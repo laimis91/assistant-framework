@@ -1,0 +1,7 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/.publish/
+
+# OS files
+**/.DS_Store

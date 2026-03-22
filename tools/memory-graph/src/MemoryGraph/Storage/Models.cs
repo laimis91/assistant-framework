@@ -1,0 +1,75 @@
+namespace MemoryGraph.Storage;
+
+public sealed class ReflexionEntry
+{
+    public long Id { get; set; }
+    public required string TaskDescription { get; set; }
+    public required string Project { get; set; }
+    public string? ProjectType { get; set; }
+    public string? TaskType { get; set; }
+    public string? Size { get; set; }
+    public string? WentWell { get; set; }
+    public string? WentWrong { get; set; }
+    public string? Lessons { get; set; }
+    public int PlanAccuracy { get; set; }
+    public int EstimateAccuracy { get; set; }
+    public bool FirstAttemptSuccess { get; set; }
+    public string? CreatedAt { get; set; }
+}
+
+public sealed class DecisionEntry
+{
+    public long Id { get; set; }
+    public required string Title { get; set; }
+    public required string Decision { get; set; }
+    public required string Rationale { get; set; }
+    public string? Alternatives { get; set; }
+    public string? Constraints { get; set; }
+    public string? Project { get; set; }
+    public string? Tags { get; set; }
+    public string? Outcome { get; set; }
+    public string? CreatedAt { get; set; }
+}
+
+public sealed class StrategyLesson
+{
+    public long Id { get; set; }
+    public required string ProjectType { get; set; }
+    public required string Phase { get; set; }
+    public required string Lesson { get; set; }
+    public double Confidence { get; set; } = 0.5;
+    public int ReinforcementCount { get; set; } = 1;
+    public long? SourceReflexionId { get; set; }
+    public string? CreatedAt { get; set; }
+    public string? LastReinforced { get; set; }
+}
+
+public sealed class FtsResult
+{
+    public required string SourceType { get; set; }
+    public required string SourceId { get; set; }
+    public required string Title { get; set; }
+    public required string Snippet { get; set; }
+    public double Rank { get; set; }
+}
+
+public sealed class MemoryStats
+{
+    public int Reflexions { get; set; }
+    public int Decisions { get; set; }
+    public int StrategyLessons { get; set; }
+    public int CalibrationEntries { get; set; }
+    public int FtsEntries { get; set; }
+}
+
+public sealed class CalibrationStats
+{
+    public Dictionary<string, CalibrationTypeStats> ByType { get; set; } = new();
+}
+
+public sealed class CalibrationTypeStats
+{
+    public int Total { get; set; }
+    public int Accurate { get; set; }
+    public double AccuracyRate => Total > 0 ? (double)Accurate / Total : 0;
+}

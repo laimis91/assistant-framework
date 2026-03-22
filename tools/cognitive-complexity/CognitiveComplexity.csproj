@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Allow running on any .NET 8+ runtime without exact version match -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+  </ItemGroup>
+
+  <!-- TestSample.cs is a test input file for the analyzer, not compilable source -->
+  <ItemGroup>
+    <Compile Remove="TestSample.cs" />
+    <None Include="TestSample.cs" />
+  </ItemGroup>
+
+</Project>

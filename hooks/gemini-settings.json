@@ -1,0 +1,60 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-session-start",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/session-start.sh",
+            "timeout": 5000,
+            "description": "Injects task journal and memory feedback on session start"
+          }
+        ]
+      }
+    ],
+    "PreCompress": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-pre-compress",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/pre-compress.sh",
+            "timeout": 5000,
+            "description": "Saves task state before context compression"
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-stop-review",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/stop-review.sh",
+            "timeout": 5000,
+            "description": "Checks if self-review was done before agent finishes"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-session-end",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/session-end.sh",
+            "timeout": 5000,
+            "description": "Reminder to capture insights before session closes"
+          }
+        ]
+      }
+    ]
+  }
+}
