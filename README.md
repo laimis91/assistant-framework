@@ -115,7 +115,7 @@ A knowledge graph over the markdown memory system. Provides queryable context so
 
 Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
 
-**Claude Code** (`~/.claude/settings.json`):
+**Claude Code** (`~/.claude.json`):
 ```json
 {
   "mcpServers": {
