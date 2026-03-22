@@ -338,8 +338,27 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
                 fi
             fi
         fi
+    elif [[ "$AGENT" == "codex" ]]; then
+        # Codex: register in ~/.codex/config.toml using [mcp_servers.name] TOML syntax
+        CODEX_CONFIG="$AGENT_HOME/config.toml"
+        if $DRY_RUN; then
+            dry "Register memory-graph MCP server in $CODEX_CONFIG"
+        else
+            if [[ -f "$CODEX_CONFIG" ]] && grep -q '\[mcp_servers\.memory-graph\]' "$CODEX_CONFIG" 2>/dev/null; then
+                info "MCP server memory-graph already registered in $CODEX_CONFIG"
+            else
+                # Append TOML block
+                {
+                    echo ""
+                    echo "[mcp_servers.memory-graph]"
+                    echo "command = \"$MCP_COMMAND\""
+                    echo "args = [\"--memory-dir\", \"$MCP_MEMORY_DIR\"]"
+                } >> "$CODEX_CONFIG"
+                ok "MCP server memory-graph registered in $CODEX_CONFIG"
+            fi
+        fi
     else
-        # Non-Claude agents: register in settings.json as before
+        # Gemini and other agents: register in settings.json with JSON mcpServers format
         if $DRY_RUN; then
             dry "Register memory-graph MCP server in $SETTINGS_FILE"
         elif command -v jq &>/dev/null; then

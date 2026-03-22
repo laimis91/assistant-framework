@@ -127,9 +127,9 @@ Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. Th
 }
 ```
 
-**Codex** (`~/.codex/config.toml` or equivalent):
+**Codex** (`~/.codex/config.toml`):
 ```toml
-[mcp.memory-graph]
+[mcp_servers.memory-graph]
 command = "~/.codex/tools/memory-graph/run-memory-graph.sh"
 args = ["--memory-dir", "~/.codex/memory"]
 ```
