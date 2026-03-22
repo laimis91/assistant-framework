@@ -234,22 +234,26 @@ for skill in "${SKILLS[@]}"; do
     done < "$skill_md"
 done
 
-# ── Create .agents/skills symlink for Codex skill discovery ─────────────────
-# Codex CLI also discovers skills from ~/.codex/.agents/skills/ (agentskills.io standard).
-# Create a symlink so skills installed at ~/.codex/skills/ are also found there.
+# ── Create ~/.agents symlink for Codex (agentskills.io standard) ────────────
+# Codex CLI discovers skills/agents from ~/.agents/ (agentskills.io standard).
+# Create a symlink so ~/.agents/ resolves to ~/.codex/ — covers skills, agents, etc.
 
 if [[ "$AGENT" == "codex" ]]; then
-    AGENTS_SKILLS_DIR="$AGENT_HOME/.agents/skills"
+    AGENTS_SYMLINK="$HOME/.agents"
     if $DRY_RUN; then
-        dry "Create symlink $AGENTS_SKILLS_DIR -> $SKILLS_TARGET"
-    elif [[ -L "$AGENTS_SKILLS_DIR" ]]; then
-        info ".agents/skills symlink already exists"
-    elif [[ -d "$AGENTS_SKILLS_DIR" ]]; then
-        info ".agents/skills directory already exists — skipping symlink (check for duplicates)"
+        dry "Create symlink $AGENTS_SYMLINK -> $AGENT_HOME"
+    elif [[ -L "$AGENTS_SYMLINK" ]]; then
+        existing_target=$(readlink "$AGENTS_SYMLINK")
+        if [[ "$existing_target" == "$AGENT_HOME" ]]; then
+            info "~/.agents symlink already points to $AGENT_HOME"
+        else
+            info "~/.agents symlink exists but points to $existing_target — skipping"
+        fi
+    elif [[ -d "$AGENTS_SYMLINK" ]]; then
+        info "~/.agents directory already exists — skipping symlink (check for conflicts)"
     else
-        mkdir -p "$AGENT_HOME/.agents"
-        ln -s "$SKILLS_TARGET" "$AGENTS_SKILLS_DIR"
-        ok "Created .agents/skills -> skills/ symlink for Codex skill discovery"
+        ln -s "$AGENT_HOME" "$AGENTS_SYMLINK"
+        ok "Created ~/.agents -> $AGENT_HOME symlink for agentskills.io discovery"
     fi
 fi
 
@@ -487,11 +491,10 @@ if $INSTALL_HOOKS; then
         claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
         gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
         codex)
-            # Codex CLI does not support lifecycle hooks — only a `notify` command
-            # for agent-turn-complete events. Skip hooks config entirely.
-            info "Codex CLI does not support lifecycle hooks — skipping hook configuration."
-            info "Hook scripts are installed for reference but will not be auto-triggered."
-            HOOKS_SETTINGS=""
+            # Codex CLI has experimental hooks support (codex_hooks feature flag).
+            # Hooks are read from hooks.json (not settings.json).
+            HOOKS_SETTINGS="$HOOKS_SOURCE/codex-settings.json"
+            CODEX_HOOKS=true
             ;;
     esac
 
@@ -505,9 +508,12 @@ if $INSTALL_HOOKS; then
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
-                    # Codex has no lifecycle hooks — skip all hook scripts
+                    # Codex experimental hooks: only SessionStart, UserPromptSubmit, Stop
                     if [[ "$AGENT" == "codex" ]]; then
-                        continue
+                        case "$hook_name" in
+                            session-start.sh|skill-router.sh|stop-review.sh) ;;  # supported
+                            *) continue ;;  # skip unsupported hooks
+                        esac
                     fi
                     # post-compact.sh and subagent-monitor.sh are Claude-only
                     if [[ "$AGENT" != "claude" ]]; then
@@ -530,8 +536,38 @@ if $INSTALL_HOOKS; then
                 info "No hook scripts found in $HOOKS_SOURCE/scripts/"
             fi
 
-            # Merge hooks into settings.json
-            if [[ -f "$SETTINGS_FILE" ]]; then
+            # Codex: write hooks.json (separate file, not settings.json)
+            if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
+                CODEX_HOOKS_FILE="$AGENT_HOME/hooks.json"
+                if [[ -f "$CODEX_HOOKS_FILE" ]] && command -v jq &>/dev/null; then
+                    # Merge with existing hooks.json
+                    existing_hooks=$(jq '.hooks // {}' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
+                    new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
+                    merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
+                        ($a | keys) + ($b | keys) | unique | map(
+                            . as $k |
+                            {key: $k, value: ([
+                                ($a[$k] // [] | if type == "array" then . else [.] end),
+                                ($b[$k] // [] | if type == "array" then . else [.] end)
+                            ] | add | unique_by(.command))}
+                        ) | from_entries
+                    ')
+                    if jq -n --argjson hooks "$merged" '{hooks: $hooks}' > "${CODEX_HOOKS_FILE}.tmp" \
+                        && mv "${CODEX_HOOKS_FILE}.tmp" "$CODEX_HOOKS_FILE"; then
+                        ok "Hooks merged into $CODEX_HOOKS_FILE"
+                    else
+                        rm -f "${CODEX_HOOKS_FILE}.tmp"
+                        info "WARNING: Failed to merge hooks into $CODEX_HOOKS_FILE"
+                    fi
+                else
+                    cp "$HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
+                    ok "Created $CODEX_HOOKS_FILE (requires codex_hooks feature flag)"
+                fi
+                info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
+                info "  [features]"
+                info "  codex_hooks = true"
+            # Claude/Gemini: merge hooks into settings.json
+            elif [[ -f "$SETTINGS_FILE" ]]; then
                 # Settings exists — merge hooks key
                 if command -v jq &>/dev/null; then
                     # Use jq to merge (preserves existing settings)
