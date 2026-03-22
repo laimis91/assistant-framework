@@ -309,7 +309,7 @@ Docs skill: Scans endpoints, extracts parameters/types, generates API reference 
 ### For new projects
 ```
 You: "Learn this codebase"
-Onboard skill: Maps structure, identifies patterns, generates .claude/memory.md, reports summary
+Onboard skill: Maps structure, identifies patterns, generates project memory (.claude/memory.md or .codex/memory.md), reports summary
 ```
 
 ### For brainstorming
