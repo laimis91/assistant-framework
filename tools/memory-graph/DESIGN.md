@@ -133,7 +133,7 @@ The primary tool. Given a project name (or auto-detected from cwd), returns ever
 
 ```
 Input:  { "project": "DesktopApp" }
-        or { "path": "/Users/laimis/Developer/Projects/DesktopApp" }
+        or { "path": "/home/user/Projects/DesktopApp" }
 
 Output: {
     "project": { "name": "DesktopApp", "type": "Project", "observations": [...] },

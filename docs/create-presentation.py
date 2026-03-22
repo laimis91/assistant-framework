@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate PowerPoint presentation for Assistant Framework v0.2.0"""
 
+import os
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
@@ -495,7 +496,7 @@ add_text_box(slide, 1, 5.8, 11.3, 1,
 # ═══════════════════════════════════════════════════════════════
 # Save
 # ═══════════════════════════════════════════════════════════════
-output_path = "/Users/laimis/Developer/Projects/Assistant/docs/Assistant-Framework-v0.2.0.pptx"
+output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Assistant-Framework-v0.2.0.pptx")
 prs.save(output_path)
 print(f"Presentation saved to: {output_path}")
 print(f"Slides: {len(prs.slides)}")
