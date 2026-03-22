@@ -172,14 +172,18 @@ for skill in "${SKILLS[@]}"; do
             "$source_dir/" "$target_dir/"
 
         # Substitute agent-specific state directory paths in all .md files
-        # Only replace functional path references (backtick-quoted or at line start),
-        # not prose mentions like "Claude's .claude/ directory"
+        # Replaces .claude/ paths in: backtick-quoted inline refs, code blocks,
+        # and standalone path references. Avoids prose like "Claude's .claude/ directory"
+        # by targeting patterns that look like actual paths (preceded by backtick, ~/, or line start).
         if [[ "$AGENT" != "claude" ]]; then
             while IFS= read -r md_file; do
                 sed -i.bak \
                     -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
                     -e "s|\`\.claude/|\`.${AGENT}/|g" \
                     -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
+                    -e "s|^~/\.claude/|~/.${AGENT}/|g" \
+                    -e "s| ~/\.claude/| ~/.${AGENT}/|g" \
+                    -e "s| \.claude/| .${AGENT}/|g" \
                     "$md_file"
                 rm -f "${md_file}.bak"
             done < <(find "$target_dir" -name "*.md" -type f)
