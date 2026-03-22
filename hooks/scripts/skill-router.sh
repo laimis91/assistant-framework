@@ -25,6 +25,9 @@ INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
 [[ -n "$PROMPT" ]] || exit 0
 
+# Detect the hook event name from input (defaults to UserPromptSubmit for Claude)
+HOOK_EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "UserPromptSubmit"')
+
 prompt_lower=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
 word_count=$(echo "$PROMPT" | wc -w | tr -d ' ')
 
@@ -163,7 +166,8 @@ if [[ ${#matched_reminders[@]} -gt 0 ]]; then
     done
     jq -n \
         --arg ctx "$combined" \
-        '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}}'
+        --arg event "$HOOK_EVENT" \
+        '{hookSpecificOutput: {hookEventName: $event, additionalContext: $ctx}}'
 fi
 
 exit 0

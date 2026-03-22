@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "BeforeAgent": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-skill-router",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/skill-router.sh",
+            "timeout": 5000,
+            "description": "Routes user prompts to matching skills"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "",

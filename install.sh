@@ -234,6 +234,25 @@ for skill in "${SKILLS[@]}"; do
     done < "$skill_md"
 done
 
+# ── Create .agents/skills symlink for Codex skill discovery ─────────────────
+# Codex CLI also discovers skills from ~/.codex/.agents/skills/ (agentskills.io standard).
+# Create a symlink so skills installed at ~/.codex/skills/ are also found there.
+
+if [[ "$AGENT" == "codex" ]]; then
+    AGENTS_SKILLS_DIR="$AGENT_HOME/.agents/skills"
+    if $DRY_RUN; then
+        dry "Create symlink $AGENTS_SKILLS_DIR -> $SKILLS_TARGET"
+    elif [[ -L "$AGENTS_SKILLS_DIR" ]]; then
+        info ".agents/skills symlink already exists"
+    elif [[ -d "$AGENTS_SKILLS_DIR" ]]; then
+        info ".agents/skills directory already exists — skipping symlink (check for duplicates)"
+    else
+        mkdir -p "$AGENT_HOME/.agents"
+        ln -s "$SKILLS_TARGET" "$AGENTS_SKILLS_DIR"
+        ok "Created .agents/skills -> skills/ symlink for Codex skill discovery"
+    fi
+fi
+
 # ── Install tools ────────────────────────────────────────────────────────────
 
 TOOLS_SOURCE="$FRAMEWORK_DIR/tools"
@@ -467,7 +486,13 @@ if $INSTALL_HOOKS; then
     case "$AGENT" in
         claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
         gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
-        codex)   HOOKS_SETTINGS="$HOOKS_SOURCE/codex-settings.json" ;;
+        codex)
+            # Codex CLI does not support lifecycle hooks — only a `notify` command
+            # for agent-turn-complete events. Skip hooks config entirely.
+            info "Codex CLI does not support lifecycle hooks — skipping hook configuration."
+            info "Hook scripts are installed for reference but will not be auto-triggered."
+            HOOKS_SETTINGS=""
+            ;;
     esac
 
     if [[ -n "$HOOKS_SETTINGS" && -f "$HOOKS_SETTINGS" ]]; then
@@ -480,16 +505,19 @@ if $INSTALL_HOOKS; then
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
-                    # post-compact.sh is Claude-only (Gemini/Codex have no PostCompact event)
-                    if [[ "$AGENT" != "claude" && "$hook_name" == "post-compact.sh" ]]; then
+                    # Codex has no lifecycle hooks — skip all hook scripts
+                    if [[ "$AGENT" == "codex" ]]; then
                         continue
                     fi
-                    # Codex only supports SessionStart, UserPromptSubmit, Stop
-                    if [[ "$AGENT" == "codex" ]]; then
+                    # post-compact.sh and subagent-monitor.sh are Claude-only
+                    if [[ "$AGENT" != "claude" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh) ;;  # supported
-                            *) continue ;;  # skip unsupported hooks
+                            post-compact.sh|subagent-monitor.sh) continue ;;
                         esac
+                    fi
+                    # task-completed.sh is Claude-only (Gemini has no TaskCompleted event)
+                    if [[ "$AGENT" == "gemini" && "$hook_name" == "task-completed.sh" ]]; then
+                        continue
                     fi
                     cp "$hook_script" "$HOOKS_TARGET/"
                 done
@@ -541,75 +569,8 @@ if $INSTALL_HOOKS; then
     fi
 fi
 
-# ── Memory protocol in global instructions ───────────────────────────────────
-
-MEMORY_PROTOCOL_SOURCE="$FRAMEWORK_DIR/memory-protocol.md"
-MARKER="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START"
-
-# Determine agent's global instructions file
-case "$AGENT" in
-    claude)  INSTRUCTIONS_FILE="$AGENT_HOME/CLAUDE.md" ;;
-    gemini)  INSTRUCTIONS_FILE="$AGENT_HOME/GEMINI.md" ;;
-    codex)
-        INSTRUCTIONS_FILE="$AGENT_HOME/CODEX.md"
-        info "NOTE: Codex does not auto-read ~/.codex/CODEX.md."
-        info "After install, add this to ~/.codex/config.toml or your --system-prompt:"
-        info "  instructions_file = \"$AGENT_HOME/CODEX.md\""
-        ;;
-esac
-
-if [[ -f "$MEMORY_PROTOCOL_SOURCE" ]]; then
-    echo ""
-
-    # Check if protocol is already present
-    ALREADY_INSTALLED=false
-    if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        ALREADY_INSTALLED=true
-    elif [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "WAL Protocol\|Persistent Memory System" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        ALREADY_INSTALLED=true
-    fi
-
-    if $ALREADY_INSTALLED; then
-        info "Memory protocol already present in $INSTRUCTIONS_FILE — skipping"
-    elif $DRY_RUN; then
-        dry "Would append memory protocol to $INSTRUCTIONS_FILE"
-    else
-        # Read the protocol template and substitute agent paths
-        protocol_content=$(cat "$MEMORY_PROTOCOL_SOURCE")
-        if [[ "$AGENT" != "claude" ]]; then
-            protocol_content=$(echo "$protocol_content" | sed \
-                -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
-                -e "s|\`\.claude/|\`.${AGENT}/|g" \
-                -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
-                -e "s|~/.claude/|~/.${AGENT}/|g")
-        fi
-
-        # Ask for confirmation (non-interactive mode: skip)
-        if [[ -t 0 ]]; then
-            echo ""
-            echo "  The memory system needs a protocol section in your global instructions file."
-            echo "  File: $INSTRUCTIONS_FILE"
-            echo ""
-            read -r -p "  Append memory protocol to $INSTRUCTIONS_FILE? [y/N] " response
-            case "$response" in
-                [yY]|[yY][eE][sS])
-                    mkdir -p "$(dirname "$INSTRUCTIONS_FILE")"
-                    echo "" >> "$INSTRUCTIONS_FILE"
-                    echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
-                    ok "Memory protocol appended to $INSTRUCTIONS_FILE"
-                    ;;
-                *)
-                    info "Skipped. To add manually, append the contents of memory-protocol.md to $INSTRUCTIONS_FILE"
-                    ;;
-            esac
-        else
-            info "Non-interactive mode — skipping memory protocol setup."
-            info "To add manually: cat memory-protocol.md >> $INSTRUCTIONS_FILE"
-        fi
-    fi
-fi
-
 # ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
+# Must run before memory protocol section since protocol is appended to AGENTS.md
 
 if [[ "$AGENT" == "codex" ]]; then
     AGENTS_MD="$AGENT_HOME/AGENTS.md"
@@ -672,6 +633,72 @@ Project memory lives in .codex/ at the project root:
 - Tests: xUnit/NUnit, Arrange-Act-Assert, descriptive naming
 AGENTS_EOF
         ok "Generated $AGENTS_MD"
+    fi
+fi
+
+# ── Memory protocol in global instructions ───────────────────────────────────
+
+MEMORY_PROTOCOL_SOURCE="$FRAMEWORK_DIR/memory-protocol.md"
+MARKER="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START"
+
+# Determine agent's global instructions file
+case "$AGENT" in
+    claude)  INSTRUCTIONS_FILE="$AGENT_HOME/CLAUDE.md" ;;
+    gemini)  INSTRUCTIONS_FILE="$AGENT_HOME/GEMINI.md" ;;
+    codex)
+        # Codex reads AGENTS.md natively — memory protocol is appended there
+        INSTRUCTIONS_FILE="$AGENT_HOME/AGENTS.md"
+        ;;
+esac
+
+if [[ -f "$MEMORY_PROTOCOL_SOURCE" ]]; then
+    echo ""
+
+    # Check if protocol is already present
+    ALREADY_INSTALLED=false
+    if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
+        ALREADY_INSTALLED=true
+    elif [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "WAL Protocol\|Persistent Memory System" "$INSTRUCTIONS_FILE" 2>/dev/null; then
+        ALREADY_INSTALLED=true
+    fi
+
+    if $ALREADY_INSTALLED; then
+        info "Memory protocol already present in $INSTRUCTIONS_FILE — skipping"
+    elif $DRY_RUN; then
+        dry "Would append memory protocol to $INSTRUCTIONS_FILE"
+    else
+        # Read the protocol template and substitute agent paths
+        protocol_content=$(cat "$MEMORY_PROTOCOL_SOURCE")
+        if [[ "$AGENT" != "claude" ]]; then
+            protocol_content=$(echo "$protocol_content" | sed \
+                -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
+                -e "s|\`\.claude/|\`.${AGENT}/|g" \
+                -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
+                -e "s|~/.claude/|~/.${AGENT}/|g")
+        fi
+
+        # Ask for confirmation (non-interactive mode: skip)
+        if [[ -t 0 ]]; then
+            echo ""
+            echo "  The memory system needs a protocol section in your global instructions file."
+            echo "  File: $INSTRUCTIONS_FILE"
+            echo ""
+            read -r -p "  Append memory protocol to $INSTRUCTIONS_FILE? [y/N] " response
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    mkdir -p "$(dirname "$INSTRUCTIONS_FILE")"
+                    echo "" >> "$INSTRUCTIONS_FILE"
+                    echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
+                    ok "Memory protocol appended to $INSTRUCTIONS_FILE"
+                    ;;
+                *)
+                    info "Skipped. To add manually, append the contents of memory-protocol.md to $INSTRUCTIONS_FILE"
+                    ;;
+            esac
+        else
+            info "Non-interactive mode — skipping memory protocol setup."
+            info "To add manually: cat memory-protocol.md >> $INSTRUCTIONS_FILE"
+        fi
     fi
 fi
 
