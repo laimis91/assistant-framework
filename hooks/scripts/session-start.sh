@@ -15,9 +15,9 @@
 #   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
-#   1. Active task journal (.claude/task.md) — injects full state
-#   2. Telos context (~/.claude/telos.md) — purpose/strategic priorities
-#   3. Memory feedback rules (~/.claude/memory/feedback/) — always injected (fast, structural)
+#   1. Active task journal ({state_dir}/task.md) — injects full state
+#   2. Telos context (~/{agent}/telos.md) — purpose/strategic priorities
+#   3. Memory feedback rules (~/{agent}/memory/feedback/) — always injected (fast, structural)
 #   4. Instruction to call memory_context via memory-graph MCP for project context
 #   5. No output if nothing found (exit 0)
 

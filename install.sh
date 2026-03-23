@@ -615,15 +615,15 @@ fi
 # ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
 # Must run before memory protocol section since protocol is appended to AGENTS.md
 
+AGENTS_MD_MARKER_START="ASSISTANT_FRAMEWORK_AGENTS_MD_START"
+AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
+
 if [[ "$AGENT" == "codex" ]]; then
     AGENTS_MD="$AGENT_HOME/AGENTS.md"
     echo ""
-    if [[ -f "$AGENTS_MD" ]]; then
-        info "AGENTS.md already exists at $AGENTS_MD — skipping (edit manually if needed)"
-    elif $DRY_RUN; then
-        dry "Would generate $AGENTS_MD from installed skills"
-    else
-        cat > "$AGENTS_MD" << 'AGENTS_EOF'
+
+    # Build the installer-owned content block (wrapped in markers)
+    AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
 # AGENTS.md — Codex Agent Instructions
 
 ## Skill Routing
@@ -674,7 +674,26 @@ Project memory lives in .codex/ at the project root:
 - Use Microsoft.Extensions.DependencyInjection and Microsoft.Extensions.Logging
 - Never hardcode secrets; never log PII
 - Tests: xUnit/NUnit, Arrange-Act-Assert, descriptive naming
-AGENTS_EOF
+<!-- $AGENTS_MD_MARKER_END -->"
+
+    if $DRY_RUN; then
+        dry "Would generate/update $AGENTS_MD from installed skills"
+    elif [[ -f "$AGENTS_MD" ]] && grep -q "$AGENTS_MD_MARKER_START" "$AGENTS_MD" 2>/dev/null; then
+        # Re-install: strip old installer block, preserve user content
+        sed -i.bak "/$AGENTS_MD_MARKER_START/,/$AGENTS_MD_MARKER_END/d" "$AGENTS_MD"
+        rm -f "${AGENTS_MD}.bak"
+        # Prepend installer block (it should come first)
+        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
+            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        ok "Updated installer section in $AGENTS_MD (user customizations preserved)"
+    elif [[ -f "$AGENTS_MD" ]]; then
+        # Existing file without markers — prepend installer block, keep user content
+        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
+            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        ok "Prepended installer section to existing $AGENTS_MD (user content preserved)"
+    else
+        # First install
+        echo "$AGENTS_MD_CONTENT" > "$AGENTS_MD"
         ok "Generated $AGENTS_MD"
     fi
 fi
@@ -697,30 +716,45 @@ esac
 if [[ -f "$MEMORY_PROTOCOL_SOURCE" ]]; then
     echo ""
 
-    # Check if protocol is already present
-    ALREADY_INSTALLED=false
-    if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        ALREADY_INSTALLED=true
-    elif [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "WAL Protocol\|Persistent Memory System" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        ALREADY_INSTALLED=true
+    MARKER_END="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END"
+
+    # Prepare substituted protocol content
+    protocol_content=$(cat "$MEMORY_PROTOCOL_SOURCE")
+    if [[ "$AGENT" != "claude" ]]; then
+        protocol_content=$(echo "$protocol_content" | sed \
+            -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
+            -e "s|\`\.claude/|\`.${AGENT}/|g" \
+            -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
+            -e "s|~/.claude/|~/.${AGENT}/|g")
     fi
 
-    if $ALREADY_INSTALLED; then
-        info "Memory protocol already present in $INSTRUCTIONS_FILE — skipping"
+    # Strip old protocol if present (replace with latest version)
+    if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
+        sed -i.bak "/$MARKER/,/$MARKER_END/d" "$INSTRUCTIONS_FILE"
+        rm -f "${INSTRUCTIONS_FILE}.bak"
+        if $DRY_RUN; then
+            dry "Would update memory protocol in $INSTRUCTIONS_FILE"
+        else
+            echo "" >> "$INSTRUCTIONS_FILE"
+            echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
+            ok "Memory protocol updated in $INSTRUCTIONS_FILE"
+        fi
+    elif [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "WAL Protocol\|Persistent Memory System" "$INSTRUCTIONS_FILE" 2>/dev/null; then
+        info "WARNING: $INSTRUCTIONS_FILE contains a manually-added memory protocol — not replacing."
+        info "Remove the 'Persistent Memory System' section manually, then re-run install to get the latest."
+    elif [[ "$AGENT" == "codex" ]]; then
+        # Codex: we own AGENTS.md entirely — always append without prompting
+        if $DRY_RUN; then
+            dry "Would append memory protocol to $INSTRUCTIONS_FILE"
+        else
+            echo "" >> "$INSTRUCTIONS_FILE"
+            echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
+            ok "Memory protocol appended to $INSTRUCTIONS_FILE"
+        fi
     elif $DRY_RUN; then
         dry "Would append memory protocol to $INSTRUCTIONS_FILE"
     else
-        # Read the protocol template and substitute agent paths
-        protocol_content=$(cat "$MEMORY_PROTOCOL_SOURCE")
-        if [[ "$AGENT" != "claude" ]]; then
-            protocol_content=$(echo "$protocol_content" | sed \
-                -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
-                -e "s|\`\.claude/|\`.${AGENT}/|g" \
-                -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
-                -e "s|~/.claude/|~/.${AGENT}/|g")
-        fi
-
-        # Ask for confirmation (non-interactive mode: skip)
+        # Claude/Gemini first install — ask for confirmation (modifying user's own file)
         if [[ -t 0 ]]; then
             echo ""
             echo "  The memory system needs a protocol section in your global instructions file."
