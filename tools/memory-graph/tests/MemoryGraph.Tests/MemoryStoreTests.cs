@@ -246,6 +246,32 @@ public sealed class MemoryStoreTests : IDisposable
         Assert.Equal(0, archived);
     }
 
+    // ── Stale lesson count tests ────────────────────────────────
+
+    [Fact]
+    public void GetStaleLessonCount_ReturnsZeroWhenFresh()
+    {
+        _store.AddStrategyLesson(new StrategyLesson
+        {
+            ProjectType = "test", Phase = "build", Lesson = "fresh lesson", Confidence = 0.5
+        });
+
+        var count = _store.GetStaleLessonCount(90);
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public void GetStaleLessonCount_ExcludesLowConfidence()
+    {
+        _store.AddStrategyLesson(new StrategyLesson
+        {
+            ProjectType = "test", Phase = "build", Lesson = "low conf", Confidence = 0.05
+        });
+
+        var count = _store.GetStaleLessonCount(0); // 0 days = everything is stale
+        Assert.Equal(0, count); // But confidence too low, so excluded
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private static ReflexionEntry MakeReflexion(

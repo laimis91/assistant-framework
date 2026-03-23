@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. Eleven composable skills: structured workflow, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, and self-improving reflexion.
+A Personal AI Assistant framework for developers. Twelve composable skills: structured workflow, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, self-improving reflexion, and purpose-driven context (Telos).
 
 ## What it does
 
@@ -15,6 +15,7 @@ A Personal AI Assistant framework for developers. Eleven composable skills: stru
 9. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 10. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
 11. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
+12. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 
 ## Installation
 
@@ -105,13 +106,18 @@ Self-improving agent loop. Post-task reflection captures what worked and what di
 
 Triggers on: reflect, what did we learn, lessons, how did that go, calibrate
 
+### assistant-telos
+Purpose context framework based on [Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos). Guides you through building a purpose chain (problems → mission → goals → challenges → strategies → projects) stored at `~/.claude/telos.md`. Loaded at every session start so agents can prioritize work aligned with what actually matters to you.
+
+Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
+
 ## Tools
 
 ### Memory Graph (MCP Server)
 
 A knowledge graph over the markdown memory system. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" instead of reading all memory files.
 
-**13 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`
+**14 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
 
 Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
 
@@ -227,8 +233,12 @@ skills/
   assistant-reflexion/
     SKILL.md                       <- Self-improvement loop protocol
 
+  assistant-telos/
+    SKILL.md                       <- Purpose context framework (Telos Method)
+
 hooks/                             <- Automated behaviors (Claude + Gemini)
   scripts/
+    learning-signals.sh             <- Detect learning signals in user prompts
     session-start.sh               <- Inject task journal + memory on start/resume
     pre-compress.sh                <- Save state before context compression
     post-compact.sh                <- Restore context after compaction
@@ -332,6 +342,14 @@ Reflexion skill: Captures what worked, what didn't, extracts lessons for future 
 Reflexion: Recalls relevant lessons, adjusts plan based on past experience
 ```
 
+### For purpose alignment
+```
+You: "telos create"
+Telos skill: Walks you through problems → mission → goals → challenges → strategies → projects
+You: "Does this task align with my goals?"
+Telos skill: Checks active work against your purpose chain
+```
+
 ## Hooks (automated behaviors)
 
 Hooks fire automatically on agent lifecycle events. Installed for Claude Code and Gemini CLI (Codex not yet supported).
@@ -343,6 +361,7 @@ Hooks fire automatically on agent lifecycle events. Installed for Claude Code an
 | **Post-compact** | After compaction completes (Claude only) | Re-injects task journal and feedback rules |
 | **Stop review** | Agent finishes responding (during active build) | Enforces self-review before task handoff |
 | **Skill router** | User submits prompt | Pattern-matches prompt against skill triggers; injects reminder to invoke the correct skill |
+| **Learning signals** | User submits prompt | Detects corrections, approvals, frustrations, and pivots; logs to signals.jsonl for trend analysis |
 | **Session end** | Session terminates | Logs reminder about uncaptured insights |
 
 These replace manual steps — you no longer need to ask "did you read the task journal?" or "do a fresh review".

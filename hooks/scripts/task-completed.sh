@@ -10,7 +10,7 @@
 #   Plain text advisory reminder to capture learnings.
 #
 # Env vars used:
-#   CLAUDE_PROJECT_DIR — project root
+#   CLAUDE_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
 #   Advisory only — reminds agent to save insights and update memory.
@@ -20,9 +20,13 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}"
 AGENT_HOME="$HOME/.claude"
 STATE_DIR=".claude"
+if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.codex"
+    STATE_DIR=".codex"
+fi
 
 # Check for task journal
 TASK_FILE=""
@@ -56,7 +60,7 @@ MSG="TASK COMPLETED — capture learnings before moving on:
 3. PATTERNS: If you noticed recurring patterns in this project type, call memory_pattern:
    - projectType, phase (discover/plan/build/review), pattern description
 
-4. INSIGHTS: Additionally save non-obvious gotchas to ~/.claude/memory/insights/ and call memory_add_insight
+4. INSIGHTS: Additionally save non-obvious gotchas to $AGENT_HOME/memory/insights/ and call memory_add_insight
 
 5. SESSION STATE: Update $STATE_DIR/session.md with completion status:
    ## Last Completed

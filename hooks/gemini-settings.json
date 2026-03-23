@@ -10,6 +10,13 @@
             "command": "$HOME/.gemini/hooks/assistant/skill-router.sh",
             "timeout": 5000,
             "description": "Routes user prompts to matching skills"
+          },
+          {
+            "name": "assistant-learning-signals",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/learning-signals.sh",
+            "timeout": 5000,
+            "description": "Detects learning signals in user prompts"
           }
         ]
       }

@@ -40,6 +40,7 @@ When told this is round N with a previously-fixed list:
 For C# projects, run `bash ~/.codex/tools/cognitive-complexity/run-complexity.sh --changed` to identify methods with high cognitive complexity. Flag methods exceeding the threshold as SHOULD-FIX items with a recommendation to extract or simplify.
 
 ## Constraints
+- **Verify before reporting**: Read the actual code before claiming a bug or issue exists. Search for callers/usage before flagging something as unused or incorrect. Never report findings based on assumptions.
 - Do NOT edit any files
 - High confidence bar — only report issues you are genuinely confident about
 - Do not manufacture findings to appear thorough

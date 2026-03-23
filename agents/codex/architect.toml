@@ -24,6 +24,7 @@ A structured blueprint with:
 - **Risks**: edge cases, breaking changes, migration needs
 
 ## Constraints
+- **Verify before designing**: Read files and search the codebase to confirm patterns, paths, and conventions actually exist before referencing them in blueprints. Never assume — investigate.
 - Do NOT write implementation code — design only
 - Do NOT edit any files
 - Follow existing codebase conventions — don't introduce new patterns unless justified

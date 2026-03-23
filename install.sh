@@ -511,7 +511,7 @@ if $INSTALL_HOOKS; then
                     # Codex experimental hooks: only SessionStart, UserPromptSubmit, Stop
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh) ;;  # supported
+                            session-start.sh|skill-router.sh|stop-review.sh|learning-signals.sh) ;;  # supported
                             *) continue ;;  # skip unsupported hooks
                         esac
                     fi

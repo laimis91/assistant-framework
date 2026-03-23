@@ -112,12 +112,13 @@ registry.Register(new MemoryRemoveEntityTool(graph));
 registry.Register(new MemoryRemoveRelationTool(graph));
 registry.Register(new MemoryGraphTool(graph));
 
-// v2 tools — reflexion, decisions, patterns, consolidation, stats
+// v2 tools — reflexion, decisions, patterns, consolidation, stats, trends
 registry.Register(new MemoryReflectTool(memoryStore));
 registry.Register(new MemoryDecideTool(memoryStore));
 registry.Register(new MemoryPatternTool(memoryStore));
 registry.Register(new MemoryConsolidateTool(memoryStore));
 registry.Register(new MemoryStatsTool(graph, memoryStore));
+registry.Register(new MemoryTrendTool(memoryStore, memoryDir));
 
 // ── Start MCP server ──────────────────────────────────────────
 

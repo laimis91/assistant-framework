@@ -12,7 +12,7 @@
 #   Gemini: {"decision": "retry", "reason": "..."}  or no output (allows stop)
 #
 # Env vars used:
-#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR — project root
+#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
 #   Only activates when task journal is in BUILDING/VERIFYING state.
@@ -28,7 +28,7 @@ command -v jq >/dev/null 2>&1 || { exit 0; }
 
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-$(pwd)}}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
 
 IS_GEMINI=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then

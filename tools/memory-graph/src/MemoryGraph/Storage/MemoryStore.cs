@@ -471,6 +471,21 @@ public sealed class MemoryStore : IDisposable
         return (decayed, archived);
     }
 
+    /// <summary>
+    /// Count strategy lessons not reinforced within the given number of days.
+    /// </summary>
+    public int GetStaleLessonCount(int staleDays)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = """
+            SELECT COUNT(*) FROM strategy_lessons
+            WHERE julianday('now') - julianday(last_reinforced) > @days
+            AND confidence > 0.1
+            """;
+        cmd.Parameters.AddWithValue("@days", staleDays);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
     // ── Private helpers ─────────────────────────────────────────────
 
     private List<ReflexionEntry> ReadReflexions(SqliteCommand cmd)

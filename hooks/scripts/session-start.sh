@@ -12,13 +12,14 @@
 #   Gemini: {"additionalContext": "..."}  (strict JSON only)
 #
 # Env vars used:
-#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR — project root
+#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
 #   1. Active task journal (.claude/task.md) — injects full state
-#   2. Memory feedback rules (~/.claude/memory/feedback/) — always injected (fast, structural)
-#   3. Instruction to call memory_context via memory-graph MCP for project context
-#   4. No output if nothing found (exit 0)
+#   2. Telos context (~/.claude/telos.md) — purpose/strategic priorities
+#   3. Memory feedback rules (~/.claude/memory/feedback/) — always injected (fast, structural)
+#   4. Instruction to call memory_context via memory-graph MCP for project context
+#   5. No output if nothing found (exit 0)
 
 set -euo pipefail
 
@@ -28,21 +29,20 @@ command -v jq >/dev/null 2>&1 || JQ_MISSING=true
 INPUT=$(cat)
 
 # Determine project and agent directories
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-$(pwd)}}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
 IS_GEMINI=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_GEMINI=true
 fi
 
 AGENT_HOME="$HOME/.claude"
-if $IS_GEMINI; then
-    AGENT_HOME="$HOME/.gemini"
-fi
-
-# Agent-local state directory name (e.g. .claude or .gemini)
 STATE_DIR=".claude"
 if $IS_GEMINI; then
+    AGENT_HOME="$HOME/.gemini"
     STATE_DIR=".gemini"
+elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.codex"
+    STATE_DIR=".codex"
 fi
 
 # Guard: if resolved AGENT_HOME doesn't exist, skip memory loading
@@ -66,7 +66,16 @@ if [[ -f "$TASK_FILE" ]]; then
     context_parts+=("---")
 fi
 
-# 2. Load memory feedback rules (always relevant — injected directly for speed)
+# 2. Load Telos context (purpose/strategic context — lightweight, always relevant)
+TELOS_FILE="$AGENT_HOME/telos.md"
+if [[ -f "$TELOS_FILE" ]]; then
+    telos_content=$(cat "$TELOS_FILE")
+    context_parts+=("TELOS CONTEXT (user's purpose and strategic priorities — use to inform prioritization and alignment):")
+    context_parts+=("$telos_content")
+    context_parts+=("---")
+fi
+
+# 3. Load memory feedback rules (always relevant — injected directly for speed)
 MEMORY_DIR="$AGENT_HOME/memory/feedback"
 if [[ -d "$MEMORY_DIR" ]]; then
     for f in "$MEMORY_DIR"/*.md; do
@@ -78,13 +87,14 @@ if [[ -d "$MEMORY_DIR" ]]; then
     done
 fi
 
-# 3. Instruction to load project context via memory-graph MCP
+# 4. Instruction to load project context via memory-graph MCP
 context_parts+=("SESSION START — Memory Protocol:")
 context_parts+=("1. Call memory_context with the current project name/path to load project context (dependencies, technologies, patterns, conventions, recent insights)")
 context_parts+=("2. If $STATE_DIR/session.md exists, read it to resume previous session state")
 context_parts+=("3. If $STATE_DIR/working-buffer.md exists, read it then clear its contents")
 context_parts+=("4. If memory-graph MCP is unavailable, fall back to reading $AGENT_HOME/memory/INDEX.md and relevant files")
 context_parts+=("Use memory_search for targeted queries during the session. Use memory_add_insight to record learnings.")
+context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
 context_parts+=("")
 context_parts+=("REFLEXION SYSTEM (v2):")
 context_parts+=("- memory_reflect: Record post-task reflexions (what worked, what didn't, lessons)")
@@ -96,7 +106,7 @@ context_parts+=("- During DISCOVER phase: check past lessons for this project ty
 context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
 context_parts+=("---")
 
-# 4. Output context if any was found
+# 5. Output context if any was found
 if [[ ${#context_parts[@]} -gt 0 ]]; then
     full_context=""
     for part in "${context_parts[@]}"; do

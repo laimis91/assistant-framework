@@ -42,6 +42,10 @@ Gather:
 - What approach/strategy was used?
 - How long did it take (approximate)?
 
+### Step 1.5: Read Learning Signals
+
+If `memory_trend` MCP tool is available, call it with the current project name to surface mid-task signals (corrections, approvals, frustrations, pivots) captured during this session. Incorporate these into the self-assessment — they are objective evidence of what worked and what didn't.
+
 ### Step 2: Self-Assess
 
 Ask yourself honestly:
@@ -145,6 +149,8 @@ Search memory for lessons matching:
 - Current project type
 - Current task type (feature, bugfix, etc.)
 - Technologies involved
+
+Also call `memory_trend` with the project type to surface calibration trends and recent signal patterns. If trends show systematic bias (e.g., underestimation), factor that into planning.
 
 ### Step 2: Filter by Relevance
 

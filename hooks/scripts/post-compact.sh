@@ -10,7 +10,7 @@
 #   Claude: plain text (task journal + feedback rules + memory instructions re-injected)
 #
 # Env vars used:
-#   CLAUDE_PROJECT_DIR — project root
+#   CLAUDE_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
 #   Re-injects task journal, feedback rules, and memory-graph instructions after compaction.
@@ -21,8 +21,13 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
 AGENT_HOME="$HOME/.claude"
+if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.gemini"
+elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.codex"
+fi
 
 # Guard: if resolved AGENT_HOME doesn't exist, skip memory loading
 [[ -d "$AGENT_HOME" ]] || { exit 0; }
@@ -40,6 +45,15 @@ for dir in .claude .gemini .codex; do
         break
     fi
 done
+
+# Re-inject Telos context (purpose/strategic priorities — lightweight, always relevant)
+TELOS_FILE="$AGENT_HOME/telos.md"
+if [[ -f "$TELOS_FILE" ]]; then
+    telos_content=$(cat "$TELOS_FILE")
+    context_parts+=("TELOS CONTEXT (user's purpose and strategic priorities — use to inform prioritization and alignment):")
+    context_parts+=("$telos_content")
+    context_parts+=("---")
+fi
 
 # Re-inject feedback rules
 MEMORY_DIR="$AGENT_HOME/memory/feedback"
@@ -81,7 +95,17 @@ done
 context_parts+=("CONTEXT RESTORED — Memory Protocol:")
 context_parts+=("Call memory_context with the current project name/path to reload project context (dependencies, technologies, patterns, conventions, recent insights).")
 context_parts+=("Use memory_search for targeted queries. Use memory_add_insight to record new learnings.")
-context_parts+=("If memory-graph MCP is unavailable, fall back to reading ~/.claude/memory/INDEX.md and relevant files.")
+context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
+context_parts+=("")
+context_parts+=("REFLEXION SYSTEM (v2):")
+context_parts+=("- memory_reflect: Record post-task reflexions (what worked, what didn't, lessons)")
+context_parts+=("- memory_decide: Record architectural/design decisions with rationale")
+context_parts+=("- memory_pattern: Record/reinforce recurring patterns per project type")
+context_parts+=("- memory_stats: Check memory system health and calibration accuracy")
+context_parts+=("- memory_consolidate: Decay stale lessons and archive low-confidence ones")
+context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
+AGENT_DIR_NAME=$(basename "$AGENT_HOME")
+context_parts+=("If memory-graph MCP is unavailable, fall back to reading ~/$AGENT_DIR_NAME/memory/INDEX.md and relevant files.")
 context_parts+=("---")
 
 if [[ ${#context_parts[@]} -gt 0 ]]; then

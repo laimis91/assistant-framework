@@ -12,7 +12,7 @@
 #   Gemini: {"systemMessage": "..."}  (strict JSON only)
 #
 # Env vars used:
-#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR — project root
+#   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
 #   Advisory only — cannot block compression.
@@ -30,17 +30,16 @@ if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_GEMINI=true
 fi
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-$(pwd)}}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
 
 AGENT_HOME="$HOME/.claude"
-if $IS_GEMINI; then
-    AGENT_HOME="$HOME/.gemini"
-fi
-
-# Agent-local state directory name (e.g. .claude or .gemini)
 STATE_DIR=".claude"
 if $IS_GEMINI; then
+    AGENT_HOME="$HOME/.gemini"
     STATE_DIR=".gemini"
+elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.codex"
+    STATE_DIR=".codex"
 fi
 
 MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:

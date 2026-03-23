@@ -18,6 +18,10 @@
           {
             "type": "command",
             "command": "$HOME/.codex/hooks/assistant/skill-router.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/learning-signals.sh"
           }
         ]
       }
