@@ -187,6 +187,13 @@ for skill in "${SKILLS[@]}"; do
                     "$md_file"
                 rm -f "${md_file}.bak"
             done < <(find "$target_dir" -name "*.md" -type f)
+
+            # Swap agent.conf to the correct preset if one exists
+            agent_preset="$target_dir/agents/${AGENT}.conf"
+            agent_conf="$target_dir/agent.conf"
+            if [[ -f "$agent_preset" && -f "$agent_conf" ]]; then
+                cp "$agent_preset" "$agent_conf"
+            fi
         fi
 
         ok "$skill -> $target_dir"
