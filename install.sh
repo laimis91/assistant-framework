@@ -758,14 +758,14 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     echo "Tools: $TOOLS_TARGET/"
 fi
-if [[ "$AGENT" == "codex" && ${#toml_files[@]:-0} -gt 0 ]]; then
+if [[ "$AGENT" == "codex" && ${#toml_files[@]} -gt 0 ]]; then
     echo ""
     echo "Agents: $AGENT_HOME/agents/"
     for toml in "${toml_files[@]}"; do
         echo "  $(basename "$toml" .toml)"
     done
 fi
-if [[ "$AGENT" == "claude" && ${#md_files[@]:-0} -gt 0 ]]; then
+if [[ "$AGENT" == "claude" && ${#md_files[@]} -gt 0 ]]; then
     echo ""
     echo "Agents: $AGENT_HOME/agents/"
     for md in "${md_files[@]}"; do
