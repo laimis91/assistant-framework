@@ -5,10 +5,10 @@ effort: high
 requires:
   - assistant-memory
 triggers:
-  - pattern: "implement feature|implement the|implementing|fix bug|fix the|build feature|build the|refactor the|create feature|add feature|how should i approach|break this down|start working on"
-    priority: 30
-    min_words: 5
-    reminder: "This request may match assistant-workflow. Consider whether the Skill tool should be invoked with skill='assistant-workflow' for structured development phases."
+  - pattern: "implement feature|implement the|implementing|fix bug|fix the|build feature|build the|build a|build an|refactor the|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make)|phase [0-9]"
+    priority: 40
+    min_words: 4
+    reminder: "This request matches assistant-workflow. You MUST invoke the Skill tool with skill='assistant-workflow' BEFORE writing any code. At minimum: triage the task size, then build with tests. Skipping workflow for speed is explicitly prohibited — see CLAUDE.md."
 ---
 
 # Development Workflow
