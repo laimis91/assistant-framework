@@ -91,6 +91,32 @@ for dir in .claude .gemini .codex; do
     fi
 done
 
+# Re-inject depth profile + communication preferences (V2)
+DEPTH_PROFILE="$AGENT_HOME/memory/depth-profile.json"
+if [[ -f "$DEPTH_PROFILE" ]]; then
+    has_topics=$(jq '.topics | length' "$DEPTH_PROFILE" 2>/dev/null || echo "0")
+    has_comm=$(jq -e '.communication' "$DEPTH_PROFILE" >/dev/null 2>&1 && echo "true" || echo "false")
+
+    if [[ "$has_topics" -gt 0 || "$has_comm" == "true" ]]; then
+        context_parts+=("ADAPTIVE DEPTH + COMMUNICATION (restored after compaction):")
+
+        if [[ "$has_topics" -gt 0 ]]; then
+            profile=$(jq -r '
+                "Default: \(.defaults.level) (\(.defaults.preference))\n" +
+                (.topics | to_entries | map("  \(.key): \(.value.level) (\(.value.preference // "standard"))") | join("\n"))
+            ' "$DEPTH_PROFILE" 2>/dev/null)
+            context_parts+=("$profile")
+        fi
+
+        if [[ "$has_comm" == "true" ]]; then
+            comm=$(jq -r '.communication | to_entries | map("  \(.key): \(.value)") | join("\n")' "$DEPTH_PROFILE" 2>/dev/null)
+            context_parts+=("Communication: $comm")
+        fi
+
+        context_parts+=("---")
+    fi
+fi
+
 # Instruction to restore full context via memory-graph
 context_parts+=("CONTEXT RESTORED — Memory Protocol:")
 context_parts+=("Call memory_context with the current project name/path to reload project context (dependencies, technologies, patterns, conventions, recent insights).")
