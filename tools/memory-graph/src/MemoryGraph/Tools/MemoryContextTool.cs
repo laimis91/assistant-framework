@@ -79,13 +79,32 @@ public sealed class MemoryContextTool : IMemoryTool
             }
             else
             {
-                return ToolHelpers.Success(new
+                // Try alias resolution — search "Aliases:" observations in Project entities
+                var aliasMatches = _graph.FindByAlias(projectName);
+                if (aliasMatches.Count == 1)
                 {
-                    found = false,
-                    message = $"No project found matching '{projectName}'",
-                    availableProjects = _graph.GetEntitiesByType(EntityType.Project)
-                        .Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-                });
+                    entity = aliasMatches[0];
+                    projectName = entity.Name;
+                }
+                else if (aliasMatches.Count > 1)
+                {
+                    return ToolHelpers.Success(new
+                    {
+                        found = false,
+                        message = $"Ambiguous alias '{projectName}' — {aliasMatches.Count} projects match",
+                        ambiguousMatches = aliasMatches.Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
+                    });
+                }
+                else
+                {
+                    return ToolHelpers.Success(new
+                    {
+                        found = false,
+                        message = $"No project found matching '{projectName}'",
+                        availableProjects = _graph.GetEntitiesByType(EntityType.Project)
+                            .Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
+                    });
+                }
             }
         }
 

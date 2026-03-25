@@ -342,6 +342,101 @@ public class ToolIntegrationTests : IDisposable
         Assert.Contains("managedBy", text);
     }
 
+    // ── Alias Resolution Tests ──────────────────────────────────────────────
+
+    [Fact]
+    public void Context_FindsByAlias_WhenExactNameFails()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Framework", "type": "Project", "observations": ["Aliases: Assistant, assistant-framework", "AI coding agent enhancement framework"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"project": "assistant-framework"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("Assistant Framework", text);
+        Assert.Contains("AI coding agent enhancement framework", text);
+    }
+
+    [Fact]
+    public void Context_FindsByAlias_FromPath()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "s-Planner", "type": "Project", "observations": ["Aliases: NaviPlanner, NaviPlannerWPF, navi-planner-wpf", "WPF desktop app"]}
+            """));
+
+        // Path auto-detects "navi-planner-wpf" which should resolve via alias
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"path": "/Users/dev/Projects/navi-planner-wpf"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("s-Planner", text);
+        Assert.Contains("WPF desktop app", text);
+    }
+
+    [Fact]
+    public void Context_AliasIsCaseInsensitive()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "MyProject", "type": "Project", "observations": ["Aliases: my-proj, MYPROJ"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"project": "myproj"}
+            """));
+        Assert.False(result.IsError);
+        Assert.Contains("MyProject", result.Content[0].Text);
+    }
+
+    [Fact]
+    public void Context_AmbiguousAlias_ReturnsAmbiguousMatches()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "ProjectA", "type": "Project", "observations": ["Aliases: shared-name"]}
+            """));
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "ProjectB", "type": "Project", "observations": ["Aliases: shared-name"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"project": "shared-name"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("Ambiguous alias", text);
+        Assert.Contains("ProjectA", text);
+        Assert.Contains("ProjectB", text);
+    }
+
+    [Fact]
+    public void Context_NoAlias_StillReturnsAvailableProjects()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "RealProject", "type": "Project", "observations": ["Aliases: real-proj"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"project": "completely-unknown"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("No project found", text);
+        Assert.Contains("RealProject", text);
+    }
+
     // ── V2 Reflexion Tool Tests ──────────────────────────────────────────────
 
     [Fact]

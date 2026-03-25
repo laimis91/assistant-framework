@@ -197,6 +197,43 @@ public sealed class KnowledgeGraph
         return true;
     }
 
+    // ── Alias resolution ──────────────────────────────────────────
+
+    /// <summary>
+    /// Searches Project entities for an "Aliases:" observation that contains the query.
+    /// Returns matching entities (expects 0 or 1 in practice).
+    /// </summary>
+    public List<Entity> FindByAlias(string alias)
+    {
+        const string prefix = "Aliases:";
+        var results = new List<Entity>();
+
+        foreach (var entity in _entities.Values)
+        {
+            if (entity.Type != EntityType.Project)
+            {
+                continue;
+            }
+
+            foreach (var obs in entity.Observations)
+            {
+                if (!obs.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var aliasList = obs[prefix.Length..].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (aliasList.Any(a => a.Equals(alias, StringComparison.OrdinalIgnoreCase)))
+                {
+                    results.Add(entity);
+                    break; // Don't double-add from multiple alias observations
+                }
+            }
+        }
+
+        return results;
+    }
+
     // ── Search ─────────────────────────────────────────────────────
 
     /// <summary>

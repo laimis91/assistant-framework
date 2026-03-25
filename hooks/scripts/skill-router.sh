@@ -164,7 +164,7 @@ if [[ ${#matched_reminders[@]} -gt 0 ]]; then
         fi
         combined+="SKILL MATCH ($((i+1))/${#matched_reminders[@]}): ${matched_reminders[$i]}"
     done
-    jq -n \
+    jq -cn \
         --arg ctx "$combined" \
         --arg event "$HOOK_EVENT" \
         '{hookSpecificOutput: {hookEventName: $event, additionalContext: $ctx}}'
