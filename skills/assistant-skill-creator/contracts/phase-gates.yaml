@@ -1,0 +1,132 @@
+# Assistant Skill Creator Phase Gates
+# Binary assertions checked at every phase transition.
+
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-skill-creator
+
+gates:
+  - phase: CAPTURE
+    checkpoint_start: "--- PHASE: CAPTURE ---"
+    checkpoint_end: "--- PHASE: CAPTURE COMPLETE ---"
+    condition: "existing_skill_path is not provided"
+    exit_assertions:
+      - id: SC1a
+        check: "skill_name is defined"
+        on_fail: "Ask the user to provide a skill name"
+      - id: SC1b
+        check: "skill_name follows kebab-case with a domain prefix"
+        on_fail: "Ask the user to reformat the name as kebab-case with domain prefix (e.g., assistant-foo)"
+      - id: SC2
+        check: "skill_purpose is a concrete one-sentence description"
+        on_fail: "Ask the user to refine the purpose into one actionable sentence"
+      - id: SC3
+        check: "skill_category is one of: process, analysis, utility"
+        on_fail: "Infer category from purpose or ask the user"
+      - id: SC4
+        check: "At least 3 trigger phrases are defined"
+        on_fail: "Ask the user for additional trigger phrases"
+
+  - phase: DESIGN
+    checkpoint_start: "--- PHASE: DESIGN ---"
+    checkpoint_end: "--- PHASE: DESIGN COMPLETE ---"
+    exit_assertions:
+      - id: SD1a
+        check: "Input contract has at least 3 fields"
+        on_fail: "Add more input fields — minimum 3 per SKILL.md guidance"
+      - id: SD1b
+        check: "Every input field has a type declaration"
+        on_fail: "Add type to each input field missing one"
+      - id: SD1c
+        check: "Every required input field has an on_missing action"
+        on_fail: "Add on_missing action to each required field missing one"
+      - id: SD2a
+        check: "Output contract has at least 2 artifacts"
+        on_fail: "Add more output artifacts — minimum 2 per SKILL.md guidance"
+      - id: SD2b
+        check: "Every required output artifact has an on_fail action"
+        on_fail: "Add on_fail action to each required artifact missing one"
+      - id: SD3
+        check: "Phase gates are designed for each phase"
+        condition: "skill_category is process or analysis"
+        on_fail: "Design at least one gate assertion per phase"
+      - id: SD4
+        check: "Handoff schemas are designed with matching context_fields and return_fields"
+        condition: "skill_category is process"
+        on_fail: "Design handoff schemas with explicit field matching"
+      - id: SD5
+        check: "User has reviewed and approved the contract design"
+        on_fail: "Present the design to the user and wait for approval"
+
+  - phase: BUILD
+    checkpoint_start: "--- PHASE: BUILD ---"
+    checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
+    exit_assertions:
+      - id: SB1
+        check: "SKILL.md exists with valid YAML frontmatter"
+        on_fail: "Create or fix SKILL.md frontmatter"
+      - id: SB2
+        check: "contracts/input.yaml exists with schema_version header"
+        on_fail: "Create input.yaml with proper header"
+      - id: SB3
+        check: "contracts/output.yaml exists with schema_version header"
+        on_fail: "Create output.yaml with proper header"
+      - id: SB4
+        check: "contracts/phase-gates.yaml exists"
+        condition: "skill_category is process or analysis"
+        on_fail: "Create phase-gates.yaml"
+      - id: SB5
+        check: "contracts/handoffs.yaml exists"
+        condition: "skill_category is process"
+        on_fail: "Create handoffs.yaml"
+
+  - phase: VALIDATE
+    checkpoint_start: "--- PHASE: VALIDATE ---"
+    checkpoint_end: "--- PHASE: VALIDATE COMPLETE ---"
+    exit_assertions:
+      - id: SV1a
+        check: "Every required field has an on_missing action"
+        on_fail: "Add on_missing actions to required fields that lack them"
+      - id: SV1b
+        check: "Every enum field lists all valid values"
+        on_fail: "Add enum_values to enum fields with missing or open-ended values"
+      - id: SV1c
+        check: "All validation rules are plain English"
+        on_fail: "Rewrite validation rules that contain regex, code, or framework syntax"
+      - id: SV1d
+        check: "All phase gate assertions are binary"
+        on_fail: "Split compound assertions into individual binary checks"
+      - id: SV1e
+        check: "Handoff return_fields satisfy consumer context_fields"
+        condition: "skill_category is process"
+        on_fail: "Align producer return_fields with consumer context_fields"
+      - id: SV1f
+        check: "All corrective actions are actionable"
+        on_fail: "Replace vague on_fail actions with specific recovery steps"
+      - id: SV1g
+        check: "No previously required fields have been removed"
+        condition: "skill has a prior version"
+        on_fail: "Restore removed required fields or mark them deprecated with defaults"
+      - id: SV1h
+        check: "Conditional fields use condition: syntax"
+        on_fail: "Add condition: to fields that only apply in certain contexts"
+      - id: SV1i
+        check: "Ambiguous fields have examples:"
+        on_fail: "Add at least 2 realistic examples to ambiguous fields"
+      - id: SV1j
+        check: "At least one cross-phase invariant exists"
+        condition: "skill_category is process or analysis"
+        on_fail: "Add at least one invariant with scope: all_phases"
+      - id: SV2
+        check: "SKILL.md body is under 500 lines"
+        on_fail: "Split content into sub-files under references/"
+
+invariants:
+  - id: INV1
+    check: "All YAML contract files have schema_version, contract, and skill headers"
+    scope: all_phases
+    on_fail: "Add missing headers to the contract file"
+  - id: INV2
+    check: "No enum field has open-ended values — all enums list explicit values"
+    scope: all_phases
+    on_fail: "Replace open-ended enum with explicit value list"
