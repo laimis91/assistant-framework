@@ -143,17 +143,25 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks, dispatch a **Code Mapper** to map the codebase structure while you handle the Q&A with the user. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
+For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The context map is stored at `.claude/context-map.md` and used by Code Writer and Architect instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
 
-Print: `>> Dispatching Code Mapper` (when applicable)
+Print: `>> Dispatching Code Mapper → context map` (when applicable)
 Print: `>> Dispatching Explorer` (when applicable)
 
 1. Read repo: README, CLAUDE.md, AGENTS.md, key files
 2. Compare current state against request
 3. **Recall lessons**: If `assistant-reflexion` is available, check past lessons for this project type and task type. Incorporate high-confidence lessons into constraints.
    Print: `>> Found [N] relevant lessons from past tasks` (or skip silently if none)
-4. Ask structured Q&A with recommendations when ambiguous
-5. Restate requirements in 1-3 sentences
+4. **Agent readiness check** (medium+ tasks): Quick scan of the project environment. Score 0-5:
+   - Linter config present? (eslint, .editorconfig, analyzers, etc.)
+   - Build scripted/documented? (CI, Makefile, documented `dotnet build` command, etc.)
+   - Test suite exists? (any test project or test files)
+   - `CLAUDE.md` or `AGENTS.md` exists? (agent can orient itself)
+   - Observability in place? (logging, telemetry, health checks)
+   Print: `>> Agent readiness: [N]/5` followed by any gaps found.
+   If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
+5. Ask structured Q&A with recommendations when ambiguous
+6. Restate requirements in 1-3 sentences
 
 **Q&A format:**
 ```
@@ -182,15 +190,17 @@ For large tasks, dispatch an **Architect** — it analyzes existing patterns (us
 
 Print: `>> Dispatching Architect` (when applicable)
 
-For medium+ tasks: read `references/plan-template.md` and fill it in.
-For small tasks: lightweight inline plan (what files change, risks, what to test).
+Read `references/plan-template.md` and use the correct tier:
+- Small: inline plan (goal, files, risks, tests)
+- Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
+- Large/Mega: full plan (all sections including Security and Operability)
 
 1. Research codebase: modules, patterns, entrypoints
 2. Evaluate architecture (see `playbooks/*.md` for project-type rules)
 3. Analyze 1-3 options with tradeoffs, pick one
 4. Identify risks and edge cases
 5. Write ordered implementation steps with file paths
-6. For medium+: fill in Security and Operability sections
+6. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
 7. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - New code: `references/prompts/test-strategy.md`
@@ -355,7 +365,12 @@ Print: `--- PHASE: DOCUMENT ---`
 3. For medium+: complete `references/release-readiness-checklist.md`
 4. If user-facing changes: generate release notes using `references/prompts/release-notes.md`
 5. Capture learnings to `~/.claude/memory/insights/` (if assistant-memory skill is available)
-6. **Post-task reflection**: If `assistant-reflexion` is available, invoke it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
+6. **Task completion metrics**: Append a JSONL entry to `~/.claude/memory/metrics/workflow-metrics.jsonl`:
+   ```json
+   {"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":["list of skipped criteria and why"],"agent_readiness_score":N or null if skipped (small tasks)}
+   ```
+   This is how we measure whether workflow changes improve outcomes over time.
+7. **Post-task reflection**: If `assistant-reflexion` is available, invoke it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`

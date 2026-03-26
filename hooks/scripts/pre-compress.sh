@@ -44,7 +44,7 @@ fi
 
 MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:
 
-1. TASK JOURNAL: If $STATE_DIR/task.md exists, update it with current progress, key decisions, and next steps.
+1. TASK JOURNAL: If $STATE_DIR/task.md exists, update it with current progress (including Artifact Registry and Milestones), key decisions, and next steps.
 
 2. SESSION STATE: Update $STATE_DIR/session.md with:
    - What was discussed and decided this session

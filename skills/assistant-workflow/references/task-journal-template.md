@@ -8,7 +8,7 @@ Write to `.claude/task.md` in the project root. This file is the single source o
 - Medium+: always
 
 ## When to update
-- After each Build step completes
+- After each Build step completes (update Progress, Artifact Registry, and check off Milestones)
 - When key decisions are made
 - When constraints are added by the user
 - After each review cycle pass (append to Review Log — never overwrite)
@@ -31,6 +31,17 @@ Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 
 ## Key Decisions
 - [decision]: [why] (Step N)
+
+## Artifact Registry
+[track every file created or modified — survives compression, prevents file-tracking loss]
+| File | Purpose | Last Step |
+|------|---------|-----------|
+| [path] | [what and why] | Step N |
+
+## Milestones
+[compression-safe boundaries — each marks a point where context can be safely truncated]
+- [ ] M1: [milestone description] (after Step N)
+- [ ] M2: [milestone description] (after Step N)
 
 ## Progress
 - [x] Step 1: [what was done, files changed]
@@ -107,7 +118,7 @@ Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 ## Lifecycle
 
 1. **Created** at plan approval — Status: BUILDING [1/N]
-2. **Build** each step — update Progress, Key Decisions, Status after each step
+2. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. Check off Milestones when reached.
 3. **Review cycle** when all steps done — Spec Review first (plan alignment), then Quality Review (pr-review.md checklist), fix must-fix → re-test → re-review until clean, fill Final Result
 4. **Verification** after review cycle passes — fill Verification Summary, Status: VERIFYING
 5. **Handoff** to user — they test manually and add Review Notes

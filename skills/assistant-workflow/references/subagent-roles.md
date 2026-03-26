@@ -21,7 +21,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 | Agent | Model | Access | Phase | Purpose |
 |---|---|---|---|---|
-| `code-mapper` | haiku | Read-only | Discover | Lightweight structural map of files, entry points, conventions |
+| `code-mapper` | haiku | Read-only | Discover | Produces context map (`.claude/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | sonnet | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | opus | Read-only | Plan | Implementation blueprints: files, interfaces, data flows, build sequence |
 | `code-writer` | opus | Write | Build | Implements code following a plan. No builds, no tests, no review |
