@@ -35,7 +35,18 @@ MEMORY_DIR="$AGENT_HOME/memory"
 # Ensure memory directory exists
 [[ -d "$MEMORY_DIR" ]] || exit 0
 
-prompt_lower=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
+# Strip system/agent content that causes false positives:
+# - XML tags and their content (task-notification, system-reminder, tool-use, etc.)
+# - Lines that start with common pasted-content markers (timestamps, URLs, code fences)
+# What remains should be the user's actual words.
+CLEAN_PROMPT=$(echo "$PROMPT" | sed -E '
+    s/<[^>]+>[^<]*<\/[^>]+>//g
+    s/<[^>]+>//g
+' | grep -vE '^\s*(```|http|[0-9]{2}:[0-9]{2}|<)' || true)
+
+[[ -n "$CLEAN_PROMPT" ]] || exit 0
+
+prompt_lower=$(echo "$CLEAN_PROMPT" | tr '[:upper:]' '[:lower:]')
 
 # Detection patterns — kept simple and low-false-positive
 # Each pattern group maps to a signal type
@@ -46,22 +57,22 @@ signal_detail=""
 # PIVOT signals: user is changing direction mid-task (check BEFORE correction — "actually, let's" is pivot, not correction)
 if echo "$prompt_lower" | grep -qE '\b(actually[, ]+(let.s|we should|change|switch|try)|forget that|new approach|different approach|scrap that|start over|never ?mind)\b'; then
     signal_type="pivot"
-    signal_detail=$(echo "$PROMPT" | head -c 100)
+    signal_detail=$(echo "$CLEAN_PROMPT" | head -c 100)
 
 # FRUSTRATION signals: user is repeating themselves or expressing friction
 elif echo "$prompt_lower" | grep -qE '\b(i already (said|told|asked)|again[,!]|like i said|as i mentioned|pay attention|read (it|the|my)|did you (read|check|look)|why did you)\b'; then
     signal_type="frustration"
-    signal_detail=$(echo "$PROMPT" | head -c 100)
+    signal_detail=$(echo "$CLEAN_PROMPT" | head -c 100)
 
 # CORRECTION signals: user is correcting the agent's approach
 elif echo "$prompt_lower" | grep -qE '\b(no[, ]+not that|wrong|don.t do|stop doing|that.s not|incorrect|you missed|you forgot|instead[, ]+do|i said)\b'; then
     signal_type="correction"
-    signal_detail=$(echo "$PROMPT" | head -c 100)
+    signal_detail=$(echo "$CLEAN_PROMPT" | head -c 100)
 
 # APPROVAL signals: user confirms a non-obvious approach worked
 elif echo "$prompt_lower" | grep -qE '\b(yes exactly|perfect|that.s exactly|great job|well done|good approach|nice work|that.s right|exactly what i wanted)\b'; then
     signal_type="approval"
-    signal_detail=$(echo "$PROMPT" | head -c 100)
+    signal_detail=$(echo "$CLEAN_PROMPT" | head -c 100)
 fi
 
 # Only log if a signal was detected

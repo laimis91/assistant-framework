@@ -107,7 +107,7 @@ artifacts:
   - name: metrics_entry
     type: jsonl_line
     required: true
-    condition: "size in [medium, large, mega]"
+    condition: always
     validation: "Valid JSON with required keys: date, project, task, size, review_rounds, plan_deviations, build_failures"
     location: "~/.claude/memory/metrics/workflow-metrics.jsonl"
 

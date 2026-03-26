@@ -379,17 +379,32 @@ Do NOT proceed to Phase 6 until the user confirms.
 
 Print: `--- PHASE: DOCUMENT ---`
 
+### Small tasks — lightweight path
+
+For small tasks, skip documentation updates and go straight to metrics:
+
+1. **Task completion metrics**: Append a JSONL entry (see format below)
+2. **Post-task reflection** (optional): Invoke `assistant-reflexion` if the task produced a non-obvious lesson
+
+Then print completion markers and exit.
+
+### Medium+ tasks — full path
+
 1. Update README, CHANGELOG, architecture docs as needed
 2. Code comments where "why" isn't obvious
-3. For medium+: complete `references/release-readiness-checklist.md`
+3. Complete `references/release-readiness-checklist.md`
 4. If user-facing changes: generate release notes using `references/prompts/release-notes.md`
 5. Capture learnings to `~/.claude/memory/insights/` (if assistant-memory skill is available)
-6. **Task completion metrics**: Append a JSONL entry to `~/.claude/memory/metrics/workflow-metrics.jsonl`:
-   ```json
-   {"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":["list of skipped criteria and why"],"agent_readiness_score":N or null if skipped (small tasks)}
-   ```
-   This is how we measure whether workflow changes improve outcomes over time.
+6. **Task completion metrics**: Append a JSONL entry (see format below)
 7. **Post-task reflection**: If `assistant-reflexion` is available, invoke it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
+
+### Metrics entry format (all sizes)
+
+Append one JSONL line to `~/.claude/memory/metrics/workflow-metrics.jsonl`:
+```json
+{"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":[],"agent_readiness_score":null}
+```
+`agent_readiness_score` is null for small tasks (readiness check is skipped). This is how we measure whether workflow changes improve outcomes over time.
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`

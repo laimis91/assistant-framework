@@ -189,12 +189,12 @@ gates:
 
       - id: DOC1
         check: "Relevant documentation was updated OR explicitly noted as unnecessary with reason"
+        condition: "size in [medium, large, mega]"
         on_fail: "Review what documentation needs updating (README, CHANGELOG, code comments)"
 
       - id: DOC2
-        check: "For medium+ tasks: metrics JSONL entry was appended"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Append metrics entry to workflow-metrics.jsonl"
+        check: "Metrics JSONL entry was appended to workflow-metrics.jsonl"
+        on_fail: "Append metrics entry to workflow-metrics.jsonl — required for all task sizes"
 
       - id: DOC3
         check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
