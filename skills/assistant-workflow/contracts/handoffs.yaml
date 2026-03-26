@@ -1,0 +1,508 @@
+# Handoff Contracts
+# Defines the data shape that flows between subagents.
+# Think of these as API contracts between microservices — the producer must
+# include all required fields, and the consumer must validate before using.
+#
+# Any agent dispatching a subagent MUST include the required context fields.
+# Any subagent returning results MUST include the required output fields.
+# If a required field is missing from the return, follow the on_missing action.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-workflow
+
+# ─────────────────────────────────────────────
+# Orchestrator → CodeMapper
+# ─────────────────────────────────────────────
+handoffs:
+
+  - name: orchestrator_to_code_mapper
+    from: Orchestrator
+    to: CodeMapper
+    phase: DISCOVER
+    context_fields:
+      - name: task_description
+        type: string
+        required: true
+        description: "What the task is about — scopes the mapping"
+      - name: target_area
+        type: string
+        required: false
+        description: "Specific module/directory to focus on, if known"
+      - name: constraints
+        type: string[]
+        required: false
+        description: "Boundaries the mapper should note (e.g., 'ignore tests/')"
+    return_fields:
+      - name: project_type
+        type: string
+        required: true
+        description: "Detected project type (e.g., 'ASP.NET Core Web API', 'Blazor WASM', 'Console app')"
+        validation: "Non-empty, specific enough to inform architecture decisions"
+      - name: entry_points
+        type: object[]
+        required: true
+        description: "Main entry points relevant to the task"
+        min_items: 1
+        object_fields:
+          - name: file
+            type: string
+            required: true
+          - name: description
+            type: string
+            required: true
+      - name: key_interfaces
+        type: object[]
+        required: true
+        description: "Interfaces and contracts relevant to the task"
+        object_fields:
+          - name: name
+            type: string
+            required: true
+          - name: file
+            type: string
+            required: true
+          - name: purpose
+            type: string
+            required: true
+      - name: conventions
+        type: object[]
+        required: true
+        description: "Coding conventions observed in the codebase"
+        min_items: 1
+        object_fields:
+          - name: pattern
+            type: string
+            required: true
+          - name: example
+            type: string
+            required: true
+      - name: dependencies
+        type: string[]
+        required: true
+        description: "External packages and frameworks in use"
+      - name: file_map
+        type: object[]
+        required: true
+        description: "Files relevant to the task with their roles"
+        min_items: 1
+        object_fields:
+          - name: path
+            type: string
+            required: true
+          - name: role
+            type: string
+            required: true
+      - name: test_locations
+        type: object[]
+        required: true
+        description: "Where tests live for the relevant areas"
+        object_fields:
+          - name: area
+            type: string
+            required: true
+          - name: test_file
+            type: string
+            required: true
+          - name: type
+            type: enum
+            required: true
+            enum_values: [unit, integration, e2e]
+    on_missing_field: "Re-dispatch CodeMapper with explicit request for the missing field"
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Explorer
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_explorer
+    from: Orchestrator
+    to: Explorer
+    phase: DISCOVER
+    context_fields:
+      - name: task_description
+        type: string
+        required: true
+      - name: focus_areas
+        type: string[]
+        required: true
+        description: "Specific execution paths or behaviors to trace"
+      - name: context_map
+        type: string
+        required: false
+        description: "Output from CodeMapper if available — avoids re-exploring structure"
+    return_fields:
+      - name: execution_paths
+        type: object[]
+        required: true
+        description: "Traced paths through the code relevant to the task"
+        object_fields:
+          - name: trigger
+            type: string
+            required: true
+            description: "What initiates this path (HTTP request, event, command, etc.)"
+          - name: steps
+            type: string[]
+            required: true
+            description: "Ordered list of method calls / service interactions"
+          - name: side_effects
+            type: string[]
+            required: false
+            description: "Database writes, API calls, events emitted"
+      - name: design_decisions
+        type: object[]
+        required: true
+        description: "Architectural choices and their rationale"
+        object_fields:
+          - name: decision
+            type: string
+            required: true
+          - name: rationale
+            type: string
+            required: true
+          - name: location
+            type: string
+            required: true
+      - name: hidden_dependencies
+        type: object[]
+        required: false
+        description: "Non-obvious coupling or dependencies"
+        object_fields:
+          - name: from
+            type: string
+            required: true
+          - name: to
+            type: string
+            required: true
+          - name: nature
+            type: string
+            required: true
+            description: "What kind of dependency (runtime, config, convention, implicit)"
+    on_missing_field: "Re-dispatch Explorer with specific questions about the missing area"
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Architect
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_architect
+    from: Orchestrator
+    to: Architect
+    phase: PLAN
+    context_fields:
+      - name: task_description
+        type: string
+        required: true
+      - name: requirements_summary
+        type: string
+        required: true
+        description: "Restated requirements from Discover phase"
+      - name: context_map
+        type: string
+        required: true
+        description: "CodeMapper output — the Architect builds on this, not from scratch"
+      - name: explorer_findings
+        type: string
+        required: false
+        description: "Explorer output if available (large/mega tasks)"
+      - name: constraints
+        type: string[]
+        required: true
+        description: "All accumulated constraints"
+    return_fields:
+      - name: implementation_steps
+        type: object[]
+        required: true
+        description: "Ordered steps with file paths and test criteria"
+        min_items: 1
+        object_fields:
+          - name: order
+            type: int
+            required: true
+          - name: description
+            type: string
+            required: true
+          - name: files
+            type: string[]
+            required: true
+            description: "File paths this step touches"
+          - name: test_criteria
+            type: string[]
+            required: true
+            description: "What to test after this step"
+            min_items: 1
+      - name: files_to_create
+        type: object[]
+        required: false
+        object_fields:
+          - name: path
+            type: string
+            required: true
+          - name: purpose
+            type: string
+            required: true
+          - name: template
+            type: string
+            required: false
+            description: "Existing file to use as structural reference"
+      - name: files_to_modify
+        type: object[]
+        required: true
+        object_fields:
+          - name: path
+            type: string
+            required: true
+            validation: "File must exist in the project"
+          - name: change_description
+            type: string
+            required: true
+      - name: interfaces
+        type: object[]
+        required: false
+        description: "New interfaces or contracts to define"
+        object_fields:
+          - name: name
+            type: string
+            required: true
+          - name: file
+            type: string
+            required: true
+          - name: methods
+            type: string[]
+            required: true
+      - name: test_plan
+        type: object[]
+        required: true
+        description: "What to test and how"
+        min_items: 1
+        object_fields:
+          - name: component
+            type: string
+            required: true
+          - name: test_type
+            type: enum
+            required: true
+            enum_values: [unit, integration, e2e]
+          - name: description
+            type: string
+            required: true
+      - name: risks
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: mitigation
+            type: string
+            required: true
+    on_missing_field: "Re-dispatch Architect requesting the specific missing section"
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → CodeWriter
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_code_writer
+    from: Orchestrator
+    to: CodeWriter
+    phase: BUILD
+    context_fields:
+      - name: plan
+        type: string
+        required: true
+        description: "Approved plan — the CodeWriter follows this exactly"
+      - name: current_step
+        type: int
+        required: true
+        description: "Which step(s) to implement"
+      - name: context_map
+        type: string
+        required: true
+        description: "CodeMapper output for codebase orientation"
+      - name: conventions
+        type: object[]
+        required: true
+        description: "Coding conventions to follow (from context map)"
+      - name: constraints
+        type: string[]
+        required: true
+        description: "Boundaries that must not be crossed"
+      - name: tdd_mode
+        type: boolean
+        required: false
+        default: false
+        description: "If true, CodeWriter must write failing test BEFORE production code"
+    return_fields:
+      - name: files_changed
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: path
+            type: string
+            required: true
+          - name: change_type
+            type: enum
+            required: true
+            enum_values: [created, modified, deleted]
+          - name: description
+            type: string
+            required: true
+      - name: tests_written
+        type: object[]
+        required: true
+        description: "Tests created or modified in this step"
+        min_items: 0
+        object_fields:
+          - name: file
+            type: string
+            required: true
+          - name: test_names
+            type: string[]
+            required: true
+      - name: deviation_detected
+        type: boolean
+        required: true
+        description: "True if the plan didn't match reality"
+      - name: deviation_details
+        type: string
+        required: false
+        description: "What the plan assumed vs. what was found"
+        condition: "when deviation_detected is true"
+    on_missing_field: "CodeWriter must always return files_changed and deviation_detected at minimum"
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → BuilderTester
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_builder_tester
+    from: Orchestrator
+    to: BuilderTester
+    phase: BUILD
+    context_fields:
+      - name: files_changed
+        type: string[]
+        required: true
+        description: "Files that were just modified (from CodeWriter return)"
+      - name: build_command
+        type: string
+        required: false
+        description: "Custom build command if non-standard"
+      - name: test_targets
+        type: string[]
+        required: true
+        description: "Test projects or files to run"
+    return_fields:
+      - name: build_result
+        type: enum
+        required: true
+        enum_values: [passed, failed]
+      - name: build_errors
+        type: string[]
+        required: false
+        condition: "when build_result is failed"
+        description: "Concise error descriptions — not raw logs"
+      - name: test_summary
+        type: object
+        required: true
+        object_fields:
+          - name: passed
+            type: int
+            required: true
+          - name: failed
+            type: int
+            required: true
+          - name: skipped
+            type: int
+            required: true
+      - name: test_failures
+        type: object[]
+        required: false
+        condition: "test_summary.failed > 0"
+        object_fields:
+          - name: test_name
+            type: string
+            required: true
+          - name: error
+            type: string
+            required: true
+            description: "Concise error — assertion message + expected/actual, not stack trace"
+    on_missing_field: "Re-dispatch BuilderTester. build_result and test_summary are never optional."
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Reviewer
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_reviewer
+    from: Orchestrator
+    to: Reviewer
+    phase: REVIEW
+    context_fields:
+      - name: diff
+        type: string
+        required: true
+        description: "Full diff of all changes to review"
+      - name: round
+        type: int
+        required: true
+        description: "Current review round number"
+      - name: previously_fixed
+        type: object[]
+        required: true
+        description: "Items fixed in prior rounds — reviewer must NOT re-report these"
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: fixed_in_round
+            type: int
+            required: true
+      - name: confidence_threshold
+        type: int
+        required: true
+        description: "Minimum confidence percentage for reporting findings"
+        validation: "Must be one of: 80, 85, 90"
+        notes: "Round 1-2: 80, Round 3-4: 85, Round 5: 90"
+    return_fields:
+      - name: round
+        type: int
+        required: true
+      - name: findings
+        type: object[]
+        required: true
+        description: "All findings above the confidence threshold"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+          - name: file
+            type: string
+            required: true
+          - name: line
+            type: int
+            required: false
+          - name: description
+            type: string
+            required: true
+          - name: confidence_pct
+            type: int
+            required: true
+            validation: "Must be >= confidence_threshold for this round"
+          - name: suggestion
+            type: string
+            required: false
+            description: "Concrete fix suggestion when applicable"
+      - name: summary
+        type: string
+        required: true
+        description: "1-paragraph summary of overall code quality"
+      - name: verdict
+        type: enum
+        required: true
+        enum_values: [clean, has_must_fix, has_should_fix, has_nits_only]
+    on_missing_field: "Re-dispatch Reviewer. findings and verdict are never optional."
+
+# ─────────────────────────────────────────────
+# Validation behavior for all handoffs:
+#
+# 1. Before dispatching: verify all required context_fields are populated
+# 2. After return: verify all required return_fields are present
+# 3. If on_missing_field action is "re-dispatch": retry once with explicit request
+# 4. If second dispatch also missing fields: log the gap, fill manually, and continue
+# 5. Never silently proceed with missing required fields — always log what was missing
+# ─────────────────────────────────────────────

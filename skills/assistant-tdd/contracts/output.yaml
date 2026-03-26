@@ -1,0 +1,102 @@
+# TDD Output Contract
+# Defines what a completed TDD session MUST produce.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-tdd
+
+artifacts:
+  - name: cycle_log
+    type: object[]
+    required: true
+    condition: always
+    description: "Record of every Red-Green-Refactor cycle executed"
+    min_items: 1
+    validation: "One entry per behavior. Every behavior from input must have a corresponding cycle."
+    object_fields:
+      - name: behavior
+        type: string
+        required: true
+        description: "The behavior description from the input"
+      - name: plan_step
+        type: int
+        required: false
+      - name: red
+        type: object
+        required: true
+        description: "RED phase: write failing test"
+        object_fields:
+          - name: test_name
+            type: string
+            required: true
+          - name: test_file
+            type: string
+            required: true
+          - name: failure_reason
+            type: string
+            required: true
+            validation: "Must describe WHY the test failed (not syntax error or missing import)"
+          - name: verified_failing
+            type: boolean
+            required: true
+            validation: "Must be true — test was run and confirmed to fail for the right reason"
+      - name: green
+        type: object
+        required: true
+        description: "GREEN phase: make test pass with simplest code"
+        object_fields:
+          - name: production_file
+            type: string
+            required: true
+          - name: test_passes
+            type: boolean
+            required: true
+            validation: "Must be true — the previously failing test now passes"
+          - name: all_tests_pass
+            type: boolean
+            required: true
+            validation: "Must be true — no other tests broke"
+      - name: refactor
+        type: object
+        required: true
+        description: "REFACTOR phase: clean up without changing behavior"
+        object_fields:
+          - name: changes_made
+            type: string
+            required: true
+            description: "What was refactored, or 'none needed'"
+          - name: all_tests_pass
+            type: boolean
+            required: true
+            validation: "Must be true — refactoring did not break any tests"
+
+  - name: coverage_summary
+    type: object
+    required: true
+    condition: always
+    description: "Summary of what is now tested"
+    object_fields:
+      - name: new_tests
+        type: int
+        required: true
+        validation: ">= 1"
+      - name: total_tests_run
+        type: int
+        required: true
+      - name: all_passing
+        type: boolean
+        required: true
+        validation: "Must be true at TDD completion"
+
+  - name: task_journal_entry
+    type: string
+    required: true
+    condition: "task journal exists"
+    description: "Progress section updated with RED/GREEN/REFACTOR entries per step"
+    validation: "Each completed behavior shows RED, GREEN, REFACTOR sub-entries"
+
+# Completeness check:
+# 1. Every input behavior has a corresponding cycle_log entry
+# 2. Every cycle has verified_failing=true (RED), test_passes=true (GREEN), all_tests_pass=true (REFACTOR)
+# 3. No production code exists without a preceding failing test
+# 4. coverage_summary.all_passing is true

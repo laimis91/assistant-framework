@@ -1,0 +1,226 @@
+# Phase Gate Contracts
+# Assertions that MUST be true before transitioning between phases.
+# Think of these as type checks at function boundaries — the output of phase N
+# must satisfy the input contract of phase N+1.
+#
+# Any agent executing this skill MUST evaluate all assertions for the current
+# phase before printing --- PHASE: {name} COMPLETE ---.
+# If any assertion fails, the agent MUST resolve it before proceeding.
+
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-workflow
+
+gates:
+
+  # ─────────────────────────────────────────────
+  # TRIAGE → DISCOVER
+  # ─────────────────────────────────────────────
+  - phase: TRIAGE
+    checkpoint_start: "--- PHASE: TRIAGE ---"
+    checkpoint_end: null  # Triage has no COMPLETE line; it flows into Discover
+    exit_assertions:
+
+      - id: T1
+        check: "size is set to one of: small, medium, large, mega"
+        on_fail: "Re-assess task against size criteria table in SKILL.md"
+
+      - id: T2
+        check: "phases list is populated and matches the size-to-phases mapping table"
+        on_fail: "Correct phases list to match the selected size"
+
+      - id: T3
+        check: "'>> Triaged as: {SIZE} — phases: {list}' message was printed to user"
+        on_fail: "Print the triage result before continuing"
+
+  # ─────────────────────────────────────────────
+  # DISCOVER → PLAN
+  # ─────────────────────────────────────────────
+  - phase: DISCOVER
+    checkpoint_start: "--- PHASE: DISCOVER ---"
+    checkpoint_end: "--- PHASE: DISCOVER COMPLETE ---"
+    exit_assertions:
+
+      - id: D1
+        check: "Requirements restated in 1-3 sentences"
+        on_fail: "Write a requirements summary before proceeding"
+
+      - id: D2
+        check: "No open questions remain — all answered by user or resolved with stated defaults"
+        on_fail: "Present remaining questions to user and wait for answers"
+
+      - id: D3
+        check: "For medium+ tasks: context map exists at .claude/context-map.md"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Dispatch Code Mapper before proceeding to Plan"
+
+      - id: D4
+        check: "For medium+ tasks: agent readiness score was assessed and printed"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Run agent readiness check and print score"
+
+      - id: D5
+        check: "constraints list is captured (may be empty, but must be explicitly set)"
+        on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
+
+  # ─────────────────────────────────────────────
+  # PLAN → BUILD (or DESIGN)
+  # ─────────────────────────────────────────────
+  - phase: PLAN
+    checkpoint_start: "--- PHASE: PLAN ---"
+    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) ---"
+    exit_assertions:
+
+      - id: P1
+        check: "Plan contains ordered implementation steps, each with file paths"
+        on_fail: "Add file paths to every implementation step"
+
+      - id: P2
+        check: "Each implementation step has associated test criteria describing what to verify"
+        on_fail: "Add test criteria to steps missing them"
+
+      - id: P3
+        check: "Risks section is populated — at minimum 'Low risk: single-file change' for small tasks"
+        on_fail: "Add risks section. Every plan has at least one risk, even if low."
+
+      - id: P4
+        check: "User explicitly said 'approved' or 'approved with changes'"
+        on_fail: "Present plan and wait for approval. Do NOT proceed without it."
+
+      - id: P5
+        check: "Plan tier matches task size (inline for small, standard for medium, full for large/mega)"
+        on_fail: "Upgrade or downgrade plan tier to match size"
+
+      - id: P6
+        check: "For large/mega tasks: Security and Operability sections are populated"
+        condition: "size in [large, mega]"
+        on_fail: "Fill Security and Operability sections per plan-template.md"
+
+  # ─────────────────────────────────────────────
+  # DESIGN → BUILD (UI tasks only)
+  # ─────────────────────────────────────────────
+  - phase: DESIGN
+    checkpoint_start: "--- PHASE: DESIGN ---"
+    checkpoint_end: "--- PHASE: DESIGN COMPLETE (approved) ---"
+    condition: "phases list includes DESIGN"
+    exit_assertions:
+
+      - id: DS1
+        check: "Visual mockup was presented to user"
+        on_fail: "Create and present mockup before proceeding"
+
+      - id: DS2
+        check: "User explicitly approved the design"
+        on_fail: "Wait for design approval"
+
+  # ─────────────────────────────────────────────
+  # BUILD → REVIEW
+  # ─────────────────────────────────────────────
+  - phase: BUILD
+    checkpoint_start: "--- PHASE: BUILD ---"
+    checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
+    exit_assertions:
+
+      - id: B1
+        check: "Every plan step has a corresponding '>> Step N/total: DONE' message"
+        on_fail: "Complete remaining plan steps before entering Review"
+
+      - id: B2
+        check: "Build command succeeded (exit code 0 or equivalent success)"
+        on_fail: "Fix build errors. Do not enter Review with a broken build."
+
+      - id: B3
+        check: "At least 1 test exists and was executed"
+        on_fail: "Write at least one test for the changed code before proceeding"
+
+      - id: B4
+        check: "All tests pass (0 failures)"
+        on_fail: "Fix failing tests before entering Review"
+
+      - id: B5
+        check: "No plan deviations occurred silently — all were flagged via '>> PLAN DEVIATION DETECTED'"
+        on_fail: "If any code diverges from the plan, print the deviation message and get resolution"
+
+      - id: B6
+        check: "For medium+ tasks: task journal is updated with progress for all completed steps"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Update task journal Progress section"
+
+      - id: B7
+        check: "Tests were written alongside code, not in a batch after all implementation"
+        on_fail: "This is a process violation. Note it in the task journal for the reflexion phase."
+
+  # ─────────────────────────────────────────────
+  # REVIEW → DOCUMENT
+  # ─────────────────────────────────────────────
+  - phase: REVIEW
+    checkpoint_start: "--- PHASE: REVIEW ---"
+    checkpoint_end: "--- PHASE: REVIEW COMPLETE ---"
+    exit_assertions:
+
+      - id: R1
+        check: "Spec Review completed — plan alignment was assessed"
+        on_fail: "Run Spec Review (compare implementation against approved plan)"
+
+      - id: R2
+        check: "Quality Review completed via assistant-review skill invocation (not manual review)"
+        on_fail: "Invoke assistant-review skill. Do not manually dispatch reviewers."
+
+      - id: R3
+        check: "Verification summary is written with: changed files, test coverage, review result, manual test steps, known limitations"
+        on_fail: "Write verification summary in task journal"
+
+      - id: R4
+        check: "User confirmed 'looks good' or equivalent approval"
+        on_fail: "Present verification summary and wait for user confirmation"
+
+      - id: R5
+        check: "For medium+ tasks: task journal Review Log has Final Result entry"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Write Final Result entry in task journal Review Log"
+
+  # ─────────────────────────────────────────────
+  # DOCUMENT → COMPLETE
+  # ─────────────────────────────────────────────
+  - phase: DOCUMENT
+    checkpoint_start: "--- PHASE: DOCUMENT ---"
+    checkpoint_end: "--- PHASE: DOCUMENT COMPLETE ---"
+    exit_assertions:
+
+      - id: DOC1
+        check: "Relevant documentation was updated OR explicitly noted as unnecessary with reason"
+        on_fail: "Review what documentation needs updating (README, CHANGELOG, code comments)"
+
+      - id: DOC2
+        check: "For medium+ tasks: metrics JSONL entry was appended"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Append metrics entry to workflow-metrics.jsonl"
+
+      - id: DOC3
+        check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
+        on_fail: "Do not print workflow complete until all document assertions pass"
+
+# ─────────────────────────────────────────────
+# Cross-phase invariants
+# These must hold true throughout the entire workflow, not just at gates.
+# ─────────────────────────────────────────────
+invariants:
+  - id: INV1
+    check: "Constraints list is never reduced — only grows. Removing a constraint requires explicit user instruction."
+    scope: all_phases
+    on_fail: "Print '>> CONSTRAINT REMOVED — review with user before proceeding' and restore the removed constraint"
+
+  - id: INV2
+    check: "No phase is skipped that the size-to-phases mapping requires"
+    scope: all_phases
+    on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing' and execute the skipped phase"
+
+  - id: INV3
+    check: "Every phase prints its start checkpoint before any work and its end checkpoint after assertions pass"
+    scope: all_phases
+    on_fail: "Re-print the missing checkpoint marker and note the skipped protocol step in the task journal"
+
+  - id: INV4
+    check: "If scope grows beyond initial triage during any phase, stop and re-triage"
+    scope: all_phases
+    on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"

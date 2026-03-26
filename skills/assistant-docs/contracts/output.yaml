@@ -1,0 +1,40 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-docs
+
+artifacts:
+  - name: files_updated
+    type: object[]
+    required: true
+    description: "List of files created or modified with documentation"
+    min_items: 1
+    on_fail: "Re-run skill to produce the missing artifact"
+    object_fields:
+      - name: path
+        type: string
+        required: true
+        description: "File path that was created or modified"
+      - name: change_type
+        type: enum
+        required: true
+        enum_values: [created, modified]
+        description: "Whether the file was newly created or modified"
+      - name: description
+        type: string
+        required: true
+        description: "What documentation was added or changed"
+
+  - name: doc_coverage
+    type: string
+    required: true
+    description: "Summary of what is documented and what gaps remain"
+    validation: "Non-empty string covering both documented and undocumented areas"
+    on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: review_needed
+    type: boolean
+    required: true
+    description: "Whether generated docs need user review before committing"
+    validation: "True when docs contain inferred information or cover complex areas"
+    on_fail: "Re-run skill to produce the missing artifact"

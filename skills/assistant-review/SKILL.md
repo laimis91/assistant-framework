@@ -13,6 +13,24 @@ triggers:
 
 # Autonomous Review Loop
 
+## Contracts
+
+This skill enforces strict contracts on inputs, outputs, loop gates, and reviewer handoffs. Read the contract files in `contracts/` before executing.
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Scope, mode, and diff to resolve before entering the loop |
+| **Output** | `contracts/output.yaml` | Final summary and verification artifacts |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Per-round step assertions and loop invariants |
+| **Handoffs** | `contracts/handoffs.yaml` | Reviewer subagent dispatch and return schema |
+
+**Rules:**
+- Resolve all input contract fields before entering the loop
+- Check phase gate assertions at every step transition within each round
+- Include all required context fields when dispatching Reviewer subagents
+- Validate all required return fields when Reviewer completes
+- Verify all output contract artifacts before presenting the final summary
+
 You MUST run this loop autonomously from start to finish. Do NOT stop after one round. Do NOT present intermediate results. Do NOT wait for the user between rounds. Run until clean or max rounds reached, then present the final result.
 
 ## Entry

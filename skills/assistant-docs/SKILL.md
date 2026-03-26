@@ -11,6 +11,17 @@ triggers:
 
 # Documentation Generator
 
+## Contracts
+
+| File | Purpose |
+|---|---|
+| [`contracts/input.yaml`](contracts/input.yaml) | doc_type, scope, source_files[], format |
+| [`contracts/output.yaml`](contracts/output.yaml) | files_updated[], doc_coverage, review_needed |
+
+- `doc_type` and `scope` are required; `source_files` and `format` are inferred when absent
+- `files_updated` entries include path, change_type (created/modified), and description
+- `review_needed` is true when docs contain inferred information needing user confirmation
+
 Covers the developer's documentation weakness by generating accurate, maintainable docs from code.
 
 Core principle: **docs should be generated from truth (code), not written from memory.**

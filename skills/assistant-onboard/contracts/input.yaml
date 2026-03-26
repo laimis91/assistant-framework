@@ -1,0 +1,27 @@
+# contract header
+schema_version: "1.0"
+contract: input
+skill: assistant-onboard
+
+fields:
+  - name: project_path
+    type: string
+    required: true
+    description: "Root directory of the project to learn"
+    validation: "Must be a valid directory path containing a project"
+    on_missing: ask
+
+  - name: focus_area
+    type: string
+    required: false
+    description: "Specific module or area to focus on"
+    validation: "Non-empty string when provided"
+    on_missing: skip
+
+  - name: depth
+    type: enum
+    required: false
+    description: "How thoroughly to explore the codebase"
+    validation: "Defaults to standard when not specified"
+    on_missing: infer
+    enum_values: [quick, standard, deep]

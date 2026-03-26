@@ -1,0 +1,38 @@
+# contract header
+schema_version: "1.0"
+contract: input
+skill: assistant-memory
+
+fields:
+  - name: action
+    type: enum
+    required: true
+    description: "What memory operation to perform"
+    validation: "Must be a supported memory action"
+    on_missing: ask
+    enum_values: [save, recall, update, forget, search]
+
+  - name: content
+    type: string
+    required: conditional
+    condition: "when action is save or update"
+    description: "What to remember or update"
+    validation: "Non-empty string"
+    on_missing: ask
+
+  - name: memory_type
+    type: enum
+    required: conditional
+    condition: "when action is save"
+    description: "Category of memory to save"
+    validation: "Must be a supported memory type"
+    on_missing: ask
+    enum_values: [user, feedback, project, reference, insight]
+
+  - name: query
+    type: string
+    required: conditional
+    condition: "when action is recall or search"
+    description: "What to look for in memory"
+    validation: "Non-empty string"
+    on_missing: ask

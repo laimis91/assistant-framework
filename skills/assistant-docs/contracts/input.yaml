@@ -1,0 +1,35 @@
+# contract header
+schema_version: "1.0"
+contract: input
+skill: assistant-docs
+
+fields:
+  - name: doc_type
+    type: enum
+    required: true
+    description: "What kind of documentation to generate"
+    validation: "Must be a supported documentation type"
+    on_missing: ask
+    enum_values: [api, architecture, readme, changelog, migration, inline_comments, explainer]
+
+  - name: scope
+    type: string
+    required: true
+    description: "What to document — a feature, module, or entire project"
+    validation: "Non-empty string identifying the documentation target"
+    on_missing: ask
+
+  - name: source_files
+    type: string[]
+    required: false
+    description: "Specific files to document"
+    validation: "Each entry must be a valid file path"
+    on_missing: infer
+
+  - name: format
+    type: enum
+    required: false
+    description: "Output format for generated documentation"
+    validation: "Defaults to markdown when not specified"
+    on_missing: infer
+    enum_values: [markdown, xml_comments, jsdoc]

@@ -11,6 +11,19 @@ triggers:
 
 # Thinking Tools
 
+## Contracts
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Problem, tool selection, stakes level |
+| **Output** | `contracts/output.yaml` | Key insights, recommendation, confidence, dissenting view |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Tool selection → Analysis → Synthesis gates |
+
+**Rules:**
+- Analysis must follow the loaded tool's methodology — not ad-hoc thinking
+- Dissenting views must be considered, not suppressed
+- Confidence level must reflect actual analysis depth, not default to HIGH
+
 On-demand structured reasoning. Use when you or the user needs deeper analysis — not on every task.
 
 ## Available Tools

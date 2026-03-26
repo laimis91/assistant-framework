@@ -1,0 +1,77 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-security
+
+artifacts:
+  - name: findings
+    type: object[]
+    required: true
+    description: "Security findings from the analysis"
+    object_fields:
+      - name: severity
+        type: enum
+        required: true
+        description: "How serious the finding is"
+        enum_values: [critical, high, medium, low]
+
+      - name: category
+        type: string
+        required: true
+        description: "Classification of the finding (e.g., 'injection', 'auth bypass', 'outdated dependency')"
+
+      - name: file
+        type: string
+        required: false
+        description: "File path where the finding was identified"
+        on_missing: skip
+        default: "project-level"
+
+      - name: description
+        type: string
+        required: true
+        description: "What the security issue is"
+
+      - name: impact
+        type: string
+        required: true
+        description: "What could happen if this is exploited or left unaddressed"
+
+      - name: remediation
+        type: string
+        required: true
+        description: "How to fix the issue"
+
+  - name: summary
+    type: string
+    required: true
+    description: "Overall security posture assessment"
+
+  - name: risk_level
+    type: enum
+    required: true
+    description: "Overall risk level based on all findings"
+    enum_values: [critical, high, medium, low, none]
+
+  - name: action_items
+    type: object[]
+    required: conditional
+    condition: "when findings contain items at or above severity_threshold"
+    description: "Prioritized list of what to fix"
+    on_missing: skip
+    default: []
+    object_fields:
+      - name: priority
+        type: int
+        required: true
+        description: "Priority order (1 = highest priority)"
+
+      - name: description
+        type: string
+        required: true
+        description: "What action to take"
+
+      - name: effort
+        type: enum
+        required: true
+        description: "Estimated effort to implement the fix"
+        enum_values: [trivial, small, medium, large]

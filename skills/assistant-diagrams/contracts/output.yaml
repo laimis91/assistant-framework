@@ -1,0 +1,26 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-diagrams
+
+artifacts:
+  - name: diagram_code
+    type: string
+    required: true
+    description: "Valid Mermaid or PlantUML diagram syntax"
+    validation: "Diagram syntax must be valid — parseable by the target renderer"
+    on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: diagram_type
+    type: enum
+    required: true
+    description: "The type of diagram that was generated (echoed from input)"
+    enum_values: [architecture, sequence, er, flow, component, class, state]
+    on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: description
+    type: string
+    required: true
+    description: "What the diagram shows — a brief explanation of its contents"
+    validation: "Non-empty, concise description of the diagram's purpose and scope"
+    on_fail: "Re-run skill to produce the missing artifact"

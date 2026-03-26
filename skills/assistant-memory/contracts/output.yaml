@@ -1,0 +1,45 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-memory
+
+artifacts:
+  - name: action_taken
+    type: enum
+    required: true
+    description: "The memory operation that was performed"
+    enum_values: [save, recall, update, forget, search]
+    on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: file_path
+    type: string
+    required: false
+    condition: "When action is save or update"
+    description: "Path where memory was written"
+    validation: "Must be a valid file path under ~/.claude/memory/ or .claude/"
+
+  - name: results
+    type: object[]
+    required: false
+    condition: "When action is recall or search"
+    description: "Found memories matching the query"
+    object_fields:
+      - name: file
+        type: string
+        required: true
+        description: "File path where the memory was found"
+      - name: title
+        type: string
+        required: true
+        description: "Title or heading of the matched memory"
+      - name: relevance
+        type: string
+        required: true
+        description: "How relevant the result is to the query"
+
+  - name: confirmation
+    type: string
+    required: true
+    description: "Human-readable description of what was done"
+    validation: "Non-empty, concise summary of the action taken"
+    on_fail: "Re-run skill to produce the missing artifact"

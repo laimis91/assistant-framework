@@ -11,6 +11,17 @@ triggers:
 
 # Diagram Generator
 
+## Contracts
+
+| File | Purpose |
+|---|---|
+| [`contracts/input.yaml`](contracts/input.yaml) | diagram_type, scope, source_files[], format |
+| [`contracts/output.yaml`](contracts/output.yaml) | diagram_code, diagram_type, description |
+
+- `diagram_type` and `scope` are required; `format` defaults to mermaid
+- `diagram_code` must be valid syntax parseable by the target renderer
+- `diagram_type` is echoed back in output to confirm what was generated
+
 Creates accurate Mermaid diagrams from code analysis. Covers the developer's visual documentation weakness.
 
 Core principle: **Diagrams should be generated from code, not drawn from memory.**

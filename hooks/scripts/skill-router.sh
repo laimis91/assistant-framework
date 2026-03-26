@@ -151,6 +151,32 @@ for entry in "${sorted[@]}"; do
     # Guard against malformed regex by suppressing grep errors.
     if echo "$prompt_lower" | grep -qE "\b($pattern)\b" 2>/dev/null; then
         matched_skills+=("$skill_name")
+
+        # Check for input contract and extract required field names
+        input_contract="$SKILLS_DIR/$skill_name/contracts/input.yaml"
+        if [[ -f "$input_contract" ]]; then
+            # Extract required field names: find name: lines where required: true follows
+            required_fields=()
+            prev_name=""
+            while IFS= read -r cline; do
+                if [[ "$cline" =~ ^[[:space:]]*-[[:space:]]*name:[[:space:]]*(.+)$ ]]; then
+                    prev_name="${BASH_REMATCH[1]}"
+                elif [[ "$cline" =~ ^[[:space:]]*name:[[:space:]]*(.+)$ ]]; then
+                    prev_name="${BASH_REMATCH[1]}"
+                elif [[ "$cline" =~ ^[[:space:]]*required:[[:space:]]*true && -n "$prev_name" ]]; then
+                    required_fields+=("$prev_name")
+                    prev_name=""
+                elif [[ "$cline" =~ ^[[:space:]]*required:[[:space:]] ]]; then
+                    prev_name=""
+                fi
+            done < "$input_contract"
+
+            if [[ ${#required_fields[@]} -gt 0 ]]; then
+                fields_list=$(IFS=', '; echo "${required_fields[*]}")
+                reminder="$reminder Required inputs for this skill: [$fields_list]"
+            fi
+        fi
+
         matched_reminders+=("$reminder")
     fi
 done

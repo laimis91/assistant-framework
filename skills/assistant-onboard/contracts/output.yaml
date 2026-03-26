@@ -1,0 +1,35 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-onboard
+
+artifacts:
+  - name: project_summary
+    type: string
+    required: true
+    description: "What the project does, its tech stack, and architecture overview"
+    validation: "Non-empty, covers purpose, stack, and structure"
+
+  - name: key_files
+    type: object[]
+    required: true
+    description: "Important files in the project with their purpose"
+    validation: "Each entry must include path (string) and purpose (string)"
+
+  - name: conventions
+    type: object[]
+    required: true
+    description: "Coding patterns and conventions observed in the project"
+    validation: "Each entry must include pattern (string) and example (string)"
+
+  - name: memory_updated
+    type: boolean
+    required: true
+    description: "Whether .claude/memory.md was created or updated"
+    validation: "Must accurately reflect whether the file was written"
+
+  - name: questions
+    type: string[]
+    required: true
+    description: "Open questions for the user about the project"
+    validation: "Specific questions about unclear areas — not generic prompts"

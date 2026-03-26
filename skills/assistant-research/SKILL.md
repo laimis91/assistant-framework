@@ -10,6 +10,19 @@ triggers:
 
 # Research Tools
 
+## Contracts
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Question, tier, tool selection |
+| **Output** | `contracts/output.yaml` | Findings with confidence scores, conflicts, gaps |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Search → Synthesize → Verify pipeline gates |
+
+**Rules:**
+- Every finding must have a confidence level (HIGH/MEDIUM/LOW) based on source count
+- Every URL must be verified before presenting to user
+- Conflicts and gaps must be explicitly checked and reported (even if empty)
+
 On-demand investigation capabilities with tiered depth and URL verification.
 
 ## Available Tools

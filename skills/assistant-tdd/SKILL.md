@@ -10,6 +10,22 @@ triggers:
 
 # Test-Driven Development
 
+## Contracts
+
+This skill enforces strict gate assertions at every RED → GREEN → REFACTOR transition.
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Behaviors to implement, test framework, exceptions |
+| **Output** | `contracts/output.yaml` | Cycle log with verified pass/fail at each phase |
+| **Phase Gates** | `contracts/phase-gates.yaml` | RED/GREEN/REFACTOR transition assertions + invariants |
+| **Handoffs** | `contracts/handoffs.yaml` | Subagent dispatch contracts (currently none; workflow owns TDD handoffs) |
+
+**Rules:**
+- Check phase gate assertions at every transition (RED→GREEN, GREEN→REFACTOR, REFACTOR→next RED)
+- Every cycle must have verified test execution results (not assumed)
+- No production code without a preceding failing test — this is structurally enforced, not advisory
+
 Enforces the Red-Green-Refactor cycle. When active, no production code is written without a failing test first.
 
 ## The Iron Law

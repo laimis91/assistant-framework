@@ -1,0 +1,130 @@
+# Review Handoff Contracts
+# Defines the data shape between Orchestrator and Reviewer subagent.
+# The review skill dispatches a fresh Reviewer each round for medium+ scope.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-review
+
+handoffs:
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Reviewer (per round)
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_reviewer
+    from: Orchestrator
+    to: Reviewer
+    phase: REVIEW_STEP
+    notes: "Fresh Reviewer dispatch each round for medium+ scope. For trivial/small, self-review is acceptable."
+
+    context_fields:
+      - name: diff
+        type: string
+        required: true
+        description: "Full diff of all changes under review"
+        validation: "Non-empty. Must include the complete set of changes, not a partial diff."
+
+      - name: round
+        type: int
+        required: true
+        description: "Current review round number (1-5)"
+        validation: ">= 1 and <= 5"
+
+      - name: previously_fixed
+        type: object[]
+        required: true
+        description: "Items fixed in prior rounds — Reviewer MUST NOT re-report these"
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: fixed_in_round
+            type: int
+            required: true
+
+      - name: confidence_threshold
+        type: int
+        required: true
+        description: "Minimum confidence percentage for reporting findings this round"
+        validation: "Must be one of: 80, 85, 90"
+        notes: "Round 1-2: 80. Round 3-4: 85. Round 5: 90."
+
+      - name: project_type
+        type: string
+        required: false
+        description: "Project type if known (e.g., 'C# ASP.NET Core') — enables language-specific checks"
+
+      - name: review_focus
+        type: string[]
+        required: false
+        description: "Specific areas to focus on if the orchestrator wants targeted review"
+        examples:
+          - "security"
+          - "error handling"
+          - "test coverage"
+          - "architecture violations"
+
+    return_fields:
+      - name: round
+        type: int
+        required: true
+        description: "Echo back the round number for tracking"
+
+      - name: findings
+        type: object[]
+        required: true
+        description: "All findings above the confidence threshold for this round"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+          - name: file
+            type: string
+            required: true
+            validation: "Must be a file path that exists in the diff"
+          - name: line
+            type: int
+            required: false
+            description: "Line number in the file (not the diff line number)"
+          - name: description
+            type: string
+            required: true
+            validation: "Specific and actionable — not vague ('could be better')"
+          - name: confidence_pct
+            type: int
+            required: true
+            validation: "Must be >= confidence_threshold for this round"
+          - name: suggestion
+            type: string
+            required: false
+            description: "Concrete fix suggestion when applicable"
+
+      - name: summary
+        type: string
+        required: true
+        description: "1-paragraph overall assessment of code quality"
+        validation: "Non-empty. Must reference specific patterns observed, not generic praise."
+
+      - name: verdict
+        type: enum
+        required: true
+        enum_values: [clean, has_must_fix, has_should_fix, has_nits_only]
+        description: "Overall result for this round"
+        validation: >
+          clean: findings is empty or contains only items below threshold.
+          has_must_fix: at least one finding with severity=must-fix.
+          has_should_fix: no must-fix, but at least one should-fix.
+          has_nits_only: only nit-level findings.
+
+    on_missing_field: "Re-dispatch Reviewer. findings and verdict are never optional — a review without them is not a review."
+
+# ─────────────────────────────────────────────
+# Validation behavior:
+# 1. Before dispatch: verify all required context_fields are populated
+# 2. Compute confidence_threshold from round number (not hardcoded in prompt)
+# 3. After return: verify findings[], summary, and verdict are all present
+# 4. Filter any findings with confidence_pct < confidence_threshold
+# 5. Filter any findings that match previously_fixed descriptions
+# 6. If re-dispatch needed: include explicit note about what was missing
+# ─────────────────────────────────────────────

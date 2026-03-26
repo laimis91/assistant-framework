@@ -1,0 +1,141 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-ideate
+
+artifacts:
+  - name: problem_statement
+    type: string
+    required: true
+    description: "2-3 sentence clarified problem statement produced during UNDERSTAND"
+    validation: "Between 2 and 3 sentences that frame the core problem"
+    on_fail: "Re-run UNDERSTAND phase to produce the problem statement"
+
+  - name: ideas
+    type: object[]
+    required: true
+    description: "Raw ideas generated during DIVERGE phase"
+    validation: "At least 8 ideas, each with name, description, and rationale"
+    on_fail: "Re-run DIVERGE phase to generate the missing ideas"
+    min_items: 8
+    object_fields:
+      - name: name
+        type: string
+        required: true
+        description: "Short memorable name for the idea"
+
+      - name: description
+        type: string
+        required: true
+        description: "One-line description of what the idea is"
+
+      - name: rationale
+        type: string
+        required: true
+        description: "Why this idea is interesting or worth considering"
+
+  - name: ranked_ideas
+    type: object[]
+    required: true
+    description: "All ideas scored and ranked during CONVERGE phase"
+    validation: "Every idea from DIVERGE is scored on all 5 criteria"
+    on_fail: "Re-run CONVERGE phase to score and rank all ideas"
+    object_fields:
+      - name: rank
+        type: int
+        required: true
+        description: "Position in the ranking (1 = best)"
+
+      - name: name
+        type: string
+        required: true
+        description: "Idea name matching an entry from ideas"
+
+      - name: impact
+        type: int
+        required: true
+        description: "How much this moves the needle (1-5)"
+        validation: "Integer between 1 and 5 inclusive"
+
+      - name: feasibility
+        type: int
+        required: true
+        description: "Can we actually build this with current resources (1-5)"
+        validation: "Integer between 1 and 5 inclusive"
+
+      - name: alignment
+        type: int
+        required: true
+        description: "Does this fit the project's direction and values (1-5)"
+        validation: "Integer between 1 and 5 inclusive"
+
+      - name: novelty
+        type: int
+        required: true
+        description: "Does this offer something genuinely new (1-5)"
+        validation: "Integer between 1 and 5 inclusive"
+
+      - name: risk
+        type: int
+        required: true
+        description: "How much could go wrong (1-5, higher = riskier)"
+        validation: "Integer between 1 and 5 inclusive"
+
+      - name: weighted_score
+        type: int
+        required: true
+        description: "Calculated as impact*3 + feasibility*2 + alignment*2 + novelty*1 - risk*1"
+
+  - name: refined_candidates
+    type: object[]
+    required: true
+    description: "Top candidates refined during REFINE phase"
+    validation: "Between 3 and 5 candidates, each fully detailed"
+    on_fail: "Re-run REFINE phase to produce the missing candidates"
+    min_items: 3
+    object_fields:
+      - name: name
+        type: string
+        required: true
+        description: "Idea name matching a top-ranked idea"
+
+      - name: elevator_pitch
+        type: string
+        required: true
+        description: "2-sentence pitch explaining the idea"
+
+      - name: how_it_works
+        type: string[]
+        required: true
+        description: "3-5 bullet points describing the approach"
+
+      - name: technical_needs
+        type: string[]
+        required: true
+        description: "What needs to be built or acquired"
+
+      - name: risks
+        type: object[]
+        required: true
+        description: "Identified risks with mitigations"
+        object_fields:
+          - name: description
+            type: string
+            required: true
+            description: "What could go wrong"
+
+          - name: mitigation
+            type: string
+            required: true
+            description: "How to reduce or handle this risk"
+
+      - name: first_step
+        type: string
+        required: true
+        description: "The smallest thing you could build to validate this idea"
+
+  - name: user_decision
+    type: enum
+    required: true
+    description: "What the user chose after seeing refined candidates"
+    enum_values: [selected, combined, rejected, more_ideas]
+    on_fail: "Re-run DECIDE phase to capture the user's decision"

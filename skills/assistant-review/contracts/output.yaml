@@ -1,0 +1,142 @@
+# Review Output Contract
+# Defines what a completed review MUST produce before presenting results to the user.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-review
+
+artifacts:
+  - name: final_summary
+    type: object
+    required: true
+    condition: always
+    description: "The single summary presented to the user after the loop completes"
+    object_fields:
+      - name: rounds
+        type: int
+        required: true
+        validation: ">= 1"
+      - name: result
+        type: enum
+        required: true
+        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS]
+      - name: fixed_items
+        type: object[]
+        required: true
+        description: "All items fixed across all rounds, grouped by severity"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+          - name: file
+            type: string
+            required: true
+          - name: description
+            type: string
+            required: true
+          - name: fixed_in_round
+            type: int
+            required: true
+      - name: remaining_items
+        type: object[]
+        required: false
+        condition: "result == HAS_REMAINING_ITEMS"
+        description: "Items that could not be resolved within max rounds"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix]
+          - name: file
+            type: string
+            required: true
+          - name: description
+            type: string
+            required: true
+          - name: reason_unresolved
+            type: string
+            required: true
+      - name: nits
+        type: object[]
+        required: true
+        description: "Low-priority observations noted but not fixed"
+        object_fields:
+          - name: file
+            type: string
+            required: true
+          - name: description
+            type: string
+            required: true
+
+  - name: build_verification
+    type: object
+    required: true
+    condition: "mode == review-fix"
+    description: "Build and test results after all fixes applied"
+    object_fields:
+      - name: build_result
+        type: enum
+        required: true
+        enum_values: [passed, failed, not_applicable]
+      - name: test_summary
+        type: object
+        required: true
+        condition: "build_result != not_applicable"
+        object_fields:
+          - name: passed
+            type: int
+            required: true
+          - name: failed
+            type: int
+            required: true
+            validation: "Must be 0 at review completion"
+          - name: skipped
+            type: int
+            required: true
+
+  - name: task_journal_entry
+    type: string
+    required: true
+    condition: "task_journal_path is not null"
+    description: "Review Log entry appended to the task journal with Final Result"
+    validation: "Entry follows the task-journal-template.md Review Log format"
+
+  - name: audit_report
+    type: object
+    required: true
+    condition: "mode == audit"
+    description: "Full findings report when running in audit mode (no fixes)"
+    object_fields:
+      - name: findings
+        type: object[]
+        required: true
+        description: "All findings grouped by severity"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+          - name: file
+            type: string
+            required: true
+          - name: line
+            type: int
+            required: false
+          - name: description
+            type: string
+            required: true
+          - name: confidence_pct
+            type: int
+            required: true
+      - name: summary
+        type: string
+        required: true
+        description: "Overall assessment paragraph"
+
+# Completeness check:
+# Before presenting results to user:
+# 1. final_summary is fully populated
+# 2. If mode=review-fix: build_verification shows passed and 0 test failures
+# 3. If task journal exists: Review Log has been updated with entry + Final Result
+# 4. If mode=audit: audit_report contains all findings, no fixes were applied

@@ -11,6 +11,17 @@ triggers:
 
 # Project Onboarding
 
+## Contracts
+
+| File | Purpose |
+|---|---|
+| [`contracts/input.yaml`](contracts/input.yaml) | project_path, focus_area, depth |
+| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], memory_updated, questions[] |
+
+- `project_path` is required; `depth` defaults to standard when not specified
+- `key_files` entries include path and purpose; `conventions` entries include pattern and example
+- `questions` must be specific to unclear areas discovered during onboarding
+
 Systematic protocol for learning a new codebase. Produces structured project memory that accelerates all future work.
 
 Core principle: **Understand before acting. Map the territory before navigating it.**

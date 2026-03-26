@@ -10,6 +10,17 @@ triggers:
 
 # Memory Management
 
+## Contracts
+
+| File | Purpose |
+|---|---|
+| [`contracts/input.yaml`](contracts/input.yaml) | action (save/recall/update/forget/search), content, memory_type, query |
+| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, file_path, results[], confirmation |
+
+- `content` is required for save/update; `query` is required for recall/search
+- `memory_type` is required for save — determines which subdirectory receives the file
+- All outputs include a human-readable `confirmation` string
+
 Global memory that persists across all projects and sessions. Data lives in `~/.claude/memory/` (outside any skill directory — survives reinstalls).
 
 ## Memory Structure

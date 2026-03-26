@@ -1,0 +1,136 @@
+# Workflow Output Contract
+# Defines what a completed workflow MUST produce.
+# Any agent executing this skill MUST verify all required artifacts exist
+# before printing --- WORKFLOW COMPLETE ---.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-workflow
+
+artifacts:
+  - name: phase_checkpoints
+    type: string[]
+    required: true
+    condition: always
+    validation: >
+      Must contain paired entries for every phase that ran:
+      '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
+      Missing checkpoints = workflow was not followed.
+    minimum_entries:
+      small: 10   # TRIAGE(2) + DISCOVER(2) + PLAN(2) + BUILD(2) + REVIEW(2) + DOCUMENT(2) - some may be lightweight
+      medium: 12
+      large: 14
+      mega: 14
+
+  - name: changed_files
+    type: object[]
+    required: true
+    condition: always
+    validation: "At least 1 entry unless task was determined unnecessary during Discovery"
+    object_fields:
+      - name: path
+        type: string
+        required: true
+        validation: "Relative file path that exists in the project"
+      - name: change_type
+        type: enum
+        required: true
+        enum_values: [created, modified, deleted]
+      - name: description
+        type: string
+        required: true
+        validation: "1 sentence explaining what changed and why"
+
+  - name: test_results
+    type: object
+    required: true
+    condition: always
+    validation: "passed + failed + skipped must equal total tests run. passed must be > 0."
+    object_fields:
+      - name: passed
+        type: int
+        required: true
+        validation: ">= 1 (at least one test must exist and pass)"
+      - name: failed
+        type: int
+        required: true
+        validation: "Must be 0 at workflow completion"
+      - name: skipped
+        type: int
+        required: true
+
+  - name: review_result
+    type: object
+    required: true
+    condition: always
+    object_fields:
+      - name: spec_review_status
+        type: enum
+        required: true
+        enum_values: [clean, fixed]
+        validation: "Must be 'clean' or 'fixed' (all spec issues resolved)"
+      - name: quality_review_status
+        type: enum
+        required: true
+        enum_values: [clean, has_remaining]
+      - name: review_rounds
+        type: int
+        required: true
+        validation: ">= 1"
+      - name: must_fix_resolved
+        type: int
+        required: true
+      - name: should_fix_resolved
+        type: int
+        required: true
+
+  - name: manual_test_steps
+    type: string[]
+    required: true
+    condition: always
+    validation: "At least 1 actionable step the user can follow to verify the change"
+
+  - name: task_journal
+    type: file
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: "File exists at .claude/task.md and contains Status: DONE"
+    location: ".claude/task.md"
+
+  - name: context_map
+    type: file
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: "File exists at .claude/context-map.md"
+    location: ".claude/context-map.md"
+
+  - name: metrics_entry
+    type: jsonl_line
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: "Valid JSON with required keys: date, project, task, size, review_rounds, plan_deviations, build_failures"
+    location: "~/.claude/memory/metrics/workflow-metrics.jsonl"
+
+  - name: plan_document
+    type: string
+    required: true
+    condition: always
+    validation: >
+      Small: inline plan with goal, files, risks, tests.
+      Medium: standard plan per plan-template.md.
+      Large/Mega: full plan per plan-template.md including Security and Operability.
+
+  - name: user_approval
+    type: enum
+    required: true
+    condition: always
+    enum_values: [confirmed, confirmed_with_issues]
+    validation: "User explicitly confirmed 'looks good' or equivalent before Document phase"
+
+# Completeness check:
+# Before printing --- WORKFLOW COMPLETE ---, verify:
+# 1. All required artifacts for the task's size tier are present
+# 2. test_results.failed == 0
+# 3. review_result.quality_review_status is not missing
+# 4. user_approval is confirmed or confirmed_with_issues
+# If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.

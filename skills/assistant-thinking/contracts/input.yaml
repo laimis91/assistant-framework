@@ -1,0 +1,30 @@
+schema_version: "1.0"
+
+fields:
+  - name: problem
+    type: string
+    required: true
+    description: "The problem, question, or decision to think through"
+    validation: "Non-empty string describing something that needs structured analysis"
+    on_missing: ask
+
+  - name: tool
+    type: enum
+    required: true
+    description: "Which thinking tool to use for the analysis"
+    enum_values: [clarify, perspectives, stress_test, deep_think, hypothesize, creative]
+    on_missing: infer
+
+  - name: stakes
+    type: enum
+    required: false
+    description: "Determines depth of analysis — higher stakes get deeper treatment"
+    enum_values: [low, medium, high]
+    on_missing: infer
+
+  - name: existing_position
+    type: string
+    required: false
+    description: "Current thinking or position to challenge, validate, or build on"
+    validation: "Describes a stance, hypothesis, or preliminary conclusion"
+    on_missing: skip

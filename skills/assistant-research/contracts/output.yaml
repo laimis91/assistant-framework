@@ -1,0 +1,106 @@
+# Research Output Contract
+# Defines what a completed research activity MUST produce.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-research
+
+artifacts:
+  - name: findings
+    type: object[]
+    required: true
+    condition: always
+    description: "Research findings with confidence scores and source attribution"
+    min_items: 1
+    validation: "At least one finding. Each must have a confidence level."
+    object_fields:
+      - name: finding
+        type: string
+        required: true
+        description: "The factual claim or insight discovered"
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+        validation: >
+          high: 3+ independent sources agree, or primary/official source found.
+          medium: 2 sources agree, or 1 authoritative source.
+          low: single source, or sources conflict.
+      - name: sources
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Source names or descriptions (URLs go in verified_urls)"
+      - name: verified_urls
+        type: string[]
+        required: false
+        description: "URLs that were verified as accessible"
+        validation: "Every URL listed here was checked and returned a valid response"
+
+  - name: conflicts
+    type: object[]
+    required: true
+    condition: always
+    description: "Conflicting information found across sources"
+    validation: "Empty list is valid — but the field must be present to confirm conflicts were checked"
+    object_fields:
+      - name: claim_a
+        type: string
+        required: true
+      - name: source_a
+        type: string
+        required: true
+      - name: claim_b
+        type: string
+        required: true
+      - name: source_b
+        type: string
+        required: true
+      - name: assessment
+        type: string
+        required: true
+        description: "Which is more likely correct and why"
+
+  - name: gaps
+    type: string[]
+    required: true
+    condition: always
+    description: "What could not be found or verified"
+    validation: "Empty list is valid — but field must be present to confirm gaps were checked"
+
+  - name: summary
+    type: string
+    required: true
+    condition: always
+    description: "1-3 sentence synthesis of key findings"
+    validation: "Non-empty. Must answer the original question, not just list findings."
+
+  - name: insight_captured
+    type: boolean
+    required: false
+    condition: "findings contain notable reusable insights"
+    description: "Whether findings were saved to memory/insights/ for future sessions"
+
+# Output format (must be followed for all tiers):
+#
+# RESEARCH: {question}
+# Tier: {quick/standard/extensive/deep}
+#
+# FINDINGS
+# 1. {finding} — confidence: {HIGH/MEDIUM/LOW}
+#    Sources: {source 1}, {source 2}
+# 2. ...
+#
+# CONFLICTS
+# - {source A} says X, {source B} says Y — {assessment}
+#
+# GAPS
+# - {what we couldn't find}
+#
+# Completeness check:
+# 1. findings[] has at least 1 entry
+# 2. Every finding has confidence level assigned
+# 3. Every URL presented was verified (no unverified URLs)
+# 4. conflicts[] is present (may be empty)
+# 5. gaps[] is present (may be empty)
+# 6. Low-confidence findings are explicitly flagged

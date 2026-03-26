@@ -15,6 +15,25 @@ triggers:
 
 Core principles: **never guess**, **right-sized ceremony**, **every idea becomes testable criteria**.
 
+## Contracts
+
+This skill enforces strict input/output contracts and phase gate assertions. Read the contract files in `contracts/` before executing the workflow. All contracts are **mandatory** — not advisory.
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Required fields to resolve before Triage |
+| **Output** | `contracts/output.yaml` | Artifacts that must exist before `--- WORKFLOW COMPLETE ---` |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Assertions checked at every phase transition |
+| **Handoffs** | `contracts/handoffs.yaml` | Data shapes between subagent dispatch and return |
+
+**Rules:**
+- Resolve all input contract fields before printing `--- PHASE: TRIAGE ---`
+- Check phase gate assertions before printing any `--- PHASE: {name} COMPLETE ---`
+- Include all required handoff context fields when dispatching subagents
+- Validate all required handoff return fields when subagents complete
+- Verify all output contract artifacts before printing `--- WORKFLOW COMPLETE ---`
+- If any contract check fails: resolve it before proceeding, never skip silently
+
 ## Visible Checkpoints
 
 You MUST print checkpoint messages at every phase transition and key step so the user can see workflow progress. Use this exact format:

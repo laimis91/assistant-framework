@@ -1,0 +1,98 @@
+# Research Phase Gate Contracts
+# Research has a search → synthesize → verify pipeline.
+# Gates ensure each stage completes before the next begins.
+
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-research
+
+gates:
+
+  # ─────────────────────────────────────────────
+  # SEARCH → SYNTHESIZE
+  # ─────────────────────────────────────────────
+  - phase: SEARCH
+    checkpoint_start: "--- PHASE: SEARCH ---"
+    checkpoint_end: "--- PHASE: SEARCH COMPLETE ---"
+    exit_assertions:
+
+      - id: S1
+        check: "Agent count matches tier: quick=1, standard=3, extensive=6-12, deep=iterative"
+        on_fail: "Adjust agent count to match the selected tier"
+
+      - id: S2
+        check: "For standard tier: 3 agents searched from different angles (direct, alternative, counter-evidence)"
+        condition: "tier == standard"
+        on_fail: "Dispatch agents with differentiated search angles, not duplicate queries"
+
+      - id: S3
+        check: "For extensive tier: at least 3 research angles were identified before searching"
+        condition: "tier == extensive"
+        on_fail: "Generate research angles via structured thinking before dispatching agents"
+
+      - id: S4
+        check: "Raw search results are available for synthesis — not discarded prematurely"
+        on_fail: "Retain all search results until synthesis is complete"
+
+  # ─────────────────────────────────────────────
+  # SYNTHESIZE → VERIFY
+  # ─────────────────────────────────────────────
+  - phase: SYNTHESIZE
+    checkpoint_start: "--- PHASE: SYNTHESIZE ---"
+    checkpoint_end: "--- PHASE: SYNTHESIZE COMPLETE ---"
+    exit_assertions:
+
+      - id: SY1
+        check: "Findings are cross-validated — claims appearing in multiple sources get higher confidence"
+        on_fail: "Compare findings across sources before assigning confidence levels"
+
+      - id: SY2
+        check: "Conflicting information is identified and assessed — not silently ignored"
+        on_fail: "Check for contradictions between sources and document in conflicts[]"
+
+      - id: SY3
+        check: "Gaps are identified — what couldn't be found or verified is documented"
+        on_fail: "Review what was asked vs. what was found. Document the delta in gaps[]"
+
+      - id: SY4
+        check: "Each finding has a confidence level assigned based on source count and quality"
+        on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
+
+  # ─────────────────────────────────────────────
+  # VERIFY → PRESENT
+  # ─────────────────────────────────────────────
+  - phase: VERIFY
+    checkpoint_start: "--- PHASE: VERIFY ---"
+    checkpoint_end: "--- PHASE: VERIFY COMPLETE ---"
+    exit_assertions:
+
+      - id: VR1
+        check: "Every URL to be presented to the user has been verified as accessible"
+        on_fail: "Verify URLs via fetch/head request. Remove or flag unverified URLs."
+
+      - id: VR2
+        check: "No AI-hallucinated URLs are included — every URL came from a search result"
+        on_fail: "Remove any URL not found in search results. AI agents routinely hallucinate plausible URLs."
+
+      - id: VR3
+        check: "Low-confidence findings are explicitly flagged in the output"
+        on_fail: "Add explicit LOW confidence labels to single-source or conflicting findings"
+
+# ─────────────────────────────────────────────
+# Research invariants
+# ─────────────────────────────────────────────
+invariants:
+  - id: INV1
+    check: "No unverified URL is ever presented to the user"
+    scope: all_phases
+    on_fail: "Verify or remove the URL. Dead links erode trust."
+
+  - id: INV2
+    check: "Confidence levels are evidence-based, not assumed — single source cannot be HIGH"
+    scope: all_phases
+    on_fail: "Downgrade confidence to match actual source count and quality"
+
+  - id: INV3
+    check: "The output follows the structured format defined in output.yaml — not free-form prose"
+    scope: all_phases
+    on_fail: "Reformat output to match the required FINDINGS/CONFLICTS/GAPS structure"

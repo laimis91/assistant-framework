@@ -11,6 +11,19 @@ triggers:
 
 # Idea Generation
 
+## Contracts
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Seed idea, goal, constraints |
+| **Output** | `contracts/output.yaml` | Ideas, rankings, refined candidates, user decision |
+| **Phase Gates** | `contracts/phase-gates.yaml` | UNDERSTAND → DIVERGE → CONVERGE → REFINE → DECIDE gates |
+
+**Rules:**
+- DIVERGE must produce 8+ ideas before CONVERGE can score them
+- Never present a single option — ideation means choices
+- Constraints from input are respected throughout all phases
+
 Structured brainstorming pipeline that turns vague desires into ranked, actionable ideas.
 
 Core principle: **Diverge wide, converge ruthlessly, refine what survives.**

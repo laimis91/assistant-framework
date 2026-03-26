@@ -1,0 +1,49 @@
+# Telos Input Contract
+# Resolve these fields before starting TCF creation or update.
+
+schema_version: "1.0"
+contract: input
+skill: assistant-telos
+
+fields:
+  - name: action
+    type: enum
+    required: true
+    enum_values: [create, update, review]
+    description: "Whether to create a new TCF, update an existing one, or review/validate one"
+    on_missing: infer
+    infer_from: >
+      No TCF exists → create.
+      TCF exists and user wants changes → update.
+      User says 'review', 'check', 'validate' → review.
+
+  - name: entity_type
+    type: enum
+    required: true
+    enum_values: [individual, team, organization]
+    description: "What kind of entity this TCF is for"
+    on_missing: infer
+    infer_from: "Context clues from user — default to individual for personal use"
+
+  - name: existing_tcf_path
+    type: string
+    required: false
+    condition: "action in [update, review]"
+    description: "Path to existing Telos Context File"
+    on_missing: infer
+    infer_from: "Search for telos.md, TCF.md, or .telos/ in project root and home directory"
+
+  - name: focus_sections
+    type: string[]
+    required: false
+    description: "Specific TCF sections to focus on (for targeted updates)"
+    examples:
+      - "goals"
+      - "challenges"
+      - "strategies"
+      - "narratives"
+
+# Validation behavior:
+# 1. Resolve action and entity_type before starting
+# 2. For update/review: locate existing TCF or ask user for path
+# 3. Log: >> Telos: {action} | entity: {entity_type}

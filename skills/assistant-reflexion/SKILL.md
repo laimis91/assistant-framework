@@ -11,6 +11,17 @@ triggers:
 
 # Reflexion — Self-Improving Agent
 
+## Contracts
+
+| File | Purpose |
+|---|---|
+| [`contracts/input.yaml`](contracts/input.yaml) | action (reflect/recall/stats/consolidate), task_description, project_type, task_type |
+| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, lessons[], insights_file, recalled_lessons[] |
+
+- `task_description` is required for reflect; `project_type` and `task_type` are inferred when absent
+- `lessons` entries include lesson, confidence (high/medium/low), and applies_to
+- `recalled_lessons` entries include lesson, confidence, date, and project
+
 Cross-task learning system where insights from task N improve performance on task N+1.
 
 Core principle: **Every task should make the next task better.**

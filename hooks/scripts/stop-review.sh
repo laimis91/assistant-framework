@@ -81,7 +81,7 @@ fi
 # 1. Review Log must have at least one review entry (Spec Review, Quality Review, or legacy Review)
 # 2. Final result must have a "- Result:" line
 has_review_entry=$(grep -m1 -E "^### (Spec Review|Quality Review|Review) #[0-9]+" "$TASK_FILE" 2>/dev/null || echo "")
-has_final_result=$(grep -m1 -E "^- Result: (CLEAN|ISSUES FIXED|HAS REMAINING ITEMS)" "$TASK_FILE" 2>/dev/null || echo "")
+has_final_result=$(grep -m1 -E "^- Result: (CLEAN|ISSUES[_ ]FIXED|HAS[_ ]REMAINING[_ ]ITEMS)" "$TASK_FILE" 2>/dev/null || echo "")
 
 if [[ -z "$has_review_entry" ]]; then
     REVIEW_REASON="Task journal shows active build but no review cycle was run. You MUST run the two-stage review before presenting results. Steps: (1) Spec Review — walk through each plan step vs git diff, append a Spec Review entry to the Review Log, (2) Quality Review — read references/prompts/pr-review.md, review all changes, append a Quality Review entry, (3) Fix any must-fix issues and re-review until clean, (4) Write the Final Result in the Review Log."

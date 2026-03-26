@@ -11,6 +11,18 @@ triggers:
 
 # Telos — Deep Context Framework
 
+## Contracts
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Action (create/update/review), entity type, focus sections |
+| **Output** | `contracts/output.yaml` | TCF file, sections completed, review findings |
+
+**Rules:**
+- Create action must produce a TCF with at minimum: problems, mission, goals
+- Review action must assess every section's completeness
+- Existing TCF must be located before update/review proceeds
+
 Based on [Daniel Miessler's Telos](https://github.com/danielmiessler/Telos) — an open-source framework for creating Deep Context about things that matter to humans.
 
 **Core idea:** Help entities of any size — individuals, teams, organizations — articulate what they are about and how they're pursuing their purpose. The output is a Telos Context File (TCF) that gives AI agents strategic context about *why* you do what you do.

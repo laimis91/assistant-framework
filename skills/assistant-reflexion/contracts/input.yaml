@@ -1,0 +1,34 @@
+# contract header
+schema_version: "1.0"
+contract: input
+skill: assistant-reflexion
+
+fields:
+  - name: action
+    type: enum
+    required: true
+    description: "What reflexion operation to perform"
+    validation: "Must be a supported reflexion action"
+    on_missing: ask
+    enum_values: [reflect, recall, stats, consolidate]
+
+  - name: task_description
+    type: string
+    required: false
+    description: "What task was just completed"
+    validation: "Required when action is reflect; non-empty string"
+    on_missing: ask
+
+  - name: project_type
+    type: string
+    required: false
+    description: "Type of project (e.g., ASP.NET API, Unity game, Blazor app)"
+    validation: "Non-empty string when provided"
+    on_missing: infer
+
+  - name: task_type
+    type: string
+    required: false
+    description: "Type of task (e.g., feature, bugfix, refactor)"
+    validation: "Non-empty string when provided"
+    on_missing: infer

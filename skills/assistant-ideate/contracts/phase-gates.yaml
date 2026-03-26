@@ -1,0 +1,79 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-ideate
+
+gates:
+  - phase: UNDERSTAND
+    checkpoint_start: "--- PHASE: UNDERSTAND ---"
+    checkpoint_end: "--- PHASE: UNDERSTAND COMPLETE ---"
+    exit_assertions:
+      - id: U1
+        check: "Problem statement is written as 2-3 sentences"
+        on_fail: "Ask clarifying questions until the problem can be stated in 2-3 sentences"
+      - id: U2
+        check: "Constraints are identified (or explicitly noted as none)"
+        on_fail: "Ask about budget, timeline, tech stack, and other limitations"
+
+  - phase: DIVERGE
+    checkpoint_start: "--- PHASE: DIVERGE ---"
+    checkpoint_end: "--- PHASE: DIVERGE COMPLETE ---"
+    exit_assertions:
+      - id: D1
+        check: "At least 8 ideas have been generated"
+        on_fail: "Continue generating ideas using additional diverge techniques"
+      - id: D2
+        check: "At least 1 wild or unconventional idea is included"
+        on_fail: "Apply constraint-removal or inversion technique to produce a wild idea"
+      - id: D3
+        check: "Each idea has a name, description, and rationale"
+        on_fail: "Fill in missing fields for incomplete ideas"
+
+  - phase: CONVERGE
+    checkpoint_start: "--- PHASE: CONVERGE ---"
+    checkpoint_end: "--- PHASE: CONVERGE COMPLETE ---"
+    exit_assertions:
+      - id: C1
+        check: "All ideas are scored on all 5 criteria (impact, feasibility, alignment, novelty, risk)"
+        on_fail: "Score any unscored ideas before proceeding"
+      - id: C2
+        check: "Weighted scores are calculated for every idea"
+        on_fail: "Calculate weighted_score = impact*3 + feasibility*2 + alignment*2 + novelty*1 - risk*1"
+      - id: C3
+        check: "Top 3 or more ideas are advanced to REFINE"
+        on_fail: "Select at least the top 3 scoring ideas for refinement"
+
+  - phase: REFINE
+    checkpoint_start: "--- PHASE: REFINE ---"
+    checkpoint_end: "--- PHASE: REFINE COMPLETE ---"
+    exit_assertions:
+      - id: R1
+        check: "Each top candidate has an elevator pitch (2 sentences)"
+        on_fail: "Write elevator pitches for candidates missing them"
+      - id: R2
+        check: "Each candidate has how-it-works (3-5 bullets), technical needs, risks with mitigations, and a first step"
+        on_fail: "Complete all missing sections for each refined candidate"
+
+  - phase: DECIDE
+    checkpoint_start: "--- PHASE: DECIDE ---"
+    checkpoint_end: "--- PHASE: DECIDE COMPLETE ---"
+    exit_assertions:
+      - id: DE1
+        check: "Multiple options are presented to the user (never a single option)"
+        on_fail: "Ensure at least 2 refined candidates are shown with clear choice prompts"
+      - id: DE2
+        check: "User decision is captured as one of: selected, combined, rejected, more_ideas"
+        on_fail: "Ask the user to choose: go with one, combine, reject all, or request more ideas"
+
+invariants:
+  - id: INV1
+    check: "No criticism of ideas during DIVERGE phase"
+    scope: all_phases
+    on_fail: "Remove evaluative language and defer scoring to CONVERGE"
+  - id: INV2
+    check: "Never present a single option — ideation means choices"
+    scope: all_phases
+    on_fail: "Generate or refine additional candidates before presenting"
+  - id: INV3
+    check: "Constraints from input are respected throughout all phases"
+    scope: all_phases
+    on_fail: "Review ideas against stated constraints and flag or remove violations"

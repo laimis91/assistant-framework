@@ -12,6 +12,20 @@ triggers:
 
 # Security Tools
 
+## Contracts
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Analysis type, scope, severity threshold |
+| **Output** | `contracts/output.yaml` | Findings with severity, remediation, and risk level |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Scope → Analyze → Report pipeline gates |
+| **Handoffs** | `contracts/handoffs.yaml` | Subagent dispatch contracts (currently none) |
+
+**Rules:**
+- Every finding must have severity, impact, and remediation — observations without fixes are not actionable
+- Severity levels follow the 4-level scale consistently
+- Findings must be evidence-based — cite specific code, config, or dependency
+
 On-demand security analysis. Use when touching auth, inputs, dependencies, or preparing for review.
 
 ## Available Tools
