@@ -17,6 +17,13 @@
             "command": "$HOME/.gemini/hooks/assistant/learning-signals.sh",
             "timeout": 5000,
             "description": "Detects learning signals in user prompts"
+          },
+          {
+            "name": "assistant-workflow-enforcer",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/workflow-enforcer.sh",
+            "timeout": 5000,
+            "description": "Injects workflow phase state and enforcement rules on every prompt"
           }
         ]
       }
@@ -31,6 +38,20 @@
             "command": "$HOME/.gemini/hooks/assistant/session-start.sh",
             "timeout": 5000,
             "description": "Injects task journal and memory feedback on session start"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "name": "assistant-workflow-guard",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/workflow-guard.sh",
+            "timeout": 5000,
+            "description": "Warns when orchestrator edits files directly during active task"
           }
         ]
       }
@@ -59,6 +80,13 @@
             "command": "$HOME/.gemini/hooks/assistant/stop-review.sh",
             "timeout": 5000,
             "description": "Checks if self-review was done before agent finishes"
+          },
+          {
+            "name": "assistant-harness-gate",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/assistant/harness-gate.sh",
+            "timeout": 5000,
+            "description": "Enforces harness lifecycle: plan approval, rubric scores, score thresholds"
           }
         ]
       }

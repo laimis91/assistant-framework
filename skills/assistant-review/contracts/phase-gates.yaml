@@ -59,6 +59,11 @@ gates:
         check: "No previously-fixed item was re-reported in findings"
         on_fail: "Filter out re-reported items before proceeding to EVALUATE"
 
+      - id: RS5
+        check: "For medium+ scope: rubric_scores is present in reviewer return with all 5 dimensions scored"
+        condition: "scope_size in [medium, large]"
+        on_fail: "Re-dispatch Reviewer with rubric_required=true. Reference references/review-rubric.md for scoring instructions."
+
   # ─────────────────────────────────────────────
   # EVALUATE step — per round
   # ─────────────────────────────────────────────
@@ -68,8 +73,8 @@ gates:
     exit_assertions:
 
       - id: EV1
-        check: "Exit decision is one of: EXIT_CLEAN, EXIT_NITS_ONLY, EXIT_MAX_ROUNDS, CONTINUE"
-        on_fail: "Re-evaluate findings against exit criteria"
+        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, CONTINUE"
+        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix (nits OK, note in report). EXIT_ISSUES_FIXED = round 5, all issues fixed this session. EXIT_MAX_ROUNDS = round 5 with remaining must-fix."
 
       - id: EV2
         check: "EXIT_CLEAN only if: zero must-fix AND zero should-fix findings"
@@ -83,6 +88,16 @@ gates:
         check: "In audit mode: always EXIT after first round (no fix loop)"
         condition: "mode == audit"
         on_fail: "Audit mode does not fix or loop — present findings and exit"
+
+      - id: EV5
+        check: "For medium+ scope: rubric threshold action is applied — PASS exits, REFINE continues, PIVOT escalates"
+        condition: "scope_size in [medium, large] and rubric_scores is present"
+        on_fail: "Check rubric weighted_score against threshold table in references/review-rubric.md and apply the correct action"
+
+      - id: EV6
+        check: "PIVOT action triggers escalation to orchestrator — do not silently continue after PIVOT"
+        condition: "rubric_scores.action == PIVOT"
+        on_fail: "Flag to orchestrator: weighted score below pivot threshold. Include lowest-scoring dimensions and recommendations."
 
   # ─────────────────────────────────────────────
   # FIX step — per round (review-fix mode only)
@@ -144,6 +159,11 @@ gates:
         condition: "task_journal_path is not null"
         on_fail: "Append Review Log entry to task journal"
 
+      - id: X3
+        check: "For medium+ scope: rubric_summary is populated in output with final scores and score progression"
+        condition: "scope_size in [medium, large]"
+        on_fail: "Populate rubric_summary with final_scores from last round and score_progression from all rounds"
+
 # ─────────────────────────────────────────────
 # Loop invariants
 # ─────────────────────────────────────────────
@@ -172,3 +192,21 @@ invariants:
     check: "Each round finds fewer or equal issues than the previous round"
     scope: all_rounds
     on_fail: "Investigate whether fixes are introducing new problems. If issue count increased, document this in the final summary as a warning."
+
+  - id: INV5
+    check: "For medium+ scope: rubric score increases correlate with finding count decreases (no drift)"
+    scope: all_rounds
+    condition: "scope_size in [medium, large] and round >= 2"
+    on_fail: >
+      Drift detected: score increased without corresponding quality improvement.
+      Per references/score-tracking.md: reset evaluator context by dispatching a fresh Reviewer
+      with stricter prompt. Add 'Drift detected in round N' to the final summary.
+
+  - id: INV6
+    check: "For medium+ scope: score does not stagnate (unchanged for 2+ rounds with findings present)"
+    scope: all_rounds
+    condition: "scope_size in [medium, large] and round >= 3"
+    on_fail: >
+      Stagnation detected: score unchanged for 2+ rounds while findings remain.
+      Escalate to orchestrator — the loop is churning without progress. Consider whether
+      remaining issues are architectural (require broader changes) or the approach needs a PIVOT.

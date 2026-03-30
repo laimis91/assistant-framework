@@ -43,7 +43,7 @@ src/
 - No heavy frameworks unless justified
 
 ## Design rules (Design phase)
-Phase 3 (Design) is **mandatory** for this project type.
+Phase 4 (Design) is **mandatory** for this project type.
 - Define complete design direction before any code
 - Color palette with CSS variables
 - Font pairing (display + body) with CDN links

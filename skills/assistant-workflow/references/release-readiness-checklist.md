@@ -1,6 +1,6 @@
 # Release Readiness Checklist
 
-Complete this during Phase 5 (Document). The checklist scales by task size from triage. Check items that apply, mark N/A for those that don't. Items that need human sign-off are flagged — the AI fills in what it can verify and flags the rest.
+Complete this during Phase 7 (Document). The checklist scales by task size from triage. Check items that apply, mark N/A for those that don't. Items that need human sign-off are flagged — the AI fills in what it can verify and flags the rest.
 
 ## Checklist by task size
 
@@ -48,7 +48,7 @@ Complete this during Phase 5 (Document). The checklist scales by task size from 
 
 ## How to use this checklist
 
-1. During Phase 5, the AI generates this checklist pre-filled based on task size
+1. During Phase 7, the AI generates this checklist pre-filled based on task size
 2. AI checks off items it can verify (tests pass, no secrets in code, docs updated)
 3. AI flags items that need human action with ⚠️
 4. Present the completed checklist to the user for review

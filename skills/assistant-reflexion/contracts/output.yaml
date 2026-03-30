@@ -20,9 +20,9 @@ artifacts:
   - name: insights_file
     type: string
     required: false
-    condition: "When a reflexion insight was saved to disk"
-    description: "Path to the saved insight file"
-    validation: "Must be a valid path under ~/.claude/memory/insights/"
+    condition: "When a reflexion insight was recorded"
+    description: "Confirmation that reflexion was recorded via memory_reflect MCP tool"
+    validation: "Non-empty string confirming the reflexion was stored in the knowledge graph"
 
   - name: recalled_lessons
     type: object[]

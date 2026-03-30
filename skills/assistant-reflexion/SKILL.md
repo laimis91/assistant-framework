@@ -121,9 +121,7 @@ Store the reflection using memory system:
 - First approach worked: [yes/no]
 ```
 
-File location: `~/.claude/memory/insights/[YYYY-MM-DD]-reflexion-[brief-topic].md`
-
-If `memory_reflect` MCP tool is available, also call it with structured data.
+Use `memory_reflect` MCP tool to record the reflexion in the knowledge graph.
 
 ### Step 5: Update Strategy Profile
 
@@ -145,7 +143,7 @@ If lessons apply broadly to a project type, update the strategy profile:
 - [lesson about what to watch for]
 ```
 
-File location: `~/.claude/memory/insights/strategy-[project-type].md`
+Use `memory_pattern` MCP tool to record/reinforce the strategy pattern in the knowledge graph.
 
 Update (don't overwrite) — add new lessons, reinforce existing ones.
 

@@ -22,7 +22,7 @@ public sealed class MemoryContextTool : IMemoryTool
     public ToolDefinition GetDefinition() => new()
     {
         Name = Name,
-        Description = "Get all relevant context for a project: dependencies, technologies, patterns, conventions, preferences, and recent insights. Use at session start or when switching projects.",
+        Description = "Get all relevant context for a project: dependencies, technologies, patterns, conventions, preferences, rules, and recent insights. Use at session start or when switching projects.",
         InputSchema = ToolHelpers.ParseSchema("""
         {
             "type": "object",
@@ -173,6 +173,11 @@ public sealed class MemoryContextTool : IMemoryTool
             .Select(p => new { name = p.Name, observations = p.Observations })
             .ToList();
 
+        // Get rules: always global, always returned (behavioral mandates)
+        var rules = _graph.GetEntitiesByType(EntityType.Rule)
+            .Select(r => new { name = r.Name, observations = r.Observations })
+            .ToList();
+
         // Recent insights that apply to this project
         var insights = _graph.GetEntitiesByType(EntityType.Insight)
             .Where(i => appliesToLookup.TryGetValue(i.Name, out var targets) &&
@@ -203,6 +208,7 @@ public sealed class MemoryContextTool : IMemoryTool
             patterns,
             conventions,
             preferences,
+            rules,
             recentInsights = insights.Concat(techInsights).ToList()
         });
     }

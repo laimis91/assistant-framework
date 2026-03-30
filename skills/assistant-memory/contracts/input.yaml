@@ -20,14 +20,14 @@ fields:
     validation: "Non-empty string"
     on_missing: ask
 
-  - name: memory_type
+  - name: entity_type
     type: enum
     required: conditional
     condition: "when action is save"
-    description: "Category of memory to save"
-    validation: "Must be a supported memory type"
+    description: "Knowledge graph entity type for the memory being saved"
+    validation: "Must be a supported entity type"
     on_missing: ask
-    enum_values: [user, feedback, project, reference, insight]
+    enum_values: [Rule, Preference, Insight, Project, Technology, Pattern, Convention]
 
   - name: query
     type: string

@@ -27,17 +27,16 @@ With 5-10 projects and growing insights, reading everything is wasteful. The age
 │                                                     │
 │  Memory Graph Server (C# self-contained binary)     │
 │                                                     │
-│  ┌───────────────┐  ┌────────────────────────────┐  │
-│  │ Graph Engine   │  │ Markdown Sync              │  │
-│  │ (in-memory)    │←→│ (reads/indexes .md files)  │  │
-│  └───────┬───────┘  └────────────────────────────┘  │
+│  ┌───────────────┐                                  │
+│  │ Graph Engine   │                                  │
+│  │ (in-memory)    │                                  │
+│  └───────┬───────┘                                  │
 │          │                                          │
 │  ┌───────▼───────┐                                  │
 │  │ graph.jsonl    │  ← persistent graph storage     │
 │  └───────────────┘                                  │
 │                                                     │
 │  Storage: ~/.{agent}/memory/graph.jsonl              │
-│  Indexes: ~/.{agent}/memory/ (reads .md files)       │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -53,7 +52,8 @@ public enum EntityType
     Pattern,      // architectural decision (Clean Architecture, CQRS, guard clauses)
     Preference,   // user coding preference (var usage, naming style)
     Insight,      // learned fact from a past session
-    Convention    // project-specific convention (test naming, folder structure)
+    Convention,   // project-specific convention (test naming, folder structure)
+    Rule          // behavioral mandate or correction (always enforced, highest priority)
 }
 ```
 
@@ -129,7 +129,7 @@ Each line is a JSON object with a `kind` discriminator:
 
 ### 1. `memory_context` — "What do I need to know?"
 
-The primary tool. Given a project name (or auto-detected from cwd), returns everything relevant: the project entity, related projects, technologies, patterns, conventions, recent insights, and applicable preferences.
+The primary tool. Given a project name (or auto-detected from cwd), returns everything relevant: the project entity, related projects, technologies, patterns, conventions, rules, recent insights, and applicable preferences.
 
 ```
 Input:  { "project": "DesktopApp" }
@@ -144,6 +144,9 @@ Output: {
     "patterns": ["MVVM", "guard clauses"],
     "conventions": ["test naming: {Method}_{Case}_{Expected}"],
     "preferences": ["prefer var when type is obvious", "use braces for single-line blocks"],
+    "rules": [
+        { "name": "workflow-enforcement", "observations": ["never skip workflow skills for speed", "tests must accompany features"] }
+    ],
     "recentInsights": [
         { "name": "...", "observations": [...], "date": "2026-03-15" }
     ]
@@ -213,42 +216,6 @@ Input:  {}
 Output: { "entities": [...], "relations": [...], "stats": { "entities": 15, "relations": 22 } }
 ```
 
-## Markdown Sync
-
-The server indexes existing markdown files on startup and watches for changes:
-
-```
-~/.claude/memory/
-  INDEX.md           → scan for project names, extract entity hints
-  user/profile.md    → extract Preference entities
-  feedback/*.md      → extract Convention/Preference entities
-  insights/*.md      → extract Insight entities, link to projects
-```
-
-### Sync rules
-
-1. **Startup**: read all `.md` files under the memory directory, extract entities and relations, merge into graph (markdown is source of truth for conflicts)
-2. **Entity sourcing**: entities extracted from markdown get `sourceFile` set — so we know where they came from
-3. **No markdown writes**: the server never modifies markdown files. It only reads them and maintains the graph index.
-4. **Agent writes**: when the agent uses `memory_add_insight`, the server writes to `graph.jsonl` only. The `assistant-memory` skill still writes markdown files. The graph is a queryable index, not a replacement.
-5. **Manual entities**: entities created via `memory_add_entity` (not from markdown) have `sourceFile: null` — these are graph-only facts.
-
-### Extraction heuristics
-
-From `insights/*.md`:
-- Title line → Insight entity name
-- Body text → observations
-- If mentions a known Project name → `AppliesTo` relation
-- If mentions a known Technology name → `AppliesTo` relation
-
-From `user/profile.md`:
-- Key-value style lines → Preference entities
-- "prefers X" / "uses Y" → observations
-
-From `feedback/*.md`:
-- Rule statements → Convention or Preference entities
-- "always/never" statements → observations
-
 ## Project Structure
 
 ```
@@ -274,16 +241,11 @@ tools/memory-graph/
         MemoryAddInsightTool.cs    ← memory_add_insight implementation
         MemoryRemoveTool.cs        ← memory_remove_entity + memory_remove_relation
         MemoryGraphTool.cs         ← memory_graph (full dump)
-      Sync/
-        MarkdownScanner.cs         ← reads .md files, extracts entities/relations
-        EntityExtractor.cs         ← heuristic extraction from markdown text
   tests/
     MemoryGraph.Tests/
       MemoryGraph.Tests.csproj
       KnowledgeGraphTests.cs
       GraphStoreTests.cs
-      MarkdownScannerTests.cs
-      EntityExtractorTests.cs
       ToolIntegrationTests.cs
 ```
 
@@ -343,7 +305,6 @@ memory-graph [OPTIONS]
 Options:
   --memory-dir PATH    Memory directory (default: auto-detect from agent)
   --graph-file PATH    Graph file path (default: {memory-dir}/graph.jsonl)
-  --no-sync            Skip markdown sync on startup
   --verbose            Log to stderr for debugging
 ```
 
@@ -351,15 +312,13 @@ Options:
 
 1. **JSONL over SQLite**: JSONL is human-readable, git-diffable, and trivial to parse. At 5-10 projects with ~100 entities, performance is not a concern. SQLite would be premature.
 
-2. **Read-only markdown**: The graph indexes markdown but never writes to it. This preserves the existing human-readable memory system and avoids conflicts with the `assistant-memory` skill.
+2. **Graph as source of truth**: The knowledge graph (`graph.jsonl`) is the authoritative store. Markdown sync has been removed — all entities are managed directly through MCP tools.
 
-3. **Graph as index, not source of truth**: Markdown files remain the source of truth. The graph is a queryable acceleration layer. If `graph.jsonl` is deleted, it can be rebuilt from markdown.
+3. **Stdio transport over HTTP**: Stdio is simpler, requires no port management, and is the standard MCP transport for local tools. No security concerns about open ports.
 
-4. **Stdio transport over HTTP**: Stdio is simpler, requires no port management, and is the standard MCP transport for local tools. No security concerns about open ports.
+4. **Self-contained binary**: No runtime dependencies. Works on the restricted PC without .NET SDK installed (if pre-built). The `RollForward=LatestMajor` approach from cognitive-complexity also applies here for source builds.
 
-5. **Self-contained binary**: No runtime dependencies. Works on the restricted PC without .NET SDK installed (if pre-built). The `RollForward=LatestMajor` approach from cognitive-complexity also applies here for source builds.
-
-6. **No external NuGet packages**: Only `System.Text.Json` (built-in). Keeps the binary small and avoids dependency management issues on restricted machines.
+5. **No external NuGet packages**: Only `System.Text.Json` (built-in). Keeps the binary small and avoids dependency management issues on restricted machines.
 
 ## v2 Additions: SQLite + FTS5 + Reflexion
 
@@ -410,7 +369,6 @@ v2 adds one NuGet dependency: `Microsoft.Data.Sqlite` (8.0.x). This is a lightwe
 
 ## Future Extensions
 
-- **File watcher**: Watch markdown directory for changes and re-sync automatically
 - **Semantic similarity**: Embed observations and search by meaning (requires external model)
 - **Project auto-detection**: Scan `~/Developer/Projects/` and auto-register projects
 - **Cross-agent sync**: If Claude and Codex share the same memory directory, the graph serves both

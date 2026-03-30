@@ -1,6 +1,6 @@
 # Test Strategy Prompt
 
-Load this during Phase 2 (Plan) for any task that introduces new code paths. Think about what to test before writing code — this produces a test plan that becomes part of the implementation plan.
+Load this during Phase 3 (Plan) for any task that introduces new code paths. Think about what to test before writing code — this produces a test plan that becomes part of the implementation plan.
 
 ## When to use
 

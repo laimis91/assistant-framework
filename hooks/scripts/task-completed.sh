@@ -81,7 +81,7 @@ MSG="TASK COMPLETED — capture learnings before moving on:
 3. PATTERNS: If you noticed recurring patterns in this project type, call memory_pattern:
    - projectType, phase (discover/plan/build/review), pattern description
 
-4. INSIGHTS: Additionally save non-obvious gotchas to $AGENT_HOME/memory/insights/ and call memory_add_insight
+4. INSIGHTS: Use memory_add_insight to save non-obvious gotchas to the knowledge graph
 
 5. SESSION STATE: Update $STATE_DIR/session.md with completion status:
    ## Last Completed

@@ -136,10 +136,11 @@ Create or update `.claude/memory.md`:
 - [non-obvious thing 2]
 ```
 
-Also update the memory graph if available:
-- `memory_add_entity` for the project
-- `memory_add_relation` for technology dependencies
-- `memory_add_insight` for discovered conventions
+Record discoveries in the knowledge graph:
+- `memory_add_entity` — register the project (type Project) with key observations
+- `memory_add_relation` — link technology dependencies (Uses), patterns (Follows), conventions (HasConvention)
+- `memory_add_insight` — record discovered conventions and non-obvious findings
+- `memory_add_entity` with type `Rule` — if any behavioral constraints are discovered (e.g., "never force-push to main")
 
 ### Phase 6: Report
 

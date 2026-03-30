@@ -1,14 +1,12 @@
 using MemoryGraph.Graph;
 using MemoryGraph.Server;
 using MemoryGraph.Storage;
-using MemoryGraph.Sync;
 using MemoryGraph.Tools;
 
 // ── Parse CLI arguments ────────────────────────────────────────
 
 string? memoryDir = null;
 string? graphFile = null;
-var noSync = false;
 var verbose = false;
 
 for (var i = 0; i < args.Length; i++)
@@ -20,9 +18,6 @@ for (var i = 0; i < args.Length; i++)
             break;
         case "--graph-file" when i + 1 < args.Length:
             graphFile = args[++i];
-            break;
-        case "--no-sync":
-            noSync = true;
             break;
         case "--verbose":
             verbose = true;
@@ -75,15 +70,6 @@ Log($"Loaded graph: {graph.EntityCount} entities, {graph.RelationCount} relation
 if (skippedLines > 0)
 {
     Console.Error.WriteLine($"[memory-graph] WARNING: {skippedLines} malformed line(s) skipped in {graphFile}");
-}
-
-// ── Markdown sync ──────────────────────────────────────────────
-
-if (!noSync)
-{
-    var scanner = new MarkdownScanner(memoryDir, graph, verbose);
-    var (entities, relations) = scanner.Scan();
-    Log($"Markdown sync: processed {entities} entities, {relations} relations");
 }
 
 // ── Initialize SQLite store ───────────────────────────────────
@@ -146,7 +132,6 @@ void PrintUsage()
         Options:
           --memory-dir PATH    Memory directory (default: auto-detect from agent)
           --graph-file PATH    Graph file path (default: {memory-dir}/graph.jsonl)
-          --no-sync            Skip markdown sync on startup
           --verbose            Log to stderr for debugging
           -h, --help           Show this help
         """);

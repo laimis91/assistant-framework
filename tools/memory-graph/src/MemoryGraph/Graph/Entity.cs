@@ -10,7 +10,8 @@ public enum EntityType
     Pattern,      // architectural decision (Clean Architecture, CQRS, guard clauses)
     Preference,   // user coding preference (var usage, naming style)
     Insight,      // learned fact from a past session
-    Convention    // project-specific convention (test naming, folder structure)
+    Convention,   // project-specific convention (test naming, folder structure)
+    Rule          // behavioral mandate or correction (always enforced, highest priority)
 }
 
 /// <summary>

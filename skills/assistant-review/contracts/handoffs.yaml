@@ -64,6 +64,12 @@ handoffs:
           - "test coverage"
           - "architecture violations"
 
+      - name: rubric_required
+        type: boolean
+        required: false
+        description: "Whether the reviewer must return rubric scores (default: true for medium+ scope)"
+        notes: "Set to false for trivial/small scope single-round clean passes."
+
     return_fields:
       - name: round
         type: int
@@ -117,6 +123,66 @@ handoffs:
           has_should_fix: no must-fix, but at least one should-fix.
           has_nits_only: only nit-level findings.
 
+      - name: rubric_scores
+        type: object
+        required: false
+        condition: "rubric_required is true (default for medium+ scope)"
+        description: "Structured rubric scores per references/review-rubric.md"
+        object_fields:
+          - name: correctness
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: code_quality
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: architecture
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: security
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: test_coverage
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: weighted_score
+            type: float
+            required: true
+            validation: "Calculated per rubric formula. Must match dimension * weight sum."
+          - name: action
+            type: enum
+            required: true
+            enum_values: [PASS, REFINE, PIVOT]
+            validation: "Determined by weighted_score vs threshold for current round"
+          - name: score_justification
+            type: object
+            required: true
+            description: "Per-dimension justification citing specific code"
+            object_fields:
+              - name: correctness
+                type: string
+                required: true
+              - name: code_quality
+                type: string
+                required: true
+              - name: architecture
+                type: string
+                required: true
+              - name: security
+                type: string
+                required: true
+              - name: test_coverage
+                type: string
+                required: true
+          - name: critical_override
+            type: string
+            required: false
+            description: "If a critical finding caps the score, describe it here"
+
     on_missing_field: "Re-dispatch Reviewer. findings and verdict are never optional — a review without them is not a review."
 
 # ─────────────────────────────────────────────
@@ -126,5 +192,7 @@ handoffs:
 # 3. After return: verify findings[], summary, and verdict are all present
 # 4. Filter any findings with confidence_pct < confidence_threshold
 # 5. Filter any findings that match previously_fixed descriptions
-# 6. If re-dispatch needed: include explicit note about what was missing
+# 6. If rubric_required: verify rubric_scores is present with all dimensions
+# 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
+# 8. If re-dispatch needed: include explicit note about what was missing
 # ─────────────────────────────────────────────

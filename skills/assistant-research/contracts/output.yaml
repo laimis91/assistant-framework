@@ -79,7 +79,7 @@ artifacts:
     type: boolean
     required: false
     condition: "findings contain notable reusable insights"
-    description: "Whether findings were saved to memory/insights/ for future sessions"
+    description: "Whether findings were recorded in the knowledge graph via memory_add_insight for future sessions"
 
 # Output format (must be followed for all tiers):
 #

@@ -55,14 +55,18 @@ if [[ -f "$TELOS_FILE" ]]; then
     context_parts+=("---")
 fi
 
-# Re-inject feedback rules
-MEMORY_DIR="$AGENT_HOME/memory/feedback"
-if [[ -d "$MEMORY_DIR" ]]; then
-    for f in "$MEMORY_DIR"/*.md; do
-        [[ -f "$f" ]] || continue
-        context_parts+=("Memory rule: $(cat "$f")")
-        context_parts+=("---")
-    done
+# Re-inject memory rules from knowledge graph
+GRAPH_FILE="$AGENT_HOME/memory/graph.jsonl"
+if [[ -f "$GRAPH_FILE" ]] && command -v jq >/dev/null 2>&1; then
+    while IFS= read -r rule_json; do
+        rule_name=$(echo "$rule_json" | jq -r '.name')
+        rule_obs=$(echo "$rule_json" | jq -r '.observations | map("  - " + .) | join("\n")')
+        if [[ -n "$rule_name" && "$rule_name" != "null" ]]; then
+            context_parts+=("Memory rule: $rule_name")
+            context_parts+=("$rule_obs")
+            context_parts+=("---")
+        fi
+    done < <(jq -Rc 'fromjson? | select(.kind=="entity" and .type=="rule")' "$GRAPH_FILE" 2>/dev/null)
 fi
 
 # Re-inject session state if available
@@ -130,8 +134,7 @@ context_parts+=("- memory_pattern: Record/reinforce recurring patterns per proje
 context_parts+=("- memory_stats: Check memory system health and calibration accuracy")
 context_parts+=("- memory_consolidate: Decay stale lessons and archive low-confidence ones")
 context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
-AGENT_DIR_NAME=$(basename "$AGENT_HOME")
-context_parts+=("If memory-graph MCP is unavailable, fall back to reading ~/$AGENT_DIR_NAME/memory/INDEX.md and relevant files.")
+context_parts+=("If memory-graph MCP is unavailable, rules are still loaded from graph.jsonl by hooks.")
 context_parts+=("---")
 
 if [[ ${#context_parts[@]} -gt 0 ]]; then

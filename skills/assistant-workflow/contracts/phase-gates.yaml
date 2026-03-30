@@ -34,7 +34,7 @@ gates:
         on_fail: "Print the triage result before continuing"
 
   # ─────────────────────────────────────────────
-  # DISCOVER → PLAN
+  # DISCOVER → DECOMPOSE (medium+) / PLAN (small)
   # ─────────────────────────────────────────────
   - phase: DISCOVER
     checkpoint_start: "--- PHASE: DISCOVER ---"
@@ -63,8 +63,56 @@ gates:
         check: "constraints list is captured (may be empty, but must be explicitly set)"
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
+      - id: D6
+        check: "For medium+ tasks: Code Mapper subagent was dispatched to produce context map (not explored inline by Orchestrator)"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Dispatch Code Mapper subagent — Orchestrator must not absorb mapping work"
+
+      - id: D7
+        check: "For large+ tasks: Explorer subagent was dispatched to trace execution paths"
+        condition: "size in [large, mega]"
+        on_fail: "Dispatch Explorer subagent — deep analysis requires dedicated agent focus"
+
   # ─────────────────────────────────────────────
-  # PLAN → BUILD (or DESIGN)
+  # DISCOVER → DECOMPOSE (medium+ only)
+  # ─────────────────────────────────────────────
+  - phase: DECOMPOSE
+    checkpoint_start: "--- PHASE: DECOMPOSE ---"
+    checkpoint_end: "--- PHASE: DECOMPOSE COMPLETE (approved) ---"
+    condition: "size in [medium, large, mega]"
+    exit_assertions:
+
+      - id: DC1
+        check: "Component manifest exists with 2-7 components (medium) or 3-7 (large/mega)"
+        on_fail: "Dispatch Architect to decompose the problem into verifiable components"
+
+      - id: DC2
+        check: "Each component has at least 1 verification criterion that is binary and observable"
+        on_fail: "Add verification criteria to components missing them — each must be pass/fail checkable"
+
+      - id: DC3
+        check: "Components are ordered by dependency — independent components first"
+        on_fail: "Reorder components so prerequisites come before dependents"
+
+      - id: DC4
+        check: "No circular dependencies exist between components"
+        on_fail: "Merge circularly dependent components into a single component"
+
+      - id: DC5
+        check: "If multiple components share interfaces/DTOs, a shared-contracts component exists as #1"
+        on_fail: "Extract shared contracts into component #1"
+
+      - id: DC6
+        check: "User explicitly approved the component decomposition"
+        on_fail: "Present component manifest and wait for approval"
+
+      - id: DC7
+        check: "Architect subagent was dispatched for decomposition (not done inline by Orchestrator)"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Dispatch Architect for component decomposition — Orchestrator must not absorb this work"
+
+  # ─────────────────────────────────────────────
+  # DECOMPOSE → PLAN (or PLAN directly for small)
   # ─────────────────────────────────────────────
   - phase: PLAN
     checkpoint_start: "--- PHASE: PLAN ---"
@@ -96,6 +144,11 @@ gates:
         condition: "size in [large, mega]"
         on_fail: "Fill Security and Operability sections per plan-template.md"
 
+      - id: P7
+        check: "For large+ tasks: Architect subagent was dispatched for implementation blueprint (not planned inline by Orchestrator)"
+        condition: "size in [large, mega]"
+        on_fail: "Dispatch Architect subagent — complex plans require dedicated architectural analysis"
+
   # ─────────────────────────────────────────────
   # DESIGN → BUILD (UI tasks only)
   # ─────────────────────────────────────────────
@@ -112,6 +165,10 @@ gates:
       - id: DS2
         check: "User explicitly approved the design"
         on_fail: "Wait for design approval"
+
+      - id: DS3
+        check: "Architect subagent was dispatched for design direction proposal"
+        on_fail: "Dispatch Architect subagent to propose design direction — Orchestrator creates the mockup, Architect defines the direction"
 
   # ─────────────────────────────────────────────
   # BUILD → REVIEW
@@ -150,6 +207,33 @@ gates:
         check: "Tests were written alongside code, not in a batch after all implementation"
         on_fail: "This is a process violation. Note it in the task journal for the reflexion phase."
 
+      - id: B8
+        check: "SOLID principles checklist was evaluated for each implementation step (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega per references/prompts/solid-principles.md)"
+        on_fail: "Load references/prompts/solid-principles.md and evaluate the graduated checklist for each completed step. Fix any violations before proceeding to Review."
+
+      - id: B9
+        check: "Code Writer subagent was dispatched for implementation (Orchestrator does not write production code inline)"
+        on_fail: "Dispatch Code Writer subagent — separation of orchestration and implementation is required"
+
+      - id: B10
+        check: "Builder/Tester subagent was dispatched to build and run tests (Orchestrator does not absorb build/test work)"
+        on_fail: "Dispatch Builder/Tester subagent — build output must be absorbed by a dedicated agent"
+
+      - id: B11
+        check: "For medium+ tasks: Code Writer and Builder/Tester were dispatched per component (not once for all components batched together)"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Each component must have its own Code Writer → Builder/Tester cycle. Re-dispatch per component."
+
+      - id: B12
+        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are checked and passing"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Run verification criteria for each component. Fix failing criteria before proceeding to Review."
+
+      - id: B13
+        check: "For medium+ tasks: each component was verified independently before the next component started"
+        condition: "size in [medium, large, mega]"
+        on_fail: "This is a process violation — components must be verified sequentially. Note in task journal for reflexion."
+
   # ─────────────────────────────────────────────
   # REVIEW → DOCUMENT
   # ─────────────────────────────────────────────
@@ -178,6 +262,16 @@ gates:
         check: "For medium+ tasks: task journal Review Log has Final Result entry"
         condition: "size in [medium, large, mega]"
         on_fail: "Write Final Result entry in task journal Review Log"
+
+      - id: R6
+        check: "For medium+ tasks: rubric scores present in Quality Review entries (Rubric: and Weighted: lines)"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md. The harness-gate.sh hook will block completion without rubric scores."
+
+      - id: R7
+        check: "For medium+ tasks: final rubric weighted score >= 3.0 (minimum completion threshold)"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Weighted score below 3.0 — the code needs significant improvement. Fix lowest-scoring dimensions and re-review. The harness-gate.sh hook enforces this structurally."
 
   # ─────────────────────────────────────────────
   # DOCUMENT → COMPLETE

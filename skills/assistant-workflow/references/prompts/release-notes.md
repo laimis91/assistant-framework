@@ -1,6 +1,6 @@
 # Release Notes Generator
 
-Load this during Phase 5 (Document) to produce user-facing release notes from the plan and implementation. The output is a draft for human review — never publish without a person reading it.
+Load this during Phase 7 (Document) to produce user-facing release notes from the plan and implementation. The output is a draft for human review — never publish without a person reading it.
 
 ## When to use
 

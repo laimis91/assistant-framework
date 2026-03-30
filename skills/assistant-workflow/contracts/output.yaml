@@ -17,10 +17,12 @@ artifacts:
       '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
       Missing checkpoints = workflow was not followed.
     minimum_entries:
-      small: 10   # TRIAGE(2) + DISCOVER(2) + PLAN(2) + BUILD(2) + REVIEW(2) + DOCUMENT(2) - some may be lightweight
-      medium: 12
-      large: 14
-      mega: 14
+      # TRIAGE has no COMPLETE marker (checkpoint_end: null), so it contributes 1.
+      # All other phases contribute 2 (start + complete).
+      small: 11   # TRIAGE(1) + DISCOVER(2) + PLAN(2) + BUILD(2) + REVIEW(2) + DOCUMENT(2)
+      medium: 13  # + DECOMPOSE(2), Design optional
+      large: 15   # + DECOMPOSE(2) + DESIGN(2)
+      mega: 9     # TRIAGE(1) + DISCOVER(2) + DECOMPOSE(2) + REVIEW(2) + DOCUMENT(2); sub-task checkpoints are additional
 
   - name: changed_files
     type: object[]
@@ -103,6 +105,16 @@ artifacts:
     condition: "size in [medium, large, mega]"
     validation: "File exists at .claude/context-map.md"
     location: ".claude/context-map.md"
+
+  - name: component_manifest
+    type: string
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: >
+      Contains ordered list of components with names, descriptions, files,
+      dependencies, and binary verification criteria. Each component has at
+      least 1 verification criterion. All criteria must be checked and passing
+      before WORKFLOW COMPLETE.
 
   - name: metrics_entry
     type: jsonl_line

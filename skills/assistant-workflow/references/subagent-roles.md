@@ -19,11 +19,11 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 ## Agent summary
 
-| Agent | Model | Access | Phase | Purpose |
+| Agent | Model | Access | Phase(s) | Purpose |
 |---|---|---|---|---|
 | `code-mapper` | haiku | Read-only | Discover | Produces context map (`.claude/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | sonnet | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
-| `architect` | opus | Read-only | Plan | Implementation blueprints: files, interfaces, data flows, build sequence |
+| `architect` | opus | Read-only | Decompose, Plan, Design | Component decomposition, implementation blueprints, design direction |
 | `code-writer` | opus | Write | Build | Implements code following a plan. No builds, no tests, no review |
 | `builder-tester` | sonnet | Write | Build | Builds, writes tests, runs tests. Returns concise summaries, not logs |
 | `reviewer` | opus | Read-only | Review | Finds bugs, security issues, architecture violations, structural problems |
@@ -32,9 +32,9 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small** | Code Writer → Builder/Tester → Reviewer | Sequential, minimal |
-| **Medium** | Code Mapper → Code Writer → Builder/Tester → Reviewer | Mapper feeds Writer |
-| **Large** | Code Mapper → Explorer → Architect → Code Writer → Builder/Tester → Reviewer | Full pipeline |
+| **Small** | Code Writer → Builder/Tester → Reviewer | Sequential, minimal (no Decompose) |
+| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Reviewer | Mapper feeds Architect, components feed Writer |
+| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Reviewer | Full pipeline with component verification |
 | **Mega** | All roles, parallel Code Writers per sub-task | Mapper → Explorer → Architect → parallel Writers → Builder/Tester and Reviewer at integration |
 
 ## Reviewer dispatch (review rounds)

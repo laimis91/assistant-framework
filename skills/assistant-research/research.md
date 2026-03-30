@@ -33,7 +33,7 @@ Iterative progressive research:
 3. Deep-dive the highest-value findings
 4. Repeat until coverage is sufficient
 
-Store notable findings in `memory/insights/YYYY-MM-DD-topic.md` if they'll be useful in future sessions.
+Use `memory_add_insight` to record notable findings in the knowledge graph for future sessions.
 
 ## Mandatory: URL Verification
 **Every URL presented to the user MUST be verified.** See `url-verify.md`.

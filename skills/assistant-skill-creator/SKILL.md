@@ -92,6 +92,19 @@ Read `references/skill-contract-design-guide.md` for the full schema reference. 
 - `return_fields` — what the subagent must return
 - Producer's `return_fields` must satisfy consumer's `context_fields`
 
+#### For Process skills with evaluation loops:
+
+If the skill includes a multi-round loop (review, refinement, optimization), read `references/harness-patterns.md` and apply the relevant patterns:
+
+| Pattern | When to Apply |
+|---|---|
+| **Rubric Scoring** | Loop evaluates quality against criteria |
+| **Drift Detection** | Loop runs 2+ rounds with scoring |
+| **Harness Gates** | Loop must complete before task finishes |
+| **Generation/Evaluation Separation** | One agent creates, another evaluates |
+
+These patterns add rubric return fields to handoffs, drift invariants to phase-gates, and score progression to output contracts. Most loop-based Process skills will use all four.
+
 Present the contract design to the user for review before building.
 
 Print: `--- PHASE: DESIGN COMPLETE ---`
@@ -177,6 +190,7 @@ Print: `--- PHASE: VALIDATE COMPLETE ---`
 
 - [Contract Design Guide](references/skill-contract-design-guide.md) — mandatory reading before designing contracts
 - [Contract Design Checklist](references/contract-design-checklist.md) — validation checklist for Phase 4
+- [Harness Patterns](references/harness-patterns.md) — rubric, drift detection, gates, and separation patterns for loop-based Process skills
 - Existing skills in `skills/` — use as examples for your category tier
 
 ## Tips

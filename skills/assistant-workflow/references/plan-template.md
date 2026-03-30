@@ -11,11 +11,12 @@ No separate plan document needed. Include directly in your response:
 **Files:** [list of files to change]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
+**SRP check:** [single responsibility confirmed / split needed]
 ```
 
 ## Medium Tasks — Standard Plan
 
-Covers the essentials without Security/Operability overhead. Fill this in during Phase 2.
+Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
 
 ```markdown
 ## Goal
@@ -43,6 +44,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Dependency direction: [A → B → C]
 - New files placement:
   - [file → layer/folder rationale]
+- SOLID design notes:
+  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
+  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
+  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
 
 ## Analysis
 ### Options
@@ -95,6 +100,12 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 - Dependency direction: [A → B → C]
 - New files placement:
   - [file → layer/folder rationale]
+- SOLID design notes:
+  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
+  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
+  - LSP: [any inheritance hierarchies? Do subtypes preserve base type contracts?]
+  - ISP: [any interfaces? Are they minimal or do implementers need to stub methods?]
+  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
 
 ## Security considerations
 - Data classification: [does this touch PII, auth, payments, external inputs?]

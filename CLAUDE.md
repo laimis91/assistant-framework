@@ -56,7 +56,7 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 2. **Hooks** (`hooks/`) — Shell scripts that fire on agent lifecycle events (SessionStart, UserPromptSubmit, Stop, PreCompact, PostCompact, etc.). Agent-specific settings files (`claude-settings.json`, `gemini-settings.json`, `codex-settings.json`) map events to scripts. Hooks enforce behaviors like skill routing, review gating, and memory injection.
 
 3. **Tools** (`tools/`) — Compiled utilities exposed as MCP servers or CLI tools.
-   - `memory-graph/` — C# MCP server (stdio, JSON-RPC) with 14 tools. In-memory knowledge graph + SQLite/FTS5 for reflexions/decisions. Source in `src/MemoryGraph/` with subdirs: `Graph/`, `Storage/`, `Tools/`, `Server/`, `Sync/`.
+   - `memory-graph/` — C# MCP server (stdio, JSON-RPC) with 14 tools. In-memory knowledge graph + SQLite/FTS5 for reflexions/decisions. Source in `src/MemoryGraph/` with subdirs: `Graph/`, `Storage/`, `Tools/`, `Server/`.
    - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
 
 ### Skill anatomy
@@ -81,7 +81,10 @@ Skills are routed by the `skill-router.sh` hook, which pattern-matches user prom
 | `session-start.sh` | SessionStart | Inject task journal + memory feedback |
 | `skill-router.sh` | UserPromptSubmit | Route prompts to matching skills |
 | `learning-signals.sh` | UserPromptSubmit | Detect corrections/approvals for trend analysis |
+| `workflow-enforcer.sh` | UserPromptSubmit | Inject workflow phase state + enforcement rules on every prompt (combats rule drift) |
+| `workflow-guard.sh` | PreToolUse | Warn when orchestrator uses Edit/Write directly during active task (reinforces delegation) |
 | `stop-review.sh` | Stop | Enforce self-review before task completion |
+| `harness-gate.sh` | Stop | Enforce harness lifecycle: plan approval, rubric scores, score thresholds (medium+ tasks) |
 | `pre-compress.sh` | PreCompact | Save state before context compression |
 | `post-compact.sh` | PostCompact | Re-inject context after compaction |
 | `task-completed.sh` | TaskCompleted | Post-task processing |
@@ -92,9 +95,10 @@ Skills are routed by the `skill-router.sh` hook, which pattern-matches user prom
 
 `agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
 
-### Memory seed
+### Codex execution policy rules
 
-`memory-seed/` contains initial memory data installed on first run (never overwrites existing data). Includes user profile template, feedback rules, and sample insights.
+`codex-rules/` contains Starlark `.rules` files installed to `~/.codex/rules/`. These provide **deterministic** enforcement (system-level, not prompt-level) — they always execute regardless of LLM reasoning. Current rules:
+- `workflow.rules` — Git safety (block force push, confirm commits/pushes), destructive operation guards, build/test allow-listing
 
 ## Mandatory: Skill Contract Design Guide
 

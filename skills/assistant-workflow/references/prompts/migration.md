@@ -1,6 +1,6 @@
 # Migration Prompt
 
-Load this during Phase 2 (Plan) when the task involves database schema changes, data transformations, or data store migrations. Produces a migration section for the plan with explicit rollback steps.
+Load this during Phase 3 (Plan) when the task involves database schema changes, data transformations, or data store migrations. Produces a migration section for the plan with explicit rollback steps.
 
 ## When to use
 

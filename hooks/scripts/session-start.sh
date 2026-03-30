@@ -17,7 +17,7 @@
 # Behavior:
 #   1. Active task journal ({state_dir}/task.md) — injects full state
 #   2. Telos context (~/{agent}/telos.md) — purpose/strategic priorities
-#   3. Memory feedback rules (~/{agent}/memory/feedback/) — always injected (fast, structural)
+#   3. Memory rules from knowledge graph (~/{agent}/memory/graph.jsonl) — always injected
 #   4. Instruction to call memory_context via memory-graph MCP for project context
 #   5. No output if nothing found (exit 0)
 
@@ -75,24 +75,30 @@ if [[ -f "$TELOS_FILE" ]]; then
     context_parts+=("---")
 fi
 
-# 3. Load memory feedback rules (always relevant — injected directly for speed)
-MEMORY_DIR="$AGENT_HOME/memory/feedback"
-if [[ -d "$MEMORY_DIR" ]]; then
-    for f in "$MEMORY_DIR"/*.md; do
-        [[ -f "$f" ]] || continue
-        feedback_content=$(cat "$f")
-        context_parts+=("Memory rule from $(basename "$f"):")
-        context_parts+=("$feedback_content")
-        context_parts+=("---")
-    done
+# 3. Load memory rules from knowledge graph (always relevant — injected directly for speed)
+GRAPH_FILE="$AGENT_HOME/memory/graph.jsonl"
+if [[ -f "$GRAPH_FILE" ]] && command -v jq >/dev/null 2>&1; then
+    while IFS= read -r rule_json; do
+        rule_name=$(echo "$rule_json" | jq -r '.name')
+        rule_obs=$(echo "$rule_json" | jq -r '.observations | map("  - " + .) | join("\n")')
+        if [[ -n "$rule_name" && "$rule_name" != "null" ]]; then
+            context_parts+=("Memory rule: $rule_name")
+            context_parts+=("$rule_obs")
+            context_parts+=("---")
+        fi
+    done < <(jq -Rc 'fromjson? | select(.kind=="entity" and .type=="rule")' "$GRAPH_FILE" 2>/dev/null)
 fi
 
-# 4. Instruction to load project context via memory-graph MCP
+# 4. Role definition and enforcement (injected every session for all agents)
+context_parts+=("ROLE: You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents (code-writer, builder-tester, architect, explorer, reviewer). You NEVER edit files directly — dispatch a sub-agent instead. Your responsibilities: decompose tasks, dispatch agents, monitor progress, communicate with the user, and enforce phase gates. You MUST follow all skill instructions, phase gates, and review loops exactly as defined — no bypassing, no shortcuts, no skipping steps. When a skill matches your task, invoke it; do not manually replicate what it does.")
+context_parts+=("---")
+
+# 5. Instruction to load project context via memory-graph MCP
 context_parts+=("SESSION START — Memory Protocol:")
 context_parts+=("1. Call memory_context with the current project name/path to load project context (dependencies, technologies, patterns, conventions, recent insights)")
 context_parts+=("2. If $STATE_DIR/session.md exists, read it to resume previous session state")
 context_parts+=("3. If $STATE_DIR/working-buffer.md exists, read it then clear its contents")
-context_parts+=("4. If memory-graph MCP is unavailable, fall back to reading $AGENT_HOME/memory/INDEX.md and relevant files")
+context_parts+=("4. If memory-graph MCP is unavailable, rules are still loaded from graph.jsonl by the session hook")
 context_parts+=("Use memory_search for targeted queries during the session. Use memory_add_insight to record learnings.")
 context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
 context_parts+=("")
@@ -106,7 +112,7 @@ context_parts+=("- During DISCOVER phase: check past lessons for this project ty
 context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
 context_parts+=("---")
 
-# 5. Output context if any was found
+# 6. Output context if any was found
 if [[ ${#context_parts[@]} -gt 0 ]]; then
     full_context=""
     for part in "${context_parts[@]}"; do

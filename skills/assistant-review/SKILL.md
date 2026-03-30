@@ -46,28 +46,46 @@ Determine the review scope:
 ```
 round = 1
 previously_fixed = []
+score_history = []
 
 while round <= 5:
 
   1. REVIEW
      - Dispatch a Reviewer subagent (or self-review for small scope)
      - Provide: full diff, previously_fixed list, round number
+     - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
        fixed — do NOT re-report them: {previously_fixed}
        Confidence threshold:
        - Round 1-2: 80%+
        - Round 3-4: 85%+
-       - Round 5: 90%+"
+       - Round 5: 90%+
+       Score against the rubric (5 dimensions) per references/review-rubric.md."
 
   2. EVALUATE
-     a. No must-fix AND no should-fix → EXIT CLEAN
-     b. Only nits → EXIT CLEAN (note nits in final report)
+     a. Check rubric score (medium+ scope):
+        - PASS (weighted >= 4.0) AND no must-fix AND no should-fix → EXIT CLEAN
+        - PIVOT (weighted < threshold for round) → escalate to orchestrator
+        - REFINE with findings → continue to step 3
+        - REFINE with zero findings → EXIT CLEAN with advisory:
+          "Rubric score {score} suggests room for improvement but no
+          specific actionable items found. Low-scoring dimensions
+          noted as recommendations for future work."
+          Include rubric scores and low-dimension details in final report.
+     b. No rubric (small scope): use findings-based exit:
+        - No must-fix AND no should-fix → EXIT CLEAN
+        - Only nits → EXIT CLEAN (note nits in final report)
      c. round == 5 with remaining must-fix → EXIT WITH REMAINING ITEMS
-     d. Otherwise → continue to step 3
+     d. round == 5 with issues fixed and now clean → EXIT ISSUES FIXED
+     e. Otherwise → continue to step 3
+
+     Record in score_history: { round, weighted_score, finding_count, drift_status }
+     (see references/score-tracking.md for drift detection rules)
 
   3. FIX
      - Fix ALL must-fix and should-fix items (not just must-fix)
+     - Prioritize lowest-scoring rubric dimensions first
      - Add each fixed item to previously_fixed with description
 
   4. VERIFY
@@ -86,7 +104,23 @@ After the loop completes, present ONE summary to the user:
 ## Review Complete
 
 **Rounds:** {N}
-**Result:** CLEAN | HAS REMAINING ITEMS
+**Result:** CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
+
+### Rubric Score (medium+ scope)
+| Dimension | Score | Justification |
+|---|---|---|
+| Correctness (0.30) | {score} | {one-line justification} |
+| Code Quality (0.20) | {score} | {one-line justification} |
+| Architecture (0.20) | {score} | {one-line justification} |
+| Security (0.15) | {score} | {one-line justification} |
+| Test Coverage (0.15) | {score} | {one-line justification} |
+| **Weighted** | **{score}** | **{PASS/REFINE/PIVOT}** |
+
+### Score Progression (if multiple rounds)
+| Round | Score | Findings | Delta | Drift |
+|---|---|---|---|---|
+| 1 | {score} | {count} | — | — |
+| 2 | {score} | {count} | {+/-} | {drift_status} |
 
 ### Fixed in this review
 - [list of all items fixed across all rounds, grouped by severity]
@@ -106,3 +140,20 @@ After the loop completes, present ONE summary to the user:
 - **Previously-fixed list prevents re-reporting** — each round should find fewer issues.
 - **Higher confidence each round** — early rounds catch obvious issues, later rounds require higher certainty.
 - If scope is trivial (single small file, obvious change) → one round is fine if clean. But if findings exist, you MUST loop.
+
+### Drift detection (medium+ scope)
+
+After each round, compare rubric scores to the previous round per `references/score-tracking.md`:
+
+- **GENUINE**: Score up, findings down → continue normally
+- **SUSPICIOUS**: Score jumped > 1.0 in one round → log warning, continue
+- **DRIFT**: Score up but findings didn't decrease → **reset evaluator** (fresh agent, stricter prompt)
+- **REGRESSION**: Score down → investigate, escalate if 2+ consecutive rounds
+- **NEUTRAL**: Score unchanged for 1 round with findings present → log, no action yet
+- **STAGNATION**: Score unchanged for 2+ rounds with findings present → escalate to orchestrator
+
+On DRIFT, the next Reviewer dispatch MUST include this addition to its prompt:
+> "Previous rounds showed score inflation without corresponding quality improvement.
+> Apply maximum skepticism. Score conservatively — when uncertain, round DOWN."
+
+On 3+ DRIFT occurrences: stop the loop and present findings for manual review.

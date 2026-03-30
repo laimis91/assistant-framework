@@ -2,7 +2,7 @@
 # run-memory-graph.sh — Build (if needed) and run the memory-graph MCP server
 #
 # Usage:
-#   run-memory-graph.sh [--memory-dir DIR] [--verbose] [--no-sync]
+#   run-memory-graph.sh [--memory-dir DIR] [--verbose]
 #
 # The script builds the project on first run, then reuses the cached binary.
 

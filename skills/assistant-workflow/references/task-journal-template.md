@@ -3,7 +3,7 @@
 Write to `.claude/task.md` in the project root. This file is the single source of truth for the current task — it survives context compression and session continuations.
 
 ## When to create
-- At plan approval (Phase 2 gate passed)
+- At plan approval (Phase 3 gate passed)
 - Small tasks: optional (only if multi-step)
 - Medium+: always
 
@@ -20,6 +20,8 @@ Write to `.claude/task.md` in the project root. This file is the single source o
 ```markdown
 ## Task: [1-sentence description]
 Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
+Triaged as: [small | medium | large | mega]
+Plan approval: [yes/no + date]
 
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
@@ -80,6 +82,10 @@ Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 - Round: 1 of 5
 - Previously fixed: 0 items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
+- Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
+- Weighted: [score]
+- Delta from previous: — (first round)
+- Drift check: — (first round)
 - Complexity: [ran / skipped (not C#) / tool unavailable]
   - [method (line N): score X — refactored to Y, or "within threshold"]
 - Must-fix:
@@ -92,6 +98,10 @@ Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 - Round: 2 of 5
 - Previously fixed: [count] items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
+- Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
+- Weighted: [score]
+- Delta from previous: [+/- amount]
+- Drift check: [GENUINE / SUSPICIOUS / DRIFT / REGRESSION / STAGNATION / NEUTRAL]
 - Must-fix:
   - [x] [file:line] — [issue] → [fix applied]
 - Should-fix:
@@ -102,8 +112,11 @@ Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 [Note: On test failure, skip this entry — write only "- Result: HAS REMAINING ITEMS" to Final result]
 
 ### Final result
-- Result: CLEAN | ISSUES FIXED | HAS REMAINING ITEMS
+- Result: CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
 - Review rounds: [count]
+- Final rubric score: [weighted score] ([PASS/REFINE/PIVOT])
+- Score progression: [round1→round2→...roundN] (e.g., 3.50→3.85→4.10)
+- Drift incidents: [count, or "none"]
 - Total must-fix resolved: [count across all rounds]
 - Total should-fix resolved: [count across all rounds]
 - Should-fix deferred: [list any remaining]

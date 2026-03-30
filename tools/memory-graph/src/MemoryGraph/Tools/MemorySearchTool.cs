@@ -39,7 +39,7 @@ public sealed class MemorySearchTool : IMemoryTool
                 "types": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Optional filter by source type: entity, reflexion, decision, strategy. Or entity types: Project, Technology, Pattern, Preference, Insight, Convention"
+                    "description": "Optional filter by source type: entity, reflexion, decision, strategy. Or entity types: Project, Technology, Pattern, Preference, Insight, Convention, Rule"
                 }
             },
             "required": ["query"]

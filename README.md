@@ -77,7 +77,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-memory
-Memory management: templates, categories, pruning rules. Data lives in `~/.{agent}/memory/` (survives skill reinstalls).
+Memory management via knowledge graph (`~/.{agent}/memory/graph.jsonl`). Records rules, preferences, insights, and project context. Survives skill reinstalls.
 
 Triggers on: remember this, save insight, update memory, preferences
 
@@ -115,7 +115,7 @@ Triggers on: telos, my purpose, why am I doing this, what matters most, my missi
 
 ### Memory Graph (MCP Server)
 
-A knowledge graph over the markdown memory system. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" instead of reading all memory files.
+The sole persistence layer for cross-session memory. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" via MCP tools.
 
 **14 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
 
@@ -163,6 +163,7 @@ Roslyn-based analyzer that scores method complexity. Used by the workflow skill'
 ```
 install.sh                         <- Top-level installer (skills + hooks + memory)
 version.txt                        <- Framework version
+graph-seed.jsonl                   <- Default knowledge graph seed data
 
 skills/
   assistant-workflow/
@@ -258,18 +259,11 @@ tools/
       Storage/                     <- SQLite + FTS5 store (reflexions, decisions, strategies)
       Tools/                       <- 13 MCP tool implementations
       Server/                      <- JSON-RPC message loop
-      Sync/                        <- Markdown file scanner
     tests/MemoryGraph.Tests/       <- 65 xUnit tests
 
 tests/
   test-hooks.sh                    <- Hook integration tests
 
-memory-seed/                       <- Initial memory data (installed on first run)
-  INDEX.md
-  user/profile.md
-  feedback/workflow-invisible.md   <- Workflow should feel invisible
-  feedback/always-check-skills-first.md  <- Always invoke matching skills first
-  insights/2026-03-17-*.md         <- Sample insight
 ```
 
 ## How it works

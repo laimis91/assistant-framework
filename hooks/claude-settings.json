@@ -11,6 +11,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/assistant/learning-signals.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"
           }
         ]
       }
@@ -22,6 +26,17 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/assistant/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/assistant/workflow-guard.sh"
           }
         ]
       }
@@ -55,6 +70,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/assistant/stop-review.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/assistant/harness-gate.sh"
           }
         ]
       }

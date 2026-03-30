@@ -33,7 +33,7 @@ public sealed class MemoryAddEntityTool : IMemoryTool
                 },
                 "type": {
                     "type": "string",
-                    "description": "Entity type: Project, Technology, Pattern, Preference, Insight, Convention"
+                    "description": "Entity type: Project, Technology, Pattern, Preference, Insight, Convention, Rule"
                 },
                 "observations": {
                     "type": "array",

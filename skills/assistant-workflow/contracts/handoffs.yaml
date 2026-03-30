@@ -179,7 +179,94 @@ handoffs:
     on_missing_field: "Re-dispatch Explorer with specific questions about the missing area"
 
   # ─────────────────────────────────────────────
-  # Orchestrator → Architect
+  # Orchestrator → Architect (DECOMPOSE)
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_architect_decompose
+    from: Orchestrator
+    to: Architect
+    phase: DECOMPOSE
+    context_fields:
+      - name: task_description
+        type: string
+        required: true
+        description: "What the task is about — scopes the decomposition"
+      - name: requirements_summary
+        type: string
+        required: true
+        description: "Restated requirements from Discover phase"
+      - name: context_map
+        type: string
+        required: true
+        description: "CodeMapper output — Architect uses this to understand codebase boundaries"
+      - name: explorer_findings
+        type: string
+        required: false
+        description: "Explorer output if available (large/mega tasks)"
+      - name: constraints
+        type: string[]
+        required: true
+        description: "All accumulated constraints"
+      - name: task_size
+        type: enum
+        required: true
+        enum_values: [medium, large, mega]
+        description: "Determines component count range (medium: 2-7, large/mega: 3-7)"
+    return_fields:
+      - name: components
+        type: object[]
+        required: true
+        description: "Ordered list of independently verifiable components"
+        min_items: 2
+        object_fields:
+          - name: order
+            type: int
+            required: true
+          - name: name
+            type: string
+            required: true
+            description: "Short descriptive name (e.g., 'shared-contracts', 'api-endpoints', 'ui-binding')"
+          - name: description
+            type: string
+            required: true
+            description: "1-2 sentence description of what this component delivers"
+          - name: files
+            type: string[]
+            required: true
+            description: "Files to create or modify"
+            min_items: 1
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Names of prerequisite components, or empty array if independent"
+          - name: verification_criteria
+            type: string[]
+            required: true
+            description: "Binary pass/fail statements — each must be observable via test, build, or inspection"
+            min_items: 1
+      - name: decomposition_pattern
+        type: enum
+        required: true
+        enum_values: [by_layer, by_feature, by_module, contracts_first]
+        description: "Which decomposition strategy was applied"
+      - name: shared_contracts_needed
+        type: boolean
+        required: true
+        description: "Whether component #1 is a shared contracts component"
+      - name: risks
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: mitigation
+            type: string
+            required: true
+    on_missing_field: "Re-dispatch Architect requesting the missing decomposition field"
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Architect (PLAN)
   # ─────────────────────────────────────────────
   - name: orchestrator_to_architect
     from: Orchestrator
@@ -205,6 +292,32 @@ handoffs:
         type: string[]
         required: true
         description: "All accumulated constraints"
+      - name: component_manifest
+        type: object[]
+        required: false
+        condition: "size in [medium, large, mega]"
+        description: "Component decomposition from DECOMPOSE phase — Architect aligns plan steps to components"
+        object_fields:
+          - name: order
+            type: int
+            required: true
+            description: "Build sequence — plan steps must respect this ordering"
+          - name: name
+            type: string
+            required: true
+          - name: description
+            type: string
+            required: true
+          - name: files
+            type: string[]
+            required: true
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Component names that must be built first"
+          - name: verification_criteria
+            type: string[]
+            required: true
     return_fields:
       - name: implementation_steps
         type: object[]
@@ -227,6 +340,11 @@ handoffs:
             required: true
             description: "What to test after this step"
             min_items: 1
+          - name: component_name
+            type: string
+            required: false
+            condition: "size in [medium, large, mega]"
+            description: "Which component from the DECOMPOSE manifest this step belongs to — enables per-component verification in BUILD"
       - name: files_to_create
         type: object[]
         required: false

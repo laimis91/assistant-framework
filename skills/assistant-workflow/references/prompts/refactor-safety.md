@@ -1,6 +1,6 @@
 # Refactor Safety Prompt
 
-Load this during Phase 2 (Plan) when the task is a refactor — restructuring code without changing its external behaviour. Produces a "refactor safety contract" that defines what must not change and how to verify it.
+Load this during Phase 3 (Plan) when the task is a refactor — restructuring code without changing its external behaviour. Produces a "refactor safety contract" that defines what must not change and how to verify it.
 
 ## When to use
 

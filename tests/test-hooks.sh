@@ -145,14 +145,60 @@ if test_start "session-start: Claude, with task journal → outputs journal"; th
     rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "session-start: Claude, with memory feedback → outputs rules"; then
-    mkdir -p "$TEST_AGENT_HOME/.claude/memory/feedback"
-    echo "# Always use tabs" > "$TEST_AGENT_HOME/.claude/memory/feedback/tabs.md"
+if test_start "session-start: Claude, with graph rules → outputs rules"; then
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory"
+    echo '{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl"
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"Memory rule"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"always-use-tabs"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout missing Memory rule"
+        fail "exit=$HOOK_EXIT, stdout missing always-use-tabs"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "session-start: Claude, graph.jsonl with mixed types → outputs only rules"; then
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory"
+    cat > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl" <<'JSONL'
+{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+{"kind":"entity","name":"prefers-dark-mode","type":"preference","observations":["User prefers dark mode"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+{"kind":"entity","name":"caching-helps-perf","type":"insight","observations":["Caching reduces latency by 50%"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+JSONL
+    HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
+    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"always-use-tabs"* \
+        && "$HOOK_STDOUT" != *"prefers-dark-mode"* \
+        && "$HOOK_STDOUT" != *"caching-helps-perf"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected only rule entity in output"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "session-start: Claude, no graph.jsonl → no rules output"; then
+    mkdir -p "$TEST_AGENT_HOME/.claude"
+    # Ensure no graph.jsonl exists
+    rm -f "$TEST_AGENT_HOME/.claude/memory/graph.jsonl"
+    HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
+    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" != *"Memory rule"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout should not contain 'Memory rule' without graph.jsonl"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "session-start: Claude, malformed line in graph.jsonl → still outputs valid rules"; then
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory"
+    cat > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl" <<'JSONL'
+this is not valid json at all
+{"kind":"entity","name":"use-strict-mode","type":"rule","observations":["Always enable strict mode"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+JSONL
+    HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
+    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"use-strict-mode"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout missing use-strict-mode (jq should skip malformed lines)"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
@@ -560,6 +606,192 @@ SKILL_EOF
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude/skills/test-skill"
+fi
+
+echo ""
+
+# ── workflow-guard.sh tests ──────────────────────────────────────────────────
+
+echo "workflow-guard.sh"
+
+if test_start "workflow-guard: non-Edit tool → no output"; then
+    rm -f "$TEST_PROJECT/.claude/task.md"
+    echo '{"tool_name": "Read", "tool_input": {}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: Edit but no task journal → no output"; then
+    rm -f "$TEST_PROJECT/.claude/task.md"
+    echo '{"tool_name": "Edit", "tool_input": {}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: Edit with DONE status → no output"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    echo -e "Status: DONE" > "$TEST_PROJECT/.claude/task.md"
+    echo '{"tool_name": "Edit", "tool_input": {}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: Edit with BUILDING status → outputs warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.claude/task.md"
+    echo '{"tool_name": "Edit", "tool_input": {}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "ORCHESTRATOR WARNING"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: Write with VERIFYING status → outputs warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    echo -e "Status: VERIFYING" > "$TEST_PROJECT/.claude/task.md"
+    echo '{"tool_name": "Write", "tool_input": {}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "ORCHESTRATOR WARNING"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+echo ""
+
+# ── workflow-enforcer.sh tests ───────────────────────────────────────────────
+
+echo "workflow-enforcer.sh"
+
+if test_start "workflow-enforcer: Claude, no task journal → lightweight rules reminder"; then
+    # Clean any task journals from prior tests
+    rm -f "$TEST_PROJECT/.claude/task.md" "$TEST_PROJECT/.gemini/task.md" "$TEST_PROJECT/.codex/task.md"
+    echo '{"prompt": "build a login page", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Claude, empty prompt → no output"; then
+    echo '{"prompt": "", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Claude, with task journal → phase-aware context"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add login page
+Status: BUILDING [step 2/4]
+Triaged as: medium
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "BUILDING" \
+        && echo "$HOOK_STDOUT" | grep -q "Plan approved: yes"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: BUILDING without plan approval on medium → includes WARNING"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add payment system
+Status: BUILDING [step 1/3]
+Triaged as: medium
+EOF
+    echo '{"prompt": "start coding", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WARNING.*BUILDING without an approved plan"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: BUILDING with 0 reviews → includes REMINDER"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Refactor auth
+Status: BUILDING [step 3/3]
+Triaged as: small
+Plan approval: yes
+EOF
+    echo '{"prompt": "almost done", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "REMINDER.*No reviews recorded"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
 echo ""

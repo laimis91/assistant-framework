@@ -69,6 +69,60 @@ artifacts:
             type: string
             required: true
 
+  - name: rubric_summary
+    type: object
+    required: false
+    condition: "scope_size in [medium, large] and mode == review-fix"
+    description: "Final rubric scores from the last review round, plus progression across all rounds"
+    object_fields:
+      - name: final_scores
+        type: object
+        required: true
+        description: "Rubric scores from the final review round"
+        object_fields:
+          - name: correctness
+            type: float
+            required: true
+          - name: code_quality
+            type: float
+            required: true
+          - name: architecture
+            type: float
+            required: true
+          - name: security
+            type: float
+            required: true
+          - name: test_coverage
+            type: float
+            required: true
+          - name: weighted_score
+            type: float
+            required: true
+          - name: action
+            type: enum
+            required: true
+            enum_values: [PASS, REFINE, PIVOT]
+      - name: score_progression
+        type: object[]
+        required: true
+        description: "Weighted score per round — used for drift detection"
+        object_fields:
+          - name: round
+            type: int
+            required: true
+          - name: weighted_score
+            type: float
+            required: true
+          - name: finding_count
+            type: int
+            required: true
+            description: "Total findings (must-fix + should-fix) this round"
+          - name: drift_status
+            type: enum
+            required: true
+            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
+            description: "Whether score change correlates with finding count change"
+
   - name: build_verification
     type: object
     required: true

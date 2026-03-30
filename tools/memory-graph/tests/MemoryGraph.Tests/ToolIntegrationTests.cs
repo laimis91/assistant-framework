@@ -595,6 +595,80 @@ public class ToolIntegrationTests : IDisposable
         }
     }
 
+    // ── Rule Entity Tests ────────────────────────────────────────────────
+
+    [Fact]
+    public void AddEntity_Rule_CreatesWithCorrectType()
+    {
+        var (graph, registry) = CreateTestSetup();
+
+        var result = registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Never skip tests", "type": "Rule", "observations": ["Always write tests before moving to next feature"]}
+            """));
+        Assert.False(result.IsError);
+        Assert.Contains("created", result.Content[0].Text);
+
+        var entity = graph.GetEntity("Never skip tests");
+        Assert.NotNull(entity);
+        Assert.Equal(EntityType.Rule, entity.Type);
+        Assert.Contains("Always write tests before moving to next feature", entity.Observations);
+    }
+
+    [Fact]
+    public void Context_ReturnsRulesInOutput()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "MyApp", "type": "Project", "observations": ["A test project"]}
+            """));
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "No force push", "type": "Rule", "observations": ["Never use git push --force on main"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"project": "MyApp"}
+            """));
+        Assert.False(result.IsError);
+
+        var text = result.Content[0].Text;
+        Assert.Contains("rules", text);
+        Assert.Contains("No force push", text);
+        Assert.Contains("Never use git push --force on main", text);
+    }
+
+    [Fact]
+    public void Context_RulesAreGlobal_AppearForAllProjects()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "ProjectAlpha", "type": "Project", "observations": ["First project"]}
+            """));
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "ProjectBeta", "type": "Project", "observations": ["Second project"]}
+            """));
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Always use structured logging", "type": "Rule", "observations": ["Use ILogger with message templates, never string interpolation"]}
+            """));
+
+        // Rule should appear in context for ProjectAlpha
+        var resultAlpha = registry.Execute("memory_context", ParseArgs("""
+            {"project": "ProjectAlpha"}
+            """));
+        Assert.False(resultAlpha.IsError);
+        var textAlpha = resultAlpha.Content[0].Text;
+        Assert.Contains("Always use structured logging", textAlpha);
+
+        // Same rule should appear in context for ProjectBeta
+        var resultBeta = registry.Execute("memory_context", ParseArgs("""
+            {"project": "ProjectBeta"}
+            """));
+        Assert.False(resultBeta.IsError);
+        var textBeta = resultBeta.Content[0].Text;
+        Assert.Contains("Always use structured logging", textBeta);
+    }
+
     [Fact]
     public void Stats_FiltersByProjectType()
     {

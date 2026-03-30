@@ -1,0 +1,84 @@
+# workflow.rules — Starlark execution policy rules for Codex CLI.
+#
+# These provide DETERMINISTIC enforcement — unlike AGENTS.md instructions
+# (which are probabilistic), rules always execute at the system level.
+#
+# Precedence: forbidden > prompt > allow (most restrictive wins)
+#
+# Install location: ~/.codex/rules/workflow.rules
+# Enable in config.toml:
+#   [features]
+#   codex_hooks = true
+
+# ── Git safety ──────────────────────────────────────────────────────────────
+
+# Block direct pushes — require review workflow first
+prefix_rule(
+    pattern=["git", "push"],
+    decision="prompt",
+    justification="Confirm review cycle is complete before pushing. Check task journal for final review result."
+)
+
+# Force push is almost never what you want
+prefix_rule(
+    pattern=["git", "push", "--force"],
+    decision="forbidden",
+    justification="Force push is forbidden. Use --force-with-lease if absolutely necessary, and only with explicit user approval."
+)
+
+prefix_rule(
+    pattern=["git", "push", "-f"],
+    decision="forbidden",
+    justification="Force push is forbidden. Use --force-with-lease if absolutely necessary, and only with explicit user approval."
+)
+
+# Require confirmation before committing (ensure tests pass first)
+prefix_rule(
+    pattern=["git", "commit"],
+    decision="prompt",
+    justification="Before committing: (1) tests must pass, (2) build must succeed, (3) review cycle should be complete for medium+ tasks."
+)
+
+# ── Destructive operations ──────────────────────────────────────────────────
+
+# Block hard reset (can lose work)
+prefix_rule(
+    pattern=["git", "reset", "--hard"],
+    decision="prompt",
+    justification="Hard reset discards uncommitted changes. Confirm this is intentional and no work will be lost."
+)
+
+# Block branch deletion without confirmation
+prefix_rule(
+    pattern=["git", "branch", "-D"],
+    decision="prompt",
+    justification="Force-deleting a branch cannot be undone easily. Confirm the branch is fully merged or no longer needed."
+)
+
+# Block rm -rf (catastrophic potential)
+prefix_rule(
+    pattern=["rm", "-rf"],
+    decision="prompt",
+    justification="Recursive force delete is dangerous. Verify the target path is correct and no important files will be lost."
+)
+
+# ── Build safety ────────────────────────────────────────────────────────────
+
+# Allow build and test commands freely (these are safe, read-mostly operations)
+prefix_rule(
+    pattern=["dotnet", "build"],
+    decision="allow",
+    justification="Build commands are safe and encouraged."
+)
+
+prefix_rule(
+    pattern=["dotnet", "test"],
+    decision="allow",
+    justification="Test commands are safe and encouraged."
+)
+
+prefix_rule(
+    pattern=["dotnet", "format"],
+    decision="allow",
+    justification="Format commands are safe."
+)

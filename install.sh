@@ -2,7 +2,7 @@
 # install.sh — Installs all Assistant Framework skills for any supported AI agent.
 #
 # Auto-discovers skills from the skills/ directory (any subdirectory with SKILL.md).
-# Also installs hooks + memory seed data.
+# Also installs hooks + knowledge graph seed.
 #
 # Also installs hooks for automated:
 #   - Context injection on session start/resume
@@ -18,8 +18,8 @@
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
 #   ./install.sh --agent claude --no-hooks                  # skip hook installation
 #
-# Memory data (user preferences, insights) is installed to ~/.{agent}/memory/
-# only if it doesn't already exist — existing memory is never overwritten.
+# Knowledge graph seed is installed to ~/.{agent}/memory/graph.jsonl
+# only if it doesn't already exist — existing graph is never overwritten.
 
 set -euo pipefail
 
@@ -60,8 +60,8 @@ Skills installed:
   Auto-discovered from skills/ directory (any subdirectory with SKILL.md).
 
 Memory data:
-  Installed to ~/.{agent}/memory/ on first install only.
-  Existing memory is never overwritten.
+  Knowledge graph seed installed to ~/.{agent}/memory/graph.jsonl on first install only.
+  Existing graph is never overwritten.
 
 Examples:
   $(basename "$0") --agent claude
@@ -97,7 +97,7 @@ dry()  { echo "  [dry-run] $1"; }
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
-MEMORY_SOURCE="$FRAMEWORK_DIR/memory-seed"
+GRAPH_SEED="$FRAMEWORK_DIR/graph-seed.jsonl"
 HOOKS_SOURCE="$FRAMEWORK_DIR/hooks"
 
 [[ -d "$SKILLS_SOURCE" ]] || fail "Skills directory not found at $SKILLS_SOURCE"
@@ -146,7 +146,7 @@ echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
 echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
-echo "  Memory target: $MEMORY_TARGET"
+echo "  Graph seed: $GRAPH_SEED"
 echo ""
 
 # ── Install skills ────────────────────────────────────────────────────────────
@@ -416,22 +416,23 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
     fi
 fi
 
-# ── Install memory seed (only if memory doesn't exist) ───────────────────────
+# ── Seed knowledge graph (only if graph.jsonl doesn't exist) ────────────────
 
 echo ""
-if [[ -d "$MEMORY_TARGET" ]]; then
-    info "Memory already exists at $MEMORY_TARGET — skipping (never overwrite)"
+GRAPH_TARGET="$MEMORY_TARGET/graph.jsonl"
+if [[ -f "$GRAPH_TARGET" ]]; then
+    info "Knowledge graph already exists at $GRAPH_TARGET — skipping (never overwrite)"
 else
-    if [[ -d "$MEMORY_SOURCE" ]]; then
+    if [[ -f "$GRAPH_SEED" ]]; then
         if $DRY_RUN; then
-            dry "cp -r $MEMORY_SOURCE/ -> $MEMORY_TARGET/ (first install only)"
+            dry "cp $GRAPH_SEED -> $GRAPH_TARGET (first install only)"
         else
-            mkdir -p "$(dirname "$MEMORY_TARGET")"
-            rsync -a --exclude='.DS_Store' "$MEMORY_SOURCE/" "$MEMORY_TARGET/"
-            ok "Memory seed installed to $MEMORY_TARGET"
+            mkdir -p "$MEMORY_TARGET"
+            cp "$GRAPH_SEED" "$GRAPH_TARGET"
+            ok "Knowledge graph seed installed to $GRAPH_TARGET"
         fi
     else
-        info "No memory seed found — skipping"
+        info "No graph seed found — skipping"
     fi
 fi
 
@@ -460,6 +461,73 @@ if [[ "$AGENT" == "codex" && -d "$AGENTS_SOURCE/codex" ]]; then
             cp "$toml" "$AGENTS_TARGET/"
         done
         ok "Codex agents -> $AGENTS_TARGET/ (${#toml_files[@]} agents)"
+    fi
+fi
+
+# ── Install Codex execution policy rules ─────────────────────────────────
+# Starlark .rules files provide DETERMINISTIC enforcement (system-level, not prompt-level).
+# These block/prompt on dangerous commands regardless of what the LLM decides.
+
+RULES_SOURCE="$FRAMEWORK_DIR/codex-rules"
+
+if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
+    echo ""
+    RULES_TARGET="$AGENT_HOME/rules"
+
+    shopt -s nullglob
+    rules_files=("$RULES_SOURCE/"*.rules)
+    shopt -u nullglob
+
+    if [[ ${#rules_files[@]} -eq 0 ]]; then
+        info "No .rules files found in $RULES_SOURCE/ — skipping"
+    elif $DRY_RUN; then
+        for rf in "${rules_files[@]}"; do
+            dry "Install rule: $(basename "$rf") -> $RULES_TARGET/"
+        done
+    else
+        mkdir -p "$RULES_TARGET"
+        for rf in "${rules_files[@]}"; do
+            cp "$rf" "$RULES_TARGET/"
+        done
+        ok "Execution policy rules -> $RULES_TARGET/ (${#rules_files[@]} rules)"
+    fi
+
+    # Ensure codex_hooks feature flag is enabled in config.toml
+    CODEX_CONFIG="$AGENT_HOME/config.toml"
+    if $DRY_RUN; then
+        dry "Ensure codex_hooks = true in $CODEX_CONFIG"
+    else
+        if [[ ! -f "$CODEX_CONFIG" ]]; then
+            mkdir -p "$(dirname "$CODEX_CONFIG")"
+            cat > "$CODEX_CONFIG" <<'TOML'
+# Codex CLI configuration — managed by Assistant Framework installer
+[features]
+codex_hooks = true
+TOML
+            ok "Created $CODEX_CONFIG with codex_hooks enabled"
+        elif ! grep -q 'codex_hooks' "$CODEX_CONFIG" 2>/dev/null; then
+            # Add codex_hooks — check if [features] section already exists
+            if grep -q '^\[features\]' "$CODEX_CONFIG" 2>/dev/null; then
+                # Append under existing [features] section (avoid duplicate TOML header)
+                sed -i.bak '/^\[features\]/a\
+codex_hooks = true' "$CODEX_CONFIG"
+                rm -f "${CODEX_CONFIG}.bak"
+            else
+                # No [features] section yet — add one
+                {
+                    echo ""
+                    echo "[features]"
+                    echo "codex_hooks = true"
+                } >> "$CODEX_CONFIG"
+            fi
+            ok "Enabled codex_hooks in $CODEX_CONFIG"
+        elif grep -q 'codex_hooks.*=.*false' "$CODEX_CONFIG" 2>/dev/null; then
+            sed -i.bak 's/codex_hooks.*=.*false/codex_hooks = true/' "$CODEX_CONFIG"
+            rm -f "${CODEX_CONFIG}.bak"
+            ok "Switched codex_hooks to true in $CODEX_CONFIG"
+        else
+            info "codex_hooks already enabled in $CODEX_CONFIG"
+        fi
     fi
 fi
 
@@ -518,7 +586,7 @@ if $INSTALL_HOOKS; then
                     # Codex experimental hooks: only SessionStart, UserPromptSubmit, Stop
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|learning-signals.sh) ;;  # supported
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh) ;;  # supported
                             *) continue ;;  # skip unsupported hooks
                         esac
                     fi
@@ -623,57 +691,71 @@ if [[ "$AGENT" == "codex" ]]; then
     echo ""
 
     # Build the installer-owned content block (wrapped in markers)
+    #
+    # DESIGN: This AGENTS.md uses three enforcement techniques from research:
+    # 1. XML behavioral_rules block — parses more reliably than markdown for rules
+    # 2. Recursive self-display — rule 6 requires restating phase, keeping rules in context
+    # 3. Concise structure — long instruction files get selectively ignored; stay under 4K
+    #
     AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
 # AGENTS.md — Codex Agent Instructions
 
-## Skill Routing
+## Role
 
-Before acting on any user request, check if it matches an available skill trigger.
-If it does, load the matching skill from ~/.codex/skills/<name>/SKILL.md before proceeding.
+You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents (code-writer, builder-tester, architect, explorer, reviewer). You NEVER edit files directly — dispatch a sub-agent instead. Your responsibilities: decompose tasks, dispatch agents, monitor progress, communicate with the user, and enforce phase gates. You MUST follow all skill instructions, phase gates, and review loops exactly as defined — no bypassing, no shortcuts, no skipping steps. When a skill matches your task, invoke it; do not manually replicate what it does.
 
-## Available Skills
+<behavioral_rules>
+THESE RULES ARE NON-NEGOTIABLE. You MUST follow them on every response.
 
-Skills are installed in ~/.codex/skills/. Each contains a SKILL.md with trigger patterns
-and workflow instructions. Key skills:
+1. SKILL ROUTING: Before acting on ANY request, check if it matches an installed skill in ~/.codex/skills/. If it does, load and follow the skill's SKILL.md BEFORE proceeding. NEVER freelance what a skill handles.
 
-- **assistant-workflow**: Structured development: triage, discover, plan, build, test, review, document
-- **assistant-tdd**: Test-Driven Development with Red-Green-Refactor enforcement
-- **assistant-review**: Autonomous code review loop (max 5 rounds)
-- **assistant-security**: STRIDE threat models, OWASP code review, CVE audits
-- **assistant-memory**: Cross-session learning with persistent memory
-- **assistant-research**: Tiered research and investigation
-- **assistant-thinking**: Structured reasoning tools (clarify, debate, brainstorm)
+2. ORCHESTRATOR ONLY: You are the orchestrator. You NEVER edit files or write code directly. ALL file changes go through sub-agents (code-writer for implementation, builder-tester for tests/builds). Your job is to delegate, monitor, and communicate — like a conductor who never plays an instrument.
 
-## Available Agents
+3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST -> VERIFY -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
 
-Custom agents are in ~/.codex/agents/:
-- **code-mapper**: Lightweight codebase mapping (read-only)
-- **explorer**: Deep execution path tracing (read-only)
-- **architect**: Implementation blueprint design (read-only)
-- **code-writer**: Focused code implementation (write access)
-- **builder-tester**: Build, write tests, run tests (write access)
-- **reviewer**: Independent code review with confidence filtering (read-only)
+4. PLAN BEFORE BUILD: For medium+ tasks, you MUST have an approved plan before writing implementation code. Present the plan, wait for approval, THEN build.
 
-## Memory System
+5. TESTS WITH FEATURES: Every new component or feature MUST have tests in the SAME step. \"I'll add tests later\" is NOT acceptable. Write the test alongside the code.
 
-Persistent memory lives in ~/.codex/memory/:
-- INDEX.md — memory index (loaded every session)
-- user/ — preferences and working style
-- feedback/ — corrections and rules (highest priority)
-- insights/ — task learnings (date-prefixed)
+6. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 5 rounds). A single review pass is NOT a review. The loop must run until clean or max rounds.
 
-Project memory lives in .codex/ at the project root:
-- memory.md — project decisions and conventions
-- session.md — current session state
-- task.md — active task journal
+7. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
+</behavioral_rules>
 
-## Coding Conventions
+## Skills (loaded from ~/.codex/skills/)
 
-- Default to C# on modern .NET; respect existing repo conventions
-- Prefer Clean Architecture with dependency inversion
-- Use Microsoft.Extensions.DependencyInjection and Microsoft.Extensions.Logging
+| Skill | Trigger | What it does |
+|-------|---------|-------------|
+| assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |
+| assistant-review | review, check the code | Autonomous review-fix loop (max 5 rounds) |
+| assistant-tdd | tests first, test-driven, red green | Red-Green-Refactor with verification gates |
+| assistant-security | security, threat model, audit | STRIDE, OWASP, CVE analysis |
+| assistant-memory | remember, save insight, preferences | Cross-session persistent memory |
+| assistant-research | research, investigate, look into | Tiered research with source verification |
+
+## Agents (in ~/.codex/agents/)
+
+| Agent | Access | Role |
+|-------|--------|------|
+| code-mapper | read-only | Map project structure and entry points |
+| explorer | read-only | Trace execution paths, understand architecture |
+| architect | read-only | Design implementation blueprints |
+| code-writer | write | Implement code following a plan |
+| builder-tester | write | Build, write tests, run tests |
+| reviewer | read-only | Independent code review, confidence-filtered |
+
+## Memory
+
+- Global: ~/.codex/memory/graph.jsonl (knowledge graph — single source of truth)
+- Project: .codex/ at project root (memory.md, session.md, task.md)
+- Rules (type Rule) in the knowledge graph are loaded at session start via hooks and memory_context.
+
+## Conventions
+
+- C# on modern .NET; respect existing repo style
+- Clean Architecture; dependency inversion
 - Never hardcode secrets; never log PII
-- Tests: xUnit/NUnit, Arrange-Act-Assert, descriptive naming
+- Tests: Arrange-Act-Assert, descriptive naming
 <!-- $AGENTS_MD_MARKER_END -->"
 
     if $DRY_RUN; then
@@ -810,11 +892,17 @@ if $INSTALL_HOOKS; then
     echo ""
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
-        echo "  (Codex: SessionStart, UserPromptSubmit, Stop — 3 of 6 hooks)"
+        echo "  (Codex: SessionStart, UserPromptSubmit, Stop — 3 events, 6 hook scripts)"
+        echo "  Enforcement: skill-router + workflow-enforcer + stop-review + harness-gate"
     fi
 fi
+if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
+    echo ""
+    echo "Execution rules: $AGENT_HOME/rules/"
+    echo "  (Starlark policy: git push/commit guards, destructive op confirmation)"
+fi
 echo ""
-echo "Memory: $MEMORY_TARGET/"
+echo "Graph: $MEMORY_TARGET/graph.jsonl"
 echo ""
 if [[ -n "$SINGLE_SKILL" ]]; then
     echo "To install all skills: ./install.sh --agent $AGENT"

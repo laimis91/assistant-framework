@@ -11,12 +11,12 @@ artifacts:
     enum_values: [save, recall, update, forget, search]
     on_fail: "Re-run skill to produce the missing artifact"
 
-  - name: file_path
+  - name: entity_name
     type: string
     required: false
     condition: "When action is save or update"
-    description: "Path where memory was written"
-    validation: "Must be a valid file path under ~/.claude/memory/ or .claude/"
+    description: "Name of the entity saved or updated in the knowledge graph"
+    validation: "Must be a non-empty string matching the entity name in the graph"
 
   - name: results
     type: object[]
@@ -24,14 +24,14 @@ artifacts:
     condition: "When action is recall or search"
     description: "Found memories matching the query"
     object_fields:
-      - name: file
+      - name: entity_name
         type: string
         required: true
-        description: "File path where the memory was found"
-      - name: title
+        description: "Name of the matched entity in the knowledge graph"
+      - name: entity_type
         type: string
         required: true
-        description: "Title or heading of the matched memory"
+        description: "Type of the matched entity (Rule, Preference, Insight, etc.)"
       - name: relevance
         type: string
         required: true

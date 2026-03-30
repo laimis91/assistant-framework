@@ -22,6 +22,10 @@
           {
             "type": "command",
             "command": "$HOME/.codex/hooks/assistant/learning-signals.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/workflow-enforcer.sh"
           }
         ]
       }
@@ -33,6 +37,21 @@
           {
             "type": "command",
             "command": "$HOME/.codex/hooks/assistant/stop-review.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/harness-gate.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/workflow-guard.sh"
           }
         ]
       }
