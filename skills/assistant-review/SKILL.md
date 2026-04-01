@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "Autonomous code review loop: review, fix, re-review until clean (max 5 rounds). Use when user says 'review', 'fresh review', 'code review', 'review this', 'check the code', or '/review'. Triggers on any request to review code changes."
+description: "This skill runs an autonomous code review loop: review, fix, re-review until clean (max 5 rounds). Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Phase 6 (Review) requires quality review dispatch."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"

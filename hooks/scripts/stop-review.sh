@@ -108,4 +108,34 @@ if [[ -z "$has_review_entry" || -z "$has_final_result" ]]; then
     exit 0
 fi
 
+# Check if metrics were recorded (all task sizes require metrics)
+AGENT_HOME="$HOME/.claude"
+if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.codex"
+elif [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
+    AGENT_HOME="$HOME/.gemini"
+fi
+
+METRICS_FILE="$AGENT_HOME/memory/metrics/workflow-metrics.jsonl"
+TODAY=$(date +%Y-%m-%d)
+
+has_metrics_today=""
+if [[ -f "$METRICS_FILE" ]]; then
+    has_metrics_today=$(grep -m1 "\"date\":\"$TODAY\"" "$METRICS_FILE" 2>/dev/null || echo "")
+fi
+
+if [[ -z "$has_metrics_today" ]]; then
+    METRICS_REASON="Review is complete but no metrics entry was recorded for today ($TODAY). Append a JSONL entry to $METRICS_FILE with task details (date, project, task, size, review_rounds, etc.) before stopping. Format: {\"date\":\"$TODAY\",\"project\":\"[name]\",\"task\":\"[description]\",\"size\":\"[size]\",\"retriage\":false,\"review_rounds\":N,\"plan_deviations\":N,\"build_failures\":N,\"criteria_defined\":N,\"criteria_skipped\":[],\"agent_readiness_score\":null,\"components_count\":null,\"components_verified\":null}"
+fi
+
+if [[ -n "${METRICS_REASON:-}" ]]; then
+    if $IS_GEMINI; then
+        touch "${RETRY_FLAG}"
+        jq -n --arg reason "$METRICS_REASON" '{decision: "retry", reason: $reason}'
+    else
+        jq -n --arg reason "$METRICS_REASON" '{decision: "block", reason: $reason}'
+    fi
+    exit 0
+fi
+
 exit 0

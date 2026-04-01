@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Assistant Framework v0.2.0 — a personal AI assistant framework providing 12+ composable skills, lifecycle hooks, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
+Assistant Framework v0.3.0 — a personal AI assistant framework providing 12+ composable skills, lifecycle hooks, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
 
 ## Build and Test Commands
 

@@ -1,6 +1,6 @@
 ---
 name: assistant-thinking
-description: "Structured reasoning tools for deeper analysis. Use when you need to think through a problem, clarify constraints, debate perspectives, stress-test decisions, or brainstorm creatively. Triggers on: 'think about', 'think through', 'clarify', 'perspectives on', 'stress test', 'debate', 'first principles', 'brainstorm', 'hypothesize'."
+description: "This skill provides structured reasoning tools for deeper analysis. Use when the user says 'think about', 'think through', 'clarify', 'perspectives on', 'stress test', 'debate', 'first principles', 'brainstorm', 'hypothesize'. Best for architecture decisions and complex trade-off analysis."
 effort: high
 triggers:
   - pattern: "think about|think through|clarify|perspectives on|stress test|debate|first principles|brainstorm|hypothesize"

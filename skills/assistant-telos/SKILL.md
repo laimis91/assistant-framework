@@ -1,6 +1,6 @@
 ---
 name: assistant-telos
-description: "Purpose and strategic context framework based on Daniel Miessler's Telos (github.com/danielmiessler/Telos). Helps users create a Telos Context File (TCF) — a structured document capturing problems, mission, narratives, goals, challenges, strategies, projects, and more — so AI agents have deep context about what matters. Triggers on: 'telos', 'purpose', 'why am I doing this', 'what matters', 'my mission', 'update telos'."
+description: "This skill implements the Telos purpose and strategic context framework (Daniel Miessler). Creates structured Telos Context Files capturing problems, mission, goals, challenges, and strategies. Use when the user says 'telos', 'purpose', 'why am I doing this', 'what matters', 'my mission', 'update telos'."
 effort: medium
 triggers:
   - pattern: "telos|my purpose|why am I doing this|what matters most|my mission|update telos|strategic context"

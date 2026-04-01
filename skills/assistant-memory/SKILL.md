@@ -1,6 +1,6 @@
 ---
 name: assistant-memory
-description: "Memory management for cross-session learning. Captures user preferences, feedback, and task insights that persist across all projects and sessions. Triggers on: 'remember this', 'save insight', 'update memory', 'what do you know about me', 'forget', 'memory', 'preferences'."
+description: "This skill manages cross-session memory in the knowledge graph. Use when the user says 'remember this', 'save insight', 'update memory', 'what do you know about me', 'forget', 'preferences'. Also activates when the user provides a correction or states a behavioral preference that should persist."
 triggers:
   - pattern: "remember this|save insight|update memory|what do you know about me|forget|memory|preferences"
     priority: 70

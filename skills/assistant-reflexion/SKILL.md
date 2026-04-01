@@ -1,6 +1,6 @@
 ---
 name: assistant-reflexion
-description: "Self-improvement loop for cross-task learning. Post-task reflection, lesson recall, strategy profiles, and confidence calibration. Auto-activates at task completion. Manual trigger: 'reflect', 'what did we learn', 'lessons', 'how did that go', 'performance', 'calibrate'."
+description: "This skill provides a self-improvement loop for cross-task learning: post-task reflection, lesson recall, strategy profiles, and confidence calibration. Use when the user says 'reflect', 'what did we learn', 'lessons', 'how did that go', 'performance', 'calibrate'. Auto-activates at task completion for post-task reflection."
 effort: low
 triggers:
   - pattern: "reflect|what did we learn|lessons learned|how did that go|performance review|calibrate|self-assess|retrospective"

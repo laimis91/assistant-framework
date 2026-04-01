@@ -7,7 +7,8 @@
 #   Claude: {"session_id": "...", ...}
 #
 # Output (stdout):
-#   Claude: plain text (task journal + feedback rules + memory instructions re-injected)
+#   JSON: {"additionalContext": "..."}  (all agents, requires jq)
+#   Fallback: plain text if jq is unavailable
 #
 # Env vars used:
 #   CLAUDE_PROJECT_DIR / CODEX_PROJECT_DIR — project root
@@ -138,9 +139,16 @@ context_parts+=("If memory-graph MCP is unavailable, rules are still loaded from
 context_parts+=("---")
 
 if [[ ${#context_parts[@]} -gt 0 ]]; then
+    full_context=""
     for part in "${context_parts[@]}"; do
-        echo "$part"
+        full_context+="$part"$'\n'
     done
+
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
+    else
+        echo "$full_context"
+    fi
 fi
 
 exit 0

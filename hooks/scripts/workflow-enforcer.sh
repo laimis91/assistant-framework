@@ -27,14 +27,7 @@ INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
 [[ -n "$PROMPT" ]] || exit 0
 
-HOOK_EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "UserPromptSubmit"')
-
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
-
-IS_GEMINI=false
-if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
-    IS_GEMINI=true
-fi
 
 # Find active task journal
 TASK_FILE=""
@@ -57,10 +50,7 @@ if [[ -z "$TASK_FILE" ]]; then
 - After code changes, run the review cycle (not one-shot — loop until clean).
 - State your current phase before your next action."
 
-    jq -cn \
-        --arg ctx "$context" \
-        --arg event "$HOOK_EVENT" \
-        '{hookSpecificOutput: {hookEventName: $event, additionalContext: $ctx}}'
+    jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
     exit 0
 fi
 
@@ -111,9 +101,6 @@ REMINDER: No reviews recorded yet. You MUST complete the review cycle before fin
     fi
 fi
 
-jq -cn \
-    --arg ctx "$context" \
-    --arg event "$HOOK_EVENT" \
-    '{hookSpecificOutput: {hookEventName: $event, additionalContext: $ctx}}'
+jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
 
 exit 0

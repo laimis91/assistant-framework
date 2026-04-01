@@ -8,8 +8,8 @@
 #   Gemini: {"session_id": "...", ...}
 #
 # Output (stdout):
-#   Claude: plain text (added directly to agent context)
-#   Gemini: {"additionalContext": "..."}  (strict JSON only)
+#   JSON: {"additionalContext": "..."}  (all agents, requires jq)
+#   Fallback: plain text if jq is unavailable
 #
 # Env vars used:
 #   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
@@ -119,13 +119,11 @@ if [[ ${#context_parts[@]} -gt 0 ]]; then
         full_context+="$part"$'\n'
     done
 
-    if $IS_GEMINI; then
-        # Gemini uses JSON additionalContext (requires jq)
-        if [[ "${JQ_MISSING:-}" == "true" ]]; then exit 0; fi
-        jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
-    else
-        # Claude Code: plain stdout is added to context for SessionStart
+    if [[ "${JQ_MISSING:-}" == "true" ]]; then
+        # No jq available — fall back to plain text
         echo "$full_context"
+    else
+        jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
     fi
 fi
 

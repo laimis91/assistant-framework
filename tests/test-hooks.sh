@@ -358,7 +358,12 @@ Status: BUILDING
 - Result: ISSUES FIXED
 - Total must-fix resolved: 1
 TASK
-    run_hook stop-review.sh claude
+    # Set up metrics in test home (isolated from real user data)
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
     if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
@@ -378,7 +383,12 @@ Status: BUILDING
 ### Final result
 - Result: CLEAN
 TASK
-    run_hook stop-review.sh claude
+    # Set up metrics in test home (isolated from real user data)
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
     if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
@@ -439,6 +449,58 @@ if test_start "stop-review: Gemini, retry flag exists → exit 0 (loop guard)"; 
     fi
     rm -f "${TMPDIR:-/tmp}/.assistant-stop-review-retry-${_proj_hash}"
     rm -rf "$TEST_PROJECT/.gemini"
+fi
+
+if test_start "stop-review: Claude, review complete but no metrics → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Plan alignment: matches
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    # No metrics file in test home — should trigger block
+    rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "metrics"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected {decision: block} mentioning metrics"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, review complete with metrics → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Plan alignment: matches
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    # Create metrics in test home with today's date
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow stop when metrics present"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
 fi
 
 echo ""
@@ -669,7 +731,7 @@ if test_start "workflow-guard: Edit with BUILDING status → outputs warning"; t
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wg_out)
     rm -f /tmp/_wg_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "ORCHESTRATOR WARNING"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
@@ -685,12 +747,55 @@ if test_start "workflow-guard: Write with VERIFYING status → outputs warning";
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wg_out)
     rm -f /tmp/_wg_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "ORCHESTRATOR WARNING"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-guard: dotnet build without --tl → adds --tl:on"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build src/MyApp.csproj"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.updatedInput.command' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q 'dotnet build src/MyApp.csproj --tl:on'; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: dotnet build with --tl → no modification"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build src/MyApp.csproj --tl:on"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: non-dotnet command → no modification"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "git status"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
 fi
 
 echo ""
@@ -708,7 +813,7 @@ if test_start "workflow-enforcer: Claude, no task journal → lightweight rules 
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
         pass
     else

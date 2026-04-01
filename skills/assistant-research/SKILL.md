@@ -1,6 +1,6 @@
 ---
 name: assistant-research
-description: "Research and investigation tools for information gathering. Use when you need to research a topic, investigate an entity, look into a technology, or verify URLs. Triggers on: 'research', 'investigate', 'look into', 'find out about', 'what is', 'compare options for'."
+description: "This skill provides research and investigation tools for information gathering. Use when the user says 'research', 'investigate', 'look into', 'find out about', 'what is', 'compare options for'. Also activates during the workflow's Discovery phase when external information gathering is needed."
 triggers:
   - pattern: "research|investigate|look into|find out about|what is|compare options for"
     priority: 65

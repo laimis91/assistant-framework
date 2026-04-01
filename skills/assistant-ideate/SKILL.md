@@ -1,6 +1,6 @@
 ---
 name: assistant-ideate
-description: "Structured brainstorming and idea generation. Diverge-converge-refine pipeline for features, architecture, solutions, and creative problems. Use when user says 'brainstorm', 'idea', 'what if', 'how could we', 'possibilities', 'options for', 'alternatives', 'explore ways to', 'feature ideas', 'improve this'."
+description: "This skill provides structured brainstorming via a diverge-converge-refine pipeline. Use when the user says 'brainstorm', 'idea', 'what if', 'how could we', 'possibilities', 'options for', 'alternatives', 'explore ways to', 'feature ideas', 'improve this'. Best for generating and evaluating multiple solutions before committing."
 effort: medium
 triggers:
   - pattern: "brainstorm|feature idea|what if we|how could we|possibilities for|options for|alternatives to|explore ways|what could|improve this|ideas for"
