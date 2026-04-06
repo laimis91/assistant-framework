@@ -26,9 +26,12 @@ set -euo pipefail
 # jq is required for both JSON parsing and output
 command -v jq >/dev/null 2>&1 || { exit 0; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 
 IS_GEMINI=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
@@ -55,19 +58,13 @@ if $IS_GEMINI; then
     find "${TMPDIR:-/tmp}" -maxdepth 1 -type f -name ".assistant-stop-review-retry-*" -mmin +60 -delete 2>/dev/null || true
 fi
 
-# Find active task journal
-TASK_FILE=""
-for dir in .claude .gemini .codex; do
-    if [[ -f "$PROJECT_DIR/$dir/task.md" ]]; then
-        TASK_FILE="$PROJECT_DIR/$dir/task.md"
-        break
-    fi
-done
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 # No task journal = no enforcement needed
 if [[ -z "$TASK_FILE" ]]; then
     exit 0
 fi
+assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Read status
 status=$(grep -m1 "^Status:" "$TASK_FILE" 2>/dev/null || echo "")

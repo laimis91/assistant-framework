@@ -18,9 +18,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}"
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 AGENT_HOME="$HOME/.claude"
 STATE_DIR=".claude"
 if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
@@ -28,17 +31,11 @@ if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
     STATE_DIR=".codex"
 fi
 
-# Check for task journal
-TASK_FILE=""
-for dir in .claude .gemini .codex; do
-    if [[ -f "$PROJECT_DIR/$dir/task.md" ]]; then
-        TASK_FILE="$PROJECT_DIR/$dir/task.md"
-        break
-    fi
-done
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 # No task journal — nothing to capture
 [[ -n "$TASK_FILE" ]] || exit 0
+assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Output contract validation (advisory warnings)
 WARNINGS=""

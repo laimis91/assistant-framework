@@ -23,6 +23,9 @@ set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
 
@@ -51,28 +54,21 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     fi
 fi
 
-# Only guard Edit and Write tools.
-# Note: The settings matcher field can't OR-match multiple tool names,
-# so this hook fires on all PreToolUse events and filters here.
-# The overhead is minimal (cat + jq + case, ~5ms).
+# Only guard Edit and Write tools for orchestrator warnings.
+# The settings matcher (Edit|Write|Bash) pre-filters at the event level.
+# This case guard is a secondary filter for the Edit/Write warning logic
+# (Bash is handled above for dotnet flag injection).
 case "$TOOL_NAME" in
     Edit|Write|edit|write) ;;
     *) exit 0 ;;
 esac
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
-
-# Find active task journal
-TASK_FILE=""
-for dir in .claude .gemini .codex; do
-    if [[ -f "$PROJECT_DIR/$dir/task.md" ]]; then
-        TASK_FILE="$PROJECT_DIR/$dir/task.md"
-        break
-    fi
-done
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 # No active task = no enforcement (ad-hoc edits are fine)
 [[ -n "$TASK_FILE" ]] || exit 0
+assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Check if we're in an active build phase
 status=$(grep -m1 "^Status:" "$TASK_FILE" 2>/dev/null || echo "")

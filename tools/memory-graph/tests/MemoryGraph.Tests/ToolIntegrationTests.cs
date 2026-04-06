@@ -382,6 +382,82 @@ public class ToolIntegrationTests : IDisposable
     }
 
     [Fact]
+    public void Context_FindsProjectFromRepoRootPath_UsingParentSegment()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Framework", "type": "Project", "observations": ["AI coding agent enhancement framework"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("Assistant Framework", text);
+        Assert.Contains("AI coding agent enhancement framework", text);
+    }
+
+    [Fact]
+    public void Context_FindsProjectFromObservedPathMetadata()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Framework", "type": "Project", "observations": ["Path: /Users/laimis/Developer/Projects/Assistant/V1", "AI coding agent enhancement framework"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("Assistant Framework", text);
+        Assert.Contains("AI coding agent enhancement framework", text);
+    }
+
+    [Fact]
+    public void Context_PathMetadataTakesPrecedenceOverFuzzyNameAmbiguity()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Dashboard", "type": "Project", "observations": ["Blazor admin panel"]}
+            """));
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Framework", "type": "Project", "observations": ["Path: /Users/laimis/Developer/Projects/Assistant/V1", "AI coding agent enhancement framework"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.DoesNotContain("Ambiguous project name", text);
+        Assert.Contains("Assistant Framework", text);
+        Assert.Contains("AI coding agent enhancement framework", text);
+    }
+
+    [Fact]
+    public void Context_NormalizesWindowsStylePaths_ForObservedMetadata()
+    {
+        var (_, registry) = CreateTestSetup();
+
+        registry.Execute("memory_add_entity", ParseArgs("""
+            {"name": "Assistant Framework", "type": "Project", "observations": ["ProjectPath: C:\\Users\\laimis\\Developer\\Projects\\Assistant\\V1", "AI coding agent enhancement framework"]}
+            """));
+
+        var result = registry.Execute("memory_context", ParseArgs("""
+            {"path": "C:/Users/laimis/Developer/Projects/Assistant/V1/"}
+            """));
+        Assert.False(result.IsError);
+        var text = result.Content[0].Text;
+        Assert.Contains("Assistant Framework", text);
+        Assert.Contains("AI coding agent enhancement framework", text);
+    }
+
+    [Fact]
     public void Context_AliasIsCaseInsensitive()
     {
         var (_, registry) = CreateTestSetup();

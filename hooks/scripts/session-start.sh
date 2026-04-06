@@ -26,10 +26,13 @@ set -euo pipefail
 # jq is required for Gemini JSON output
 command -v jq >/dev/null 2>&1 || JQ_MISSING=true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 
 # Determine project and agent directories
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 IS_GEMINI=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_GEMINI=true
@@ -51,16 +54,11 @@ fi
 context_parts=()
 
 # 1. Check for active task journal
-TASK_FILE=""
-for dir in .claude .gemini .codex; do
-    if [[ -f "$PROJECT_DIR/$dir/task.md" ]]; then
-        TASK_FILE="$PROJECT_DIR/$dir/task.md"
-        break
-    fi
-done
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 if [[ -f "$TASK_FILE" ]]; then
     task_content=$(cat "$TASK_FILE")
+    assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
     context_parts+=("ACTIVE TASK JOURNAL (read this first — it has full task state):")
     context_parts+=("$task_content")
     context_parts+=("---")

@@ -32,7 +32,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "",
+        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
@@ -96,6 +96,28 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/assistant/subagent-monitor.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/assistant/post-tool-context.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/assistant/tool-failure-advisor.sh"
           }
         ]
       }

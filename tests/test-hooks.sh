@@ -813,7 +813,8 @@ if test_start "workflow-enforcer: Claude, no task journal → lightweight rules 
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.additionalContext' >/dev/null 2>&1 \
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
         pass
     else
@@ -849,7 +850,9 @@ EOF
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "BUILDING" \
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "BUILDING" \
         && echo "$HOOK_STDOUT" | grep -q "Plan approved: yes"; then
         pass
     else
@@ -870,7 +873,9 @@ EOF
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WARNING.*BUILDING without an approved plan"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING.*BUILDING without an approved plan"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
@@ -891,12 +896,112 @@ EOF
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "REMINDER.*No reviews recorded"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "REMINDER.*No reviews recorded"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: nested cwd without project env → finds root task journal"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_PROJECT/src/nested/deeper"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Fix nested resolver
+Status: VERIFYING
+Triaged as: medium
+Plan approval: yes
+EOF
+    (
+        cd "$TEST_PROJECT/src/nested/deeper"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "Task: Fix nested resolver" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: VERIFYING"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: cached state fallback for forked workspace without project env"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Fix subagent state
+Status: BUILDING [step 2/3]
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "Task: Fix subagent state" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: BUILDING \\[step 2/3\\]"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: cached state fallback for Codex-primed forked workspace without project env"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Fix codex subagent state
+Status: BUILDING [step 2/3]
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "Task: Fix codex subagent state" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: BUILDING \\[step 2/3\\]"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
 fi
 
 echo ""

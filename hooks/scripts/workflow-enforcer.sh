@@ -23,20 +23,16 @@ set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Shared resolver handles nested cwd and sub-agent cache fallback.
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
 [[ -n "$PROMPT" ]] || exit 0
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
-
-# Find active task journal
-TASK_FILE=""
-for dir in .claude .gemini .codex; do
-    if [[ -f "$PROJECT_DIR/$dir/task.md" ]]; then
-        TASK_FILE="$PROJECT_DIR/$dir/task.md"
-        break
-    fi
-done
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 # No task journal = lightweight reminder only (no phase tracking needed)
 if [[ -z "$TASK_FILE" ]]; then
@@ -50,9 +46,16 @@ if [[ -z "$TASK_FILE" ]]; then
 - After code changes, run the review cycle (not one-shot — loop until clean).
 - State your current phase before your next action."
 
-    jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
+    jq -cn --arg ctx "$context" '{
+        hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: $ctx
+        }
+    }'
     exit 0
 fi
+
+assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Read task journal state
 status=$(grep -m1 "^Status:" "$TASK_FILE" 2>/dev/null | sed 's/^Status:[[:space:]]*//' || echo "UNKNOWN")
@@ -101,6 +104,11 @@ REMINDER: No reviews recorded yet. You MUST complete the review cycle before fin
     fi
 fi
 
-jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
+jq -cn --arg ctx "$context" '{
+    hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: $ctx
+    }
+}'
 
 exit 0
