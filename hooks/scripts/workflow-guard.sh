@@ -28,8 +28,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
+IS_CODEX=false
+if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    IS_CODEX=true
+fi
 
-# Auto-add --tl:on to dotnet build/test commands (Terminal Logger for cleaner output)
+# Auto-add --tl:on to dotnet build/test commands (Terminal Logger for cleaner output).
+# Codex currently rejects PreToolUse updatedInput payloads, so keep this optimization
+# on agents that support input mutation and no-op on Codex.
 if [[ "$TOOL_NAME" == "Bash" ]]; then
     COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
     if [[ -n "$COMMAND" ]]; then
@@ -42,7 +48,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
             NEEDS_UPDATE=true
         fi
 
-        if $NEEDS_UPDATE; then
+        if $NEEDS_UPDATE && ! $IS_CODEX; then
             jq -n --arg cmd "$UPDATED_COMMAND" '{
                 hookSpecificOutput: {
                     hookEventName: "PreToolUse",

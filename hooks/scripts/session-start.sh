@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # session-start.sh — Injects task journal, feedback rules, and memory instructions on session start/resume.
 #
-# Events: Claude SessionStart, Gemini SessionStart
+# Events: Claude SessionStart, Gemini SessionStart, Codex SessionStart
 #
 # Input (stdin JSON):
 #   Claude: {"session_id": "...", ...}
 #   Gemini: {"session_id": "...", ...}
 #
 # Output (stdout):
-#   JSON: {"additionalContext": "..."}  (all agents, requires jq)
+#   Claude/Gemini JSON: {"additionalContext": "..."}
+#   Codex JSON: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}
 #   Fallback: plain text if jq is unavailable
 #
 # Env vars used:
@@ -34,8 +35,12 @@ INPUT=$(cat)
 # Determine project and agent directories
 PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 IS_GEMINI=false
+IS_CODEX=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_GEMINI=true
+fi
+if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    IS_CODEX=true
 fi
 
 AGENT_HOME="$HOME/.claude"
@@ -43,7 +48,7 @@ STATE_DIR=".claude"
 if $IS_GEMINI; then
     AGENT_HOME="$HOME/.gemini"
     STATE_DIR=".gemini"
-elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+elif $IS_CODEX; then
     AGENT_HOME="$HOME/.codex"
     STATE_DIR=".codex"
 fi
@@ -120,6 +125,13 @@ if [[ ${#context_parts[@]} -gt 0 ]]; then
     if [[ "${JQ_MISSING:-}" == "true" ]]; then
         # No jq available — fall back to plain text
         echo "$full_context"
+    elif $IS_CODEX; then
+        jq -n --arg ctx "$full_context" '{
+            hookSpecificOutput: {
+                hookEventName: "SessionStart",
+                additionalContext: $ctx
+            }
+        }'
     else
         jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
     fi

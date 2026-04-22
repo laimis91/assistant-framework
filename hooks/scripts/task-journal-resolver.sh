@@ -110,6 +110,13 @@ assistant_safe_name() {
     printf '%s' "$1" | tr '/[:space:]' '__' | tr -cd '[:alnum:]_.-'
 }
 
+assistant_best_effort_cache_write() {
+    local task_file="$1"
+    local cache_file="$2"
+
+    { cat "$task_file" > "$cache_file"; } >/dev/null 2>&1 || true
+}
+
 assistant_cache_task_journal() {
     local task_file="$1"
     local project_dir="${2:-$(dirname "$(dirname "$task_file")")}"
@@ -125,8 +132,8 @@ assistant_cache_task_journal() {
 
     while IFS= read -r cache_dir; do
         mkdir -p "$cache_dir" 2>/dev/null || continue
-        cat "$task_file" > "$cache_dir/path-$path_hash.task.md" 2>/dev/null || true
-        cat "$task_file" > "$cache_dir/name-$repo_key.task.md" 2>/dev/null || true
+        assistant_best_effort_cache_write "$task_file" "$cache_dir/path-$path_hash.task.md"
+        assistant_best_effort_cache_write "$task_file" "$cache_dir/name-$repo_key.task.md"
     done < <(assistant_workflow_cache_dirs)
 }
 

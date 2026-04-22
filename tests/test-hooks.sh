@@ -216,6 +216,26 @@ if test_start "session-start: Gemini, with task journal → valid JSON"; then
     rm -rf "$TEST_PROJECT/.gemini" "$TEST_AGENT_HOME/.gemini"
 fi
 
+if test_start "session-start: Codex, with task journal → hookSpecificOutput JSON"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo -e "# Task\nStatus: BUILDING" > "$TEST_PROJECT/.codex/task.md"
+    mkdir -p "$TEST_AGENT_HOME/.codex"
+    echo '{"session_id":"test"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > /tmp/_ss_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_ss_out)
+    rm -f /tmp/_ss_out
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, invalid JSON or missing Codex hookSpecificOutput"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
 echo ""
 
 # ── pre-compress.sh tests ────────────────────────────────────────────────────
@@ -560,6 +580,15 @@ echo ""
 
 echo "skill-router.sh"
 
+sync_real_skill() {
+    local skill_name="$1"
+    local source_dir="$FRAMEWORK_DIR/skills/$skill_name"
+    local target_dir="$TEST_AGENT_HOME/.claude/skills/$skill_name"
+
+    mkdir -p "$target_dir"
+    cp "$source_dir/SKILL.md" "$target_dir/SKILL.md"
+}
+
 # Test: No skills directory → no output
 if test_start "skill-router: no skills directory → no output"; then
     local_tmp_out=$(mktemp)
@@ -608,35 +637,42 @@ SKILL_EOF
     rm -rf "$TEST_AGENT_HOME/.claude/skills/test-skill"
 fi
 
-# Test: Prompt matches a skill trigger → outputs reminder
-if test_start "skill-router: matching prompt → outputs reminder"; then
-    mkdir -p "$TEST_AGENT_HOME/.claude/skills/test-skill"
-    cat > "$TEST_AGENT_HOME/.claude/skills/test-skill/SKILL.md" << 'SKILL_EOF'
----
-name: test-skill
-description: "Test skill"
-triggers:
-  - pattern: "xyzzy unique trigger"
-    priority: 50
-    min_words: 2
-    reminder: "Matched test-skill"
----
-# Test
-SKILL_EOF
+# Test: Real assistant-clarify skill matches an ambiguous prompt
+if test_start "skill-router: assistant-clarify ambiguous prompt → outputs reminder"; then
+    sync_real_skill assistant-clarify
     local_tmp_out=$(mktemp)
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
     env CLAUDE_PROJECT_DIR="$TEST_PROJECT" HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/skill-router.sh" \
-        > "$local_tmp_out" 2> "$local_tmp_err" <<< '{"prompt": "please xyzzy unique trigger now"}' || HOOK_EXIT=$?
+        > "$local_tmp_out" 2> "$local_tmp_err" <<< '{"prompt": "I am not sure what I need yet. Can you make sense of this and help me untangle this before we decide what to do?"}' || HOOK_EXIT=$?
     HOOK_STDOUT=$(cat "$local_tmp_out")
     HOOK_STDERR=$(cat "$local_tmp_err")
     rm -f "$local_tmp_out" "$local_tmp_err"
-    if [[ $HOOK_EXIT -eq 0 && -n "$HOOK_STDOUT" ]]; then
+    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"assistant-clarify"* ]]; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
-    rm -rf "$TEST_AGENT_HOME/.claude/skills/test-skill"
+    rm -rf "$TEST_AGENT_HOME/.claude/skills/assistant-clarify"
+fi
+
+# Test: Real assistant-clarify skill does not match a concrete prompt
+if test_start "skill-router: assistant-clarify concrete prompt → no output"; then
+    sync_real_skill assistant-clarify
+    local_tmp_out=$(mktemp)
+    local_tmp_err=$(mktemp)
+    HOOK_EXIT=0
+    env CLAUDE_PROJECT_DIR="$TEST_PROJECT" HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/skill-router.sh" \
+        > "$local_tmp_out" 2> "$local_tmp_err" <<< '{"prompt": "Implement OAuth token refresh for expired access tokens and add integration coverage for the refresh flow."}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    HOOK_STDERR=$(cat "$local_tmp_err")
+    rm -f "$local_tmp_out" "$local_tmp_err"
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude/skills/assistant-clarify"
 fi
 
 # Test: min_words gating — prompt too short
@@ -668,6 +704,50 @@ SKILL_EOF
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude/skills/test-skill"
+fi
+
+echo ""
+
+# ── Codex installation dependency tests ───────────────────────────────────────
+
+echo "codex-install"
+
+if test_start "codex-install: installed hook dependencies are copied too"; then
+    CODEX_ALLOWED_SCRIPTS=()
+    while IFS= read -r script_name; do
+        [[ -n "$script_name" ]] || continue
+        CODEX_ALLOWED_SCRIPTS+=("$script_name")
+    done < <(
+        sed -n '/if \[\[ "\$AGENT" == "codex" \]\]; then/,/^[[:space:]]*fi$/p' "$FRAMEWORK_DIR/install.sh" | \
+            rg -o '[[:alnum:]-]+\.sh' | \
+            sort -u
+    )
+
+    if [[ ${#CODEX_ALLOWED_SCRIPTS[@]} -eq 0 ]]; then
+        fail "could not parse Codex hook allowlist from install.sh"
+    else
+        missing_dependencies=()
+
+        for script_name in "${CODEX_ALLOWED_SCRIPTS[@]}"; do
+            script_path="$HOOKS_DIR/$script_name"
+            [[ -f "$script_path" ]] || continue
+
+            while IFS= read -r dependency; do
+                [[ -n "$dependency" ]] || continue
+
+                dependency_name=$(basename "$dependency")
+                if [[ ! " ${CODEX_ALLOWED_SCRIPTS[*]} " =~ [[:space:]]"$dependency_name"[[:space:]] ]]; then
+                    missing_dependencies+=("$script_name -> $dependency_name")
+                fi
+            done < <(sed -n 's/^[[:space:]]*\.[[:space:]]*"\$SCRIPT_DIR\/\([^"]*\)".*/\1/p' "$script_path")
+        done
+
+        if [[ ${#missing_dependencies[@]} -eq 0 ]]; then
+            pass
+        else
+            fail "missing Codex-installed helper scripts: ${missing_dependencies[*]}"
+        fi
+    fi
 fi
 
 echo ""
@@ -770,6 +850,20 @@ if test_start "workflow-guard: dotnet build without --tl → adds --tl:on"; then
     fi
 fi
 
+if test_start "workflow-guard: Codex dotnet build without --tl → no unsupported mutation"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build src/MyApp.csproj"}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
 if test_start "workflow-guard: dotnet build with --tl → no modification"; then
     echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build src/MyApp.csproj --tl:on"}}' | \
         HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
@@ -796,6 +890,88 @@ if test_start "workflow-guard: non-dotnet command → no modification"; then
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
+fi
+
+echo ""
+
+# ── task-journal-resolver.sh tests ───────────────────────────────────────────
+
+echo "task-journal-resolver.sh"
+
+if test_start "task-journal-resolver: cache writes stay silent on permission failure"; then
+    RESOLVER_TEST_HOME=$(mktemp -d)
+    RESOLVER_TEST_PROJECT=$(mktemp -d)
+    mkdir -p "$RESOLVER_TEST_PROJECT/.codex"
+    printf '# Task\nStatus: BUILDING\n' > "$RESOLVER_TEST_PROJECT/.codex/task.md"
+    mkdir -p "$RESOLVER_TEST_HOME/.codex/cache/workflow-state"
+    chmod 500 "$RESOLVER_TEST_HOME/.codex/cache/workflow-state"
+
+    local_tmp_out=$(mktemp)
+    local_tmp_err=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$RESOLVER_TEST_HOME" CODEX_PROJECT_DIR="$RESOLVER_TEST_PROJECT" bash -c '
+        set -euo pipefail
+        . "$1"
+        assistant_cache_task_journal "$2" "$3"
+    ' bash "$HOOKS_DIR/task-journal-resolver.sh" \
+        "$RESOLVER_TEST_PROJECT/.codex/task.md" "$RESOLVER_TEST_PROJECT" \
+        > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    HOOK_STDERR=$(cat "$local_tmp_err")
+    rm -f "$local_tmp_out" "$local_tmp_err"
+
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" && -z "$HOOK_STDERR" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', stderr='$HOOK_STDERR'"
+    fi
+
+    chmod 700 "$RESOLVER_TEST_HOME/.codex/cache/workflow-state"
+    rm -rf "$RESOLVER_TEST_HOME" "$RESOLVER_TEST_PROJECT"
+fi
+
+echo ""
+
+# ── codex install regression tests ───────────────────────────────────────────
+
+echo "codex install"
+
+if test_start "codex install: shared hook helper is installed and workflow-guard runs"; then
+    INSTALL_TEST_HOME=$(mktemp -d)
+    local_tmp_out=$(mktemp)
+    local_tmp_err=$(mktemp)
+    HOOK_EXIT=0
+
+    env HOME="$INSTALL_TEST_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex \
+        > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
+
+    INSTALL_STDOUT=$(cat "$local_tmp_out")
+    INSTALL_STDERR=$(cat "$local_tmp_err")
+    rm -f "$local_tmp_out" "$local_tmp_err"
+
+    if [[ $HOOK_EXIT -ne 0 ]]; then
+        fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
+    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/task-journal-resolver.sh" ]]; then
+        fail "missing task-journal-resolver.sh after install"
+    else
+        local_tmp_out=$(mktemp)
+        local_tmp_err=$(mktemp)
+        HOOK_EXIT=0
+        env HOME="$INSTALL_TEST_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" \
+            bash "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-guard.sh" \
+            > "$local_tmp_out" 2> "$local_tmp_err" <<< '{"tool_name":"Read","tool_input":{}}' || HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat "$local_tmp_out")
+        HOOK_STDERR=$(cat "$local_tmp_err")
+        rm -f "$local_tmp_out" "$local_tmp_err"
+
+        if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+            pass
+        else
+            fail "hook exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', stderr='$HOOK_STDERR', install_stdout='$INSTALL_STDOUT'"
+        fi
+    fi
+
+    rm -rf "$INSTALL_TEST_HOME"
 fi
 
 echo ""

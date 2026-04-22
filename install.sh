@@ -586,7 +586,7 @@ if $INSTALL_HOOKS; then
                     # Codex experimental hooks: only SessionStart, UserPromptSubmit, Stop
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh) ;;  # supported
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
                             *) continue ;;  # skip unsupported hooks
                         esac
                     fi
@@ -727,6 +727,7 @@ THESE RULES ARE NON-NEGOTIABLE. You MUST follow them on every response.
 | Skill | Trigger | What it does |
 |-------|---------|-------------|
 | assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |
+| assistant-clarify | ambiguous, multi-intent, underspecified prompts | Clarify the request before execution |
 | assistant-review | review, check the code | Autonomous review-fix loop (max 5 rounds) |
 | assistant-tdd | tests first, test-driven, red green | Red-Green-Refactor with verification gates |
 | assistant-security | security, threat model, audit | STRIDE, OWASP, CVE analysis |
