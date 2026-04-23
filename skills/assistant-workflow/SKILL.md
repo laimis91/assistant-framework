@@ -93,6 +93,13 @@ Criteria:
 Approve these criteria? Then I'll triage and plan.
 ```
 
+## Refactor Guidance
+
+When a task includes incidental or scope-expanding refactor work:
+- Justify it with a concrete risk only: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, or poor extension seam.
+- Do not justify incidental or scope-expanding refactors with vague framing such as generic convention language, style, cleanliness, or generic improvement.
+- Choose the smallest useful, durable fix that removes the identified risk. Avoid broad cleanup unless the user explicitly requested cleanup, reorganization, or refactor work.
+
 ## Triage
 
 Print: `--- PHASE: TRIAGE ---`

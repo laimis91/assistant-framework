@@ -41,6 +41,21 @@ Determine the review scope:
 - If there's an active task journal (`.claude/task.md`) → review all changes from that task
 - Otherwise → ask the user what to review
 
+## Refactor-Related Findings
+
+Use refactor-related findings only for concrete actionable risk. Allowed risk categories:
+- correctness
+- security
+- unsafe change surface
+- branching/responsibility growth
+- hidden dependency/ownership
+- brittle testing
+- poor extension seam
+
+Every refactor-related finding MUST state the risk category, affected surface, evidence from the diff or review scope, and the smallest durable fix that addresses the risk within the normal finding text.
+
+Do not use vague framing such as generic convention language, style, cleanliness, or generic improvement. Do not ask for broad cleanup when a smaller durable fix will remove the risk.
+
 ## The Loop
 
 ```
@@ -69,9 +84,9 @@ while round <= 5:
         - PIVOT (weighted < threshold for round) → escalate to orchestrator
         - REFINE with findings → continue to step 3
         - REFINE with zero findings → EXIT CLEAN with advisory:
-          "Rubric score {score} suggests room for improvement but no
-          specific actionable items found. Low-scoring dimensions
-          noted as recommendations for future work."
+          "Rubric score {score} is below target, but no concrete
+          actionable risk was found in scope. Low-scoring dimensions
+          are noted as watch areas for future work."
           Include rubric scores and low-dimension details in final report.
      b. No rubric (small scope): use findings-based exit:
         - No must-fix AND no should-fix → EXIT CLEAN
