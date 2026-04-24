@@ -1036,6 +1036,402 @@ EOF
     fi
 fi
 
+if test_start "workflow-enforcer: pending clarification on medium → includes clarification gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: needs_clarification
+Clarification defaults applied: false
+Unresolved clarification topics:
+- target subsystem
+- default behavior
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Task: Add approvals" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: DISCOVERING" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: false" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: target subsystem, default behavior" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in DISCOVERING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: small BUILDING resume with saved pending clarification → includes clarification gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Update hook docs
+Status: BUILDING [step 1/1]
+Triaged as: small
+Clarification status: needs_clarification
+Clarification defaults applied: false
+Unresolved clarification topics:
+- output location
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Size: small" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: BUILDING \[step 1/1\]" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: needs_clarification" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: output location" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: small tasks with saved clarification state must not continue in BUILDING \[step 1/1\] until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && ! echo "$HOOK_STDOUT" | grep -q "Medium+ tasks"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: contradictory clarification state → still includes clarification gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+- target subsystem
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: ready" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: target subsystem" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: target subsystem" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Saved clarification state is contradictory/invalid. status is ready but unresolved clarification topics are still recorded. Treat clarification as pending until the saved state is reconciled."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: needs_clarification without unresolved topics → includes invalid clarification warning and gate"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: needs_clarification
+Clarification defaults applied: false
+Unresolved clarification topics:
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: needs_clarification" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Saved clarification state is contradictory/invalid. status is needs_clarification but unresolved clarification topics are empty. Treat clarification as pending until the saved state is reconciled." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in DISCOVERING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: defaults applied with non-ready clarification → includes invalid clarification warning and gate"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: needs_clarification
+Clarification defaults applied: true
+Unresolved clarification topics:
+- target subsystem
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: true" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: target subsystem" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: target subsystem" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Saved clarification state is contradictory/invalid. clarification defaults are marked true but clarification status is not ready; clarification defaults are marked true but unresolved clarification topics are still recorded. Treat clarification as pending until the saved state is reconciled." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in DISCOVERING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: medium DISCOVERING with missing or unknown clarification fields → includes clarification state warning and gate"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: pending_review
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: pending_review" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: unknown" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Clarification state is missing or unknown in the saved task journal." \
+        && echo "$HOOK_STDOUT" | grep -q "REMINDER: Saved clarification state must be written to the task journal before continuing." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in DISCOVERING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: DISCOVERING cannot continue until the task journal saves explicit clarification state."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: medium DECOMPOSING with missing or unknown clarification fields → includes clarification state warning and gate"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DECOMPOSING
+Triaged as: medium
+Clarification status: pending_review
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: DECOMPOSING" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: pending_review" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: unknown" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Clarification state is missing or unknown in the saved task journal." \
+        && echo "$HOOK_STDOUT" | grep -q "REMINDER: Saved clarification state must be written to the task journal before continuing." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in DECOMPOSING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: DECOMPOSING cannot continue until the task journal saves explicit clarification state."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: medium PLANNING with missing or unknown clarification fields → includes clarification gate and planning warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: PLANNING
+Triaged as: medium
+Clarification status: pending_review
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: pending_review" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: unknown" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Clarification state is missing or unknown in the saved task journal." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in PLANNING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: PLANNING cannot continue until the task journal saves explicit clarification state."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: medium BUILDING with missing or unknown clarification fields → includes clarification gate and saved state warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: BUILDING [step 1/3]
+Triaged as: medium
+Clarification status: pending_review
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: BUILDING \[step 1/3\]" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: pending_review" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: unknown" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Clarification state is missing or unknown in the saved task journal." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in BUILDING \[step 1/3\] until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: BUILDING \[step 1/3\] cannot continue until the task journal saves explicit clarification state."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: medium VERIFYING with missing or unknown clarification fields → includes clarification gate and saved state warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: VERIFYING
+Triaged as: medium
+Clarification status: pending_review
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: VERIFYING" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: pending_review" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: unknown" \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: none" \
+        && echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Clarification state is missing or unknown in the saved task journal." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: medium tasks with saved clarification state must not continue in VERIFYING until clarification is resolved or explicit defaults are applied and the saved task journal state is valid." \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: VERIFYING cannot continue until the task journal saves explicit clarification state."; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: pending clarification with 3 topics → renders full comma-spaced list"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: needs_clarification
+Clarification defaults applied: false
+Unresolved clarification topics:
+- target subsystem
+- default behavior
+- verification scope
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Unresolved clarification topics: target subsystem, default behavior, verification scope" \
+        && echo "$HOOK_STDOUT" | grep -q "Outstanding topics: target subsystem, default behavior, verification scope"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: resolved clarification with defaults applied → no clarification gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add approvals
+Status: PLANNING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: true
+Unresolved clarification topics:
+Plan approval: no
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: ready" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: true" \
+        && ! echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "must remain in Discover until clarification is resolved or explicit defaults are applied"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: small BUILDING resume with resolved clarification → no clarification gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Update hook docs
+Status: BUILDING [step 1/1]
+Triaged as: small
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Size: small" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification status: ready" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: false" \
+        && ! echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "small tasks with saved clarification state must not continue"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
 if test_start "workflow-enforcer: BUILDING without plan approval on medium → includes WARNING"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'

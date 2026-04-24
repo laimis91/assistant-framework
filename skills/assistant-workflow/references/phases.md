@@ -10,6 +10,15 @@ Print: `--- PHASE: DISCOVER ---`
 
 For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The context map is stored at `.claude/context-map.md` and used by Code Writer and Architect instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
 
+For any task that needs clarification, create or update `.claude/task.md` during Discover before printing clarification questions or any clarification wait. Persist:
+- `Clarification status: ready | needs_clarification`
+- `Clarification defaults applied: true | false`
+- `Unresolved clarification topics:` as a markdown list
+
+For medium+ tasks, keep `.claude/task.md` for the full task lifecycle even when Discover resolves without a clarification wait.
+
+Discover does not complete while `Clarification status: needs_clarification`. Clarification waiting is a Discover substate, not a separate workflow phase.
+
 Print: `>> Dispatching Code Mapper → context map` (when applicable)
 Print: `>> Dispatching Explorer` (when applicable)
 
@@ -25,18 +34,32 @@ Print: `>> Dispatching Explorer` (when applicable)
    - Observability in place? (logging, telemetry, health checks)
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
-5. Ask structured Q&A with recommendations when ambiguous
-6. Restate requirements in 1-3 sentences
+5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field
+6. Restate requirements in 1-3 sentences after clarification is resolved
 
-**Q&A format:**
+**Clarification format:**
 ```
 Need to know
 1. [Question]?
    a) [Option]  b) [Option]  c) [Option]
-   --> Recommendation: (b) because [reason]
+   --> Recommendation: b because [reason]
 
 Reply with: "1b 2a" or "defaults".
 ```
+
+**Clarification state rules:**
+- For any task entering clarification wait, if `.claude/task.md` does not exist yet, create it before printing clarification questions or the clarification wait message.
+- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, `Clarification defaults applied: false`, and list each unresolved implementation-shaping topic.
+- Print: `>> WAITING: Clarification answers required`
+- Stop after the wait message. Do not continue into Decompose or Plan while clarification is pending.
+- On resume, accept only:
+  - explicit question/option answers covering the open question ids (example: `1b 2a`)
+  - explicit `defaults`
+- Do not infer answers from free-form continuation text.
+- Every implementation-shaping field that is still unresolved must appear in `Unresolved clarification topics` until it is answered or explicitly defaulted.
+- Treat clarification as pending whenever unresolved clarification topics are non-empty, even if `Clarification status` was previously recorded as `ready`.
+- If the reply is `defaults`, print the defaults being applied, set `Clarification defaults applied: true`, clear the unresolved topics list, and set `Clarification status: ready`.
+- If the reply is explicit answers, record the chosen options, set `Clarification defaults applied: false`, clear the unresolved topics list, and set `Clarification status: ready`.
 
 **Rules:**
 - No commands, edits, or plans that depend on unknowns
@@ -54,6 +77,8 @@ Print: `--- PHASE: DECOMPOSE ---`
 Think of components like LEGO bricks — each one is self-contained and testable, and together they form the solution.
 
 **Skip condition:** Small tasks skip this phase entirely — they ARE the atomic unit.
+
+**Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
 For medium+ tasks, dispatch an **Architect** to analyze the problem and propose component boundaries based on the context map and requirements.
 
@@ -119,6 +144,8 @@ For large tasks, dispatch an **Architect** — it analyzes existing patterns (us
 
 Print: `>> Dispatching Architect` (when applicable)
 
+**Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
+
 Read `references/plan-template.md` and use the correct tier:
 - Small: inline plan (goal, files, risks, tests)
 - Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
@@ -172,7 +199,7 @@ Print: `--- PHASE: BUILD ---`
 
 ### Task journal
 
-For medium+ tasks, create `.claude/task.md` using `references/task-journal-template.md`. Update after each step. This file survives context compression — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
+For medium+ tasks, create `.claude/task.md` using `references/task-journal-template.md` during Discover and keep updating it through Build. This file survives context compression — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 

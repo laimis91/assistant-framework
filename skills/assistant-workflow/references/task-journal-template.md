@@ -3,11 +3,12 @@
 Write to `.claude/task.md` in the project root. This file is the single source of truth for the current task — it survives context compression and session continuations.
 
 ## When to create
-- At plan approval (Phase 3 gate passed)
-- Small tasks: optional (only if multi-step)
-- Medium+: always
+- Any task that enters clarification wait: during Discover, before printing clarification questions or the wait message
+- Medium+: during Discover, before leaving Discover even when no clarification wait is needed
+- Small tasks without clarification wait: optional unless the task is multi-step
 
 ## When to update
+- When clarification questions are asked, answered, or resolved via explicit `defaults`
 - After each Build step completes (update Progress, Artifact Registry, and check off Milestones)
 - When key decisions are made
 - When constraints are added by the user
@@ -19,8 +20,12 @@ Write to `.claude/task.md` in the project root. This file is the single source o
 
 ```markdown
 ## Task: [1-sentence description]
-Status: BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
+Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
 Triaged as: [small | medium | large | mega]
+Clarification status: [ready | needs_clarification]
+Clarification defaults applied: [true | false]
+Unresolved clarification topics:
+- [none, or one short topic per line]
 Plan approval: [yes/no + date]
 
 ## Constraints
@@ -130,17 +135,21 @@ Plan approval: [yes/no + date]
 
 ## Lifecycle
 
-1. **Created** at plan approval — Status: BUILDING [1/N]
-2. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. Check off Milestones when reached.
-3. **Review cycle** when all steps done — Spec Review first (plan alignment), then Quality Review (pr-review.md checklist), fix must-fix → re-test → re-review until clean, fill Final Result
-4. **Verification** after review cycle passes — fill Verification Summary, Status: VERIFYING
-5. **Handoff** to user — they test manually and add Review Notes
-6. **Review fixes** — fix issues, re-test, re-review, update Progress
-7. **Done** — Status: DONE, promote insights to memory, delete file
+1. **Created** during Discover when clarification state must be tracked. Any task that enters clarification wait creates it before the wait; medium+ tasks also create it before leaving Discover even when no clarification wait is needed.
+2. **Clarification** updates — while waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
+3. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the approved component decomposition before moving on to planning. Small tasks skip this state.
+4. **Plan approval** — once ready to plan, set `Status: PLANNING`, capture the approved plan, and update `Plan approval`.
+5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. Check off Milestones when reached.
+6. **Review cycle** when all steps done — Spec Review first (plan alignment), then Quality Review (pr-review.md checklist), fix must-fix → re-test → re-review until clean, fill Final Result
+7. **Verification** after review cycle passes — fill Verification Summary, Status: VERIFYING
+8. **Handoff** to user — they test manually and add Review Notes
+9. **Review fixes** — fix issues, re-test, re-review, update Progress
+10. **Done** — Status: DONE, promote insights to memory, delete file
 
 ## Rules
 
 - Keep entries concise — this is a log, not documentation
+- Resume from clarification waits only on explicit numbered answers or explicit `defaults`
 - Constraints are checked before each Build step
 - On context continuation: read `.claude/task.md` FIRST, before any other action
 - Never delete constraints unless the user explicitly removes them

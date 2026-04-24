@@ -71,9 +71,40 @@ fields:
     on_missing: skip
     notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
 
+  - name: clarification_status
+    type: enum
+    required: true
+    enum_values: [ready, needs_clarification]
+    description: "Whether Discover is clear to continue or is waiting on explicit clarification about implementation-shaping fields"
+    validation: "ready requires zero unresolved clarification topics and every implementation-shaping field is explicit or defaulted. needs_clarification requires at least one unresolved clarification topic."
+    on_missing: infer
+    infer_from: "If any implementation-shaping field that affects files, behavior, interfaces, data shape, rollout, or verification is still unresolved, set to needs_clarification and add a deterministic topic label. Set to ready only when each such field is explicit or has an explicit default."
+
+  - name: unresolved_clarification_topics
+    type: string[]
+    required: true
+    description: "Deterministic short labels for unanswered topics that block planning"
+    validation: "List every unresolved implementation-shaping field with one deterministic short label. Empty when clarification_status=ready. Non-empty when clarification_status=needs_clarification."
+    default: []
+    on_missing: skip
+    examples:
+      - "target subsystem"
+      - "default behavior"
+      - "migration strategy"
+
+  - name: clarification_defaults_applied
+    type: boolean
+    required: true
+    description: "Whether any unresolved clarification topic was resolved by an explicit `defaults` reply during Discover"
+    validation: "Must be explicit true or false. May be true only after the workflow prints the applied defaults and the user explicitly replies `defaults`."
+    default: false
+    on_missing: skip
+    notes: "Never infer this from follow-up wording or continuation text."
+
 # Validation behavior:
 # 1. Resolve all required fields BEFORE printing --- PHASE: TRIAGE ---
 # 2. If on_missing=ask: present ONE focused question, wait for answer
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
-# 5. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}
+# 5. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
+# 6. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

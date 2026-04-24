@@ -46,29 +46,37 @@ gates:
         on_fail: "Write a requirements summary before proceeding"
 
       - id: D2
-        check: "No open questions remain — all answered by user or resolved with stated defaults"
-        on_fail: "Present remaining questions to user and wait for answers"
+        check: "clarification_status is ready and every implementation-shaping field is explicit, explicitly defaulted, or no longer unresolved"
+        on_fail: "Persist unresolved clarification topics for every unresolved implementation-shaping field, ask structured clarification questions, and wait for explicit answers or `defaults`."
 
       - id: D3
+        check: "clarification_defaults_applied is explicit (true/false) and unresolved clarification topics are empty before Discover completes"
+        on_fail: "Update the saved clarification state so clarification_defaults_applied is explicit true/false and unresolved topics are cleared before continuing"
+
+      - id: D4
+        check: "If Discover prints a clarification wait for any task size: task journal exists before the wait is printed, and the clarification state is persisted before printing the wait message and before leaving Discover"
+        on_fail: "Create or update .claude/task.md with Clarification status, Clarification defaults applied, and Unresolved clarification topics before printing the clarification wait message or continuing"
+
+      - id: D5
         check: "For medium+ tasks: context map exists at .claude/context-map.md"
         condition: "size in [medium, large, mega]"
         on_fail: "Dispatch Code Mapper before proceeding to Plan"
 
-      - id: D4
+      - id: D6
         check: "For medium+ tasks: agent readiness score was assessed and printed"
         condition: "size in [medium, large, mega]"
         on_fail: "Run agent readiness check and print score"
 
-      - id: D5
+      - id: D7
         check: "constraints list is captured (may be empty, but must be explicitly set)"
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
-      - id: D6
+      - id: D8
         check: "For medium+ tasks: Code Mapper subagent was dispatched to produce context map (not explored inline by Orchestrator)"
         condition: "size in [medium, large, mega]"
         on_fail: "Dispatch Code Mapper subagent — Orchestrator must not absorb mapping work"
 
-      - id: D7
+      - id: D9
         check: "For large+ tasks: Explorer subagent was dispatched to trace execution paths"
         condition: "size in [large, mega]"
         on_fail: "Dispatch Explorer subagent — deep analysis requires dedicated agent focus"
@@ -111,6 +119,10 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Dispatch Architect for component decomposition — Orchestrator must not absorb this work"
 
+      - id: DC8
+        check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
+        on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
+
   # ─────────────────────────────────────────────
   # DECOMPOSE → PLAN (or PLAN directly for small)
   # ─────────────────────────────────────────────
@@ -148,6 +160,10 @@ gates:
         check: "For large+ tasks: Architect subagent was dispatched for implementation blueprint (not planned inline by Orchestrator)"
         condition: "size in [large, mega]"
         on_fail: "Dispatch Architect subagent — complex plans require dedicated architectural analysis"
+
+      - id: P8
+        check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
+        on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
   # ─────────────────────────────────────────────
   # DESIGN → BUILD (UI tasks only)
