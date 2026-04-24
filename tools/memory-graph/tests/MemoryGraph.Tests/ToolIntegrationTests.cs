@@ -51,7 +51,7 @@ public class ToolIntegrationTests : IDisposable
         registry.Register(new MemoryRemoveRelationTool(graph));
         registry.Register(new MemoryGraphTool(graph));
         // v2 reflexion tools
-        registry.Register(new MemoryReflectTool(memoryStore));
+        registry.Register(new MemoryReflectTool(memoryStore, graph));
         registry.Register(new MemoryDecideTool(memoryStore));
         registry.Register(new MemoryPatternTool(memoryStore));
         registry.Register(new MemoryConsolidateTool(memoryStore));
@@ -540,6 +540,84 @@ public class ToolIntegrationTests : IDisposable
             var text = result.Content[0].Text;
             Assert.Contains("reflexionId", text);
             Assert.Contains("lessonsCreated", text);
+        }
+    }
+
+    [Fact]
+    public void Reflect_CreatesGraphProjectInsightAndAppliesToRelation()
+    {
+        var (graph, registry, store) = CreateFullTestSetup();
+        using (store)
+        {
+            var result = registry.Execute("memory_reflect", ParseArgs("""
+                {
+                    "task": "Fix cache invalidation",
+                    "project": "API",
+                    "projectType": "dotnet-api",
+                    "lessons": ["Always test cache invalidation by project"],
+                    "firstAttemptSuccess": true
+                }
+                """));
+
+            Assert.False(result.IsError);
+
+            var project = graph.GetEntity("API");
+            Assert.NotNull(project);
+            Assert.Equal(EntityType.Project, project.Type);
+
+            var insight = graph.GetEntitiesByType(EntityType.Insight).Single();
+            Assert.Contains("Always test cache invalidation by project", insight.Observations);
+            Assert.Contains(graph.GetRelationsFrom(insight.Name), r =>
+                r.To == "API" && r.Type == RelationType.AppliesTo);
+        }
+    }
+
+    [Fact]
+    public void Search_DoesNotReturnOrphanFtsEntity()
+    {
+        var (graph, registry, store) = CreateFullTestSetup();
+        using (store)
+        {
+            graph.AddOrUpdateEntity("RealProject", EntityType.Project, ["real entity"]);
+            store.IndexInFts("entity", "OrphanProject", "OrphanProject", "orphan searchable content", "Project");
+
+            var result = registry.Execute("memory_search", ParseArgs("""
+                {"query": "orphan"}
+                """));
+
+            Assert.False(result.IsError);
+            Assert.DoesNotContain("OrphanProject", result.Content[0].Text);
+        }
+    }
+
+    [Fact]
+    public void Search_RefillsWhenStaleEntityHitsOccupyInitialLimit()
+    {
+        var (_, registry, store) = CreateFullTestSetup();
+        using (store)
+        {
+            for (var i = 0; i < 25; i++)
+            {
+                store.IndexInFts("entity", $"OrphanProject{i:D2}", $"OrphanProject{i:D2}",
+                    "searchlimitneedle stale entity content", "Project");
+            }
+
+            store.AddDecision(new DecisionEntry
+            {
+                Title = "Valid limit recovery decision",
+                Decision = "searchlimitneedle valid decision content",
+                Rationale = "Non-entity memory should still be returned after stale entity filtering",
+                Tags = "searchlimitneedle"
+            });
+
+            var result = registry.Execute("memory_search", ParseArgs("""
+                {"query": "searchlimitneedle"}
+                """));
+
+            Assert.False(result.IsError);
+            var text = result.Content[0].Text;
+            Assert.Contains("Valid limit recovery decision", text);
+            Assert.DoesNotContain("OrphanProject00", text);
         }
     }
 

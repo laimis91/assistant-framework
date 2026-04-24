@@ -216,6 +216,23 @@ if test_start "session-start: Gemini, with task journal → valid JSON"; then
     rm -rf "$TEST_PROJECT/.gemini" "$TEST_AGENT_HOME/.gemini"
 fi
 
+if test_start "session-start: Gemini, with graph rules → valid JSON with full rules"; then
+    mkdir -p "$TEST_AGENT_HOME/.gemini/memory"
+    echo '{"kind":"entity","name":"gemini-full-rule-regression","type":"rule","observations":["Gemini should receive full graph rules"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.gemini/memory/graph.jsonl"
+    HOME="$TEST_AGENT_HOME" run_hook session-start.sh gemini
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.additionalContext' >/dev/null 2>&1 \
+        && [[ "$additional_context" == *"gemini-full-rule-regression"* ]] \
+        && [[ "$additional_context" == *"Gemini should receive full graph rules"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, invalid JSON or missing full Gemini graph rule context"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.gemini"
+fi
+
 if test_start "session-start: Codex, with task journal → hookSpecificOutput JSON"; then
     mkdir -p "$TEST_PROJECT/.codex"
     echo -e "# Task\nStatus: BUILDING" > "$TEST_PROJECT/.codex/task.md"
@@ -232,6 +249,35 @@ if test_start "session-start: Codex, with task journal → hookSpecificOutput JS
         pass
     else
         fail "exit=$HOOK_EXIT, invalid JSON or missing Codex hookSpecificOutput"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, with graph rules → compact memory summary and journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory"
+    echo -e "# Task\nStatus: BUILDING\nStep: keep task visible" > "$TEST_PROJECT/.codex/task.md"
+    echo '{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.codex/memory/graph.jsonl"
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' >/dev/null 2>&1 \
+        && [[ "$additional_context" == *"1 memory rule(s)"* ]] \
+        && [[ "$additional_context" == *"memory_context"* ]] \
+        && [[ "$additional_context" == *"memory_search"* ]] \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
+        && [[ "$additional_context" == *"keep task visible"* ]] \
+        && [[ "$additional_context" != *"always-use-tabs"* ]] \
+        && [[ "$additional_context" != *"Always use tabs for indentation"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected compact Codex memory summary without rule body leakage"
     fi
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi

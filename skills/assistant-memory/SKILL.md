@@ -5,7 +5,7 @@ triggers:
   - pattern: "remember this|save insight|update memory|what do you know about me|forget|memory|preferences"
     priority: 70
     min_words: 3
-    reminder: "This request matches assistant-memory. Consider whether the Skill tool should be invoked with skill='assistant-memory' for memory management."
+    reminder: "This request matches assistant-memory. Load and follow this SKILL.md and its contracts before managing memory."
 ---
 
 # Memory Management
@@ -21,11 +21,11 @@ triggers:
 - `entity_type` is required for save — determines the knowledge graph entity type (Rule, Preference, Insight, etc.)
 - All outputs include a human-readable `confirmation` string
 
-Global memory that persists across all projects and sessions.
+The knowledge graph is the cross-session source of truth for memory across projects and sessions.
 
 ## Memory Storage
 
-All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory/graph.jsonl`), accessed via memory-graph MCP tools. No markdown files.
+All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory/graph.jsonl`), accessed via memory-graph MCP tools. Project-local markdown files may exist as generated orientation or task artifacts, but they are not the cross-session memory source of truth.
 
 Entity types:
 | Type | Purpose | Example |
@@ -59,7 +59,7 @@ Use MCP tools to record new memory:
 | Project registration | `memory_add_entity` | `Project` |
 | Connect entities | `memory_add_relation` | — |
 
-No markdown files to update. No INDEX.md to maintain.
+Do not treat markdown files as cross-session memory. Update project-local orientation artifacts only when a project workflow explicitly calls for them.
 
 ## Querying Memory
 

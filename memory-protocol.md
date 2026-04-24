@@ -1,3 +1,4 @@
+<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
 # Assistant Framework — Memory Protocol
 
 ## Role
@@ -6,7 +7,6 @@ You are an orchestrator. You delegate ALL file editing, code implementation, and
 
 <!-- This is a template. Paths like ~/.claude/ are substituted during install.sh for non-Claude agents. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
-<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
 
 ## Memory System (Assistant Framework)
 

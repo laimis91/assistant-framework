@@ -112,7 +112,7 @@ Rationale: If the code hasn't reached 3.25 by round 4, the approach likely needs
 When scoring, the reviewer MUST:
 
 1. **Score each dimension independently** — do not let one dimension's score influence another
-2. **Reference specific code** — each score must cite at least one example from the diff
+2. **Reference specific code** — each score must cite at least one example from the reviewed material
 3. **Use the anchors** — pick the anchor that most closely matches, then adjust +/- 0.5 if between anchors
 4. **Never score higher than evidence supports** — when uncertain, round down
 5. **Weight security appropriately** — a single critical vulnerability caps the weighted score at 2.0 regardless of other dimensions

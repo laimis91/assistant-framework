@@ -18,11 +18,35 @@ handoffs:
     notes: "Fresh Reviewer dispatch each round for medium+ scope. For trivial/small, self-review is acceptable."
 
     context_fields:
-      - name: diff
-        type: string
+      - name: review_material_snapshot
+        type: object
         required: true
-        description: "Full diff of all changes under review"
-        validation: "Non-empty. Must include the complete set of changes, not a partial diff."
+        description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
+        validation: "Non-empty. Must include enough material to support concrete file/content findings."
+        object_fields:
+          - name: kind
+            type: enum
+            required: true
+            enum_values: [diff, files, task_snapshot, pr_snapshot, content]
+            description: "Shape of the review material"
+          - name: summary
+            type: string
+            required: true
+            description: "Concise description of what the snapshot covers"
+          - name: material
+            type: string
+            required: true
+            description: "Actual diff, file contents/excerpts, task or PR snapshot, or pasted content"
+          - name: files
+            type: string[]
+            required: false
+            default: []
+            description: "Known files covered by the snapshot"
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+            description: "Optional PR URL, task journal path, command, or user-provided label"
 
       - name: round
         type: int
@@ -88,7 +112,7 @@ handoffs:
           - name: file
             type: string
             required: true
-            validation: "Must be a file path that exists in the diff"
+            validation: "Must be a file path covered by the reviewed material, or a stable content label when reviewing pasted content"
           - name: line
             type: int
             required: false

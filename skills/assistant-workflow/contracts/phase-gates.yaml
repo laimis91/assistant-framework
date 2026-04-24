@@ -263,8 +263,8 @@ gates:
         on_fail: "Run Spec Review (compare implementation against approved plan)"
 
       - id: R2
-        check: "Quality Review completed via assistant-review skill invocation (not manual review)"
-        on_fail: "Invoke assistant-review skill. Do not manually dispatch reviewers."
+        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts (not manual review)"
+        on_fail: "Load and follow assistant-review SKILL.md and contracts. Do not manually dispatch reviewers."
 
       - id: R3
         check: "Verification summary is written with: changed files, test coverage, review result, manual test steps, known limitations"

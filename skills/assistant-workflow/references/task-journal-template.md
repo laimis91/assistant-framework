@@ -20,7 +20,7 @@ Write to `.claude/task.md` in the project root. This file is the single source o
 
 ```markdown
 ## Task: [1-sentence description]
-Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | VERIFYING | REVIEWING | DONE
+Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING | DOCUMENTING | DONE
 Triaged as: [small | medium | large | mega]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
@@ -141,7 +141,7 @@ Plan approval: [yes/no + date]
 4. **Plan approval** — once ready to plan, set `Status: PLANNING`, capture the approved plan, and update `Plan approval`.
 5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. Check off Milestones when reached.
 6. **Review cycle** when all steps done — Spec Review first (plan alignment), then Quality Review (pr-review.md checklist), fix must-fix → re-test → re-review until clean, fill Final Result
-7. **Verification** after review cycle passes — fill Verification Summary, Status: VERIFYING
+7. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
 8. **Handoff** to user — they test manually and add Review Notes
 9. **Review fixes** — fix issues, re-test, re-review, update Progress
 10. **Done** — Status: DONE, promote insights to memory, delete file

@@ -2,7 +2,7 @@
 
 Loaded on demand by the orchestrator during each phase. Read only the phase you're executing.
 
-## Phase 1: Discover
+## Phase: Discover
 
 Print: `--- PHASE: DISCOVER ---`
 
@@ -68,7 +68,7 @@ Reply with: "1b 2a" or "defaults".
 
 Print: `--- PHASE: DISCOVER COMPLETE ---`
 
-## Phase 2: Decompose
+## Phase: Decompose
 
 Print: `--- PHASE: DECOMPOSE ---`
 
@@ -134,7 +134,7 @@ Review the decomposition:
 
 Print: `--- PHASE: DECOMPOSE COMPLETE (approved) ---`
 
-## Phase 3: Plan
+## Phase: Plan
 
 Print: `--- PHASE: PLAN ---`
 
@@ -178,7 +178,7 @@ Review the plan:
 
 Print: `--- PHASE: PLAN COMPLETE (approved) ---`
 
-## Phase 4: Design (UI/UX only, skip for backend)
+## Phase: Design (UI/UX only, skip for backend)
 
 Print: `--- PHASE: DESIGN ---`
 
@@ -193,7 +193,7 @@ Show mockup and WAIT for approval.
 
 Print: `--- PHASE: DESIGN COMPLETE (approved) ---`
 
-## Phase 5: Build & Test
+## Phase: Build
 
 Print: `--- PHASE: BUILD ---`
 
@@ -265,7 +265,7 @@ Print: `>> Build: [passed/failed] | Tests: [N passed, M failed]`
 
 Print: `--- PHASE: BUILD COMPLETE ---`
 
-## Phase 6: Review
+## Phase: Review
 
 Print: `--- PHASE: REVIEW ---`
 
@@ -291,9 +291,9 @@ Print: `>> Spec Review: [CLEAN / found N issues, fixing]`
 
 ### Stage 2 — Quality Review
 
-Print: `>> Stage 2: Quality Review — invoking assistant-review skill`
+Print: `>> Stage 2: Quality Review — loading assistant-review SKILL.md`
 
-**Invoke the `assistant-review` skill.** This runs the autonomous review-fix loop (max 5 rounds) with visible progress. Do NOT implement the review loop inline — delegate to the skill so the loop instructions are loaded into context.
+**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 5 rounds) with visible progress. Do NOT implement the review loop inline when a delegated review agent is available — use the skill instructions so the loop is applied consistently.
 
 The `assistant-review` skill will:
 - Dispatch Reviewer subagents
@@ -307,7 +307,7 @@ For medium+ tasks: full two-stage review with autonomous quality loop via `assis
 ### Status gate
 
 The stop hook (`~/.claude/hooks/assistant/stop-review.sh`) enforces the review cycle structurally:
-- If the task journal status is BUILDING or VERIFYING **and** the Review Log is missing entries or a Final Result, the agent is **blocked from stopping**.
+- If the task journal status is BUILDING or REVIEWING **and** the Review Log is missing entries or a Final Result, the agent is **blocked from stopping**.
 - The agent must complete the full review cycle and write the Final Result before it can present results to the user.
 - This is not advisory — the hook prevents the agent from finishing without review.
 
@@ -339,13 +339,13 @@ After testing, let me know:
 
 When the user reports issues:
 1. Add to Review Notes in task journal
-2. Fix each issue (re-enter Build → Test → Review for those steps only)
+2. Fix each issue (re-enter Build → Review for those steps only; tests remain part of Build)
 3. Update verification summary
 4. Present again for approval
 
-Do NOT proceed to Phase 7 until the user confirms.
+Do NOT proceed to Document until the user confirms.
 
-## Phase 7: Document
+## Phase: Document
 
 Print: `--- PHASE: DOCUMENT ---`
 
@@ -354,7 +354,7 @@ Print: `--- PHASE: DOCUMENT ---`
 For small tasks, skip documentation updates and go straight to metrics:
 
 1. **Task completion metrics**: Append a JSONL entry (see format below)
-2. **Post-task reflection** (optional): Invoke `assistant-reflexion` if the task produced a non-obvious lesson
+2. **Post-task reflection** (optional): Load and follow `assistant-reflexion` if the task produced a non-obvious lesson
 
 Then print completion markers and exit.
 
@@ -366,11 +366,11 @@ Then print completion markers and exit.
 4. If user-facing changes: generate release notes using `references/prompts/release-notes.md`
 5. Use `memory_add_insight` to capture learnings in the knowledge graph
 6. **Task completion metrics**: Append a JSONL entry (see format below)
-7. **Post-task reflection**: If `assistant-reflexion` is available, invoke it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
+7. **Post-task reflection**: If `assistant-reflexion` is available, load and follow it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
 
 ### Metrics entry format (all sizes)
 
-Append one JSONL line to `~/.claude/memory/metrics/workflow-metrics.jsonl`:
+Append one JSONL line to the agent's workflow metrics location (for example `~/.claude/memory/metrics/workflow-metrics.jsonl`, `~/.codex/memory/metrics/workflow-metrics.jsonl`, or `~/.gemini/memory/metrics/workflow-metrics.jsonl`):
 ```json
 {"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":[],"agent_readiness_score":null,"components_count":null,"components_verified":null}
 ```

@@ -90,6 +90,118 @@ info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
 
+substitute_agent_paths_in_stream() {
+    if [[ "$AGENT" == "claude" ]]; then
+        cat
+    else
+        sed \
+            -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
+            -e "s|\`\.claude/|\`.${AGENT}/|g" \
+            -e "s|\"~/\.claude/|\"~/.${AGENT}/|g" \
+            -e "s|\"\.claude/|\".${AGENT}/|g" \
+            -e "s|'~/\.claude/|'~/.${AGENT}/|g" \
+            -e "s|'\.claude/|'.${AGENT}/|g" \
+            -e "s|(\~/\.claude/|(~/.${AGENT}/|g" \
+            -e "s|(\.claude/|(.${AGENT}/|g" \
+            -e "s|\[~/\.claude/|[~/.${AGENT}/|g" \
+            -e "s|\[\.claude/|[.${AGENT}/|g" \
+            -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
+            -e "s|^~/\.claude/|~/.${AGENT}/|g" \
+            -e "s| ~/\.claude/| ~/.${AGENT}/|g" \
+            -e "s| \.claude/| .${AGENT}/|g" \
+            -e "s| at \.claude/| at .${AGENT}/|g" \
+            -e "s| to \.claude/| to .${AGENT}/|g" \
+            -e "s|: \.claude/|: .${AGENT}/|g"
+    fi
+}
+
+substitute_agent_paths_in_file() {
+    local target_file="$1"
+
+    [[ "$AGENT" != "claude" ]] || return 0
+
+    sed -i.bak \
+        -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
+        -e "s|\`\.claude/|\`.${AGENT}/|g" \
+        -e "s|\"~/\.claude/|\"~/.${AGENT}/|g" \
+        -e "s|\"\.claude/|\".${AGENT}/|g" \
+        -e "s|'~/\.claude/|'~/.${AGENT}/|g" \
+        -e "s|'\.claude/|'.${AGENT}/|g" \
+        -e "s|(\~/\.claude/|(~/.${AGENT}/|g" \
+        -e "s|(\.claude/|(.${AGENT}/|g" \
+        -e "s|\[~/\.claude/|[~/.${AGENT}/|g" \
+        -e "s|\[\.claude/|[.${AGENT}/|g" \
+        -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
+        -e "s|^~/\.claude/|~/.${AGENT}/|g" \
+        -e "s| ~/\.claude/| ~/.${AGENT}/|g" \
+        -e "s| \.claude/| .${AGENT}/|g" \
+        -e "s| at \.claude/| at .${AGENT}/|g" \
+        -e "s| to \.claude/| to .${AGENT}/|g" \
+        -e "s|: \.claude/|: .${AGENT}/|g" \
+        "$target_file"
+    rm -f "${target_file}.bak"
+}
+
+strip_memory_protocol_from_file() {
+    local instructions_file="$1"
+    local marker_start="$2"
+    local marker_end="$3"
+
+    awk -v marker_start="$marker_start" -v marker_end="$marker_end" '
+        function is_legacy_protocol_preamble_line(line) {
+            return line == "" \
+                || line == "# Assistant Framework — Memory Protocol" \
+                || line == "## Role" \
+                || index(line, "You are an orchestrator. You delegate ALL file editing") == 1 \
+                || line ~ /^<!-- This is a template\. Paths like ~\/\.(claude|codex|gemini)\// \
+                || index(line, "<!-- Appended by Assistant Framework install.") == 1
+        }
+
+        { lines[NR] = $0 }
+
+        END {
+            for (i = 1; i <= NR; i++) {
+                if (index(lines[i], marker_start) == 0) {
+                    continue
+                }
+
+                start = i
+                for (j = i - 1; j >= 1; j--) {
+                    if (lines[j] == "# Assistant Framework — Memory Protocol") {
+                        start = j
+                        break
+                    }
+                    if (!is_legacy_protocol_preamble_line(lines[j])) {
+                        break
+                    }
+                }
+
+                end = i
+                while (end <= NR && index(lines[end], marker_end) == 0) {
+                    end++
+                }
+                if (end > NR) {
+                    for (j = start; j <= NR; j++) {
+                        skip[j] = 1
+                    }
+                    break
+                }
+
+                for (j = start; j <= end; j++) {
+                    skip[j] = 1
+                }
+                i = end
+            }
+
+            for (i = 1; i <= NR; i++) {
+                if (!(i in skip)) {
+                    print lines[i]
+                }
+            }
+        }
+    ' "$instructions_file" > "${instructions_file}.tmp" && mv "${instructions_file}.tmp" "$instructions_file"
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -163,7 +275,7 @@ for skill in "${SKILLS[@]}"; do
     if $DRY_RUN; then
         dry "rsync $source_dir/ -> $target_dir/"
         if [[ "$AGENT" != "claude" ]]; then
-            dry "Substitute .claude/ paths with .${AGENT}/ in $skill/SKILL.md"
+            dry "Substitute .claude/ paths with .${AGENT}/ in copied $skill instruction/config files"
         fi
     else
         mkdir -p "$target_dir"
@@ -171,29 +283,25 @@ for skill in "${SKILLS[@]}"; do
             --exclude='.DS_Store' \
             "$source_dir/" "$target_dir/"
 
-        # Substitute agent-specific state directory paths in all .md files
-        # Replaces .claude/ paths in: backtick-quoted inline refs, code blocks,
-        # and standalone path references. Avoids prose like "Claude's .claude/ directory"
-        # by targeting patterns that look like actual paths (preceded by backtick, ~/, or line start).
+        # Swap agent.conf to the correct preset if one exists before path substitution.
         if [[ "$AGENT" != "claude" ]]; then
-            while IFS= read -r md_file; do
-                sed -i.bak \
-                    -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
-                    -e "s|\`\.claude/|\`.${AGENT}/|g" \
-                    -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
-                    -e "s|^~/\.claude/|~/.${AGENT}/|g" \
-                    -e "s| ~/\.claude/| ~/.${AGENT}/|g" \
-                    -e "s| \.claude/| .${AGENT}/|g" \
-                    "$md_file"
-                rm -f "${md_file}.bak"
-            done < <(find "$target_dir" -name "*.md" -type f)
-
-            # Swap agent.conf to the correct preset if one exists
             agent_preset="$target_dir/agents/${AGENT}.conf"
             agent_conf="$target_dir/agent.conf"
             if [[ -f "$agent_preset" && -f "$agent_conf" ]]; then
                 cp "$agent_preset" "$agent_conf"
             fi
+
+            # Substitute agent-specific state directory paths in instruction/config files.
+            # Targets values and path references, not every prose mention of Claude.
+            while IFS= read -r instruction_file; do
+                substitute_agent_paths_in_file "$instruction_file"
+            done < <(find "$target_dir" -type f \( \
+                -name "*.md" -o \
+                -name "*.yaml" -o \
+                -name "*.yml" -o \
+                -name "*.conf" -o \
+                -name "*.toml" \
+            \))
         fi
 
         ok "$skill -> $target_dir"
@@ -711,7 +819,7 @@ THESE RULES ARE NON-NEGOTIABLE. You MUST follow them on every response.
 
 2. ORCHESTRATOR ONLY: You are the orchestrator. You NEVER edit files or write code directly. ALL file changes go through sub-agents (code-writer for implementation, builder-tester for tests/builds). Your job is to delegate, monitor, and communicate — like a conductor who never plays an instrument.
 
-3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST -> VERIFY -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
+3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
 
 4. PLAN BEFORE BUILD: For medium+ tasks, you MUST have an approved plan before writing implementation code. Present the plan, wait for approval, THEN build.
 
@@ -802,22 +910,16 @@ if [[ -f "$MEMORY_PROTOCOL_SOURCE" ]]; then
     MARKER_END="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END"
 
     # Prepare substituted protocol content
-    protocol_content=$(cat "$MEMORY_PROTOCOL_SOURCE")
-    if [[ "$AGENT" != "claude" ]]; then
-        protocol_content=$(echo "$protocol_content" | sed \
-            -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
-            -e "s|\`\.claude/|\`.${AGENT}/|g" \
-            -e "s|~~/\.claude/|~~/.${AGENT}/|g" \
-            -e "s|~/.claude/|~/.${AGENT}/|g")
-    fi
+    protocol_content=$(substitute_agent_paths_in_stream < "$MEMORY_PROTOCOL_SOURCE")
 
-    # Strip old protocol if present (replace with latest version)
+    # Strip old protocol if present (replace with latest version). Legacy installs
+    # placed the title/role preamble before the start marker; strip that preamble
+    # only when it is immediately tied to an installer-owned marker block.
     if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        sed -i.bak "/$MARKER/,/$MARKER_END/d" "$INSTRUCTIONS_FILE"
-        rm -f "${INSTRUCTIONS_FILE}.bak"
         if $DRY_RUN; then
             dry "Would update memory protocol in $INSTRUCTIONS_FILE"
         else
+            strip_memory_protocol_from_file "$INSTRUCTIONS_FILE" "$MARKER" "$MARKER_END"
             echo "" >> "$INSTRUCTIONS_FILE"
             echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
             ok "Memory protocol updated in $INSTRUCTIONS_FILE"

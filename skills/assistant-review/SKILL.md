@@ -1,14 +1,14 @@
 ---
 name: assistant-review
-description: "This skill runs an autonomous code review loop: review, fix, re-review until clean (max 5 rounds). Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Phase 6 (Review) requires quality review dispatch."
+description: "This skill runs an autonomous code review loop: review, fix, re-review until clean (max 5 rounds). Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review dispatch."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
     priority: 90
-    reminder: "This request to fix review issues matches assistant-review. You MUST invoke the Skill tool with skill='assistant-review' BEFORE editing code directly. The skill includes fix → verify → re-review steps that must not be skipped."
+    reminder: "This request to fix review issues matches assistant-review. You MUST load and follow this SKILL.md and its contracts before editing code. The skill includes fix → validation → re-review steps that must not be skipped."
   - pattern: "review|fresh review|code review|review this|check the code|/review"
     priority: 80
-    reminder: "This request matches assistant-review. You MUST invoke the Skill tool with skill='assistant-review' BEFORE doing anything else. The skill runs an autonomous review-fix loop — do NOT just review and stop."
+    reminder: "This request matches assistant-review. You MUST load and follow this SKILL.md and its contracts before doing anything else. The skill runs an autonomous review-fix loop — do NOT just review and stop."
 ---
 
 # Autonomous Review Loop
@@ -19,7 +19,7 @@ This skill enforces strict contracts on inputs, outputs, loop gates, and reviewe
 
 | Contract | File | Purpose |
 |---|---|---|
-| **Input** | `contracts/input.yaml` | Scope, mode, and diff to resolve before entering the loop |
+| **Input** | `contracts/input.yaml` | Scope, mode, and review material snapshot to resolve before entering the loop |
 | **Output** | `contracts/output.yaml` | Final summary and verification artifacts |
 | **Phase Gates** | `contracts/phase-gates.yaml` | Per-round step assertions and loop invariants |
 | **Handoffs** | `contracts/handoffs.yaml` | Reviewer subagent dispatch and return schema |
@@ -36,9 +36,10 @@ You MUST run this loop autonomously from start to finish. Do NOT stop after one 
 ## Entry
 
 Determine the review scope:
-- If the user specified files or a diff → review those
+- If the user specified files, pasted content, or a diff → review that material
 - If there are uncommitted changes → review those (`git diff`)
 - If there's an active task journal (`.claude/task.md`) → review all changes from that task
+- If the user requests an audit of current file contents → review the relevant files even without a diff
 - Otherwise → ask the user what to review
 
 ## Refactor-Related Findings
@@ -52,7 +53,7 @@ Use refactor-related findings only for concrete actionable risk. Allowed risk ca
 - brittle testing
 - poor extension seam
 
-Every refactor-related finding MUST state the risk category, affected surface, evidence from the diff or review scope, and the smallest durable fix that addresses the risk within the normal finding text.
+Every refactor-related finding MUST state the risk category, affected surface, evidence from the review material, and the smallest durable fix that addresses the risk within the normal finding text.
 
 Do not use vague framing such as generic convention language, style, cleanliness, or generic improvement. Do not ask for broad cleanup when a smaller durable fix will remove the risk.
 
@@ -67,7 +68,7 @@ while round <= 5:
 
   1. REVIEW
      - Dispatch a Reviewer subagent (or self-review for small scope)
-     - Provide: full diff, previously_fixed list, round number
+     - Provide: review material snapshot, previously_fixed list, round number
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
@@ -103,7 +104,7 @@ while round <= 5:
      - Prioritize lowest-scoring rubric dimensions first
      - Add each fixed item to previously_fixed with description
 
-  4. VERIFY
+  4. VALIDATE
      - Run build + tests if applicable
      - If build/tests fail → fix and re-verify before continuing
      - For C# projects: run `bash ~/.claude/tools/cognitive-complexity/run-complexity.sh --changed` and flag methods exceeding threshold (adjust path for agent: `~/.codex/tools/...` or `~/.gemini/tools/...`)

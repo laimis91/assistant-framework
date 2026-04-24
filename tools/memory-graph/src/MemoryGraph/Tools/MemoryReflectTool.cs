@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MemoryGraph.Graph;
 using MemoryGraph.Server;
 using MemoryGraph.Storage;
 
@@ -11,12 +12,14 @@ namespace MemoryGraph.Tools;
 public sealed class MemoryReflectTool : IMemoryTool
 {
     private readonly MemoryStore _store;
+    private readonly KnowledgeGraph? _graph;
 
     public string Name => "memory_reflect";
 
-    public MemoryReflectTool(MemoryStore store)
+    public MemoryReflectTool(MemoryStore store, KnowledgeGraph? graph = null)
     {
         _store = store;
+        _graph = graph;
     }
 
     public ToolDefinition GetDefinition() => new()
@@ -126,6 +129,7 @@ public sealed class MemoryReflectTool : IMemoryTool
         };
 
         var reflexionId = _store.AddReflexion(entry);
+        entry.Id = reflexionId;
 
         // Extract strategy lessons from the reflexion
         var lessonsCreated = 0;
@@ -154,6 +158,12 @@ public sealed class MemoryReflectTool : IMemoryTool
         }
         _store.AddCalibration("plan", planAccuracy.ToString(), planAccuracy.ToString(), planAccuracy >= 4, projectType);
         _store.AddCalibration("first_attempt", firstAttempt.ToString(), firstAttempt.ToString(), firstAttempt, projectType);
+
+        if (_graph is not null)
+        {
+            MemoryGraphReconciler.EnsureReflexionGraphEntities(_graph, entry);
+            _graph.SaveIfDirty();
+        }
 
         return ToolHelpers.Success(new
         {

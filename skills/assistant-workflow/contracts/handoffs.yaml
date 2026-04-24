@@ -550,10 +550,25 @@ handoffs:
     to: Reviewer
     phase: REVIEW
     context_fields:
-      - name: diff
-        type: string
+      - name: review_material_snapshot
+        type: object
         required: true
-        description: "Full diff of all changes to review"
+        description: "Material to review: diff, file contents/excerpts, task snapshot, PR snapshot, or pasted content"
+        object_fields:
+          - name: kind
+            type: enum
+            required: true
+            enum_values: [diff, files, task_snapshot, pr_snapshot, content]
+          - name: summary
+            type: string
+            required: true
+          - name: material
+            type: string
+            required: true
+          - name: files
+            type: string[]
+            required: false
+            default: []
       - name: round
         type: int
         required: true

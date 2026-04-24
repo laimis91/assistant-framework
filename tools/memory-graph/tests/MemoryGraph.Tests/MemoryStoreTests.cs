@@ -1,4 +1,5 @@
 using MemoryGraph.Storage;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace MemoryGraph.Tests;
@@ -196,6 +197,67 @@ public sealed class MemoryStoreTests : IDisposable
         var results = _store.Search("Minimal APIs");
         Assert.Single(results);
         Assert.Equal("MyAPI", results[0].SourceId);
+    }
+
+    [Fact]
+    public void PruneGraphEntityIndex_RemovesEntityRowsMissingFromGraph()
+    {
+        _store.IndexInFts("entity", "LiveProject", "LiveProject", "live searchable content", "Project");
+        _store.IndexInFts("entity", "OrphanProject", "OrphanProject", "orphan searchable content", "Project");
+        _store.IndexInFts("reflexion", "1", "Orphan task", "orphan reflexion content", "feature");
+
+        var pruned = _store.PruneGraphEntityIndex(["LiveProject"]);
+
+        Assert.Equal(1, pruned);
+        Assert.Empty(_store.Search("orphan searchable", sourceType: "entity"));
+        Assert.Single(_store.Search("live searchable", sourceType: "entity"));
+        Assert.Single(_store.Search("orphan reflexion", sourceType: "reflexion"));
+    }
+
+    [Fact]
+    public void IndexGraphEntities_RemovesCaseVariantEntityRows()
+    {
+        _store.IndexInFts("entity", "api", "api", "stale lowercase api content", "Project");
+
+        _store.IndexGraphEntities([
+            ("API", "Project", new List<string> { "canonical uppercase api content" })
+        ]);
+
+        var results = _store.Search("api content", sourceType: "entity");
+        Assert.Single(results);
+        Assert.Equal("API", results[0].SourceId);
+        Assert.Equal("API", results[0].Title);
+    }
+
+    [Fact]
+    public void PruneGraphEntityIndex_RemovesCaseVariantEntityRows()
+    {
+        _store.IndexInFts("entity", "API", "API", "canonical uppercase api content", "Project");
+        InsertFtsRow("entity", "api", "api", "stale lowercase api content", "Project");
+
+        var pruned = _store.PruneGraphEntityIndex(["API"]);
+
+        Assert.Equal(1, pruned);
+        var results = _store.Search("api content", sourceType: "entity");
+        Assert.Single(results);
+        Assert.Equal("API", results[0].SourceId);
+    }
+
+    private void InsertFtsRow(string sourceType, string sourceId, string title, string content, string tags)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO memory_fts (source_type, source_id, title, content, tags)
+            VALUES (@type, @id, @title, @content, @tags)
+            """;
+        command.Parameters.AddWithValue("@type", sourceType);
+        command.Parameters.AddWithValue("@id", sourceId);
+        command.Parameters.AddWithValue("@title", title);
+        command.Parameters.AddWithValue("@content", content);
+        command.Parameters.AddWithValue("@tags", tags);
+        command.ExecuteNonQuery();
     }
 
     // ── Calibration tests ───────────────────────────────────────

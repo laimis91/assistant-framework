@@ -242,9 +242,9 @@ for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
 
     # Determine workflow line
     if [[ "$HAS_UI" == "true" ]]; then
-        WORKFLOW="Run: Plan → Design → Build & Test."
+        WORKFLOW="Run: Plan → Design → Build."
     else
-        WORKFLOW="Run: Plan → Build & Test."
+        WORKFLOW="Run: Plan → Build."
     fi
 
     # Build order note

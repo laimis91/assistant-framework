@@ -6,7 +6,7 @@ Read `references/sub-task-brief-template.md` for brief format.
 
 - 3-7 sub-tasks
 - Sub-task #1: shared contracts (interfaces, DTOs, entities) -- build first
-- Each sub-task: Plan --> [Design] --> Build & Test
+- Each sub-task: Plan --> [Design] --> Build
 - Git: integration branch + per-sub-task branches
 
 Automation scripts in `scripts/` (bash):

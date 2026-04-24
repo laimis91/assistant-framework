@@ -159,6 +159,8 @@ public sealed class MemoryStore : IDisposable
         return ReadReflexions(cmd);
     }
 
+    public List<ReflexionEntry> GetAllReflexions() => GetReflexions(limit: int.MaxValue);
+
     // ── Decisions ───────────────────────────────────────────────────
 
     public long AddDecision(DecisionEntry entry)
@@ -199,6 +201,8 @@ public sealed class MemoryStore : IDisposable
 
         return ReadDecisions(cmd);
     }
+
+    public List<DecisionEntry> GetAllDecisions() => GetDecisions(limit: int.MaxValue);
 
     // ── Strategy Lessons ────────────────────────────────────────────
 
@@ -334,7 +338,9 @@ public sealed class MemoryStore : IDisposable
     {
         // Remove existing entry if present
         using var delCmd = _db.CreateCommand();
-        delCmd.CommandText = "DELETE FROM memory_fts WHERE source_type = @type AND source_id = @id";
+        delCmd.CommandText = sourceType.Equals("entity", StringComparison.OrdinalIgnoreCase)
+            ? "DELETE FROM memory_fts WHERE source_type = @type AND source_id = @id COLLATE NOCASE"
+            : "DELETE FROM memory_fts WHERE source_type = @type AND source_id = @id";
         delCmd.Parameters.AddWithValue("@type", sourceType);
         delCmd.Parameters.AddWithValue("@id", sourceId);
         delCmd.ExecuteNonQuery();
@@ -408,6 +414,42 @@ public sealed class MemoryStore : IDisposable
         {
             IndexInFts("entity", name, name, string.Join(" ", observations), type);
         }
+    }
+
+    /// <summary>
+    /// Removes indexed graph entities that no longer exist in the graph.
+    /// </summary>
+    public int PruneGraphEntityIndex(IEnumerable<string> validEntityNames)
+    {
+        var valid = validEntityNames
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var stale = new List<string>();
+
+        using (var selectCmd = _db.CreateCommand())
+        {
+            selectCmd.CommandText = "SELECT source_id FROM memory_fts WHERE source_type = 'entity'";
+            using var reader = selectCmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var sourceId = reader.GetString(0);
+                if (!valid.TryGetValue(sourceId, out var canonical) ||
+                    !sourceId.Equals(canonical, StringComparison.Ordinal))
+                {
+                    stale.Add(sourceId);
+                }
+            }
+        }
+
+        foreach (var sourceId in stale)
+        {
+            using var deleteCmd = _db.CreateCommand();
+            deleteCmd.CommandText = "DELETE FROM memory_fts WHERE source_type = 'entity' AND source_id = @id";
+            deleteCmd.Parameters.AddWithValue("@id", sourceId);
+            deleteCmd.ExecuteNonQuery();
+        }
+
+        return stale.Count;
     }
 
     // ── Stats ───────────────────────────────────────────────────────

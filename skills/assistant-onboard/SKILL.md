@@ -1,12 +1,12 @@
 ---
 name: assistant-onboard
-description: "This skill performs systematic codebase learning for new projects. Maps structure, identifies patterns, generates project memory. Use when the user says 'learn this codebase', 'onboard', 'get familiar with', 'map this project', 'what does this project do', 'new to this repo', 'first time here'."
+description: "This skill performs systematic codebase learning for new projects. Maps structure, identifies patterns, and may generate project-local orientation artifacts. Use when the user says 'learn this codebase', 'onboard', 'get familiar with', 'map this project', 'what does this project do', 'new to this repo', 'first time here'."
 effort: high
 triggers:
   - pattern: "learn this codebase|onboard|get familiar with|map this project|what does this project do|new to this repo|first time"
     priority: 65
     min_words: 4
-    reminder: "This request matches assistant-onboard. Consider invoking the Skill tool with skill='assistant-onboard' for systematic codebase learning."
+    reminder: "This request matches assistant-onboard. Load and follow this SKILL.md and its contracts for systematic codebase learning."
 ---
 
 # Project Onboarding
@@ -22,7 +22,7 @@ triggers:
 - `key_files` entries include path and purpose; `conventions` entries include pattern and example
 - `questions` must be specific to unclear areas discovered during onboarding
 
-Systematic protocol for learning a new codebase. Produces structured project memory that accelerates all future work.
+Systematic protocol for learning a new codebase. Produces structured project orientation that accelerates future work; durable cross-session memory still lives in the knowledge graph.
 
 Core principle: **Understand before acting. Map the territory before navigating it.**
 
@@ -30,8 +30,8 @@ Core principle: **Understand before acting. Map the territory before navigating 
 
 - First time working with a repository
 - User explicitly asks to learn/understand a codebase
-- No `.claude/memory.md` exists for the project
-- Existing project memory is stale (> 60 days old with significant changes)
+- No project-local orientation artifact exists for the project
+- Existing project-local orientation is stale (> 60 days old with significant changes)
 
 ## Onboarding Protocol
 
@@ -92,11 +92,11 @@ List what you still don't understand:
 
 Present gaps to user for clarification.
 
-### Phase 5: Generate Project Memory
+### Phase 5: Generate Project Orientation
 
-Print: `>> Onboarding: Generating project memory`
+Print: `>> Onboarding: Generating project orientation`
 
-Create or update `.claude/memory.md`:
+Create or update `.claude/memory.md` as a generated project-local orientation artifact, not as the cross-session memory source of truth:
 
 ```markdown
 # [Project Name]
@@ -121,7 +121,7 @@ Create or update `.claude/memory.md`:
 - Testing: [framework, naming convention]
 - DI: [registration pattern]
 
-## Build & Test
+## Build and Test Commands
 ```bash
 [build command]
 [test command]
@@ -156,7 +156,7 @@ Size: [small/medium/large] (~[N] files, ~[N]k lines)
 Conventions: [key conventions]
 Unknowns: [any remaining gaps]
 
-Project memory saved to .claude/memory.md
+Project orientation saved to .claude/memory.md
 Ready to work on this codebase.
 ```
 
@@ -164,7 +164,7 @@ Ready to work on this codebase.
 
 When returning to a known project after significant time:
 
-1. Read existing `.claude/memory.md`
+1. Read existing `.claude/memory.md` if present
 2. Check `git log --since="[last session date]"` for changes
 3. Update memory with new information
 4. Print: `>> Refreshed project context — [N] changes since last session`

@@ -6,7 +6,7 @@ triggers:
   - pattern: "brainstorm|feature idea|what if we|how could we|possibilities for|options for|alternatives to|explore ways|what could|improve this|ideas for"
     priority: 55
     min_words: 4
-    reminder: "This request matches assistant-ideate. Consider invoking the Skill tool with skill='assistant-ideate' for structured brainstorming."
+    reminder: "This request matches assistant-ideate. Load and follow this SKILL.md and its contracts for structured brainstorming."
 ---
 
 # Idea Generation
@@ -176,7 +176,7 @@ Which resonates? Options:
 
 When brainstorming within an existing project:
 
-1. Read `.claude/memory.md` for project context
+1. Read `.claude/memory.md` for project-local orientation if present; use the knowledge graph for cross-session memory
 2. Scan for TODOs, FIXMEs, and complexity hotspots
 3. Check recent git history for momentum/direction
 4. Consider what the existing architecture enables vs. constrains

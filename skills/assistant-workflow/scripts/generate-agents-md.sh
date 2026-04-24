@@ -385,7 +385,7 @@ for agent_dir in "$HOME/.claude" "$HOME/.codex" "$HOME/.gemini"; do
 ## Development Workflow
 
 This project uses the AI-Assisted Development Workflow (assistant-workflow skill).
-Follow it for all code changes: Triage → Discover → Plan → [Design] → Build & Test → Document.
+Follow it for all code changes: Triage → Discover → [Decompose] → Plan → [Design] → Build → Review → Document.
 
 Key rules:
 - Never guess — ask before assuming
@@ -435,7 +435,7 @@ generate_content() {
 
 $DEP_RULES
 
-## Build & Test
+## Build
 
 \`\`\`bash
 # Build

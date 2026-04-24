@@ -74,10 +74,10 @@ if [[ -z "$TASK_FILE" ]]; then
     # This is the "always-on" enforcement layer
     context="WORKFLOW RULES (active every prompt):
 - Before ANY code change, state which phase you are in
-- Phases: TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST -> VERIFY -> DOCUMENT
+- Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
 - You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
-- Tests accompany features in the SAME step, not later.
-- After code changes, run the review cycle (not one-shot — loop until clean).
+- Tests are part of BUILD and accompany features in the SAME step, not later.
+- REVIEW is the post-build verification loop (not one-shot — loop until clean).
 - State your current phase before your next action."
 
     jq -cn --arg ctx "$context" '{
@@ -191,7 +191,7 @@ is_discovering="no"
 is_decomposing="no"
 is_planning="no"
 is_building="no"
-is_verifying="no"
+is_reviewing="no"
 if [[ "$status" == *"DISCOVERING"* ]]; then
     is_discovering="yes"
 fi
@@ -204,12 +204,12 @@ fi
 if [[ "$status" == *"BUILDING"* ]]; then
     is_building="yes"
 fi
-if [[ "$status" == *"VERIFYING"* ]]; then
-    is_verifying="yes"
+if [[ "$status" == *"REVIEWING"* ]]; then
+    is_reviewing="yes"
 fi
 
 requires_saved_clarification_state="no"
-if [[ "$is_medium_plus_task" == "yes" && ( "$is_discovering" == "yes" || "$is_decomposing" == "yes" || "$is_planning" == "yes" || "$is_building" == "yes" || "$is_verifying" == "yes" ) ]]; then
+if [[ "$is_medium_plus_task" == "yes" && ( "$is_discovering" == "yes" || "$is_decomposing" == "yes" || "$is_planning" == "yes" || "$is_building" == "yes" || "$is_reviewing" == "yes" ) ]]; then
     requires_saved_clarification_state="yes"
 fi
 if [[ "$has_saved_clarification_state" == "yes" ]]; then
@@ -255,10 +255,10 @@ context="WORKFLOW STATE (auto-injected every prompt):
 
 PHASE RULES (non-negotiable):
 1. Current phase is $status — stay in this phase until its exit criteria are met.
-2. Do NOT jump ahead. PLAN requires approval before BUILD. BUILD requires tests alongside code. VERIFY requires review loop (not one-shot).
+2. Do NOT jump ahead. PLAN requires approval before BUILD. BUILD includes tests alongside code. REVIEW requires the review loop (not one-shot).
 3. State your current phase before your next action.
 4. If you are in BUILD: every new component MUST have tests in the same step.
-5. If you are in VERIFY: run the review-fix loop (review -> fix -> re-review) until clean or max 5 rounds. A single review pass is NOT a review."
+5. If you are in REVIEW: run the review-fix loop (review -> fix -> re-review) until clean or max 5 rounds. A single review pass is NOT a review."
 
 if [[ "$clarification_gate_active" == "yes" ]]; then
     context+="
@@ -297,7 +297,7 @@ if [[ "$clarification_state_unsaved" == "yes" && "$requires_saved_clarification_
 WARNING: $status cannot continue until the task journal saves explicit clarification state."
 fi
 
-if [[ "$status" == *"BUILDING"* || "$status" == *"VERIFYING"* ]]; then
+if [[ "$status" == *"BUILDING"* || "$status" == *"REVIEWING"* ]]; then
     if [[ "$review_count" == "0" ]]; then
         context+="
 REMINDER: No reviews recorded yet. You MUST complete the review cycle before finishing."

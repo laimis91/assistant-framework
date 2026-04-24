@@ -11,6 +11,9 @@ namespace MemoryGraph.Tools;
 /// </summary>
 public sealed class MemorySearchTool : IMemoryTool
 {
+    private const int SearchResultLimit = 20;
+    private const int MaxFtsFetchLimit = 200;
+
     private readonly KnowledgeGraph _graph;
     private readonly MemoryStore? _store;
 
@@ -67,7 +70,8 @@ public sealed class MemorySearchTool : IMemoryTool
                     }
                 }
 
-                var ftsResults = _store.Search(query, sourceTypeFilter);
+                PruneStaleEntityFtsRows(sourceTypeFilter);
+                var ftsResults = SearchFtsWithLiveEntities(query, sourceTypeFilter);
 
                 if (ftsResults.Count > 0)
                 {
@@ -135,5 +139,42 @@ public sealed class MemorySearchTool : IMemoryTool
         }).ToList();
 
         return ToolHelpers.Success(new { results = graphResults, searchMode = "graph" });
+    }
+
+    private List<FtsResult> SearchFtsWithLiveEntities(string query, string? sourceTypeFilter)
+    {
+        if (_store is null)
+        {
+            return [];
+        }
+
+        var fetchLimit = SearchResultLimit;
+        while (true)
+        {
+            var fetched = _store.Search(query, sourceTypeFilter, fetchLimit);
+            var liveResults = fetched
+                .Where(r => r.SourceType != "entity" || _graph.GetEntity(r.SourceId) is not null)
+                .Take(SearchResultLimit)
+                .ToList();
+
+            if (liveResults.Count >= SearchResultLimit ||
+                fetched.Count < fetchLimit ||
+                fetchLimit >= MaxFtsFetchLimit)
+            {
+                return liveResults;
+            }
+
+            fetchLimit = Math.Min(fetchLimit * 2, MaxFtsFetchLimit);
+        }
+    }
+
+    private void PruneStaleEntityFtsRows(string? sourceTypeFilter)
+    {
+        if (_store is null || sourceTypeFilter is not (null or "entity"))
+        {
+            return;
+        }
+
+        _store.PruneGraphEntityIndex(_graph.GetAllEntities().Select(e => e.Name));
     }
 }

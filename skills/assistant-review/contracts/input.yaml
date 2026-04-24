@@ -10,29 +10,54 @@ fields:
   - name: review_scope
     type: enum
     required: true
-    enum_values: [files, diff, task, pr]
-    description: "What to review — specific files, uncommitted diff, task journal changes, or a PR"
+    enum_values: [files, changes, task, pr, content]
+    description: "What to review — specific files, uncommitted changes, task journal changes, a PR, or pasted/provided content"
     on_missing: infer
     infer_from: >
       User specified files → files.
-      Uncommitted changes exist (git diff non-empty) → diff.
+      User provided pasted content or an arbitrary text/file snapshot → content.
+      Uncommitted changes exist (git diff non-empty) → changes.
       Active task journal (.claude/task.md) exists → task.
       User provided PR number/URL → pr.
       None of the above → ask.
 
-  - name: diff_content
-    type: string
+  - name: review_material_snapshot
+    type: object
     required: true
-    description: "The actual diff to review — full text of changes"
-    validation: "Non-empty. Must contain actual code changes, not just whitespace."
+    description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
+    validation: "Non-empty. Must include enough material to support concrete file/content findings."
     on_missing: fail
-    notes: "Generated from review_scope: git diff, git diff for task files, or PR diff"
+    notes: "Generated from review_scope: git diff for changes, file contents for files, task/PR snapshot, or user-provided content."
+    object_fields:
+      - name: kind
+        type: enum
+        required: true
+        enum_values: [diff, files, task_snapshot, pr_snapshot, content]
+        description: "Shape of the review material"
+      - name: summary
+        type: string
+        required: true
+        description: "Concise description of what the snapshot covers"
+      - name: material
+        type: string
+        required: true
+        description: "Actual diff, file contents/excerpts, task or PR snapshot, or pasted content"
+      - name: files
+        type: string[]
+        required: false
+        default: []
+        description: "Known files covered by the snapshot"
+      - name: source_ref
+        type: string
+        required: false
+        default: null
+        description: "Optional PR URL, task journal path, command, or user-provided label"
 
   - name: scope_size
     type: enum
     required: true
     enum_values: [trivial, small, medium, large]
-    description: "Size of the change — determines whether subagents are dispatched"
+    description: "Size of the review scope — determines whether subagents are dispatched"
     on_missing: infer
     infer_from: >
       1-2 files, < 50 lines changed → trivial.
@@ -60,7 +85,7 @@ fields:
   - name: previously_fixed
     type: object[]
     required: false
-    description: "Items already fixed in prior review invocations (carries over from workflow Phase 5)"
+    description: "Items already fixed in prior review loops (carries over from workflow Build/Review)"
     default: []
     object_fields:
       - name: description
@@ -71,6 +96,6 @@ fields:
         required: true
 
 # Validation behavior:
-# 1. Resolve review_scope and diff_content before entering the loop
-# 2. If diff_content is empty after resolution, inform user "nothing to review" and exit
+# 1. Resolve review_scope and review_material_snapshot before entering the loop
+# 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
 # 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | files: {count}

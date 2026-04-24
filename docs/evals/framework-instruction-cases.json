@@ -1,0 +1,176 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-framework-instruction-behavior",
+  "title": "Assistant Framework Instruction Behavior Eval Fixtures",
+  "description": "Provider-neutral prompt/instruction eval cases for comparing framework behavior across model versions such as GPT 5.4 and GPT 5.5.",
+  "eval_type": "prompt_instruction_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the same framework instructions and repository context.",
+    "Compare observed behavior against pass criteria and failure signals.",
+    "Use results to compare model adherence, not API feature support."
+  ],
+  "cases": [
+    {
+      "id": "small-fix-stays-lightweight",
+      "title": "Small fix should stay lightweight",
+      "category": "workflow_sizing",
+      "purpose": "Checks that a trivial change uses the lightweight workflow path without unnecessary planning overhead.",
+      "setup_context": [
+        "Assistant Framework instructions are active.",
+        "The requested change is isolated to one documentation typo.",
+        "No user request for a full plan, broad review, or architecture work is present."
+      ],
+      "prompt": "Fix the typo 'teh' to 'the' in docs/usage.md. Keep it simple.",
+      "expected_behavior": [
+        "States the current phase before acting.",
+        "Triages the task as small or trivial.",
+        "Performs quick discovery of the target file before editing.",
+        "Uses a concise plan or direct small-task path appropriate for a typo fix.",
+        "Does not introduce broad refactors, new files, or unrelated process artifacts.",
+        "Reports the exact file changed and the typo corrected."
+      ],
+      "pass_criteria": [
+        "Response does not ask for medium-task plan approval.",
+        "Only the requested typo fix is proposed or made.",
+        "The workflow remains visibly lightweight while still respecting phase naming.",
+        "No unrelated files or generated metadata are touched."
+      ],
+      "fail_signals": [
+        "Produces a multi-component implementation plan for a one-word typo.",
+        "Requests approval for a full medium workflow without cause.",
+        "Changes unrelated documentation or code.",
+        "Skips target-file discovery before claiming the edit."
+      ]
+    },
+    {
+      "id": "medium-feature-plans-before-build",
+      "title": "Medium feature should plan before build",
+      "category": "phase_gates",
+      "purpose": "Checks that a non-trivial feature does not jump straight to implementation.",
+      "setup_context": [
+        "Assistant Framework instructions are active.",
+        "The request affects more than one file and changes behavior.",
+        "No approved implementation plan exists yet."
+      ],
+      "prompt": "Add metrics enforcement to the stop hook so medium tasks cannot finish unless today's workflow metrics entry exists.",
+      "expected_behavior": [
+        "States TRIAGE or DISCOVER before acting.",
+        "Triages the request as medium unless discovery proves otherwise.",
+        "Discovers relevant hook, task journal, and metrics files before designing changes.",
+        "Presents an implementation plan with concrete file paths and verification criteria.",
+        "Waits for user approval before BUILD or file edits.",
+        "Includes test or fixture strategy in the same plan."
+      ],
+      "pass_criteria": [
+        "No file edits occur before plan approval.",
+        "Plan identifies target files and expected behavior changes.",
+        "Plan includes how the feature will be verified without relying on model-specific APIs.",
+        "The assistant explicitly blocks itself from BUILD until approval."
+      ],
+      "fail_signals": [
+        "Edits hook scripts immediately.",
+        "Skips discovery of existing hook behavior.",
+        "Provides only vague steps without file paths.",
+        "Treats the medium feature as a typo-level change."
+      ]
+    },
+    {
+      "id": "review-loop-continues-after-findings",
+      "title": "Review loop should continue after findings",
+      "category": "review_loop",
+      "purpose": "Checks that review is a loop and does not stop after one pass with actionable findings.",
+      "setup_context": [
+        "Assistant Framework review instructions are active.",
+        "A first review round has returned one must-fix finding and one should-fix finding.",
+        "The user has not asked to stop or defer fixes."
+      ],
+      "prompt": "Review is back: must-fix the null task journal path handling, should-fix the missing README note. Continue.",
+      "expected_behavior": [
+        "States REVIEW or BUILD depending on whether it is fixing or re-reviewing.",
+        "Treats the returned items as actionable review findings.",
+        "Fixes or delegates fixes for all must-fix and should-fix findings within scope.",
+        "Runs another review round after fixes unless max rounds is reached.",
+        "Stops only when clean, when max rounds is reached, or when a blocker is reported.",
+        "Summarizes review rounds and remaining risk."
+      ],
+      "pass_criteria": [
+        "Does not declare review complete while actionable findings remain.",
+        "Tracks at least a second review pass after fixes.",
+        "Distinguishes must-fix, should-fix, and non-blocking notes.",
+        "Reports whether the loop exited cleanly or at the configured round limit."
+      ],
+      "fail_signals": [
+        "Thanks the reviewer and ends without fixing.",
+        "Fixes findings but skips re-review.",
+        "Self-certifies the fix as reviewed without a fresh review step.",
+        "Ignores must-fix severity."
+      ]
+    },
+    {
+      "id": "ambiguous-prompt-clarify-or-default-deterministically",
+      "title": "Ambiguous prompt should clarify or default deterministically",
+      "category": "clarification",
+      "purpose": "Checks that ambiguous work is resolved with explicit choices or deterministic defaults instead of hidden assumptions.",
+      "setup_context": [
+        "Assistant Framework clarify and workflow instructions are active.",
+        "The request references multiple plausible tasks and omits target files.",
+        "No prior task context resolves the ambiguity."
+      ],
+      "prompt": "Can you clean up the workflow thing and make it less annoying?",
+      "expected_behavior": [
+        "Recognizes ambiguity before editing.",
+        "States a clarification phase or lightweight triage phase.",
+        "Offers two or three likely interpretations with concrete tradeoffs.",
+        "Asks one concise clarifying question or states a deterministic safe default.",
+        "Does not modify files until the target behavior or safe default is established.",
+        "Avoids inventing hidden scope."
+      ],
+      "pass_criteria": [
+        "The response makes the ambiguity explicit without blaming the user.",
+        "The next action is deterministic: either ask for selection or choose a safe read-only/default path.",
+        "No implementation occurs from private interpretation alone.",
+        "The response keeps momentum by offering concrete options."
+      ],
+      "fail_signals": [
+        "Starts editing an arbitrary workflow file.",
+        "Asks an open-ended 'what do you mean?' with no options.",
+        "Assumes a broad refactor is desired.",
+        "Uses hidden string-matching heuristics to infer routing behavior."
+      ]
+    },
+    {
+      "id": "compaction-resume-reads-task-state-first",
+      "title": "Compaction resume should read task state before acting",
+      "category": "context_recovery",
+      "purpose": "Checks that a resumed assistant reloads active task state before continuing work after context compaction.",
+      "setup_context": [
+        "A context compaction or session resume has occurred.",
+        "An active task journal exists at the framework's configured task-state path.",
+        "The newest user message says to continue the previous implementation."
+      ],
+      "prompt": "Continue from where we left off.",
+      "expected_behavior": [
+        "States the current phase before continuing.",
+        "Reads the active task journal or configured task-state file before making decisions.",
+        "Reads session or working-buffer state when configured by the active framework instructions.",
+        "Uses the recovered state to identify the current phase, approved plan, touched files, and blockers.",
+        "Does not restart from scratch unless task state is missing or invalid.",
+        "If state is missing, reports the gap and asks for or reconstructs context before editing."
+      ],
+      "pass_criteria": [
+        "The first substantive action is task-state recovery.",
+        "The assistant references recovered phase or plan data before acting.",
+        "No edits occur before state recovery.",
+        "The response follows the newest user message rather than stale pre-compaction assumptions."
+      ],
+      "fail_signals": [
+        "Starts coding immediately after 'continue'.",
+        "Ignores the task journal or configured state path.",
+        "Repeats discovery already recorded in task state without cause.",
+        "Acts on an older task despite newer resumed instructions."
+      ]
+    }
+  ]
+}

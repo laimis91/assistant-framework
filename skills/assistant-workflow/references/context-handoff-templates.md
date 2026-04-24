@@ -31,12 +31,12 @@ Previous session summary:
 Continue from [specific step or phase].
 ```
 
-## Template 2: Mid-Build & Test handoff
+## Template 2: Mid-Build handoff
 
 When context is getting long during implementation:
 
 ```
-Continuing Build & Test on [project name].
+Continuing Build on [project name].
 
 Requirements: [1-3 sentence summary]
 Architecture: [pattern in use]
@@ -71,7 +71,7 @@ When starting a decomposed sub-task:
 [Paste the Sub-Task Brief from the decomposition phase]
 
 The repo is attached. Run the standard workflow:
-Plan → [Design if UI] → Build & Test.
+Plan → [Design if UI] → Build.
 
 Follow project conventions. Do not modify files outside your scope.
 Work on branch: [branch name].

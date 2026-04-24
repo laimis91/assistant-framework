@@ -79,12 +79,18 @@ Log($"SQLite database: {dbPath}");
 
 using var memoryStore = new MemoryStore(dbPath);
 
+// Reconcile authoritative relational rows into graph before indexing graph entities.
+var reconciliation = MemoryGraphReconciler.ReconcileFromStore(graph, memoryStore);
+graph.SaveIfDirty();
+Log($"Reconciled SQLite memory: {reconciliation.ProjectsCreated} projects, {reconciliation.InsightsCreated} insights, {reconciliation.RelationsCreated} relations");
+
 // Index existing graph entities into FTS5 for unified search
 var entityData = graph.GetAllEntities()
     .Select(e => (e.Name, e.Type.ToString(), e.Observations))
     .ToList();
+var prunedEntities = memoryStore.PruneGraphEntityIndex(entityData.Select(e => e.Name));
 memoryStore.IndexGraphEntities(entityData);
-Log($"FTS5 index: {entityData.Count} graph entities indexed");
+Log($"FTS5 index: {entityData.Count} graph entities indexed, {prunedEntities} stale entity rows pruned");
 
 // ── Register tools ─────────────────────────────────────────────
 
@@ -99,7 +105,7 @@ registry.Register(new MemoryRemoveRelationTool(graph));
 registry.Register(new MemoryGraphTool(graph));
 
 // v2 tools — reflexion, decisions, patterns, consolidation, stats, trends
-registry.Register(new MemoryReflectTool(memoryStore));
+registry.Register(new MemoryReflectTool(memoryStore, graph));
 registry.Register(new MemoryDecideTool(memoryStore));
 registry.Register(new MemoryPatternTool(memoryStore));
 registry.Register(new MemoryConsolidateTool(memoryStore));

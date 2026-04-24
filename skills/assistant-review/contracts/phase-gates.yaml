@@ -19,11 +19,11 @@ gates:
     exit_assertions:
 
       - id: E1
-        check: "review_scope is resolved to one of: files, diff, task, pr"
+        check: "review_scope is resolved to one of: files, changes, task, pr, content"
         on_fail: "Determine scope from git state and task journal, or ask user"
 
       - id: E2
-        check: "diff_content is non-empty — there are actual code changes to review"
+        check: "review_material_snapshot.material is non-empty — there is actual material to review"
         on_fail: "Inform user 'nothing to review' and exit without entering the loop"
 
       - id: E3
@@ -45,10 +45,10 @@ gates:
       - id: RS1
         check: "For medium+ scope: a fresh Reviewer subagent was dispatched (not reusing prior context)"
         condition: "scope_size in [medium, large]"
-        on_fail: "Dispatch a new Reviewer subagent with the current diff and previously_fixed list"
+        on_fail: "Dispatch a new Reviewer subagent with the current review material snapshot and previously_fixed list"
 
       - id: RS2
-        check: "Reviewer received: diff, round number, previously_fixed list, and confidence_threshold"
+        check: "Reviewer received: review_material_snapshot, round number, previously_fixed list, and confidence_threshold"
         on_fail: "Re-dispatch with all required context fields per handoffs contract"
 
       - id: RS3
@@ -118,12 +118,12 @@ gates:
 
       - id: F3
         check: "Each fixed item was added to previously_fixed with description and round number"
-        on_fail: "Update previously_fixed list before proceeding to VERIFY"
+        on_fail: "Update previously_fixed list before proceeding to VALIDATE"
 
   # ─────────────────────────────────────────────
-  # VERIFY step — per round (review-fix mode only)
+  # VALIDATE step — per round (review-fix mode only)
   # ─────────────────────────────────────────────
-  - phase: VERIFY_STEP
+  - phase: VALIDATE_STEP
     condition: "mode == review-fix"
     checkpoint_start: null
     checkpoint_end: null

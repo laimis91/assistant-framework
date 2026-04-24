@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "This skill provides a structured development workflow with phases: triage, discover, plan, build, test, review, document. Use when the user says 'build', 'implement', 'fix', 'refactor', 'plan', 'create', 'add feature', 'idea', 'how should I approach', 'break this down', 'start working on'. Also activates for any non-trivial development task requiring discovery and planning before coding."
+description: "This skill provides a structured development workflow with phases: triage, discover, decompose when needed, plan, design when needed, build, review, document. Tests are part of Build; Review is the post-build verification loop. Use when the user says 'build', 'implement', 'fix', 'refactor', 'plan', 'create', 'add feature', 'idea', 'how should I approach', 'break this down', 'start working on'. Also activates for any non-trivial development task requiring discovery and planning before coding."
 effort: high
 requires:
   - assistant-memory
@@ -8,7 +8,7 @@ triggers:
   - pattern: "implement feature|implement the|implementing|fix bug|fix the|build feature|build the|build a|build an|refactor the|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make)|phase [0-9]"
     priority: 40
     min_words: 4
-    reminder: "This request matches assistant-workflow. You MUST invoke the Skill tool with skill='assistant-workflow' BEFORE writing any code. At minimum: triage the task size, then build with tests. Skipping workflow for speed is explicitly prohibited — see CLAUDE.md."
+    reminder: "This request matches assistant-workflow. You MUST load and follow this SKILL.md and its contracts before acting. At minimum: triage the task size, then build with tests included in the Build phase. Skipping workflow for speed is explicitly prohibited."
 ---
 
 # Development Workflow
@@ -108,10 +108,10 @@ Assess task size. This determines which phases run.
 
 | Size | Phases |
 |---|---|
-| **Small** (bugfix, typo, config, one-file) | Discover (quick) -> Plan (lightweight) -> Build & Test -> Review -> Document |
-| **Medium** (feature, refactor, endpoint) | Discover -> Decompose -> Plan -> [Design] -> Build & Test -> Review -> Document |
-| **Large** (new project, multi-module) | Discover -> Decompose -> Plan -> Design -> Build & Test -> Review -> Document |
-| **Mega** (rewrite, 10+ files across layers) | Discover -> Decompose -> sub-tasks -> Integrate -> Review -> Document |
+| **Small** (bugfix, typo, config, one-file) | Discover (quick) -> Plan (lightweight) -> Build -> Review -> Document |
+| **Medium** (feature, refactor, endpoint) | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
+| **Large** (new project, multi-module) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
+| **Mega** (rewrite, 10+ files across layers) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
 
 [Design] = include if task has UI work, skip for backend-only.
 
@@ -132,8 +132,8 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 | **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Approval gate. |
 | **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Approval gate. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
-| **Build & Test** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
-| **Review** | All sizes | Stage 1: Spec Review. Stage 2: invoke `assistant-review` skill. |
+| **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
+| **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
 For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
@@ -141,7 +141,7 @@ For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 
 ## Context Management
 
-- **On continuation**: read `.claude/task.md` FIRST — it has the full task state
+- **On continuation**: read the active project task journal FIRST — it has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
 - Mega: each sub-task gets its own brief and context.

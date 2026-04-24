@@ -68,7 +68,7 @@ Include the actual code/signatures, not just names.]
 
 ### What to do
 Read `.claude/memory.md` for project context before starting.
-Run: Plan → [Design →] Build & Test.
+Run: Plan → [Design →] Build.
 Follow project conventions.
 Add code comments where intent isn't obvious.
 Do NOT update README, CHANGELOG, or architecture docs —
