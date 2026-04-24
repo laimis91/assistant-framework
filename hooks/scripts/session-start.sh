@@ -60,7 +60,7 @@ context_parts=()
 # 1. Check for active task journal
 TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
-if [[ -f "$TASK_FILE" ]]; then
+if [[ -f "$TASK_FILE" ]] && ! assistant_task_journal_completed "$TASK_FILE"; then
     task_content=$(cat "$TASK_FILE")
     assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
     context_parts+=("ACTIVE TASK JOURNAL (read this first — it has full task state):")

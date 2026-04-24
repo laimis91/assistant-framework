@@ -158,6 +158,15 @@ strip_memory_protocol_from_file() {
                 || index(line, "<!-- Appended by Assistant Framework install.") == 1
         }
 
+        function has_legacy_protocol_preamble(from, to,    k) {
+            for (k = from; k <= to; k++) {
+                if (lines[k] == "# Assistant Framework — Memory Protocol") {
+                    return 1
+                }
+            }
+            return 0
+        }
+
         { lines[NR] = $0 }
 
         END {
@@ -168,13 +177,12 @@ strip_memory_protocol_from_file() {
 
                 start = i
                 for (j = i - 1; j >= 1; j--) {
-                    if (lines[j] == "# Assistant Framework — Memory Protocol") {
-                        start = j
-                        break
-                    }
                     if (!is_legacy_protocol_preamble_line(lines[j])) {
                         break
                     }
+                }
+                if (has_legacy_protocol_preamble(j + 1, i - 1)) {
+                    start = j + 1
                 }
 
                 end = i
@@ -201,6 +209,32 @@ strip_memory_protocol_from_file() {
             }
         }
     ' "$instructions_file" > "${instructions_file}.tmp" && mv "${instructions_file}.tmp" "$instructions_file"
+}
+
+cleanup_installed_tool_build_artifacts() {
+    local tools_target="$1"
+    local artifact_dir
+    local found=false
+
+    if [[ ! -d "$tools_target" ]]; then
+        if $DRY_RUN; then
+            dry "Would remove stale tool build artifacts under $tools_target/*/: .publish, bin, obj"
+        fi
+        return 0
+    fi
+
+    while IFS= read -r artifact_dir; do
+        found=true
+        if $DRY_RUN; then
+            dry "Remove stale tool build artifact: $artifact_dir"
+        else
+            rm -rf "$artifact_dir"
+        fi
+    done < <(find "$tools_target" -mindepth 2 -type d \( -name ".publish" -o -name "bin" -o -name "obj" \) -prune -print)
+
+    if $DRY_RUN && ! $found; then
+        dry "No stale tool build artifacts found under $tools_target"
+    fi
 }
 
 # ── Validate ──────────────────────────────────────────────────────────────────
@@ -382,6 +416,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     if $DRY_RUN; then
         dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
+        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
     else
         mkdir -p "$TOOLS_TARGET"
         rsync -a --delete \
@@ -390,6 +425,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='bin' \
             --exclude='obj' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
+        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
 
         # Make scripts executable
         if compgen -G "$TOOLS_TARGET"/*/*.sh >/dev/null 2>&1; then
@@ -685,14 +721,18 @@ if $INSTALL_HOOKS; then
     if [[ -n "$HOOKS_SETTINGS" && -f "$HOOKS_SETTINGS" ]]; then
         if $DRY_RUN; then
             dry "Copy hook scripts to $HOOKS_TARGET/"
-            dry "Merge hook configuration into $SETTINGS_FILE"
+            if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
+                dry "Merge hook configuration into $AGENT_HOME/hooks.json"
+            else
+                dry "Merge hook configuration into $SETTINGS_FILE"
+            fi
         else
             # Copy hook scripts
             mkdir -p "$HOOKS_TARGET"
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
-                    # Codex experimental hooks: only SessionStart, UserPromptSubmit, Stop
+                    # Codex experimental hooks: SessionStart, UserPromptSubmit, Stop, PreToolUse.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
                             session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
@@ -725,15 +765,55 @@ if $INSTALL_HOOKS; then
                 CODEX_HOOKS_FILE="$AGENT_HOME/hooks.json"
                 if [[ -f "$CODEX_HOOKS_FILE" ]] && command -v jq &>/dev/null; then
                     # Merge with existing hooks.json
-                    existing_hooks=$(jq '.hooks // {}' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
+                    existing_hooks=$(jq '
+                        (.hooks // {})
+                        | with_entries(
+                            .value = (
+                                (.value | if type == "array" then . else [.] end)
+                                | map(
+                                    .hooks = (
+                                        (.hooks // [])
+                                        | map(select((.command // "") | startswith("$HOME/.codex/hooks/assistant/") | not))
+                                    )
+                                )
+                                | map(select((.hooks // []) | length > 0))
+                            )
+                        )
+                        | with_entries(select((.value // []) | length > 0))
+                    ' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
                     new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
                     merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
+                        def arrayify:
+                            if type == "array" then . else [.] end;
+                        def unique_commands:
+                            reduce .[] as $hook ({seen: {}, out: []};
+                                ($hook.command? // "") as $command
+                                | if $command == "" then
+                                    .out += [$hook]
+                                elif .seen[$command] then
+                                    .
+                                else
+                                    .seen[$command] = true | .out += [$hook]
+                                end
+                            ) | .out;
+                        def merge_matcher_groups:
+                            reduce .[] as $group ({seen: {}, out: []};
+                                ($group | .hooks = ((.hooks // []) | arrayify | unique_commands)) as $normalized
+                                | ($normalized.matcher // "") as $matcher
+                                | if (($normalized.hooks // []) | length) == 0 then
+                                    .
+                                elif .seen[$matcher] == null then
+                                    .seen[$matcher] = (.out | length) | .out += [$normalized]
+                                else
+                                    .out[.seen[$matcher]].hooks = ((.out[.seen[$matcher]].hooks + $normalized.hooks) | unique_commands)
+                                end
+                            ) | .out;
                         ($a | keys) + ($b | keys) | unique | map(
                             . as $k |
                             {key: $k, value: ([
                                 ($a[$k] // [] | if type == "array" then . else [.] end),
                                 ($b[$k] // [] | if type == "array" then . else [.] end)
-                            ] | add | unique_by(.command))}
+                            ] | add | merge_matcher_groups)}
                         ) | from_entries
                     ')
                     if jq -n --argjson hooks "$merged" '{hooks: $hooks}' > "${CODEX_HOOKS_FILE}.tmp" \
@@ -996,8 +1076,8 @@ if $INSTALL_HOOKS; then
     echo ""
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
-        echo "  (Codex: SessionStart, UserPromptSubmit, Stop — 3 events, 6 hook scripts)"
-        echo "  Enforcement: skill-router + workflow-enforcer + stop-review + harness-gate"
+        echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, 7 hook commands)"
+        echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate"
     fi
 fi
 if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then

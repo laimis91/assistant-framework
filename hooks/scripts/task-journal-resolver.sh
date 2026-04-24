@@ -54,6 +54,31 @@ assistant_walk_for_task_journal() {
     return 1
 }
 
+assistant_walk_for_active_task_journal() {
+    local dir task_file
+    dir=$(assistant_canonical_dir "${1:-$(pwd)}")
+
+    while [[ -n "$dir" && "$dir" != "/" ]]; do
+        while IFS= read -r state_dir; do
+            task_file="$dir/$state_dir/task.md"
+            if [[ -f "$task_file" ]] && assistant_emit_active_task_journal "$task_file" "$dir"; then
+                return 0
+            fi
+        done < <(assistant_task_state_dirs)
+
+        dir=$(dirname "$dir")
+    done
+
+    while IFS= read -r state_dir; do
+        task_file="/$state_dir/task.md"
+        if [[ -f "$task_file" ]] && assistant_emit_active_task_journal "$task_file" "/"; then
+            return 0
+        fi
+    done < <(assistant_task_state_dirs)
+
+    return 1
+}
+
 assistant_git_root() {
     local dir="${1:-$(pwd)}"
     git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true
@@ -65,8 +90,12 @@ assistant_resolve_project_dir() {
     local task_file=""
     local git_root=""
 
-    if [[ -n "$env_project" && -d "$env_project" ]]; then
-        assistant_canonical_dir "$env_project"
+    if [[ -n "$env_project" ]]; then
+        if [[ -d "$env_project" ]]; then
+            assistant_canonical_dir "$env_project"
+        else
+            printf '%s\n' "$env_project"
+        fi
         return 0
     fi
 
@@ -110,6 +139,67 @@ assistant_safe_name() {
     printf '%s' "$1" | tr '/[:space:]' '__' | tr -cd '[:alnum:]_.-'
 }
 
+assistant_task_journal_completed() {
+    local task_file="${1:-}"
+    local status_token=""
+
+    [[ -n "$task_file" && -f "$task_file" ]] || return 1
+
+    status_token=$(
+        awk '
+            $0 ~ /^(#+[[:space:]]*)?Status:/ {
+                sub(/^(#+[[:space:]]*)?Status:[[:space:]]*/, "", $0)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                split($0, parts, /[[:space:]]+/)
+                print toupper(parts[1])
+                exit
+            }
+        ' "$task_file" 2>/dev/null
+    )
+
+    if [[ "$status_token" == "DONE" ]]; then
+        return 0
+    fi
+
+    if grep -qF 'WORKFLOW COMPLETE' "$task_file" 2>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+assistant_purge_workflow_cache() {
+    local project_dir="${1:-}"
+    local cache_dir path_hash repo_name repo_key
+
+    [[ -n "$project_dir" ]] || return 0
+
+    project_dir=$(assistant_canonical_dir "$project_dir")
+    path_hash=$(printf '%s' "$project_dir" | cksum | awk '{print $1}')
+    repo_name=$(basename "$project_dir")
+    repo_key=$(assistant_safe_name "$repo_name")
+
+    while IFS= read -r cache_dir; do
+        [[ -d "$cache_dir" ]] || continue
+        rm -f "$cache_dir/path-$path_hash.task.md" "$cache_dir/name-$repo_key.task.md" 2>/dev/null || true
+    done < <(assistant_workflow_cache_dirs)
+}
+
+assistant_emit_active_task_journal() {
+    local task_file="${1:-}"
+    local project_dir="${2:-}"
+
+    [[ -f "$task_file" ]] || return 1
+
+    if assistant_task_journal_completed "$task_file"; then
+        assistant_purge_workflow_cache "${project_dir:-$(dirname "$(dirname "$task_file")")}"
+        return 1
+    fi
+
+    printf '%s\n' "$task_file"
+    return 0
+}
+
 assistant_best_effort_cache_write() {
     local task_file="$1"
     local cache_file="$2"
@@ -124,6 +214,10 @@ assistant_cache_task_journal() {
 
     [[ -f "$task_file" ]] || return 0
     [[ "$task_file" == */cache/workflow-state/*.task.md ]] && return 0
+    if assistant_task_journal_completed "$task_file"; then
+        assistant_purge_workflow_cache "$project_dir"
+        return 0
+    fi
 
     project_dir=$(assistant_canonical_dir "$project_dir")
     path_hash=$(printf '%s' "$project_dir" | cksum | awk '{print $1}')
@@ -149,19 +243,40 @@ assistant_restore_cached_task_journal() {
             project_dir=$(assistant_canonical_dir "$project_dir")
             path_hash=$(printf '%s' "$project_dir" | cksum | awk '{print $1}')
             cache_file="$cache_dir/path-$path_hash.task.md"
-            [[ -f "$cache_file" ]] && { printf '%s\n' "$cache_file"; return 0; }
+            if [[ -f "$cache_file" ]]; then
+                if assistant_task_journal_completed "$cache_file"; then
+                    rm -f "$cache_file" 2>/dev/null || true
+                else
+                    printf '%s\n' "$cache_file"
+                    return 0
+                fi
+            fi
         fi
 
         git_root=$(assistant_git_root "$start_dir")
         if [[ -n "$git_root" ]]; then
             path_hash=$(printf '%s' "$(assistant_canonical_dir "$git_root")" | cksum | awk '{print $1}')
             cache_file="$cache_dir/path-$path_hash.task.md"
-            [[ -f "$cache_file" ]] && { printf '%s\n' "$cache_file"; return 0; }
+            if [[ -f "$cache_file" ]]; then
+                if assistant_task_journal_completed "$cache_file"; then
+                    rm -f "$cache_file" 2>/dev/null || true
+                else
+                    printf '%s\n' "$cache_file"
+                    return 0
+                fi
+            fi
 
             repo_name=$(basename "$git_root")
             repo_key=$(assistant_safe_name "$repo_name")
             cache_file="$cache_dir/name-$repo_key.task.md"
-            [[ -f "$cache_file" ]] && { printf '%s\n' "$cache_file"; return 0; }
+            if [[ -f "$cache_file" ]]; then
+                if assistant_task_journal_completed "$cache_file"; then
+                    rm -f "$cache_file" 2>/dev/null || true
+                else
+                    printf '%s\n' "$cache_file"
+                    return 0
+                fi
+            fi
         fi
 
         search_dir=$(assistant_canonical_dir "$start_dir")
@@ -169,7 +284,14 @@ assistant_restore_cached_task_journal() {
             repo_name=$(basename "$search_dir")
             repo_key=$(assistant_safe_name "$repo_name")
             cache_file="$cache_dir/name-$repo_key.task.md"
-            [[ -f "$cache_file" ]] && { printf '%s\n' "$cache_file"; return 0; }
+            if [[ -f "$cache_file" ]]; then
+                if assistant_task_journal_completed "$cache_file"; then
+                    rm -f "$cache_file" 2>/dev/null || true
+                else
+                    printf '%s\n' "$cache_file"
+                    return 0
+                fi
+            fi
             search_dir=$(dirname "$search_dir")
         done
     done < <(assistant_workflow_cache_dirs)
@@ -191,13 +313,18 @@ assistant_find_task_journal() {
     if [[ -n "$project_dir" ]]; then
         while IFS= read -r state_dir; do
             if [[ -f "$project_dir/$state_dir/task.md" ]]; then
-                printf '%s\n' "$project_dir/$state_dir/task.md"
-                return 0
+                if assistant_emit_active_task_journal "$project_dir/$state_dir/task.md" "$project_dir"; then
+                    return 0
+                fi
             fi
         done < <(assistant_task_state_dirs)
     fi
 
-    task_file=$(assistant_walk_for_task_journal "$start_dir" || true)
+    if [[ "$has_explicit_project" == "true" ]]; then
+        return 1
+    fi
+
+    task_file=$(assistant_walk_for_active_task_journal "$start_dir" || true)
     if [[ -n "$task_file" ]]; then
         printf '%s\n' "$task_file"
         return 0
@@ -207,8 +334,9 @@ assistant_find_task_journal() {
     if [[ -n "$git_root" ]]; then
         while IFS= read -r state_dir; do
             if [[ -f "$git_root/$state_dir/task.md" ]]; then
-                printf '%s\n' "$git_root/$state_dir/task.md"
-                return 0
+                if assistant_emit_active_task_journal "$git_root/$state_dir/task.md" "$git_root"; then
+                    return 0
+                fi
             fi
         done < <(assistant_task_state_dirs)
     fi

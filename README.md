@@ -77,7 +77,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-memory
-Memory management via knowledge graph (`~/.{agent}/memory/graph.jsonl`). Records rules, preferences, insights, and project context. Survives skill reinstalls.
+Memory management via SQLite-backed knowledge graph (`~/.{agent}/memory/memory.db`). Records rules, preferences, insights, and project context. Survives skill reinstalls. Legacy `graph.jsonl` files are imported or used as fallback seed compatibility only.
 
 Triggers on: remember this, save insight, update memory, preferences
 
@@ -255,8 +255,8 @@ tools/
     DESIGN.md                      <- Architecture and data model
     run-memory-graph.sh            <- Build-and-run script
     src/MemoryGraph/               <- C# MCP server (stdio, JSON-RPC)
-      Graph/                       <- In-memory knowledge graph + JSONL persistence
-      Storage/                     <- SQLite + FTS5 store (reflexions, decisions, strategies)
+      Graph/                       <- In-memory knowledge graph abstractions + legacy JSONL compatibility
+      Storage/                     <- Authoritative SQLite + FTS5 store (graph memory, reflexions, decisions, strategies)
       Tools/                       <- 13 MCP tool implementations
       Server/                      <- JSON-RPC message loop
     tests/MemoryGraph.Tests/       <- 65 xUnit tests

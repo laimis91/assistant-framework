@@ -97,6 +97,13 @@ is_valid_json() {
     echo "$1" | jq empty 2>/dev/null
 }
 
+clear_workflow_cache() {
+    rm -rf \
+        "$TEST_AGENT_HOME/.codex/cache/workflow-state" \
+        "$TEST_AGENT_HOME/.claude/cache/workflow-state" \
+        "$TEST_AGENT_HOME/.gemini/cache/workflow-state"
+}
+
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 # Create temp project directory with mock data
@@ -296,6 +303,117 @@ if test_start "session-start: Codex, with graph rules → compact MCP retrieval 
         pass
     else
         fail "exit=$HOOK_EXIT, expected compact Codex MCP instruction without rule body leakage"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, Status DONE task journal → no active task journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Status: DONE
+Step: old completed work
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" != *"ACTIVE TASK JOURNAL"* ]] \
+        && [[ "$additional_context" != *"old completed work"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, completed task journal was injected"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, WORKFLOW COMPLETE task journal → no active task journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Status: DOCUMENTED
+Step: old completed marker work
+--- WORKFLOW COMPLETE ---
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" != *"ACTIVE TASK JOURNAL"* ]] \
+        && [[ "$additional_context" != *"old completed marker work"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, completed marker task journal was injected"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, completed state dir with active state dir → active journal wins"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+# Task
+Status: DONE
+Step: old completed work
+EOF
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Status: BUILDING
+Step: active codex work
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
+        && [[ "$additional_context" == *"active codex work"* ]] \
+        && [[ "$additional_context" != *"old completed work"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, active task journal did not win over completed journal"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, Status NOT DONE task journal → active task journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Status: NOT DONE
+Step: still active work
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
+        && [[ "$additional_context" == *"still active work"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, Status: NOT DONE was treated as completed"
     fi
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
@@ -1065,15 +1183,29 @@ echo "workflow-enforcer.sh"
 if test_start "workflow-enforcer: Claude, no task journal → lightweight rules reminder"; then
     # Clean any task journals from prior tests
     rm -f "$TEST_PROJECT/.claude/task.md" "$TEST_PROJECT/.gemini/task.md" "$TEST_PROJECT/.codex/task.md"
-    echo '{"prompt": "build a login page", "hook_event_name": "UserPromptSubmit"}' | \
-        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
-        > /tmp/_wf_out 2>/dev/null
+    CWD_STATE_PROJECT=$(mktemp -d)
+    mkdir -p "$CWD_STATE_PROJECT/.codex"
+    cat > "$CWD_STATE_PROJECT/.codex/task.md" <<'EOF'
+Task: Wrong cwd state
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+    (
+        cd "$CWD_STATE_PROJECT"
+        echo '{"prompt": "build a login page", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
+    rm -rf "$CWD_STATE_PROJECT"
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
+        && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
@@ -1102,20 +1234,142 @@ Status: BUILDING [step 2/4]
 Triaged as: medium
 Plan approval: yes
 EOF
-    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
-        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
-        > /tmp/_wf_out 2>/dev/null
+    CWD_STATE_PROJECT=$(mktemp -d)
+    mkdir -p "$CWD_STATE_PROJECT/.codex"
+    cat > "$CWD_STATE_PROJECT/.codex/task.md" <<'EOF'
+Task: Wrong cwd state
+Status: DISCOVERING
+Triaged as: medium
+Plan approval: no
+EOF
+    (
+        cd "$CWD_STATE_PROJECT"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
+    rm -rf "$CWD_STATE_PROJECT"
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Task: Add login page" \
         && echo "$HOOK_STDOUT" | grep -q "BUILDING" \
-        && echo "$HOOK_STDOUT" | grep -q "Plan approved: yes"; then
+        && echo "$HOOK_STDOUT" | grep -q "Plan approved: yes" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
+fi
+
+if test_start "workflow-enforcer: Codex, Status DONE task journal → lightweight rules reminder"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Completed codex task
+Status: DONE
+Triaged as: small
+EOF
+    echo '{"prompt": "new task", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Completed codex task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-enforcer: Codex, WORKFLOW COMPLETE task journal → lightweight rules reminder"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Completed marker codex task
+Status: DOCUMENTED
+Triaged as: small
+--- WORKFLOW COMPLETE ---
+EOF
+    echo '{"prompt": "new task", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Completed marker codex task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-enforcer: Codex, completed state dir with active state dir → active journal wins"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Completed wrong state
+Status: DONE
+Triaged as: small
+EOF
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Active codex state
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Task: Active codex state" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: BUILDING" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Completed wrong state"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-enforcer: Codex, Status NOT DONE task journal → phase-aware context"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Not done regression
+Status: NOT DONE
+Triaged as: small
+Plan approval: yes
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Task: Not done regression" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: NOT DONE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
 fi
 
 if test_start "workflow-enforcer: pending clarification on medium → includes clarification gate warning"; then
@@ -1623,6 +1877,7 @@ EOF
 fi
 
 if test_start "workflow-enforcer: cached state fallback for Codex-primed forked workspace without project env"; then
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
 Task: Fix codex subagent state
@@ -1656,6 +1911,60 @@ EOF
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-enforcer: completed observed after active cache → no stale cache restore after delete"; then
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Cached active task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Cached active task
+Status: DONE
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "observe completed", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    rm -f "$TEST_PROJECT/.codex/task.md"
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Cached active task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.codex"
 fi
 
 echo ""

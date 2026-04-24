@@ -12,7 +12,7 @@ public sealed class GraphStore
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false) },
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
@@ -45,45 +45,97 @@ public sealed class GraphStore
                 continue;
             }
 
-            try
-            {
-                using var doc = JsonDocument.Parse(line);
-                if (!doc.RootElement.TryGetProperty("kind", out var kindElement))
-                {
-                    skipped++;
-                    continue; // skip records without a kind discriminator
-                }
-
-                var kind = kindElement.GetString();
-
-                switch (kind)
-                {
-                    case "entity":
-                        var entity = JsonSerializer.Deserialize<EntityRecord>(line, JsonOptions);
-                        if (entity is not null)
-                        {
-                            entities.Add(entity.ToEntity());
-                        }
-                        break;
-
-                    case "relation":
-                        var relation = JsonSerializer.Deserialize<RelationRecord>(line, JsonOptions);
-                        if (relation is not null)
-                        {
-                            relations.Add(relation.ToRelation());
-                        }
-                        break;
-                }
-            }
-            catch (Exception)
+            if (!TryLoadRecord(line, entities, relations))
             {
                 skipped++;
-                // Skip malformed lines — don't crash on corrupt data
-                // Catches JsonException, null fields in deserialized records, etc.
             }
         }
 
         return (entities, relations, skipped);
+    }
+
+    private static bool TryLoadRecord(string line, List<Entity> entities, List<Relation> relations)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            if (!doc.RootElement.TryGetProperty("kind", out var kindElement))
+            {
+                return false;
+            }
+
+            return kindElement.GetString() switch
+            {
+                "entity" => TryLoadEntity(line, doc.RootElement, entities),
+                "relation" => TryLoadRelation(line, doc.RootElement, relations),
+                _ => false
+            };
+        }
+        catch (Exception)
+        {
+            // Skip malformed lines — don't crash on corrupt data.
+            // Catches JsonException, null fields in deserialized records, etc.
+            return false;
+        }
+    }
+
+    private static bool TryLoadEntity(string line, JsonElement root, List<Entity> entities)
+    {
+        if (!HasRequiredStringProperty(root, "name")
+            || !HasRequiredStringProperty(root, "type")
+            || !HasOptionalStringArrayProperty(root, "observations"))
+        {
+            return false;
+        }
+
+        var entity = JsonSerializer.Deserialize<EntityRecord>(line, JsonOptions);
+        if (entity is not null)
+        {
+            entities.Add(entity.ToEntity());
+        }
+
+        return true;
+    }
+
+    private static bool TryLoadRelation(string line, JsonElement root, List<Relation> relations)
+    {
+        if (!HasRequiredStringProperty(root, "from")
+            || !HasRequiredStringProperty(root, "to")
+            || !HasRequiredStringProperty(root, "type"))
+        {
+            return false;
+        }
+
+        var relation = JsonSerializer.Deserialize<RelationRecord>(line, JsonOptions);
+        if (relation is not null)
+        {
+            relations.Add(relation.ToRelation());
+        }
+
+        return true;
+    }
+
+    private static bool HasRequiredStringProperty(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
+            && property.GetString() is not null;
+    }
+
+    private static bool HasOptionalStringArrayProperty(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var property))
+        {
+            return true;
+        }
+
+        if (property.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        return property.EnumerateArray()
+            .All(item => item.ValueKind == JsonValueKind.String && item.GetString() is not null);
     }
 
     /// <summary>

@@ -73,3 +73,35 @@ public sealed class CalibrationTypeStats
     public int Accurate { get; set; }
     public double AccuracyRate => Total > 0 ? (double)Accurate / Total : 0;
 }
+
+public sealed class JsonlImportResult
+{
+    public bool NoOp { get; set; }
+    public long? ImportId { get; set; }
+    public required string SourcePath { get; set; }
+    public required string FileHash { get; set; }
+    public long FileLength { get; set; }
+    public int LinesRead { get; set; }
+    public int SkippedLines { get; set; }
+    public int EntitiesRead { get; set; }
+    public int EntitiesCreated { get; set; }
+    public int EntitiesUpdated { get; set; }
+    public int ObservationsAdded { get; set; }
+    public int RelationsRead { get; set; }
+    public int RelationsCreated { get; set; }
+    public int RelationsDeduplicated { get; set; }
+    public int RelationsSkipped { get; set; }
+}
+
+public sealed class GraphEntityMutationResult
+{
+    public bool Created { get; set; }
+    public bool Updated { get; set; }
+    public int NewObservations { get; set; }
+}
+
+public sealed class GraphEntityRemovalResult
+{
+    public bool Removed { get; set; }
+    public int RelationsRemoved { get; set; }
+}

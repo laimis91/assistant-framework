@@ -1,7 +1,4 @@
-using MemoryGraph.Graph;
 using MemoryGraph.Server;
-using MemoryGraph.Storage;
-using MemoryGraph.Tools;
 
 // ── Parse CLI arguments ────────────────────────────────────────
 
@@ -60,61 +57,29 @@ graphFile = ExpandHome(graphFile);
 Log($"Memory directory: {memoryDir}");
 Log($"Graph file: {graphFile}");
 
-// ── Initialize graph ───────────────────────────────────────────
+// ── Initialize runtime ─────────────────────────────────────────
 
-var store = new GraphStore(graphFile);
-var graph = new KnowledgeGraph(store);
-var skippedLines = graph.Load();
+using var runtime = MemoryGraphRuntime.Create(new MemoryGraphRuntimeOptions(memoryDir, graphFile));
+var metrics = runtime.Metrics;
 
-Log($"Loaded graph: {graph.EntityCount} entities, {graph.RelationCount} relations");
-if (skippedLines > 0)
+Log($"SQLite database: {metrics.DatabasePath}");
+if (metrics.GraphJsonlImport is { } graphJsonlImport)
 {
-    Console.Error.WriteLine($"[memory-graph] WARNING: {skippedLines} malformed line(s) skipped in {graphFile}");
+    var importStatus = graphJsonlImport.NoOp ? "unchanged, no-op" : "imported";
+    Log($"Graph JSONL {importStatus}: {graphJsonlImport.LinesRead} lines read, {graphJsonlImport.SkippedLines} skipped, {graphJsonlImport.EntitiesCreated} entities created, {graphJsonlImport.EntitiesUpdated} entities updated, {graphJsonlImport.RelationsCreated} relations created, {graphJsonlImport.RelationsDeduplicated} relations deduplicated, {graphJsonlImport.RelationsSkipped} relations skipped");
+}
+else
+{
+    Log("Graph JSONL import: file missing, skipped");
 }
 
-// ── Initialize SQLite store ───────────────────────────────────
-
-var dbPath = Path.Combine(memoryDir, "memory.db");
-Log($"SQLite database: {dbPath}");
-
-using var memoryStore = new MemoryStore(dbPath);
-
-// Reconcile authoritative relational rows into graph before indexing graph entities.
-var reconciliation = MemoryGraphReconciler.ReconcileFromStore(graph, memoryStore);
-graph.SaveIfDirty();
-Log($"Reconciled SQLite memory: {reconciliation.ProjectsCreated} projects, {reconciliation.InsightsCreated} insights, {reconciliation.RelationsCreated} relations");
-
-// Index existing graph entities into FTS5 for unified search
-var entityData = graph.GetAllEntities()
-    .Select(e => (e.Name, e.Type.ToString(), e.Observations))
-    .ToList();
-var prunedEntities = memoryStore.PruneGraphEntityIndex(entityData.Select(e => e.Name));
-memoryStore.IndexGraphEntities(entityData);
-Log($"FTS5 index: {entityData.Count} graph entities indexed, {prunedEntities} stale entity rows pruned");
-
-// ── Register tools ─────────────────────────────────────────────
-
-var registry = new ToolRegistry();
-registry.Register(new MemoryContextTool(graph));
-registry.Register(new MemorySearchTool(graph, memoryStore));
-registry.Register(new MemoryAddEntityTool(graph));
-registry.Register(new MemoryAddRelationTool(graph));
-registry.Register(new MemoryAddInsightTool(graph));
-registry.Register(new MemoryRemoveEntityTool(graph));
-registry.Register(new MemoryRemoveRelationTool(graph));
-registry.Register(new MemoryGraphTool(graph));
-
-// v2 tools — reflexion, decisions, patterns, consolidation, stats, trends
-registry.Register(new MemoryReflectTool(memoryStore, graph));
-registry.Register(new MemoryDecideTool(memoryStore));
-registry.Register(new MemoryPatternTool(memoryStore));
-registry.Register(new MemoryConsolidateTool(memoryStore));
-registry.Register(new MemoryStatsTool(graph, memoryStore));
-registry.Register(new MemoryTrendTool(memoryStore, memoryDir));
+Log($"Loaded graph: {runtime.Graph.EntityCount} entities, {runtime.Graph.RelationCount} relations");
+Log($"Reconciled SQLite memory: {metrics.Reconciliation.ProjectsCreated} projects, {metrics.Reconciliation.InsightsCreated} insights, {metrics.Reconciliation.RelationsCreated} relations");
+Log($"FTS5 index: {metrics.IndexedGraphEntities} graph entities indexed, {metrics.PrunedGraphEntityRows} stale entity rows pruned");
 
 // ── Start MCP server ──────────────────────────────────────────
 
-var server = new McpServer(registry, verbose);
+var server = new McpServer(runtime.Registry, verbose);
 Log("Server started, waiting for MCP messages on stdin...");
 await server.RunAsync();
 
@@ -131,13 +96,13 @@ void Log(string message)
 void PrintUsage()
 {
     Console.Error.WriteLine("""
-        memory-graph — MCP server providing a knowledge graph over markdown memory
+        memory-graph — MCP server providing DB-backed local memory storage
 
         Usage: memory-graph [OPTIONS]
 
         Options:
           --memory-dir PATH    Memory directory (default: auto-detect from agent)
-          --graph-file PATH    Graph file path (default: {memory-dir}/graph.jsonl)
+          --graph-file PATH    Legacy JSONL import/fallback path (default: {memory-dir}/graph.jsonl)
           --verbose            Log to stderr for debugging
           -h, --help           Show this help
         """);

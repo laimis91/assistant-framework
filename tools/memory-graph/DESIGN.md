@@ -1,6 +1,6 @@
 # Memory Graph — MCP Server Design
 
-Self-contained C# MCP server providing a knowledge graph over the existing markdown memory system. Runs locally via stdio transport — no external dependencies, no cloud services.
+Self-contained C# MCP server providing DB-backed local memory storage through a queryable knowledge graph. Runs locally via stdio transport with SQLite as the authoritative runtime store; legacy `graph.jsonl` files are imported or used as fallback seed compatibility only.
 
 ## Problem
 
@@ -29,14 +29,19 @@ With 5-10 projects and growing insights, reading everything is wasteful. The age
 │                                                     │
 │  ┌───────────────┐                                  │
 │  │ Graph Engine   │                                  │
-│  │ (in-memory)    │                                  │
+│  │ (runtime view) │                                  │
 │  └───────┬───────┘                                  │
 │          │                                          │
 │  ┌───────▼───────┐                                  │
-│  │ graph.jsonl    │  ← persistent graph storage     │
+│  │ memory.db      │  ← authoritative storage        │
+│  └───────▲───────┘                                  │
+│          │                                          │
+│  ┌───────┴───────┐                                  │
+│  │ graph.jsonl    │  ← legacy import/fallback seed  │
 │  └───────────────┘                                  │
 │                                                     │
-│  Storage: ~/.{agent}/memory/graph.jsonl              │
+│  Storage: ~/.{agent}/memory/memory.db                │
+│  Optional import: ~/.{agent}/memory/graph.jsonl      │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -111,9 +116,9 @@ public record Relation
 }
 ```
 
-### Storage Format (graph.jsonl)
+### Legacy Import Format (graph.jsonl)
 
-Each line is a JSON object with a `kind` discriminator:
+Legacy `graph.jsonl` files are line-delimited JSON records with a `kind` discriminator. On startup, existing files can be imported additively into `memory.db`; they are retained for migration, fallback, and seed compatibility, not as runtime authority.
 
 ```jsonl
 {"kind":"entity","name":"DesktopApp","type":"Project","observations":["WPF app with MVVM","Sends HTTP requests to API","Uses .NET 8"],"sourceFile":null,"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
@@ -232,7 +237,7 @@ tools/memory-graph/
         KnowledgeGraph.cs          ← in-memory graph + CRUD operations
         Entity.cs                  ← entity model
         Relation.cs                ← relation model
-        GraphStore.cs              ← JSONL read/write
+        GraphStore.cs              ← Legacy JSONL read/write compatibility
       Tools/
         MemoryContextTool.cs       ← memory_context implementation
         MemorySearchTool.cs        ← memory_search implementation
@@ -304,15 +309,15 @@ memory-graph [OPTIONS]
 
 Options:
   --memory-dir PATH    Memory directory (default: auto-detect from agent)
-  --graph-file PATH    Graph file path (default: {memory-dir}/graph.jsonl)
+  --graph-file PATH    Legacy JSONL import/fallback path (default: {memory-dir}/graph.jsonl)
   --verbose            Log to stderr for debugging
 ```
 
 ## Design Decisions
 
-1. **JSONL over SQLite**: JSONL is human-readable, git-diffable, and trivial to parse. At 5-10 projects with ~100 entities, performance is not a concern. SQLite would be premature.
+1. **SQLite as authoritative local storage**: `memory.db` is the runtime source of truth for graph memory, reflexions, decisions, strategy lessons, calibration data, and FTS5 search indexes. It keeps the server local and self-contained while supporting reliable updates and queryable cross-session context.
 
-2. **Graph as source of truth**: The knowledge graph (`graph.jsonl`) is the authoritative store. Markdown sync has been removed — all entities are managed directly through MCP tools.
+2. **JSONL as compatibility input**: `graph.jsonl` remains supported as a legacy import/fallback/seed format. Imports are additive and must not delete DB-only rows, so runtime data continues to be managed through MCP tools backed by SQLite.
 
 3. **Stdio transport over HTTP**: Stdio is simpler, requires no port management, and is the standard MCP transport for local tools. No security concerns about open ports.
 
@@ -324,14 +329,14 @@ Options:
 
 ### Architecture (v2)
 
-The v2 upgrade adds a SQLite database (`memory.db`) alongside the existing JSONL graph. SQLite provides:
+The v2 upgrade makes SQLite (`memory.db`) the authoritative local graph store. SQLite provides:
 - **FTS5 full-text search** across all memory content (entities, reflexions, decisions, strategy lessons)
 - **Reflexion storage** for post-task self-assessments
 - **Decision journal** for architectural decisions with rationale
 - **Strategy lessons** per project type with confidence scoring and decay
 - **Calibration tracking** for prediction accuracy
 
-The JSONL graph remains the source of truth for entities and relations. SQLite is an acceleration layer that also stores new data types (reflexions, decisions, etc.).
+Legacy JSONL import remains available for existing entity/relation graph files. `memory.db` is authoritative for runtime reads and writes; JSONL is compatibility input only.
 
 ### New MCP Tools (v2)
 
@@ -359,8 +364,8 @@ Strategy lessons accumulate per project type and phase (discover, plan, build, r
 
 ```
 ~/.{agent}/memory/
-  graph.jsonl          ← existing entity/relation graph
-  memory.db            ← NEW: SQLite + FTS5 (reflexions, decisions, strategies, FTS index)
+  memory.db            ← authoritative SQLite + FTS5 store
+  graph.jsonl          ← optional legacy import/fallback seed
 ```
 
 ### Dependencies

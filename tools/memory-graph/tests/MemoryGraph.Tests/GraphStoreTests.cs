@@ -91,6 +91,152 @@ public class GraphStoreTests
     }
 
     [Fact]
+    public void Load_SkipsEntityRowsMissingType()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"entity","name":"Good","type":"project","observations":["ok"],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"MissingType","observations":["must not default"]}
+            """);
+
+        var store = new GraphStore(path);
+        var (entities, _, skipped) = store.Load();
+
+        Assert.Single(entities);
+        Assert.Equal("Good", entities[0].Name);
+        Assert.Equal(EntityType.Project, entities[0].Type);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsEntityRowsWithNumericType()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"entity","name":"Good","type":"project","observations":["ok"],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"NumericType","type":0,"observations":["must not default"]}
+            """);
+
+        var store = new GraphStore(path);
+        var (entities, _, skipped) = store.Load();
+
+        Assert.Single(entities);
+        Assert.Equal("Good", entities[0].Name);
+        Assert.Equal(EntityType.Project, entities[0].Type);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsEntityRowsMissingName()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"entity","name":"Good","type":"project","observations":["ok"],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","type":"technology","observations":["must not load"]}
+            """);
+
+        var store = new GraphStore(path);
+        var (entities, _, skipped) = store.Load();
+
+        Assert.Single(entities);
+        Assert.Equal("Good", entities[0].Name);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsEntityRowsWithMalformedObservations()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"entity","name":"Good","type":"project","observations":["ok"],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"MissingObservations","type":"technology","createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"NullObservation","type":"project","observations":[null],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"NumberObservation","type":"project","observations":[1],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"ObjectObservation","type":"project","observations":[{}],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"MixedObservation","type":"project","observations":["ok",1],"createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            {"kind":"entity","name":"NonArrayObservation","type":"project","observations":"not-array","createdAt":"2026-03-18T10:00:00Z","updatedAt":"2026-03-18T10:00:00Z"}
+            """);
+
+        var store = new GraphStore(path);
+        var (entities, _, skipped) = store.Load();
+
+        Assert.Equal(2, entities.Count);
+        Assert.Contains(entities, entity => entity.Name == "Good" && entity.Observations.SequenceEqual(["ok"]));
+        Assert.Contains(entities, entity => entity.Name == "MissingObservations" && entity.Observations.Count == 0);
+        Assert.Equal(5, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsRelationRowsMissingType()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"relation","from":"A","to":"B","type":"uses","detail":"valid","createdAt":"2026-03-18T10:00:00Z"}
+            {"kind":"relation","from":"A","to":"B","detail":"must not default"}
+            """);
+
+        var store = new GraphStore(path);
+        var (_, relations, skipped) = store.Load();
+
+        Assert.Single(relations);
+        Assert.Equal(RelationType.Uses, relations[0].Type);
+        Assert.Equal("valid", relations[0].Detail);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsRelationRowsWithNumericType()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"relation","from":"A","to":"B","type":"uses","detail":"valid","createdAt":"2026-03-18T10:00:00Z"}
+            {"kind":"relation","from":"A","to":"B","type":0,"detail":"must not default"}
+            """);
+
+        var store = new GraphStore(path);
+        var (_, relations, skipped) = store.Load();
+
+        Assert.Single(relations);
+        Assert.Equal(RelationType.Uses, relations[0].Type);
+        Assert.Equal("valid", relations[0].Detail);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsRelationRowsMissingFrom()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"relation","from":"A","to":"B","type":"uses","detail":"valid","createdAt":"2026-03-18T10:00:00Z"}
+            {"kind":"relation","to":"B","type":"uses","detail":"must not load"}
+            """);
+
+        var store = new GraphStore(path);
+        var (_, relations, skipped) = store.Load();
+
+        Assert.Single(relations);
+        Assert.Equal("A", relations[0].From);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
+    public void Load_SkipsRelationRowsMissingTo()
+    {
+        var path = TempFile();
+        File.WriteAllText(path, """
+            {"kind":"relation","from":"A","to":"B","type":"uses","detail":"valid","createdAt":"2026-03-18T10:00:00Z"}
+            {"kind":"relation","from":"A","type":"uses","detail":"must not load"}
+            """);
+
+        var store = new GraphStore(path);
+        var (_, relations, skipped) = store.Load();
+
+        Assert.Single(relations);
+        Assert.Equal("B", relations[0].To);
+        Assert.Equal(1, skipped);
+    }
+
+    [Fact]
     public void Save_CreatesDirectoryIfMissing()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"test-dir-{Guid.NewGuid()}");

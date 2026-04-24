@@ -3,10 +3,10 @@ using Microsoft.Data.Sqlite;
 namespace MemoryGraph.Storage;
 
 /// <summary>
-/// SQLite + FTS5 storage for reflexions, decisions, strategy lessons, and full-text search.
-/// Lives alongside the existing JSONL graph store — does not replace it.
+/// SQLite + FTS5 storage for reflexions, decisions, strategy lessons, graph memory, and full-text search.
+/// This store is the runtime authority for graph memory; JSONL is retained for legacy import/fallback support.
 /// </summary>
-public sealed class MemoryStore : IDisposable
+public sealed partial class MemoryStore : IDisposable
 {
     private readonly SqliteConnection _db;
 
@@ -20,7 +20,15 @@ public sealed class MemoryStore : IDisposable
 
         _db = new SqliteConnection($"Data Source={dbPath}");
         _db.Open();
+        EnableForeignKeys();
         InitializeSchema();
+    }
+
+    private void EnableForeignKeys()
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = "PRAGMA foreign_keys = ON";
+        cmd.ExecuteNonQuery();
     }
 
     private void InitializeSchema()
@@ -99,6 +107,57 @@ public sealed class MemoryStore : IDisposable
                 source_id TEXT NOT NULL,
                 accessed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- DB-authoritative graph foundation. Runtime tools read and write graph memory here;
+            -- graph.jsonl is legacy import/fallback support only.
+            CREATE TABLE IF NOT EXISTS graph_entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                type TEXT NOT NULL,
+                source_file TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS graph_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_id INTEGER NOT NULL REFERENCES graph_entities(id) ON DELETE CASCADE,
+                observation TEXT NOT NULL COLLATE NOCASE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(entity_id, observation)
+            );
+
+            CREATE TABLE IF NOT EXISTS graph_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_entity_id INTEGER NOT NULL REFERENCES graph_entities(id) ON DELETE CASCADE,
+                to_entity_id INTEGER NOT NULL REFERENCES graph_entities(id) ON DELETE CASCADE,
+                type TEXT NOT NULL,
+                detail TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(from_entity_id, to_entity_id, type)
+            );
+
+            CREATE TABLE IF NOT EXISTS jsonl_imports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_path TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                file_hash TEXT NOT NULL,
+                file_length INTEGER NOT NULL,
+                lines_read INTEGER NOT NULL,
+                skipped_lines INTEGER NOT NULL,
+                entities_read INTEGER NOT NULL,
+                entities_created INTEGER NOT NULL,
+                entities_updated INTEGER NOT NULL,
+                observations_added INTEGER NOT NULL,
+                relations_read INTEGER NOT NULL,
+                relations_created INTEGER NOT NULL,
+                relations_deduplicated INTEGER NOT NULL,
+                relations_skipped INTEGER NOT NULL,
+                imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_graph_entities_type ON graph_entities(type);
+            CREATE INDEX IF NOT EXISTS idx_graph_relations_from ON graph_relations(from_entity_id);
+            CREATE INDEX IF NOT EXISTS idx_graph_relations_to ON graph_relations(to_entity_id);
             """;
         cmd.ExecuteNonQuery();
     }
@@ -336,8 +395,20 @@ public sealed class MemoryStore : IDisposable
 
     public void IndexInFts(string sourceType, string sourceId, string title, string content, string tags)
     {
+        IndexInFtsCore(sourceType, sourceId, title, content, tags);
+    }
+
+    private void IndexInFtsCore(
+        string sourceType,
+        string sourceId,
+        string title,
+        string content,
+        string tags,
+        SqliteTransaction? transaction = null)
+    {
         // Remove existing entry if present
         using var delCmd = _db.CreateCommand();
+        delCmd.Transaction = transaction;
         delCmd.CommandText = sourceType.Equals("entity", StringComparison.OrdinalIgnoreCase)
             ? "DELETE FROM memory_fts WHERE source_type = @type AND source_id = @id COLLATE NOCASE"
             : "DELETE FROM memory_fts WHERE source_type = @type AND source_id = @id";
@@ -346,6 +417,7 @@ public sealed class MemoryStore : IDisposable
         delCmd.ExecuteNonQuery();
 
         using var cmd = _db.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText = """
             INSERT INTO memory_fts (source_type, source_id, title, content, tags)
             VALUES (@type, @id, @title, @content, @tags)
@@ -406,7 +478,7 @@ public sealed class MemoryStore : IDisposable
 
     /// <summary>
     /// Indexes all graph entities into FTS5 for unified search.
-    /// Called on startup after graph is loaded.
+    /// Used when legacy import/fallback callers provide graph entity snapshots.
     /// </summary>
     public void IndexGraphEntities(IEnumerable<(string Name, string Type, List<string> Observations)> entities)
     {

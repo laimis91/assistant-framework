@@ -34,6 +34,25 @@ PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
 PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
+emit_workflow_rules_context() {
+    local context
+
+    context="WORKFLOW RULES (active every prompt):
+- Before ANY code change, state which phase you are in
+- Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
+- You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
+- Tests are part of BUILD and accompany features in the SAME step, not later.
+- REVIEW is the post-build verification loop (not one-shot — loop until clean).
+- State your current phase before your next action."
+
+    jq -cn --arg ctx "$context" '{
+        hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: $ctx
+        }
+    }'
+}
+
 read_scalar_field() {
     local label="$1"
     awk -v label="$label" '
@@ -69,23 +88,10 @@ has_field_label() {
 }
 
 # No task journal = lightweight reminder only (no phase tracking needed)
-if [[ -z "$TASK_FILE" ]]; then
+if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
     # Even without a task journal, inject the behavioral rules reminder
     # This is the "always-on" enforcement layer
-    context="WORKFLOW RULES (active every prompt):
-- Before ANY code change, state which phase you are in
-- Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
-- You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
-- Tests are part of BUILD and accompany features in the SAME step, not later.
-- REVIEW is the post-build verification loop (not one-shot — loop until clean).
-- State your current phase before your next action."
-
-    jq -cn --arg ctx "$context" '{
-        hookSpecificOutput: {
-            hookEventName: "UserPromptSubmit",
-            additionalContext: $ctx
-        }
-    }'
+    emit_workflow_rules_context
     exit 0
 fi
 
