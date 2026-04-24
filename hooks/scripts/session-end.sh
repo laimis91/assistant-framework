@@ -59,9 +59,10 @@ MSG="SESSION ENDING — capture state before closing:
    - Notes: [anything the next session needs to know]
 
 5. MEMORY CHECK: Review this conversation for anything worth remembering:
-   - Did the user correct your approach or state a preference? → Save to feedback/ and call memory_add_insight
-   - Did you discover a non-obvious gotcha or pattern? → Save to insights/ and call memory_add_insight
-   - Did you learn about user's role, preferences, or working style? → Update user/ files
+   - Did the user correct your approach or state a preference? → Use memory_add_entity (Rule or Preference)
+   - Did you discover a non-obvious gotcha or pattern? → Use memory_add_insight or memory_pattern
+   - Did you learn a durable project relationship? → Use memory_add_entity and memory_add_relation
+   - Keep $STATE_DIR/session.md and $STATE_DIR/task.md for session state only.
 
 6. TASK CLEANUP: If $STATE_DIR/task.md exists and the task is complete, update its status to DONE."
 

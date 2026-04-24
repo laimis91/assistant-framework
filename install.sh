@@ -2,7 +2,7 @@
 # install.sh — Installs all Assistant Framework skills for any supported AI agent.
 #
 # Auto-discovers skills from the skills/ directory (any subdirectory with SKILL.md).
-# Also installs hooks + knowledge graph seed.
+# Also installs hooks + legacy graph seed/import compatibility.
 #
 # Also installs hooks for automated:
 #   - Context injection on session start/resume
@@ -18,8 +18,8 @@
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
 #   ./install.sh --agent claude --no-hooks                  # skip hook installation
 #
-# Knowledge graph seed is installed to ~/.{agent}/memory/graph.jsonl
-# only if it doesn't already exist — existing graph is never overwritten.
+# Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
+# only if it doesn't already exist — existing legacy data is never overwritten.
 
 set -euo pipefail
 
@@ -60,8 +60,9 @@ Skills installed:
   Auto-discovered from skills/ directory (any subdirectory with SKILL.md).
 
 Memory data:
-  Knowledge graph seed installed to ~/.{agent}/memory/graph.jsonl on first install only.
-  Existing graph is never overwritten.
+  memory-graph MCP is registered against ~/.{agent}/memory.
+  Legacy graph seed/import compatibility data is installed on first install only.
+  Existing legacy graph data is never overwritten.
 
 Examples:
   $(basename "$0") --agent claude
@@ -258,7 +259,7 @@ echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
 echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
-echo "  Graph seed: $GRAPH_SEED"
+echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
 
 # ── Install skills ────────────────────────────────────────────────────────────
@@ -524,23 +525,23 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
     fi
 fi
 
-# ── Seed knowledge graph (only if graph.jsonl doesn't exist) ────────────────
+# ── Seed legacy graph import compatibility (only if graph.jsonl doesn't exist) ─
 
 echo ""
 GRAPH_TARGET="$MEMORY_TARGET/graph.jsonl"
 if [[ -f "$GRAPH_TARGET" ]]; then
-    info "Knowledge graph already exists at $GRAPH_TARGET — skipping (never overwrite)"
+    info "Legacy graph compatibility data already exists at $GRAPH_TARGET — skipping (never overwrite)"
 else
     if [[ -f "$GRAPH_SEED" ]]; then
         if $DRY_RUN; then
-            dry "cp $GRAPH_SEED -> $GRAPH_TARGET (first install only)"
+            dry "cp $GRAPH_SEED -> $GRAPH_TARGET (legacy import compatibility, first install only)"
         else
             mkdir -p "$MEMORY_TARGET"
             cp "$GRAPH_SEED" "$GRAPH_TARGET"
-            ok "Knowledge graph seed installed to $GRAPH_TARGET"
+            ok "Legacy graph seed installed to $GRAPH_TARGET for import compatibility"
         fi
     else
-        info "No graph seed found — skipping"
+        info "No legacy graph seed found — skipping"
     fi
 fi
 
@@ -855,9 +856,9 @@ THESE RULES ARE NON-NEGOTIABLE. You MUST follow them on every response.
 
 ## Memory
 
-- Global: ~/.codex/memory/graph.jsonl (knowledge graph — single source of truth)
-- Project: .codex/ at project root (memory.md, session.md, task.md)
-- Rules (type Rule) in the knowledge graph are loaded at session start via hooks and memory_context.
+- Global: memory-graph MCP backed by ~/.codex/memory (local memory store)
+- Project state: .codex/session.md, .codex/working-buffer.md, and .codex/task.md at project root
+- Rules and preferences are retrieved at session start via memory_context; hooks do not inject rule bodies.
 
 ## Conventions
 
@@ -1005,7 +1006,8 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
     echo "  (Starlark policy: git push/commit guards, destructive op confirmation)"
 fi
 echo ""
-echo "Graph: $MEMORY_TARGET/graph.jsonl"
+echo "Memory store: $MEMORY_TARGET/"
+echo "Legacy graph seed/import compatibility: $MEMORY_TARGET/graph.jsonl"
 echo ""
 if [[ -n "$SINGLE_SKILL" ]]; then
     echo "To install all skills: ./install.sh --agent $AGENT"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# session-start.sh — Injects task journal, feedback rules, and memory instructions on session start/resume.
+# session-start.sh — Injects task journal, Telos context, role, and memory instructions on session start/resume.
 #
 # Events: Claude SessionStart, Gemini SessionStart, Codex SessionStart
 #
@@ -18,9 +18,8 @@
 # Behavior:
 #   1. Active task journal ({state_dir}/task.md) — injects full state
 #   2. Telos context (~/{agent}/telos.md) — purpose/strategic priorities
-#   3. Memory rules from knowledge graph (~/{agent}/memory/graph.jsonl) — fully injected for Claude/Gemini, summarized for Codex
-#   4. Instruction to call memory_context via memory-graph MCP for project context
-#   5. No output if nothing found (exit 0)
+#   3. Compact instruction to call memory_context / memory_search via memory-graph MCP
+#   4. No output if nothing found (exit 0)
 
 set -euo pipefail
 
@@ -53,7 +52,7 @@ elif $IS_CODEX; then
     STATE_DIR=".codex"
 fi
 
-# Guard: if resolved AGENT_HOME doesn't exist, skip memory loading
+# Guard: if resolved AGENT_HOME doesn't exist, skip hook context
 [[ -d "$AGENT_HOME" ]] || { exit 0; }
 
 context_parts=()
@@ -78,30 +77,11 @@ if [[ -f "$TELOS_FILE" ]]; then
     context_parts+=("---")
 fi
 
-# 3. Load memory rules from knowledge graph (always relevant — injected directly for Claude/Gemini, summarized for Codex)
-GRAPH_FILE="$AGENT_HOME/memory/graph.jsonl"
-memory_rule_count=0
-if [[ -f "$GRAPH_FILE" ]] && command -v jq >/dev/null 2>&1; then
-    if $IS_CODEX; then
-        memory_rule_count=$(jq -Rn '[inputs | fromjson? | select(.kind=="entity" and .type=="rule")] | length' "$GRAPH_FILE" 2>/dev/null || true)
-        memory_rule_count="${memory_rule_count:-0}"
-    else
-        while IFS= read -r rule_json; do
-            rule_name=$(echo "$rule_json" | jq -r '.name')
-            rule_obs=$(echo "$rule_json" | jq -r '.observations | map("  - " + .) | join("\n")')
-            if [[ -n "$rule_name" && "$rule_name" != "null" ]]; then
-                context_parts+=("Memory rule: $rule_name")
-                context_parts+=("$rule_obs")
-                context_parts+=("---")
-            fi
-        done < <(jq -Rc 'fromjson? | select(.kind=="entity" and .type=="rule")' "$GRAPH_FILE" 2>/dev/null)
-    fi
-fi
 if $IS_CODEX; then
-    context_parts+=("MEMORY SUMMARY: $memory_rule_count memory rule(s) found in the knowledge graph.")
+    context_parts+=("MEMORY: Rules, preferences, lessons, and recent insights are retrieved through the memory-graph MCP tools.")
     context_parts+=("Call memory_context first with the current project path/name to retrieve persisted project context, rules, preferences, and recent insights.")
     context_parts+=("Use memory_search for targeted retrieval of specific rules, lessons, decisions, or prior implementation context.")
-    context_parts+=("Full memory rule names and observations are persisted in graph.jsonl and intentionally not injected into Codex SessionStart output.")
+    context_parts+=("Codex SessionStart intentionally avoids injecting memory rule bodies directly; use MCP retrieval instead.")
     context_parts+=("---")
 fi
 
@@ -124,10 +104,10 @@ if $IS_CODEX; then
     context_parts+=("---")
 else
     context_parts+=("SESSION START — Memory Protocol:")
-    context_parts+=("1. Call memory_context with the current project name/path to load project context (dependencies, technologies, patterns, conventions, recent insights)")
+    context_parts+=("1. Call memory_context with the current project name/path to load project context (dependencies, technologies, patterns, conventions, rules, preferences, recent insights)")
     context_parts+=("2. If $STATE_DIR/session.md exists, read it to resume previous session state")
     context_parts+=("3. If $STATE_DIR/working-buffer.md exists, read it then clear its contents")
-    context_parts+=("4. If memory-graph MCP is unavailable, rules are still loaded from graph.jsonl by the session hook")
+    context_parts+=("4. Rules and preferences are retrieved via memory-graph MCP tools; hooks do not inject rule bodies directly.")
     context_parts+=("Use memory_search for targeted queries during the session. Use memory_add_insight to record learnings.")
     context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
     context_parts+=("")

@@ -78,15 +78,17 @@ MSG="TASK COMPLETED — capture learnings before moving on:
 3. PATTERNS: If you noticed recurring patterns in this project type, call memory_pattern:
    - projectType, phase (discover/plan/build/review), pattern description
 
-4. INSIGHTS: Use memory_add_insight to save non-obvious gotchas to the knowledge graph
+4. INSIGHTS: Use memory_add_insight to save non-obvious gotchas through the memory-graph MCP.
 
-5. SESSION STATE: Update $STATE_DIR/session.md with completion status:
+5. RELATED MEMORY: If completion revealed durable project, technology, or preference relationships, use memory_add_entity and memory_add_relation.
+
+6. SESSION STATE: Update $STATE_DIR/session.md with completion status:
    ## Last Completed
    - Task: [description]
    - Status: DONE
    - Notes: [anything useful for future work]
 
-6. TASK JOURNAL: Update $STATE_DIR/task.md status to DONE."
+7. TASK JOURNAL: Update $STATE_DIR/task.md status to DONE."
 
 if [[ -n "$WARNINGS" ]]; then
     MSG="$WARNINGS

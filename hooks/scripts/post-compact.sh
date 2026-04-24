@@ -14,7 +14,7 @@
 #   CLAUDE_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
-#   Re-injects task journal, feedback rules, and memory-graph instructions after compaction.
+#   Re-injects task journal, session state, working buffer, depth profile, and memory-graph instructions after compaction.
 #   No output if nothing found (exit 0).
 #   Not installed for Gemini — session-start.sh handles re-injection on resume.
 
@@ -30,7 +30,7 @@ elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
     AGENT_HOME="$HOME/.codex"
 fi
 
-# Guard: if resolved AGENT_HOME doesn't exist, skip memory loading
+# Guard: if resolved AGENT_HOME doesn't exist, skip hook context
 [[ -d "$AGENT_HOME" ]] || { exit 0; }
 
 context_parts=()
@@ -54,20 +54,6 @@ if [[ -f "$TELOS_FILE" ]]; then
     context_parts+=("TELOS CONTEXT (user's purpose and strategic priorities — use to inform prioritization and alignment):")
     context_parts+=("$telos_content")
     context_parts+=("---")
-fi
-
-# Re-inject memory rules from knowledge graph
-GRAPH_FILE="$AGENT_HOME/memory/graph.jsonl"
-if [[ -f "$GRAPH_FILE" ]] && command -v jq >/dev/null 2>&1; then
-    while IFS= read -r rule_json; do
-        rule_name=$(echo "$rule_json" | jq -r '.name')
-        rule_obs=$(echo "$rule_json" | jq -r '.observations | map("  - " + .) | join("\n")')
-        if [[ -n "$rule_name" && "$rule_name" != "null" ]]; then
-            context_parts+=("Memory rule: $rule_name")
-            context_parts+=("$rule_obs")
-            context_parts+=("---")
-        fi
-    done < <(jq -Rc 'fromjson? | select(.kind=="entity" and .type=="rule")' "$GRAPH_FILE" 2>/dev/null)
 fi
 
 # Re-inject session state if available
@@ -124,7 +110,7 @@ fi
 
 # Instruction to restore full context via memory-graph
 context_parts+=("CONTEXT RESTORED — Memory Protocol:")
-context_parts+=("Call memory_context with the current project name/path to reload project context (dependencies, technologies, patterns, conventions, recent insights).")
+context_parts+=("Call memory_context with the current project name/path to reload project context (dependencies, technologies, patterns, conventions, rules, preferences, recent insights).")
 context_parts+=("Use memory_search for targeted queries. Use memory_add_insight to record new learnings.")
 context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
 context_parts+=("")
@@ -135,7 +121,6 @@ context_parts+=("- memory_pattern: Record/reinforce recurring patterns per proje
 context_parts+=("- memory_stats: Check memory system health and calibration accuracy")
 context_parts+=("- memory_consolidate: Decay stale lessons and archive low-confidence ones")
 context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
-context_parts+=("If memory-graph MCP is unavailable, rules are still loaded from graph.jsonl by hooks.")
 context_parts+=("---")
 
 if [[ ${#context_parts[@]} -gt 0 ]]; then

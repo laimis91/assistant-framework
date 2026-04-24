@@ -1,6 +1,6 @@
 ---
 name: assistant-memory
-description: "This skill manages cross-session memory in the knowledge graph. Use when the user says 'remember this', 'save insight', 'update memory', 'what do you know about me', 'forget', 'preferences'. Also activates when the user provides a correction or states a behavioral preference that should persist."
+description: "This skill manages cross-session memory through memory-graph MCP. Use when the user says 'remember this', 'save insight', 'update memory', 'what do you know about me', 'forget', 'preferences'. Also activates when the user provides a correction or states a behavioral preference that should persist."
 triggers:
   - pattern: "remember this|save insight|update memory|what do you know about me|forget|memory|preferences"
     priority: 70
@@ -18,19 +18,19 @@ triggers:
 | [`contracts/output.yaml`](contracts/output.yaml) | action_taken, entity_name, results[], confirmation |
 
 - `content` is required for save/update; `query` is required for recall/search
-- `entity_type` is required for save — determines the knowledge graph entity type (Rule, Preference, Insight, etc.)
+- `entity_type` is required for save — determines the memory entity type (Rule, Preference, Insight, etc.)
 - All outputs include a human-readable `confirmation` string
 
-The knowledge graph is the cross-session source of truth for memory across projects and sessions.
+The memory-graph MCP backed by the local memory store is the cross-session source of truth for memory across projects and sessions.
 
 ## Memory Storage
 
-All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory/graph.jsonl`), accessed via memory-graph MCP tools. Project-local markdown files may exist as generated orientation or task artifacts, but they are not the cross-session memory source of truth.
+All cross-session memory is accessed through **memory-graph MCP tools**, backed by the local memory store under `~/.claude/memory`. Project-local session/task markdown files are for session state only, not cross-session memory storage.
 
 Entity types:
 | Type | Purpose | Example |
 |---|---|---|
-| `Rule` | Behavioral mandates, corrections (highest priority — always loaded) | "NEVER skip workflow skills" |
+| `Rule` | Behavioral mandates, corrections (highest priority — retrieve via `memory_context`) | "NEVER skip workflow skills" |
 | `Preference` | User coding preferences, working style | "Prefers var when type is obvious" |
 | `Insight` | Learned facts from past sessions | "EF Core migration gotcha with nullable columns" |
 | `Project` | Codebase / repository | "Assistant Framework" |
@@ -45,7 +45,7 @@ Entity types:
 3. If `.claude/session.md` exists → read it; resume from where it left off.
 4. If `.claude/working-buffer.md` exists → read it, then **clear** its contents.
 
-Rules (type `Rule`) are also injected by the session-start hook directly from `graph.jsonl`, so they're available even if the MCP call hasn't happened yet.
+Hooks do not inject rule bodies directly. Use `memory_context` and `memory_search` to retrieve rules, preferences, and prior lessons.
 
 ## Recording Memory
 
@@ -59,7 +59,7 @@ Use MCP tools to record new memory:
 | Project registration | `memory_add_entity` | `Project` |
 | Connect entities | `memory_add_relation` | — |
 
-Do not treat markdown files as cross-session memory. Update project-local orientation artifacts only when a project workflow explicitly calls for them.
+Do not treat markdown files as cross-session memory. Use project-local session/task files only for session state.
 
 ## Querying Memory
 

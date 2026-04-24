@@ -191,12 +191,22 @@ else
     pass
 fi
 
-test_start "memory protocol wording uses graph-only storage and matching installed-agent paths"
+test_start "memory protocol wording avoids graph-only storage and matching installed-agent paths"
 if jq -e . >/dev/null 2>&1 <<< '{}'; then
     :
 fi
-if rg -n "WAL|markdown sync|memory files are the source of truth|\.claude/" "$INSTALL_HOME_TWO/.codex/AGENTS.md" >/tmp/p0p4-memory-wording.out; then
+if rg -n "WAL|markdown sync|memory files are the source of truth|knowledge graph .+source of truth|loaded at session start via hooks|graph\\.jsonl.+source of truth|\\.claude/" "$INSTALL_HOME_TWO/.codex/AGENTS.md" >/tmp/p0p4-memory-wording.out; then
     fail "installed Codex memory protocol has stale memory wording or paths; see /tmp/p0p4-memory-wording.out"
+else
+    pass
+fi
+
+test_start "installer and protocol docs do not describe graph.jsonl as live source of truth"
+if rg -n 'graph\.jsonl.*source of truth|source of truth.*graph\.jsonl|rules are still loaded from graph\.jsonl|session-start hook directly from `graph\.jsonl`|knowledge graph seed installed' \
+    "$FRAMEWORK_DIR/install.sh" \
+    "$FRAMEWORK_DIR/memory-protocol.md" \
+    "$FRAMEWORK_DIR/skills/assistant-memory/SKILL.md" >/tmp/p0p4-graph-source-wording.out; then
+    fail "found stale graph-only storage wording; see /tmp/p0p4-graph-source-wording.out"
 else
     pass
 fi

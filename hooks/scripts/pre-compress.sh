@@ -52,11 +52,12 @@ MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:
    - What should happen next
 
 3. MEMORY CAPTURE: Before context is lost, check if anything from this conversation should be saved:
-   - User corrections or preferences → use memory_add_insight or write to feedback/ via assistant-memory skill
-   - Non-obvious findings or gotchas → use memory_add_insight to record in the knowledge graph
+   - User corrections or preferences → use memory_add_entity (Rule or Preference)
+   - Non-obvious findings or gotchas → use memory_add_insight
    - New project/technology relationships → use memory_add_entity and memory_add_relation
+   - Task reflexions, decisions, or recurring patterns → use memory_reflect, memory_decide, or memory_pattern
 
-4. WORKING BUFFER: Write any mid-session findings to $STATE_DIR/working-buffer.md as scratch space.
+4. WORKING BUFFER: Write only session-state scratch notes to $STATE_DIR/working-buffer.md.
 
 This is your only chance to preserve state. Act now before compression."
 

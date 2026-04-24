@@ -145,19 +145,23 @@ if test_start "session-start: Claude, with task journal → outputs journal"; th
     rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "session-start: Claude, with graph rules → outputs rules"; then
+if test_start "session-start: Claude, graph.jsonl rule body → no direct injection"; then
     mkdir -p "$TEST_AGENT_HOME/.claude/memory"
     echo '{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl"
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"always-use-tabs"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"memory_context"* \
+        && "$HOOK_STDOUT" == *"memory_search"* \
+        && "$HOOK_STDOUT" != *"always-use-tabs"* \
+        && "$HOOK_STDOUT" != *"Always use tabs for indentation"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout missing always-use-tabs"
+        fail "exit=$HOOK_EXIT, expected MCP instructions without graph rule body leakage"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "session-start: Claude, graph.jsonl with mixed types → outputs only rules"; then
+if test_start "session-start: Claude, graph.jsonl with mixed types → no entity leakage"; then
     mkdir -p "$TEST_AGENT_HOME/.claude/memory"
     cat > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl" <<'JSONL'
 {"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
@@ -165,40 +169,50 @@ if test_start "session-start: Claude, graph.jsonl with mixed types → outputs o
 {"kind":"entity","name":"caching-helps-perf","type":"insight","observations":["Caching reduces latency by 50%"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
 JSONL
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"always-use-tabs"* \
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"memory_context"* \
+        && "$HOOK_STDOUT" == *"memory_search"* \
+        && "$HOOK_STDOUT" != *"always-use-tabs"* \
         && "$HOOK_STDOUT" != *"prefers-dark-mode"* \
         && "$HOOK_STDOUT" != *"caching-helps-perf"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected only rule entity in output"
+        fail "exit=$HOOK_EXIT, expected no direct graph entity leakage"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "session-start: Claude, no graph.jsonl → no rules output"; then
+if test_start "session-start: Claude, no graph.jsonl → MCP retrieval instruction"; then
     mkdir -p "$TEST_AGENT_HOME/.claude"
     # Ensure no graph.jsonl exists
     rm -f "$TEST_AGENT_HOME/.claude/memory/graph.jsonl"
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" != *"Memory rule"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"memory_context"* \
+        && "$HOOK_STDOUT" == *"memory_search"* \
+        && "$HOOK_STDOUT" != *"Memory rule"* \
+        && "$HOOK_STDOUT" != *"graph.jsonl"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout should not contain 'Memory rule' without graph.jsonl"
+        fail "exit=$HOOK_EXIT, expected MCP retrieval instruction without graph fallback"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "session-start: Claude, malformed line in graph.jsonl → still outputs valid rules"; then
+if test_start "session-start: Claude, malformed graph.jsonl → still outputs MCP instruction"; then
     mkdir -p "$TEST_AGENT_HOME/.claude/memory"
     cat > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl" <<'JSONL'
 this is not valid json at all
 {"kind":"entity","name":"use-strict-mode","type":"rule","observations":["Always enable strict mode"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
 JSONL
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"use-strict-mode"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"memory_context"* \
+        && "$HOOK_STDOUT" != *"use-strict-mode"* \
+        && "$HOOK_STDOUT" != *"Always enable strict mode"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout missing use-strict-mode (jq should skip malformed lines)"
+        fail "exit=$HOOK_EXIT, expected MCP instruction without parsing malformed graph.jsonl"
     fi
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
@@ -216,7 +230,7 @@ if test_start "session-start: Gemini, with task journal → valid JSON"; then
     rm -rf "$TEST_PROJECT/.gemini" "$TEST_AGENT_HOME/.gemini"
 fi
 
-if test_start "session-start: Gemini, with graph rules → valid JSON with full rules"; then
+if test_start "session-start: Gemini, with graph rules → valid JSON with MCP retrieval instruction"; then
     mkdir -p "$TEST_AGENT_HOME/.gemini/memory"
     echo '{"kind":"entity","name":"gemini-full-rule-regression","type":"rule","observations":["Gemini should receive full graph rules"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.gemini/memory/graph.jsonl"
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh gemini
@@ -224,11 +238,14 @@ if test_start "session-start: Gemini, with graph rules → valid JSON with full 
     additional_context=$(echo "$HOOK_STDOUT" | jq -r '.additionalContext // empty' 2>/dev/null || true)
     if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.additionalContext' >/dev/null 2>&1 \
-        && [[ "$additional_context" == *"gemini-full-rule-regression"* ]] \
-        && [[ "$additional_context" == *"Gemini should receive full graph rules"* ]]; then
+        && [[ "$additional_context" == *"memory_context"* ]] \
+        && [[ "$additional_context" == *"memory_search"* ]] \
+        && [[ "$additional_context" != *"gemini-full-rule-regression"* ]] \
+        && [[ "$additional_context" != *"Gemini should receive full graph rules"* ]] \
+        && [[ "$additional_context" != *"graph.jsonl"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, invalid JSON or missing full Gemini graph rule context"
+        fail "exit=$HOOK_EXIT, invalid JSON or graph rule leaked into Gemini context"
     fi
     rm -rf "$TEST_AGENT_HOME/.gemini"
 fi
@@ -253,7 +270,7 @@ if test_start "session-start: Codex, with task journal → hookSpecificOutput JS
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
-if test_start "session-start: Codex, with graph rules → compact memory summary and journal"; then
+if test_start "session-start: Codex, with graph rules → compact MCP retrieval instruction and journal"; then
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory"
     echo -e "# Task\nStatus: BUILDING\nStep: keep task visible" > "$TEST_PROJECT/.codex/task.md"
     echo '{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.codex/memory/graph.jsonl"
@@ -268,16 +285,17 @@ if test_start "session-start: Codex, with graph rules → compact memory summary
     additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
     if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' >/dev/null 2>&1 \
-        && [[ "$additional_context" == *"1 memory rule(s)"* ]] \
         && [[ "$additional_context" == *"memory_context"* ]] \
         && [[ "$additional_context" == *"memory_search"* ]] \
+        && [[ "$additional_context" == *"MCP"* ]] \
         && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
         && [[ "$additional_context" == *"keep task visible"* ]] \
         && [[ "$additional_context" != *"always-use-tabs"* ]] \
-        && [[ "$additional_context" != *"Always use tabs for indentation"* ]]; then
+        && [[ "$additional_context" != *"Always use tabs for indentation"* ]] \
+        && [[ "$additional_context" != *"graph.jsonl"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected compact Codex memory summary without rule body leakage"
+        fail "exit=$HOOK_EXIT, expected compact Codex MCP instruction without rule body leakage"
     fi
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
@@ -348,6 +366,24 @@ if test_start "post-compact: Claude, with task journal → re-injects content"; 
         fail "exit=$HOOK_EXIT, stdout missing RESTORED AFTER COMPACTION"
     fi
     rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "post-compact: Claude, graph.jsonl rule body → no fallback or direct injection"; then
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory"
+    echo '{"kind":"entity","name":"post-compact-rule","type":"rule","observations":["PostCompact must not inject this"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.claude/memory/graph.jsonl"
+    HOME="$TEST_AGENT_HOME" run_hook post-compact.sh claude
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"memory_context"* \
+        && "$HOOK_STDOUT" == *"memory_search"* \
+        && "$HOOK_STDOUT" != *"post-compact-rule"* \
+        && "$HOOK_STDOUT" != *"PostCompact must not inject this"* \
+        && "$HOOK_STDOUT" != *"graph.jsonl"* \
+        && "$HOOK_STDOUT" != *"fallback"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected PostCompact MCP reload instruction without graph fallback"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
 echo ""

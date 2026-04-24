@@ -10,13 +10,13 @@ You are an orchestrator. You delegate ALL file editing, code implementation, and
 
 ## Memory System (Assistant Framework)
 
-All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory/graph.jsonl`), accessed via memory-graph MCP tools.
+All cross-session memory is accessed through the **memory-graph MCP tools**, backed by the local memory store under `~/.claude/memory`.
 
 ### Entity Types
 
 | Type | Purpose | Priority |
 |---|---|---|
-| `Rule` | Behavioral mandates, corrections | Highest — always loaded at session start |
+| `Rule` | Behavioral mandates, corrections | Highest — retrieve via `memory_context` at session start |
 | `Preference` | User coding preferences, working style | High — loaded via memory_context |
 | `Insight` | Learned facts from past sessions | Normal — loaded via memory_context |
 | `Project` | Codebase / repository | Normal |
@@ -24,11 +24,10 @@ All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory
 | `Pattern` | Architectural decision | Normal |
 | `Convention` | Project-specific convention | Normal |
 
-**Project memory** — lives in `.claude/` at the project root (create on first use):
+**Project session state** — lives in `.claude/` at the project root (create on first use):
 
 | File | Purpose |
 |---|---|
-| `.claude/memory.md` | Project-specific decisions, architecture, conventions (git-tracked) |
 | `.claude/session.md` | Current session state: task, progress, blockers (ephemeral) |
 | `.claude/working-buffer.md` | Scratch space for mid-session summaries (ephemeral) |
 | `.claude/task.md` | Task journal for active work — single source of truth during build (ephemeral) |
@@ -41,16 +40,16 @@ All cross-session memory is stored in the **knowledge graph** (`~/.claude/memory
 3. If `.claude/session.md` exists → read it; resume from where it left off.
 4. If `.claude/working-buffer.md` exists → read it, then **clear** its contents.
 
-Rules are also injected by the session-start hook directly from `graph.jsonl`, available before the first MCP call.
+Hooks do not inject rule bodies directly. Use `memory_context` and `memory_search` to retrieve rules, preferences, and prior lessons.
 
 #### When Corrected
 If the user corrects a mistake or clarifies a preference:
-1. Use `memory_add_entity` with type `Rule` to record the correction in the knowledge graph.
+1. Use `memory_add_entity` with type `Rule` to record the correction through memory-graph MCP.
 2. Acknowledge the correction, then continue.
 
 #### After Task Completion
 If the task produced reusable insights:
-1. Use `memory_add_insight` to record the insight in the knowledge graph.
+1. Use `memory_add_insight` to record the insight through memory-graph MCP.
 2. If `assistant-reflexion` is available, invoke it for structured reflection.
 
 #### Memory Hygiene
