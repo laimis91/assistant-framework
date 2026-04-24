@@ -1130,6 +1130,72 @@ if test_start "task-journal-resolver: cache writes stay silent on permission fai
     rm -rf "$RESOLVER_TEST_HOME" "$RESOLVER_TEST_PROJECT"
 fi
 
+if test_start "task-journal-resolver: failed metadata write removes stale cache pair silently"; then
+    RESOLVER_TEST_HOME=$(mktemp -d)
+    RESOLVER_OLD_PROJECT=$(mktemp -d)
+    RESOLVER_NEW_PROJECT=$(mktemp -d)
+    mkdir -p "$RESOLVER_OLD_PROJECT/.codex" "$RESOLVER_NEW_PROJECT/.codex"
+    printf '# Task\nTask: old cached source\nStatus: BUILDING\n' > "$RESOLVER_OLD_PROJECT/.codex/task.md"
+    printf '# Task\nTask: new cached source\nStatus: BUILDING\n' > "$RESOLVER_NEW_PROJECT/.codex/task.md"
+
+    cache_dir="$RESOLVER_TEST_HOME/.codex/cache/workflow-state"
+    cache_file="$cache_dir/name-stale-meta.task.md"
+    cache_body_tmp="$cache_dir/body.tmp"
+    cache_meta_tmp="$cache_dir/meta.tmp.dir"
+    mkdir -p "$cache_dir"
+    cp "$RESOLVER_OLD_PROJECT/.codex/task.md" "$cache_file"
+    cache_body_checksum=$(cksum "$cache_file" | awk '{print $1 ":" $2}')
+    {
+        printf 'canonical_project_dir=%s\n' "$RESOLVER_OLD_PROJECT"
+        printf 'source_task_file=%s\n' "$RESOLVER_OLD_PROJECT/.codex/task.md"
+        printf 'cached_body_checksum=%s\n' "$cache_body_checksum"
+    } > "$cache_file.meta"
+
+    local_tmp_out=$(mktemp)
+    local_tmp_err=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$RESOLVER_TEST_HOME" \
+        CACHE_BODY_TMP="$cache_body_tmp" \
+        CACHE_META_TMP="$cache_meta_tmp" \
+        bash -c '
+        set -euo pipefail
+        MKTEMP_CALLS=0
+        mktemp() {
+            MKTEMP_CALLS=$((MKTEMP_CALLS + 1))
+            if [[ $MKTEMP_CALLS -eq 1 ]]; then
+                : > "$CACHE_BODY_TMP"
+                printf "%s\n" "$CACHE_BODY_TMP"
+                return 0
+            fi
+
+            mkdir -p "$CACHE_META_TMP"
+            printf "%s\n" "$CACHE_META_TMP"
+            return 0
+        }
+
+        . "$1"
+        assistant_best_effort_cache_write "$2" "$3" "$4"
+    ' bash "$HOOKS_DIR/task-journal-resolver.sh" \
+        "$RESOLVER_NEW_PROJECT/.codex/task.md" "$cache_file" "$RESOLVER_NEW_PROJECT" \
+        > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    HOOK_STDERR=$(cat "$local_tmp_err")
+    rm -f "$local_tmp_out" "$local_tmp_err"
+
+    if [[ $HOOK_EXIT -eq 0 \
+        && -z "$HOOK_STDOUT" \
+        && -z "$HOOK_STDERR" \
+        && ! -e "$cache_file" \
+        && ! -e "$cache_file.meta" \
+        && ! -e "$cache_body_tmp" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', stderr='$HOOK_STDERR', cache_file_exists=$([[ -e "$cache_file" ]] && printf yes || printf no), meta_exists=$([[ -e "$cache_file.meta" ]] && printf yes || printf no)"
+    fi
+
+    rm -rf "$RESOLVER_TEST_HOME" "$RESOLVER_OLD_PROJECT" "$RESOLVER_NEW_PROJECT"
+fi
+
 echo ""
 
 # ── codex install regression tests ───────────────────────────────────────────
@@ -1841,6 +1907,7 @@ EOF
 fi
 
 if test_start "workflow-enforcer: cached state fallback for forked workspace without project env"; then
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
 Task: Fix subagent state
@@ -1913,6 +1980,159 @@ EOF
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
 
+if test_start "workflow-enforcer: rewritten original after cache prime → no stale cache restore"; then
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Old active task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: New active task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Old active task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-enforcer: mixed cache body and metadata → no stale cache restore"; then
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Mixed-publish old task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    mixed_cache_valid=true
+    mixed_cache_count=0
+    for mixed_cache_file in \
+        "$TEST_AGENT_HOME/.claude/cache/workflow-state/name-$(basename "$TEST_PROJECT").task.md" \
+        "$TEST_AGENT_HOME/.codex/cache/workflow-state/name-$(basename "$TEST_PROJECT").task.md" \
+        "$TEST_AGENT_HOME/.gemini/cache/workflow-state/name-$(basename "$TEST_PROJECT").task.md"; do
+        if [[ -f "$mixed_cache_file" ]] && grep -q '^cached_body_checksum=' "$mixed_cache_file.meta" 2>/dev/null; then
+            mixed_cache_count=$((mixed_cache_count + 1))
+            cat > "$mixed_cache_file" <<'EOF'
+Task: Mixed-publish new task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+        else
+            mixed_cache_valid=false
+        fi
+    done
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+    mixed_cache_remainders=$(find "$TEST_AGENT_HOME" -path "*/cache/workflow-state/name-$(basename "$TEST_PROJECT").task.md*" -print 2>/dev/null || true)
+
+    if [[ "$mixed_cache_valid" == "true" && $mixed_cache_count -gt 0 && $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Mixed-publish old task" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Mixed-publish new task" \
+        && [[ -z "$mixed_cache_remainders" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', mixed_cache_valid=$mixed_cache_valid, mixed_cache_count=$mixed_cache_count, mixed_cache_remainders='$mixed_cache_remainders'"
+    fi
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-enforcer: deleted original after cache prime → no stale cache restore"; then
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Deleted cached task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    echo '{"prompt": "prime cache", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    rm -f /tmp/_wf_out
+
+    rm -f "$TEST_PROJECT/.codex/task.md"
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+    cache_entries_after_deleted=$(find "$TEST_AGENT_HOME" -path '*/cache/workflow-state/*' -print 2>/dev/null || true)
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Deleted cached task" \
+        && [[ -z "$cache_entries_after_deleted" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', cache_entries_after_deleted='$cache_entries_after_deleted'"
+    fi
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
 if test_start "workflow-enforcer: completed observed after active cache → no stale cache restore after delete"; then
     clear_workflow_cache
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
@@ -1941,6 +2161,7 @@ EOF
         > /tmp/_wf_out 2>/dev/null
     rm -f /tmp/_wf_out
 
+    cache_entries_after_completed=$(find "$TEST_AGENT_HOME" -path '*/cache/workflow-state/*' -print 2>/dev/null || true)
     rm -f "$TEST_PROJECT/.codex/task.md"
 
     FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
@@ -1958,13 +2179,51 @@ EOF
 
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
-        && ! echo "$HOOK_STDOUT" | grep -q "Cached active task"; then
+        && ! echo "$HOOK_STDOUT" | grep -q "Cached active task" \
+        && [[ -z "$cache_entries_after_completed" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', cache_entries_after_completed='$cache_entries_after_completed'"
     fi
     clear_workflow_cache
     rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-enforcer: legacy metadata-less cache entry → ignored and removed"; then
+    clear_workflow_cache
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    legacy_cache_dir="$TEST_AGENT_HOME/.claude/cache/workflow-state"
+    legacy_cache_file="$legacy_cache_dir/name-$(basename "$TEST_PROJECT").task.md"
+    mkdir -p "$legacy_cache_dir"
+    cat > "$legacy_cache_file" <<'EOF'
+Task: Legacy cached task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+EOF
+
+    FORK_ROOT=$(mktemp -d)/"$(basename "$TEST_PROJECT")"
+    mkdir -p "$FORK_ROOT/subagent/worktree"
+    (
+        cd "$FORK_ROOT/subagent/worktree"
+        echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+    )
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    rm -rf "$(dirname "$FORK_ROOT")"
+
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Legacy cached task" \
+        && [[ ! -f "$legacy_cache_file" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT', legacy_cache_file_exists=$([[ -f "$legacy_cache_file" ]] && printf yes || printf no)"
+    fi
+    clear_workflow_cache
 fi
 
 echo ""

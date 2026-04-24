@@ -25,6 +25,21 @@ assistant_canonical_dir() {
     fi
 }
 
+assistant_canonical_file() {
+    local file="${1:-}"
+    local dir base
+
+    [[ -n "$file" ]] || return 1
+
+    dir=$(dirname "$file")
+    base=$(basename "$file")
+    if [[ -d "$dir" ]]; then
+        printf '%s/%s\n' "$(assistant_canonical_dir "$dir")" "$base"
+    else
+        printf '%s\n' "$file"
+    fi
+}
+
 assistant_task_state_dirs() {
     printf '%s\n' ".claude" ".gemini" ".codex"
 }
@@ -181,7 +196,12 @@ assistant_purge_workflow_cache() {
 
     while IFS= read -r cache_dir; do
         [[ -d "$cache_dir" ]] || continue
-        rm -f "$cache_dir/path-$path_hash.task.md" "$cache_dir/name-$repo_key.task.md" 2>/dev/null || true
+        rm -f \
+            "$cache_dir/path-$path_hash.task.md" \
+            "$cache_dir/path-$path_hash.task.md.meta" \
+            "$cache_dir/name-$repo_key.task.md" \
+            "$cache_dir/name-$repo_key.task.md.meta" \
+            2>/dev/null || true
     done < <(assistant_workflow_cache_dirs)
 }
 
@@ -203,8 +223,143 @@ assistant_emit_active_task_journal() {
 assistant_best_effort_cache_write() {
     local task_file="$1"
     local cache_file="$2"
+    local project_dir="$3"
+    local canonical_project_dir canonical_task_file cache_dir cache_name cache_tmp meta_tmp cached_body_checksum
 
-    { cat "$task_file" > "$cache_file"; } >/dev/null 2>&1 || true
+    canonical_project_dir=$(assistant_canonical_dir "$project_dir")
+    canonical_task_file=$(assistant_canonical_file "$task_file")
+    cache_dir=$(dirname "$cache_file")
+    cache_name=$(basename "$cache_file")
+
+    cache_tmp=$(mktemp "$cache_dir/.${cache_name}.tmp.XXXXXX" 2>/dev/null) || {
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    }
+
+    meta_tmp=$(mktemp "$cache_dir/.${cache_name}.meta.tmp.XXXXXX" 2>/dev/null) || {
+        rm -f "$cache_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    }
+
+    if ! { cat "$task_file" > "$cache_tmp"; } >/dev/null 2>&1; then
+        rm -f "$cache_tmp" "$meta_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    fi
+
+    cached_body_checksum=$(assistant_file_checksum "$cache_tmp" || true)
+    if [[ -z "$cached_body_checksum" ]]; then
+        rm -f "$cache_tmp" "$meta_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    fi
+
+    if ! {
+        {
+            printf 'canonical_project_dir=%s\n' "$canonical_project_dir"
+            printf 'source_task_file=%s\n' "$canonical_task_file"
+            printf 'cached_body_checksum=%s\n' "$cached_body_checksum"
+        } > "$meta_tmp"
+    } >/dev/null 2>&1; then
+        rm -f "$cache_tmp" "$meta_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    fi
+
+    if ! mv "$cache_tmp" "$cache_file" >/dev/null 2>&1; then
+        rm -f "$cache_tmp" "$meta_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    fi
+
+    if ! mv "$meta_tmp" "$cache_file.meta" >/dev/null 2>&1; then
+        rm -f "$cache_tmp" "$meta_tmp" 2>/dev/null || true
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 0
+    fi
+}
+
+assistant_remove_workflow_cache_entry() {
+    local cache_file="${1:-}"
+
+    [[ -n "$cache_file" ]] || return 0
+    rm -f "$cache_file" "$cache_file.meta" 2>/dev/null || true
+}
+
+assistant_cache_meta_value() {
+    local cache_file="$1"
+    local key="$2"
+    local meta_file="$cache_file.meta"
+
+    [[ -f "$meta_file" ]] || return 1
+
+    awk -v key="$key" '
+        index($0, key "=") == 1 {
+            sub(key "=", "", $0)
+            print
+            exit
+        }
+    ' "$meta_file" 2>/dev/null
+}
+
+assistant_file_checksum() {
+    local file="${1:-}"
+
+    [[ -f "$file" ]] || return 1
+    cksum "$file" 2>/dev/null | awk '{print $1 ":" $2}'
+}
+
+assistant_validate_cached_task_journal() {
+    local cache_file="${1:-}"
+    local source_task_file source_project_dir cached_body_checksum actual_body_checksum source_body_checksum
+
+    [[ -f "$cache_file" ]] || return 1
+
+    if [[ ! -f "$cache_file.meta" ]]; then
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    source_project_dir=$(assistant_cache_meta_value "$cache_file" "canonical_project_dir" || true)
+    source_task_file=$(assistant_cache_meta_value "$cache_file" "source_task_file" || true)
+    cached_body_checksum=$(assistant_cache_meta_value "$cache_file" "cached_body_checksum" || true)
+
+    if [[ -z "$source_project_dir" || -z "$source_task_file" || -z "$cached_body_checksum" ]]; then
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    actual_body_checksum=$(assistant_file_checksum "$cache_file" || true)
+    if [[ -z "$actual_body_checksum" || "$actual_body_checksum" != "$cached_body_checksum" ]]; then
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    if [[ ! -f "$source_task_file" ]]; then
+        assistant_purge_workflow_cache "$source_project_dir"
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    if assistant_task_journal_completed "$source_task_file"; then
+        assistant_purge_workflow_cache "$source_project_dir"
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    source_body_checksum=$(assistant_file_checksum "$source_task_file" || true)
+    if [[ -z "$source_body_checksum" || "$source_body_checksum" != "$cached_body_checksum" ]]; then
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    if assistant_task_journal_completed "$cache_file"; then
+        assistant_remove_workflow_cache_entry "$cache_file"
+        return 1
+    fi
+
+    return 0
 }
 
 assistant_cache_task_journal() {
@@ -226,8 +381,8 @@ assistant_cache_task_journal() {
 
     while IFS= read -r cache_dir; do
         mkdir -p "$cache_dir" 2>/dev/null || continue
-        assistant_best_effort_cache_write "$task_file" "$cache_dir/path-$path_hash.task.md"
-        assistant_best_effort_cache_write "$task_file" "$cache_dir/name-$repo_key.task.md"
+        assistant_best_effort_cache_write "$task_file" "$cache_dir/path-$path_hash.task.md" "$project_dir"
+        assistant_best_effort_cache_write "$task_file" "$cache_dir/name-$repo_key.task.md" "$project_dir"
     done < <(assistant_workflow_cache_dirs)
 }
 
@@ -244,9 +399,7 @@ assistant_restore_cached_task_journal() {
             path_hash=$(printf '%s' "$project_dir" | cksum | awk '{print $1}')
             cache_file="$cache_dir/path-$path_hash.task.md"
             if [[ -f "$cache_file" ]]; then
-                if assistant_task_journal_completed "$cache_file"; then
-                    rm -f "$cache_file" 2>/dev/null || true
-                else
+                if assistant_validate_cached_task_journal "$cache_file"; then
                     printf '%s\n' "$cache_file"
                     return 0
                 fi
@@ -258,9 +411,7 @@ assistant_restore_cached_task_journal() {
             path_hash=$(printf '%s' "$(assistant_canonical_dir "$git_root")" | cksum | awk '{print $1}')
             cache_file="$cache_dir/path-$path_hash.task.md"
             if [[ -f "$cache_file" ]]; then
-                if assistant_task_journal_completed "$cache_file"; then
-                    rm -f "$cache_file" 2>/dev/null || true
-                else
+                if assistant_validate_cached_task_journal "$cache_file"; then
                     printf '%s\n' "$cache_file"
                     return 0
                 fi
@@ -270,9 +421,7 @@ assistant_restore_cached_task_journal() {
             repo_key=$(assistant_safe_name "$repo_name")
             cache_file="$cache_dir/name-$repo_key.task.md"
             if [[ -f "$cache_file" ]]; then
-                if assistant_task_journal_completed "$cache_file"; then
-                    rm -f "$cache_file" 2>/dev/null || true
-                else
+                if assistant_validate_cached_task_journal "$cache_file"; then
                     printf '%s\n' "$cache_file"
                     return 0
                 fi
@@ -285,9 +434,7 @@ assistant_restore_cached_task_journal() {
             repo_key=$(assistant_safe_name "$repo_name")
             cache_file="$cache_dir/name-$repo_key.task.md"
             if [[ -f "$cache_file" ]]; then
-                if assistant_task_journal_completed "$cache_file"; then
-                    rm -f "$cache_file" 2>/dev/null || true
-                else
+                if assistant_validate_cached_task_journal "$cache_file"; then
                     printf '%s\n' "$cache_file"
                     return 0
                 fi
