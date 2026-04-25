@@ -436,6 +436,25 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     fi
 fi
 
+# ── Install eval fixtures/docs used by local tools ───────────────────────────
+
+EVAL_DOCS_SOURCE="$FRAMEWORK_DIR/docs/evals"
+EVAL_DOCS_TARGET="$AGENT_HOME/docs/evals"
+
+if [[ -d "$EVAL_DOCS_SOURCE" ]]; then
+    echo ""
+    if $DRY_RUN; then
+        dry "rsync $EVAL_DOCS_SOURCE/ -> $EVAL_DOCS_TARGET/"
+    else
+        mkdir -p "$EVAL_DOCS_TARGET"
+        rsync -a --delete \
+            --exclude='.DS_Store' \
+            "$EVAL_DOCS_SOURCE/" "$EVAL_DOCS_TARGET/"
+
+        ok "Eval docs -> $EVAL_DOCS_TARGET/"
+    fi
+fi
+
 # ── Register MCP servers ─────────────────────────────────────────────────────
 
 # Register memory-graph MCP server in the correct config file per agent.

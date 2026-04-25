@@ -198,6 +198,23 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
+test_start "installer includes eval fixture used by installed eval runner"
+INSTALL_HOME_EIGHT="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_EIGHT"
+if HOME="$INSTALL_HOME_EIGHT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-evals.out 2>/tmp/p0p4-install-evals.err; then
+    installed_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-framework-instruction-evals.sh"
+    installed_fixture="$INSTALL_HOME_EIGHT/.codex/docs/evals/framework-instruction-cases.json"
+    if [[ -x "$installed_runner" ]] \
+        && [[ -f "$installed_fixture" ]] \
+        && HOME="$INSTALL_HOME_EIGHT" "$installed_runner" --validate-fixture >/tmp/p0p4-installed-eval-runner.out 2>/tmp/p0p4-installed-eval-runner.err; then
+        pass
+    else
+        fail "installed eval runner must validate the installed fixture; see /tmp/p0p4-installed-eval-runner.err"
+    fi
+else
+    fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"
+fi
+
 test_start "Codex hook template is valid JSON with one PreToolUse key"
 if jq -e . "$FRAMEWORK_DIR/hooks/codex-settings.json" >/dev/null \
     && [[ "$(grep -o '"PreToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]]; then
