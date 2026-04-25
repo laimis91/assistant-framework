@@ -6,6 +6,23 @@ schema_version: "1.0"
 contract: handoffs
 skill: assistant-review
 
+worker_status_protocol:
+  description: "Reviewer returns include a compact status packet while preserving the findings/rubric schema."
+  statuses:
+    - value: DONE
+      meaning: "No known concerns; requested review completed and no must-fix or should-fix findings remain."
+    - value: DONE_WITH_CONCERNS
+      meaning: "Review completed and is usable, but follow-up risk or nit-level concerns exist."
+    - value: NEEDS_CONTEXT
+      meaning: "Orchestration must clarify missing review material or requirements before review can proceed."
+    - value: BLOCKED
+      meaning: "Cannot proceed because an environment, dependency, permission, or tool issue prevents review."
+  packet_rules:
+    - "status is required on every Reviewer return."
+    - "findings, summary, and verdict remain required and are not replaced by status."
+    - "evidence is required to support the verdict and any findings."
+    - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+
 handoffs:
 
   # ─────────────────────────────────────────────
@@ -95,6 +112,12 @@ handoffs:
         notes: "Set to false for trivial/small scope single-round clean passes."
 
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result; DONE requires verdict=clean with no must-fix or should-fix findings"
+
       - name: round
         type: int
         required: true
@@ -136,6 +159,19 @@ handoffs:
         description: "1-paragraph overall assessment of code quality"
         validation: "Non-empty. Must reference specific patterns observed, not generic praise."
 
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Review material, files, searches, or checks used to support findings and verdict"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+
       - name: verdict
         type: enum
         required: true
@@ -146,6 +182,12 @@ handoffs:
           has_must_fix: at least one finding with severity=must-fix.
           has_should_fix: no must-fix, but at least one should-fix.
           has_nits_only: only nit-level findings.
+
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve"
 
       - name: rubric_scores
         type: object
@@ -207,13 +249,13 @@ handoffs:
             required: false
             description: "If a critical finding caps the score, describe it here"
 
-    on_missing_field: "Re-dispatch Reviewer. findings and verdict are never optional — a review without them is not a review."
+    on_missing_field: "Re-dispatch Reviewer. status, findings, evidence, and verdict are never optional — a review without them is not a review."
 
 # ─────────────────────────────────────────────
 # Validation behavior:
 # 1. Before dispatch: verify all required context_fields are populated
 # 2. Compute confidence_threshold from round number (not hardcoded in prompt)
-# 3. After return: verify findings[], summary, and verdict are all present
+# 3. After return: verify status, findings[], summary, evidence, and verdict are all present
 # 4. Filter any findings with confidence_pct < confidence_threshold
 # 5. Filter any findings that match previously_fixed descriptions
 # 6. If rubric_required: verify rubric_scores is present with all dimensions

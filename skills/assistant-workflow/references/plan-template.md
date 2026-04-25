@@ -14,6 +14,35 @@ No separate plan document needed. Include directly in your response:
 **SRP check:** [single responsibility confirmed / split needed]
 ```
 
+## Executable Task Packet
+
+For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan.
+
+```markdown
+### Task [ID]: [short name]
+- Behavior / acceptance criteria:
+  - [binary observable behavior]
+  - [binary observable behavior]
+- Files:
+  - Create: [exact paths or "none"]
+  - Modify: [exact paths or "none"]
+  - Test: [exact test paths or "none"]
+- TDD / RED step:
+  - Applies: [yes/no]
+  - RED command: [command or "N/A"]
+  - Expected failure: [specific failing test/assertion or "N/A"]
+- Implementation notes / constraints:
+  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+- Verification:
+  - Command: [exact command]
+  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Deviation / rollback rule:
+  - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
+- Worker status / evidence:
+  - Status: [pending/in_progress/done/blocked]
+  - Evidence: [files changed, test result, review note, or "pending"]
+```
+
 ## Medium Tasks — Standard Plan
 
 Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
@@ -60,10 +89,30 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ### Risks / edge cases
 - [risk]: [mitigation]
 
-## Implementation steps
-1. [Step]: [files], [what changes]
-2. [Step]: [files], [what changes]
-3. ...
+## Task packets
+Use the Executable Task Packet structure for each implementation unit. Order packets by dependency and align each packet to one component from Decompose when components exist.
+
+### Task [ID]: [short name]
+- Behavior / acceptance criteria:
+  - [binary observable behavior]
+- Files:
+  - Create: [exact paths or "none"]
+  - Modify: [exact paths or "none"]
+  - Test: [exact test paths or "none"]
+- TDD / RED step:
+  - Applies: [yes/no]
+  - RED command: [command or "N/A"]
+  - Expected failure: [specific failing test/assertion or "N/A"]
+- Implementation notes / constraints:
+  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+- Verification:
+  - Command: [exact command]
+  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Deviation / rollback rule:
+  - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
+- Worker status / evidence:
+  - Status: pending
+  - Evidence: pending
 
 ## Tests to run
 - [command]: [what it validates]
@@ -136,10 +185,30 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 ### Risks / edge cases
 - [risk]: [mitigation]
 
-## Implementation steps
-1. [Step]: [files], [what changes]
-2. [Step]: [files], [what changes]
-3. ...
+## Task packets
+Use the Executable Task Packet structure for each implementation unit. Order packets by dependency, align packets to Decompose components, and keep each packet independently verifiable before the next component starts.
+
+### Task [ID]: [short name]
+- Behavior / acceptance criteria:
+  - [binary observable behavior]
+- Files:
+  - Create: [exact paths or "none"]
+  - Modify: [exact paths or "none"]
+  - Test: [exact test paths or "none"]
+- TDD / RED step:
+  - Applies: [yes/no]
+  - RED command: [command or "N/A"]
+  - Expected failure: [specific failing test/assertion or "N/A"]
+- Implementation notes / constraints:
+  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+- Verification:
+  - Command: [exact command]
+  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Deviation / rollback rule:
+  - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
+- Worker status / evidence:
+  - Status: pending
+  - Evidence: pending
 
 ## Tests to run
 - [command]: [what it validates]

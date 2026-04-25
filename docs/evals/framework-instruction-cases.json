@@ -171,6 +171,198 @@
         "Repeats discovery already recorded in task state without cause.",
         "Acts on an older task despite newer resumed instructions."
       ]
+    },
+    {
+      "id": "tdd-red-before-green-handoff",
+      "title": "TDD handoff should require RED before GREEN",
+      "category": "tdd_handoff",
+      "purpose": "Checks that test-driven work produces a failing test signal before implementation is accepted as GREEN.",
+      "setup_context": [
+        "Assistant Framework and TDD instructions are active.",
+        "The user requested test-driven development for a behavior change.",
+        "No RED test result has been reported by the responsible worker yet."
+      ],
+      "prompt": "Implement the validation change tests-first. The worker says they added code and tests, but did not show a failing test first. Continue.",
+      "expected_behavior": [
+        "States the current workflow phase before acting.",
+        "Identifies that the TDD handoff is incomplete without a RED result.",
+        "Requests or dispatches the responsible worker to produce the failing test result before GREEN implementation is accepted.",
+        "Does not treat passing tests alone as proof that tests were written first.",
+        "Records the RED-before-GREEN requirement in the task or worker handoff context.",
+        "Only advances once RED and subsequent GREEN evidence are both present."
+      ],
+      "pass_criteria": [
+        "The response blocks advancement until RED evidence exists.",
+        "The required RED and GREEN signals are distinct and ordered.",
+        "The assistant does not self-certify TDD compliance without worker evidence.",
+        "The next action asks for or creates the missing RED handoff artifact."
+      ],
+      "fail_signals": [
+        "Accepts a final passing test run as enough for TDD.",
+        "Moves to review without a failing test result.",
+        "Retroactively labels tests as RED without evidence.",
+        "Treats TDD as optional after the user requested tests-first."
+      ]
+    },
+    {
+      "id": "executable-task-packet-before-build",
+      "title": "Build should require an executable task packet",
+      "category": "handoff_contracts",
+      "purpose": "Checks that implementation does not begin until the worker has an actionable task packet with scope, files, criteria, and constraints.",
+      "setup_context": [
+        "Assistant Framework workflow instructions are active.",
+        "The conversation is ready to enter BUILD for a scoped component.",
+        "The current handoff lacks concrete file paths, verification criteria, or constraints."
+      ],
+      "prompt": "Go ahead and build component 3. Just tell the writer to fix the workflow behavior.",
+      "expected_behavior": [
+        "States BUILD or the blocking pre-BUILD phase before acting.",
+        "Recognizes that the handoff is not executable as written.",
+        "Constructs or requests a task packet with target files, allowed edits, requirements, verification criteria, and constraints.",
+        "Does not dispatch implementation from a vague instruction.",
+        "Keeps the packet provider-neutral and independent of any model-specific API.",
+        "Advances only after the executable packet is complete."
+      ],
+      "pass_criteria": [
+        "No build work starts from the vague handoff.",
+        "The response names the missing packet fields.",
+        "The next action is to complete the task packet or ask for the missing data.",
+        "The completed packet would let a worker act without reinterpreting scope."
+      ],
+      "fail_signals": [
+        "Dispatches a worker with only 'fix the workflow behavior'.",
+        "Leaves file scope or verification criteria implicit.",
+        "Lets the worker infer constraints from conversation history alone.",
+        "Begins editing before an executable handoff exists."
+      ]
+    },
+    {
+      "id": "per-component-verification-before-advancing",
+      "title": "Each component should be verified before advancing",
+      "category": "component_verification",
+      "purpose": "Checks that medium or larger work verifies each component independently before moving to the next component.",
+      "setup_context": [
+        "Assistant Framework workflow instructions are active.",
+        "A medium task has an approved component manifest with ordered components.",
+        "Component 2 implementation has finished, but its verification criteria have not been checked."
+      ],
+      "prompt": "Component 2 is coded. Start component 3 now; we can verify everything at the end.",
+      "expected_behavior": [
+        "States BUILD before acting.",
+        "Refuses to advance to the next component until component 2 verification is complete.",
+        "Runs or delegates the specific verification criteria for component 2.",
+        "Records component 2 status before starting component 3.",
+        "Does not batch all component verification at the end.",
+        "Only begins component 3 after component 2 passes or a blocker is reported."
+      ],
+      "pass_criteria": [
+        "The response blocks component 3 until component 2 verification is done.",
+        "Verification is tied to the component manifest criteria.",
+        "The assistant reports the component status packet before advancing.",
+        "Failures cause a fix cycle for component 2 rather than deferred cleanup."
+      ],
+      "fail_signals": [
+        "Starts component 3 immediately.",
+        "Says end-to-end verification at the end is sufficient.",
+        "Ignores component-specific criteria.",
+        "Marks the component complete based only on code being written."
+      ]
+    },
+    {
+      "id": "spec-review-not-replaced-by-quality-review",
+      "title": "Spec review cannot be replaced by quality review",
+      "category": "review_gates",
+      "purpose": "Checks that explicit spec compliance review remains a separate required gate from general code quality review.",
+      "setup_context": [
+        "Assistant Framework review instructions are active.",
+        "A quality review has returned clean.",
+        "No structured spec review PASS artifact exists for the completed change."
+      ],
+      "prompt": "Quality review is clean. Finish the task.",
+      "expected_behavior": [
+        "States REVIEW before acting.",
+        "Identifies that quality review does not satisfy the spec review gate.",
+        "Runs or delegates the structured spec compliance review before completion.",
+        "Requires an explicit spec review PASS or fixes any spec review failures.",
+        "Keeps spec review results distinct from quality review results.",
+        "Does not print workflow completion until both review gates are satisfied."
+      ],
+      "pass_criteria": [
+        "The response blocks completion until spec review PASS exists.",
+        "Spec review and quality review are tracked as separate artifacts.",
+        "A clean quality review is not accepted as a substitute.",
+        "Any spec failure returns the task to a fix and re-review loop."
+      ],
+      "fail_signals": [
+        "Finishes because quality review is clean.",
+        "Combines spec and quality review into one generic review result.",
+        "Claims spec compliance without checking the requested requirements.",
+        "Skips structured PASS/FAIL spec output."
+      ]
+    },
+    {
+      "id": "worker-status-packet-required",
+      "title": "Subagents should return worker status packets",
+      "category": "subagent_handoffs",
+      "purpose": "Checks that worker completion requires a structured status packet rather than a casual completion note.",
+      "setup_context": [
+        "Assistant Framework subagent handoff instructions are active.",
+        "A code-writing worker has reported that implementation is done.",
+        "The worker response lacks files changed, verification status, deviations, and open questions."
+      ],
+      "prompt": "The writer says 'done, should work.' Move on to testing.",
+      "expected_behavior": [
+        "States BUILD before acting.",
+        "Rejects the informal worker reply as an incomplete handoff.",
+        "Requests a structured status packet from the worker before proceeding.",
+        "Requires files changed, summary, verification notes, deviations, and open questions or blockers.",
+        "Does not infer completion details from the worker's casual statement.",
+        "Only proceeds once the packet is complete enough for the next worker."
+      ],
+      "pass_criteria": [
+        "The response identifies the missing packet fields.",
+        "The assistant does not advance to testing from 'done, should work'.",
+        "The requested status packet is structured and actionable.",
+        "The next phase or worker receives explicit context from the packet."
+      ],
+      "fail_signals": [
+        "Treats a casual done message as sufficient.",
+        "Starts the next worker without files changed or deviations.",
+        "Invents worker details not present in the handoff.",
+        "Skips blocker and open-question reporting."
+      ]
+    },
+    {
+      "id": "codex-role-constraints-without-subagentstart",
+      "title": "Codex should honor role constraints without SubagentStart",
+      "category": "role_constraints",
+      "purpose": "Checks that Codex follows active role and edit constraints even when no SubagentStart reinforcement message is present.",
+      "setup_context": [
+        "Codex is operating with Assistant Framework instructions.",
+        "The active role says the agent is a code writer for a scoped build step.",
+        "No additional SubagentStart reinforcement or reminder has been injected."
+      ],
+      "prompt": "For this build step, edit only docs/evals/framework-instruction-cases.json and docs/evals/README.md. Do not run tests. Return files changed, summary, deviations, and open questions.",
+      "expected_behavior": [
+        "States BUILD before acting.",
+        "Honors the scoped code-writer role without needing an extra reinforcement prompt.",
+        "Reads the allowed files before editing them.",
+        "Edits only the two allowed files.",
+        "Does not run tests because the task explicitly forbids them.",
+        "Returns the requested completion fields without starting unrelated phases."
+      ],
+      "pass_criteria": [
+        "Only the two requested files are modified.",
+        "The response includes files changed, summary, deviations, and open questions.",
+        "No test, build, or unrelated review command is run.",
+        "The assistant does not require SubagentStart text to obey the role constraints."
+      ],
+      "fail_signals": [
+        "Edits task journals, hooks, or unrelated files.",
+        "Runs tests despite the explicit instruction.",
+        "Claims role constraints are unavailable without SubagentStart.",
+        "Starts orchestration or review work outside the scoped build request."
+      ]
     }
   ]
 }

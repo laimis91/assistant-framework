@@ -12,6 +12,37 @@ contract: handoffs
 skill: assistant-workflow
 
 # ─────────────────────────────────────────────
+# Worker Status Protocol
+# ─────────────────────────────────────────────
+worker_status_protocol:
+  description: "CodeMapper, Explorer, Architect, CodeWriter, BuilderTester, and Reviewer returns include a compact status packet so the orchestrator can route results deterministically."
+  statuses:
+    - value: DONE
+      meaning: "No known concerns; requested work completed within scope."
+    - value: DONE_WITH_CONCERNS
+      meaning: "Usable result, but follow-up risk or trade-off exists and is recorded."
+    - value: NEEDS_CONTEXT
+      meaning: "Orchestration must clarify missing information before the worker can proceed."
+    - value: BLOCKED
+      meaning: "Cannot proceed because an environment, dependency, permission, or tool issue prevents progress."
+    - value: DEVIATED
+      meaning: "The worker had to depart from the approved plan or requested scope; deviation evidence is required."
+    - value: FAILED_VERIFICATION
+      meaning: "Verification ran and failed; failure evidence is required."
+  packet_rules:
+    - "status is required on CodeMapper, Explorer, Architect, CodeWriter, BuilderTester, and Reviewer returns."
+    - "evidence is required for CodeMapper, Explorer, Architect, CodeWriter, and Reviewer returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION."
+    - "verification.evidence is required for BuilderTester returns."
+    - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+    - "deviation_details is required for Architect and CodeWriter returns with DEVIATED."
+    - "CodeMapper, Explorer, and Reviewer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED."
+    - "Architect and CodeWriter status values also include DEVIATED."
+    - "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION."
+    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur."
+    - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."
+    - "findings is required for Reviewer returns."
+
+# ─────────────────────────────────────────────
 # Orchestrator → CodeMapper
 # ─────────────────────────────────────────────
 handoffs:
@@ -34,6 +65,28 @@ handoffs:
         required: false
         description: "Boundaries the mapper should note (e.g., 'ignore tests/')"
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result"
+      - name: evidence
+        type: object[]
+        required: true
+        description: "File paths or searches that support the map"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before discovery can continue"
       - name: project_type
         type: string
         required: true
@@ -130,6 +183,28 @@ handoffs:
         required: false
         description: "Output from CodeMapper if available — avoids re-exploring structure"
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result"
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Files, searches, or traces that support the findings"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before discovery can continue"
       - name: execution_paths
         type: object[]
         required: true
@@ -212,6 +287,33 @@ handoffs:
         enum_values: [medium, large, mega]
         description: "Determines component count range (medium: 2-7, large/mega: 3-7)"
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
+        description: "Worker status packet result"
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Files, patterns, or searches that support the decomposition"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before decomposition can continue"
+      - name: deviation_details
+        type: string
+        required: false
+        condition: "status is DEVIATED"
+        description: "What the decomposition had to change from the requested scope or approved direction"
       - name: components
         type: object[]
         required: true
@@ -319,27 +421,86 @@ handoffs:
             type: string[]
             required: true
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
+        description: "Worker status packet result"
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Files, patterns, or searches that support the blueprint"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before planning can continue"
+      - name: deviation_details
+        type: string
+        required: false
+        condition: "status is DEVIATED"
+        description: "What the blueprint had to change from the requested scope or approved direction"
       - name: implementation_steps
         type: object[]
         required: true
-        description: "Ordered steps with file paths and test criteria"
+        description: "Ordered executable task packets with exact create/modify/test file lists, acceptance/test criteria, and verification commands. Legacy readers may also inspect files when present, but executable plans must use the exact files_to_* fields."
         min_items: 1
         object_fields:
           - name: order
             type: int
             required: true
+          - name: task_id
+            type: string
+            required: false
+            description: "Stable task packet id when using executable task packets"
           - name: description
             type: string
             required: true
           - name: files
             type: string[]
+            required: false
+            description: "Legacy-readable summary of file paths this step touches; do not use as the executable task packet contract"
+          - name: files_to_create
+            type: string[]
             required: true
-            description: "File paths this step touches"
+            description: "Exact files CodeWriter is expected to create for this task packet; use an empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files CodeWriter is expected to modify for this task packet; use an empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
+          - name: acceptance_criteria
+            type: string[]
+            required: true
+            description: "Observable behavior this task packet must deliver"
           - name: test_criteria
             type: string[]
             required: true
             description: "What to test after this step"
             min_items: 1
+          - name: verification_command
+            type: string
+            required: true
+            description: "Exact command BuilderTester should run for this step or task packet"
+          - name: expected_success_signal
+            type: string
+            required: true
+            description: "Specific pass signal for the verification command"
+          - name: deviation_rollback_rule
+            type: string
+            required: true
+            description: "What to do if the implementation cannot follow this step exactly"
           - name: component_name
             type: string
             required: false
@@ -429,6 +590,79 @@ handoffs:
         type: int
         required: true
         description: "Which step(s) to implement"
+      - name: current_task_packet
+        type: object
+        required: false
+        condition: "plan uses executable task packets"
+        description: "Executable task packet for the current build step; overrides any ambiguous prose in the plan"
+        object_fields:
+          - name: task_id
+            type: string
+            required: true
+          - name: name
+            type: string
+            required: true
+          - name: behavior_acceptance_criteria
+            type: string[]
+            required: true
+          - name: files_to_create
+            type: string[]
+            required: true
+          - name: files_to_modify
+            type: string[]
+            required: true
+          - name: files_to_test
+            type: string[]
+            required: true
+          - name: tdd_applies
+            type: boolean
+            required: true
+          - name: red_command
+            type: string
+            required: false
+            description: "Planning field for BuilderTester RED execution; not RED evidence and not sufficient to pass the implementation gate"
+          - name: expected_red_failure
+            type: string
+            required: false
+            description: "Planning field for expected RED behavior; not RED evidence and not sufficient to pass the implementation gate"
+          - name: red_evidence
+            type: object
+            required: false
+            condition: "required when tdd_applies is true or tdd_mode is true"
+            description: "BuilderTester RED evidence received by CodeWriter before implementation; CodeWriter does not own RED and must return NEEDS_CONTEXT if this evidence is missing while TDD is active"
+            object_fields:
+              - name: test_file
+                type: string
+                required: true
+                description: "Test file written or modified by BuilderTester for the RED step"
+              - name: test_name
+                type: string
+                required: true
+                description: "Specific failing test that proves the desired behavior is not implemented yet"
+              - name: command
+                type: string
+                required: true
+                description: "Exact command BuilderTester ran to produce the RED failure"
+              - name: failure_summary
+                type: string
+                required: true
+                description: "Concise failure evidence from the RED run, not raw logs"
+              - name: right_reason
+                type: string
+                required: true
+                description: "Why the failure demonstrates the intended missing behavior instead of a syntax, setup, or unrelated error"
+          - name: implementation_notes
+            type: string[]
+            required: true
+          - name: verification_command
+            type: string
+            required: true
+          - name: expected_success_signal
+            type: string
+            required: true
+          - name: deviation_rollback_rule
+            type: string
+            required: true
       - name: context_map
         type: string
         required: true
@@ -445,12 +679,54 @@ handoffs:
         type: boolean
         required: false
         default: false
-        description: "If true, CodeWriter must write failing test BEFORE production code"
+        description: "If true, CodeWriter must receive BuilderTester RED evidence before production changes and return NEEDS_CONTEXT if RED evidence is missing"
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
+        description: "Worker status packet result"
+      - name: changed_files
+        type: object[]
+        required: false
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        min_items: 0
+        description: "Files created, modified, or deleted by this worker. Do not invent entries when the worker returns NEEDS_CONTEXT or BLOCKED before changing files."
+        object_fields:
+          - name: path
+            type: string
+            required: true
+          - name: change_type
+            type: enum
+            required: true
+            enum_values: [created, modified, deleted]
+          - name: description
+            type: string
+            required: true
+      - name: evidence
+        type: object[]
+        required: false
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Specific implementation evidence, such as file paths and important changed behavior. Do not invent implementation evidence when the worker returns NEEDS_CONTEXT or BLOCKED before changing files."
+        min_items: 0
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before implementation can continue"
       - name: files_changed
         type: object[]
-        required: true
-        min_items: 1
+        required: false
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Legacy alias for changed_files; keep populated for implementation statuses until downstream consumers migrate. Do not invent entries for NEEDS_CONTEXT or BLOCKED before file changes."
+        min_items: 0
         object_fields:
           - name: path
             type: string
@@ -482,8 +758,8 @@ handoffs:
         type: string
         required: false
         description: "What the plan assumed vs. what was found"
-        condition: "when deviation_detected is true"
-    on_missing_field: "CodeWriter must always return files_changed and deviation_detected at minimum"
+        condition: "when deviation_detected is true or status is DEVIATED"
+    on_missing_field: "CodeWriter must always return status and deviation_detected at minimum. For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, and files_changed with real implementation evidence; for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file entries."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
@@ -493,10 +769,14 @@ handoffs:
     to: BuilderTester
     phase: BUILD
     context_fields:
-      - name: files_changed
+      - name: changed_files
         type: string[]
         required: true
         description: "Files that were just modified (from CodeWriter return)"
+      - name: files_changed
+        type: string[]
+        required: false
+        description: "Legacy alias for changed_files"
       - name: build_command
         type: string
         required: false
@@ -505,11 +785,67 @@ handoffs:
         type: string[]
         required: true
         description: "Test projects or files to run"
+      - name: current_task_packet
+        type: object
+        required: false
+        condition: "plan uses executable task packets"
+        description: "Executable task packet being verified, including command and success signal"
+        object_fields:
+          - name: task_id
+            type: string
+            required: true
+          - name: name
+            type: string
+            required: true
+          - name: behavior_acceptance_criteria
+            type: string[]
+            required: true
+          - name: files_to_test
+            type: string[]
+            required: true
+          - name: verification_command
+            type: string
+            required: true
+          - name: expected_success_signal
+            type: string
+            required: true
+          - name: expected_red_failure
+            type: string
+            required: false
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
+        description: "Worker status packet result"
+      - name: verification
+        type: object
+        required: true
+        description: "Commands/checks run and concise pass/fail evidence"
+        object_fields:
+          - name: commands
+            type: string[]
+            required: true
+            min_items: 0
+            description: "Commands/checks actually run; empty only when verification.result is not_run for NEEDS_CONTEXT or BLOCKED."
+          - name: result
+            type: enum
+            required: true
+            enum_values: [passed, failed, not_run]
+          - name: evidence
+            type: string[]
+            required: true
+            description: "Concise success signals or failure messages, not raw logs"
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve"
       - name: build_result
         type: enum
         required: true
-        enum_values: [passed, failed]
+        enum_values: [passed, failed, not_run]
+        description: "Build result. Use not_run only when status is NEEDS_CONTEXT or BLOCKED before verification can run; do not fabricate passed/failed results."
       - name: build_errors
         type: string[]
         required: false
@@ -540,7 +876,7 @@ handoffs:
             type: string
             required: true
             description: "Concise error — assertion message + expected/actual, not stack trace"
-    on_missing_field: "Re-dispatch BuilderTester. build_result and test_summary are never optional."
+    on_missing_field: "Re-dispatch BuilderTester. status, verification, build_result, and test_summary are never optional."
 
   # ─────────────────────────────────────────────
   # Orchestrator → Reviewer
@@ -591,6 +927,11 @@ handoffs:
         validation: "Must be one of: 80, 85, 90"
         notes: "Round 1-2: 80, Round 3-4: 85, Round 5: 90"
     return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result; DONE requires no must-fix or should-fix findings"
       - name: round
         type: int
         required: true
@@ -628,13 +969,30 @@ handoffs:
         type: enum
         required: true
         enum_values: [clean, has_must_fix, has_should_fix, has_nits_only]
-    on_missing_field: "Re-dispatch Reviewer. findings and verdict are never optional."
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Review material, files, or checks used to support the findings/verdict"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve"
+    on_missing_field: "Re-dispatch Reviewer. status, findings, evidence, and verdict are never optional."
 
 # ─────────────────────────────────────────────
 # Validation behavior for all handoffs:
 #
 # 1. Before dispatching: verify all required context_fields are populated
-# 2. After return: verify all required return_fields are present
+# 2. After return: verify all required return_fields are present, including the worker status packet
 # 3. If on_missing_field action is "re-dispatch": retry once with explicit request
 # 4. If second dispatch also missing fields: log the gap, fill manually, and continue
 # 5. Never silently proceed with missing required fields — always log what was missing

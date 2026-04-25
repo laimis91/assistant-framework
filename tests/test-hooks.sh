@@ -550,7 +550,13 @@ if test_start "stop-review: Claude, BUILDING with review log but no final result
 Status: BUILDING
 ## Review Log
 ### Spec Review #1
-- Plan alignment: matches
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
 ### Quality Review #1
 - Found: 1 must-fix, 0 should-fix
 TASK
@@ -570,12 +576,18 @@ if test_start "stop-review: Claude, BUILDING with complete two-stage review → 
 Status: BUILDING
 ## Review Log
 ### Spec Review #1
-- Plan alignment: matches
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
 ### Quality Review #1
 - Found: 1 must-fix, 0 should-fix
 - Re-test: PASS
 ### Final result
-- Result: ISSUES FIXED
+- Result: ISSUES_FIXED
 - Total must-fix resolved: 1
 TASK
     # Set up metrics in test home (isolated from real user data)
@@ -592,7 +604,70 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, BUILDING with legacy review format → no output"; then
+if test_start "stop-review: Claude, canonical HAS_REMAINING_ITEMS final result → no output"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 1 must-fix, 0 should-fix
+- Re-test: PASS
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Total must-fix resolved: 0
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should not block when canonical HAS_REMAINING_ITEMS final result is present"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS missing structured fields → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS omits structured fields"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, BUILDING with legacy review format but no Spec Review → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -609,10 +684,615 @@ TASK
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
 
     HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Spec Review"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when legacy Review exists without Spec Review"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review FAIL with quality review → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Required fixes: none
+### Spec Review #2
+- Result: FAIL
+- Required fixes: update missing contract test
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when latest Spec Review result is FAIL"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review placeholder result → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS | FAIL
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review result is placeholder"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS without Quality Review → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Quality Review"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS has no Quality Review"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with legacy Review heading → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Quality Review"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Stage 2 uses legacy Review heading instead of Quality Review"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Quality Review before latest Spec Review PASS → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Spec Review #2
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Quality Review"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Quality Review is before the latest Spec Review PASS"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with required fixes → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: update missing contract test
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS includes unresolved required fixes"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with missing acceptance criteria → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: missing required behavior
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS includes missing acceptance criteria"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with extra scope → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: changed unrelated files
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS includes extra scope"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with changed files mismatch → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: missing tests
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS includes changed files mismatch"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with verification evidence mismatch → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: tests not run
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Spec Review PASS includes verification evidence mismatch"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with multiline missing acceptance criteria → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria:
+  - missing behavior
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Missing acceptance criteria has multiline unresolved content"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with multiline extra scope → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope:
+  - changed unrelated file
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Extra scope has multiline unresolved content"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with multiline changed files mismatch → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch:
+  - missing tests
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Changed files mismatch has multiline unresolved content"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with multiline verification evidence mismatch → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch:
+  - tests not run
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Verification evidence mismatch has multiline unresolved content"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, Spec Review PASS with multiline required fixes → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes:
+  - add missing contract test
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "not PASS"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when Required fixes has multiline unresolved content"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, complete review path with explicit none values → no output"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Re-test: PASS
+### Final result
+- Result: CLEAN
+- Total must-fix resolved: 0
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
     if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, should not block with legacy review format"
+        fail "exit=$HOOK_EXIT, should allow stop when complete review path has explicit none values"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, final result placeholder → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Final Result"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should block when final result is placeholder"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -678,7 +1358,13 @@ if test_start "stop-review: Claude, review complete but no metrics → blocks"; 
 Status: BUILDING
 ## Review Log
 ### Spec Review #1
-- Plan alignment: matches
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
 ### Quality Review #1
 - Found: 0 must-fix, 0 should-fix
 ### Final result
@@ -703,7 +1389,13 @@ if test_start "stop-review: Claude, review complete with metrics → allows stop
 Status: BUILDING
 ## Review Log
 ### Spec Review #1
-- Plan alignment: matches
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
 ### Quality Review #1
 - Found: 0 must-fix, 0 should-fix
 ### Final result

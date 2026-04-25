@@ -211,36 +211,52 @@ Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay 
 
 Think of it like a general who directs the battle but never picks up a rifle. The orchestrator dispatches, monitors, and course-corrects — but the agents do the actual work.
 
-For each step: dispatch Code Writer with the plan step + context map → when done, dispatch Builder/Tester to verify → check results → proceed or fix.
+For each non-TDD step: dispatch Code Writer with the plan step + context map → when done, dispatch Builder/Tester to verify → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
 
 ### Build loop
 
 **For medium+ tasks with components:** execute one component at a time. Each component may contain multiple plan steps, but the component is the unit of verification.
 
+Small tasks stay lightweight: use the plan-step loop below, record the normal build/test evidence, and do not create a component ledger unless the task was decomposed into components.
+
 Print: `>> Component [C]/[total]: [name]`
+
+Before starting each medium+ component:
+
+1. Load the approved task packet for the component, including files, criteria, verification command, expected success signal, and deviation/rollback rule
+2. Confirm prior component status is `VERIFIED` before advancing; do not start the next component while the current component is unverified
+3. Check constraints from the task journal against the component files and criteria
 
 For each plan step within the component:
 
 Print: `>> Step [N]/[total]: [description]`
-Print: `>> Dispatching Code Writer → [step description]`
+Print: `>> Dispatching Code Writer → [step description]` (non-TDD)
+Print: `>> Dispatching Builder/Tester → RED evidence` (TDD active)
 
-1. Dispatch Code Writer for one plan step at a time
-2. After each step: dispatch Builder/Tester for build + test, update task journal
-3. If fails: dispatch Code Writer to fix before next step
+1. Non-TDD: dispatch Code Writer for one plan step at a time, then dispatch Builder/Tester for build + test and update the task journal
+2. TDD active: run the TDD sandwich for the step, with Builder/Tester RED before Code Writer GREEN and Builder/Tester VERIFY/REFACTOR-SAFETY afterward
+3. If implementation or verification fails: dispatch Code Writer to fix before the next step
 4. Tests alongside code, not after
 5. **SOLID check** after each step: load `references/prompts/solid-principles.md` and evaluate the graduated checklist (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega). Fix violations before moving to the next step.
-6. **TDD mode** (when active): follow Red-Green-Refactor per step. Write failing test → implement → refactor. Use `assistant-tdd` skill (or `references/prompts/tdd-enforcement.md` if skill not installed).
+6. **TDD mode** (when active): use the TDD sandwich per step:
+   - Builder/Tester RED: write one failing behaviour test, run it, verify right failure reason, and return RED evidence.
+   - Code Writer GREEN: implement minimal production code only after RED evidence is present.
+   - Builder/Tester VERIFY/REFACTOR-SAFETY: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures.
 
 Print: `>> Step [N]/[total]: DONE` (after each step passes build + test)
 
 ### Per-component verification (medium+ tasks)
 
-After all steps for a component are done, verify the component against its criteria from the DECOMPOSE phase:
+Per-component verification is a Build-phase gate. It does not replace the full Review phase after Build completes.
 
-1. Run build + all tests
-2. Check each verification criterion from the component manifest — mark pass/fail
-3. If any criterion fails: fix before moving to next component
-4. Update task journal with component verification status
+After all steps for a component are done, verify the component against its criteria from the DECOMPOSE phase before moving on:
+
+1. Dispatch Builder/Tester to run the component's verification command and any relevant build/test checks from the task packet
+2. Check each verification criterion from the component manifest independently — mark pass/fail with the command/result or inspection evidence used
+3. Record verification evidence in the task journal component verification ledger, including RED status when TDD was active, implementation status, command/result, criteria checked, and final status
+4. Run a small self-check/local sanity check: compare changed files and behavior against the task packet, constraints, and deviation rule; record the result in the ledger
+5. If any criterion, command, or self-check fails: fix before moving to next component
+6. Mark the component `VERIFIED` only after all criteria pass and evidence is recorded
 
 Print: `>> Component [C]/[total]: [name] — VERIFIED ([X]/[Y] criteria passed)`
 
@@ -248,7 +264,7 @@ Only proceed to the next component after the current one is fully verified.
 
 After all components are verified:
 
-7. Run integration tests across component boundaries
+Run integration tests across component boundaries.
 
 **Loop-back rule:** If implementation reveals a plan problem, STOP:
 ```
@@ -273,21 +289,26 @@ Print: `--- PHASE: REVIEW ---`
 
 Print: `>> Stage 1: Spec Review`
 
-Compare implementation against the approved plan:
+Load and follow `references/prompts/spec-review.md`. Compare implementation against the approved plan or approved task packets/components and produce a structured spec compliance result before Stage 2.
 
-1. Walk through each plan step — is it implemented? Compare the plan to `git diff`.
-2. Check for **missing functionality**: any plan step not reflected in code
-3. Check for **scope creep**: any code change not in the plan (flag for approval)
-4. Verify edge cases from the plan's risk section are handled
-5. Confirm acceptance criteria are met (if defined)
-6. **Append** a `### Spec Review #N` entry to the task journal's Review Log:
-   - Plan alignment: matches / minor drift / significant drift
-   - Missing items (if any)
-   - Scope creep (if any)
-7. **Spec issues found:** fix them, re-test, re-run spec review
-8. **Spec clear:** proceed to Stage 2
+Quality review cannot satisfy spec review. Spec review checks scope and acceptance compliance; quality review checks correctness, maintainability, architecture, security, and coverage after spec compliance is clear.
 
-Print: `>> Spec Review: [CLEAN / found N issues, fixing]`
+1. Walk through each approved plan step, task packet, or component against `git diff`.
+2. Check for missing acceptance criteria: any required behavior not reflected in code or evidence.
+3. Check for extra scope: any code change not in the approved scope, unless explicitly approved as a deviation.
+4. Check changed files mismatch: expected files versus actual changed files.
+5. Check verification evidence mismatch: required command, expected success signal, and criteria checked versus recorded evidence.
+6. **Append** a `### Spec Review #N` entry to the task journal's Review Log using the prompt's structured output:
+   - Result: PASS | FAIL
+   - Missing acceptance criteria
+   - Extra scope
+   - Changed files mismatch
+   - Verification evidence mismatch
+   - Required fixes
+7. **Spec review FAIL:** fix required items, re-test, and re-run spec review before Stage 2.
+8. **Spec review PASS:** proceed to Stage 2.
+
+Print: `>> Spec Review: [PASS / FAIL — found N required fixes]`
 
 ### Stage 2 — Quality Review
 

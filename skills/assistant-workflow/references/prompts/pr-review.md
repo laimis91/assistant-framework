@@ -152,7 +152,7 @@ Where `<framework-tools>` is the installed tools directory (typically `~/.claude
 - **Should-fix items:** fix immediately alongside must-fix items (don't defer — our experience shows these are real issues worth fixing)
 - **Nits:** do NOT fix — note them but exit the loop. Nits don't justify another round.
 - **No findings:** exit loop, write Final Result: CLEAN
-- **Max rounds reached with remaining must-fix:** exit loop, write Final Result: HAS REMAINING ITEMS, escalate to user
+- **Max rounds reached with remaining must-fix:** exit loop, write Final Result: HAS_REMAINING_ITEMS, escalate to user
 - If significant drift from plan: stop and flag for re-approval before continuing
 
 ## Review discipline — receiving feedback

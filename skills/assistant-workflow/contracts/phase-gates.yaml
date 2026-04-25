@@ -132,12 +132,12 @@ gates:
     exit_assertions:
 
       - id: P1
-        check: "Plan contains ordered implementation steps, each with file paths"
-        on_fail: "Add file paths to every implementation step"
+        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test"
+        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet"
 
       - id: P2
-        check: "Each implementation step has associated test criteria describing what to verify"
-        on_fail: "Add test criteria to steps missing them"
+        check: "Each implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify"
+        on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
 
       - id: P3
         check: "Risks section is populated — at minimum 'Low risk: single-file change' for small tasks"
@@ -164,6 +164,19 @@ gates:
       - id: P8
         check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
+
+      - id: P9
+        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Rewrite vague implementation steps into executable task packets"
+
+      - id: P10
+        check: "Each implementation step or task packet has a verification command and expected success signal"
+        on_fail: "Add an exact verification command and expected success signal to each step or task packet"
+
+      - id: P11
+        check: "Each task packet includes a deviation/rollback rule, or small inline plan explicitly states how deviations are handled"
+        on_fail: "Add deviation/rollback handling before seeking plan approval"
 
   # ─────────────────────────────────────────────
   # DESIGN → BUILD (UI tasks only)
@@ -241,14 +254,14 @@ gates:
         on_fail: "Each component must have its own Code Writer → Builder/Tester cycle. Re-dispatch per component."
 
       - id: B12
-        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are checked and passing"
+        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal component verification ledger"
         condition: "size in [medium, large, mega]"
-        on_fail: "Run verification criteria for each component. Fix failing criteria before proceeding to Review."
+        on_fail: "Run verification criteria for each component, record command/result evidence in the task journal ledger, and fix failing criteria before proceeding to Review."
 
       - id: B13
-        check: "For medium+ tasks: each component was verified independently before the next component started"
+        check: "For medium+ tasks: each component has a final status of VERIFIED, including self-check result, before the next component started"
         condition: "size in [medium, large, mega]"
-        on_fail: "This is a process violation — components must be verified sequentially. Note in task journal for reflexion."
+        on_fail: "This is a process violation — components must be verified sequentially with evidence before advancing. Note in task journal for reflexion."
 
   # ─────────────────────────────────────────────
   # REVIEW → DOCUMENT
@@ -259,8 +272,12 @@ gates:
     exit_assertions:
 
       - id: R1
-        check: "Spec Review completed — plan alignment was assessed"
-        on_fail: "Run Spec Review (compare implementation against approved plan)"
+        check: "Structured Spec Review completed by loading and following references/prompts/spec-review.md; latest Spec Review entry has Result: PASS and records missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes"
+        on_fail: "Run Stage 1 Spec Review using references/prompts/spec-review.md, record the structured spec compliance result, fix any FAIL items, and re-run until Result: PASS before quality review."
+
+      - id: R1A
+        check: "Quality Review entries do not substitute for Spec Review; Stage 1 spec compliance result is present before Stage 2 quality review starts"
+        on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
         check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts (not manual review)"

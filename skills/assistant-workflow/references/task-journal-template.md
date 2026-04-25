@@ -55,6 +55,12 @@ Plan approval: [yes/no + date]
 - [x] Step 2: [what was done, files changed]
 - [ ] Step 3: [next]
 
+## Component Verification Ledger
+[required for medium+ tasks; update after each component before starting the next]
+| Component | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
+|-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
+| C1: [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `[command]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
+
 ## Test Coverage
 - Unit: [what's covered]
 - Integration: [what's covered, or "N/A"]
@@ -79,9 +85,13 @@ Plan approval: [yes/no + date]
 [append an entry each time a review stage runs — never overwrite previous entries]
 
 ### Spec Review #1
-- Plan alignment: matches | minor drift | significant drift
-- Missing items: [none, or list]
-- Scope creep: [none, or list with disposition]
+- Result: PASS | FAIL
+- Scope reviewed: [plan step(s), task packet(s), or component(s)]
+- Missing acceptance criteria: [none, or list]
+- Extra scope: [none, or list with file paths and disposition]
+- Changed files mismatch: [none, or expected vs actual]
+- Verification evidence mismatch: [none, or expected vs actual]
+- Required fixes: [none, or ordered fix list]
 
 ### Quality Review #1
 - Round: 1 of 5
@@ -114,7 +124,7 @@ Plan approval: [yes/no + date]
 - Re-test: PASS
 
 [...repeat until clean or max rounds reached...]
-[Note: On test failure, skip this entry — write only "- Result: HAS REMAINING ITEMS" to Final result]
+[Note: On test failure, skip this entry — write only "- Result: HAS_REMAINING_ITEMS" to Final result]
 
 ### Final result
 - Result: CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
@@ -139,8 +149,8 @@ Plan approval: [yes/no + date]
 2. **Clarification** updates — while waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
 3. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the approved component decomposition before moving on to planning. Small tasks skip this state.
 4. **Plan approval** — once ready to plan, set `Status: PLANNING`, capture the approved plan, and update `Plan approval`.
-5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. Check off Milestones when reached.
-6. **Review cycle** when all steps done — Spec Review first (plan alignment), then Quality Review (pr-review.md checklist), fix must-fix → re-test → re-review until clean, fill Final Result
+5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Component Verification Ledger after each component and do not start the next component until the current one is `VERIFIED`. Check off Milestones when reached.
+6. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
 7. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
 8. **Handoff** to user — they test manually and add Review Notes
 9. **Review fixes** — fix issues, re-test, re-review, update Progress

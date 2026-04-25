@@ -19,9 +19,16 @@ A structured blueprint with:
 - **File changes**: exact paths, what changes in each, why
 - **New files**: paths, purpose, key interfaces/classes
 - **Data flow**: how data moves through new/changed components
-- **Build sequence**: ordered implementation steps
+- **Build sequence**: ordered implementation steps; for medium+ plans, executable task packets with task id/name, exact files, acceptance criteria, test/TDD expectation, verification command, expected success signal, and deviation/rollback rule
 - **Test plan**: what to test, what type (unit/integration/E2E)
 - **Risks**: edge cases, breaking changes, migration needs
+
+## Status packet
+Return a status packet with:
+- **status**: DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, or DEVIATED
+- **evidence**: files, patterns, and searches used to support the blueprint
+- **open_questions**: required when status is NEEDS_CONTEXT or BLOCKED
+- **deviation_details**: required when status is DEVIATED
 
 ## Constraints
 - **Verify before designing**: Read files and search the codebase to confirm patterns, paths, and conventions actually exist before referencing them in blueprints. Never assume — investigate.

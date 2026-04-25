@@ -13,6 +13,12 @@ under common operating conditions:
 - multi-round review behavior after findings
 - deterministic clarification for ambiguous prompts
 - task-state recovery after context compaction
+- TDD RED-before-GREEN handoff behavior
+- executable task packet requirements before build
+- per-component verification before advancing
+- separate spec review and quality review gates
+- structured worker status packets from subagents
+- Codex role constraints without SubagentStart reinforcement
 
 ## Files
 
@@ -28,4 +34,3 @@ and `fail_signals`.
 The cases are intended for prompt/instruction behavior comparisons. They should
 be useful whether the evaluated assistant is backed by GPT 5.4, GPT 5.5, Claude,
 Gemini, or another provider.
-

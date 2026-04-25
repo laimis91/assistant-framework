@@ -69,6 +69,22 @@ For each behaviour or plan step:
 3. Run ALL tests after each refactoring — they must stay green
 4. Do not add new behaviour during refactoring
 
+## Orchestrated role ownership
+
+When TDD runs inside `assistant-workflow`, preserve agent ownership:
+
+- **Builder/Tester owns RED**: write one failing behaviour test, run it, verify the failure is for the intended reason, and return RED evidence.
+- **Code Writer owns GREEN**: implement the minimal production change only after RED evidence is present in the task packet or handoff.
+- **Builder/Tester owns verification and refactor-safety**: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures.
+
+Required RED evidence before production implementation:
+- Test file and test name
+- Command run
+- Failure summary
+- Why the failure proves the intended missing behaviour
+
+If TDD is active and RED evidence is missing, Code Writer must return `NEEDS_CONTEXT` and make no production changes.
+
 ## Verification gates
 
 Each transition has a gate that must pass before proceeding:

@@ -22,6 +22,12 @@ A structured report with:
 - **Risks**: tight coupling, missing error handling, undocumented assumptions
 - **Behavioral insights**: key findings relevant to the task at hand
 
+## Status packet
+Return:
+- **status**: DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, or BLOCKED
+- **evidence**: files, searches, or traces used to support findings
+- **open_questions**: required when status is NEEDS_CONTEXT or BLOCKED
+
 ## Constraints
 - Do NOT edit any files
 - Do NOT run commands that modify state
