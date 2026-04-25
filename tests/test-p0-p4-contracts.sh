@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 P0P4_SUITE_DIR="$SCRIPT_DIR/p0-p4"
 
 source "$P0P4_SUITE_DIR/lib/p0p4-harness.sh"
+source "$P0P4_SUITE_DIR/repo-guard-contracts.sh"
 source "$P0P4_SUITE_DIR/installer-contracts.sh"
 source "$P0P4_SUITE_DIR/installed-hook-smoke.sh"
 source "$P0P4_SUITE_DIR/workflow-basics-contracts.sh"
