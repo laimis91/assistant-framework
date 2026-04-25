@@ -23,7 +23,8 @@ under common operating conditions:
 ## Files
 
 - `framework-instruction-cases.json` - machine-readable eval cases with prompts,
-  setup context, expected behavior, pass criteria, and failure signals.
+  setup context, expected behavior, pass criteria, failure signals, and local
+  machine expectations.
 - `../../tools/evals/run-framework-instruction-evals.sh` - offline helper for
   validating the fixture, listing cases, emitting prompt packets, and grading
   captured responses locally.
@@ -56,10 +57,16 @@ Grade those saved responses locally:
 tools/evals/run-framework-instruction-evals.sh --responses /tmp/framework-eval-responses
 ```
 
+Each case includes `machine_expectations.required_substrings` and
+`machine_expectations.forbidden_substrings`. These arrays contain literal
+observable substrings for deterministic local checks. Required substrings must
+appear in the captured response, and forbidden substrings must not appear.
+
 The response grader is intentionally heuristic/local grading. It checks for
-missing files, empty responses, and exact fail-signal phrase hits where useful.
-It complements human review or a separate LLM judge; it does not replace natural
-language judgment.
+missing files, empty responses, exact fail-signal phrase hits where useful,
+missing required substrings, and forbidden substring hits. These deterministic
+substring checks are proxies that complement human review or a separate LLM
+judge; they do not replace natural language judgment.
 
 The cases are intended for prompt/instruction behavior comparisons. They should
 be useful whether the evaluated assistant is backed by GPT 5.4, GPT 5.5, Claude,

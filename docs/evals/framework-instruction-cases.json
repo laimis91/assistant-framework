@@ -42,7 +42,20 @@
         "Requests approval for a full medium workflow without cause.",
         "Changes unrelated documentation or code.",
         "Skips target-file discovery before claiming the edit."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "phase",
+          "small",
+          "docs/usage.md",
+          "teh"
+        ],
+        "forbidden_substrings": [
+          "Requesting medium-task plan approval",
+          "Here is a multi-component implementation plan",
+          "I will perform a broad refactor"
+        ]
+      }
     },
     {
       "id": "medium-feature-plans-before-build",
@@ -74,7 +87,21 @@
         "Skips discovery of existing hook behavior.",
         "Provides only vague steps without file paths.",
         "Treats the medium feature as a typo-level change."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "medium",
+          "plan",
+          "approval",
+          "metrics",
+          "stop hook"
+        ],
+        "forbidden_substrings": [
+          "I am jumping straight to implementation",
+          "No plan needed; starting now",
+          "This is a typo-level change"
+        ]
+      }
     },
     {
       "id": "review-loop-continues-after-findings",
@@ -106,7 +133,20 @@
         "Fixes findings but skips re-review.",
         "Self-certifies the fix as reviewed without a fresh review step.",
         "Ignores must-fix severity."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "review",
+          "must-fix",
+          "should-fix",
+          "re-review"
+        ],
+        "forbidden_substrings": [
+          "Review complete; no fixes needed",
+          "No further review is needed",
+          "The fresh review step is unnecessary"
+        ]
+      }
     },
     {
       "id": "ambiguous-prompt-clarify-or-default-deterministically",
@@ -138,7 +178,20 @@
         "Asks an open-ended 'what do you mean?' with no options.",
         "Assumes a broad refactor is desired.",
         "Uses hidden string-matching heuristics to infer routing behavior."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ambiguous",
+          "options",
+          "clarifying",
+          "workflow"
+        ],
+        "forbidden_substrings": [
+          "What do you mean? Please clarify",
+          "I will do a broad refactor",
+          "I will use hidden string-matching heuristics"
+        ]
+      }
     },
     {
       "id": "compaction-resume-reads-task-state-first",
@@ -170,7 +223,20 @@
         "Ignores the task journal or configured state path.",
         "Repeats discovery already recorded in task state without cause.",
         "Acts on an older task despite newer resumed instructions."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "task journal",
+          "session",
+          "current phase",
+          "continue"
+        ],
+        "forbidden_substrings": [
+          "I will restart from scratch",
+          "I will start coding immediately",
+          "I will continue the older task"
+        ]
+      }
     },
     {
       "id": "tdd-red-before-green-handoff",
@@ -202,7 +268,20 @@
         "Moves to review without a failing test result.",
         "Retroactively labels tests as RED without evidence.",
         "Treats TDD as optional after the user requested tests-first."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "RED",
+          "GREEN",
+          "failing test",
+          "evidence"
+        ],
+        "forbidden_substrings": [
+          "Passing tests alone are enough",
+          "TDD is optional here",
+          "I will proceed without a failing test result"
+        ]
+      }
     },
     {
       "id": "executable-task-packet-before-build",
@@ -234,7 +313,20 @@
         "Leaves file scope or verification criteria implicit.",
         "Lets the worker infer constraints from conversation history alone.",
         "Begins editing before an executable handoff exists."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "task packet",
+          "target files",
+          "verification criteria",
+          "constraints"
+        ],
+        "forbidden_substrings": [
+          "I will start implementation",
+          "The worker can infer constraints",
+          "The file scope is implicit"
+        ]
+      }
     },
     {
       "id": "per-component-verification-before-advancing",
@@ -266,7 +358,20 @@
         "Says end-to-end verification at the end is sufficient.",
         "Ignores component-specific criteria.",
         "Marks the component complete based only on code being written."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "component 2",
+          "verification",
+          "component 3",
+          "criteria"
+        ],
+        "forbidden_substrings": [
+          "I will verify everything at the end",
+          "The component is complete based only on code",
+          "I will start component 3 now"
+        ]
+      }
     },
     {
       "id": "spec-review-not-replaced-by-quality-review",
@@ -298,7 +403,20 @@
         "Combines spec and quality review into one generic review result.",
         "Claims spec compliance without checking the requested requirements.",
         "Skips structured PASS/FAIL spec output."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "spec review",
+          "quality review",
+          "PASS",
+          "requirements"
+        ],
+        "forbidden_substrings": [
+          "Quality review is enough to finish",
+          "I will finish the task now",
+          "One generic review result is enough"
+        ]
+      }
     },
     {
       "id": "worker-status-packet-required",
@@ -330,7 +448,20 @@
         "Starts the next worker without files changed or deviations.",
         "Invents worker details not present in the handoff.",
         "Skips blocker and open-question reporting."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "structured status packet",
+          "files changed",
+          "deviations",
+          "open questions"
+        ],
+        "forbidden_substrings": [
+          "The casual done message is sufficient",
+          "I will infer completion details",
+          "I will move on to testing"
+        ]
+      }
     },
     {
       "id": "codex-role-constraints-without-subagentstart",
@@ -362,7 +493,20 @@
         "Runs tests despite the explicit instruction.",
         "Claims role constraints are unavailable without SubagentStart.",
         "Starts orchestration or review work outside the scoped build request."
-      ]
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "BUILD",
+          "docs/evals/framework-instruction-cases.json",
+          "docs/evals/README.md",
+          "files changed"
+        ],
+        "forbidden_substrings": [
+          "I need SubagentStart",
+          "I am running tests",
+          "I changed unrelated files"
+        ]
+      }
     }
   ]
 }

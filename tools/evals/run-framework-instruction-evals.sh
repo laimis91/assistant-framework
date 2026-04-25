@@ -74,6 +74,22 @@ validate_fixture() {
           then empty
           else "case[\($index)] missing or invalid non-empty string array field: \($name)" end;
 
+        def case_machine_expectation_array($index; $name):
+          if (.machine_expectations | has($name))
+             and (.machine_expectations[$name] | type == "array")
+             and (.machine_expectations[$name] | length > 0)
+             and all(.machine_expectations[$name][]; type == "string" and length > 0)
+          then empty
+          else "case[\($index)] missing or invalid machine_expectations.\($name) non-empty string array" end;
+
+        def case_machine_expectations($index):
+          if has("machine_expectations") and (.machine_expectations | type == "object") then
+            case_machine_expectation_array($index; "required_substrings"),
+            case_machine_expectation_array($index; "forbidden_substrings")
+          else
+            "case[\($index)] missing or invalid object field: machine_expectations"
+          end;
+
         if type != "object" then
           "fixture root must be a JSON object"
         else
@@ -100,7 +116,8 @@ validate_fixture() {
                  case_string_array($index; "setup_context"),
                  case_string_array($index; "expected_behavior"),
                  case_string_array($index; "pass_criteria"),
-                 case_string_array($index; "fail_signals")
+                 case_string_array($index; "fail_signals"),
+                 case_machine_expectations($index)
                end
            else empty end)
         end
@@ -125,7 +142,9 @@ emit_prompts() {
     while IFS= read -r id; do
         packet_path="$OUTPUT_DIR/$id.md"
         jq -r --arg id "$id" '
-            def bullets($items): $items | map("- " + .) | join("\n");
+            def bullets($items):
+              if ($items | length) > 0 then $items | map("- " + .) | join("\n")
+              else "- (none)" end;
             .cases[]
             | select(.id == $id)
             | "# " + .title + "\n\n"
@@ -136,7 +155,12 @@ emit_prompts() {
               + "## Prompt\n\n" + .prompt + "\n\n"
               + "## Expected Behavior\n\n" + bullets(.expected_behavior) + "\n\n"
               + "## Pass Criteria\n\n" + bullets(.pass_criteria) + "\n\n"
-              + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n"
+              + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n\n"
+              + "## Machine Expectations\n\n"
+              + "### Required Substrings\n\n"
+              + bullets(.machine_expectations.required_substrings) + "\n\n"
+              + "### Forbidden Substrings\n\n"
+              + bullets(.machine_expectations.forbidden_substrings) + "\n"
         ' "$FIXTURE" >"$packet_path"
     done < <(jq -r '.cases[].id' "$FIXTURE")
 
@@ -174,6 +198,36 @@ count_fail_signal_hits() {
     printf '%s\n' "$hits"
 }
 
+count_missing_required_substrings() {
+    local id="$1"
+    local response_path="$2"
+    local expected
+    local misses=0
+
+    while IFS= read -r expected; do
+        if ! grep -Fqi -- "$expected" "$response_path"; then
+            misses=$((misses + 1))
+        fi
+    done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$FIXTURE")
+
+    printf '%s\n' "$misses"
+}
+
+count_forbidden_substring_hits() {
+    local id="$1"
+    local response_path="$2"
+    local forbidden
+    local hits=0
+
+    while IFS= read -r forbidden; do
+        if grep -Fqi -- "$forbidden" "$response_path"; then
+            hits=$((hits + 1))
+        fi
+    done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.forbidden_substrings[]' "$FIXTURE")
+
+    printf '%s\n' "$hits"
+}
+
 grade_responses() {
     validate_fixture
     [[ -d "$RESPONSES_DIR" ]] || die "Response directory does not exist: $RESPONSES_DIR"
@@ -184,16 +238,18 @@ grade_responses() {
     local missing=0
     local empty=0
     local signal_failures=0
-    local id category title response_path fail_signal_hits status reason
+    local missing_required_failures=0
+    local forbidden_substring_failures=0
+    local id category title response_path fail_signal_hits required_misses forbidden_hits status reason
 
-    echo "Heuristic/local grading only. No provider API is invoked."
+    echo "Heuristic/local grading only. Deterministic substring checks are local proxies; no provider API is invoked."
     echo ""
 
     while IFS=$'\t' read -r id category title; do
         total=$((total + 1))
         response_path="$(first_response_path_for_case "$id")"
         status="PASS"
-        reason="non-empty response with no exact fail-signal phrase hits"
+        reason="non-empty response with no exact fail-signal phrase hits and no machine expectation failures"
 
         if [[ -z "$response_path" ]]; then
             status="FAIL"
@@ -205,10 +261,30 @@ grade_responses() {
             empty=$((empty + 1))
         else
             fail_signal_hits="$(count_fail_signal_hits "$id" "$response_path")"
+            required_misses="$(count_missing_required_substrings "$id" "$response_path")"
+            forbidden_hits="$(count_forbidden_substring_hits "$id" "$response_path")"
             if [[ "$fail_signal_hits" -gt 0 ]]; then
                 status="FAIL"
                 reason="$fail_signal_hits exact fail-signal phrase hit(s)"
                 signal_failures=$((signal_failures + 1))
+            fi
+            if [[ "$required_misses" -gt 0 ]]; then
+                if [[ "$status" == "FAIL" ]]; then
+                    reason="$reason; $required_misses missing required substring(s)"
+                else
+                    status="FAIL"
+                    reason="$required_misses missing required substring(s)"
+                fi
+                missing_required_failures=$((missing_required_failures + required_misses))
+            fi
+            if [[ "$forbidden_hits" -gt 0 ]]; then
+                if [[ "$status" == "FAIL" ]]; then
+                    reason="$reason; $forbidden_hits forbidden substring hit(s)"
+                else
+                    status="FAIL"
+                    reason="$forbidden_hits forbidden substring hit(s)"
+                fi
+                forbidden_substring_failures=$((forbidden_substring_failures + forbidden_hits))
             fi
         fi
 
@@ -222,8 +298,8 @@ grade_responses() {
     done < <(jq -r '.cases[] | [.id, .category, .title] | @tsv' "$FIXTURE")
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures"
+    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s\n' \
+        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures"
 
     [[ "$failed" -eq 0 ]]
 }
