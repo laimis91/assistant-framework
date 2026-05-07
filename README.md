@@ -1,21 +1,24 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. Twelve composable skills: structured workflow, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, self-improving reflexion, and purpose-driven context (Telos).
+A Personal AI Assistant framework for developers. 15 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, self-improving reflexion, and purpose-driven context (Telos).
 
 ## What it does
 
 1. **Structured Workflow** — TRIAGE > DISCOVER > PLAN > BUILD & TEST > DOCUMENT with approval gates and two-stage review
-2. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
-3. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
-4. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
-5. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
-6. **Memory System** — Cross-session learning: user preferences, feedback rules, task insights
-7. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
-8. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, generates project memory
-9. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
-10. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-11. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
-12. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
+2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
+3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
+4. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
+5. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
+6. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
+7. **Memory System** — Cross-session learning: user preferences, feedback rules, task insights, project context
+8. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
+9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
+10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
+11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
+12. **Review Automation** — Autonomous review/fix/re-review loop with confidence thresholds
+13. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
+14. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
+15. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 
 ## Installation
 
@@ -26,6 +29,8 @@ Install all skills for any supported agent:
 ./install.sh --agent codex    # → ~/.codex/skills/assistant-*/
 ./install.sh --agent gemini   # → ~/.gemini/skills/assistant-*/
 ```
+
+The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
 Install a single skill:
 ```bash
@@ -51,10 +56,17 @@ Test hooks before installing:
 
 ## Skills
 
+Only tracked `assistant-*` directories are first-class release skills.
+
 ### assistant-workflow
 Core development pipeline: idea-to-action decomposition, triage, discover, plan, build & test, verify, document.
 
 Triggers on: build, implement, fix, refactor, plan, create, idea
+
+### assistant-clarify
+Clarification workflow for ambiguous, fragmented, or multi-intent prompts. Restates the likely goal, surfaces constraints, asks targeted questions, and produces a structured execution brief.
+
+Triggers on: messy prompt, unclear prompt, figure out what I mean, help me structure this
 
 ### assistant-tdd
 Test-Driven Development enforcement: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
@@ -76,6 +88,11 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
+### assistant-review
+Autonomous code review loop: review, fix, re-review until clean or the loop reaches its cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+
+Triggers on: review, fresh review, code review, review this, check the code
+
 ### assistant-memory
 Memory management via SQLite-backed knowledge graph (`~/.{agent}/memory/memory.db`). Records rules, preferences, insights, and project context. Survives skill reinstalls. Legacy `graph.jsonl` files are imported or used as fallback seed compatibility only.
 
@@ -86,8 +103,13 @@ Documentation generation and maintenance. Six modes: API docs, architecture over
 
 Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
 
+### assistant-skill-creator
+Creates or updates V1 skills with input/output contracts, phase gates, and handoff definitions following the framework contract guide.
+
+Triggers on: create skill, new skill, add contracts, skill contracts, scaffold skill
+
 ### assistant-onboard
-Systematic codebase learning for new projects. Six-phase protocol: surface scan, architecture map, pattern recognition, knowledge gaps, generate project memory, report.
+Systematic codebase learning for new projects. Six-phase protocol: surface scan, architecture map, pattern recognition, knowledge gaps, record project context, report.
 
 Triggers on: learn this codebase, onboard, get familiar with, map this project
 
@@ -117,7 +139,7 @@ Triggers on: telos, my purpose, why am I doing this, what matters most, my missi
 
 The sole persistence layer for cross-session memory. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" via MCP tools.
 
-**14 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
+**15 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
 
 Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
 
@@ -173,6 +195,9 @@ skills/
     scripts/                       <- Mega task automation
     agents/                        <- Agent presets (claude/codex/gemini.conf)
 
+  assistant-clarify/
+    SKILL.md                       <- Clarification workflow for ambiguous or multi-intent prompts
+
   assistant-tdd/
     SKILL.md                       <- TDD enforcement (Red-Green-Refactor cycle)
 
@@ -199,6 +224,9 @@ skills/
     attack-surface.md              <- Attack surface mapping
     prompts/threat-model.md        <- Deep analysis prompt pack
 
+  assistant-review/
+    SKILL.md                       <- Autonomous review/fix/re-review loop
+
   assistant-memory/
     SKILL.md                       <- Memory categories, rules, hygiene
     templates/                     <- Entry format templates
@@ -214,6 +242,9 @@ skills/
     changelog.md                   <- Release notes from git history
     migration.md                   <- Breaking change migration guides
     explainer.md                   <- Code explanation for learning
+
+  assistant-skill-creator/
+    SKILL.md                       <- V1 skill scaffolding with contracts and phase gates
 
   assistant-onboard/
     SKILL.md                       <- Six-phase onboarding protocol
@@ -237,7 +268,9 @@ skills/
   assistant-telos/
     SKILL.md                       <- Purpose context framework (Telos Method)
 
-hooks/                             <- Automated behaviors (Claude + Gemini)
+  unity-*/                         <- Local-only skill experiments ignored by git, not release inventory
+
+hooks/                             <- Automated behaviors (Claude + Codex + Gemini)
   scripts/
     learning-signals.sh             <- Detect learning signals in user prompts
     session-start.sh               <- Inject task journal + memory on start/resume
@@ -247,6 +280,7 @@ hooks/                             <- Automated behaviors (Claude + Gemini)
     session-end.sh                 <- Reminder to capture insights
     skill-router.sh                <- Data-driven skill routing (UserPromptSubmit)
   claude-settings.json             <- Hook config for Claude Code
+  codex-settings.json              <- Hook config for Codex hooks.json
   gemini-settings.json             <- Hook config for Gemini CLI
 
 tools/
@@ -257,7 +291,7 @@ tools/
     src/MemoryGraph/               <- C# MCP server (stdio, JSON-RPC)
       Graph/                       <- In-memory knowledge graph abstractions + legacy JSONL compatibility
       Storage/                     <- Authoritative SQLite + FTS5 store (graph memory, reflexions, decisions, strategies)
-      Tools/                       <- 13 MCP tool implementations
+      Tools/                       <- 15 MCP tool implementations
       Server/                      <- JSON-RPC message loop
     tests/MemoryGraph.Tests/       <- 65 xUnit tests
 
@@ -313,7 +347,7 @@ Docs skill: Scans endpoints, extracts parameters/types, generates API reference 
 ### For new projects
 ```
 You: "Learn this codebase"
-Onboard skill: Maps structure, identifies patterns, generates project memory (.claude/memory.md or .codex/memory.md), reports summary
+Onboard skill: Maps structure, identifies patterns, records project context through the memory graph, reports summary
 ```
 
 ### For brainstorming
@@ -346,7 +380,7 @@ Telos skill: Checks active work against your purpose chain
 
 ## Hooks (automated behaviors)
 
-Hooks fire automatically on agent lifecycle events. Installed for Claude Code and Gemini CLI (Codex not yet supported).
+Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use the experimental `codex_hooks` feature flag and `~/.codex/hooks.json`.
 
 | Hook | Event | What it does |
 |---|---|---|
@@ -396,7 +430,7 @@ No script changes needed when adding new skills — just add the frontmatter and
 
 - **Never guess** — Ask when ambiguous, state assumptions when clear
 - **Right-sized ceremony** — Small tasks get lightweight treatment, large tasks get full workflow
-- **Composable skills** — Each skill works standalone; use one or all eleven
+- **Composable skills** — Each first-class `assistant-*` skill works standalone or together with the others
 - **Progressive loading** — Each SKILL.md is small. Tool files load on demand.
 - **Thinking tools are tools, not phases** — Use them when needed, not on every task
 - **Memory survives reinstalls** — Data in `~/.{agent}/memory/`, not in skill directories

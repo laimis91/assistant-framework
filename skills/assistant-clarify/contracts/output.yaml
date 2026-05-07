@@ -1,0 +1,72 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-clarify
+
+artifacts:
+  - name: likely_goal
+    type: string
+    required: true
+    description: "Short interpretation of what the user most likely wants"
+    validation: "Non-empty, concise statement that does not invent unstated requirements"
+    on_fail: "Re-run the clarification workflow and produce the missing likely_goal before asking questions or proceeding."
+
+  - name: structured_brief
+    type: object
+    required: true
+    description: "Brief that separates knowns, unknowns, assumptions, constraints, and likely deliverables"
+    validation: "Includes known facts, open unknowns, explicit assumptions, constraints, and likely deliverables as separate parts"
+    on_fail: "Re-run the clarification workflow and produce the missing structured_brief before proceeding."
+    object_fields:
+      - name: knowns
+        type: string[]
+        required: true
+        description: "Facts and constraints explicitly known from the user message or context"
+      - name: unknowns
+        type: string[]
+        required: true
+        description: "Important missing details that affect execution"
+      - name: assumptions
+        type: string[]
+        required: true
+        description: "Default interpretations the agent would use if the user does not correct them"
+      - name: constraints
+        type: string[]
+        required: true
+        description: "Constraints, preferences, exclusions, or defaults already stated or inferred"
+      - name: likely_deliverables
+        type: string[]
+        required: true
+        description: "Probable artifacts or outcomes the user wants from the clarified request"
+
+  - name: clarification_questions
+    type: object[]
+    required: true
+    description: "One to three high-yield questions with defaults or recommendations"
+    min_items: 1
+    validation: "Contains no more than three questions; each question includes a recommended default or bounded choices"
+    on_fail: "Ask the smallest necessary set of one to three clarification questions before proceeding."
+    object_fields:
+      - name: question
+        type: string
+        required: true
+        description: "Clarification question to ask the user"
+      - name: default_or_recommendation
+        type: string
+        required: true
+        description: "Recommended answer, default path, or bounded choices that preserve momentum"
+
+  - name: execution_target
+    type: string
+    required: true
+    description: "Confirmed or provisional target the agent should execute after ambiguity is reduced"
+    validation: "Non-empty statement of the next actionable target, with provisional status when not yet confirmed"
+    on_fail: "State the provisional execution target and ask for confirmation before implementation or other irreversible work."
+
+  - name: status
+    type: enum
+    required: true
+    description: "Whether the clarified request is ready to execute, still needs clarification, or is blocked"
+    validation: "Must reflect whether ambiguity remains before execution"
+    enum_values: [ready_to_execute, needs_clarification, blocked]
+    on_fail: "State whether the request is ready_to_execute, needs_clarification, or blocked before proceeding."

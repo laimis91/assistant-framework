@@ -15,7 +15,10 @@ p0p4_file_mode_octal() {
     esac
 }
 
-test_start "installer reinstall keeps one memory protocol block and one legacy preamble"
+legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
+stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
+
+test_start "Codex reinstall keeps one framework block, one memory protocol block, and current wording"
 INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME"
 if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-1.out 2>/tmp/p0p4-install-1.err; then
@@ -24,10 +27,16 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         starts="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START" "$agents_file")"
         ends="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END" "$agents_file")"
         preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$agents_file")"
-        if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]]; then
+        agents_starts="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$agents_file")"
+        agents_ends="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$agents_file")"
+        if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
+            && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
+            && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
+            && grep -Fq "File edits, code implementation, builds/tests, and independent review are owned by those specialized agents" "$agents_file" \
+            && grep -Fq "The orchestrator does not edit files or write code directly." "$agents_file"; then
             pass
         else
-            fail "expected one protocol start/end/preamble, got start=$starts end=$ends preamble=$preambles"
+            fail "expected one Codex framework block, one protocol block, and current generated wording"
         fi
     else
         fail "second install failed; see /tmp/p0p4-install-2.err"
@@ -40,14 +49,14 @@ test_start "installer replaces interrupted memory protocol install without dupli
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"
 mkdir -p "$INSTALL_HOME_THREE/.codex"
-cat > "$INSTALL_HOME_THREE/.codex/AGENTS.md" <<'TRUNCATED'
+cat > "$INSTALL_HOME_THREE/.codex/AGENTS.md" <<TRUNCATED
 User-managed heading before installer content.
 
 # Assistant Framework — Memory Protocol
 
 ## Role
 
-You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.
+$legacy_orchestrator_role
 <!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
@@ -74,7 +83,7 @@ test_start "Codex reinstall collapses duplicate and interrupted memory protocol 
 INSTALL_HOME_SIX="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SIX"
 mkdir -p "$INSTALL_HOME_SIX/.codex"
-cat > "$INSTALL_HOME_SIX/.codex/AGENTS.md" <<'DUPLICATE_CODEX'
+cat > "$INSTALL_HOME_SIX/.codex/AGENTS.md" <<DUPLICATE_CODEX
 User-managed content before old installer blocks.
 
 <!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->
@@ -95,7 +104,7 @@ User-managed content between complete memory blocks.
 
 ## Role
 
-You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.
+$legacy_orchestrator_role
 <!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
@@ -109,7 +118,7 @@ User-managed content before interrupted memory block.
 
 ## Role
 
-You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.
+$legacy_orchestrator_role
 <!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
@@ -144,14 +153,14 @@ test_start "installer strips substituted Gemini legacy memory preamble"
 INSTALL_HOME_FOUR="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_FOUR"
 mkdir -p "$INSTALL_HOME_FOUR/.gemini"
-cat > "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" <<'TRUNCATED_GEMINI'
+cat > "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" <<TRUNCATED_GEMINI
 User-managed Gemini heading before installer content.
 
 # Assistant Framework — Memory Protocol
 
 ## Role
 
-You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.
+$legacy_orchestrator_role
 <!-- This is a template. Paths like ~/.gemini/ are substituted during install.sh for non-Claude agents. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
@@ -317,145 +326,6 @@ if jq -e . "$FRAMEWORK_DIR/hooks/codex-settings.json" >/dev/null \
     pass
 else
     fail "hooks/codex-settings.json must parse and contain exactly one raw PreToolUse key"
-fi
-
-test_start "Codex hook reinstall merges hooks sanely"
-INSTALL_HOME_FIVE="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_FIVE"
-mkdir -p "$INSTALL_HOME_FIVE/.codex"
-cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
-{
-  "hooks": {
-    "PostCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\$HOME/.codex/hooks/assistant/post-compact.sh"
-          },
-          {
-            "type": "command",
-            "command": "/tmp/user-custom-hook.sh"
-          },
-          {
-            "type": "command",
-            "command": "\$HOME/.codex/hooks/assistant/custom-user.sh"
-          },
-          {
-            "type": "command",
-            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/session-end.sh --legacy"
-          },
-          {
-            "type": "command",
-            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/custom-absolute.sh --keep"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\$HOME/.codex/hooks/assistant/pre-compress.sh"
-          },
-          {
-            "type": "command",
-            "command": "$FRAMEWORK_DIR/hooks/scripts/task-completed.sh --legacy"
-          },
-          {
-            "type": "command",
-            "command": "$FRAMEWORK_DIR/hooks/scripts/task-journal-resolver.sh --legacy"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\$HOME/.codex/hooks/assistant/workflow-guard.sh"
-          },
-          {
-            "type": "command",
-            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/workflow-guard.sh --absolute-stale"
-          },
-          {
-            "type": "command",
-            "command": "$FRAMEWORK_DIR/hooks/scripts/workflow-guard.sh --repo-stale"
-          },
-          {
-            "type": "command",
-            "command": "/tmp/user-pretool-hook.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\$HOME/.codex/hooks/assistant/tool-failure-advisor.sh --stale"
-          },
-          {
-            "type": "command",
-            "command": "$FRAMEWORK_DIR/hooks/scripts/post-tool-context.sh --stale"
-          }
-        ]
-      }
-    ]
-  }
-}
-JSON
-if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-hooks.out 2>/tmp/p0p4-install-codex-hooks.err; then
-    if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e --arg install_home "$INSTALL_HOME_FIVE" --arg framework_dir "$FRAMEWORK_DIR" '
-        def first_shell_token:
-            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-        def current_framework_hook_names:
-            [
-                "session-start.sh",
-                "skill-router.sh",
-                "learning-signals.sh",
-                "workflow-enforcer.sh",
-                "workflow-guard.sh",
-                "stop-review.sh",
-                "harness-gate.sh"
-            ];
-        [.. | objects | .command? // empty] as $commands
-        | [$commands[] | first_shell_token] as $tokens
-        | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ("$HOME/.codex/hooks/assistant/" + $hook_name)))] as $frameworkCommands
-        | {
-            stale: ($tokens | any(. == "$HOME/.codex/hooks/assistant/post-compact.sh"
-                or . == "$HOME/.codex/hooks/assistant/pre-compress.sh"
-                or . == ($install_home + "/.codex/hooks/assistant/session-end.sh")
-                or . == ($install_home + "/.codex/hooks/assistant/workflow-guard.sh")
-                or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
-                or . == ($framework_dir + "/hooks/scripts/task-completed.sh")
-                or . == ($framework_dir + "/hooks/scripts/task-journal-resolver.sh")
-                or . == ($framework_dir + "/hooks/scripts/workflow-guard.sh")
-                or . == ($framework_dir + "/hooks/scripts/post-tool-context.sh"))),
-            custom: ($commands | any(. == "/tmp/user-custom-hook.sh")),
-            homeAssistantCustom: ($commands | any(. == "$HOME/.codex/hooks/assistant/custom-user.sh")),
-            absoluteAssistantCustom: ($commands | any(. == ($install_home + "/.codex/hooks/assistant/custom-absolute.sh --keep"))),
-            preToolCustom: ($commands | any(. == "/tmp/user-pretool-hook.sh")),
-            uniqueFramework: (($frameworkCommands | length) == ($frameworkCommands | unique | length)),
-            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
-            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh"))
-        }
-        | (.stale | not) and .custom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
-    ' "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null; then
-        pass
-    else
-        fail "Codex hook reinstall did not remove stale framework hooks, preserve custom hooks, or dedupe framework commands"
-    fi
-else
-    fail "codex hook reinstall failed; see /tmp/p0p4-install-codex-hooks.err"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

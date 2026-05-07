@@ -7,7 +7,7 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 # This suite stays focused on source skill instruction quality.
 
 p0p4_root_skill_files() {
-    find "$FRAMEWORK_DIR/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -print | sort
+    find "$FRAMEWORK_DIR/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -print | sort
 }
 
 p0p4_skill_output_allowlist_reason() {
@@ -43,25 +43,77 @@ p0p4_section_has_term() {
     ' "$file"
 }
 
-test_start "root skill inventory is filesystem based and includes Unity skills"
+p0p4_required_fields_missing_behavior_count() {
+    local file="$1"
+
+    awk '
+        /^  - name:/ {
+            if (in_required && !has_on_missing) {
+                missing++
+            }
+            in_required = 0
+            has_on_missing = 0
+        }
+        /^    required:[[:space:]]*true[[:space:]]*$/ {
+            in_required = 1
+        }
+        /^    on_missing:/ {
+            has_on_missing = 1
+        }
+        END {
+            if (in_required && !has_on_missing) {
+                missing++
+            }
+            print missing + 0
+        }
+    ' "$file"
+}
+
+p0p4_required_artifacts_failure_behavior_count() {
+    local file="$1"
+
+    awk '
+        /^  - name:/ {
+            if (in_required && !has_failure_behavior) {
+                missing++
+            }
+            in_required = 0
+            has_failure_behavior = 0
+        }
+        /^    required:[[:space:]]*true[[:space:]]*$/ {
+            in_required = 1
+        }
+        /^    (on_fail:|validation:)/ {
+            has_failure_behavior = 1
+        }
+        END {
+            if (in_required && !has_failure_behavior) {
+                missing++
+            }
+            print missing + 0
+        }
+    ' "$file"
+}
+
+test_start "root skill inventory is filesystem based and limited to assistant skills"
 skill_inventory="$(p0p4_root_skill_files)"
-missing_inventory_skills=()
-for skill in \
-    unity-game-design \
-    unity-iterate \
-    unity-multiplayer \
-    unity-playtest \
-    unity-procedural-art \
-    unity-scene-builder; do
-    expected_skill="$FRAMEWORK_DIR/skills/$skill/SKILL.md"
-    if ! printf '%s\n' "$skill_inventory" | grep -Fxq "$expected_skill"; then
-        missing_inventory_skills+=("$skill")
+non_assistant_inventory_skills=()
+while IFS= read -r skill_file; do
+    if [[ -z "$skill_file" ]]; then
+        continue
     fi
-done
-if [[ -n "$skill_inventory" && "${#missing_inventory_skills[@]}" -eq 0 ]]; then
+
+    rel_path="${skill_file#$FRAMEWORK_DIR/}"
+    if [[ "$rel_path" != skills/assistant-*/SKILL.md ]]; then
+        non_assistant_inventory_skills+=("$rel_path")
+    fi
+done <<< "$skill_inventory"
+if [[ -z "$skill_inventory" ]]; then
+    fail "root skill inventory did not find assistant-* skills"
+elif [[ "${#non_assistant_inventory_skills[@]}" -eq 0 ]]; then
     pass
 else
-    fail "filesystem skill inventory missed expected root skills: ${missing_inventory_skills[*]}"
+    fail "root skill inventory should include only assistant-* skills: ${non_assistant_inventory_skills[*]}"
 fi
 
 test_start "root skills declare output sections or documented exceptions"
@@ -86,6 +138,67 @@ if [[ "${#missing_output_sections[@]}" -eq 0 ]]; then
     pass
 else
     fail "root SKILL.md files need a ## Output section or documented contract-backed exception: ${missing_output_sections[*]}"
+fi
+
+test_start "assistant-clarify declares utility input and output contracts"
+clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
+clarify_input="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/input.yaml"
+clarify_output="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/output.yaml"
+clarify_contract_failures=()
+
+for contract_file in "$clarify_input" "$clarify_output"; do
+    if [[ ! -f "$contract_file" ]]; then
+        clarify_contract_failures+=("${contract_file#$FRAMEWORK_DIR/}: missing")
+    fi
+done
+
+if [[ -f "$clarify_input" ]]; then
+    for term in \
+        'schema_version: "1.0"' \
+        "contract: input" \
+        "skill: assistant-clarify" \
+        "on_missing:"; do
+        if ! grep -Fq "$term" "$clarify_input"; then
+            clarify_contract_failures+=("skills/assistant-clarify/contracts/input.yaml missing $term")
+        fi
+    done
+
+    if [[ "$(p0p4_required_fields_missing_behavior_count "$clarify_input")" -ne 0 ]]; then
+        clarify_contract_failures+=("skills/assistant-clarify/contracts/input.yaml has required fields without on_missing")
+    fi
+fi
+
+if [[ -f "$clarify_output" ]]; then
+    for term in \
+        'schema_version: "1.0"' \
+        "contract: output" \
+        "skill: assistant-clarify" \
+        "on_fail:"; do
+        if ! grep -Fq "$term" "$clarify_output"; then
+            clarify_contract_failures+=("skills/assistant-clarify/contracts/output.yaml missing $term")
+        fi
+    done
+
+    if [[ "$(p0p4_required_artifacts_failure_behavior_count "$clarify_output")" -ne 0 ]]; then
+        clarify_contract_failures+=("skills/assistant-clarify/contracts/output.yaml has required artifacts without validation or on_fail")
+    fi
+fi
+
+for term in \
+    "## Contracts" \
+    'contracts/input.yaml' \
+    'contracts/output.yaml' \
+    "Utility skill" \
+    "no phase gates or sub-agent handoffs"; do
+    if ! grep -Fq "$term" "$clarify_skill"; then
+        clarify_contract_failures+=("skills/assistant-clarify/SKILL.md missing $term")
+    fi
+done
+
+if [[ "${#clarify_contract_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
 fi
 
 test_start "high-control skills pair restrictions with actionable guidance"

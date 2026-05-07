@@ -22,6 +22,17 @@ Do not tell the user their prompt is "chaotic." Treat it as a normal collaborati
 | **Chaotic Prompts** | `chaotic-prompts.md` | User intent is compressed, mixed, or partially implicit. |
 | **Research Notes** | `research-notes.md` | Need the psychology rationale behind the workflow. |
 
+## Contracts
+
+Read and follow these contracts before running the clarification workflow.
+
+| Contract | File | Purpose |
+|---|---|---|
+| **Input** | `contracts/input.yaml` | Required context to resolve before clarifying a request. |
+| **Output** | `contracts/output.yaml` | Required artifacts to produce before proceeding with execution. |
+
+This is a Utility skill. It has no phase gates or sub-agent handoffs.
+
 ## Usage
 
 Read `chaotic-prompts.md` when any of these are true:
