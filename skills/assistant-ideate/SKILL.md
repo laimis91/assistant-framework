@@ -49,6 +49,16 @@ Seed (user's vague idea or question)
 5. DECIDE — Present for user decision
 ```
 
+## Output
+
+Return:
+- **Problem statement** - the clarified goal and constraints.
+- **Ideas** - the divergent idea set with short rationale for each.
+- **Ranking** - scored shortlist with criteria and trade-offs.
+- **Refined candidates** - the top options with first step, effort, risks, and dependencies.
+- **Decision point** - recommended next action, user choice requested, or open questions blocking selection.
+- **Status** - ready for decision, needs more ideation, or blocked by missing constraints.
+
 ## Phase 1: Understand
 
 Before generating ideas, clarify the problem:

@@ -54,4 +54,9 @@ Read the relevant tool file when the situation calls for it. These are tools, no
 
 ## Output
 
-Each tool produces structured output. Present the key findings concisely — the user doesn't need to see the full framework mechanics, just the insights and recommendations.
+Return:
+- **Result** - concise synthesis of the selected thinking tool's outcome.
+- **Key insights** - the few observations that materially change the decision.
+- **Recommendation** - proposed next step with confidence level.
+- **Dissenting view** - strongest counterpoint, risk, or alternative interpretation.
+- **Gaps** - assumptions, unknowns, or questions that limit confidence.

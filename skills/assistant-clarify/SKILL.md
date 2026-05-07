@@ -33,8 +33,9 @@ Read `chaotic-prompts.md` when any of these are true:
 
 ## Output
 
-The workflow should produce:
-1. A short interpretation of the user's likely goal
-2. A structured brief with knowns, unknowns, and assumptions
-3. One to three high-yield clarification questions with defaults or recommendations
-4. A confirmed execution target once the ambiguity is reduced
+Return:
+1. **Interpretation** - the user's likely goal in one or two sentences.
+2. **Structured brief** - knowns, unknowns, assumptions, constraints, and likely deliverables.
+3. **Clarifying questions** - one to three high-yield questions with defaults or recommendations.
+4. **Execution target** - the confirmed next action once ambiguity is reduced, or the blocker if it is not.
+5. **Status** - ready to execute, needs clarification, or blocked.

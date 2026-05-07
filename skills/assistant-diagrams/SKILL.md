@@ -70,9 +70,11 @@ For all diagram types:
 | Medium (10-50 files) | One overview + detail diagrams per area |
 | Large (50+ files) | Layered: L0 overview → L1 component → L2 detail |
 
-## Output Format
+## Output
 
-Always output Mermaid inside a fenced code block:
+Return:
+- **Result** - the diagram type generated and a brief description of what it shows.
+- **Diagram** - valid Mermaid inside a fenced code block:
 
 ````markdown
 ```mermaid
@@ -80,7 +82,9 @@ Always output Mermaid inside a fenced code block:
 ```
 ````
 
-Include a brief description above each diagram explaining what it shows.
+- **Evidence** - code files, symbols, or paths used to derive the diagram.
+- **Placement** - where the diagram was written, or "inline only" if no file changed.
+- **Gaps** - any missing context, assumptions, or follow-up questions affecting accuracy.
 
 ## Where to Place Diagrams
 

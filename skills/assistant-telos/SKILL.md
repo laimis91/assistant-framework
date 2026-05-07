@@ -233,6 +233,16 @@ When `~/.claude/telos.md` is loaded at session start:
 
 Telos is context, not constraint. It informs decisions but never blocks work the user explicitly requests.
 
+## Output
+
+Return:
+- **Action taken** - created, updated, reviewed, applied, or no changes needed.
+- **TCF location** - path to the Telos Context File read or changed.
+- **Sections** - sections completed, updated, reviewed, or still missing.
+- **Findings** - chain health, orphaned items, stale entries, or strategic alignment notes.
+- **Open questions** - decisions or missing context needed before the next Telos update.
+- **Status** - created, updated, reviewed, applied, or blocked by missing TCF/context.
+
 ## Rules
 
 - **Conversational, not ceremonial** — this should feel like useful reflection, not a form

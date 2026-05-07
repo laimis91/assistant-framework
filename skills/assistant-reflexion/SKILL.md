@@ -226,6 +226,16 @@ Lesson created (confidence: 0.5)
 | `assistant-onboard` | First reflexion seeds from onboarding observations |
 | `assistant-review` | Review findings feed into lessons about common mistakes |
 
+## Output
+
+Return:
+- **Action taken** - reflected, recalled lessons, updated strategy, reported stats, or consolidated.
+- **Lessons** - actionable lessons with confidence and where they apply.
+- **Evidence** - task context, review findings, user corrections, or memory signals behind each lesson.
+- **Artifacts** - memory/reflexion/strategy entries written, or "none" if read-only.
+- **Next use** - how the lessons should influence future discovery, planning, build, or review work.
+- **Status** - reflected, recalled, consolidated, or blocked by missing context.
+
 ## Visibility
 
 Following the "invisible workflow" principle:

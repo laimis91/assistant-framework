@@ -52,7 +52,10 @@ Always verify URLs before presenting them to the user. Dead links erode trust.
 
 ## Output
 
-Research produces confidence-scored findings. Present results with:
-- Confidence level (high/medium/low) per finding
-- Source attribution
-- Verified URLs only
+Return:
+- **Status** - completion state and confidence for the research result.
+- **Answer** - concise synthesis of the research result.
+- **Findings** - confidence-scored findings with source attribution.
+- **Sources** - verified URLs only, with enough context to understand relevance.
+- **Conflicts** - conflicting evidence or interpretations, or "none found".
+- **Gaps** - unanswered questions, weak evidence, stale sources, or recommended next checks.

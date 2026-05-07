@@ -67,6 +67,15 @@ Do not treat markdown files as cross-session memory. Use project-local session/t
 - `memory_search("EF Core migration")` — find entities by text across the graph
 - `memory_graph()` — full dump for debugging or overview
 
+## Output
+
+Return:
+- **Action taken** - save, recall, update, forget, search, or no-op.
+- **Result** - entity name, memory type, or matched memories as applicable.
+- **Evidence** - MCP tool used and relevant project/query context.
+- **Confirmation** - concise user-facing confirmation of what changed or what was found.
+- **Gaps** - missing content, ambiguous entity identity, or blockers preventing the memory operation.
+
 ## Rules
 
 - Only capture genuine insights: gotchas, non-obvious patterns, decision rationale

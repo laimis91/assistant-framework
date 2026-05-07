@@ -160,6 +160,16 @@ Project orientation saved to .claude/memory.md
 Ready to work on this codebase.
 ```
 
+## Output
+
+Return:
+- **Project summary** - purpose, stack, architecture, and approximate size.
+- **Key files** - important paths with their role in the system.
+- **Conventions** - discovered patterns with concrete examples.
+- **Artifacts** - orientation or memory files created or updated, or "none" if no files changed.
+- **Gaps** - unknowns, assumptions, and specific questions for the user.
+- **Status** - onboarded, partially onboarded, or blocked by missing access/context.
+
 ## Incremental Onboarding
 
 When returning to a known project after significant time:

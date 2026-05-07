@@ -60,4 +60,10 @@ All tools use a consistent 4-level scale:
 
 ## Output
 
-Present findings as actionable items with severity, not just observations. Each finding should have: what's wrong, why it matters, and how to fix it.
+Return:
+- **Status** - completion state and confidence for the security analysis.
+- **Risk summary** - overall result and scope assessed.
+- **Findings** - actionable items with severity, impact, evidence, and remediation.
+- **Evidence** - specific code, config, dependency, or threat path for each finding.
+- **Residual risk** - accepted risks, assumptions, or areas not assessed.
+- **Blockers** - missing access, missing context, or follow-up questions required for confidence.
