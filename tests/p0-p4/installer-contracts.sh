@@ -3,6 +3,18 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+p0p4_file_mode_octal() {
+    local path="$1"
+    case "$(uname -s)" in
+        Darwin|FreeBSD)
+            stat -f "%Lp" "$path"
+            ;;
+        *)
+            stat -c "%a" "$path"
+            ;;
+    esac
+}
+
 test_start "installer reinstall keeps one memory protocol block and one legacy preamble"
 INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME"
@@ -198,6 +210,104 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
+test_start "Codex reinstall refreshes stale memory-graph MCP config, tool approvals, and file mode"
+INSTALL_HOME_NINE="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_NINE"
+mkdir -p "$INSTALL_HOME_NINE/.codex"
+cat > "$INSTALL_HOME_NINE/.codex/config.toml" <<'STALE_CODEX_MCP'
+model = "test-model"
+
+[mcp_servers.other-server]
+command = "/tmp/other-server"
+args = ["--keep"]
+
+[mcp_servers.memory-graph]
+command = "/stale/memory-graph"
+args = ["--old-memory-dir", "/stale/memory"]
+
+[mcp_servers.memory-graph.tools.memory_context]
+approval_mode = "deny"
+
+[mcp_servers.memory-graph.tools.memory_search]
+approval_mode = "approve"
+
+[mcp_servers.memory-graph.tools.memory_search]
+approval_mode = "approve"
+
+[features]
+codex_hooks = false
+STALE_CODEX_MCP
+chmod 600 "$INSTALL_HOME_NINE/.codex/config.toml"
+if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-stale-codex-mcp.out 2>/tmp/p0p4-install-stale-codex-mcp.err; then
+    config_file="$INSTALL_HOME_NINE/.codex/config.toml"
+    config_mode="$(p0p4_file_mode_octal "$config_file")"
+    expected_command="command = \"$INSTALL_HOME_NINE/.codex/tools/memory-graph/run-memory-graph.sh\""
+    expected_args="args = [\"--memory-dir\", \"$INSTALL_HOME_NINE/.codex/memory\"]"
+    memory_tools=(
+        memory_context
+        memory_search
+        memory_stats
+        memory_doctor
+        memory_add_entity
+        memory_add_insight
+        memory_add_relation
+        memory_remove_entity
+        memory_remove_relation
+        memory_graph
+        memory_reflect
+        memory_decide
+        memory_pattern
+        memory_consolidate
+        memory_trend
+    )
+
+    if [[ "$(count_occurrences "^\\[mcp_servers\\.memory-graph\\]$" "$config_file")" != "1" ]] \
+        || ! grep -Fq "$expected_command" "$config_file" \
+        || ! grep -Fq "$expected_args" "$config_file" \
+        || grep -q "/stale/memory-graph" "$config_file" \
+        || ! grep -q '^model = "test-model"$' "$config_file" \
+        || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
+        || [[ "$config_mode" != "600" ]]; then
+        fail "expected stale Codex memory-graph command/args to refresh while preserving unrelated config and file mode"
+    else
+        missing_tool=""
+        duplicate_tool=""
+        bad_approval_tool=""
+        for tool in "${memory_tools[@]}"; do
+            section="mcp_servers\\.memory-graph\\.tools\\.$tool"
+            if [[ "$(count_occurrences "^\\[$section\\]$" "$config_file")" == "0" ]]; then
+                missing_tool="$tool"
+                break
+            fi
+            if [[ "$(count_occurrences "^\\[$section\\]$" "$config_file")" != "1" ]]; then
+                duplicate_tool="$tool"
+                break
+            fi
+            if ! awk -v section="[mcp_servers.memory-graph.tools.$tool]" '
+                $0 == section { in_section = 1; next }
+                in_section && /^\[/ { exit }
+                in_section && $0 == "approval_mode = \"approve\"" { found = 1; exit }
+                END { exit found ? 0 : 1 }
+            ' "$config_file"; then
+                bad_approval_tool="$tool"
+                break
+            fi
+        done
+
+        if [[ -n "$missing_tool" ]]; then
+            fail "expected refreshed Codex MCP config to include approval block for $missing_tool"
+        elif [[ -n "$duplicate_tool" ]]; then
+            fail "expected refreshed Codex MCP config to avoid duplicate approval blocks for $duplicate_tool"
+        elif [[ -n "$bad_approval_tool" ]]; then
+            fail "expected refreshed Codex MCP config to approve $bad_approval_tool"
+        else
+            pass
+        fi
+    fi
+else
+    fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
+fi
+
 test_start "installer includes eval fixture used by installed eval runner"
 INSTALL_HOME_EIGHT="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_EIGHT"
@@ -227,7 +337,7 @@ test_start "Codex hook reinstall merges hooks sanely"
 INSTALL_HOME_FIVE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_FIVE"
 mkdir -p "$INSTALL_HOME_FIVE/.codex"
-cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<'JSON'
+cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
 {
   "hooks": {
     "PostCompact": [
@@ -236,11 +346,23 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<'JSON'
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/post-compact.sh"
+            "command": "\$HOME/.codex/hooks/assistant/post-compact.sh"
           },
           {
             "type": "command",
             "command": "/tmp/user-custom-hook.sh"
+          },
+          {
+            "type": "command",
+            "command": "\$HOME/.codex/hooks/assistant/custom-user.sh"
+          },
+          {
+            "type": "command",
+            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/session-end.sh --legacy"
+          },
+          {
+            "type": "command",
+            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/custom-absolute.sh --keep"
           }
         ]
       }
@@ -251,7 +373,15 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<'JSON'
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/pre-compress.sh"
+            "command": "\$HOME/.codex/hooks/assistant/pre-compress.sh"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/task-completed.sh --legacy"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/task-journal-resolver.sh --legacy"
           }
         ]
       }
@@ -262,11 +392,34 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<'JSON'
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/workflow-guard.sh"
+            "command": "\$HOME/.codex/hooks/assistant/workflow-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "$INSTALL_HOME_FIVE/.codex/hooks/assistant/workflow-guard.sh --absolute-stale"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/workflow-guard.sh --repo-stale"
           },
           {
             "type": "command",
             "command": "/tmp/user-pretool-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\$HOME/.codex/hooks/assistant/tool-failure-advisor.sh --stale"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/post-tool-context.sh --stale"
           }
         ]
       }
@@ -275,21 +428,41 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<'JSON'
 }
 JSON
 if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-hooks.out 2>/tmp/p0p4-install-codex-hooks.err; then
-    if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e '
+    if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e --arg install_home "$INSTALL_HOME_FIVE" --arg framework_dir "$FRAMEWORK_DIR" '
+        def first_shell_token:
+            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+        def current_framework_hook_names:
+            [
+                "session-start.sh",
+                "skill-router.sh",
+                "learning-signals.sh",
+                "workflow-enforcer.sh",
+                "workflow-guard.sh",
+                "stop-review.sh",
+                "harness-gate.sh"
+            ];
         [.. | objects | .command? // empty] as $commands
-        | [$commands[] | select(startswith("$HOME/.codex/hooks/assistant/"))] as $frameworkCommands
+        | [$commands[] | first_shell_token] as $tokens
+        | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ("$HOME/.codex/hooks/assistant/" + $hook_name)))] as $frameworkCommands
         | {
-            stale: ($commands | any(. == "$HOME/.codex/hooks/assistant/post-compact.sh"
+            stale: ($tokens | any(. == "$HOME/.codex/hooks/assistant/post-compact.sh"
                 or . == "$HOME/.codex/hooks/assistant/pre-compress.sh"
-                or . == "$HOME/.codex/hooks/assistant/session-end.sh"
-                or . == "$HOME/.codex/hooks/assistant/task-completed.sh")),
+                or . == ($install_home + "/.codex/hooks/assistant/session-end.sh")
+                or . == ($install_home + "/.codex/hooks/assistant/workflow-guard.sh")
+                or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
+                or . == ($framework_dir + "/hooks/scripts/task-completed.sh")
+                or . == ($framework_dir + "/hooks/scripts/task-journal-resolver.sh")
+                or . == ($framework_dir + "/hooks/scripts/workflow-guard.sh")
+                or . == ($framework_dir + "/hooks/scripts/post-tool-context.sh"))),
             custom: ($commands | any(. == "/tmp/user-custom-hook.sh")),
+            homeAssistantCustom: ($commands | any(. == "$HOME/.codex/hooks/assistant/custom-user.sh")),
+            absoluteAssistantCustom: ($commands | any(. == ($install_home + "/.codex/hooks/assistant/custom-absolute.sh --keep"))),
             preToolCustom: ($commands | any(. == "/tmp/user-pretool-hook.sh")),
             uniqueFramework: (($frameworkCommands | length) == ($frameworkCommands | unique | length)),
             sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
             workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh"))
         }
-        | (.stale | not) and .custom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
+        | (.stale | not) and .custom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
     ' "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null; then
         pass
     else

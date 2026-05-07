@@ -62,6 +62,7 @@ public sealed partial class MemoryDoctorTool : IMemoryTool
 
         var storeStats = GetStoreStats(warnings);
         var ftsDiagnostics = GetFtsDiagnostics(entities, warnings);
+        AddLocalStoreWarnings(warnings, entities.Count, relations.Count, storeStats, ftsDiagnostics);
 
         var ftsIssueCount = ftsDiagnostics?.StaleEntityRows ?? 0;
         var issueCount = splitProjectCandidates.Count +
@@ -70,14 +71,19 @@ public sealed partial class MemoryDoctorTool : IMemoryTool
                          danglingRelations.Count +
                          selfRelations.Count +
                          ftsIssueCount;
+        var runtime = BuildRuntime(ftsDiagnostics, warnings);
+        var warningCount = warnings.Count;
 
         return ToolHelpers.Success(new
         {
             summary = new
             {
-                status = issueCount == 0 ? "ok" : "issuesFound",
+                status = issueCount == 0
+                    ? (warningCount == 0 ? "ok" : "warnings")
+                    : "issuesFound",
                 readOnly = true,
-                issueCount
+                issueCount,
+                warningCount
             },
             counts = new
             {
@@ -119,7 +125,7 @@ public sealed partial class MemoryDoctorTool : IMemoryTool
                 selfRelations
             },
             ftsIssues = BuildFtsIssues(ftsDiagnostics),
-            runtime = BuildRuntime(ftsDiagnostics, warnings),
+            runtime,
             warnings
         });
     }

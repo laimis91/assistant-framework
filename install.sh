@@ -237,6 +237,142 @@ cleanup_installed_tool_build_artifacts() {
     fi
 }
 
+register_codex_memory_graph_mcp() {
+    local config_file="$1"
+    local mcp_command="$2"
+    local memory_dir="$3"
+    local python_bin=""
+
+    if command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+    elif command -v python >/dev/null 2>&1 && python -c 'import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)' >/dev/null 2>&1; then
+        python_bin="python"
+    fi
+
+    if [[ -z "$python_bin" ]]; then
+        info "WARNING: Python 3 not found — cannot safely refresh Codex MCP TOML automatically."
+        info "Update $config_file manually with [mcp_servers.memory-graph], command/args, and memory tool approval blocks."
+        info "  command = \"$mcp_command\""
+        info "  args = [\"--memory-dir\", \"$memory_dir\"]"
+        return 1
+    fi
+
+    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" <<'PY'
+import json
+import os
+import re
+import stat
+import sys
+
+config_file, mcp_command, memory_dir = sys.argv[1:4]
+tools = [
+    "memory_context",
+    "memory_search",
+    "memory_stats",
+    "memory_doctor",
+    "memory_add_entity",
+    "memory_add_insight",
+    "memory_add_relation",
+    "memory_remove_entity",
+    "memory_remove_relation",
+    "memory_graph",
+    "memory_reflect",
+    "memory_decide",
+    "memory_pattern",
+    "memory_consolidate",
+    "memory_trend",
+]
+
+
+def table_name(line):
+    stripped = line.strip()
+    if stripped.startswith("[["):
+        end = stripped.find("]]")
+        if end == -1:
+            return None
+        name = stripped[2:end]
+    elif stripped.startswith("["):
+        end = stripped.find("]")
+        if end == -1:
+            return None
+        name = stripped[1:end]
+    else:
+        return None
+
+    name = re.sub(r"\s*\.\s*", ".", name.strip())
+    name = name.replace('"memory-graph"', "memory-graph")
+    name = name.replace("'memory-graph'", "memory-graph")
+    return name
+
+
+def is_memory_graph_table(name):
+    return name == "mcp_servers.memory-graph" or name.startswith("mcp_servers.memory-graph.")
+
+
+def split_sections(text):
+    sections = []
+    current = []
+    for line in text.splitlines(keepends=True):
+        if table_name(line) is not None:
+            if current:
+                sections.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        sections.append(current)
+    return sections
+
+
+original = ""
+existing_mode = None
+if os.path.exists(config_file):
+    existing_mode = stat.S_IMODE(os.stat(config_file).st_mode)
+    with open(config_file, "r", encoding="utf-8") as handle:
+        original = handle.read()
+
+kept_lines = []
+for section in split_sections(original):
+    name = table_name(section[0]) if section else None
+    if name is not None and is_memory_graph_table(name):
+        continue
+    kept_lines.extend(section)
+
+memory_graph_lines = [
+    "[mcp_servers.memory-graph]\n",
+    "command = {}\n".format(json.dumps(mcp_command)),
+    "args = [\"--memory-dir\", {}]\n".format(json.dumps(memory_dir)),
+]
+for tool in tools:
+    memory_graph_lines.extend([
+        "\n",
+        "[mcp_servers.memory-graph.tools.{}]\n".format(tool),
+        "approval_mode = \"approve\"\n",
+    ])
+
+kept_text = "".join(kept_lines).rstrip()
+memory_graph_text = "".join(memory_graph_lines)
+updated = "{}\n\n{}".format(kept_text, memory_graph_text) if kept_text else memory_graph_text
+if not updated.endswith("\n"):
+    updated += "\n"
+
+os.makedirs(os.path.dirname(config_file), exist_ok=True)
+tmp_file = "{}.tmp".format(config_file)
+with open(tmp_file, "w", encoding="utf-8") as handle:
+    handle.write(updated)
+if existing_mode is not None:
+    os.chmod(tmp_file, existing_mode)
+os.replace(tmp_file, config_file)
+PY
+    then
+        ok "MCP server memory-graph refreshed in $config_file"
+    else
+        rm -f "${config_file}.tmp"
+        info "WARNING: Failed to refresh MCP server in $config_file"
+        return 1
+    fi
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -536,20 +672,9 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
         # Codex: register in ~/.codex/config.toml using [mcp_servers.name] TOML syntax
         CODEX_CONFIG="$AGENT_HOME/config.toml"
         if $DRY_RUN; then
-            dry "Register memory-graph MCP server in $CODEX_CONFIG"
+            dry "Refresh memory-graph MCP server in $CODEX_CONFIG"
         else
-            if [[ -f "$CODEX_CONFIG" ]] && grep -q '\[mcp_servers\.memory-graph\]' "$CODEX_CONFIG" 2>/dev/null; then
-                info "MCP server memory-graph already registered in $CODEX_CONFIG"
-            else
-                # Append TOML block
-                {
-                    echo ""
-                    echo "[mcp_servers.memory-graph]"
-                    echo "command = \"$MCP_COMMAND\""
-                    echo "args = [\"--memory-dir\", \"$MCP_MEMORY_DIR\"]"
-                } >> "$CODEX_CONFIG"
-                ok "MCP server memory-graph registered in $CODEX_CONFIG"
-            fi
+            register_codex_memory_graph_mcp "$CODEX_CONFIG" "$MCP_COMMAND" "$MCP_MEMORY_DIR" || true
         fi
     else
         # Gemini and other agents: register in settings.json with JSON mcpServers format
@@ -785,6 +910,34 @@ if $INSTALL_HOOKS; then
                 if [[ -f "$CODEX_HOOKS_FILE" ]] && command -v jq &>/dev/null; then
                     # Merge with existing hooks.json
                     existing_hooks=$(jq '
+                        def assistant_framework_codex_hook_names:
+                            [
+                                "session-start.sh",
+                                "skill-router.sh",
+                                "learning-signals.sh",
+                                "workflow-enforcer.sh",
+                                "workflow-guard.sh",
+                                "stop-review.sh",
+                                "harness-gate.sh",
+                                "subagent-monitor.sh",
+                                "post-compact.sh",
+                                "pre-compress.sh",
+                                "session-end.sh",
+                                "post-tool-context.sh",
+                                "tool-failure-advisor.sh",
+                                "task-completed.sh",
+                                "task-journal-resolver.sh"
+                            ];
+                        def first_shell_token:
+                            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+                        def assistant_framework_codex_hook_command:
+                            (. // "") as $command
+                            | ($command | first_shell_token) as $token
+                            | any(assistant_framework_codex_hook_names[]; . as $hook_name |
+                                $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
+                                or ($token | endswith("/.codex/hooks/assistant/" + $hook_name))
+                                or ($token | endswith("/hooks/scripts/" + $hook_name))
+                            );
                         (.hooks // {})
                         | with_entries(
                             .value = (
@@ -792,7 +945,7 @@ if $INSTALL_HOOKS; then
                                 | map(
                                     .hooks = (
                                         (.hooks // [])
-                                        | map(select((.command // "") | startswith("$HOME/.codex/hooks/assistant/") | not))
+                                        | map(select(((.command // "") | assistant_framework_codex_hook_command) | not))
                                     )
                                 )
                                 | map(select((.hooks // []) | length > 0))

@@ -104,6 +104,30 @@ public sealed class MemoryGraphRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void Create_DoctorWarnsWhenLocalMemoryStoreIsEmpty()
+    {
+        var graphFile = Path.Combine(_memoryDir, "missing-graph.jsonl");
+
+        using var runtime = MemoryGraphRuntime.Create(new MemoryGraphRuntimeOptions(_memoryDir, graphFile));
+        var result = runtime.Registry.Execute("memory_doctor", ParseArgs("{}"));
+
+        Assert.False(result.IsError);
+        using var document = JsonDocument.Parse(result.Content[0].Text);
+        var root = document.RootElement;
+        var warnings = root.GetProperty("warnings")
+            .EnumerateArray()
+            .Select(warning => Assert.IsType<string>(warning.GetString()))
+            .ToList();
+
+        Assert.Equal("warnings", root.GetProperty("summary").GetProperty("status").GetString());
+        Assert.Contains(warnings, warning => warning.Contains("Memory store appears empty", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Contains("Memory is local to memoryDir", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Contains("another PC", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Contains("memory.db", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Contains("graph.jsonl", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Create_IndexesImportedJsonlGraphEntitiesForMemorySearchWithRelations()
     {
         var graphFile = Path.Combine(_memoryDir, "graph.jsonl");
@@ -170,6 +194,33 @@ public sealed class MemoryGraphRuntimeTests : IDisposable
         Assert.False(result.IsError);
         Assert.Contains("DbOnlyProject", result.Content[0].Text);
         Assert.Contains("from sqlite", result.Content[0].Text);
+    }
+
+    [Fact]
+    public void Create_DoctorDoesNotWarnWhenDbGraphIsNonEmptyAndLegacyJsonlIsMissing()
+    {
+        var missingGraphFile = Path.Combine(_memoryDir, "missing-graph.jsonl");
+        using (var seedStore = new MemoryStore(Path.Combine(_memoryDir, "memory.db")))
+        {
+            seedStore.AddOrUpdateGraphEntity("DbOnlyProject", EntityType.Project, ["from sqlite"]);
+        }
+
+        using var runtime = MemoryGraphRuntime.Create(new MemoryGraphRuntimeOptions(_memoryDir, missingGraphFile));
+        var result = runtime.Registry.Execute("memory_doctor", ParseArgs("{}"));
+
+        Assert.False(result.IsError);
+        using var document = JsonDocument.Parse(result.Content[0].Text);
+        var root = document.RootElement;
+        var warnings = root.GetProperty("warnings")
+            .EnumerateArray()
+            .Select(warning => Assert.IsType<string>(warning.GetString()))
+            .ToList();
+
+        Assert.Equal("ok", root.GetProperty("summary").GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("summary").GetProperty("warningCount").GetInt32());
+        Assert.DoesNotContain(warnings, warning => warning.Contains("Memory store appears empty", StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings, warning => warning.Contains("Legacy graph.jsonl is missing", StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings, warning => warning.Contains("copy or import memory.db", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -46,6 +46,16 @@ p0p4_installed_hook_payload() {
 }
 
 if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; then
+    mkdir -p "$HOOK_SMOKE_PROJECT/.codex"
+    cat > "$HOOK_SMOKE_PROJECT/.codex/task.md" <<'TASK'
+Task: stale completed smoke task
+Status: DONE
+Triaged as: medium
+
+This completed task text must not be injected by installed hooks.
+WORKFLOW COMPLETE
+TASK
+
     if [[ ! -f "$hooks_file" ]]; then
         smoke_failed="expected installed hooks.json at $hooks_file"
     elif ! jq -e . "$hooks_file" >/dev/null 2>&1; then
@@ -106,6 +116,8 @@ if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; 
             smoke_failed="installed session-start.sh failed with exit $session_exit"
         elif [[ -n "$session_stdout" ]] && ! echo "$session_stdout" | jq -e . >/dev/null 2>&1; then
             smoke_failed="installed session-start.sh emitted non-JSON stdout"
+        elif [[ "$session_stdout" == *"ACTIVE TASK JOURNAL"* || "$session_stdout" == *"stale completed smoke task"* || "$session_stdout" == *"This completed task text must not be injected"* ]]; then
+            smoke_failed="installed session-start.sh injected completed task journal"
         fi
     fi
 
@@ -132,6 +144,8 @@ if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; 
         rm -f "$enforcer_out" "$enforcer_err"
         if [[ "$enforcer_exit" -ne 0 || "$enforcer_stdout" != *"WORKFLOW RULES"* ]]; then
             smoke_failed="installed workflow-enforcer.sh did not emit workflow reminder; exit=$enforcer_exit stdout='$enforcer_stdout'"
+        elif [[ "$enforcer_stdout" == *"WORKFLOW STATE"* || "$enforcer_stdout" == *"stale completed smoke task"* || "$enforcer_stdout" == *"This completed task text must not be injected"* ]]; then
+            smoke_failed="installed workflow-enforcer.sh injected completed task journal state"
         fi
     fi
 
