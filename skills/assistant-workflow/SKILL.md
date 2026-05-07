@@ -115,7 +115,7 @@ Assess task size. This determines which phases run.
 
 [Design] = include if task has UI work, skip for backend-only.
 
-Print: `>> Triaged as: [SIZE] - phases: [list]`
+Print: `>> Triaged as: [SIZE] — phases: [list]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 

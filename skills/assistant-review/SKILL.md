@@ -72,8 +72,10 @@ while round <= 5:
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
-       fixed; treat them as closed unless the current review material still shows risk:
+       fixed — do NOT re-report them:
        {previously_fixed}
+       If the current review material shows a residual or related risk, report it
+       only as a distinct new finding with new evidence; do not re-report the fixed item.
        Confidence threshold:
        - Round 1-2: 80%+
        - Round 3-4: 85%+
