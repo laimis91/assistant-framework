@@ -13,11 +13,11 @@ triggers:
 
 # Development Workflow
 
-Core principles: **never guess**, **right-sized ceremony**, **every idea becomes testable criteria**.
+Core principles: **verify before deciding**, **right-sized ceremony**, **every idea becomes testable criteria**.
 
 ## Contracts
 
-This skill enforces strict input/output contracts and phase gate assertions. Read the contract files in `contracts/` before executing the workflow. All contracts are **mandatory** — not advisory.
+This skill enforces strict input/output contracts and phase gate assertions. Read the contract files in `contracts/` before executing the workflow. All contracts are **mandatory** and enforced.
 
 | Contract | File | Purpose |
 |---|---|---|
@@ -32,7 +32,7 @@ This skill enforces strict input/output contracts and phase gate assertions. Rea
 - Include all required handoff context fields when dispatching subagents
 - Validate all required handoff return fields when subagents complete
 - Verify all output contract artifacts before printing `--- WORKFLOW COMPLETE ---`
-- If any contract check fails: resolve it before proceeding, never skip silently
+- If any contract check fails: resolve it before proceeding and record the recovery
 
 ## Visible Checkpoints
 
@@ -54,7 +54,7 @@ For completion:
 --- PHASE: [name] COMPLETE ---
 ```
 
-These are mandatory. If the user never sees these messages, the workflow is not being followed.
+These are mandatory. Visible checkpoints are the proof that the workflow is being followed.
 
 ## Idea-to-Action Pipeline
 
@@ -70,9 +70,9 @@ Is this an idea/question (not a concrete task)?
 
 ### Decomposing ideas into criteria
 
-When the user has an idea, question, or vague goal — not a concrete task — decompose it before triaging:
+When the user has an idea, question, or vague goal - not a concrete task - decompose it before triaging:
 
-1. **Reverse engineer**: What do they explicitly want? What do they NOT want? What's implied?
+1. **Reverse engineer**: What do they explicitly want? What constraints or exclusions did they state? What's implied?
 2. **Extract criteria**: Write 4-12 atomic, binary, testable statements (8-12 words each)
 3. **Apply splitting test**: If a criterion joins two verifiable things (AND/WITH) -> split. If parts can fail independently -> split. If it says "all/every/complete" -> enumerate.
 4. **Present for confirmation**: Show criteria, get approval, then triage as a task.
@@ -97,8 +97,8 @@ Approve these criteria? Then I'll triage and plan.
 
 When a task includes incidental or scope-expanding refactor work:
 - Justify it with a concrete risk only: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, or poor extension seam.
-- Do not justify incidental or scope-expanding refactors with vague framing such as generic convention language, style, cleanliness, or generic improvement.
-- Choose the smallest useful, durable fix that removes the identified risk. Avoid broad cleanup unless the user explicitly requested cleanup, reorganization, or refactor work.
+- Tie incidental or scope-expanding refactors to concrete risk instead of vague framing such as generic convention language, style, cleanliness, or generic improvement.
+- Choose the smallest useful, durable fix that removes the identified risk. Keep cleanup scoped unless the user explicitly requested cleanup, reorganization, or refactor work.
 
 ## Triage
 
@@ -115,7 +115,7 @@ Assess task size. This determines which phases run.
 
 [Design] = include if task has UI work, skip for backend-only.
 
-Print: `>> Triaged as: [SIZE] — phases: [list]`
+Print: `>> Triaged as: [SIZE] - phases: [list]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 
@@ -141,7 +141,7 @@ For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 
 ## Context Management
 
-- **On continuation**: read the active project task journal FIRST — it has the full task state
+- **On continuation**: read the active project task journal FIRST; it has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
 - Mega: each sub-task gets its own brief and context.

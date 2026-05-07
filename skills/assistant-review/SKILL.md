@@ -5,10 +5,10 @@ effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
     priority: 90
-    reminder: "This request to fix review issues matches assistant-review. You MUST load and follow this SKILL.md and its contracts before editing code. The skill includes fix → validation → re-review steps that must not be skipped."
+    reminder: "This request to fix review issues matches assistant-review. You MUST load and follow this SKILL.md and its contracts before editing code. The skill includes fix -> validation -> re-review steps that run before the final summary."
   - pattern: "review|fresh review|code review|review this|check the code|/review"
     priority: 80
-    reminder: "This request matches assistant-review. You MUST load and follow this SKILL.md and its contracts before doing anything else. The skill runs an autonomous review-fix loop — do NOT just review and stop."
+    reminder: "This request matches assistant-review. You MUST load and follow this SKILL.md and its contracts before doing anything else. Run the autonomous review-fix loop to its exit condition before reporting."
 ---
 
 # Autonomous Review Loop
@@ -31,16 +31,16 @@ This skill enforces strict contracts on inputs, outputs, loop gates, and reviewe
 - Validate all required return fields when Reviewer completes
 - Verify all output contract artifacts before presenting the final summary
 
-You MUST run this loop autonomously from start to finish. Do NOT stop after one round. Do NOT present intermediate results. Do NOT wait for the user between rounds. Run until clean or max rounds reached, then present the final result.
+Run this loop autonomously from start to finish. Continue rounds until clean or max rounds reached, keep intermediate results inside the loop, and present one final result after exit.
 
 ## Entry
 
 Determine the review scope:
-- If the user specified files, pasted content, or a diff → review that material
-- If there are uncommitted changes → review those (`git diff`)
-- If there's an active task journal (`.claude/task.md`) → review all changes from that task
-- If the user requests an audit of current file contents → review the relevant files even without a diff
-- Otherwise → ask the user what to review
+- If the user specified files, pasted content, or a diff -> review that material
+- If there are uncommitted changes -> review those (`git diff`)
+- If there's an active task journal (`.claude/task.md`) -> review all changes from that task
+- If the user requests an audit of current file contents -> review the relevant files even without a diff
+- Otherwise -> ask the user what to review
 
 ## Refactor-Related Findings
 
@@ -55,7 +55,7 @@ Use refactor-related findings only for concrete actionable risk. Allowed risk ca
 
 Every refactor-related finding MUST state the risk category, affected surface, evidence from the review material, and the smallest durable fix that addresses the risk within the normal finding text.
 
-Do not use vague framing such as generic convention language, style, cleanliness, or generic improvement. Do not ask for broad cleanup when a smaller durable fix will remove the risk.
+Use concrete risk framing instead of generic convention, style, cleanliness, or improvement language. Request broad cleanup only when a smaller durable fix cannot remove the risk.
 
 ## The Loop
 
@@ -72,7 +72,8 @@ while round <= 5:
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
-       fixed — do NOT re-report them: {previously_fixed}
+       fixed; treat them as closed unless the current review material still shows risk:
+       {previously_fixed}
        Confidence threshold:
        - Round 1-2: 80%+
        - Round 3-4: 85%+
@@ -81,20 +82,20 @@ while round <= 5:
 
   2. EVALUATE
      a. Check rubric score (medium+ scope):
-        - PASS (weighted >= 4.0) AND no must-fix AND no should-fix → EXIT CLEAN
-        - PIVOT (weighted < threshold for round) → escalate to orchestrator
-        - REFINE with findings → continue to step 3
-        - REFINE with zero findings → EXIT CLEAN with advisory:
+        - PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN
+        - PIVOT (weighted < threshold for round) -> escalate to orchestrator
+        - REFINE with findings -> continue to step 3
+        - REFINE with zero findings -> EXIT CLEAN with advisory:
           "Rubric score {score} is below target, but no concrete
           actionable risk was found in scope. Low-scoring dimensions
           are noted as watch areas for future work."
           Include rubric scores and low-dimension details in final report.
      b. No rubric (small scope): use findings-based exit:
-        - No must-fix AND no should-fix → EXIT CLEAN
-        - Only nits → EXIT CLEAN (note nits in final report)
-     c. round == 5 with remaining must-fix → EXIT WITH REMAINING ITEMS
-     d. round == 5 with issues fixed and now clean → EXIT ISSUES FIXED
-     e. Otherwise → continue to step 3
+        - No must-fix AND no should-fix -> EXIT CLEAN
+        - Only nits -> EXIT CLEAN (note nits in final report)
+     c. round == 5 with remaining must-fix -> EXIT WITH REMAINING ITEMS
+     d. round == 5 with issues fixed and now clean -> EXIT ISSUES FIXED
+     e. Otherwise -> continue to step 3
 
      Record in score_history: { round, weighted_score, finding_count, drift_status }
      (see references/score-tracking.md for drift detection rules)
@@ -106,10 +107,10 @@ while round <= 5:
 
   4. VALIDATE
      - Run build + tests if applicable
-     - If build/tests fail → fix and re-verify before continuing
+     - If build/tests fail -> fix and re-verify before continuing
      - For C# projects: run `bash ~/.claude/tools/cognitive-complexity/run-complexity.sh --changed` and flag methods exceeding threshold (adjust path for agent: `~/.codex/tools/...` or `~/.gemini/tools/...`)
 
-  5. round += 1 → go to step 1
+  5. round += 1 -> go to step 1
 ```
 
 ## Exit: Present Final Result
@@ -135,7 +136,7 @@ After the loop completes, present ONE summary to the user:
 ### Score Progression (if multiple rounds)
 | Round | Score | Findings | Delta | Drift |
 |---|---|---|---|---|
-| 1 | {score} | {count} | — | — |
+| 1 | {score} | {count} | - | - |
 | 2 | {score} | {count} | {+/-} | {drift_status} |
 
 ### Fixed in this review
@@ -150,26 +151,26 @@ After the loop completes, present ONE summary to the user:
 
 ## Rules
 
-- **NEVER** present round 1 results and wait. The whole point of this skill is autonomous looping.
-- **NEVER** ask "should I do another round?" — just do it.
-- **Fresh Reviewer each round** on medium+ scope — stale context weakens reviews.
-- **Previously-fixed list prevents re-reporting** — each round should find fewer issues.
-- **Higher confidence each round** — early rounds catch obvious issues, later rounds require higher certainty.
-- If scope is trivial (single small file, obvious change) → one round is fine if clean. But if findings exist, you MUST loop.
+- **Single final summary**: keep round results internal and report after the loop exits.
+- **Autonomous continuation**: advance to the next round while exit criteria are unmet.
+- **Fresh Reviewer each round** on medium+ scope: stale context weakens reviews.
+- **Previously-fixed list prevents re-reporting**: each round should find fewer issues.
+- **Higher confidence each round**: early rounds catch obvious issues, later rounds require higher certainty.
+- If scope is trivial (single small file, obvious change) -> one clean round can exit. If findings exist, continue looping.
 
 ### Drift detection (medium+ scope)
 
 After each round, compare rubric scores to the previous round per `references/score-tracking.md`:
 
-- **GENUINE**: Score up, findings down → continue normally
-- **SUSPICIOUS**: Score jumped > 1.0 in one round → log warning, continue
-- **DRIFT**: Score up but findings didn't decrease → **reset evaluator** (fresh agent, stricter prompt)
-- **REGRESSION**: Score down → investigate, escalate if 2+ consecutive rounds
-- **NEUTRAL**: Score unchanged for 1 round with findings present → log, no action yet
-- **STAGNATION**: Score unchanged for 2+ rounds with findings present → escalate to orchestrator
+- **GENUINE**: Score up, findings down -> continue normally
+- **SUSPICIOUS**: Score jumped > 1.0 in one round -> log warning, continue
+- **DRIFT**: Score up but findings didn't decrease -> **reset evaluator** (fresh agent, stricter prompt)
+- **REGRESSION**: Score down -> investigate, escalate if 2+ consecutive rounds
+- **NEUTRAL**: Score unchanged for 1 round with findings present -> log, no action yet
+- **STAGNATION**: Score unchanged for 2+ rounds with findings present -> escalate to orchestrator
 
 On DRIFT, the next Reviewer dispatch MUST include this addition to its prompt:
 > "Previous rounds showed score inflation without corresponding quality improvement.
-> Apply maximum skepticism. Score conservatively — when uncertain, round DOWN."
+> Apply maximum skepticism. Score conservatively; when uncertain, round DOWN."
 
 On 3+ DRIFT occurrences: stop the loop and present findings for manual review.

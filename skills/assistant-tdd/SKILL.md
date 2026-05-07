@@ -12,7 +12,7 @@ triggers:
 
 ## Contracts
 
-This skill enforces strict gate assertions at every RED → GREEN → REFACTOR transition.
+This skill enforces strict gate assertions at every RED -> GREEN -> REFACTOR transition.
 
 | Contract | File | Purpose |
 |---|---|---|
@@ -22,15 +22,15 @@ This skill enforces strict gate assertions at every RED → GREEN → REFACTOR t
 | **Handoffs** | `contracts/handoffs.yaml` | Subagent dispatch contracts (currently none; workflow owns TDD handoffs) |
 
 **Rules:**
-- Check phase gate assertions at every transition (RED→GREEN, GREEN→REFACTOR, REFACTOR→next RED)
+- Check phase gate assertions at every transition (RED->GREEN, GREEN->REFACTOR, REFACTOR->next RED)
 - Every cycle must have verified test execution results (not assumed)
-- No production code without a preceding failing test — this is structurally enforced, not advisory
+- Production implementation starts only after a verified failing test; this is structurally enforced, not advisory
 
-Enforces the Red-Green-Refactor cycle. When active, no production code is written without a failing test first.
+Enforces the Red-Green-Refactor cycle. When active, every production change begins with a failing test.
 
 ## The Iron Law
 
-No production code without a failing test first. If you write code before its test, **delete the code** and start with the test. This is not negotiable — code written before tests has unknown coverage and cannot be trusted.
+Production code starts after a failing test proves the missing behaviour. Recovery: if implementation appears before its test, **delete the code**, write the test, verify RED, then implement GREEN. This is mandatory because code written before tests has unknown coverage and cannot be trusted.
 
 ## Activation
 
@@ -48,26 +48,26 @@ When active, add to the task journal constraints:
 
 For each behaviour or plan step:
 
-### RED — Write a failing test
+### RED - Write a failing test
 
 1. Write ONE test that describes the desired behaviour
-2. Run it — it **MUST** fail
+2. Run it; it **MUST** fail
 3. Verify it fails for the **RIGHT reason** (not a syntax error or missing import)
 4. If it passes: the behaviour already exists or the test is wrong. Investigate.
 
-### GREEN — Make it pass
+### GREEN - Make it pass
 
 1. Write the **SIMPLEST** code that makes the test pass
-2. Do not write more code than needed — no "while I'm here" additions
-3. Run the test — it must pass
-4. Run **ALL** tests — nothing else should break
+2. Keep the change limited to the code needed for this test
+3. Run the test; it must pass
+4. Run **ALL** tests to confirm existing behaviour still passes
 
-### REFACTOR — Clean up
+### REFACTOR - Clean up
 
 1. Remove duplication introduced in the GREEN step
 2. Improve naming, extract methods, simplify
-3. Run ALL tests after each refactoring — they must stay green
-4. Do not add new behaviour during refactoring
+3. Run ALL tests after each refactoring; they must stay green
+4. Keep refactoring behaviour-neutral; add new behaviour in the next RED cycle
 
 ## Orchestrated role ownership
 
@@ -90,12 +90,12 @@ If TDD is active and RED evidence is missing, Code Writer must return `NEEDS_CON
 Each transition has a gate that must pass before proceeding:
 
 ```
-RED:      test written → test runs → test FAILS → failure reason is correct
-GREEN:    code written → failing test PASSES → all other tests still pass
-REFACTOR: code cleaned → all tests still pass → no new behaviour added
+RED:      test written -> test runs -> test FAILS -> failure reason is correct
+GREEN:    code written -> failing test PASSES -> all other tests still pass
+REFACTOR: code cleaned -> all tests still pass -> no new behaviour added
 ```
 
-**Never skip a gate.** If the test doesn't fail in RED, stop. If other tests break in GREEN, stop. If tests fail after REFACTOR, undo and try again.
+Advance only when the current gate passes. Recovery: if the test does not fail in RED, stop and fix the test or requirement. If other tests break in GREEN, stop and fix the regression. If tests fail after REFACTOR, undo the refactor and try again.
 
 ## When to apply
 
@@ -115,24 +115,24 @@ REFACTOR: code cleaned → all tests still pass → no new behaviour added
 
 Bug fixes get their own TDD variant:
 
-1. **Reproduce**: write a test that demonstrates the bug (RED — test fails showing the bug exists)
-2. **Fix**: make the minimal change to fix the bug (GREEN — test passes)
-3. **Protect**: verify no regressions, refactor if needed (REFACTOR — all tests green)
+1. **Reproduce**: write a test that demonstrates the bug (RED - test fails showing the bug exists)
+2. **Fix**: make the minimal change to fix the bug (GREEN - test passes)
+3. **Protect**: verify no regressions, refactor if needed (REFACTOR - all tests green)
 
-This ensures the bug can never silently return.
+This protects against silent bug regressions.
 
-## Common rationalizations (rejected)
+## Common shortcuts and required response
 
-These excuses are not valid reasons to skip TDD:
+Each shortcut routes back to the RED gate:
 
-| Excuse | Why it's wrong |
+| Shortcut | Required response |
 |---|---|
 | "Tests after achieve the same thing" | Tests-first discover requirements; tests-after verify remembered cases |
 | "I already tested it manually" | Manual testing is unrepeatable and incomplete |
 | "Deleting working code is wasteful" | Unverified code is technical debt, not an asset |
 | "TDD slows me down" | TDD is faster than production debugging |
 | "This is too simple to need a test" | Simple code becomes complex code. The test documents intent. |
-| "I'll add the test right after" | "After" becomes "never." Write it now. |
+| "I'll add the test right after" | Write the test now, before production code. |
 
 ## Task journal integration
 
@@ -140,13 +140,13 @@ When TDD is active, the task journal Progress section must show the cycle for ea
 
 ```markdown
 - [x] Step 1: User registration endpoint
-  - RED: test_register_valid_user — fails (no endpoint exists)
-  - GREEN: POST /api/users returns 201 — test passes
-  - REFACTOR: extracted validation to UserValidator — all tests pass
+  - RED: test_register_valid_user - fails (no endpoint exists)
+  - GREEN: POST /api/users returns 201 - test passes
+  - REFACTOR: extracted validation to UserValidator - all tests pass
 - [x] Step 2: Duplicate email rejection
-  - RED: test_register_duplicate_email — fails (no uniqueness check)
-  - GREEN: returns 409 on duplicate — test passes
-  - REFACTOR: moved email check to domain service — all tests pass
+  - RED: test_register_duplicate_email - fails (no uniqueness check)
+  - GREEN: returns 409 on duplicate - test passes
+  - REFACTOR: moved email check to domain service - all tests pass
 ```
 
 ## Review cycle integration
@@ -154,7 +154,7 @@ When TDD is active, the task journal Progress section must show the cycle for ea
 When TDD is active, the Spec Review (Stage 1) adds an extra check:
 - Every new public method/endpoint has a corresponding test
 - Tests were written BEFORE implementation (verify via commit history or task journal RED entries)
-- No production code exists without a matching test
+- Every production change has a matching test and RED entry
 
 ## Pairing with assistant-workflow
 
@@ -167,9 +167,9 @@ This skill enhances the Build loop in `assistant-workflow`:
 
 ```
 1. Pick next behaviour from test plan
-2. RED:      write test → run → must FAIL → right reason?
-3. GREEN:    write code → run → must PASS → all tests pass?
-4. REFACTOR: clean up → run → still PASS → no new behaviour?
+2. RED:      write test -> run -> must FAIL -> right reason?
+3. GREEN:    write code -> run -> must PASS -> all tests pass?
+4. REFACTOR: clean up -> run -> still PASS -> no new behaviour?
 5. Log RED/GREEN/REFACTOR in task journal
 6. Repeat from 1
 ```
