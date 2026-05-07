@@ -1,79 +1,10 @@
-using System.Text.Json;
 using MemoryGraph.Graph;
-using MemoryGraph.Storage;
-using MemoryGraph.Tools;
 using Xunit;
 
 namespace MemoryGraph.Tests;
 
-public class ToolIntegrationTests : IDisposable
+public class ToolIntegrationTests : ToolIntegrationTestBase
 {
-    private readonly List<string> _tempFiles = [];
-
-    private (KnowledgeGraph Graph, ToolRegistry Registry) CreateTestSetup()
-    {
-        var tempFile = Path.Combine(Path.GetTempPath(), $"test-tools-{Guid.NewGuid()}.jsonl");
-        _tempFiles.Add(tempFile);
-        var store = new GraphStore(tempFile);
-        var graph = new KnowledgeGraph(store);
-
-        var registry = new ToolRegistry();
-        registry.Register(new MemoryContextTool(graph));
-        registry.Register(new MemorySearchTool(graph));
-        registry.Register(new MemoryAddEntityTool(graph));
-        registry.Register(new MemoryAddRelationTool(graph));
-        registry.Register(new MemoryAddInsightTool(graph));
-        registry.Register(new MemoryRemoveEntityTool(graph));
-        registry.Register(new MemoryRemoveRelationTool(graph));
-        registry.Register(new MemoryGraphTool(graph));
-
-        return (graph, registry);
-    }
-
-    private (KnowledgeGraph Graph, ToolRegistry Registry, MemoryStore Store) CreateFullTestSetup()
-    {
-        var tempFile = Path.Combine(Path.GetTempPath(), $"test-tools-{Guid.NewGuid()}.jsonl");
-        var tempDb = Path.Combine(Path.GetTempPath(), $"test-tools-{Guid.NewGuid()}.db");
-        _tempFiles.Add(tempFile);
-        _tempFiles.Add(tempDb);
-        var store = new GraphStore(tempFile);
-        var graph = new KnowledgeGraph(store);
-        var memoryStore = new MemoryStore(tempDb);
-
-        var registry = new ToolRegistry();
-        // v1 graph tools
-        registry.Register(new MemoryContextTool(graph));
-        registry.Register(new MemorySearchTool(graph, memoryStore));
-        registry.Register(new MemoryAddEntityTool(graph));
-        registry.Register(new MemoryAddRelationTool(graph));
-        registry.Register(new MemoryAddInsightTool(graph));
-        registry.Register(new MemoryRemoveEntityTool(graph));
-        registry.Register(new MemoryRemoveRelationTool(graph));
-        registry.Register(new MemoryGraphTool(graph));
-        // v2 reflexion tools
-        registry.Register(new MemoryReflectTool(memoryStore, graph));
-        registry.Register(new MemoryDecideTool(memoryStore));
-        registry.Register(new MemoryPatternTool(memoryStore));
-        registry.Register(new MemoryConsolidateTool(memoryStore));
-        registry.Register(new MemoryStatsTool(graph, memoryStore));
-
-        return (graph, registry, memoryStore);
-    }
-
-    public void Dispose()
-    {
-        foreach (var f in _tempFiles)
-        {
-            try { File.Delete(f); } catch { /* best effort */ }
-        }
-    }
-
-    private static JsonElement ParseArgs(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        return doc.RootElement.Clone();
-    }
-
     [Fact]
     public void AddEntity_ThenSearch_FindsIt()
     {
@@ -144,6 +75,26 @@ public class ToolIntegrationTests : IDisposable
         var insights = graph.GetEntitiesByType(EntityType.Insight).ToList();
         Assert.Single(insights);
         Assert.Contains("EF Core SaveChanges in a loop causes N+1", insights[0].Observations);
+    }
+
+    [Fact]
+    public void AddInsight_ResolvesProjectAliasToCanonicalTarget()
+    {
+        var (graph, registry) = CreateTestSetup();
+
+        graph.AddOrUpdateEntity("Assistant Framework", EntityType.Project, ["Aliases: V1", "Canonical project"]);
+        graph.AddOrUpdateEntity("V1", EntityType.Project, ["Legacy duplicate project"]);
+
+        var result = registry.Execute("memory_add_insight", ParseArgs("""
+            {"insight": "Alias targets should write to canonical project", "appliesTo": ["V1"]}
+            """));
+
+        Assert.False(result.IsError);
+        var insight = graph.GetEntitiesByType(EntityType.Insight).Single();
+        Assert.Contains(graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "Assistant Framework" && r.Type == RelationType.AppliesTo);
+        Assert.DoesNotContain(graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "V1" && r.Type == RelationType.AppliesTo);
     }
 
     [Fact]
@@ -307,9 +258,10 @@ public class ToolIntegrationTests : IDisposable
 
         var definitions = registry.GetDefinitions();
 
-        Assert.Equal(13, definitions.Count);
+        Assert.Equal(14, definitions.Count);
         Assert.Contains(definitions, d => d.Name == "memory_reflect");
         Assert.Contains(definitions, d => d.Name == "memory_decide");
+        Assert.Contains(definitions, d => d.Name == "memory_doctor");
         Assert.Contains(definitions, d => d.Name == "memory_pattern");
         Assert.Contains(definitions, d => d.Name == "memory_consolidate");
         Assert.Contains(definitions, d => d.Name == "memory_stats");
@@ -340,177 +292,6 @@ public class ToolIntegrationTests : IDisposable
         var text = result.Content[0].Text;
         Assert.Contains("WebAdmin", text);
         Assert.Contains("managedBy", text);
-    }
-
-    // ── Alias Resolution Tests ──────────────────────────────────────────────
-
-    [Fact]
-    public void Context_FindsByAlias_WhenExactNameFails()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Framework", "type": "Project", "observations": ["Aliases: Assistant, assistant-framework", "AI coding agent enhancement framework"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"project": "assistant-framework"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("Assistant Framework", text);
-        Assert.Contains("AI coding agent enhancement framework", text);
-    }
-
-    [Fact]
-    public void Context_FindsByAlias_FromPath()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "s-Planner", "type": "Project", "observations": ["Aliases: NaviPlanner, NaviPlannerWPF, navi-planner-wpf", "WPF desktop app"]}
-            """));
-
-        // Path auto-detects "navi-planner-wpf" which should resolve via alias
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"path": "/Users/dev/Projects/navi-planner-wpf"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("s-Planner", text);
-        Assert.Contains("WPF desktop app", text);
-    }
-
-    [Fact]
-    public void Context_FindsProjectFromRepoRootPath_UsingParentSegment()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Framework", "type": "Project", "observations": ["AI coding agent enhancement framework"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("Assistant Framework", text);
-        Assert.Contains("AI coding agent enhancement framework", text);
-    }
-
-    [Fact]
-    public void Context_FindsProjectFromObservedPathMetadata()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Framework", "type": "Project", "observations": ["Path: /Users/laimis/Developer/Projects/Assistant/V1", "AI coding agent enhancement framework"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("Assistant Framework", text);
-        Assert.Contains("AI coding agent enhancement framework", text);
-    }
-
-    [Fact]
-    public void Context_PathMetadataTakesPrecedenceOverFuzzyNameAmbiguity()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Dashboard", "type": "Project", "observations": ["Blazor admin panel"]}
-            """));
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Framework", "type": "Project", "observations": ["Path: /Users/laimis/Developer/Projects/Assistant/V1", "AI coding agent enhancement framework"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"path": "/Users/laimis/Developer/Projects/Assistant/V1"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.DoesNotContain("Ambiguous project name", text);
-        Assert.Contains("Assistant Framework", text);
-        Assert.Contains("AI coding agent enhancement framework", text);
-    }
-
-    [Fact]
-    public void Context_NormalizesWindowsStylePaths_ForObservedMetadata()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "Assistant Framework", "type": "Project", "observations": ["ProjectPath: C:\\Users\\laimis\\Developer\\Projects\\Assistant\\V1", "AI coding agent enhancement framework"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"path": "C:/Users/laimis/Developer/Projects/Assistant/V1/"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("Assistant Framework", text);
-        Assert.Contains("AI coding agent enhancement framework", text);
-    }
-
-    [Fact]
-    public void Context_AliasIsCaseInsensitive()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "MyProject", "type": "Project", "observations": ["Aliases: my-proj, MYPROJ"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"project": "myproj"}
-            """));
-        Assert.False(result.IsError);
-        Assert.Contains("MyProject", result.Content[0].Text);
-    }
-
-    [Fact]
-    public void Context_AmbiguousAlias_ReturnsAmbiguousMatches()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "ProjectA", "type": "Project", "observations": ["Aliases: shared-name"]}
-            """));
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "ProjectB", "type": "Project", "observations": ["Aliases: shared-name"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"project": "shared-name"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("Ambiguous alias", text);
-        Assert.Contains("ProjectA", text);
-        Assert.Contains("ProjectB", text);
-    }
-
-    [Fact]
-    public void Context_NoAlias_StillReturnsAvailableProjects()
-    {
-        var (_, registry) = CreateTestSetup();
-
-        registry.Execute("memory_add_entity", ParseArgs("""
-            {"name": "RealProject", "type": "Project", "observations": ["Aliases: real-proj"]}
-            """));
-
-        var result = registry.Execute("memory_context", ParseArgs("""
-            {"project": "completely-unknown"}
-            """));
-        Assert.False(result.IsError);
-        var text = result.Content[0].Text;
-        Assert.Contains("No project found", text);
-        Assert.Contains("RealProject", text);
     }
 
     // ── V2 Reflexion Tool Tests ──────────────────────────────────────────────
@@ -569,55 +350,6 @@ public class ToolIntegrationTests : IDisposable
             Assert.Contains("Always test cache invalidation by project", insight.Observations);
             Assert.Contains(graph.GetRelationsFrom(insight.Name), r =>
                 r.To == "API" && r.Type == RelationType.AppliesTo);
-        }
-    }
-
-    [Fact]
-    public void Search_DoesNotReturnOrphanFtsEntity()
-    {
-        var (graph, registry, store) = CreateFullTestSetup();
-        using (store)
-        {
-            graph.AddOrUpdateEntity("RealProject", EntityType.Project, ["real entity"]);
-            store.IndexInFts("entity", "OrphanProject", "OrphanProject", "orphan searchable content", "Project");
-
-            var result = registry.Execute("memory_search", ParseArgs("""
-                {"query": "orphan"}
-                """));
-
-            Assert.False(result.IsError);
-            Assert.DoesNotContain("OrphanProject", result.Content[0].Text);
-        }
-    }
-
-    [Fact]
-    public void Search_RefillsWhenStaleEntityHitsOccupyInitialLimit()
-    {
-        var (_, registry, store) = CreateFullTestSetup();
-        using (store)
-        {
-            for (var i = 0; i < 25; i++)
-            {
-                store.IndexInFts("entity", $"OrphanProject{i:D2}", $"OrphanProject{i:D2}",
-                    "searchlimitneedle stale entity content", "Project");
-            }
-
-            store.AddDecision(new DecisionEntry
-            {
-                Title = "Valid limit recovery decision",
-                Decision = "searchlimitneedle valid decision content",
-                Rationale = "Non-entity memory should still be returned after stale entity filtering",
-                Tags = "searchlimitneedle"
-            });
-
-            var result = registry.Execute("memory_search", ParseArgs("""
-                {"query": "searchlimitneedle"}
-                """));
-
-            Assert.False(result.IsError);
-            var text = result.Content[0].Text;
-            Assert.Contains("Valid limit recovery decision", text);
-            Assert.DoesNotContain("OrphanProject00", text);
         }
     }
 

@@ -12,7 +12,8 @@ public static class MemoryGraphReconciler
     {
         var reflexions = store.GetAllReflexions();
         var decisions = store.GetAllDecisions();
-        var candidates = BuildProjectCandidates(reflexions, decisions);
+        var resolver = new ProjectIdentityResolver(graph);
+        var candidates = BuildProjectCandidates(reflexions, decisions, resolver);
         var projectsCreated = 0;
         var insightsCreated = 0;
         var relationsCreated = 0;
@@ -38,20 +39,21 @@ public static class MemoryGraphReconciler
 
     public static ReconciliationResult EnsureReflexionGraphEntities(KnowledgeGraph graph, ReflexionEntry reflexion)
     {
-        var projectName = EnsureReflectProject(graph, reflexion);
+        var projectName = EnsureReflectProject(graph, reflexion, new ProjectIdentityResolver(graph));
         var result = EnsureReflexionLessons(graph, projectName, reflexion);
         return new ReconciliationResult(0, result.InsightsCreated, result.RelationsCreated);
     }
 
     private static Dictionary<string, ProjectRecoveryCandidate> BuildProjectCandidates(
         List<ReflexionEntry> reflexions,
-        List<DecisionEntry> decisions)
+        List<DecisionEntry> decisions,
+        ProjectIdentityResolver resolver)
     {
         var candidates = new Dictionary<string, ProjectRecoveryCandidate>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var reflexion in reflexions)
         {
-            var project = NormalizeProject(reflexion.Project);
+            var project = NormalizeProject(reflexion.Project, resolver);
             if (project is null)
             {
                 continue;
@@ -72,7 +74,7 @@ public static class MemoryGraphReconciler
 
         foreach (var decision in decisions)
         {
-            var project = NormalizeProject(decision.Project);
+            var project = NormalizeProject(decision.Project, resolver);
             if (project is null)
             {
                 continue;
@@ -119,16 +121,20 @@ public static class MemoryGraphReconciler
         return candidate.Name;
     }
 
-    private static string EnsureReflectProject(KnowledgeGraph graph, ReflexionEntry reflexion)
+    private static string EnsureReflectProject(
+        KnowledgeGraph graph,
+        ReflexionEntry reflexion,
+        ProjectIdentityResolver resolver)
     {
+        var projectName = resolver.CanonicalizeProjectNameForWrite(reflexion.Project);
         var observations = new List<string> { "Recorded from memory_reflect SQLite reflexion data." };
         if (!string.IsNullOrWhiteSpace(reflexion.ProjectType))
         {
             observations.Add($"Project type observed in reflexion: {reflexion.ProjectType.Trim()}");
         }
 
-        graph.AddOrUpdateEntity(reflexion.Project.Trim(), EntityType.Project, observations);
-        return graph.GetEntity(reflexion.Project)?.Name ?? reflexion.Project.Trim();
+        graph.AddOrUpdateEntity(projectName, EntityType.Project, observations);
+        return graph.GetEntity(projectName)?.Name ?? projectName;
     }
 
     private static ReconciliationResult EnsureReflexionLessons(
@@ -138,13 +144,15 @@ public static class MemoryGraphReconciler
     {
         var insightsCreated = 0;
         var relationsCreated = 0;
+        var projectScopeNames = GetProjectScopeNames(graph, projectName);
 
         foreach (var lesson in ParseLessons(reflexion.Lessons))
         {
-            var insightName = BuildInsightName(projectName, lesson);
             var source = reflexion.Id > 0
                 ? $"Source: SQLite reflexion {reflexion.Id}"
                 : "Source: SQLite reflexion lessons";
+            var insightName = FindEquivalentReflexionInsight(graph, projectScopeNames, lesson, source) ??
+                              BuildInsightName(projectName, lesson);
 
             var (created, _) = graph.AddOrUpdateEntity(insightName, EntityType.Insight, [lesson, source]);
             if (created)
@@ -159,6 +167,51 @@ public static class MemoryGraphReconciler
         }
 
         return new ReconciliationResult(0, insightsCreated, relationsCreated);
+    }
+
+    private static HashSet<string> GetProjectScopeNames(KnowledgeGraph graph, string projectName)
+    {
+        var project = graph.GetEntity(projectName);
+        if (project is null)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase) { projectName };
+        }
+
+        return new ProjectIdentityResolver(graph).GetEquivalentProjectNames(project);
+    }
+
+    private static string? FindEquivalentReflexionInsight(
+        KnowledgeGraph graph,
+        HashSet<string> projectScopeNames,
+        string lesson,
+        string source)
+    {
+        var normalizedLesson = NormalizeTextForKey(lesson);
+        var normalizedSource = NormalizeTextForKey(source);
+
+        foreach (var insight in graph.GetEntitiesByType(EntityType.Insight))
+        {
+            if (!HasObservation(insight, normalizedLesson) ||
+                !HasObservation(insight, normalizedSource))
+            {
+                continue;
+            }
+
+            if (graph.GetRelationsFrom(insight.Name).Any(r =>
+                    r.Type == RelationType.AppliesTo &&
+                    projectScopeNames.Contains(r.To)))
+            {
+                return insight.Name;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasObservation(Entity entity, string normalizedObservation)
+    {
+        return entity.Observations.Any(o =>
+            NormalizeTextForKey(o).Equals(normalizedObservation, StringComparison.Ordinal));
     }
 
     private static List<string> ParseLessons(string? lessons)
@@ -238,9 +291,11 @@ public static class MemoryGraphReconciler
         }
     }
 
-    private static string? NormalizeProject(string? project)
+    private static string? NormalizeProject(string? project, ProjectIdentityResolver resolver)
     {
-        return string.IsNullOrWhiteSpace(project) ? null : project.Trim();
+        return string.IsNullOrWhiteSpace(project)
+            ? null
+            : resolver.CanonicalizeProjectNameForWrite(project);
     }
 
     private sealed class ProjectRecoveryCandidate

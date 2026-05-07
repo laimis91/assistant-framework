@@ -54,24 +54,14 @@ public sealed class MemorySearchTool : IMemoryTool
     {
         var query = ToolHelpers.GetRequiredString(arguments, "query");
         var typeNames = ToolHelpers.GetStringArray(arguments, "types");
+        var filters = SearchFilters.Create(typeNames);
 
         // Try FTS5 search first if store is available
         if (_store is not null)
         {
             try
             {
-                string? sourceTypeFilter = null;
-                if (typeNames.Count == 1)
-                {
-                    var t = typeNames[0].ToLowerInvariant();
-                    if (t is "entity" or "reflexion" or "decision" or "strategy")
-                    {
-                        sourceTypeFilter = t;
-                    }
-                }
-
-                PruneStaleEntityFtsRows(sourceTypeFilter);
-                var ftsResults = SearchFtsWithLiveEntities(query, sourceTypeFilter);
+                var ftsResults = SearchFtsWithLiveEntities(query, filters);
 
                 if (ftsResults.Count > 0)
                 {
@@ -111,16 +101,12 @@ public sealed class MemorySearchTool : IMemoryTool
         }
 
         // Fallback: in-memory graph search
-        EntityType[]? types = null;
-        if (typeNames.Count > 0)
+        if (!filters.CanReturnEntities)
         {
-            types = typeNames
-                .Select(t => Enum.TryParse<EntityType>(t, ignoreCase: true, out var et) ? (EntityType?)et : null)
-                .Where(t => t.HasValue)
-                .Select(t => t!.Value)
-                .ToArray();
+            return ToolHelpers.Success(new { results = Array.Empty<object>(), searchMode = "graph" });
         }
 
+        var types = filters.GetGraphEntityTypeFilter();
         var entities = _graph.Search(query, types);
 
         var graphResults = entities.Select(e => new
@@ -141,19 +127,23 @@ public sealed class MemorySearchTool : IMemoryTool
         return ToolHelpers.Success(new { results = graphResults, searchMode = "graph" });
     }
 
-    private List<FtsResult> SearchFtsWithLiveEntities(string query, string? sourceTypeFilter)
+    private List<FtsResult> SearchFtsWithLiveEntities(string query, SearchFilters filters)
     {
         if (_store is null)
         {
             return [];
         }
 
+        var sourceTypeFilter = filters.GetStoreSourceTypeFilter();
+        var entityTypeFilter = filters.GetStoreEntityTypeFilter();
         var fetchLimit = SearchResultLimit;
         while (true)
         {
-            var fetched = _store.Search(query, sourceTypeFilter, fetchLimit);
+            var fetched = sourceTypeFilter is null && entityTypeFilter is null
+                ? _store.Search(query, limit: fetchLimit)
+                : _store.Search(query, sourceTypeFilter ?? [], entityTypeFilter ?? [], fetchLimit);
             var liveResults = fetched
-                .Where(r => r.SourceType != "entity" || _graph.GetEntity(r.SourceId) is not null)
+                .Where(r => MatchesFilters(r, filters))
                 .Take(SearchResultLimit)
                 .ToList();
 
@@ -168,13 +158,110 @@ public sealed class MemorySearchTool : IMemoryTool
         }
     }
 
-    private void PruneStaleEntityFtsRows(string? sourceTypeFilter)
+    private bool MatchesFilters(FtsResult result, SearchFilters filters)
     {
-        if (_store is null || sourceTypeFilter is not (null or "entity"))
+        if (!filters.HasFilters)
         {
-            return;
+            return result.SourceType != "entity" || GetLiveEntityForFtsRow(result) is not null;
         }
 
-        _store.PruneGraphEntityIndex(_graph.GetAllEntities().Select(e => e.Name));
+        if (filters.SourceTypes.Contains(result.SourceType))
+        {
+            return result.SourceType != "entity" || GetLiveEntityForFtsRow(result) is not null;
+        }
+
+        if (result.SourceType != "entity")
+        {
+            return false;
+        }
+
+        var entity = GetLiveEntityForFtsRow(result);
+        return entity is not null && filters.EntityTypes.Contains(entity.Type);
+    }
+
+    private Entity? GetLiveEntityForFtsRow(FtsResult result)
+    {
+        var entity = _graph.GetEntity(result.SourceId);
+        return entity is not null && entity.Name.Equals(result.SourceId, StringComparison.Ordinal)
+            ? entity
+            : null;
+    }
+
+    private sealed class SearchFilters
+    {
+        private SearchFilters(HashSet<string> sourceTypes, HashSet<EntityType> entityTypes)
+        {
+            SourceTypes = sourceTypes;
+            EntityTypes = entityTypes;
+        }
+
+        public HashSet<string> SourceTypes { get; }
+        public HashSet<EntityType> EntityTypes { get; }
+        public bool HasFilters => SourceTypes.Count > 0 || EntityTypes.Count > 0;
+        public bool CanReturnEntities => SourceTypes.Count == 0 || SourceTypes.Contains("entity") || EntityTypes.Count > 0;
+
+        public static SearchFilters Create(IEnumerable<string> typeNames)
+        {
+            var sourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var entityTypes = new HashSet<EntityType>();
+
+            foreach (var typeName in typeNames)
+            {
+                var sourceType = typeName.ToLowerInvariant();
+                if (sourceType is "entity" or "reflexion" or "decision" or "strategy")
+                {
+                    sourceTypes.Add(sourceType);
+                    continue;
+                }
+
+                if (Enum.TryParse<EntityType>(typeName, ignoreCase: true, out var entityType))
+                {
+                    entityTypes.Add(entityType);
+                }
+            }
+
+            return new SearchFilters(sourceTypes, entityTypes);
+        }
+
+        public IReadOnlyList<string>? GetStoreSourceTypeFilter()
+        {
+            if (!HasFilters)
+            {
+                return null;
+            }
+
+            var sourceTypes = SourceTypes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (EntityTypes.Count > 0)
+            {
+                sourceTypes.Add("entity");
+            }
+
+            return sourceTypes.Count > 0
+                ? sourceTypes.OrderBy(sourceType => sourceType, StringComparer.OrdinalIgnoreCase).ToList()
+                : null;
+        }
+
+        public IReadOnlyList<string>? GetStoreEntityTypeFilter()
+        {
+            if (EntityTypes.Count == 0 || SourceTypes.Contains("entity"))
+            {
+                return null;
+            }
+
+            return EntityTypes
+                .Select(entityType => entityType.ToString())
+                .OrderBy(entityType => entityType, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        public EntityType[]? GetGraphEntityTypeFilter()
+        {
+            if (SourceTypes.Contains("entity"))
+            {
+                return null;
+            }
+
+            return EntityTypes.Count > 0 ? EntityTypes.ToArray() : null;
+        }
     }
 }

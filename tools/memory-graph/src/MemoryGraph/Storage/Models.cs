@@ -53,6 +53,24 @@ public sealed class FtsResult
     public double Rank { get; set; }
 }
 
+public sealed class GraphEntityFtsDiagnostics
+{
+    public int EntityRows { get; set; }
+    public int StaleEntityRows => StaleRows.Count;
+    public int OrphanEntityRows { get; set; }
+    public int NonCanonicalEntityRows { get; set; }
+    public List<GraphEntityFtsIssue> StaleRows { get; set; } = [];
+}
+
+public sealed class GraphEntityFtsIssue
+{
+    public required string SourceId { get; set; }
+    public required string Title { get; set; }
+    public string? Tags { get; set; }
+    public required string Reason { get; set; }
+    public string? CanonicalName { get; set; }
+}
+
 public sealed class MemoryStats
 {
     public int Reflexions { get; set; }

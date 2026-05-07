@@ -72,6 +72,7 @@ public sealed class MemoryGraphRuntimeTests : IDisposable
             "memory_consolidate",
             "memory_context",
             "memory_decide",
+            "memory_doctor",
             "memory_graph",
             "memory_pattern",
             "memory_reflect",
@@ -81,6 +82,25 @@ public sealed class MemoryGraphRuntimeTests : IDisposable
             "memory_stats",
             "memory_trend"
         ], toolNames);
+    }
+
+    [Fact]
+    public void Create_DoctorReturnsRuntimeMetadata()
+    {
+        var graphFile = Path.Combine(_memoryDir, "missing-graph.jsonl");
+
+        using var runtime = MemoryGraphRuntime.Create(new MemoryGraphRuntimeOptions(_memoryDir, graphFile));
+        var result = runtime.Registry.Execute("memory_doctor", ParseArgs("{}"));
+
+        Assert.False(result.IsError);
+        using var document = JsonDocument.Parse(result.Content[0].Text);
+        var runtimeMetadata = document.RootElement.GetProperty("runtime");
+        var startup = runtimeMetadata.GetProperty("startup");
+
+        Assert.Equal(_memoryDir, runtimeMetadata.GetProperty("memoryDir").GetString());
+        Assert.Equal(graphFile, startup.GetProperty("graphFile").GetString());
+        Assert.Equal(Path.Combine(_memoryDir, "memory.db"), startup.GetProperty("databasePath").GetString());
+        Assert.True(runtimeMetadata.GetProperty("freshness").TryGetProperty("status", out _));
     }
 
     [Fact]

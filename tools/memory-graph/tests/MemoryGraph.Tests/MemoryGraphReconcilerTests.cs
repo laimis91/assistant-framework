@@ -116,6 +116,71 @@ public sealed class MemoryGraphReconcilerTests : IDisposable
             r.To == "RecoveredApp" && r.Type == RelationType.AppliesTo);
     }
 
+    [Fact]
+    public void ReconcileFromStore_UsesExistingProjectAliasInsteadOfCreatingDuplicate()
+    {
+        _graph.AddOrUpdateEntity("Assistant Framework", EntityType.Project, ["Aliases: V1", "canonical project"]);
+        _store.AddReflexion(MakeReflexion(project: "V1", lessons: "Attach recovered lessons to canonical project"));
+
+        var result = MemoryGraphReconciler.ReconcileFromStore(_graph, _store);
+
+        Assert.Equal(0, result.ProjectsCreated);
+        Assert.NotNull(_graph.GetEntity("Assistant Framework"));
+        Assert.Null(_graph.GetEntity("V1"));
+        Assert.Single(_graph.GetEntitiesByType(EntityType.Project));
+
+        var insight = _graph.GetEntitiesByType(EntityType.Insight).Single();
+        Assert.Contains(_graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "Assistant Framework" && r.Type == RelationType.AppliesTo);
+    }
+
+    [Fact]
+    public void EnsureReflexionGraphEntities_UsesExistingProjectAliasInsteadOfCreatingDuplicate()
+    {
+        _graph.AddOrUpdateEntity("Assistant Framework", EntityType.Project, ["Aliases: V1", "canonical project"]);
+
+        var result = MemoryGraphReconciler.EnsureReflexionGraphEntities(
+            _graph,
+            MakeReflexion(project: "V1", lessons: "Attach reflected lessons to canonical project"));
+
+        Assert.Equal(0, result.ProjectsCreated);
+        Assert.NotNull(_graph.GetEntity("Assistant Framework"));
+        Assert.Null(_graph.GetEntity("V1"));
+        Assert.Single(_graph.GetEntitiesByType(EntityType.Project));
+
+        var insight = _graph.GetEntitiesByType(EntityType.Insight).Single();
+        Assert.Contains(_graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "Assistant Framework" && r.Type == RelationType.AppliesTo);
+    }
+
+    [Fact]
+    public void ReconcileFromStore_ReusesExistingRawAliasInsightForEquivalentCanonicalProject()
+    {
+        const string lesson = "Do not duplicate reconciled alias insights";
+
+        _graph.AddOrUpdateEntity("Assistant Framework", EntityType.Project, ["Aliases: V1", "canonical project"]);
+        _graph.AddOrUpdateEntity("V1", EntityType.Project, ["Legacy duplicate project"]);
+        var reflexionId = _store.AddReflexion(MakeReflexion(project: "V1", lessons: lesson));
+        _graph.AddOrUpdateEntity(
+            "existing-raw-alias-insight",
+            EntityType.Insight,
+            [lesson, $"Source: SQLite reflexion {reflexionId}"]);
+        _graph.AddRelation("existing-raw-alias-insight", "V1", RelationType.AppliesTo);
+
+        var result = MemoryGraphReconciler.ReconcileFromStore(_graph, _store);
+
+        Assert.Equal(0, result.ProjectsCreated);
+        Assert.Equal(0, result.InsightsCreated);
+        Assert.Equal(1, result.RelationsCreated);
+
+        var insight = _graph.GetEntitiesByType(EntityType.Insight).Single();
+        Assert.Equal("existing-raw-alias-insight", insight.Name);
+        Assert.Contains(_graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "V1" && r.Type == RelationType.AppliesTo);
+        Assert.Contains(_graph.GetRelationsFrom(insight.Name), r =>
+            r.To == "Assistant Framework" && r.Type == RelationType.AppliesTo);
+    }
+
     private static ReflexionEntry MakeReflexion(
         string task = "Recovered task",
         string project = "RecoveredApp",

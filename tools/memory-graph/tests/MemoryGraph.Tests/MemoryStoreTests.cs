@@ -180,6 +180,55 @@ public sealed class MemoryStoreTests : IDisposable
         Assert.NotEmpty(results);
     }
 
+    [Fact]
+    public void Search_HandlesBooleanOrWithPathLikeTerm()
+    {
+        _store.IndexInFts(
+            "entity",
+            "Assistant Framework",
+            "Assistant Framework",
+            "ProjectPath: /Users/laimis/Developer/Projects/Assistant/V1",
+            "Project");
+
+        var results = _store.Search("Assistant/V1 OR Framework");
+
+        Assert.NotEmpty(results);
+        Assert.Contains(results, r => r.Title == "Assistant Framework");
+    }
+
+    [Fact]
+    public void Search_TreatsLowercaseOperatorWordsAsLiteralTerms()
+    {
+        _store.IndexInFts(
+            "entity",
+            "Privacy Rule",
+            "Privacy Rule",
+            "do not log PII in diagnostics",
+            "Rule");
+
+        var results = _store.Search("do not log PII");
+
+        Assert.Single(results);
+        Assert.Equal("Privacy Rule", results[0].Title);
+    }
+
+    [Fact]
+    public void GetGraphEntityFtsDiagnostics_ReportsStaleRowsWithoutDeleting()
+    {
+        _store.IndexInFts("entity", "LiveProject", "LiveProject", "live searchable content", "Project");
+        _store.IndexInFts("entity", "OrphanProject", "OrphanProject", "orphan searchable content", "Project");
+
+        var diagnostics = _store.GetGraphEntityFtsDiagnostics(["LiveProject"]);
+
+        Assert.Equal(2, diagnostics.EntityRows);
+        Assert.Equal(1, diagnostics.StaleEntityRows);
+        Assert.Equal(1, diagnostics.OrphanEntityRows);
+        var staleRow = Assert.Single(diagnostics.StaleRows);
+        Assert.Equal("OrphanProject", staleRow.SourceId);
+        Assert.Equal("orphanEntity", staleRow.Reason);
+        Assert.Equal(2, _store.GetStats().FtsEntries);
+    }
+
     // ── Calibration tests ───────────────────────────────────────
 
     [Fact]
@@ -204,7 +253,9 @@ public sealed class MemoryStoreTests : IDisposable
         _store.AddDecision(MakeDecision());
         _store.AddStrategyLesson(new StrategyLesson
         {
-            ProjectType = "test", Phase = "build", Lesson = "test lesson"
+            ProjectType = "test",
+            Phase = "build",
+            Lesson = "test lesson"
         });
 
         var stats = _store.GetStats();
@@ -220,7 +271,10 @@ public sealed class MemoryStoreTests : IDisposable
     {
         _store.AddStrategyLesson(new StrategyLesson
         {
-            ProjectType = "test", Phase = "build", Lesson = "fresh lesson", Confidence = 0.5
+            ProjectType = "test",
+            Phase = "build",
+            Lesson = "fresh lesson",
+            Confidence = 0.5
         });
 
         var (decayed, archived) = _store.ConsolidateStrategyLessons();
@@ -235,7 +289,10 @@ public sealed class MemoryStoreTests : IDisposable
     {
         _store.AddStrategyLesson(new StrategyLesson
         {
-            ProjectType = "test", Phase = "build", Lesson = "fresh lesson", Confidence = 0.5
+            ProjectType = "test",
+            Phase = "build",
+            Lesson = "fresh lesson",
+            Confidence = 0.5
         });
 
         var count = _store.GetStaleLessonCount(90);
@@ -247,7 +304,10 @@ public sealed class MemoryStoreTests : IDisposable
     {
         _store.AddStrategyLesson(new StrategyLesson
         {
-            ProjectType = "test", Phase = "build", Lesson = "low conf", Confidence = 0.05
+            ProjectType = "test",
+            Phase = "build",
+            Lesson = "low conf",
+            Confidence = 0.05
         });
 
         var count = _store.GetStaleLessonCount(0); // 0 days = everything is stale

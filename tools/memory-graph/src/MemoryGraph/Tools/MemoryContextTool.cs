@@ -11,15 +11,6 @@ namespace MemoryGraph.Tools;
 public sealed class MemoryContextTool : IMemoryTool
 {
     private readonly KnowledgeGraph _graph;
-    private static readonly string[] PathObservationPrefixes =
-    [
-        "Path:",
-        "Paths:",
-        "RepoPath:",
-        "RepoPaths:",
-        "ProjectPath:",
-        "ProjectPaths:"
-    ];
 
     public string Name => "memory_context";
 
@@ -54,34 +45,37 @@ public sealed class MemoryContextTool : IMemoryTool
         var projectName = ToolHelpers.GetString(arguments, "project");
         var path = ToolHelpers.GetString(arguments, "path");
         var originalProjectName = projectName;
-        var normalizedPath = NormalizePath(path);
 
         if (string.IsNullOrEmpty(projectName))
         {
-            projectName = BuildPathCandidates(path).FirstOrDefault();
+            projectName = ProjectIdentityResolver.BuildPathCandidates(path).FirstOrDefault();
             if (string.IsNullOrEmpty(projectName))
             {
                 return ToolHelpers.Error("Either 'project' or 'path' is required");
             }
         }
 
-        var entity = _graph.GetEntity(projectName);
-        if (entity is null)
+        var resolver = new ProjectIdentityResolver(_graph);
+        var resolution = resolver.ResolveForContext(projectName, originalProjectName, path);
+        if (resolution.Entity is null)
         {
-            var candidates = BuildLookupCandidates(projectName, originalProjectName, path).ToList();
-            var resolution = ResolveProject(candidates, normalizedPath);
-            if (resolution.Entity is null)
-            {
-                return resolution.ErrorResult!;
-            }
-
-            entity = resolution.Entity;
-            projectName = entity.Name;
+            return BuildResolutionResult(resolution);
         }
 
+        var entity = resolution.Entity;
+        projectName = entity.Name;
+        var projectScopeNames = resolver.GetEquivalentProjectNames(entity);
+
         // Gather all related context
-        var relationsFrom = _graph.GetRelationsFrom(projectName).ToList();
-        var relationsTo = _graph.GetRelationsTo(projectName).ToList();
+        var allRelations = _graph.GetAllRelations();
+        var relationsFrom = DistinctRelationsBy(
+            allRelations.Where(r => projectScopeNames.Contains(r.From)),
+            r => RelationKey(r, r.To))
+            .ToList();
+        var relationsTo = DistinctRelationsBy(
+            allRelations.Where(r => projectScopeNames.Contains(r.To)),
+            r => RelationKey(r, r.From))
+            .ToList();
 
         var dependencies = relationsFrom
             .Where(r => r.Type is RelationType.DependsOn or RelationType.SharedWith)
@@ -101,15 +95,19 @@ public sealed class MemoryContextTool : IMemoryTool
         var technologies = relationsFrom
             .Where(r => r.Type == RelationType.Uses)
             .Select(r => r.To)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var patterns = relationsFrom
             .Where(r => r.Type == RelationType.Follows)
             .Select(r => r.To)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var conventions = relationsFrom
             .Where(r => r.Type == RelationType.HasConvention)
+            .GroupBy(r => r.To, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
             .Select(r =>
             {
                 var conv = _graph.GetEntity(r.To);
@@ -118,8 +116,6 @@ public sealed class MemoryContextTool : IMemoryTool
             .ToList();
 
         // Build relation lookups once to avoid O(N*R) per-entity scans
-        var allRelations = _graph.GetAllRelations();
-
         var scopedToLookup = allRelations
             .Where(r => r.Type == RelationType.ScopedTo)
             .GroupBy(r => r.From, StringComparer.OrdinalIgnoreCase)
@@ -139,7 +135,7 @@ public sealed class MemoryContextTool : IMemoryTool
                     return true; // Global preference (no ScopedTo relations)
                 }
 
-                return scoped.Any(t => t.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+                return scoped.Any(projectScopeNames.Contains);
             })
             .Select(p => new { name = p.Name, observations = p.Observations })
             .ToList();
@@ -152,7 +148,7 @@ public sealed class MemoryContextTool : IMemoryTool
         // Recent insights that apply to this project
         var insights = _graph.GetEntitiesByType(EntityType.Insight)
             .Where(i => appliesToLookup.TryGetValue(i.Name, out var targets) &&
-                        targets.Any(t => t.Equals(projectName, StringComparison.OrdinalIgnoreCase)))
+                        targets.Any(projectScopeNames.Contains))
             .OrderByDescending(i => i.CreatedAt)
             .Take(10)
             .Select(i => new { name = i.Name, observations = i.Observations, date = i.CreatedAt.ToString("yyyy-MM-dd") })
@@ -169,6 +165,11 @@ public sealed class MemoryContextTool : IMemoryTool
             .Select(i => new { name = i.Name, observations = i.Observations, date = i.CreatedAt.ToString("yyyy-MM-dd") })
             .ToList();
 
+        var equivalentProjectsIncluded = projectScopeNames
+            .Where(name => !name.Equals(entity.Name, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         return ToolHelpers.Success(new
         {
             project = new { entity.Name, type = entity.Type.ToString(), entity.Observations },
@@ -180,220 +181,63 @@ public sealed class MemoryContextTool : IMemoryTool
             conventions,
             preferences,
             rules,
-            recentInsights = insights.Concat(techInsights).ToList()
+            recentInsights = insights.Concat(techInsights).ToList(),
+            resolvedProject = entity.Name,
+            resolvedBy = resolution.ResolvedBy,
+            pathCandidates = resolution.PathCandidates,
+            equivalentProjectsIncluded,
+            warnings = resolution.Warnings
         });
     }
 
-    private ResolutionResult ResolveProject(List<string> candidates, string? normalizedPath)
+    private static IEnumerable<Relation> DistinctRelationsBy(
+        IEnumerable<Relation> relations,
+        Func<Relation, string> keySelector)
     {
-        foreach (var candidate in candidates)
-        {
-            var exact = _graph.GetEntity(candidate);
-            if (exact?.Type == EntityType.Project)
-            {
-                return new ResolutionResult(exact, null);
-            }
-        }
-
-        if (!string.IsNullOrEmpty(normalizedPath))
-        {
-            var exactPathMatch = ResolveByProjectPath(normalizedPath);
-            if (exactPathMatch.Entity is not null || exactPathMatch.ErrorResult is not null)
-            {
-                return exactPathMatch;
-            }
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var matches = _graph.GetEntitiesByType(EntityType.Project)
-                .Where(e => e.Name.Contains(candidate, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (matches.Count == 1)
-            {
-                return new ResolutionResult(matches[0], null);
-            }
-
-            if (matches.Count > 1)
-            {
-                return new ResolutionResult(null, ToolHelpers.Success(new
-                {
-                    found = false,
-                    message = $"Ambiguous project name '{candidate}' — {matches.Count} matches found",
-                    ambiguousMatches = matches.Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-                }));
-            }
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var aliasMatches = _graph.FindByAlias(candidate);
-            if (aliasMatches.Count == 1)
-            {
-                return new ResolutionResult(aliasMatches[0], null);
-            }
-
-            if (aliasMatches.Count > 1)
-            {
-                return new ResolutionResult(null, ToolHelpers.Success(new
-                {
-                    found = false,
-                    message = $"Ambiguous alias '{candidate}' — {aliasMatches.Count} projects match",
-                    ambiguousMatches = aliasMatches.Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-                }));
-            }
-        }
-
-        return new ResolutionResult(null, ToolHelpers.Success(new
-        {
-            found = false,
-            message = $"No project found matching '{candidates.First()}'",
-            availableProjects = _graph.GetEntitiesByType(EntityType.Project)
-                .Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-        }));
+        return relations
+            .GroupBy(keySelector, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First());
     }
 
-    private static IEnumerable<string> BuildLookupCandidates(string? projectName, string? originalProjectName, string? path)
+    private static string RelationKey(Relation relation, string relatedEntity)
     {
-        var candidates = new List<string>();
-        AddCandidate(candidates, projectName);
-        AddCandidate(candidates, originalProjectName);
-
-        foreach (var candidate in BuildPathCandidates(path))
-        {
-            AddCandidate(candidates, candidate);
-        }
-
-        return candidates;
+        return string.Join('\u001F', relation.Type.ToString(), relatedEntity, relation.Detail ?? "");
     }
 
-    private static IEnumerable<string> BuildPathCandidates(string? path)
+    private ToolCallResult BuildResolutionResult(ProjectResolution resolution)
     {
-        var normalizedPath = NormalizePath(path);
-        if (string.IsNullOrEmpty(normalizedPath))
+        if (resolution.IsAmbiguous)
         {
-            return [];
-        }
-
-        var candidates = new List<string>();
-        AddCandidate(candidates, Path.GetFileName(normalizedPath));
-
-        var parentDirectory = Path.GetDirectoryName(normalizedPath);
-        if (!string.IsNullOrEmpty(parentDirectory))
-        {
-            var parentName = Path.GetFileName(parentDirectory);
-            AddCandidate(candidates, parentName);
-
-            var grandParentDirectory = Path.GetDirectoryName(parentDirectory);
-            if (!string.IsNullOrEmpty(grandParentDirectory))
+            var label = resolution.FailureKind switch
             {
-                AddCandidate(candidates, Path.Combine(Path.GetFileName(grandParentDirectory), parentName));
-            }
-        }
+                ProjectResolutionFailureKind.AmbiguousAlias => "alias",
+                ProjectResolutionFailureKind.AmbiguousPath => "project path",
+                _ => "project name"
+            };
+            var suffix = resolution.FailureKind == ProjectResolutionFailureKind.AmbiguousAlias
+                ? "projects match"
+                : "matches found";
 
-        foreach (var segment in normalizedPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
-        {
-            AddCandidate(candidates, segment);
-        }
-
-        return candidates;
-    }
-
-    private ResolutionResult ResolveByProjectPath(string normalizedPath)
-    {
-        var pathMatches = _graph.GetEntitiesByType(EntityType.Project)
-            .Where(e => MatchesProjectPath(e, normalizedPath))
-            .ToList();
-
-        if (pathMatches.Count == 1)
-        {
-            return new ResolutionResult(pathMatches[0], null);
-        }
-
-        if (pathMatches.Count > 1)
-        {
-            return new ResolutionResult(null, ToolHelpers.Success(new
+            return ToolHelpers.Success(new
             {
                 found = false,
-                message = $"Ambiguous project path '{normalizedPath}' — {pathMatches.Count} matches found",
-                ambiguousMatches = pathMatches.Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-            }));
+                message = $"Ambiguous {label} '{resolution.Query}' — {resolution.AmbiguousMatches.Count} {suffix}",
+                ambiguousMatches = resolution.AmbiguousMatches,
+                resolvedBy = resolution.ResolvedBy,
+                pathCandidates = resolution.PathCandidates,
+                warnings = resolution.Warnings
+            });
         }
 
-        return new ResolutionResult(null, null);
-    }
-
-    private static bool MatchesProjectPath(Entity entity, string normalizedPath)
-    {
-        if (!string.IsNullOrEmpty(entity.SourceFile) &&
-            PathsEqual(entity.SourceFile, normalizedPath))
+        return ToolHelpers.Success(new
         {
-            return true;
-        }
-
-        foreach (var observation in entity.Observations)
-        {
-            foreach (var pathValue in ExtractObservedPaths(observation))
-            {
-                if (PathsEqual(pathValue, normalizedPath))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+            found = false,
+            message = $"No project found matching '{resolution.Query}'",
+            availableProjects = _graph.GetEntitiesByType(EntityType.Project)
+                .Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(),
+            resolvedBy = resolution.ResolvedBy,
+            pathCandidates = resolution.PathCandidates,
+            warnings = resolution.Warnings
+        });
     }
-
-    private static IEnumerable<string> ExtractObservedPaths(string observation)
-    {
-        foreach (var prefix in PathObservationPrefixes)
-        {
-            if (!observation.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (var candidate in observation[prefix.Length..].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            {
-                yield return candidate;
-            }
-        }
-    }
-
-    private static bool PathsEqual(string candidatePath, string targetPath)
-    {
-        var normalizedCandidate = NormalizePath(candidatePath);
-        return !string.IsNullOrEmpty(normalizedCandidate) &&
-               normalizedCandidate.Equals(targetPath, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? NormalizePath(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return null;
-        }
-
-        var normalized = path.Trim()
-            .Replace('\\', '/')
-            .TrimEnd('/');
-
-        return normalized.Replace('/', Path.DirectorySeparatorChar);
-    }
-
-    private static void AddCandidate(List<string> candidates, string? candidate)
-    {
-        if (string.IsNullOrWhiteSpace(candidate))
-        {
-            return;
-        }
-
-        if (!candidates.Contains(candidate, StringComparer.OrdinalIgnoreCase))
-        {
-            candidates.Add(candidate);
-        }
-    }
-
-    private sealed record ResolutionResult(Entity? Entity, ToolCallResult? ErrorResult);
 }

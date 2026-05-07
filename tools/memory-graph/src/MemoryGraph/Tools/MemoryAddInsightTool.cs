@@ -67,17 +67,19 @@ public sealed class MemoryAddInsightTool : IMemoryTool
 
         _graph.AddOrUpdateEntity(name, EntityType.Insight, observations);
 
+        var resolver = new ProjectIdentityResolver(_graph);
         var relationsCreated = 0;
         var skippedTargets = new List<string>();
         foreach (var target in appliesTo)
         {
-            if (_graph.GetEntity(target) is null)
+            var resolvedTarget = ResolveAppliesToTarget(target, resolver);
+            if (resolvedTarget is null)
             {
                 skippedTargets.Add(target);
                 continue;
             }
 
-            if (_graph.AddRelation(name, target, RelationType.AppliesTo))
+            if (_graph.AddRelation(name, resolvedTarget, RelationType.AppliesTo))
             {
                 relationsCreated++;
             }
@@ -85,8 +87,29 @@ public sealed class MemoryAddInsightTool : IMemoryTool
 
         _graph.SaveIfDirty();
 
-        return ToolHelpers.Success(new { entity = name, relations = relationsCreated,
-            skippedTargets = skippedTargets.Count > 0 ? skippedTargets : null });
+        return ToolHelpers.Success(new
+        {
+            entity = name,
+            relations = relationsCreated,
+            skippedTargets = skippedTargets.Count > 0 ? skippedTargets : null
+        });
+    }
+
+    private string? ResolveAppliesToTarget(string target, ProjectIdentityResolver resolver)
+    {
+        var exact = _graph.GetEntity(target);
+        if (exact is not null && exact.Type != EntityType.Project)
+        {
+            return exact.Name;
+        }
+
+        var projectResolution = resolver.ResolveProjectTarget(target);
+        if (projectResolution.Entity is not null)
+        {
+            return projectResolution.Entity.Name;
+        }
+
+        return exact?.Name;
     }
 
     /// <summary>

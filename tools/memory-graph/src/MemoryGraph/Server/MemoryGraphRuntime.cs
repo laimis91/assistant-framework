@@ -45,7 +45,6 @@ public sealed class MemoryGraphRuntime : IDisposable
             var prunedEntities = memoryStore.PruneGraphEntityIndex(entityData.Select(e => e.Name));
             memoryStore.IndexGraphEntities(entityData);
 
-            var registry = BuildRegistry(graph, memoryStore, options.MemoryDir);
             var metrics = new MemoryGraphStartupMetrics(
                 options.MemoryDir,
                 options.GraphFile,
@@ -55,6 +54,7 @@ public sealed class MemoryGraphRuntime : IDisposable
                 reconciliation,
                 entityData.Count,
                 prunedEntities);
+            var registry = BuildRegistry(graph, memoryStore, options.MemoryDir, metrics);
 
             return new MemoryGraphRuntime(memoryStore, graph, registry, metrics);
         }
@@ -70,11 +70,16 @@ public sealed class MemoryGraphRuntime : IDisposable
         MemoryStore.Dispose();
     }
 
-    private static ToolRegistry BuildRegistry(KnowledgeGraph graph, MemoryStore memoryStore, string memoryDir)
+    private static ToolRegistry BuildRegistry(
+        KnowledgeGraph graph,
+        MemoryStore memoryStore,
+        string memoryDir,
+        MemoryGraphStartupMetrics metrics)
     {
         var registry = new ToolRegistry();
         registry.Register(new MemoryContextTool(graph));
         registry.Register(new MemorySearchTool(graph, memoryStore));
+        registry.Register(new MemoryDoctorTool(graph, memoryStore, memoryDir, metrics));
         registry.Register(new MemoryAddEntityTool(graph));
         registry.Register(new MemoryAddRelationTool(graph));
         registry.Register(new MemoryAddInsightTool(graph));
