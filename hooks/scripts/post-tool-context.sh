@@ -39,13 +39,13 @@ echo "$COMMAND" | grep -qE '^\s*dotnet\s+(build|test)' || exit 0
 # Extract result — tool_result/tool_response can be a string or an object with stdout
 RESULT=$(echo "$INPUT" | jq -r '
   if (.tool_result | type) == "string" then .tool_result
-  elif (.tool_result.stdout | type) == "string" then .tool_result.stdout
+  elif (.tool_result | type) == "object" and (.tool_result.stdout | type) == "string" then .tool_result.stdout
   elif (.tool_response | type) == "string" then .tool_response
-  elif (.tool_response.stdout | type) == "string" then .tool_response.stdout
-  elif (.tool_response.stderr | type) == "string" then .tool_response.stderr
-  elif (.tool_response.output | type) == "string" then .tool_response.output
+  elif (.tool_response | type) == "object" and (.tool_response.stdout | type) == "string" then .tool_response.stdout
+  elif (.tool_response | type) == "object" and (.tool_response.stderr | type) == "string" then .tool_response.stderr
+  elif (.tool_response | type) == "object" and (.tool_response.output | type) == "string" then .tool_response.output
   elif (.response | type) == "string" then .response
-  elif (.response.stdout | type) == "string" then .response.stdout
+  elif (.response | type) == "object" and (.response.stdout | type) == "string" then .response.stdout
   else ""
   end' 2>/dev/null)
 
@@ -56,14 +56,14 @@ context=""
 if echo "$COMMAND" | grep -qE '^\s*dotnet\s+build'; then
     # Parse build result
     if echo "$RESULT" | grep -qE 'Build succeeded'; then
-        warn_count=$(echo "$RESULT" | grep -cE '^\s*[^ ]+\([0-9]+,[0-9]+\): warning' 2>/dev/null || echo "0")
+        warn_count=$(echo "$RESULT" | grep -cE '^\s*[^ ]+\([0-9]+,[0-9]+\): warning' 2>/dev/null || true)
         if [[ "$warn_count" -gt 0 ]]; then
             context="BUILD: succeeded with $warn_count warning(s). Review warnings before proceeding."
         else
             context="BUILD: succeeded (0 warnings). Proceed to next step."
         fi
     elif echo "$RESULT" | grep -qE 'Build FAILED'; then
-        error_count=$(echo "$RESULT" | grep -cE '^\s*[^ ]+\([0-9]+,[0-9]+\): error' 2>/dev/null || echo "?")
+        error_count=$(echo "$RESULT" | grep -cE '^\s*[^ ]+\([0-9]+,[0-9]+\): error' 2>/dev/null || true)
         context="BUILD: FAILED ($error_count error(s)). Fix errors before proceeding."
     fi
 

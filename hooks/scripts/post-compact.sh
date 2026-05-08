@@ -9,7 +9,7 @@
 #
 # Output (stdout):
 #   Claude JSON: {"additionalContext": "..."}
-#   Codex JSON: {"hookSpecificOutput":{"hookEventName":"PostCompact","additionalContext":"..."}}
+#   Codex JSON: {"systemMessage": "..."}  (PostCompact accepts only universal fields)
 #   Fallback: plain text if jq is unavailable
 #
 # Env vars used:
@@ -136,12 +136,7 @@ if [[ ${#context_parts[@]} -gt 0 ]]; then
 
     if command -v jq >/dev/null 2>&1; then
         if $IS_CODEX; then
-            jq -n --arg ctx "$full_context" '{
-                hookSpecificOutput: {
-                    hookEventName: "PostCompact",
-                    additionalContext: $ctx
-                }
-            }'
+            jq -n --arg ctx "$full_context" '{systemMessage: $ctx}'
         else
         jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
         fi

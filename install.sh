@@ -963,11 +963,17 @@ if $INSTALL_HOOKS; then
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
-                    # Codex hooks: SessionStart, UserPromptSubmit, Stop, PreToolUse,
-                    # PostToolUse, PreCompact, and PostCompact.
+                    # Post-tool diagnostic hooks are intentionally no longer
+                    # installed by default; workflow-guard remains the
+                    # universal tool-use hook across agents.
+                    case "$hook_name" in
+                        post-tool-context.sh|tool-failure-advisor.sh) continue ;;
+                    esac
+                    # Codex hooks: SessionStart, UserPromptSubmit, Stop,
+                    # PreToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|post-tool-context.sh|tool-failure-advisor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
                             *) continue ;;  # skip unsupported hooks
                         esac
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
@@ -995,6 +1001,17 @@ if $INSTALL_HOOKS; then
                 if compgen -G "$HOOKS_TARGET/*.sh" >/dev/null; then
                     chmod +x "$HOOKS_TARGET/"*.sh
                 fi
+                # Keep no-op shims at legacy post-tool hook paths so existing
+                # running agent processes with cached hook commands do not fail
+                # with command-not-found after reinstall.
+                for legacy_hook in post-tool-context.sh tool-failure-advisor.sh; do
+                    printf '%s\n' \
+                        '#!/usr/bin/env bash' \
+                        '# Legacy Assistant Framework post-tool hook shim.' \
+                        '# Post-tool hooks are no longer registered by default.' \
+                        'exit 0' > "$HOOKS_TARGET/$legacy_hook"
+                    chmod +x "$HOOKS_TARGET/$legacy_hook"
+                done
                 ok "Hook scripts -> $HOOKS_TARGET/"
             else
                 info "No hook scripts found in $HOOKS_SOURCE/scripts/"
@@ -1112,18 +1129,76 @@ if $INSTALL_HOOKS; then
                 # Settings exists — merge hooks key
                 if command -v jq &>/dev/null; then
                     # Use jq to merge (preserves existing settings)
-                    existing_hooks=$(jq '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null || echo '{}')
+                    existing_hooks=$(jq --arg agent "$AGENT" --arg hooks_target "$HOOKS_TARGET" '
+                        def removed_post_tool_hook_names:
+                            [
+                                "post-tool-context.sh",
+                                "tool-failure-advisor.sh"
+                            ];
+                        def first_shell_token:
+                            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+                        def removed_post_tool_hook_command:
+                            (. // "") as $command
+                            | ($command | first_shell_token) as $token
+                            | any(removed_post_tool_hook_names[]; . as $hook_name |
+                                $token == ("$HOME/." + $agent + "/hooks/assistant/" + $hook_name)
+                                or $token == ($hooks_target + "/" + $hook_name)
+                                or ($token | endswith("/." + $agent + "/hooks/assistant/" + $hook_name))
+                                or ($token | endswith("/hooks/scripts/" + $hook_name))
+                            );
+                        (.hooks // {})
+                        | with_entries(
+                            .value = (
+                                (.value | if type == "array" then . else [.] end)
+                                | map(
+                                    .hooks = (
+                                        (.hooks // [])
+                                        | map(select(((.command // "") | removed_post_tool_hook_command) | not))
+                                    )
+                                )
+                                | map(select((.hooks // []) | length > 0))
+                            )
+                        )
+                        | with_entries(select((.value // []) | length > 0))
+                    ' "$SETTINGS_FILE" 2>/dev/null || echo '{}')
                     new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
 
-                    # Array-aware merge: concatenate arrays per event key, deduplicate by command
-                    # Guards against non-array values (e.g., hand-edited single objects)
+                    # Array-aware merge: concatenate arrays per event key, merge
+                    # matcher groups, and deduplicate hooks by command. This
+                    # preserves custom hooks while refreshing framework-owned
+                    # registrations from the template.
                     merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
+                        def arrayify:
+                            if type == "array" then . else [.] end;
+                        def unique_commands:
+                            reduce .[] as $hook ({seen: {}, out: []};
+                                ($hook.command? // "") as $command
+                                | if $command == "" then
+                                    .out += [$hook]
+                                elif .seen[$command] then
+                                    .
+                                else
+                                    .seen[$command] = true | .out += [$hook]
+                                end
+                            ) | .out;
+                        def merge_matcher_groups:
+                            reduce .[] as $group ({seen: {}, out: []};
+                                ($group | .hooks = ((.hooks // []) | arrayify | unique_commands)) as $normalized
+                                | ($normalized.matcher // "") as $matcher
+                                | if (($normalized.hooks // []) | length) == 0 then
+                                    .
+                                elif .seen[$matcher] == null then
+                                    .seen[$matcher] = (.out | length) | .out += [$normalized]
+                                else
+                                    .out[.seen[$matcher]].hooks = ((.out[.seen[$matcher]].hooks + $normalized.hooks) | unique_commands)
+                                end
+                            ) | .out;
                         ($a | keys) + ($b | keys) | unique | map(
                             . as $k |
                             {key: $k, value: ([
                                 ($a[$k] // [] | if type == "array" then . else [.] end),
                                 ($b[$k] // [] | if type == "array" then . else [.] end)
-                            ] | add | unique_by(.command))}
+                            ] | add | merge_matcher_groups)}
                         ) | from_entries
                     ')
                     if jq --argjson hooks "$merged" '.hooks = $hooks' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
@@ -1349,11 +1424,11 @@ if $INSTALL_HOOKS; then
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
         if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse, PreCompact, PostCompact — 7 events, 11 hook commands)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + compaction + post-tool context"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, PostCompact — 6 events, 9 hook commands)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + compaction"
         else
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse — 5 events, 9 hook commands)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + post-tool context"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, 7 hook commands)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate"
             echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
         fi
     fi

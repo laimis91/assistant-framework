@@ -36,6 +36,12 @@ p0p4_installed_hook_payload() {
         PreToolUse)
             printf '%s\n' '{"tool_name":"Read","tool_input":{},"hook_event_name":"PreToolUse"}'
             ;;
+        PreCompact)
+            printf '%s\n' '{"hook_event_name":"PreCompact","trigger":"manual"}'
+            ;;
+        PostCompact)
+            printf '%s\n' '{"hook_event_name":"PostCompact","trigger":"manual"}'
+            ;;
         Stop)
             printf '%s\n' '{"stop_hook_active":true,"hook_event_name":"Stop"}'
             ;;
@@ -94,6 +100,11 @@ TASK
                 break
             elif [[ -n "$hook_stdout" ]] && ! echo "$hook_stdout" | jq -e . >/dev/null 2>&1; then
                 smoke_failed="assistant hook command emitted non-JSON stdout: event=$event path=$installed_path stdout='$hook_stdout'"
+                break
+            elif [[ "$event" == "PreCompact" || "$event" == "PostCompact" ]] \
+                && [[ -n "$hook_stdout" ]] \
+                && ! echo "$hook_stdout" | jq -e '(has("hookSpecificOutput") | not) and (.systemMessage | type == "string")' >/dev/null 2>&1; then
+                smoke_failed="installed Codex compaction hook emitted unsupported JSON shape: event=$event path=$installed_path stdout='$hook_stdout'"
                 break
             fi
         done < <(jq -r '.hooks | to_entries[] | .key as $event | .value[]?.hooks[]? | .command? // empty | select(startswith("$HOME/.codex/hooks/assistant/")) | [$event, .] | @tsv' "$hooks_file")

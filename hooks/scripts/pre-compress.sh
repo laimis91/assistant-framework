@@ -11,7 +11,7 @@
 # Output (stdout):
 #   Claude: plain text (advisory message added to context)
 #   Gemini: {"systemMessage": "..."}  (strict JSON only)
-#   Codex: {"hookSpecificOutput":{"hookEventName":"PreCompact","additionalContext":"..."}}
+#   Codex: {"systemMessage": "..."}  (PreCompact accepts only universal fields)
 #
 # Env vars used:
 #   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
@@ -74,12 +74,7 @@ if $IS_GEMINI; then
     jq -n --arg msg "$MSG" '{systemMessage: $msg}'
 elif $IS_CODEX; then
     if [[ "${JQ_MISSING:-}" == "true" ]]; then exit 0; fi
-    jq -n --arg msg "$MSG" '{
-        hookSpecificOutput: {
-            hookEventName: "PreCompact",
-            additionalContext: $msg
-        }
-    }'
+    jq -n --arg msg "$MSG" '{systemMessage: $msg}'
 else
     # Claude: plain stdout is added to context
     echo "$MSG"

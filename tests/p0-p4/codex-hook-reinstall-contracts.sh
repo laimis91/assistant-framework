@@ -92,6 +92,10 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
           {
             "type": "command",
             "command": "$FRAMEWORK_DIR/hooks/scripts/post-tool-context.sh --stale"
+          },
+          {
+            "type": "command",
+            "command": "/tmp/user-posttool-hook.sh"
           }
         ]
       }
@@ -111,15 +115,15 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
                 "workflow-enforcer.sh",
                 "workflow-guard.sh",
                 "stop-review.sh",
-                "harness-gate.sh"
+                "harness-gate.sh",
+                "pre-compress.sh",
+                "post-compact.sh"
             ];
         [.. | objects | .command? // empty] as $commands
         | [$commands[] | first_shell_token] as $tokens
         | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ("$HOME/.codex/hooks/assistant/" + $hook_name)))] as $frameworkCommands
         | {
-            stale: ($tokens | any(. == "$HOME/.codex/hooks/assistant/post-compact.sh"
-                or . == "$HOME/.codex/hooks/assistant/pre-compress.sh"
-                or . == ($install_home + "/.codex/hooks/assistant/session-end.sh")
+            stale: ($tokens | any(. == ($install_home + "/.codex/hooks/assistant/session-end.sh")
                 or . == ($install_home + "/.codex/hooks/assistant/workflow-guard.sh")
                 or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
                 or . == ($framework_dir + "/hooks/scripts/task-completed.sh")
@@ -127,6 +131,7 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
                 or . == ($framework_dir + "/hooks/scripts/workflow-guard.sh")
                 or . == ($framework_dir + "/hooks/scripts/post-tool-context.sh"))),
             custom: ($commands | any(. == "/tmp/user-custom-hook.sh")),
+            postToolCustom: ($commands | any(. == "/tmp/user-posttool-hook.sh")),
             homeAssistantCustom: ($commands | any(. == "$HOME/.codex/hooks/assistant/custom-user.sh")),
             absoluteAssistantCustom: ($commands | any(. == ($install_home + "/.codex/hooks/assistant/custom-absolute.sh --keep"))),
             preToolCustom: ($commands | any(. == "/tmp/user-pretool-hook.sh")),
@@ -134,7 +139,7 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
             sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
             workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh"))
         }
-        | (.stale | not) and .custom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
+        | (.stale | not) and .custom and .postToolCustom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
     ' "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null; then
         pass
     else
