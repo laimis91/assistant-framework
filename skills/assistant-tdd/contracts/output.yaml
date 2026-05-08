@@ -75,6 +75,7 @@ artifacts:
     required: true
     condition: always
     description: "Summary of what is now tested"
+    validation: "Must report new_tests, total_tests_run, and all_passing=true at TDD completion"
     object_fields:
       - name: new_tests
         type: int

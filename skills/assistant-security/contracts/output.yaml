@@ -7,6 +7,7 @@ artifacts:
     type: object[]
     required: true
     description: "Security findings from the analysis"
+    validation: "Every finding must include severity, category, description, impact, and remediation"
     object_fields:
       - name: severity
         type: enum
@@ -45,11 +46,13 @@ artifacts:
     type: string
     required: true
     description: "Overall security posture assessment"
+    validation: "Must summarize the overall risk posture in plain language"
 
   - name: risk_level
     type: enum
     required: true
     description: "Overall risk level based on all findings"
+    validation: "Must match the highest material risk remaining after analysis"
     enum_values: [critical, high, medium, low, none]
 
   - name: action_items

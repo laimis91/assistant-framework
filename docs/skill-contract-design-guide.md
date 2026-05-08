@@ -231,6 +231,29 @@ handoffs:
 
 ## Enforcement Mechanisms
 
+### Source validation foundation
+
+Run the source validator before changing first-class skill contracts:
+
+```bash
+tools/skills/validate-skills.sh
+```
+
+The default inventory is the tracked first-class release set: `skills/assistant-*/SKILL.md`. Local-only `skills/unity-*` directories are excluded by default. Use targeted validation when working on one skill:
+
+```bash
+tools/skills/validate-skills.sh --skill assistant-thinking
+tools/skills/validate-skills.sh --skill skills/assistant-thinking/SKILL.md
+```
+
+Use `--include-local` only for local experiments:
+
+```bash
+tools/skills/validate-skills.sh --include-local
+```
+
+This validator checks source skill metadata and contract structure: frontmatter, required contract tier files, contract headers, required-field recovery behavior, and enum value declarations. It intentionally stays on the source side. Canonical source paths such as `.claude` remain valid in source skills; installed-agent path substitution for `.codex` and `.gemini` stays covered by installer tests.
+
 ### Level 1: Contract files exist (passive)
 The contracts are YAML files in the skill directory. Agents read them as part of skill execution. This relies on the agent following instructions — the same trust model as the existing SKILL.md.
 
@@ -238,16 +261,20 @@ The contracts are YAML files in the skill directory. Agents read them as part of
 The SKILL.md explicitly says "read and follow contracts/". The Contracts section lists the files and summarizes the rules. This makes contracts visible and hard to miss.
 
 ### Level 3: Hook-based validation (structural)
-Shell scripts in hooks validate contract compliance:
+Shell scripts in hooks can validate contract compliance:
 - Pre-phase hooks check input contract resolution
 - Post-phase hooks check phase gate assertions
 - Stop hooks check output contract completeness
 - Example: `stop-review.sh` already enforces that the review cycle completes
 
+The source validator is the Level 3 foundation: it gives hooks a consistent, checked contract shape to rely on before runtime enforcement expands.
+
 ### Level 4: Conformance test suite (automated)
 YAML test cases define "given this input, skill must produce output matching this schema." Can be run as a verification step after skill modifications.
 
-**Current implementation: Level 2.** Level 3 already exists for review (stop-review.sh). Level 4 is future work.
+The validator is also the Level 4 foundation because it provides the inventory and structural checks that future per-skill conformance suites can build on. It is not full per-skill eval coverage yet.
+
+**Current implementation: Level 2 plus source structural validation.** Level 3 already exists for review (`stop-review.sh`). Broader runtime enforcement and per-skill eval suites are next slices built on the validator.
 
 ---
 

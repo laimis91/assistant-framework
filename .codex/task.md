@@ -5,102 +5,127 @@ Current phase: DOCUMENT COMPLETE
 
 ## Task
 
-Implement the first batch of memory-system retrieval improvements after review found cases where LLMs queried project memory but received no results, especially with keyword/OR searches and project identity drift across sessions.
+Implement the first Assistant Framework improvement slice from skill ecosystem research: add a first-class skill validation path with contract tests and documentation.
 
-## Scope
+## Constraints
 
-- Add a read-only `memory_doctor` tool for project, relation, FTS, and runtime diagnostics.
-- Add explainability fields to `memory_context`: `resolvedProject`, `resolvedBy`, `pathCandidates`, `equivalentProjectsIncluded`, and `warnings`.
-- Keep `memory_search` read-only at search time by removing FTS pruning; filter stale/non-canonical rows from returned results without deleting them.
-- Add read-only FTS diagnostics for doctor output.
-- Strengthen project identity, path, alias, and equivalent-project resolution.
-- Apply source/entity filters before FTS caps, with uppercase-only boolean operators and lowercase `and`/`or`/`not` treated as literal terms.
-- Register the new runtime tool and cover behavior with focused tests.
+- Default validation covers only first-class `skills/assistant-*` release skills.
+- `skills/unity-*` directories are local-only and excluded by default.
+- Source validation must allow canonical `.claude` paths; installed path substitution remains covered by installer tests.
+- Avoid new runtime dependencies beyond existing shell/JQ-style repository tooling.
+- Tests accompany implementation in the same BUILD step.
+
+## Approved Decomposition
+
+1. Baseline Contract Headers
+   - Files: `skills/assistant-ideate/contracts/input.yaml`, `skills/assistant-thinking/contracts/input.yaml`.
+   - Verification: strict validator reports no missing contract headers for first-class skills.
+2. Skill Validator Tool
+   - File: `tools/skills/validate-skills.sh`.
+   - Verification: valid repository passes and malformed fixtures fail clearly.
+3. P0/P4 Validator Contracts
+   - Files: `tests/p0-p4/skill-validator-contracts.sh`, `tests/test-p0-p4-contracts.sh`.
+   - Verification: standalone and aggregate suites pass.
+4. Documentation
+   - Files: `README.md`, `docs/skill-contract-design-guide.md`.
+   - Verification: docs mention validator command, first-class release inventory, local-only skill behavior, and Level 3/4 direction.
 
 ## Approved Plan
 
-1. Split project identity resolution into dedicated graph metadata, resolver, resolution, and equivalence components.
-2. Separate storage FTS behavior from core memory store code and expose read-only FTS diagnostics.
-3. Add `memory_doctor` diagnostics while preserving read-only semantics.
-4. Extend context/search tool behavior for identity explainability, equivalent-project aggregation, filter ordering, and boolean query parsing.
-5. Register runtime capabilities and add focused regression coverage for context, search, doctor, store, reconciler, and runtime behavior.
-6. Reinstall the Codex tool copy and verify both repository and installed memory-graph solutions.
+### Task 1: Fix Baseline Contract Headers
+- Modify: `skills/assistant-ideate/contracts/input.yaml`, `skills/assistant-thinking/contracts/input.yaml`.
+- Acceptance: both include `schema_version`, `contract: input`, and matching `skill`.
+- Verification: `tools/skills/validate-skills.sh`.
+- Deviation rule: if more header drift appears, fix only validator-relevant contract-header drift.
 
-## Components
+### Task 2: Add Skill Validator
+- Create: `tools/skills/validate-skills.sh`.
+- Acceptance: default assistant skill inventory, targeted `--skill NAME|PATH`, contract tier files, frontmatter metadata, contract headers, required-field recovery actions, enum values, and clear failure messages.
+- Verification: `tools/skills/validate-skills.sh`.
+- Deviation rule: keep shell validation scoped to repo conventions.
 
-- Graph resolver/reconciler: canonical project identity, path metadata, alias precedence, equivalent-project aggregation, and FTS liveness.
-- Storage/FTS: split FTS implementation, no search-time pruning, read-only diagnostics, and pre-limit filtering.
-- Tools: `memory_context`, `memory_search`, `memory_doctor`, and add-insight integration behavior.
-- Runtime: server registration for the new doctor tool and updated tool metadata.
-- Tests: focused context/search/doctor integration suites plus nearby store, reconciler, and runtime tests.
+### Task 3: Add P0/P4 Validator Contracts
+- Create: `tests/p0-p4/skill-validator-contracts.sh`.
+- Modify: `tests/test-p0-p4-contracts.sh`.
+- Acceptance: direct and aggregate suite execution; malformed fixtures fail; default inventory excludes local Unity; targeted custom path works.
+- Verification: `bash tests/p0-p4/skill-validator-contracts.sh`.
+
+### Task 4: Document Validator And Direction
+- Modify: `README.md`, `docs/skill-contract-design-guide.md`.
+- Acceptance: documents validator usage, inventory scope, local-only skills, and next enforcement direction.
+- Verification: `rg -n "validate-skills|first-class|local-only|Level 3|Level 4" README.md docs/skill-contract-design-guide.md`.
+
+## Component Verification Ledger
+
+| Component | Status | Command / Evidence | Criteria |
+|---|---|---|---|
+| 1. Baseline Contract Headers | VERIFIED | `bash tests/p0-p4/skill-instruction-quality-contracts.sh` passed 4/4; headers present in ideate/thinking input contracts. | Ideate/thinking input contracts expose schema_version, contract, and skill. |
+| 2. Skill Validator Tool | VERIFIED | `tools/skills/validate-skills.sh` passed for 15 first-class skills; `--list` excludes unity; targeted name/path checks pass. | Validator passes repo and fails malformed fixtures clearly. |
+| 3. P0/P4 Validator Contracts | VERIFIED | `bash tests/p0-p4/skill-validator-contracts.sh` passed 7/7; aggregate runner sources suite before finish. | Direct and aggregate test paths include validator coverage. |
+| 4. Documentation | VERIFIED | `rg -n "validate-skills|first-class|local-only|Level 3|Level 4" README.md docs/skill-contract-design-guide.md` found expected coverage; doc diff check passed. | README and guide document validator and direction. |
 
 ## Review Log
 
-- Round 1: fixed canonical entity FTS liveness, split FTS storage responsibilities, and split project identity logic.
-- Round 2: fixed lowercase `and`/`or`/`not` literal handling, pre-cap mixed source filtering, and doctor implementation split.
-- Round 3: split overloaded integration tests into focused context, search, and doctor files with a shared base.
-- Round 4: fixed equivalent-project context aggregation across relations/preferences, parent/leaf path alias handling, and entity-type FTS filtering before `LIMIT`.
-- Round 5: fixed parent/leaf alias precedence over legacy basename exact project while preserving explicit project precedence.
+- BUILD verification passed:
+  - `tools/skills/validate-skills.sh`: 15/15 first-class skills validated.
+  - `bash tests/p0-p4/skill-validator-contracts.sh`: 7/7 passed.
+  - `bash tests/p0-p4/skill-instruction-quality-contracts.sh`: 4/4 passed.
+  - `tools/evals/run-framework-instruction-evals.sh --validate-fixture`: passed.
+  - `bash tests/test-p0-p4-contracts.sh`: 85/85 passed after removing untracked ignored `tests/.DS_Store`.
+  - `git diff --check`: passed.
+- Spec Review #1: skill validator improvement slice
+  - Result: PASS
+  - Scope reviewed: Tasks 1-4 from the approved plan.
+  - Missing acceptance criteria: none.
+  - Extra scope: none. Validator-exposed contract output validation additions are within the approved baseline drift cleanup for strict repository validation.
+  - Changed files mismatch: none. `.codex/task.md` is the active workflow journal; `tests/.DS_Store` removal was untracked generated hygiene required by repo guard.
+  - Verification evidence mismatch: none. Validator, direct P0/P4, aggregate P0/P4, eval fixture, and diff hygiene evidence are recorded above.
+  - Required fixes: none.
+- Quality Review Round 1:
+  - Result: has_must_fix
+  - Rubric: correctness 3.0, code_quality 4.0, architecture 4.0, security 5.0, test_coverage 3.5
+  - Weighted: 3.78
+  - Finding: validator inferred contract tier only from existing files, allowing missing `phase-gates.yaml` or `handoffs.yaml` to pass by downgrading expected tier.
+  - Fix: derive expected tier from SKILL.md contract references and add negative P0/P4 fixtures for missing phase-gates and handoffs.
+- Quality Review Round 2:
+  - Result: has_must_fix
+  - Rubric: correctness 3.5, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+  - Weighted: 3.85
+  - Finding: validator P0/P4 local Unity exclusion fixture used a fixed `skills/unity-validator-local` path and could overwrite/delete a developer's local-only skill.
+  - Fix: use a unique `mktemp` directory under `skills/` and assert exclusion of that generated basename only.
+- Quality Review Round 3:
+  - Result: has_should_fix
+  - Rubric: correctness 4.4, code_quality 3.4, architecture 3.7, security 4.8, test_coverage 4.4
+  - Weighted: 4.12
+  - Finding: `tools/skills/validate-skills.sh` was a 590-line mixed-responsibility script.
+  - Fix: split validator internals into `tools/skills/lib/validate-common.sh`, `validate-inventory.sh`, `validate-frontmatter.sh`, and `validate-contracts.sh`; keep public command as a thin entrypoint.
+- Quality Review Round 4:
+  - Result: clean
+  - Rubric: correctness 4.5, code_quality 4.5, architecture 4.5, security 5.0, test_coverage 4.5
+  - Weighted: 4.575
+  - Findings: none.
+  - Final Result: CLEAN.
 
-## Verification
+## Verification Summary
 
-- Targeted final regression: `Context_PrefersParentLeafAliasOverLegacyLeafExact_FromPath` passed.
-- Nearby context identity tests: `MemoryContextToolIntegrationTests` passed 19/19.
-- Repository build: `dotnet build tools/memory-graph/MemoryGraph.sln` succeeded with 0 warnings/errors.
-- Repository full suite: `dotnet test tools/memory-graph/MemoryGraph.sln` passed 167/167.
-- Repository format: `dotnet format tools/memory-graph/MemoryGraph.sln --verify-no-changes` passed.
-- Repository complexity: `bash ~/.codex/tools/cognitive-complexity/run-complexity.sh --changed` passed.
-- Repository diff hygiene: `git diff --check` passed.
-- Installed copy updated with `./install.sh --agent codex --no-hooks`.
-- Installed copy full suite: `dotnet test /Users/laimis/.codex/tools/memory-graph/MemoryGraph.sln` passed 167/167.
-- Installed copy build was rerun sequentially after a transient parallel file lock and passed with 0 warnings/errors.
-- Installed copy format verification passed.
+- Changed files: skill validator tool modules, validator P0/P4 suite, aggregate P0/P4 runner, skill contract metadata drift fixes, README, skill contract guide, and this task journal.
+- Test coverage:
+  - `tools/skills/validate-skills.sh`: passed, 15/15 first-class skills validated.
+  - `bash tests/p0-p4/skill-validator-contracts.sh`: passed 9/9.
+  - `bash tests/p0-p4/skill-instruction-quality-contracts.sh`: passed 4/4.
+  - `bash tests/test-p0-p4-contracts.sh`: passed 87/87.
+  - `tools/evals/run-framework-instruction-evals.sh --validate-fixture`: passed.
+  - `git diff --check`: passed.
+- Review result: CLEAN after 4 quality review rounds, final weighted score 4.575.
+- Manual test steps:
+  - Run `tools/skills/validate-skills.sh --list` and confirm only first-class `assistant-*` skills appear.
+  - Run `tools/skills/validate-skills.sh --skill assistant-thinking`.
+  - Run `bash tests/p0-p4/skill-validator-contracts.sh`.
+- Known limitations:
+  - Validator is structural source validation only; runtime phase-gate enforcement and per-skill behavioral evals remain future slices.
 
-## Blockers
+## Metrics
 
-None.
+- Appended `/Users/laimis/.codex/memory/metrics/workflow-metrics.jsonl` entry for 2026-05-08.
 
-## Notes
-
-- The current MCP process may need a restart or a new session to load the installed `memory_doctor` and memory tool changes.
-
-## Follow-up Bugfix: Other-PC Memory Not Found
-
-User reported that after trying the latest changes on another PC, the LLM still could not find memory data.
-
-### Root Causes
-
-1. Memory data is local per machine under `~/.codex/memory`; installing the repository tools does not copy memories. Another PC needs `memory.db` copied from the source machine or a legacy `graph.jsonl` available/imported.
-2. `install.sh` skipped already-registered Codex memory-graph MCP config, so stale command, args, and tool approval blocks could remain. The local live config was missing the `memory_doctor` approval before this fix.
-
-### Implemented Fix
-
-- `install.sh` now refreshes an existing Codex `[mcp_servers.memory-graph]` config instead of skipping it.
-- The installer preserves unrelated TOML and preserves the existing config file mode, such as `0600`.
-- The installer writes current tool approval blocks, including `memory_doctor`, `memory_decide`, `memory_pattern`, `memory_consolidate`, remove tools, and related memory tools.
-- `memory_doctor` now emits actionable warnings for an empty local memory store and a missing legacy graph file when no retrievable graph context exists.
-- Added a negative doctor test proving a non-empty DB graph with missing `graph.jsonl` does not warn.
-
-### Follow-up Verification
-
-- `bash tests/p0-p4/installer-contracts.sh`: passed 10/10.
-- Targeted doctor runtime tests passed 3/3.
-- `dotnet build tools/memory-graph/MemoryGraph.sln`: succeeded with 0 warnings/errors.
-- `dotnet test tools/memory-graph/MemoryGraph.sln`: passed 169/169.
-- `dotnet format tools/memory-graph/MemoryGraph.sln --verify-no-changes`: passed.
-- `bash ~/.codex/tools/cognitive-complexity/run-complexity.sh --changed`: passed.
-- `git diff --check`, `bash -n install.sh`, and `bash -n tests/p0-p4/installer-contracts.sh`: passed.
-- Review loop: round 1 found two should-fix issues; both were fixed. Round 2 was clean with weighted score 4.65.
-- Installed local Codex copy updated with `./install.sh --agent codex --no-hooks`.
-- Local `~/.codex/config.toml` now includes `[mcp_servers.memory-graph.tools.memory_doctor]` and current memory tool approvals; config mode remains `600`.
-- Installed copy build passed.
-- Installed copy tests passed 169/169.
-- Installed copy format verification passed.
-
-### Other-PC Verification Steps
-
-1. Run `./install.sh --agent codex --no-hooks` on the other PC from the updated repository.
-2. Restart Codex or start a new session so the MCP tool list reloads.
-3. Confirm `~/.codex/config.toml` contains `memory_doctor` and `args = ["--memory-dir", "<home>/.codex/memory"]`.
-4. If memory data should be shared, copy `~/.codex/memory/memory.db` from the source PC to the other PC while Codex and memory-graph are stopped, or provide/import `graph.jsonl`. Without this, memory tools are correctly empty.
-5. Use `memory_stats` or `memory_doctor` in the new session; empty-store warnings indicate missing local memory data rather than query failure.
+--- WORKFLOW COMPLETE ---

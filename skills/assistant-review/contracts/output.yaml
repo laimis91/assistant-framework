@@ -11,6 +11,7 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
+    validation: "Must include rounds, result, fixed_items, remaining_items when applicable, and nits before presenting review results"
     object_fields:
       - name: rounds
         type: int
@@ -128,6 +129,7 @@ artifacts:
     required: true
     condition: "mode == review-fix"
     description: "Build and test results after all fixes applied"
+    validation: "Must show passed build/test verification or an explicit not_applicable build_result before review completion"
     object_fields:
       - name: build_result
         type: enum
@@ -161,6 +163,7 @@ artifacts:
     required: true
     condition: "mode == audit"
     description: "Full findings report when running in audit mode (no fixes)"
+    validation: "Must include all audit findings and an overall summary before audit results are presented"
     object_fields:
       - name: findings
         type: object[]

@@ -180,6 +180,31 @@ Requires .NET 8+ SDK for the initial build (builds automatically on first run). 
 
 Roslyn-based analyzer that scores method complexity. Used by the workflow skill's quality review stage. See `tools/cognitive-complexity/`.
 
+### Skill Validator
+
+Source validator for first-class skill metadata and contract structure:
+
+```bash
+tools/skills/validate-skills.sh
+```
+
+By default it validates only the release inventory: tracked `skills/assistant-*/SKILL.md` skills and their `contracts/*.yaml` files. Local-only `skills/unity-*` directories are excluded by default.
+
+Target a specific skill by name, directory, or `SKILL.md` path:
+
+```bash
+tools/skills/validate-skills.sh --skill assistant-thinking
+tools/skills/validate-skills.sh --skill skills/assistant-thinking
+tools/skills/validate-skills.sh --skill skills/assistant-thinking/SKILL.md
+```
+
+Use `--include-local` only when you explicitly want to validate every `skills/*/SKILL.md`, including local-only skill experiments:
+
+```bash
+tools/skills/validate-skills.sh --include-local
+tools/skills/validate-skills.sh --include-local --list
+```
+
 ## Structure
 
 ```
@@ -284,6 +309,8 @@ hooks/                             <- Automated behaviors (Claude + Codex + Gemi
   gemini-settings.json             <- Hook config for Gemini CLI
 
 tools/
+  skills/
+    validate-skills.sh             <- Source validator for first-class skill metadata and contracts
   cognitive-complexity/             <- Roslyn-based complexity analyzer
   memory-graph/
     DESIGN.md                      <- Architecture and data model

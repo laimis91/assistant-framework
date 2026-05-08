@@ -26,6 +26,7 @@ artifacts:
     required: true
     condition: "action == review"
     description: "Assessment of TCF completeness and quality"
+    validation: "Every reviewed TCF section must have a status and actionable suggestion when incomplete"
     object_fields:
       - name: section
         type: string
@@ -44,6 +45,7 @@ artifacts:
     required: true
     condition: always
     description: "Human-readable summary of what was done"
+    validation: "Must state the completed Telos action and the affected entity or file"
 
 # Completeness check:
 # 1. For create: TCF file exists with at minimum problems, mission, and goals sections
