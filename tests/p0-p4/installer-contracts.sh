@@ -45,6 +45,31 @@ else
     fail "first install failed; see /tmp/p0p4-install-1.err"
 fi
 
+test_start "Codex single-skill install generates AGENTS skill table from installed skills"
+INSTALL_HOME_SKILL_TABLE="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_SKILL_TABLE"
+if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-single-skill-table.out 2>/tmp/p0p4-install-single-skill-table.err; then
+    agents_file="$INSTALL_HOME_SKILL_TABLE/.codex/AGENTS.md"
+    installed_skills_dir="$INSTALL_HOME_SKILL_TABLE/.codex/skills"
+    assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
+
+    if [[ ! -d "$installed_skills_dir/assistant-workflow" ]]; then
+        fail "expected assistant-workflow to be installed"
+    elif [[ -d "$installed_skills_dir/assistant-review" || -d "$installed_skills_dir/assistant-docs" ]]; then
+        fail "expected single-skill install to avoid installing assistant-review and assistant-docs"
+    elif [[ "$assistant_skill_rows" != "1" ]]; then
+        fail "expected generated Codex AGENTS.md to list exactly one assistant skill; found $assistant_skill_rows"
+    elif ! grep -Fq "| assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |" "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to list assistant-workflow with first-class metadata"
+    elif grep -Fq "| assistant-review |" "$agents_file" || grep -Fq "| assistant-docs |" "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to omit uninstalled assistant-review and assistant-docs"
+    else
+        pass
+    fi
+else
+    fail "single-skill Codex install failed; see /tmp/p0p4-install-single-skill-table.err"
+fi
+
 test_start "installer replaces interrupted memory protocol install without duplicating blocks"
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"
@@ -339,8 +364,11 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
     missing_assistant_skill=""
     missing_agents_skill=""
     unexpected_installed_skill=""
+    source_assistant_skill_count=0
+    agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
 
     while IFS= read -r source_skill_md; do
+        source_assistant_skill_count=$((source_assistant_skill_count + 1))
         source_skill="$(basename "$(dirname "$source_skill_md")")"
         if [[ ! -d "$installed_skills_dir/$source_skill" ]]; then
             missing_assistant_skill="$source_skill"
@@ -369,6 +397,10 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
     elif [[ -n "$missing_agents_skill" ]]; then
         fail "expected generated Codex AGENTS.md to include first-class assistant skill $missing_agents_skill"
+    elif [[ "$source_assistant_skill_count" != "15" ]]; then
+        fail "expected source inventory to contain 15 first-class assistant skills; found $source_assistant_skill_count"
+    elif [[ "$agents_assistant_skill_rows" != "15" ]]; then
+        fail "expected generated Codex AGENTS.md to list all 15 first-class assistant skills; found $agents_assistant_skill_rows"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
     elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then

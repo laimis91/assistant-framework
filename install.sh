@@ -242,6 +242,59 @@ cleanup_installed_tool_build_artifacts() {
     fi
 }
 
+codex_skill_table_trigger() {
+    case "$1" in
+        assistant-workflow) printf '%s\n' "build, implement, fix, refactor, plan" ;;
+        assistant-clarify) printf '%s\n' "ambiguous, multi-intent, underspecified prompts" ;;
+        assistant-diagrams) printf '%s\n' "diagram, draw, visualize, flow" ;;
+        assistant-docs) printf '%s\n' "document, docs, README, changelog" ;;
+        assistant-ideate) printf '%s\n' "brainstorm, ideas, options, alternatives" ;;
+        assistant-memory) printf '%s\n' "remember, save insight, preferences" ;;
+        assistant-onboard) printf '%s\n' "learn codebase, onboard, map project" ;;
+        assistant-reflexion) printf '%s\n' "reflect, lessons, retrospective" ;;
+        assistant-research) printf '%s\n' "research, investigate, compare options" ;;
+        assistant-review) printf '%s\n' "review, check the code" ;;
+        assistant-security) printf '%s\n' "security, threat model, audit" ;;
+        assistant-skill-creator) printf '%s\n' "create skill, scaffold skill, contracts" ;;
+        assistant-tdd) printf '%s\n' "tests first, test-driven, red green" ;;
+        assistant-telos) printf '%s\n' "telos, purpose, mission, strategy" ;;
+        assistant-thinking) printf '%s\n' "think through, stress test, debate" ;;
+        *) printf '%s\n' "explicit install" ;;
+    esac
+}
+
+codex_skill_table_description() {
+    case "$1" in
+        assistant-workflow) printf '%s\n' "Structured dev: triage through document" ;;
+        assistant-clarify) printf '%s\n' "Clarify the request before execution" ;;
+        assistant-diagrams) printf '%s\n' "Create Mermaid architecture and flow diagrams" ;;
+        assistant-docs) printf '%s\n' "Generate and maintain project documentation" ;;
+        assistant-ideate) printf '%s\n' "Structured idea generation and refinement" ;;
+        assistant-memory) printf '%s\n' "Cross-session persistent memory" ;;
+        assistant-onboard) printf '%s\n' "Systematic project orientation" ;;
+        assistant-reflexion) printf '%s\n' "Post-task learning and calibration" ;;
+        assistant-research) printf '%s\n' "Tiered research with source verification" ;;
+        assistant-review) printf '%s\n' "Autonomous review-fix loop (max 5 rounds)" ;;
+        assistant-security) printf '%s\n' "STRIDE, OWASP, CVE analysis" ;;
+        assistant-skill-creator) printf '%s\n' "Create V1 framework skills" ;;
+        assistant-tdd) printf '%s\n' "Red-Green-Refactor with verification gates" ;;
+        assistant-telos) printf '%s\n' "Purpose and strategic context management" ;;
+        assistant-thinking) printf '%s\n' "Structured reasoning for trade-offs" ;;
+        *) printf '%s\n' "Installed custom skill; open SKILL.md for trigger guidance" ;;
+    esac
+}
+
+build_codex_skill_table_rows() {
+    local skill
+
+    for skill in "${SKILLS[@]}"; do
+        printf '| %s | %s | %s |\n' \
+            "$skill" \
+            "$(codex_skill_table_trigger "$skill")" \
+            "$(codex_skill_table_description "$skill")"
+    done
+}
+
 register_codex_memory_graph_mcp() {
     local config_file="$1"
     local mcp_command="$2"
@@ -1054,6 +1107,7 @@ AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
 
 if [[ "$AGENT" == "codex" ]]; then
     AGENTS_MD="$AGENT_HOME/AGENTS.md"
+    AGENTS_SKILL_ROWS="$(build_codex_skill_table_rows)"
     echo ""
 
     # Build the installer-owned content block (wrapped in markers)
@@ -1092,21 +1146,7 @@ These rules define the operating contract for every response.
 
 | Skill | Trigger | What it does |
 |-------|---------|-------------|
-| assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |
-| assistant-clarify | ambiguous, multi-intent, underspecified prompts | Clarify the request before execution |
-| assistant-diagrams | diagram, draw, visualize, flow | Create Mermaid architecture and flow diagrams |
-| assistant-docs | document, docs, README, changelog | Generate and maintain project documentation |
-| assistant-ideate | brainstorm, ideas, options, alternatives | Structured idea generation and refinement |
-| assistant-memory | remember, save insight, preferences | Cross-session persistent memory |
-| assistant-onboard | learn codebase, onboard, map project | Systematic project orientation |
-| assistant-reflexion | reflect, lessons, retrospective | Post-task learning and calibration |
-| assistant-research | research, investigate, compare options | Tiered research with source verification |
-| assistant-review | review, check the code | Autonomous review-fix loop (max 5 rounds) |
-| assistant-security | security, threat model, audit | STRIDE, OWASP, CVE analysis |
-| assistant-skill-creator | create skill, scaffold skill, contracts | Create V1 framework skills |
-| assistant-tdd | tests first, test-driven, red green | Red-Green-Refactor with verification gates |
-| assistant-telos | telos, purpose, mission, strategy | Purpose and strategic context management |
-| assistant-thinking | think through, stress test, debate | Structured reasoning for trade-offs |
+$AGENTS_SKILL_ROWS
 
 ## Agents (in ~/.codex/agents/)
 
