@@ -1,6 +1,6 @@
 # Task Journal
 
-Task: High-control per-skill eval coverage
+Task: Expanded Level 4 per-skill eval coverage
 Status: DONE
 Current phase: DOCUMENT COMPLETE
 Triaged as: medium
@@ -10,88 +10,89 @@ Clarification defaults applied: false
 Unresolved clarification topics:
 
 ## Requirements
-- Expand Level 4 provider-neutral per-skill eval coverage beyond the current `assistant-clarify` and `assistant-thinking` pilot.
-- Add focused fixtures for high-control skills where missed instructions create the largest workflow risk: `assistant-workflow`, `assistant-review`, `assistant-tdd`, and `assistant-security`.
-- Keep the existing runner architecture unless fixture coverage exposes a minimal contract-test gap.
-- Update P0/P4 contracts and docs so the new default inventory and coverage state are guarded from drift.
+- Expand provider-neutral per-skill eval coverage beyond the current six-skill high-control slice.
+- Add focused fixtures for `assistant-skill-creator`, `assistant-memory`, `assistant-research`, and `assistant-onboard`.
+- Keep the existing runner architecture local and provider-neutral.
+- Update P0/P4 contracts and docs so coverage moves from six to ten first-class skills and remains guarded from drift.
 
 ## Constraints
 - Keep all evals offline, provider-neutral, and based on local fixture validation/listing/emission/grading.
 - Do not add provider SDKs, model calls, or network requirements.
 - Keep fixtures skill-local at `skills/<skill>/evals/cases.json`.
 - Preserve local-only `unity-*` exclusion from the default inventory unless `--include-local` is passed.
-- Subagent dispatch has not been explicitly requested in this environment, so implementation and verification will be performed locally while preserving the workflow handoff evidence shape.
+- Coverage must still be described as incomplete for all 15 first-class skills.
+- Subagent dispatch has not been explicitly requested in this environment, so implementation and verification will be performed locally while preserving the workflow evidence shape.
 - Do not use destructive cleanup commands.
 
 ## Discovery Notes
-- `tools/evals/run-skill-evals.sh` already validates, lists, emits prompt packets, and locally grades response files through shell and `jq`.
-- Existing pilot fixtures are `skills/assistant-clarify/evals/cases.json` and `skills/assistant-thinking/evals/cases.json`.
-- `tests/p0-p4/skill-eval-contracts.sh` already guards default inventory, targeted selection, prompt emission, response grading, malformed fixtures, and local-only inclusion behavior.
-- Docs currently describe the per-skill eval slice as a two-skill pilot and call broader coverage future work.
-- Target skill contracts provide observable behaviors worth fixture testing:
-  - `assistant-workflow`: visible checkpoints, Discover/Decompose/Plan gates, approval before Build, tests with implementation, Review loop, output artifacts.
-  - `assistant-review`: review scope resolution, autonomous review-fix loop, all must-fix and should-fix handling, validation before next round, rubric for medium+ scopes.
-  - `assistant-tdd`: RED before GREEN, exactly one behavior test per RED, right failure reason, no production code before RED evidence, all tests after GREEN/REFACTOR.
-  - `assistant-security`: scoped analysis, methodology selection, evidence-based findings, severity scale, remediation, prioritized action items.
-- Agent readiness: 4/5. The repo has agent instructions, documented eval commands, shell-based contract tests, and existing eval fixtures; no obvious standalone linter/editorconfig baseline was found.
+- The repo has 15 first-class `skills/assistant-*` skills.
+- Existing fixtures cover six skills: `assistant-clarify`, `assistant-thinking`, `assistant-workflow`, `assistant-review`, `assistant-tdd`, and `assistant-security`.
+- The next four targets cover contract generation, memory safety, research evidence, and onboarding discipline:
+  - `assistant-skill-creator`: CAPTURE, DESIGN, BUILD, VALIDATE phases; required input fields with `on_missing`; output artifacts with `on_fail`; binary phase gates; contract design approval.
+  - `assistant-memory`: save/recall/update/forget/search actions; entity types; confirmation; never store secrets, API keys, credentials, or PII.
+  - `assistant-research`: tier/tool selection; search/synthesize/verify gates; confidence levels; verified URLs; conflicts and gaps.
+  - `assistant-onboard`: project path, surface scan, architecture mapping, pattern recognition, key files, conventions, memory_updated, and specific questions.
+- `tests/p0-p4/skill-eval-contracts.sh` already has dynamic case counts and stable representative row assertions for covered skills.
+- Docs currently describe coverage as a six-skill high-control slice with broader coverage future work.
+- Agent readiness: 4/5. The repo has agent instructions, documented eval commands, shell contract tests, and current eval fixtures; no obvious standalone linter/editorconfig baseline was found.
 
 ## Requirements Restatement
-Add four new skill-local eval fixture suites for the highest-risk process/security skills, then update the contract tests and docs so default eval coverage visibly moves from a two-skill pilot to a six-skill high-control coverage slice. The runner should remain provider-neutral and local-only unless a small test-only adjustment is required.
+Add four new skill-local eval fixture suites for the next highest-risk first-class skills, then update contract tests and docs so default eval coverage visibly moves from six to ten skills while preserving the local/provider-neutral runner design and incomplete-coverage limitation.
 
 ## Component Manifest
 Approval status: approved by user on 2026-05-08
 
-### Component 1: Workflow And Review Fixtures
-- **What:** Add provider-neutral behavior fixtures for the two orchestration-heavy process skills, covering mandatory phase gates and review-loop discipline.
-- **Files:** create `skills/assistant-workflow/evals/cases.json`; create `skills/assistant-review/evals/cases.json`.
+### Component 1: Skill Creator And Memory Fixtures
+- **What:** Add provider-neutral behavior fixtures for contract-generation and memory-management skills.
+- **Files:** create `skills/assistant-skill-creator/evals/cases.json`; create `skills/assistant-memory/evals/cases.json`.
 - **Depends on:** none.
 - **Verification criteria:**
-  - [ ] `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review` validates both fixture files.
-  - [ ] `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review` lists cases that cover workflow gates and review loop behavior.
-  - [ ] Fixture machine expectations include required and forbidden substrings for approval gates, phase checkpoints, review findings, and no premature implementation.
+  - [ ] `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory` validates both fixture files.
+  - [ ] `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory` lists cases covering contract design/validation and memory safety/confirmation.
+  - [ ] Machine expectations include required and forbidden substrings for contract gates, `on_missing`/`on_fail`, memory entity type, confirmation, MCP evidence, and no secrets/PII storage.
 
-### Component 2: TDD And Security Fixtures
-- **What:** Add provider-neutral behavior fixtures for the strict execution-discipline and security-analysis skills, covering RED evidence, no production-before-test behavior, evidence-based findings, severity, and remediation.
-- **Files:** create `skills/assistant-tdd/evals/cases.json`; create `skills/assistant-security/evals/cases.json`.
+### Component 2: Research And Onboard Fixtures
+- **What:** Add provider-neutral behavior fixtures for evidence-backed research and systematic codebase onboarding.
+- **Files:** create `skills/assistant-research/evals/cases.json`; create `skills/assistant-onboard/evals/cases.json`.
 - **Depends on:** none.
 - **Verification criteria:**
-  - [ ] `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security` validates both fixture files.
-  - [ ] `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security` lists cases that cover TDD gates and security report behavior.
-  - [ ] Fixture machine expectations include required and forbidden substrings for RED/GREEN/REFACTOR gates, evidence, severity, impact, remediation, and no speculative findings.
+  - [ ] `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard` validates both fixture files.
+  - [ ] `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard` lists cases covering research confidence/verification and onboarding output contracts.
+  - [ ] Machine expectations include confidence, verified URLs, conflicts, gaps, surface scan, key files, conventions, memory_updated, and specific questions.
 
 ### Component 3: P0/P4 Eval Contract Expansion
-- **What:** Extend existing contract tests to lock in the expanded default fixture inventory, targeted selection, prompt emission, generated response grading, and representative new case rows.
+- **What:** Extend existing skill-eval contracts so the ten-skill default inventory and representative new rows are guarded.
 - **Files:** modify `tests/p0-p4/skill-eval-contracts.sh`.
 - **Depends on:** Components 1 and 2.
 - **Verification criteria:**
-  - [ ] `bash tests/p0-p4/skill-eval-contracts.sh` passes and asserts all six default first-class fixture suites.
-  - [ ] Generated all-required responses pass with the expanded default case count.
-  - [ ] Targeted selection tests include at least one newly covered high-control skill.
+  - [ ] `bash tests/p0-p4/skill-eval-contracts.sh` passes and asserts all ten tracked first-class fixture suites.
+  - [ ] Generated all-required responses pass with the expanded dynamic default case count.
+  - [ ] Targeted selection includes at least one newly covered skill from this slice.
 
-### Component 4: Eval Coverage Documentation
-- **What:** Update public and design docs so they describe the six-skill high-control coverage slice instead of the older two-skill pilot.
+### Component 4: Coverage Documentation
+- **What:** Update public and design docs from six-skill high-control coverage to ten-skill expanded coverage.
 - **Files:** modify `README.md`; modify `docs/evals/README.md`; modify `docs/skill-contract-design-guide.md`.
 - **Depends on:** Components 1 through 3.
 - **Verification criteria:**
-  - [ ] Docs list or describe coverage for `assistant-clarify`, `assistant-thinking`, `assistant-workflow`, `assistant-review`, `assistant-tdd`, and `assistant-security`.
-  - [ ] Docs still state that coverage is not complete for all first-class skills.
+  - [ ] Docs list or describe coverage for the ten covered skills.
+  - [ ] Docs still state that five first-class skills remain uncovered.
   - [ ] Docs continue to describe local heuristic grading as a provider-neutral proxy, not semantic judgment.
 
 ## Plan
 Plan approval: yes, approved by user on 2026-05-08
 
 ## Goal
-- Expand provider-neutral per-skill eval coverage from the current two-skill pilot to a six-skill high-control slice.
-- Add skill-local fixtures for `assistant-workflow`, `assistant-review`, `assistant-tdd`, and `assistant-security`.
-- Update P0/P4 contracts and docs so the new coverage state is visible and guarded.
+- Expand provider-neutral per-skill eval fixture coverage from 6 of 15 first-class skills to 10 of 15.
+- Add skill-local fixtures for `assistant-skill-creator`, `assistant-memory`, `assistant-research`, and `assistant-onboard`.
+- Update P0/P4 contracts and docs so the expanded coverage state is visible and guarded.
 
 ## Constraints & decisions from Discovery
 - The eval runner stays local and provider-neutral; no model calls, provider SDKs, or network behavior are added.
 - Fixtures stay beside the skills at `skills/<skill>/evals/cases.json`.
 - Default inventory continues to include first-class `assistant-*` fixtures and exclude local-only `unity-*` fixtures unless `--include-local` is passed.
-- Coverage should be described as a six-skill high-control slice, not complete coverage for all first-class skills.
+- Coverage should be described as ten-skill expanded coverage, not complete coverage for all first-class skills.
 - Current environment does not allow subagent dispatch unless explicitly requested, so local implementation will preserve task-packet evidence instead of actual subagent handoffs.
-- Non-goal: semantic LLM judging or provider-specific adapters.
+- Non-goal: semantic LLM judging, provider-specific adapters, or a coverage-report command in this slice.
 
 ## Research
 - Modules/subprojects: shell eval runner under `tools/evals/`; skill instructions under `skills/assistant-*`; P0/P4 contracts under `tests/p0-p4/`; docs under `README.md` and `docs/`.
@@ -109,51 +110,51 @@ Plan approval: yes, approved by user on 2026-05-08
   - Fixtures use `schema_version`, `suite_id`, `skill`, provider-neutral flags, `recommended_use`, and `cases`.
   - Each case includes `id`, `title`, `category`, `purpose`, `prompt`, `setup_context`, `expected_behavior`, `pass_criteria`, `fail_signals`, and `machine_expectations`.
   - Machine expectations use deterministic required and forbidden substrings as offline proxies.
-  - Contract tests use dynamic case counts but currently assert only pilot fixture names and representative pilot rows.
+  - P0/P4 keeps total fixture and case counts dynamic while asserting representative rows and coverage docs.
 
 ## Architecture
 - Current architecture: skill-local JSON fixtures are discovered and validated by a shell runner; docs and P0/P4 contracts describe the supported surface.
-- Architecture for this change: add four more fixture suites using the existing schema, then update tests/docs. No new runner layer is planned.
+- Architecture for this change: add four more fixture suites using the existing schema, then update tests/docs. No runner changes are planned.
 - Layer rules:
   - Skill behavior examples live with each skill.
   - Generic runner/schema logic stays under `tools/evals/lib/`.
-  - P0/P4 checks guard stable public behavior and inventory expectations.
+  - P0/P4 checks guard stable public behavior, representative default inventory rows, and coverage docs.
   - Docs describe actual implemented coverage, not aspirational coverage.
 - Dependency direction: skill fixtures -> runner validation/listing/emission/grading -> P0/P4 contracts -> docs.
 - New files placement:
-  - `skills/assistant-workflow/evals/cases.json`: workflow skill behavior fixtures.
-  - `skills/assistant-review/evals/cases.json`: review loop behavior fixtures.
-  - `skills/assistant-tdd/evals/cases.json`: TDD behavior fixtures.
-  - `skills/assistant-security/evals/cases.json`: security analysis behavior fixtures.
+  - `skills/assistant-skill-creator/evals/cases.json`: skill creation and contract validation fixtures.
+  - `skills/assistant-memory/evals/cases.json`: memory action, entity, confirmation, and safety fixtures.
+  - `skills/assistant-research/evals/cases.json`: research confidence and URL/source verification fixtures.
+  - `skills/assistant-onboard/evals/cases.json`: onboarding scan, mapping, conventions, and output fixtures.
 - SOLID design notes:
-  - SRP: fixtures describe observable behavior only; runner code continues to own execution mechanics.
-  - OCP: adding future skill coverage should require adding new `evals/cases.json` files, not modifying runner discovery.
-  - DIP: docs and contract tests depend on runner outputs and fixture files, not hidden implementation details beyond stable paths.
+  - SRP: fixtures describe observable skill behavior only; runner code continues to own execution mechanics.
+  - OCP: adding future coverage should require adding new `evals/cases.json` files and representative P0/P4 rows, not modifying runner discovery.
+  - DIP: docs and contract tests depend on runner outputs and fixture paths, not hidden runner internals.
 
 ## Analysis
 ### Options
-1. Add fixtures only and rely on dynamic runner counts. Fast, but default coverage drift would be easy to miss.
-2. Add fixtures plus focused P0/P4 and docs updates. More complete and still bounded.
-3. Rewrite the runner into a richer semantic evaluator. Too broad and violates the local/provider-neutral constraint for this slice.
+1. Add only the four fixture files. Fast, but docs and P0/P4 would understate implemented coverage.
+2. Add fixtures plus focused P0/P4 and docs updates. Bounded and keeps drift guarded.
+3. Build a coverage-report command now. Useful soon, but separate from this fixture-coverage slice.
 
 ### Decision
-- Chosen: option 2. It improves behavior coverage while preserving the existing runner design.
+- Chosen: option 2. It expands coverage without changing the runner and keeps public coverage statements test-backed.
 
 ### Risks / edge cases
-- Required substrings can become too brittle. Mitigation: use stable contract terms, phase names, and output labels rather than prose-heavy sentences.
-- Docs can overstate coverage. Mitigation: explicitly say this is six-skill high-control coverage, not all first-class skills.
-- Contract tests can become overly tied to exact fixture count. Mitigation: keep total count dynamic and assert representative fixture names/case rows.
-- New fixture directories may unintentionally include local-only skills. Mitigation: only add under first-class `assistant-*` directories and keep existing local-only tests.
+- Required substrings can become too brittle. Mitigation: use stable contract/output labels rather than full prose sentences.
+- Memory fixtures can accidentally imply storing sensitive data. Mitigation: explicitly forbid secrets, credentials, API keys, and PII storage.
+- Research fixtures can imply live browsing is required for the offline runner. Mitigation: fixture prompts test output discipline, while runner remains provider-neutral and offline.
+- Docs can overstate coverage. Mitigation: say 10 of 15 first-class skills are covered and 5 remain.
 
 ## Task packets
 
-### Task 1: Workflow And Review Fixtures
+### Task 1: Skill Creator And Memory Fixtures
 - Behavior / acceptance criteria:
-  - `assistant-workflow` has cases covering phase checkpoints, Discover/Decompose/Plan approval gates, and no Build before approval.
-  - `assistant-review` has cases covering scoped review material, autonomous loop behavior, findings, validation, rubric, and no one-shot incomplete review.
+  - `assistant-skill-creator` has cases covering required field capture, category inference, contract design approval, contract file requirements, and validation checklist discipline.
+  - `assistant-memory` has cases covering save/recall actions, entity type/query/content requirements, MCP evidence, confirmation output, and secret/PII refusal.
   - Both fixtures validate through the existing schema with non-empty required and forbidden machine expectations.
 - Files:
-  - Create: `skills/assistant-workflow/evals/cases.json`, `skills/assistant-review/evals/cases.json`.
+  - Create: `skills/assistant-skill-creator/evals/cases.json`, `skills/assistant-memory/evals/cases.json`.
   - Modify: none.
   - Test: runner validation/listing through `tools/evals/run-skill-evals.sh`.
 - TDD / RED step:
@@ -161,25 +162,25 @@ Plan approval: yes, approved by user on 2026-05-08
   - RED command: N/A.
   - Expected failure: N/A.
 - Implementation notes / constraints:
-  - Follow the existing `assistant-clarify` and `assistant-thinking` fixture shape.
+  - Follow the existing fixture shape from covered skills.
   - Keep case ids safe filename components.
-  - Use stable contract words such as `--- PHASE:`, `WAITING`, `approved`, `review_material_snapshot`, `must-fix`, `should-fix`, and `rubric`.
+  - Use stable terms such as `on_missing`, `on_fail`, `phase-gates.yaml`, `validation summary`, `memory_add_entity`, `entity_type`, and `confirmation`.
 - Verification:
-  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review && tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review`
+  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory && tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory`
   - Expected success signal: exit code 0 and list rows for both new skills.
 - Deviation / rollback rule:
   - If a case cannot be represented with deterministic local substrings, narrow the case to observable contract labels and record the limitation before continuing.
 - Worker status / evidence:
   - Status: done.
-  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review` listed four cases.
+  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory` listed four cases.
 
-### Task 2: TDD And Security Fixtures
+### Task 2: Research And Onboard Fixtures
 - Behavior / acceptance criteria:
-  - `assistant-tdd` has cases covering RED before GREEN, right failure reason, no production code before RED evidence, and all tests after GREEN/REFACTOR.
-  - `assistant-security` has cases covering scoped analysis, tool/methodology selection, evidence, severity, impact, remediation, risk summary, and action items.
+  - `assistant-research` has cases covering tier/tool selection, confidence levels, verified URLs, conflicts, gaps, and no unverified links.
+  - `assistant-onboard` has cases covering surface scan, architecture mapping, pattern recognition, key files, conventions, memory_updated, gaps, and specific questions.
   - Both fixtures validate through the existing schema with non-empty required and forbidden machine expectations.
 - Files:
-  - Create: `skills/assistant-tdd/evals/cases.json`, `skills/assistant-security/evals/cases.json`.
+  - Create: `skills/assistant-research/evals/cases.json`, `skills/assistant-onboard/evals/cases.json`.
   - Modify: none.
   - Test: runner validation/listing through `tools/evals/run-skill-evals.sh`.
 - TDD / RED step:
@@ -187,24 +188,24 @@ Plan approval: yes, approved by user on 2026-05-08
   - RED command: N/A.
   - Expected failure: N/A.
 - Implementation notes / constraints:
-  - Use stable TDD labels: `RED`, `GREEN`, `REFACTOR`, `right reason`, `production code`, and `all tests`.
-  - Use stable security labels: `severity`, `impact`, `evidence`, `remediation`, `risk summary`, and `action items`.
-  - Forbidden substrings should catch shortcuts such as skipping RED or speculative security claims.
+  - Research fixture expectations should not require actual web access from the offline runner.
+  - Onboarding fixture expectations should require sampling and specific questions, not reading every file.
+  - Use stable labels such as `FINDINGS`, `CONFLICTS`, `GAPS`, `verified_urls`, `key_files`, `conventions`, and `memory_updated`.
 - Verification:
-  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security && tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security`
+  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard && tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard`
   - Expected success signal: exit code 0 and list rows for both new skills.
 - Deviation / rollback rule:
-  - If fixture wording makes response grading unrealistic, keep the schema-valid fixture and move the brittle exact phrase into human pass criteria rather than machine expectations.
+  - If output labels differ between SKILL.md and contracts, prefer the contract terms and add docs/test wording consistently.
 - Worker status / evidence:
   - Status: done.
-  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security` listed four cases.
+  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard` listed four cases.
 
 ### Task 3: P0/P4 Eval Contract Expansion
 - Behavior / acceptance criteria:
-  - Default validation output explicitly includes all six tracked first-class fixture suites.
-  - List output includes representative rows for at least one new workflow/review case and one new TDD/security case.
+  - Default validation output explicitly includes all ten tracked first-class fixture suites.
+  - List output includes representative rows for `assistant-skill-creator`, `assistant-memory`, `assistant-research`, and `assistant-onboard`.
   - Generated all-required response grading passes with the expanded dynamic default case count.
-  - Targeted selection coverage includes a newly covered high-control skill.
+  - Targeted selection coverage includes a newly covered skill from this slice.
 - Files:
   - Create: none.
   - Modify: `tests/p0-p4/skill-eval-contracts.sh`.
@@ -215,26 +216,26 @@ Plan approval: yes, approved by user on 2026-05-08
   - Expected failure: N/A.
 - Implementation notes / constraints:
   - Keep total fixture and case counts dynamic.
-  - Avoid duplicating fixture schema validation logic in the P0/P4 script.
+  - Avoid duplicating fixture schema validation logic.
   - Use representative exact rows that are stable and useful for drift detection.
 - Verification:
   - Command: `bash tests/p0-p4/skill-eval-contracts.sh`
   - Expected success signal: suite exits 0 and reports all skill eval contract tests passed.
 - Deviation / rollback rule:
-  - If exact new row assertions become too noisy, assert fixture path presence plus targeted output for one stable case per new skill group.
+  - If exact row assertions become noisy, assert fixture path presence plus targeted output for one stable case per new skill group.
 - Worker status / evidence:
   - Status: done.
-  - Evidence: `bash tests/p0-p4/skill-eval-contracts.sh` passed 23/23.
+  - Evidence: `bash tests/p0-p4/skill-eval-contracts.sh` passed: 24 passed, 0 failed.
 
-### Task 4: Eval Coverage Documentation
+### Task 4: Coverage Documentation
 - Behavior / acceptance criteria:
-  - README and eval docs state current default coverage is six first-class skills: `assistant-clarify`, `assistant-thinking`, `assistant-workflow`, `assistant-review`, `assistant-tdd`, and `assistant-security`.
-  - Docs continue to say this is not complete coverage for all first-class skills.
-  - Contract design guide describes the new wider Level 4 per-skill coverage state and remaining future work.
+  - README and eval docs state current default coverage is ten first-class skills and list or name the four new fixtures.
+  - Docs continue to say coverage is not complete for all 15 first-class skills and that five remain uncovered.
+  - Contract design guide describes the expanded Level 4 per-skill coverage state and remaining future work.
 - Files:
   - Create: none.
   - Modify: `README.md`, `docs/evals/README.md`, `docs/skill-contract-design-guide.md`.
-  - Test: docs are covered by inspection plus aggregate P0/P4 where relevant.
+  - Test: docs are covered by inspection plus P0/P4 docs-drift assertions.
 - TDD / RED step:
   - Applies: no. This component updates documentation; contract tests from Task 3 cover executable behavior.
   - RED command: N/A.
@@ -247,16 +248,16 @@ Plan approval: yes, approved by user on 2026-05-08
   - Command: `bash tests/test-p0-p4-contracts.sh && git diff --check`
   - Expected success signal: aggregate P0/P4 exits 0 and whitespace check exits 0.
 - Deviation / rollback rule:
-  - If docs need a new terminology phrase, keep it consistent across README, eval docs, and contract guide before continuing.
+  - If docs need a new coverage phrase, keep it consistent across README, eval docs, and contract guide before continuing.
 - Worker status / evidence:
   - Status: done.
-  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture` validated six fixtures; `tools/evals/run-skill-evals.sh --list` listed 12 cases; `bash tests/p0-p4/skill-eval-contracts.sh` passed 24/24; `bash tests/test-p0-p4-contracts.sh` passed 116/116; `git diff --check` passed.
+  - Evidence: `tools/evals/run-skill-evals.sh --validate-fixture` validated 10 fixtures; `tools/evals/run-skill-evals.sh --list` listed 20 cases; `bash tests/p0-p4/skill-eval-contracts.sh` passed 24/24; `bash tests/test-p0-p4-contracts.sh` passed 116/116; `git diff --check` passed.
 
 ## Tests to run
-- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review`
-- `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review`
-- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security`
-- `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security`
+- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory`
+- `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory`
+- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard`
+- `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard`
 - `tools/evals/run-skill-evals.sh --validate-fixture`
 - `tools/evals/run-skill-evals.sh --list`
 - `bash tests/p0-p4/skill-eval-contracts.sh`
@@ -264,35 +265,35 @@ Plan approval: yes, approved by user on 2026-05-08
 - `git diff --check`
 
 ## Build Progress
-- Component 1: Workflow And Review Fixtures - DONE.
-- Component 2: TDD And Security Fixtures - DONE.
+- Component 1: Skill Creator And Memory Fixtures - DONE.
+- Component 2: Research And Onboard Fixtures - DONE.
 - Component 3: P0/P4 Eval Contract Expansion - DONE.
-- Component 4: Eval Coverage Documentation - DONE.
+- Component 4: Coverage Documentation - DONE.
 
 ## Component Verification Ledger
 | Component | Status | Command / Evidence | Criteria |
 |---|---|---|---|
-| 1. Workflow And Review Fixtures | VERIFIED | `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review` listed four cases. | Both fixture files validate; list output includes workflow gate and review loop cases; machine expectations include approval gates, phase checkpoints, review findings, and premature-implementation forbidden phrases. |
-| 2. TDD And Security Fixtures | VERIFIED | `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security` listed four cases. | Both fixture files validate; list output includes TDD gate and security report cases; machine expectations include RED/GREEN/REFACTOR, evidence, severity, impact, remediation, and speculative-finding forbidden phrases. |
-| 3. P0/P4 Eval Contract Expansion | VERIFIED | `bash tests/p0-p4/skill-eval-contracts.sh` passed 23/23. | Default validation output asserts all six tracked fixture suites; list output includes representative high-control rows; targeted selection includes `assistant-security`; generated all-required responses pass with dynamic default count. |
-| 4. Eval Coverage Documentation | VERIFIED | `tools/evals/run-skill-evals.sh --validate-fixture` validated six fixtures; `tools/evals/run-skill-evals.sh --list` listed 12 cases; `bash tests/p0-p4/skill-eval-contracts.sh` passed 24/24; `bash tests/test-p0-p4-contracts.sh` passed 116/116; `git diff --check` passed. | README, eval docs, and contract design guide describe the six-skill high-control slice; docs still say coverage is not complete for all first-class skills; local grading remains described as heuristic/provider-neutral, not semantic judgment. |
+| 1. Skill Creator And Memory Fixtures | VERIFIED | `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory` listed four cases. | Both fixture files validate; list output includes contract design/validation and memory safety/confirmation cases; machine expectations include contract gates, `on_missing`/`on_fail`, memory entity type, confirmation, MCP evidence, and no secrets/PII storage. |
+| 2. Research And Onboard Fixtures | VERIFIED | `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard` passed; `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard` listed four cases. | Both fixture files validate; list output includes research confidence/verification and onboarding output-contract cases; machine expectations include confidence, verified URLs, conflicts, gaps, surface scan, key files, conventions, memory_updated, and specific questions. |
+| 3. P0/P4 Eval Contract Expansion | VERIFIED | `bash tests/p0-p4/skill-eval-contracts.sh` passed: 24 passed, 0 failed. | Default validation output includes all ten tracked first-class fixture suites; list output includes representative rows for `assistant-skill-creator`, `assistant-memory`, `assistant-research`, and `assistant-onboard`; generated all-required responses pass with the expanded dynamic default case count; targeted selection includes newly covered `assistant-research`. |
+| 4. Coverage Documentation | VERIFIED | `bash tests/p0-p4/skill-eval-contracts.sh` passed its docs-drift assertion for ten-skill expanded coverage. | README and eval docs describe ten covered first-class skills, docs state five first-class skills remain uncovered, and documentation keeps local heuristic grading framed as a provider-neutral proxy. |
+
+## Build Verification
+- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory` passed.
+- `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory` listed four cases.
+- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard` passed.
+- `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard` listed four cases.
+- `tools/evals/run-skill-evals.sh --validate-fixture` validated 10 fixture suites.
+- `tools/evals/run-skill-evals.sh --list` listed 20 cases.
+- `bash tests/p0-p4/skill-eval-contracts.sh` passed: 24 passed, 0 failed.
+- `bash tests/test-p0-p4-contracts.sh` passed: 116 passed, 0 failed.
+- `git diff --check` passed.
+- Removed generated `tests/.DS_Store` after the aggregate repo guard identified it as an environment artifact.
 
 ## Review Log
-- Build verification:
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review`: passed.
-  - `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review`: listed four cases.
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security`: passed.
-  - `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security`: listed four cases.
-  - `tools/evals/run-skill-evals.sh --validate-fixture`: validated six fixtures.
-  - `tools/evals/run-skill-evals.sh --list`: listed 12 cases.
-  - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 24/24.
-  - `bash tests/test-p0-p4-contracts.sh`: passed 116/116.
-  - `git diff --check`: passed.
-- Plan deviation:
-  - Added a doc-drift assertion to `tests/p0-p4/skill-eval-contracts.sh` while updating docs so the six-skill coverage wording is contract-tested. This stays within the approved P0/P4 and docs scope.
 ### Spec Review #1
 - Result: PASS
-- Scope reviewed: Components 1-4 from the approved decomposition and task packets.
+- Scope reviewed: approved component manifest, task packets, changed files, fixture coverage, P0/P4 assertions, and coverage docs.
 - Missing acceptance criteria: none
 - Extra scope: none
 - Changed files mismatch: none
@@ -300,58 +301,81 @@ Plan approval: yes, approved by user on 2026-05-08
 - Required fixes: none
 ### Quality Review #1
 - Result: ISSUES_FIXED
-- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 5.0, test_coverage 4.5
-- Weighted: 4.25
+- Rubric required: true
+- Rubric: correctness 4.0, code_quality 3.5, architecture 4.5, security 5.0, test_coverage 4.5
+- Weighted: 4.23
 - Findings:
-  - should-fix: `skills/assistant-workflow/evals/cases.json` required `PLAN DEVIATION` and `--- PHASE: REVIEW ---` in a Build-phase case even when a correct response may have no deviation and may not yet be in Review.
+  - should-fix: `.codex/task.md` still had pending worker status for Tasks 3 and 4 and a duplicate Review Log heading after verification completed.
+  - should-fix: `.codex/context-map.md` still described ten-skill docs/test coverage as future work instead of current state.
+  - should-fix: `skills/assistant-research/evals/cases.json` required `Research:` while the research output contract requires the uppercase `RESEARCH:` header.
+  - should-fix: `tests/p0-p4/skill-eval-contracts.sh` still labeled the expanded representative list checks as "high-control", which was stale after adding research/memory/onboard/skill-creator rows.
 - Fixed:
-  - Replaced those brittle required substrings with stable Build-phase expectations: `deviation` and `tests`.
-- Validation after fix:
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow`: passed.
+  - Updated task packet evidence and removed the duplicate Review Log heading.
+  - Updated the context map to current 10/15 coverage and current docs/test assertions.
+  - Changed the research fixture required substring to `RESEARCH:`.
+  - Renamed the stale P0/P4 test labels and failure wording to "covered" / "expanded".
+- Validation after fixes:
+  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research`: passed.
   - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 24/24.
-  - `bash tests/test-p0-p4-contracts.sh`: passed 116/116.
+  - `rm tests/.DS_Store && bash tests/test-p0-p4-contracts.sh`: passed 116/116 after removing a regenerated local macOS metadata file.
   - `git diff --check`: passed.
 ### Quality Review #2
 - Result: CLEAN
-- Rubric: correctness 4.5, code_quality 4.0, architecture 4.5, security 5.0, test_coverage 4.5
-- Weighted: 4.48
+- Rubric required: true
+- Rubric: correctness 4.5, code_quality 4.5, architecture 4.5, security 5.0, test_coverage 4.5
+- Weighted: 4.58
 - Findings: none.
 ### Final Result
 - Result: ISSUES_FIXED
 
 ## Verification Summary
 - Changed files:
-  - `skills/assistant-workflow/evals/cases.json` created with workflow phase-gate and component-verification cases.
-  - `skills/assistant-review/evals/cases.json` created with review-loop and rubric cases.
-  - `skills/assistant-tdd/evals/cases.json` created with RED evidence and GREEN/REFACTOR verification cases.
-  - `skills/assistant-security/evals/cases.json` created with scoping/methodology and findings/report-contract cases.
-  - `tests/p0-p4/skill-eval-contracts.sh` expanded for six-skill default inventory, representative rows, targeted high-control selection, prompt emission, generated response grading, and docs drift.
-  - `README.md`, `docs/evals/README.md`, and `docs/skill-contract-design-guide.md` updated to describe six-skill high-control coverage while preserving the not-full-coverage limitation.
+  - `skills/assistant-skill-creator/evals/cases.json` created with contract-design and existing-skill validation cases.
+  - `skills/assistant-memory/evals/cases.json` created with preference-save and secret/query safety cases.
+  - `skills/assistant-research/evals/cases.json` created with technology-comparison and verified-URL cases.
+  - `skills/assistant-onboard/evals/cases.json` created with first-time and incremental onboarding cases.
+  - `tests/p0-p4/skill-eval-contracts.sh` expanded to assert the ten-skill default inventory, representative new rows, targeted expanded selection, prompt emission, and ten-skill docs wording.
+  - `README.md`, `docs/evals/README.md`, and `docs/skill-contract-design-guide.md` updated from six-skill high-control coverage to ten-skill expanded coverage while preserving the incomplete-coverage limitation.
   - `.codex/task.md` and `.codex/context-map.md` updated as workflow artifacts.
 - Tests:
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-workflow --skill assistant-review`: passed.
-  - `tools/evals/run-skill-evals.sh --list --skill assistant-workflow --skill assistant-review`: listed four cases.
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-tdd --skill assistant-security`: passed.
-  - `tools/evals/run-skill-evals.sh --list --skill assistant-tdd --skill assistant-security`: listed four cases.
-  - `tools/evals/run-skill-evals.sh --validate-fixture`: validated six fixtures.
-  - `tools/evals/run-skill-evals.sh --list`: listed 12 cases.
+  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-skill-creator --skill assistant-memory`: passed.
+  - `tools/evals/run-skill-evals.sh --list --skill assistant-skill-creator --skill assistant-memory`: listed four cases.
+  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research --skill assistant-onboard`: passed.
+  - `tools/evals/run-skill-evals.sh --list --skill assistant-research --skill assistant-onboard`: listed four cases.
+  - `tools/evals/run-skill-evals.sh --validate-fixture`: validated 10 fixtures.
+  - `tools/evals/run-skill-evals.sh --list`: listed 20 cases.
+  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-research`: passed after review fix.
   - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 24/24.
-  - `bash tests/test-p0-p4-contracts.sh`: passed 116/116.
+  - `rm tests/.DS_Store && bash tests/test-p0-p4-contracts.sh`: passed 116/116 after removing a regenerated local macOS metadata file.
   - `git diff --check`: passed.
+- Review result: ISSUES_FIXED, then clean on Quality Review #2.
 - Manual test steps:
   - Run `tools/evals/run-skill-evals.sh --list`.
-  - Run `tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts --skill assistant-workflow`.
+  - Run `tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts --skill assistant-research`.
   - Run `bash tests/p0-p4/skill-eval-contracts.sh`.
+- Known limitations:
+  - Coverage is still 10 of 15 first-class skills; five first-class skills remain uncovered.
+  - Local grading remains deterministic substring checking, not semantic LLM judging.
 
 ## Metrics
 - Appended `/Users/laimis/.codex/memory/metrics/workflow-metrics.jsonl` entry:
   - date: 2026-05-08
-  - task: high-control per-skill eval coverage
+  - task: expanded Level 4 per-skill eval coverage
   - size: medium
   - review_rounds: 2
-  - plan_deviations: 1
+  - plan_deviations: 0
   - build_failures: 0
   - criteria_defined: 12
+  - agent_readiness_score: 4
+  - components_count: 4
   - components_verified: 4
 
+## Reflexion
+- Recorded post-task reflexion in memory graph: reflexionId 43.
+- Lessons captured:
+  - Check docs-drift facts separately from wrapped prose.
+  - Match fixture machine expectations to exact skill contract labels and casing.
+  - Treat `.codex` workflow artifacts as reviewable deliverables for medium workflow slices.
+
+--- PHASE: DOCUMENT COMPLETE ---
 --- WORKFLOW COMPLETE ---

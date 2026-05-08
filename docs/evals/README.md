@@ -93,11 +93,15 @@ provider SDKs, model APIs, or network services.
 
 This slice covers the highest-control first-class skills first; it is not
 complete coverage for all 15 first-class skills. The current tracked fixtures
-cover:
+cover ten first-class skills:
 
 - `skills/assistant-clarify/evals/cases.json`
+- `skills/assistant-memory/evals/cases.json`
+- `skills/assistant-onboard/evals/cases.json`
+- `skills/assistant-research/evals/cases.json`
 - `skills/assistant-review/evals/cases.json`
 - `skills/assistant-security/evals/cases.json`
+- `skills/assistant-skill-creator/evals/cases.json`
 - `skills/assistant-tdd/evals/cases.json`
 - `skills/assistant-thinking/evals/cases.json`
 - `skills/assistant-workflow/evals/cases.json`
@@ -172,4 +176,4 @@ Per-skill evals complement `tools/skills/validate-skills.sh`. The source
 validator checks skill metadata and contract structure; per-skill eval fixtures
 exercise observable skill behavior. Together they are the current Level 4
 per-skill conformance foundation, with broader fixture coverage for the
-remaining first-class skills still future work.
+remaining five first-class skills still future work.

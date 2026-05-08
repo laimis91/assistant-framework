@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-onboard-skill-behavior",
+  "skill": "assistant-onboard",
+  "title": "assistant-onboard Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-onboard skill's systematic codebase learning workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-onboard skill instructions loaded.",
+    "Compare the local response against surface scan, architecture map, pattern recognition, output contract, and gap handling requirements.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "new-repo-onboarding-produces-orientation",
+      "title": "New repo onboarding produces orientation",
+      "category": "systematic_onboarding",
+      "purpose": "Checks that a new repository onboarding request performs surface scan, architecture mapping, pattern recognition, and orientation output.",
+      "prompt": "Get familiar with this repo before we start changing anything.",
+      "setup_context": [
+        "The assistant-onboard skill instructions are active.",
+        "The current project has not been onboarded in this session.",
+        "No focus_area or depth was specified."
+      ],
+      "expected_behavior": [
+        "Requires or infers project_path and defaults depth to standard when unspecified.",
+        "Prints onboarding progress steps for Surface scan, Architecture mapping, Pattern recognition, Identifying unknowns, and Generating project orientation.",
+        "Reads README, agent instructions, gitignore, root listing, build files, and CI/CD config before deeper mapping.",
+        "Samples representative files for conventions instead of reading every file.",
+        "Returns project_summary, key_files, conventions, artifacts, gaps, and status.",
+        "Uses project-local orientation as an artifact and treats durable cross-session memory as knowledge graph backed."
+      ],
+      "pass_criteria": [
+        "The response includes the required onboarding phases.",
+        "The response outputs key_files with path and purpose.",
+        "The response outputs conventions with pattern and example.",
+        "The response records memory_updated accurately.",
+        "The response lists specific gaps or questions."
+      ],
+      "fail_signals": [
+        "Starts editing project files before onboarding.",
+        "Claims to read every file as the default approach.",
+        "Omits key_files or conventions.",
+        "Asks generic questions that are not tied to discovered gaps."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Surface scan",
+          "Architecture mapping",
+          "Pattern recognition",
+          "key_files",
+          "conventions",
+          "memory_updated",
+          "questions",
+          "Status"
+        ],
+        "forbidden_substrings": [
+          "I will edit files now",
+          "read every file",
+          "No key_files needed",
+          "Any questions?"
+        ]
+      }
+    },
+    {
+      "id": "incremental-onboarding-refreshes-context",
+      "title": "Incremental onboarding refreshes context",
+      "category": "incremental_refresh",
+      "purpose": "Checks that returning to a known project reads existing orientation, checks recent changes, updates rather than overwrites, and reports specific unknowns.",
+      "prompt": "Refresh your project context; this repo changed since our last session.",
+      "setup_context": [
+        "The assistant-onboard skill instructions are active.",
+        "A project-local orientation artifact already exists.",
+        "The user asks for an incremental refresh rather than first-time onboarding."
+      ],
+      "expected_behavior": [
+        "Reads the existing project orientation artifact if present.",
+        "Checks git history since the last session date or a reasonable refresh boundary.",
+        "Updates changed sections instead of regenerating or overwriting the full orientation blindly.",
+        "Reports how many changes or areas were refreshed.",
+        "Records artifacts as updated or none, depending on whether files changed.",
+        "Lists specific unknowns and questions tied to the changed areas."
+      ],
+      "pass_criteria": [
+        "The response identifies this as incremental onboarding.",
+        "The response reads existing orientation before updating.",
+        "The response checks recent git changes.",
+        "The response says update, not overwrite.",
+        "The response reports specific gaps or questions."
+      ],
+      "fail_signals": [
+        "Regenerates the orientation from scratch without reading the existing artifact.",
+        "Ignores recent git changes.",
+        "Overwrites memory without preserving existing sections.",
+        "Reports no unknowns without inspecting changed areas."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Incremental onboarding",
+          "existing",
+          "git log",
+          "update",
+          "artifacts",
+          "gaps",
+          "questions",
+          "Status"
+        ],
+        "forbidden_substrings": [
+          "overwrite from scratch",
+          "ignore git history",
+          "No existing orientation needed",
+          "no unknowns without inspection"
+        ]
+      }
+    }
+  ]
+}
