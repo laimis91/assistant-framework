@@ -1,0 +1,38 @@
+{
+  "name": "assistant-core",
+  "version": "0.1.0",
+  "description": "Foundation skills for clarification, memory, reflexion, and Telos context.",
+  "author": {
+    "name": "Assistant Framework",
+    "url": "https://github.com/laimis91/assistant-framework"
+  },
+  "homepage": "https://github.com/laimis91/assistant-framework",
+  "repository": "https://github.com/laimis91/assistant-framework",
+  "license": "MIT",
+  "keywords": [
+    "assistant-framework",
+    "clarification",
+    "memory",
+    "reflexion",
+    "telos"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Assistant Core",
+    "shortDescription": "Foundation context and clarification skills",
+    "longDescription": "Install the Assistant Framework core skills for clarification, memory-aware work, reflexion, and Telos purpose context.",
+    "developerName": "Assistant Framework",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/laimis91/assistant-framework",
+    "defaultPrompt": [
+      "Clarify this messy request before acting.",
+      "Recall relevant memory and continue the task.",
+      "Update my Telos context for this project."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

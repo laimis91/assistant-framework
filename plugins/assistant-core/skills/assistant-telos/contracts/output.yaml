@@ -1,0 +1,53 @@
+# Telos Output Contract
+# Defines what a completed Telos operation MUST produce.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-telos
+
+artifacts:
+  - name: tcf_file
+    type: file
+    required: true
+    condition: "action in [create, update]"
+    description: "The Telos Context File created or updated"
+    validation: "File exists and contains the required TCF sections for the entity type"
+
+  - name: sections_completed
+    type: string[]
+    required: true
+    condition: "action in [create, update]"
+    description: "Which TCF sections were populated or modified"
+    min_items: 1
+    validation: "At least the core sections: problems, mission, goals"
+
+  - name: review_findings
+    type: object[]
+    required: true
+    condition: "action == review"
+    description: "Assessment of TCF completeness and quality"
+    validation: "Every reviewed TCF section must have a status and actionable suggestion when incomplete"
+    object_fields:
+      - name: section
+        type: string
+        required: true
+      - name: status
+        type: enum
+        required: true
+        enum_values: [complete, partial, missing, stale]
+      - name: suggestion
+        type: string
+        required: false
+        description: "How to improve this section"
+
+  - name: confirmation
+    type: string
+    required: true
+    condition: always
+    description: "Human-readable summary of what was done"
+    validation: "Must state the completed Telos action and the affected entity or file"
+
+# Completeness check:
+# 1. For create: TCF file exists with at minimum problems, mission, and goals sections
+# 2. For update: modified sections are listed and file is saved
+# 3. For review: every TCF section has a status assessment

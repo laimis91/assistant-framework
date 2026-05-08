@@ -1,6 +1,6 @@
 # Task Journal
 
-Task: Assistant-core plugin install profile
+Task: Assistant-core plugin manifest scaffold
 Status: DONE
 Current phase: DOCUMENT COMPLETE
 Triaged as: medium
@@ -10,84 +10,81 @@ Clarification defaults applied: false
 Unresolved clarification topics:
 
 ## Requirements
-- Add an installer profile for `assistant-core` using `./install.sh --agent <agent> --plugin assistant-core`.
-- Keep default install behavior unchanged: root `skills/assistant-*` remains the default first-class release inventory.
-- Keep `--skill` targeted single-skill installs working and mutually exclusive with `--plugin`.
-- Do not hardcode Unity-specific exclusions in `install.sh`; custom assistant-named Unity skills must follow normal `skills/assistant-*` inventory behavior.
-- Reject boundary-defined non-core plugin profiles through a generic not-installable profile gate until they have P0/P4 coverage.
-- Use `docs/plugin-architecture.md` as the source for plugin skill ownership.
+- Add a repo-local `assistant-core` Codex plugin scaffold.
+- Add `plugins/assistant-core/.codex-plugin/plugin.json`.
+- Add plugin-local copies of the four assistant-core skills under `plugins/assistant-core/skills/`.
+- Keep root install behavior and `--plugin assistant-core` behavior unchanged.
+- Do not add marketplace registration in this slice.
+- Keep Unity handling pattern-based and avoid installer-specific Unity exclusions.
 
 ## Constraints
-- Do not move skill directories.
-- Do not add plugin manifests or marketplace files in this slice.
-- Do not change hook installation behavior.
-- Tests must cover profile dry-run, real profile install, generic boundary-only profile rejection, no Unity hardcoding, custom assistant-named skill inventory behavior, and `--skill`/`--plugin` conflict.
+- Do not move root `skills/assistant-*` directories.
+- Do not add plugin manifests for `assistant-dev`, `assistant-research`, or `assistant-unity`.
+- Do not add `.agents/plugins/marketplace.json`.
+- Tests must verify manifest metadata, boundary skill ownership, plugin-local copy parity, documentation, and aggregate P0/P4 behavior.
 
 ## Discovery Notes
-- `install.sh` currently auto-discovers all root `skills/assistant-*/SKILL.md` skills.
-- `install.sh` currently supports `--skill` but not `--plugin`.
-- The plugin boundary doc contains a parseable ownership block:
-  - `assistant-core`: `assistant-clarify`, `assistant-memory`, `assistant-reflexion`, `assistant-telos`.
-  - `assistant-unity`: `skills/unity-*`, outside the default `skills/assistant-*` inventory.
-- `tests/p0-p4/installer-contracts.sh` owns installer behavior contracts.
-- `tests/p0-p4/plugin-boundary-contracts.sh` owns plugin boundary/doc drift contracts.
+- No plugin manifests or marketplace files existed before this slice.
+- Codex curated plugins use `.codex-plugin/plugin.json` plus plugin-local `skills/`.
+- The `assistant-core` boundary owns `assistant-clarify`, `assistant-memory`, `assistant-reflexion`, and `assistant-telos`.
+- Root core skill directories include `.DS_Store` artifacts that must not be copied into plugin-local skill directories.
 
 ## Requirements Restatement
-Implement an optional `assistant-core` install profile from the plugin boundary map without changing default root inventory installs or adding plugin manifests.
+Scaffold the first repo-local Codex plugin for `assistant-core` with plugin-local skill copies and contracts, while leaving root install compatibility and marketplace registration unchanged.
 
 ## Component Manifest
-Approval status: approved by user on 2026-05-08
+Approval status: approved by user on 2026-05-08.
 
-### Component 1: Installer Profile Contracts
-- **What:** Add RED P0/P4 contracts for `--plugin assistant-core` behavior and invalid profile combinations.
-- **Files:** modify `tests/p0-p4/installer-contracts.sh`.
+### Component 1: Manifest Contracts
+- **What:** Add P0/P4 contracts for `assistant-core` manifest metadata, plugin-local skill ownership, copy parity, docs, and no marketplace registration.
+- **Files:** add `tests/p0-p4/plugin-manifest-contracts.sh`; modify `tests/test-p0-p4-contracts.sh`; modify `tests/p0-p4/plugin-boundary-contracts.sh`.
 - **Depends on:** none.
 - **Verification criteria:**
-  - [x] Initial `bash tests/p0-p4/installer-contracts.sh` fails before implementation on the new profile tests.
-  - [ ] Dry-run `--plugin assistant-core` lists only core skills.
-  - [ ] Real Codex profile install installs only core skills and AGENTS rows.
-  - [ ] Boundary-only plugin profiles fail with generic not-installable guidance.
-  - [ ] The installer contains no Unity-specific exclusion code.
-  - [ ] Assistant-named custom skills follow default inventory behavior.
-  - [ ] `--skill` plus `--plugin` fails clearly.
+  - [x] RED: `bash tests/p0-p4/plugin-manifest-contracts.sh` fails before scaffold exists.
+  - [x] RED: `bash tests/p0-p4/plugin-boundary-contracts.sh` fails before scaffold manifest exists.
+  - [x] Contracts are wired into aggregate P0/P4.
 
-### Component 2: Installer Plugin Profile Support
-- **What:** Add `--plugin` parsing, conflict validation, plugin boundary parsing, profile skill filtering, and installer output.
-- **Files:** modify `install.sh`.
+### Component 2: Assistant-Core Plugin Scaffold
+- **What:** Add `plugins/assistant-core/.codex-plugin/plugin.json` and plugin-local copies of the four core skills.
+- **Files:** add `plugins/assistant-core/.codex-plugin/plugin.json`; add `plugins/assistant-core/skills/**`.
 - **Depends on:** Component 1.
 - **Verification criteria:**
-  - [ ] `bash tests/p0-p4/installer-contracts.sh` passes.
-  - [ ] Existing default install and single-skill install contracts still pass.
+  - [x] Manifest has filled metadata and points to `./skills/`.
+  - [x] Plugin-local skills match the `assistant-core` boundary exactly.
+  - [x] Plugin-local skill files match root source files excluding `.DS_Store`.
+  - [x] No marketplace registration file exists.
 
-### Component 3: Docs And Boundary Drift Updates
-- **What:** Update README and plugin architecture docs to describe the optional `assistant-core` profile while preserving default root install compatibility.
-- **Files:** modify `README.md`; modify `docs/plugin-architecture.md`; modify `tests/p0-p4/plugin-boundary-contracts.sh` if needed.
+### Component 3: Documentation And Drift Guards
+- **What:** Update docs and README to describe the scaffold without implying marketplace distribution or root skill moves.
+- **Files:** modify `docs/plugin-architecture.md`; modify `README.md`; modify `.codex/context-map.md`.
 - **Depends on:** Components 1 and 2.
 - **Verification criteria:**
-  - [ ] README documents `--plugin assistant-core`.
-  - [ ] Plugin architecture doc states no manifests exist yet and root install remains the default compatibility path.
-  - [ ] `bash tests/p0-p4/plugin-boundary-contracts.sh` passes.
+  - [x] Docs mention `plugins/assistant-core/.codex-plugin/plugin.json`.
+  - [x] Docs state plugin-local copies exist and root skills do not move.
+  - [x] Aggregate P0/P4 passes.
 
 ## Plan
 Plan approval: yes, approved by user on 2026-05-08.
 
 ## Build Progress
-- Component 1: Installer Profile Contracts - DONE.
-- Component 2: Installer Plugin Profile Support - DONE.
-- Component 3: Docs And Boundary Drift Updates - DONE.
+- Component 1: Manifest Contracts - DONE.
+- Component 2: Assistant-Core Plugin Scaffold - DONE.
+- Component 3: Documentation And Drift Guards - DONE.
 
 ## Tests to run
-- `bash tests/p0-p4/installer-contracts.sh`
+- `bash tests/p0-p4/plugin-manifest-contracts.sh`
 - `bash tests/p0-p4/plugin-boundary-contracts.sh`
 - `bash tests/test-p0-p4-contracts.sh`
 - `git diff --check`
+- `find tests -type f -name .DS_Store -print`
+- `find plugins/assistant-core -name .DS_Store -print`
 
 ## Review Log
 ### Spec Review #1
 - Result: PASS
-- Scope reviewed: approved assistant-core profile plan; `install.sh`; installer profile contracts; plugin boundary contracts; README and plugin architecture docs; workflow task artifacts.
+- Scope reviewed: approved assistant-core manifest scaffold plan; `plugins/assistant-core/.codex-plugin/plugin.json`; plugin-local skill copies; plugin manifest contracts; plugin boundary contracts; README and plugin architecture docs; workflow task artifacts.
 - Missing acceptance criteria: none.
-- Extra scope: none after review fix; only `assistant-core` is installable through `--plugin`.
+- Extra scope: none; only `assistant-core` scaffold was added and marketplace registration remains absent.
 - Changed files mismatch: none.
 - Verification evidence mismatch: none.
 - Required fixes: none.
@@ -98,23 +95,22 @@ Plan approval: yes, approved by user on 2026-05-08.
 - Rubric scores:
   | Dimension | Score | Weight | Justification |
   |---|---:|---:|---|
-  | Correctness | 4.0 | 0.30 | `assistant-core` behavior passed, but the first generic parser made boundary-only `assistant-dev` and `assistant-research` installable without P0/P4 coverage. |
-  | Code Quality | 4.5 | 0.20 | Installer helpers were readable and localized, but needed an explicit supported-profile gate. |
-  | Architecture | 4.0 | 0.20 | Boundary doc remained the source of truth, but profile behavior leaked beyond the approved first profile. |
-  | Security | 5.0 | 0.15 | No new secret, network, auth, or permission surface was added. |
-  | Test Coverage | 4.0 | 0.15 | Core profile and invalid Unity/conflict paths were covered; boundary-only profile rejection was missing. |
-  | Weighted | 4.25 | 1.00 | REFINE due to one should-fix scope-control issue. |
+  | Correctness | 4.5 | 0.30 | Scaffold behavior and tests passed, but docs said "no skill directories move" while plugin-local skill copies were added. |
+  | Code Quality | 5.0 | 0.20 | Contracts are focused and compare plugin-local copies directly against root sources. |
+  | Architecture | 4.5 | 0.20 | Root install compatibility was preserved, but the wording needed to distinguish root skill directories from plugin-local copies. |
+  | Security | 5.0 | 0.15 | No secret, network, auth, or permission surface was added. |
+  | Test Coverage | 5.0 | 0.15 | RED/GREEN manifest tests, boundary tests, copy parity tests, aggregate P0/P4, and hygiene checks cover the slice. |
+  | Weighted | 4.75 | 1.00 | REFINE due to one documentation precision issue. |
 - Findings:
-  - SHOULD-FIX: `install.sh` accepted any non-Unity plugin boundary from `docs/plugin-architecture.md`, making `assistant-dev` and `assistant-research` installable despite this slice only approving and testing `assistant-core`. Risk category: correctness and unsafe change surface. Fix: reject boundary-defined non-core profiles until their install behavior has P0/P4 coverage, and add a contract for `assistant-dev`.
+  - SHOULD-FIX: `docs/plugin-architecture.md` said no skill directories move in a slice that adds plugin-local skill copies. Risk category: correctness and documentation drift. Fix: clarify that no root skill directories move, and update the boundary contract to check that wording.
 - Fixed in round:
-  - Added installer rejection for boundary-only profiles other than `assistant-core`.
-  - Added `installer rejects boundary-only plugin profiles without scaffold support` to `tests/p0-p4/installer-contracts.sh`.
+  - Changed docs to say "no root skill directories move in this slice".
+  - Updated `tests/p0-p4/plugin-boundary-contracts.sh` to require that clearer wording.
 - Validation after fix:
-  - `bash tests/p0-p4/installer-contracts.sh` passed 16 checks.
   - `bash tests/p0-p4/plugin-boundary-contracts.sh` passed 6 checks.
-  - `bash tests/test-p0-p4-contracts.sh` passed 128 checks after removing regenerated `tests/.DS_Store`.
+  - `bash tests/p0-p4/plugin-manifest-contracts.sh` passed 4 checks.
   - `git diff --check` passed.
-  - `find tests -type f -name .DS_Store -print` produced no output.
+  - `bash tests/test-p0-p4-contracts.sh` passed 132 checks after removing regenerated `tests/.DS_Store`.
 
 ### Quality Review #2
 - Result: CLEAN
@@ -122,11 +118,11 @@ Plan approval: yes, approved by user on 2026-05-08.
 - Rubric scores:
   | Dimension | Score | Weight | Justification |
   |---|---:|---:|---|
-  | Correctness | 5.0 | 0.30 | `assistant-core` installs only the four core skills, default/single-skill behavior remains covered, and non-core profiles are rejected until tested. |
-  | Code Quality | 5.0 | 0.20 | Profile parsing and filtering are localized, shell-compatible, and covered by focused contracts. |
-  | Architecture | 5.0 | 0.20 | The boundary doc remains the ownership source while manifests and skill moves remain absent. |
+  | Correctness | 5.0 | 0.30 | The manifest, plugin-local skill inventory, copy parity, docs, and marketplace absence match the approved scope. |
+  | Code Quality | 5.0 | 0.20 | The new contract suite is localized and uses direct file inventory/content comparisons. |
+  | Architecture | 5.0 | 0.20 | The scaffold introduces plugin packaging without changing root installs or registering marketplace distribution. |
   | Security | 5.0 | 0.15 | No security-sensitive runtime surface was introduced. |
-  | Test Coverage | 5.0 | 0.15 | RED/GREEN installer contracts, boundary contracts, aggregate P0/P4, and final hygiene checks are clean. |
+  | Test Coverage | 5.0 | 0.15 | Focused suites and aggregate P0/P4 are clean, including final `.DS_Store` and plugin hygiene checks. |
   | Weighted | 5.00 | 1.00 | PASS. |
 - Findings: none.
 - Remaining items: none.
@@ -137,58 +133,28 @@ Plan approval: yes, approved by user on 2026-05-08.
 - Spec review result: PASS
 - Quality review result: CLEAN
 
-### Spec Review #2
-- Result: PASS
-- Scope reviewed: user correction to remove Unity-specific installer exclusions; `install.sh`; installer contracts; plugin architecture docs; context/task journal.
-- Missing acceptance criteria: none.
-- Extra scope: none; `assistant-core` remains the only installable plugin profile, and unsupported profiles use the same generic boundary-only rejection.
-- Changed files mismatch: none.
-- Verification evidence mismatch: none.
-- Required fixes: none.
-
-### Quality Review #3
-- Result: CLEAN
-- Rubric required: true
-- Rubric scores:
-  | Dimension | Score | Weight | Justification |
-  |---|---:|---:|---|
-  | Correctness | 5.0 | 0.30 | `install.sh` no longer contains Unity-specific exclusions, while `assistant-core` profile behavior and generic boundary-only rejection remain intact. |
-  | Code Quality | 5.0 | 0.20 | The profile gate is simpler and profile payload filtering is generic for non-assistant ownership entries. |
-  | Architecture | 5.0 | 0.20 | Default install behavior is pattern-based, so custom assistant-named skills can be added without installer name bans. |
-  | Security | 5.0 | 0.15 | No secret, network, auth, or permission surface changed. |
-  | Test Coverage | 5.0 | 0.15 | Contracts now assert no Unity hardcoding, custom assistant-named skill inclusion, focused installer behavior, and aggregate P0/P4 cleanliness. |
-  | Weighted | 5.00 | 1.00 | PASS. |
-- Findings: none.
-- Remaining items: none.
-
-### Final Review Result After User Correction
-- Result: CLEAN
-- Rounds: 1
-- Spec review result: PASS
-- Quality review result: CLEAN
-
 ## Documentation / Closeout
-- `install.sh` now supports `--plugin assistant-core`.
-- `install.sh` keeps `--skill` and `--plugin` mutually exclusive.
-- `install.sh` rejects boundary-only profiles such as `assistant-dev` and `assistant-unity` through the same generic not-installable profile gate until they have install coverage.
-- `install.sh` does not hardcode Unity-specific exclusions; assistant-named custom Unity skills follow the normal `skills/assistant-*` inventory rule.
-- README documents the first profile install while preserving root `skills/assistant-*` as the default inventory.
-- `docs/plugin-architecture.md` records `current_plugin_profile: assistant-core via --plugin assistant-core` and still states no plugin manifests exist yet.
-- No skill directories moved, no plugin manifests were added, and hook behavior remains unchanged.
+- Added `plugins/assistant-core/.codex-plugin/plugin.json`.
+- Added plugin-local copies of `assistant-clarify`, `assistant-memory`, `assistant-reflexion`, and `assistant-telos`.
+- Added `tests/p0-p4/plugin-manifest-contracts.sh` and wired it into aggregate P0/P4.
+- Updated plugin boundary contracts for the assistant-core scaffold.
+- Updated README and `docs/plugin-architecture.md` to describe the scaffold and marketplace absence.
+- Root install behavior and `--plugin assistant-core` behavior remain unchanged.
 
 ## Final Verification
-- RED evidence: `bash tests/p0-p4/installer-contracts.sh` failed on new `--plugin` tests before implementation.
-- `bash tests/p0-p4/installer-contracts.sh` - passed; 16 checks after removing Unity-specific installer rejection.
+- RED evidence: `bash tests/p0-p4/plugin-manifest-contracts.sh` failed with 4 failures before scaffold existed.
+- RED evidence: `bash tests/p0-p4/plugin-boundary-contracts.sh` failed on missing assistant-core manifest before scaffold existed.
+- `bash tests/p0-p4/plugin-manifest-contracts.sh` - passed; 4 checks.
 - `bash tests/p0-p4/plugin-boundary-contracts.sh` - passed; 6 checks.
-- `bash tests/test-p0-p4-contracts.sh` - first rerun failed because the temporary assistant-named fixture leaked into later aggregate suites; fixed with immediate fixture cleanup.
-- `bash tests/test-p0-p4-contracts.sh` - passed; 128 checks after fixture cleanup.
+- `bash tests/test-p0-p4-contracts.sh` - first post-review rerun failed only because generated `tests/.DS_Store` tripped hygiene/direct-run gates.
+- `bash tests/test-p0-p4-contracts.sh` - passed; 132 checks after removing regenerated `tests/.DS_Store`.
 - `git diff --check` - passed.
 - `find tests -type f -name .DS_Store -print` - passed with no output.
-- `find skills -maxdepth 1 \( -name 'assistant-unity-contract-fixture-*' -o -name 'unity-contract-fixture-*' \) -print` - passed with no output.
+- `find plugins/assistant-core -name .DS_Store -print` - passed with no output.
 
 ## Component Verification Ledger
 | Component | Status | Command / Evidence | Criteria |
 |---|---|---|---|
-| 1. Installer Profile Contracts | VERIFIED | RED: `bash tests/p0-p4/installer-contracts.sh` failed on new `--plugin` tests before implementation. GREEN: same command passed 16 checks after implementation and correction. | RED/GREEN evidence captured; contracts cover dry-run, real install, generic boundary-only rejection, no Unity hardcoding, assistant-named custom skill inclusion, and `--skill`/`--plugin` conflict. |
-| 2. Installer Plugin Profile Support | VERIFIED | `bash tests/p0-p4/installer-contracts.sh` passed; `bash tests/test-p0-p4-contracts.sh` passed 128 checks after fixture cleanup. | Installer supports `--plugin assistant-core` from plugin boundary map without changing default or single-skill behavior. |
-| 3. Docs And Boundary Drift Updates | VERIFIED | `bash tests/p0-p4/plugin-boundary-contracts.sh` passed 6 checks; `git diff --check` passed; `find tests -type f -name .DS_Store -print` produced no output. | README and plugin architecture docs describe optional profile support without claiming manifests, moved skills, or Unity-specific installer exclusions. |
+| 1. Manifest Contracts | VERIFIED | RED: `bash tests/p0-p4/plugin-manifest-contracts.sh` failed before scaffold; `bash tests/p0-p4/plugin-boundary-contracts.sh` failed before manifest. GREEN: both focused suites passed after scaffold. | Contracts cover manifest metadata, boundary ownership, copy parity, docs, no marketplace registration, and aggregate wiring. |
+| 2. Assistant-Core Plugin Scaffold | VERIFIED | `bash tests/p0-p4/plugin-manifest-contracts.sh` passed 4 checks; `find plugins/assistant-core -name .DS_Store -print` produced no output. | Manifest exists, plugin-local copies match root sources, and no `.DS_Store` files were copied. |
+| 3. Documentation And Drift Guards | VERIFIED | `bash tests/p0-p4/plugin-boundary-contracts.sh` passed 6 checks; `bash tests/test-p0-p4-contracts.sh` passed 132 checks; `git diff --check` passed. | Docs describe scaffold state without claiming marketplace registration or root skill moves. |

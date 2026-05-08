@@ -1,0 +1,47 @@
+# contract header
+schema_version: "1.0"
+contract: input
+skill: assistant-clarify
+
+fields:
+  - name: user_message
+    type: string
+    required: true
+    description: "The user's original ambiguous, fragmented, or multi-intent request"
+    validation: "Non-empty text that contains the request to clarify"
+    on_missing: ask
+    ask_prompt: "What request should I help clarify?"
+    examples:
+      - "I have a few things mixed together and need help sorting them out."
+      - "Can you turn this messy idea into a structured prompt?"
+
+  - name: clarification_goal
+    type: enum
+    required: true
+    description: "The kind of clarification outcome the user needs"
+    validation: "Must be one supported clarification outcome"
+    on_missing: infer
+    infer_from: "Infer from the user's phrasing: structure_prompt for prompt drafting, choose_direction for explicit alternatives, prepare_execution when they want a buildable brief, understand_request otherwise."
+    enum_values: [understand_request, structure_prompt, choose_direction, prepare_execution]
+    examples:
+      - "structure_prompt"
+      - "choose_direction"
+
+  - name: known_context
+    type: string
+    required: false
+    description: "Relevant conversation or project context that helps interpret the request"
+    validation: "Concise summary of known context, when available"
+    on_missing: infer
+    infer_from: "Use the current conversation, attached files, or project context; leave empty when none is available."
+
+  - name: stated_constraints
+    type: string[]
+    required: false
+    description: "Constraints, preferences, exclusions, or defaults already stated by the user"
+    validation: "Each item is a concrete constraint or preference from the user message"
+    on_missing: infer
+    infer_from: "Extract explicit constraints from the user message and conversation; leave empty when none are stated."
+    examples:
+      - "Ask no more than three questions."
+      - "Prefer a concise structured brief."

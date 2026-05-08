@@ -1,0 +1,45 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-memory
+
+artifacts:
+  - name: action_taken
+    type: enum
+    required: true
+    description: "The memory operation that was performed"
+    enum_values: [save, recall, update, forget, search]
+    on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: entity_name
+    type: string
+    required: false
+    condition: "When action is save or update"
+    description: "Name of the entity saved or updated in the knowledge graph"
+    validation: "Must be a non-empty string matching the entity name in the graph"
+
+  - name: results
+    type: object[]
+    required: false
+    condition: "When action is recall or search"
+    description: "Found memories matching the query"
+    object_fields:
+      - name: entity_name
+        type: string
+        required: true
+        description: "Name of the matched entity in the knowledge graph"
+      - name: entity_type
+        type: string
+        required: true
+        description: "Type of the matched entity (Rule, Preference, Insight, etc.)"
+      - name: relevance
+        type: string
+        required: true
+        description: "How relevant the result is to the query"
+
+  - name: confirmation
+    type: string
+    required: true
+    description: "Human-readable description of what was done"
+    validation: "Non-empty, concise summary of the action taken"
+    on_fail: "Re-run skill to produce the missing artifact"

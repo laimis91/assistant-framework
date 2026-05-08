@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-telos-skill-behavior",
+  "skill": "assistant-telos",
+  "title": "assistant-telos Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-telos skill's Telos Context File creation and review workflows.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-telos skill instructions loaded.",
+    "Compare the local response against Telos input/output contracts, TCF section requirements, and review findings.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "create-personal-tcf-core-sections",
+      "title": "Create personal TCF core sections",
+      "category": "tcf_creation_contract",
+      "purpose": "Checks that creating a Telos Context File resolves action/entity type and captures the required problems, mission, and goals sections.",
+      "prompt": "Create my personal Telos context for why I am building developer assistant frameworks.",
+      "setup_context": [
+        "The assistant-telos skill instructions are active.",
+        "No existing TCF has been provided.",
+        "The user asks for personal strategic context."
+      ],
+      "expected_behavior": [
+        "Resolves action as create and entity_type as individual.",
+        "Walks through or requests content for the required problems, mission, and goals sections.",
+        "Produces or plans a tcf_file with the core TCF sections.",
+        "Lists sections_completed with at least problems, mission, and goals.",
+        "Returns confirmation that names the completed Telos action and affected entity or file.",
+        "Does not mark optional sections as required for a useful first TCF."
+      ],
+      "pass_criteria": [
+        "The response includes action create and entity_type individual.",
+        "The response includes problems, mission, and goals.",
+        "The response includes tcf_file or a path for the TCF artifact.",
+        "The response includes sections_completed and confirmation.",
+        "The response does not skip the explainability chain."
+      ],
+      "fail_signals": [
+        "Creates a TCF without problems, mission, or goals.",
+        "Treats optional sections as required blockers.",
+        "Omits confirmation.",
+        "Does not connect projects back to purpose."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action",
+          "create",
+          "entity_type",
+          "individual",
+          "tcf_file",
+          "problems",
+          "mission",
+          "goals",
+          "sections_completed",
+          "confirmation"
+        ],
+        "forbidden_substrings": [
+          "problems optional",
+          "mission optional",
+          "goals optional",
+          "No confirmation"
+        ]
+      }
+    },
+    {
+      "id": "review-existing-tcf-finds-chain-gaps",
+      "title": "Review existing TCF finds chain gaps",
+      "category": "tcf_review_contract",
+      "purpose": "Checks that reviewing an existing TCF locates the file, assesses every section, and reports actionable findings for incomplete or stale sections.",
+      "prompt": "Review my project Telos file and tell me where the strategy chain is incomplete.",
+      "setup_context": [
+        "The assistant-telos skill instructions are active.",
+        "An existing project `.claude/telos.md` may be present.",
+        "The user asks for review rather than create or update."
+      ],
+      "expected_behavior": [
+        "Resolves action as review and locates or asks for existing_tcf_path.",
+        "Checks every TCF section in the explainability chain.",
+        "Returns review_findings with section, status, and suggestion when incomplete.",
+        "Uses statuses such as complete, partial, missing, or stale.",
+        "Returns confirmation for the reviewed entity or file.",
+        "Does not claim the chain is complete without reading the TCF."
+      ],
+      "pass_criteria": [
+        "The response includes action review and existing_tcf_path handling.",
+        "The response includes review_findings for TCF sections.",
+        "The response includes section status and actionable suggestions.",
+        "The response includes confirmation.",
+        "The response does not skip file discovery or section assessment."
+      ],
+      "fail_signals": [
+        "Reviews from memory without locating the TCF.",
+        "Says all good without checking sections.",
+        "Omits status or suggestions.",
+        "Treats review as create/update and writes over the file."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action",
+          "review",
+          "existing_tcf_path",
+          "review_findings",
+          "section",
+          "status",
+          "suggestion",
+          "confirmation"
+        ],
+        "forbidden_substrings": [
+          "all good without reading",
+          "review skipped",
+          "overwrite the TCF",
+          "No section status"
+        ]
+      }
+    }
+  ]
+}

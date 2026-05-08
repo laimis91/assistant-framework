@@ -1,6 +1,6 @@
 # Plugin Architecture Plan
 
-This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, and no skill directories move in this slice.
+This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, plugin-local skill copies are scaffolded for `assistant-core`, and no root skill directories move in this slice.
 
 ## Goals
 
@@ -17,10 +17,10 @@ The installer remains root-inventory based:
 current_install_inventory: skills/assistant-*/SKILL.md
 current_plugin_profile: assistant-core via --plugin assistant-core
 current_unity_policy: skills/unity-* is outside the default assistant-* inventory
-current_plugin_manifests: none
+current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json
 ```
 
-The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below. Do not move skills, add plugin manifests, or add more install behavior until the same slice has P0/P4 coverage for that behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below from the root inventory. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, but it is not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -75,7 +75,7 @@ Unity skills remain local-only in the current release because `skills/unity-*` i
 
 ## Future Manifest Expectations
 
-When plugin scaffolding begins, each plugin should define equivalent metadata for every supported agent:
+As plugin scaffolding expands, each plugin should define equivalent metadata for every supported agent:
 
 - Codex: `.codex-plugin/plugin.json`
 - Claude: plugin manifest with skill discovery metadata
@@ -106,6 +106,13 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 - Parse profile ownership from this document.
 - Keep `--skill` and `--plugin` mutually exclusive.
 - Reject boundary-defined non-core plugin profiles through a generic not-installable profile gate.
-- Keep plugin manifests absent.
+- Keep plugin manifests absent during the profile-only slice.
 
-The next slice can scaffold `assistant-core` manifests and dry-run manifest validation once this profile path is stable.
+### Assistant-Core Manifest Scaffold
+
+- Add `plugins/assistant-core/.codex-plugin/plugin.json`.
+- Add plugin-local copies of the four core skills under `plugins/assistant-core/skills/`.
+- Guard plugin-local copies against root skill drift with P0/P4 contracts.
+- Keep marketplace registration absent.
+
+The next slice can add manifest-aware installer dry-run validation or scaffold the next plugin once this scaffold path is stable.

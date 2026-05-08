@@ -1,0 +1,32 @@
+# contract header
+schema_version: "1.0"
+contract: output
+skill: assistant-reflexion
+
+artifacts:
+  - name: action_taken
+    type: string
+    required: true
+    description: "The reflexion operation that was performed"
+    validation: "Must be one of: reflect, recall, stats, consolidate"
+
+  - name: lessons
+    type: object[]
+    required: false
+    condition: "When action is reflect"
+    description: "Lessons extracted from the completed task"
+    validation: "Each entry must include lesson (string), confidence (high, medium, or low), and applies_to (string)"
+
+  - name: insights_file
+    type: string
+    required: false
+    condition: "When a reflexion insight was recorded"
+    description: "Confirmation that reflexion was recorded via memory_reflect MCP tool"
+    validation: "Non-empty string confirming the reflexion was stored in the knowledge graph"
+
+  - name: recalled_lessons
+    type: object[]
+    required: false
+    condition: "When action is recall"
+    description: "Relevant past lessons retrieved from memory"
+    validation: "Each entry must include lesson (string), confidence (string), date (string), and project (string)"

@@ -38,6 +38,8 @@ Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The curr
 ./install.sh --agent codex --plugin assistant-core
 ```
 
+The repo also includes a scaffolded Codex plugin manifest at `plugins/assistant-core/.codex-plugin/plugin.json` with plugin-local copies of the four core skills. This scaffold is not marketplace-registered yet; root installs remain the compatibility path.
+
 Install a single skill:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking

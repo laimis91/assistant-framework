@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-reflexion-skill-behavior",
+  "skill": "assistant-reflexion",
+  "title": "assistant-reflexion Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-reflexion skill's post-task learning and lesson recall workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-reflexion skill instructions loaded.",
+    "Compare the local response against reflection, memory recording, and lesson recall contracts.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "post-task-reflection-records-lessons",
+      "title": "Post-task reflection records lessons",
+      "category": "reflection_storage_contract",
+      "purpose": "Checks that post-task reflection captures context, self-assesses, extracts actionable lessons, and records them through memory_reflect.",
+      "prompt": "Reflect on the completed per-skill eval coverage task and record lessons for future Assistant Framework work.",
+      "setup_context": [
+        "The assistant-reflexion skill instructions are active.",
+        "A task just completed and produced reusable implementation lessons.",
+        "Memory MCP tools are available."
+      ],
+      "expected_behavior": [
+        "Resolves action as reflect and includes the task_description.",
+        "Captures project_type, task_type, and size when available or infers them.",
+        "Summarizes wentWell and wentWrong evidence from the completed task.",
+        "Extracts lessons with confidence and applies_to fields.",
+        "Uses memory_reflect to record the reflexion in the knowledge graph.",
+        "Returns action_taken, lessons, insights_file or equivalent storage evidence, and status."
+      ],
+      "pass_criteria": [
+        "The response identifies action as reflect.",
+        "The response includes actionable lessons with confidence and applies_to.",
+        "The response names memory_reflect as the storage mechanism.",
+        "The response includes evidence for what went well and wrong.",
+        "The response does not store secrets or vague non-lessons."
+      ],
+      "fail_signals": [
+        "Only says the task went well with no lessons.",
+        "Records reflection in an ad hoc markdown file instead of memory_reflect.",
+        "Omits confidence or applies_to.",
+        "Invents task evidence not present in the session."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action_taken",
+          "reflect",
+          "task_description",
+          "memory_reflect",
+          "lessons",
+          "confidence",
+          "applies_to",
+          "insights_file"
+        ],
+        "forbidden_substrings": [
+          "No lessons",
+          "Saved only to markdown",
+          "confidence not needed",
+          "invented evidence"
+        ]
+      }
+    },
+    {
+      "id": "recall-lessons-before-new-work",
+      "title": "Recall lessons before new work",
+      "category": "lesson_recall_contract",
+      "purpose": "Checks that pre-task recall searches relevant memory and returns recalled lessons with confidence, date, and project.",
+      "prompt": "Before planning the next Assistant Framework eval slice, recall relevant lessons from previous tasks.",
+      "setup_context": [
+        "The assistant-reflexion skill instructions are active.",
+        "The user asks for pre-task lesson recall.",
+        "The project and task type are known from context."
+      ],
+      "expected_behavior": [
+        "Resolves action as recall.",
+        "Searches memory for project, project_type, task_type, and relevant technologies.",
+        "Filters lessons by relevance and confidence.",
+        "Returns recalled_lessons with lesson, confidence, date, and project.",
+        "Explains how high-confidence lessons affect discovery, planning, build, or review.",
+        "Does not fabricate lessons when memory has no matching results."
+      ],
+      "pass_criteria": [
+        "The response identifies action as recall.",
+        "The response includes recalled_lessons or explicitly says none were found.",
+        "Each recalled lesson includes confidence, date, and project.",
+        "The response explains next-use impact for relevant lessons."
+      ],
+      "fail_signals": [
+        "Invents lessons without memory evidence.",
+        "Omits confidence, date, or project.",
+        "Skips memory search despite asking for recall.",
+        "Treats low-confidence stale lessons as mandatory."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action_taken",
+          "recall",
+          "recalled_lessons",
+          "confidence",
+          "date",
+          "project",
+          "Next use"
+        ],
+        "forbidden_substrings": [
+          "No memory search needed",
+          "invented lesson",
+          "confidence omitted",
+          "all old lessons are mandatory"
+        ]
+      }
+    }
+  ]
+}
