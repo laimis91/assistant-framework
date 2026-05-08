@@ -23,6 +23,7 @@ p0p4_plugin_assignments() {
 test_start "plugin architecture doc exists and preserves current install compatibility"
 if [[ -f "$plugin_doc" ]] \
     && grep -Fq "current_install_inventory: skills/assistant-*/SKILL.md" "$plugin_doc" \
+    && grep -Fq "current_plugin_profile: assistant-core via --plugin assistant-core" "$plugin_doc" \
     && grep -Fq "current_plugin_manifests: none" "$plugin_doc" \
     && grep -Fq "no skill directories move in this slice" "$plugin_doc" \
     && grep -Fq "Auto-discovers first-class release skills from skills/assistant-*/SKILL.md" "$FRAMEWORK_DIR/install.sh"; then
@@ -73,14 +74,15 @@ else
     fail "plugin plan must keep Unity skills local-only and untracked in the release inventory"
 fi
 
-test_start "README documents planned plugin split without changing current installer semantics"
-if grep -Fq "plugin split is planned and contract-backed" "$FRAMEWORK_DIR/README.md" \
+test_start "README documents assistant-core plugin profile without changing current installer semantics"
+if grep -Fq "Plugin boundaries are contract-backed" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "docs/plugin-architecture.md" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "current installer still uses the root \`skills/assistant-*\` release inventory" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "./install.sh --agent codex --plugin assistant-core" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "uses the root \`skills/assistant-*\` release inventory by default" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "The release inventory is the tracked \`skills/assistant-*\` set." "$FRAMEWORK_DIR/README.md"; then
     pass
 else
-    fail "README must link the plugin plan while preserving current root installer semantics"
+    fail "README must document assistant-core profile while preserving current root installer semantics"
 fi
 
 test_start "plugin design slice does not add plugin manifests yet"

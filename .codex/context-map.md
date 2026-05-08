@@ -1,25 +1,27 @@
-# Context Map: Plugin Split Design and Boundary Contracts
+# Context Map: Assistant-Core Plugin Install Profile
 
-## Current Release Surface
-- First-class skills live at `skills/assistant-*/SKILL.md`.
-- `install.sh` auto-discovers root `skills/assistant-*` skills and installs them into each agent home.
-- `tools/skills/validate-skills.sh` and `tools/evals/run-skill-evals.sh` default to first-class `assistant-*` inventory.
-- Local Unity skill experiments are `skills/unity-*`; they are not tracked release skills and are excluded by default.
+## Current Installer Surface
+- `install.sh` discovers default first-class skills from `skills/assistant-*/SKILL.md`.
+- `--skill <name>` filters the install to one root skill.
+- Codex AGENTS.md generation is based on the installed `SKILLS` array.
+- No plugin manifests or marketplace files exist in the repo.
 
 ## Target Slice
-- Add design documentation only: `docs/plugin-architecture.md`.
-- Add contract tests only: `tests/p0-p4/plugin-boundary-contracts.sh`.
-- Wire the new P0/P4 suite into `tests/test-p0-p4-contracts.sh`.
-- Add a README note linking the plan.
+- Add `--plugin assistant-core` as an optional install profile.
+- Parse profile skill ownership from `docs/plugin-architecture.md`.
+- Keep default install and `--skill` behavior unchanged.
+- Do not hardcode Unity-specific exclusions in `install.sh`; use the same inventory rules for custom assistant-named skills.
 
-## Planned Plugin Groups
-- `assistant-core`: foundation skills for clarification, memory, reflexion, and Telos.
-- `assistant-dev`: development workflow, review, TDD, security, onboarding, docs, diagrams, and skill creation.
-- `assistant-research`: research, thinking, and ideation.
-- `assistant-unity`: optional local Unity skills, represented by `skills/unity-*`.
+## Key Files
+- `install.sh`
+- `docs/plugin-architecture.md`
+- `README.md`
+- `tests/p0-p4/installer-contracts.sh`
+- `tests/p0-p4/plugin-boundary-contracts.sh`
+- `tests/test-p0-p4-contracts.sh`
 
-## Constraints
-- Do not move skill directories in this slice.
-- Do not add `.codex-plugin/plugin.json` or Claude plugin manifests yet.
-- Do not change current install behavior.
-- The plugin boundary block in docs must remain simple enough for shell tests to parse.
+## Verification Focus
+- Dry-run output lists only core skills for `--plugin assistant-core`.
+- Real Codex install creates only four core skill directories and four AGENTS rows.
+- Default install still includes all assistant-named skills and excludes non-assistant local skills.
+- Plugin manifests remain absent in this slice.

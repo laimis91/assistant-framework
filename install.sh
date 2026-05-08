@@ -16,6 +16,7 @@
 #   ./install.sh --agent gemini     # → ~/.gemini/skills/assistant-*/
 #   ./install.sh --agent claude --dry-run
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
+#   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent claude --no-hooks                  # skip hook installation
 #
 # Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
@@ -28,6 +29,7 @@ set -euo pipefail
 AGENT=""
 DRY_RUN=false
 SINGLE_SKILL=""
+PLUGIN_PROFILE=""
 INSTALL_HOOKS=true
 TEST_HOOKS=false
 FRAMEWORK_DIR=""
@@ -47,6 +49,7 @@ Installs the Assistant Framework skills for an AI agent.
 Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
+  --plugin NAME      Install a planned plugin profile such as assistant-core
   --no-hooks         Skip hook installation
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
@@ -57,6 +60,7 @@ added manually to installed skill directories. Back up customizations first.
 
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
+  Use --plugin assistant-core to install only the core profile.
 
 Memory data:
   memory-graph MCP is registered against ~/.{agent}/memory.
@@ -67,6 +71,7 @@ Examples:
   $(basename "$0") --agent claude
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
+  $(basename "$0") --agent codex --plugin assistant-core
 EOF
     exit 0
 }
@@ -75,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --agent)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; AGENT="$2"; shift 2 ;;
         --skill)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; SINGLE_SKILL="$2"; shift 2 ;;
+        --plugin)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PLUGIN_PROFILE="$2"; shift 2 ;;
         --no-hooks)   INSTALL_HOOKS=false; shift ;;
         --test-hooks) TEST_HOOKS=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
@@ -89,6 +95,54 @@ fail() { echo "Error: $1" >&2; exit 1; }
 info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
+
+plugin_profile_line() {
+    local plugin_name="$1"
+    local plugin_doc="$FRAMEWORK_DIR/docs/plugin-architecture.md"
+
+    [[ -f "$plugin_doc" ]] || return 1
+
+    awk -v plugin_name="$plugin_name" '
+        /^PLUGIN_BOUNDARY_START$/ { inside = 1; next }
+        /^PLUGIN_BOUNDARY_END$/ { inside = 0; next }
+        inside && index($0, plugin_name ":") == 1 {
+            print
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$plugin_doc"
+}
+
+apply_plugin_profile() {
+    local plugin_name="$1"
+    local profile_line
+    local profile_payload
+    local profile_skill
+    local profile_skills=()
+
+    if ! profile_line="$(plugin_profile_line "$plugin_name")"; then
+        fail "Unknown plugin profile: $plugin_name. Available install profiles are defined in docs/plugin-architecture.md."
+    fi
+
+    if [[ "$plugin_name" != "assistant-core" ]]; then
+        fail "$plugin_name is boundary-defined but not installable yet. Supported install profile: assistant-core."
+    fi
+
+    profile_payload="${profile_line#*:}"
+    for profile_skill in $profile_payload; do
+        case "$profile_skill" in
+            assistant-*)
+                [[ -f "$SKILLS_SOURCE/$profile_skill/SKILL.md" ]] || fail "Plugin profile $plugin_name references missing skill: $profile_skill"
+                profile_skills+=("$profile_skill")
+                ;;
+            *) ;;
+        esac
+    done
+
+    [[ "${#profile_skills[@]}" -gt 0 ]] || fail "Plugin profile $plugin_name has no installable assistant skills."
+    SKILLS=("${profile_skills[@]}")
+}
 
 substitute_agent_paths_in_stream() {
     if [[ "$AGENT" == "claude" ]]; then
@@ -460,6 +514,7 @@ codex_cli_supports_compaction_hooks() {
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
 [[ "$AGENT" =~ ^(claude|codex|gemini)$ ]] || fail "Unknown agent: $AGENT. Supported: claude, codex, gemini"
+[[ -z "$SINGLE_SKILL" || -z "$PLUGIN_PROFILE" ]] || fail "Use either --skill or --plugin, not both."
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
@@ -505,11 +560,19 @@ if [[ -n "$SINGLE_SKILL" ]]; then
     SKILLS=("$SINGLE_SKILL")
 fi
 
+# Filter to a planned plugin profile if requested.
+if [[ -n "$PLUGIN_PROFILE" ]]; then
+    apply_plugin_profile "$PLUGIN_PROFILE"
+fi
+
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
+if [[ -n "$PLUGIN_PROFILE" ]]; then
+    echo "  Plugin profile: $PLUGIN_PROFILE"
+fi
 echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
 echo "  Legacy graph seed: $GRAPH_SEED"

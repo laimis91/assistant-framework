@@ -70,6 +70,103 @@ else
     fail "single-skill Codex install failed; see /tmp/p0p4-install-single-skill-table.err"
 fi
 
+test_start "Codex plugin profile dry-run selects assistant-core skills only"
+INSTALL_HOME_PLUGIN_DRY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY"
+if HOME="$INSTALL_HOME_PLUGIN_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks --dry-run >/tmp/p0p4-install-plugin-dry.out 2>/tmp/p0p4-install-plugin-dry.err; then
+    plugin_dry_output="$(cat /tmp/p0p4-install-plugin-dry.out)"
+    if printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin profile: assistant-core" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-clarify/" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-memory/" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-reflexion/" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-telos/" \
+        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-workflow/" \
+        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-research/" \
+        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-security/"; then
+        pass
+    else
+        fail "assistant-core dry-run should list only core plugin skills"
+    fi
+else
+    fail "assistant-core dry-run failed; see /tmp/p0p4-install-plugin-dry.err"
+fi
+
+test_start "Codex assistant-core plugin install installs only core skills and AGENTS rows"
+INSTALL_HOME_PLUGIN="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN"
+if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks >/tmp/p0p4-install-plugin-core.out 2>/tmp/p0p4-install-plugin-core.err; then
+    installed_skills_dir="$INSTALL_HOME_PLUGIN/.codex/skills"
+    agents_file="$INSTALL_HOME_PLUGIN/.codex/AGENTS.md"
+    agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
+    missing_core_skill=""
+    unexpected_profile_skill=""
+    for core_skill in assistant-clarify assistant-memory assistant-reflexion assistant-telos; do
+        if [[ ! -d "$installed_skills_dir/$core_skill" ]]; then
+            missing_core_skill="$core_skill"
+            break
+        fi
+        if ! grep -Fq "| $core_skill |" "$agents_file"; then
+            missing_core_skill="$core_skill AGENTS.md"
+            break
+        fi
+    done
+    for non_core_skill in assistant-workflow assistant-review assistant-security assistant-research assistant-thinking assistant-docs; do
+        if [[ -d "$installed_skills_dir/$non_core_skill" ]] || grep -Fq "| $non_core_skill |" "$agents_file"; then
+            unexpected_profile_skill="$non_core_skill"
+            break
+        fi
+    done
+
+    if [[ -n "$missing_core_skill" ]]; then
+        fail "assistant-core plugin install missed $missing_core_skill"
+    elif [[ -n "$unexpected_profile_skill" ]]; then
+        fail "assistant-core plugin install included non-core skill $unexpected_profile_skill"
+    elif [[ "$agents_assistant_skill_rows" != "4" ]]; then
+        fail "expected assistant-core Codex AGENTS.md to list 4 assistant skills; found $agents_assistant_skill_rows"
+    else
+        pass
+    fi
+else
+    fail "assistant-core plugin install failed; see /tmp/p0p4-install-plugin-core.err"
+fi
+
+test_start "installer rejects boundary-only profiles without Unity hardcoding"
+INSTALL_HOME_PLUGIN_UNITY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNITY"
+if HOME="$INSTALL_HOME_PLUGIN_UNITY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-unity --no-hooks >/tmp/p0p4-install-plugin-unity.out 2>/tmp/p0p4-install-plugin-unity.err; then
+    fail "assistant-unity boundary profile should not install until it has P0/P4 coverage"
+elif grep -Fq "assistant-unity is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-unity.err \
+    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-unity.err \
+    && ! grep -Fq "assistant-unity is local-only" "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "skills/unity-*" "$FRAMEWORK_DIR/install.sh"; then
+    pass
+else
+    fail "assistant-unity should use the generic boundary-only rejection without Unity-specific installer code"
+fi
+
+test_start "installer rejects boundary-only plugin profiles without scaffold support"
+INSTALL_HOME_PLUGIN_BOUNDARY_ONLY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY"
+if HOME="$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-boundary-only.out 2>/tmp/p0p4-install-plugin-boundary-only.err; then
+    fail "assistant-dev should remain boundary-only until it has P0/P4 install coverage"
+elif grep -Fq "assistant-dev is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-boundary-only.err \
+    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-boundary-only.err; then
+    pass
+else
+    fail "boundary-only plugin profile rejection should name assistant-core as the supported install profile"
+fi
+
+test_start "installer rejects combining --skill and --plugin"
+INSTALL_HOME_PLUGIN_CONFLICT="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_CONFLICT"
+if HOME="$INSTALL_HOME_PLUGIN_CONFLICT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --plugin assistant-core --no-hooks >/tmp/p0p4-install-plugin-conflict.out 2>/tmp/p0p4-install-plugin-conflict.err; then
+    fail "installer should reject --skill combined with --plugin"
+elif grep -Fq "Use either --skill or --plugin, not both" /tmp/p0p4-install-plugin-conflict.err; then
+    pass
+else
+    fail "installer should explain --skill/--plugin mutual exclusion"
+fi
+
 test_start "installer replaces interrupted memory protocol install without duplicating blocks"
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"
@@ -345,11 +442,13 @@ else
     fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"
 fi
 
-test_start "default install excludes local Unity skills"
+test_start "default install uses assistant inventory without Unity hardcoding"
 INSTALL_HOME_TEN="$(mktemp -d)"
 UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-contract-fixture-XXXXXX")"
 UNITY_FIXTURE_NAME="$(basename "$UNITY_FIXTURE")"
-p0p4_register_cleanup "$INSTALL_HOME_TEN" "$UNITY_FIXTURE"
+ASSISTANT_UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/assistant-unity-contract-fixture-XXXXXX")"
+ASSISTANT_UNITY_FIXTURE_NAME="$(basename "$ASSISTANT_UNITY_FIXTURE")"
+p0p4_register_cleanup "$INSTALL_HOME_TEN" "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
 cat > "$UNITY_FIXTURE/SKILL.md" <<'UNITY_SKILL'
 ---
 name: unity-local-contract-fixture
@@ -358,6 +457,14 @@ description: Local-only Unity fixture that must not be installed by default.
 
 # Unity Local Contract Fixture
 UNITY_SKILL
+cat > "$ASSISTANT_UNITY_FIXTURE/SKILL.md" <<'ASSISTANT_UNITY_SKILL'
+---
+name: assistant-unity-contract-fixture
+description: Assistant-named Unity fixture that should follow the normal assistant inventory rule.
+---
+
+# Assistant Unity Contract Fixture
+ASSISTANT_UNITY_SKILL
 if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-hooks >/tmp/p0p4-install-default-skills.out 2>/tmp/p0p4-install-default-skills.err; then
     installed_skills_dir="$INSTALL_HOME_TEN/.codex/skills"
     agents_file="$INSTALL_HOME_TEN/.codex/AGENTS.md"
@@ -380,6 +487,8 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fi
     done < <(find "$FRAMEWORK_DIR/skills" -maxdepth 2 -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -type f | sort)
 
+    rm -rf "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
+
     if [[ -d "$installed_skills_dir" ]]; then
         while IFS= read -r installed_skill_dir; do
             installed_skill="$(basename "$installed_skill_dir")"
@@ -397,19 +506,22 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
     elif [[ -n "$missing_agents_skill" ]]; then
         fail "expected generated Codex AGENTS.md to include first-class assistant skill $missing_agents_skill"
-    elif [[ "$source_assistant_skill_count" != "15" ]]; then
-        fail "expected source inventory to contain 15 first-class assistant skills; found $source_assistant_skill_count"
-    elif [[ "$agents_assistant_skill_rows" != "15" ]]; then
-        fail "expected generated Codex AGENTS.md to list all 15 first-class assistant skills; found $agents_assistant_skill_rows"
+    elif [[ "$source_assistant_skill_count" -lt "16" ]]; then
+        fail "expected source inventory to contain at least 16 assistant skills including the assistant-named custom fixture; found $source_assistant_skill_count"
+    elif [[ "$agents_assistant_skill_rows" != "$source_assistant_skill_count" ]]; then
+        fail "expected generated Codex AGENTS.md to list all $source_assistant_skill_count assistant skills; found $agents_assistant_skill_rows"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
     elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then
-        fail "expected default install to exclude local Unity fixture"
+        fail "expected default install to exclude non-assistant local Unity fixture"
+    elif [[ ! -e "$installed_skills_dir/$ASSISTANT_UNITY_FIXTURE_NAME" ]]; then
+        fail "expected default install to include assistant-named custom Unity fixture"
     else
         pass
     fi
 else
-    fail "default install with local Unity fixture failed; see /tmp/p0p4-install-default-skills.err"
+    rm -rf "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
+    fail "default install with Unity fixture coverage failed; see /tmp/p0p4-install-default-skills.err"
 fi
 
 test_start "Codex hook template is valid JSON with PreToolUse and no PostToolUse key"

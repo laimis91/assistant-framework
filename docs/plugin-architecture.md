@@ -1,6 +1,6 @@
 # Plugin Architecture Plan
 
-This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact only: the current release still installs first-class skills from the root `skills/assistant-*` inventory, and no skill directories move in this slice.
+This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, and no skill directories move in this slice.
 
 ## Goals
 
@@ -15,11 +15,12 @@ The installer remains root-inventory based:
 
 ```text
 current_install_inventory: skills/assistant-*/SKILL.md
-current_unity_policy: skills/unity-* is local-only and opt-in
+current_plugin_profile: assistant-core via --plugin assistant-core
+current_unity_policy: skills/unity-* is outside the default assistant-* inventory
 current_plugin_manifests: none
 ```
 
-Do not move skills, add plugin manifests, or change install profiles until the next implementation slice has P0/P4 coverage for the new behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below. Do not move skills, add plugin manifests, or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -70,7 +71,7 @@ Optional local game-development skills:
 
 - `skills/unity-*`
 
-Unity skills remain local-only in the current release. They are not part of the tracked first-class release inventory and should not be installed by default.
+Unity skills remain local-only in the current release because `skills/unity-*` is outside the root `skills/assistant-*` inventory. The installer should not special-case Unity names; assistant-named custom skills should follow the same filesystem inventory rules as any other assistant skill.
 
 ## Future Manifest Expectations
 
@@ -84,19 +85,27 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 
 ## Migration Rules
 
-1. Keep root `skills/assistant-*` installs as the compatibility path until plugin installs pass P0/P4.
-2. Scaffold one plugin first, preferably `assistant-core`, before moving high-control development skills.
+1. Keep root `skills/assistant-*` installs as the default compatibility path until plugin manifests pass P0/P4.
+2. Keep `--plugin assistant-core` as the first profile-backed install path before moving high-control development skills.
 3. Preserve targeted single-skill install behavior during and after the split.
-4. Keep local-only Unity opt-in; never make `skills/unity-*` part of the default release inventory by accident.
+4. Keep default inventory behavior pattern-based; `skills/unity-*` stays outside the root `skills/assistant-*` inventory unless a future supported profile or manifest adds coverage.
 5. Update eval, validator, installer, and docs contracts in the same slice as any behavior change.
 
-## First Implementation Slice
+## Implemented Slices
 
-This slice is intentionally limited to design and contracts:
+### Boundary Design
 
 - Add this document.
 - Add a P0/P4 boundary contract that parses the ownership block.
 - Link the plan from the README.
 - Keep install behavior unchanged.
 
-The next slice can scaffold `assistant-core` manifests and installer dry-run support once this boundary is stable.
+### Assistant-Core Profile
+
+- Add `./install.sh --agent <agent> --plugin assistant-core`.
+- Parse profile ownership from this document.
+- Keep `--skill` and `--plugin` mutually exclusive.
+- Reject boundary-defined non-core plugin profiles through a generic not-installable profile gate.
+- Keep plugin manifests absent.
+
+The next slice can scaffold `assistant-core` manifests and dry-run manifest validation once this profile path is stable.
