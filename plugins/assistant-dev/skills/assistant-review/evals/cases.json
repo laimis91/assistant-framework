@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-review-skill-behavior",
+  "skill": "assistant-review",
+  "title": "assistant-review Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-review skill's autonomous review-fix loop.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-review skill instructions loaded.",
+    "Compare the local response against the review loop entry, findings, fix, validate, and exit contracts.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "review-fix-loop-handles-findings",
+      "title": "Review-fix loop handles findings",
+      "category": "autonomous_review_loop",
+      "purpose": "Checks that review-fix mode resolves all must-fix and should-fix findings, validates, and continues to re-review instead of stopping after one pass.",
+      "prompt": "Review the current uncommitted changes and fix all issues you find before reporting back.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The working tree has uncommitted changes in multiple files.",
+        "The user did not request audit-only mode."
+      ],
+      "expected_behavior": [
+        "Resolves review scope and captures a non-empty review_material_snapshot.",
+        "Defaults mode to review-fix.",
+        "Runs review rounds with confidence thresholds and previously_fixed tracking.",
+        "Fixes all must-fix and should-fix findings before validation.",
+        "Runs build or test verification before the next round.",
+        "Continues review, fix, validate, and re-review until clean or max 5 rounds."
+      ],
+      "pass_criteria": [
+        "The response identifies review scope and mode.",
+        "The response includes findings with severity and evidence.",
+        "The response fixes must-fix and should-fix items or explains explicit deferrals.",
+        "The response validates after fixes.",
+        "The response reports a final result after the loop exits."
+      ],
+      "fail_signals": [
+        "Performs only one review pass when findings remain.",
+        "Reports findings without fixing them in review-fix mode.",
+        "Fixes must-fix items but ignores should-fix items without deferral.",
+        "Skips build or test validation after fixes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "review_material_snapshot",
+          "review-fix",
+          "round",
+          "previously_fixed",
+          "must-fix",
+          "should-fix",
+          "validate",
+          "re-review"
+        ],
+        "forbidden_substrings": [
+          "I will only report findings",
+          "One review pass is enough",
+          "Skipping validation",
+          "Should-fix items can be ignored"
+        ]
+      }
+    },
+    {
+      "id": "medium-review-requires-rubric",
+      "title": "Medium review requires rubric",
+      "category": "rubric_and_exit_gate",
+      "purpose": "Checks that medium or larger review scopes require rubric scores, threshold action, and a single final summary after loop exit.",
+      "prompt": "Run a fresh review on this medium-sized feature branch. Do not interrupt me with intermediate findings; just finish the loop.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope is medium-sized.",
+        "The user asks for a fresh review and does not request audit-only mode."
+      ],
+      "expected_behavior": [
+        "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
+        "Applies a weighted score threshold action such as PASS, REFINE, or PIVOT.",
+        "Uses increasing confidence thresholds across rounds.",
+        "Buffers intermediate round details and presents one final summary after loop exit.",
+        "Includes score progression when multiple rounds occur.",
+        "Does not ask the user between rounds unless blocked."
+      ],
+      "pass_criteria": [
+        "The response includes rubric dimensions and weighted score.",
+        "The response applies the threshold action to decide exit or refinement.",
+        "The response mentions confidence thresholds or round progression.",
+        "The response produces a single final summary.",
+        "The response does not pause between rounds for approval."
+      ],
+      "fail_signals": [
+        "Omits rubric scores for medium scope.",
+        "Prints intermediate findings as final results before loop exit.",
+        "Asks the user whether to continue between rounds.",
+        "Exits clean while must-fix or should-fix findings remain."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "rubric",
+          "correctness",
+          "code quality",
+          "architecture",
+          "security",
+          "test coverage",
+          "weighted",
+          "final summary"
+        ],
+        "forbidden_substrings": [
+          "No rubric needed",
+          "Here are intermediate findings",
+          "Should I continue to round",
+          "Clean despite must-fix"
+        ]
+      }
+    }
+  ]
+}

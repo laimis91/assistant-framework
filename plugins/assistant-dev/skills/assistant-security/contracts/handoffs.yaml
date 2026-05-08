@@ -1,0 +1,10 @@
+# Security Handoff Contracts
+# The security skill currently runs as a single-agent analysis — no subagent dispatch.
+# This file exists because all Process skills must declare handoffs per the contract schema.
+# When subagent-based analysis is added (e.g., dispatching a dedicated scanner), define handoffs here.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-security
+
+handoffs: []

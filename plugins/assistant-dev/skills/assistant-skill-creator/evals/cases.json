@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-skill-creator-skill-behavior",
+  "skill": "assistant-skill-creator",
+  "title": "assistant-skill-creator Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-skill-creator skill's contract design and validation workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-skill-creator skill instructions loaded.",
+    "Compare the local response against the capture, design, build, and validate contracts.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "new-process-skill-designs-contracts-before-build",
+      "title": "New process skill designs contracts before build",
+      "category": "contract_design_gate",
+      "purpose": "Checks that a new process skill request captures required fields, designs the contract tier, and waits for design approval before creating files.",
+      "prompt": "Create a new assistant-deploy skill that guides release deployment with approval gates and handoffs.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "The user asks for a new multi-phase process skill.",
+        "No contract design has been approved yet."
+      ],
+      "expected_behavior": [
+        "Starts with CAPTURE and resolves skill_name, skill_purpose, skill_category, trigger_phrases, dependencies, and effort_level.",
+        "Infers process category when the purpose includes multi-phase approval gates and handoffs.",
+        "Moves to DESIGN before BUILD and reads the contract design guide.",
+        "Designs input, output, phase-gates, and handoffs contracts for the process tier.",
+        "Ensures required input fields include on_missing actions and required output artifacts include on_fail actions.",
+        "Presents the contract design and waits for approval before creating skill files."
+      ],
+      "pass_criteria": [
+        "The response names CAPTURE and DESIGN before BUILD.",
+        "The response includes process-tier contracts, including handoffs.",
+        "The response mentions on_missing and on_fail requirements.",
+        "The response asks for design approval before file creation.",
+        "The response does not create files before the design is approved."
+      ],
+      "fail_signals": [
+        "Creates SKILL.md immediately without contract design approval.",
+        "Treats a multi-phase handoff skill as utility.",
+        "Omits on_missing or on_fail from required contract fields.",
+        "Skips phase-gates.yaml for a process skill."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "--- PHASE: CAPTURE ---",
+          "--- PHASE: DESIGN ---",
+          "skill_category",
+          "process",
+          "input.yaml",
+          "output.yaml",
+          "phase-gates.yaml",
+          "handoffs.yaml",
+          "on_missing",
+          "on_fail",
+          "approval"
+        ],
+        "forbidden_substrings": [
+          "I created SKILL.md",
+          "No design approval needed",
+          "utility skill",
+          "skip phase-gates.yaml"
+        ]
+      }
+    },
+    {
+      "id": "existing-skill-validation-enforces-checklist",
+      "title": "Existing skill validation enforces checklist",
+      "category": "validation_checklist",
+      "purpose": "Checks that adding contracts to an existing skill skips capture, validates all required contract rules, and fixes failures before completion.",
+      "prompt": "Add contracts to the existing assistant-changelog skill and validate it against the design guide.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "An existing_skill_path is provided for a skill that already has SKILL.md.",
+        "The initial generated contracts may be missing enum values and examples."
+      ],
+      "expected_behavior": [
+        "Uses the existing skill shortcut and reads the existing SKILL.md instead of asking for all capture fields again.",
+        "Enters DESIGN using the existing skill purpose, category, and triggers.",
+        "Builds the contract files required for the inferred skill category.",
+        "Runs VALIDATE against the 10 contract design guide rules.",
+        "Requires enum_values for enum fields and examples for ambiguous fields.",
+        "Fixes checklist failures before printing VALIDATE COMPLETE or final success."
+      ],
+      "pass_criteria": [
+        "The response names existing_skill_path or existing skill shortcut behavior.",
+        "The response includes the VALIDATE phase and validation summary.",
+        "The response references all 10 contract design guide rules.",
+        "The response fixes missing enum_values or examples before completion.",
+        "The response does not claim validation passed with known failures."
+      ],
+      "fail_signals": [
+        "Asks for all capture fields despite existing_skill_path.",
+        "Reports validation success while enum_values are missing.",
+        "Leaves ambiguous fields without examples.",
+        "Prints VALIDATE COMPLETE before fixing checklist failures."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "existing_skill_path",
+          "--- PHASE: DESIGN ---",
+          "--- PHASE: BUILD ---",
+          "--- PHASE: VALIDATE ---",
+          "validation summary",
+          "10 contract design guide rules",
+          "enum_values",
+          "examples",
+          "VALIDATE COMPLETE"
+        ],
+        "forbidden_substrings": [
+          "Validation passed despite failures",
+          "enum_values can be omitted",
+          "examples are optional for ambiguous fields",
+          "skip VALIDATE"
+        ]
+      }
+    }
+  ]
+}

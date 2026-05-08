@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-security-skill-behavior",
+  "skill": "assistant-security",
+  "title": "assistant-security Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-security skill's scoped, evidence-based security analysis.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-security skill instructions loaded.",
+    "Compare the local response against scope, analyze, report, and evidence requirements.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "threat-model-scopes-before-analysis",
+      "title": "Threat model scopes before analysis",
+      "category": "scope_and_methodology",
+      "purpose": "Checks that a security request resolves analysis type and scope, loads the right methodology, and avoids whole-project speculation.",
+      "prompt": "Security review this new OAuth callback endpoint before we ship it.",
+      "setup_context": [
+        "The assistant-security skill instructions are active.",
+        "The user mentions a new OAuth callback endpoint.",
+        "No specific file path or implementation diff has been supplied."
+      ],
+      "expected_behavior": [
+        "Resolves the analysis type as threat model or code review based on the requested endpoint review.",
+        "Defines or asks for a concrete scope before claiming findings.",
+        "Uses the relevant methodology such as STRIDE for threat modeling or OWASP for code review.",
+        "Identifies blockers or missing context if endpoint code is unavailable.",
+        "Does not invent vulnerabilities without evidence.",
+        "Reports status, risk summary, residual risk, and blockers when confidence is limited."
+      ],
+      "pass_criteria": [
+        "The response names the analysis type.",
+        "The response identifies scope and missing files or endpoint details.",
+        "The response names the security methodology.",
+        "The response avoids speculative findings without evidence.",
+        "The response lists blockers or follow-up needed for confidence."
+      ],
+      "fail_signals": [
+        "Audits the whole project without confirmation.",
+        "Invents specific vulnerabilities without code or config evidence.",
+        "Skips scope and methodology.",
+        "Reports high confidence despite missing endpoint details."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "analysis type",
+          "scope",
+          "methodology",
+          "evidence",
+          "risk summary",
+          "residual risk",
+          "blockers",
+          "confidence"
+        ],
+        "forbidden_substrings": [
+          "whole project without confirmation",
+          "definitely vulnerable without evidence",
+          "No scope needed",
+          "High confidence despite missing"
+        ]
+      }
+    },
+    {
+      "id": "findings-include-severity-impact-remediation",
+      "title": "Findings include severity impact remediation",
+      "category": "security_report_contract",
+      "purpose": "Checks that security findings are actionable, evidence-based, consistently ranked, and paired with remediation and prioritized action items.",
+      "prompt": "Audit this diff for SQL injection and auth bypass risks. Report anything medium or higher.",
+      "setup_context": [
+        "The assistant-security skill instructions are active.",
+        "The review scope contains a supplied diff with authentication and database access changes.",
+        "The severity threshold is medium."
+      ],
+      "expected_behavior": [
+        "Reports only findings supported by specific code, config, dependency, endpoint, or threat path evidence.",
+        "Uses the four-level severity scale consistently.",
+        "For every finding, includes severity, category, description, impact, evidence, and remediation.",
+        "Provides a risk_level that matches the highest material remaining risk.",
+        "Orders action_items by priority for findings at or above the medium threshold.",
+        "Includes residual risk and explicitly notes any scoped areas not assessed."
+      ],
+      "pass_criteria": [
+        "Every finding has severity, impact, evidence, and remediation.",
+        "Severity uses critical, high, medium, low, or none consistently.",
+        "Action items cover all findings at or above threshold.",
+        "Risk level matches the material findings.",
+        "Speculative observations are removed or clearly marked as residual risk."
+      ],
+      "fail_signals": [
+        "Lists observations without remediation.",
+        "Uses inconsistent severity labels.",
+        "Reports speculative vulnerabilities as findings.",
+        "Omits action items for medium or higher findings."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "severity",
+          "category",
+          "impact",
+          "evidence",
+          "remediation",
+          "risk_level",
+          "action_items",
+          "residual risk"
+        ],
+        "forbidden_substrings": [
+          "No remediation",
+          "Severity: urgent",
+          "Speculative finding",
+          "No action items needed"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-security
+
+gates:
+  - phase: SCOPE
+    checkpoint_start: "--- PHASE: SCOPE ---"
+    checkpoint_end: "--- PHASE: SCOPE COMPLETE ---"
+    exit_assertions:
+      - id: SC1
+        check: "analysis_type is resolved to one of the four tools"
+        on_fail: "Ask user to clarify what kind of security analysis they need"
+      - id: SC2
+        check: "scope identifies specific files, feature, PR, or project area"
+        on_fail: "Ask user to narrow scope — 'the whole project' is too broad without explicit confirmation"
+
+  - phase: ANALYZE
+    checkpoint_start: "--- PHASE: ANALYZE ---"
+    checkpoint_end: "--- PHASE: ANALYZE COMPLETE ---"
+    exit_assertions:
+      - id: AN1
+        check: "The corresponding tool file was loaded and its methodology followed"
+        on_fail: "Load the correct analysis template from the skill's prompts/ or contracts/ directory and re-run analysis"
+      - id: AN2
+        check: "Analysis covered all items within the declared scope"
+        on_fail: "Identify uncovered items and complete the analysis before proceeding"
+      - id: AN3
+        check: "Each finding cites specific evidence (code, config, dependency, or endpoint)"
+        on_fail: "Remove speculative findings or investigate further to find supporting evidence"
+
+  - phase: REPORT
+    checkpoint_start: "--- PHASE: REPORT ---"
+    checkpoint_end: "--- PHASE: REPORT COMPLETE ---"
+    exit_assertions:
+      - id: RE1
+        check: "Every finding has severity, category, description, impact, and remediation"
+        on_fail: "Complete missing fields — observations without remediation are not actionable"
+      - id: RE2
+        check: "Severity levels follow the 4-level scale consistently (critical > high > medium > low)"
+        on_fail: "Re-classify findings using the severity scale defined in the skill"
+      - id: RE3
+        check: "No finding is purely speculative — each one references specific code, config, or dependency"
+        on_fail: "Remove or substantiate speculative findings with concrete evidence"
+      - id: RE4
+        check: "action_items are ordered by priority and cover all findings above severity_threshold"
+        on_fail: "Re-prioritize action items and ensure all reportable findings are included"
+
+invariants:
+  - id: INV1
+    check: "Severity levels are strictly ordered: CRITICAL > HIGH > MEDIUM > LOW"
+    scope: all_phases
+    on_fail: "Re-classify findings using the 4-level severity scale"
+
+  - id: INV2
+    check: "Findings must be evidence-based — cite specific code, config, or dependency"
+    scope: all_phases
+    on_fail: "Remove or substantiate speculative findings with concrete evidence"
+
+  - id: INV3
+    check: "Every finding must include remediation — observations without fixes are not actionable"
+    scope: all_phases
+    on_fail: "Add remediation guidance to any finding that lacks it"

@@ -1,0 +1,110 @@
+# Workflow Input Contract
+# All agents (Claude, Codex, Gemini) MUST resolve these fields before entering Triage.
+# Fields are extracted from the user's request. If a required field cannot be inferred,
+# follow the on_missing action.
+
+schema_version: "1.0"
+contract: input
+skill: assistant-workflow
+
+fields:
+  - name: task_description
+    type: string
+    required: true
+    description: "What to build, fix, refactor, or investigate"
+    validation: "Non-empty string. Must describe a concrete action or desired outcome."
+    on_missing: ask
+    ask_prompt: "What would you like me to build, fix, or change?"
+
+  - name: task_type
+    type: enum
+    required: true
+    enum_values: [feature, bugfix, refactor, config, spike]
+    description: "Category of work — drives which prompt packs load"
+    validation: "Must be one of the enum values"
+    on_missing: infer
+    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'spike/explore/investigate' -> spike, else -> feature"
+
+  - name: scope_hint
+    type: enum
+    required: false
+    enum_values: [small, medium, large, mega]
+    description: "User-provided size estimate. Triage may override."
+    default: null
+    on_missing: skip
+
+  - name: target_files
+    type: string[]
+    required: false
+    description: "Specific files the user wants changed"
+    validation: "Each entry must be a valid relative file path"
+    default: []
+    on_missing: skip
+
+  - name: constraints
+    type: string[]
+    required: false
+    description: "Boundaries the agent must not cross"
+    validation: "Each entry is a plain-language constraint. Constraints only accumulate — never remove without explicit user instruction."
+    default: []
+    on_missing: skip
+    examples:
+      - "Don't touch ProjectA"
+      - "Stay on .NET 8"
+      - "No new NuGet packages"
+      - "Backend only, no UI"
+
+  - name: tdd_mode
+    type: boolean
+    required: false
+    description: "Whether to enforce Red-Green-Refactor cycle via assistant-tdd skill"
+    default: false
+    on_missing: skip
+    infer_from: "User says 'TDD', 'tests first', 'red green refactor' -> true"
+
+  - name: acceptance_criteria
+    type: string[]
+    required: false
+    description: "Explicit success criteria from user or decomposed from an idea"
+    validation: "Each criterion is atomic, binary (pass/fail), and testable (8-12 words)"
+    default: []
+    on_missing: skip
+    notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
+
+  - name: clarification_status
+    type: enum
+    required: true
+    enum_values: [ready, needs_clarification]
+    description: "Whether Discover is clear to continue or is waiting on explicit clarification about implementation-shaping fields"
+    validation: "ready requires zero unresolved clarification topics and every implementation-shaping field is explicit or defaulted. needs_clarification requires at least one unresolved clarification topic."
+    on_missing: infer
+    infer_from: "If any implementation-shaping field that affects files, behavior, interfaces, data shape, rollout, or verification is still unresolved, set to needs_clarification and add a deterministic topic label. Set to ready only when each such field is explicit or has an explicit default."
+
+  - name: unresolved_clarification_topics
+    type: string[]
+    required: true
+    description: "Deterministic short labels for unanswered topics that block planning"
+    validation: "List every unresolved implementation-shaping field with one deterministic short label. Empty when clarification_status=ready. Non-empty when clarification_status=needs_clarification."
+    default: []
+    on_missing: skip
+    examples:
+      - "target subsystem"
+      - "default behavior"
+      - "migration strategy"
+
+  - name: clarification_defaults_applied
+    type: boolean
+    required: true
+    description: "Whether any unresolved clarification topic was resolved by an explicit `defaults` reply during Discover"
+    validation: "Must be explicit true or false. May be true only after the workflow prints the applied defaults and the user explicitly replies `defaults`."
+    default: false
+    on_missing: skip
+    notes: "Never infer this from follow-up wording or continuation text."
+
+# Validation behavior:
+# 1. Resolve all required fields BEFORE printing --- PHASE: TRIAGE ---
+# 2. If on_missing=ask: present ONE focused question, wait for answer
+# 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
+# 4. If on_missing=skip: proceed with default value
+# 5. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
+# 6. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

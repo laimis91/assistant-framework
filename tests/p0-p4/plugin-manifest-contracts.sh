@@ -123,6 +123,28 @@ else
     fail "assistant-research plugin manifest must exist with filled scaffold metadata"
 fi
 
+test_start "assistant-dev plugin manifest has valid Codex scaffold metadata"
+if [[ -f "$FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" ]] \
+    && jq -e '
+        .name == "assistant-dev"
+        and .version == "0.1.0"
+        and .description == "Development workflow, documentation, review, and delivery skills."
+        and .repository == "https://github.com/laimis91/assistant-framework"
+        and .skills == "./skills/"
+        and (has("hooks") | not)
+        and (has("mcpServers") | not)
+        and (has("apps") | not)
+        and .interface.displayName == "Assistant Dev"
+        and .interface.shortDescription == "Development workflow and delivery skills"
+        and .interface.category == "Productivity"
+        and (.interface.capabilities == ["Interactive"])
+        and (.interface.defaultPrompt | length == 3)
+    ' "$FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" >/dev/null; then
+    pass
+else
+    fail "assistant-dev plugin manifest must exist with filled scaffold metadata"
+fi
+
 test_start "assistant-core plugin-local skills match boundary ownership"
 if p0p4_verify_plugin_skill_inventory "assistant-core"; then
     pass
@@ -135,6 +157,13 @@ if p0p4_verify_plugin_skill_inventory "assistant-research"; then
     pass
 else
     fail "assistant-research plugin skills must match boundary ownership"
+fi
+
+test_start "assistant-dev plugin-local skills match boundary ownership"
+if p0p4_verify_plugin_skill_inventory "assistant-dev"; then
+    pass
+else
+    fail "assistant-dev plugin skills must match boundary ownership"
 fi
 
 test_start "assistant-core plugin-local skill copies match root source skills"
@@ -151,15 +180,25 @@ else
     fail "assistant-research plugin skill copies must match root source without .DS_Store files"
 fi
 
+test_start "assistant-dev plugin-local skill copies match root source skills"
+if p0p4_verify_plugin_copy_parity "assistant-dev"; then
+    pass
+else
+    fail "assistant-dev plugin skill copies must match root source without .DS_Store files"
+fi
+
 test_start "assistant plugin scaffolds are documented without marketplace registration"
 marketplace_file="$FRAMEWORK_DIR/.agents/plugins/marketplace.json"
 if grep -Fq "plugins/assistant-core/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugins/assistant-research/.codex-plugin/plugin.json" "$plugin_doc" \
+    && grep -Fq "plugins/assistant-dev/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the three research skills" "$plugin_doc" \
+    && grep -Fq "plugin-local copies of the eight development skills" "$plugin_doc" \
     && grep -Fq "manifest-aware dry-run validation" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "plugin-local copies of the three research skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "plugin-local copies of the eight development skills" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "manifest-aware dry-run validation" "$FRAMEWORK_DIR/README.md" \
     && [[ ! -f "$marketplace_file" ]]; then
     pass

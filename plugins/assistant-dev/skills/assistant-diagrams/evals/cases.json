@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-diagrams-skill-behavior",
+  "skill": "assistant-diagrams",
+  "title": "assistant-diagrams Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-diagrams skill's code-derived diagram workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-diagrams skill instructions loaded.",
+    "Compare the local response against diagram input/output contracts, source evidence, placement, and gap handling.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "architecture-diagram-derived-from-code",
+      "title": "Architecture diagram derived from code",
+      "category": "code_derived_architecture",
+      "purpose": "Checks that architecture diagrams are generated from inspected source files and returned as valid Mermaid with evidence, placement, and gaps.",
+      "prompt": "Create an architecture diagram for the skill eval runner using tools/evals/run-skill-evals.sh and its lib helpers.",
+      "setup_context": [
+        "The assistant-diagrams skill instructions are active.",
+        "The user named specific source files and asked for an architecture diagram.",
+        "No existing diagram file path was requested."
+      ],
+      "expected_behavior": [
+        "Resolves diagram_type as architecture and format as mermaid.",
+        "Reads the named runner and helper files before drawing relationships.",
+        "Outputs diagram_code as a Mermaid fenced code block.",
+        "Uses real file and function names rather than aspirational components.",
+        "Returns Evidence with source files or symbols used.",
+        "Returns Placement as inline only when no output file was requested.",
+        "Returns Gaps for any source file or relationship that could not be verified."
+      ],
+      "pass_criteria": [
+        "The response includes diagram_type and diagram_code.",
+        "The response includes a Mermaid diagram.",
+        "The response cites source evidence from tools/evals files.",
+        "The response states placement and gaps.",
+        "The response does not invent components absent from source."
+      ],
+      "fail_signals": [
+        "Draws from memory without reading source files.",
+        "Includes aspirational boxes or relationships not present in code.",
+        "Omits evidence paths or symbol names.",
+        "Outputs prose only with no diagram_code."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "diagram_type",
+          "architecture",
+          "diagram_code",
+          "mermaid",
+          "Evidence",
+          "tools/evals/run-skill-evals.sh",
+          "Placement",
+          "Gaps"
+        ],
+        "forbidden_substrings": [
+          "drawn from memory",
+          "aspirational component",
+          "No source files needed",
+          "prose only"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-diagram-asks-bounded-clarification",
+      "title": "Ambiguous diagram asks bounded clarification",
+      "category": "input_contract_clarification",
+      "purpose": "Checks that missing diagram_type or scope triggers a bounded clarification instead of a guessed diagram.",
+      "prompt": "Draw a diagram for this project.",
+      "setup_context": [
+        "The assistant-diagrams skill instructions are active.",
+        "The user did not specify diagram_type, scope, or source_files.",
+        "The current project has multiple plausible diagram targets."
+      ],
+      "expected_behavior": [
+        "Recognizes that required diagram_type and scope are unresolved.",
+        "Asks a concise clarification with a small set of diagram type choices.",
+        "Mentions scope or source_files needed to avoid guessing.",
+        "Does not generate a diagram before input contract fields are resolved.",
+        "Keeps the response bounded rather than asking broad open-ended questions."
+      ],
+      "pass_criteria": [
+        "The response asks for diagram_type and scope or equivalent choices.",
+        "The response offers supported diagram types such as architecture, sequence, flow, or ER.",
+        "The response does not output diagram_code yet.",
+        "The response explains that source files or scope drive accuracy."
+      ],
+      "fail_signals": [
+        "Generates a diagram without resolving type or scope.",
+        "Guesses the project architecture from memory.",
+        "Asks an unbounded generic question with no options.",
+        "Claims source evidence is unnecessary."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "diagram_type",
+          "scope",
+          "ask",
+          "architecture",
+          "sequence",
+          "flow",
+          "source_files"
+        ],
+        "forbidden_substrings": [
+          "I generated the diagram",
+          "without reading code",
+          "No source evidence needed",
+          "guess the architecture"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+# Review Handoff Contracts
+# Defines the data shape between Orchestrator and Reviewer subagent.
+# The review skill dispatches a fresh Reviewer each round for medium+ scope.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-review
+
+worker_status_protocol:
+  description: "Reviewer returns include a compact status packet while preserving the findings/rubric schema."
+  statuses:
+    - value: DONE
+      meaning: "No known concerns; requested review completed and no must-fix or should-fix findings remain."
+    - value: DONE_WITH_CONCERNS
+      meaning: "Review completed and is usable, but follow-up risk or nit-level concerns exist."
+    - value: NEEDS_CONTEXT
+      meaning: "Orchestration must clarify missing review material or requirements before review can proceed."
+    - value: BLOCKED
+      meaning: "Cannot proceed because an environment, dependency, permission, or tool issue prevents review."
+  packet_rules:
+    - "status is required on every Reviewer return."
+    - "findings, summary, and verdict remain required and are not replaced by status."
+    - "evidence is required to support the verdict and any findings."
+    - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+
+handoffs:
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → Reviewer (per round)
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_reviewer
+    from: Orchestrator
+    to: Reviewer
+    phase: REVIEW_STEP
+    notes: "Fresh Reviewer dispatch each round for medium+ scope. For trivial/small, self-review is acceptable."
+
+    context_fields:
+      - name: review_material_snapshot
+        type: object
+        required: true
+        description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
+        validation: "Non-empty. Must include enough material to support concrete file/content findings."
+        object_fields:
+          - name: kind
+            type: enum
+            required: true
+            enum_values: [diff, files, task_snapshot, pr_snapshot, content]
+            description: "Shape of the review material"
+          - name: summary
+            type: string
+            required: true
+            description: "Concise description of what the snapshot covers"
+          - name: material
+            type: string
+            required: true
+            description: "Actual diff, file contents/excerpts, task or PR snapshot, or pasted content"
+          - name: files
+            type: string[]
+            required: false
+            default: []
+            description: "Known files covered by the snapshot"
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+            description: "Optional PR URL, task journal path, command, or user-provided label"
+
+      - name: round
+        type: int
+        required: true
+        description: "Current review round number (1-5)"
+        validation: ">= 1 and <= 5"
+
+      - name: previously_fixed
+        type: object[]
+        required: true
+        description: "Items fixed in prior rounds — Reviewer MUST NOT re-report these"
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: fixed_in_round
+            type: int
+            required: true
+
+      - name: confidence_threshold
+        type: int
+        required: true
+        description: "Minimum confidence percentage for reporting findings this round"
+        validation: "Must be one of: 80, 85, 90"
+        notes: "Round 1-2: 80. Round 3-4: 85. Round 5: 90."
+
+      - name: project_type
+        type: string
+        required: false
+        description: "Project type if known (e.g., 'C# ASP.NET Core') — enables language-specific checks"
+
+      - name: review_focus
+        type: string[]
+        required: false
+        description: "Specific areas to focus on if the orchestrator wants targeted review"
+        examples:
+          - "security"
+          - "error handling"
+          - "test coverage"
+          - "architecture violations"
+
+      - name: rubric_required
+        type: boolean
+        required: false
+        description: "Whether the reviewer must return rubric scores (default: true for medium+ scope)"
+        notes: "Set to false for trivial/small scope single-round clean passes."
+
+    return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result; DONE requires verdict=clean with no must-fix or should-fix findings"
+
+      - name: round
+        type: int
+        required: true
+        description: "Echo back the round number for tracking"
+
+      - name: findings
+        type: object[]
+        required: true
+        description: "All findings above the confidence threshold for this round"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+          - name: file
+            type: string
+            required: true
+            validation: "Must be a file path covered by the reviewed material, or a stable content label when reviewing pasted content"
+          - name: line
+            type: int
+            required: false
+            description: "Line number in the file (not the diff line number)"
+          - name: description
+            type: string
+            required: true
+            validation: "Specific and actionable — not vague ('could be better')"
+          - name: confidence_pct
+            type: int
+            required: true
+            validation: "Must be >= confidence_threshold for this round"
+          - name: suggestion
+            type: string
+            required: false
+            description: "Concrete fix suggestion when applicable"
+
+      - name: summary
+        type: string
+        required: true
+        description: "1-paragraph overall assessment of code quality"
+        validation: "Non-empty. Must reference specific patterns observed, not generic praise."
+
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Review material, files, searches, or checks used to support findings and verdict"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+
+      - name: verdict
+        type: enum
+        required: true
+        enum_values: [clean, has_must_fix, has_should_fix, has_nits_only]
+        description: "Overall result for this round"
+        validation: >
+          clean: findings is empty or contains only items below threshold.
+          has_must_fix: at least one finding with severity=must-fix.
+          has_should_fix: no must-fix, but at least one should-fix.
+          has_nits_only: only nit-level findings.
+
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve"
+
+      - name: rubric_scores
+        type: object
+        required: false
+        condition: "rubric_required is true (default for medium+ scope)"
+        description: "Structured rubric scores per references/review-rubric.md"
+        object_fields:
+          - name: correctness
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: code_quality
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: architecture
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: security
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: test_coverage
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: weighted_score
+            type: float
+            required: true
+            validation: "Calculated per rubric formula. Must match dimension * weight sum."
+          - name: action
+            type: enum
+            required: true
+            enum_values: [PASS, REFINE, PIVOT]
+            validation: "Determined by weighted_score vs threshold for current round"
+          - name: score_justification
+            type: object
+            required: true
+            description: "Per-dimension justification citing specific code"
+            object_fields:
+              - name: correctness
+                type: string
+                required: true
+              - name: code_quality
+                type: string
+                required: true
+              - name: architecture
+                type: string
+                required: true
+              - name: security
+                type: string
+                required: true
+              - name: test_coverage
+                type: string
+                required: true
+          - name: critical_override
+            type: string
+            required: false
+            description: "If a critical finding caps the score, describe it here"
+
+    on_missing_field: "Re-dispatch Reviewer. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+
+# ─────────────────────────────────────────────
+# Validation behavior:
+# 1. Before dispatch: verify all required context_fields are populated
+# 2. Compute confidence_threshold from round number (not hardcoded in prompt)
+# 3. After return: verify status, findings[], summary, evidence, and verdict are all present
+# 4. Filter any findings with confidence_pct < confidence_threshold
+# 5. Filter any findings that match previously_fixed descriptions
+# 6. If rubric_required: verify rubric_scores is present with all dimensions
+# 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
+# 8. If re-dispatch needed: include explicit note about what was missing
+# ─────────────────────────────────────────────

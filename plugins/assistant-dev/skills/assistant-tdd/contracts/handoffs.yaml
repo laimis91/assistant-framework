@@ -1,0 +1,12 @@
+# TDD Handoff Contracts
+# TDD runs as a single-agent cycle — it does not dispatch subagents directly.
+# When used with assistant-workflow, the workflow's BuilderTester subagent executes
+# build/test commands during GREEN and REFACTOR phases, but that handoff is owned
+# by the workflow skill (see assistant-workflow/contracts/handoffs.yaml, tdd_mode field).
+# This file exists because all Process skills must declare handoffs per the contract schema.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-tdd
+
+handoffs: []

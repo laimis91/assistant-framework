@@ -1,0 +1,35 @@
+schema_version: "1.0"
+contract: input
+skill: assistant-security
+
+fields:
+  - name: analysis_type
+    type: enum
+    required: true
+    description: "Which security analysis tool to run"
+    enum_values: [threat_model, code_review, dependency_audit, attack_surface]
+    on_missing: infer
+    infer_from: "Determine from the user's request — threat-model for design/architecture discussions, code-review for code changes, dependency-audit for supply chain concerns, attack-surface for new deployments"
+    validation: "Must match one of the four available security tools"
+
+  - name: scope
+    type: string
+    required: true
+    description: "What to analyze — files, feature, PR, or project area"
+    on_missing: ask
+    ask_prompt: "What is the scope of this security analysis? (specific files, a component, or the full project)"
+    validation: "Must identify specific files, feature, PR, or project scope"
+
+  - name: trigger_context
+    type: string
+    required: false
+    description: "Why security analysis was triggered (e.g., 'new auth endpoint', 'adding packages')"
+    on_missing: skip
+
+  - name: severity_threshold
+    type: enum
+    required: false
+    description: "Minimum severity level to include in results"
+    enum_values: [critical, high, medium, low]
+    default: low
+    on_missing: skip

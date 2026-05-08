@@ -1,0 +1,85 @@
+# Assistant Skill Creator Input Contract
+# Resolve these fields before entering CAPTURE phase.
+
+schema_version: "1.0"
+contract: input
+skill: assistant-skill-creator
+
+fields:
+  - name: skill_name
+    type: string
+    required: true
+    description: "Kebab-case identifier for the new skill, prefixed with domain (e.g., assistant-foo, unity-bar)"
+    validation: "Must be kebab-case. Must start with a domain prefix (assistant-, unity-, etc.)"
+    on_missing: ask
+    ask_prompt: "What should this skill be called? Use kebab-case with a domain prefix (e.g., assistant-my-skill)."
+    examples:
+      - "assistant-deploy"
+      - "unity-terrain"
+      - "assistant-changelog"
+
+  - name: skill_purpose
+    type: string
+    required: true
+    description: "One sentence describing what the skill enables the agent to do"
+    validation: "Non-empty string. Must describe a concrete capability, not a vague goal."
+    on_missing: ask
+    ask_prompt: "In one sentence, what should this skill enable the agent to do?"
+    examples:
+      - "Generate infrastructure diagrams from Terraform files"
+      - "Run structured brainstorming sessions with diverge-converge pipeline"
+      - "Scaffold new .NET projects with layered architecture"
+
+  - name: skill_category
+    type: enum
+    required: true
+    enum_values: [process, analysis, utility]
+    description: "Contract tier — determines which contract files are required"
+    validation: "Must be one of the enum values"
+    on_missing: infer
+    infer_from: "skill_purpose keywords: 'multi-phase/workflow/pipeline/subagent/dispatch' -> process, 'analyze/reason/research/diverge/converge' -> analysis, else -> utility"
+
+  - name: trigger_phrases
+    type: string[]
+    required: true
+    description: "User phrases that should activate this skill"
+    validation: "At least 3 phrases. Each phrase is 2-5 words, lowercase."
+    min_items: 3
+    on_missing: ask
+    ask_prompt: "What phrases would a user say when they need this skill? Give at least 3."
+    examples:
+      - ["deploy to prod", "push deployment", "release to staging"]
+      - ["generate terrain", "create landscape", "build terrain"]
+
+  - name: dependencies
+    type: string[]
+    required: false
+    description: "Other skills this skill requires (listed in 'requires:' frontmatter)"
+    default: []
+    on_missing: skip
+    examples:
+      - ["assistant-memory"]
+      - ["assistant-memory", "assistant-review"]
+
+  - name: effort_level
+    type: enum
+    required: false
+    enum_values: [low, medium, high]
+    description: "Expected effort to execute this skill"
+    default: medium
+    on_missing: infer
+    infer_from: "skill_category: utility -> low, analysis -> medium, process -> high"
+
+  - name: existing_skill_path
+    type: string
+    required: false
+    description: "Path to an existing skill to add contracts to (instead of creating from scratch)"
+    default: null
+    on_missing: skip
+    notes: "When provided, skip CAPTURE and go straight to DESIGN using the existing SKILL.md"
+
+# Validation behavior:
+# 1. Resolve required fields before printing --- PHASE: CAPTURE ---
+# 2. If on_missing=ask: present ONE focused question, wait for answer
+# 3. If on_missing=infer: state the inference ("I'm categorizing this as a utility skill")
+# 4. If on_missing=skip: proceed with default value

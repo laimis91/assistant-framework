@@ -1,0 +1,212 @@
+# Review Phase Gate Contracts
+# The review loop has 4 steps per round plus entry and exit conditions.
+# These gates enforce correct sequencing within each round and across the loop.
+
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-review
+
+gates:
+
+  # ─────────────────────────────────────────────
+  # ENTRY — before the loop starts
+  # ─────────────────────────────────────────────
+  # Review phases are loop steps within a single workflow REVIEW phase.
+  # The workflow's REVIEW checkpoint wraps them, so per-step checkpoints are null.
+  - phase: ENTRY
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: E1
+        check: "review_scope is resolved to one of: files, changes, task, pr, content"
+        on_fail: "Determine scope from git state and task journal, or ask user"
+
+      - id: E2
+        check: "review_material_snapshot.material is non-empty — there is actual material to review"
+        on_fail: "Inform user 'nothing to review' and exit without entering the loop"
+
+      - id: E3
+        check: "scope_size is determined (trivial, small, medium, large)"
+        on_fail: "Count files and lines changed to determine scope_size"
+
+      - id: E4
+        check: "mode is resolved (review-fix or audit)"
+        on_fail: "Default to review-fix unless user explicitly requested audit"
+
+  # ─────────────────────────────────────────────
+  # REVIEW step — per round
+  # ─────────────────────────────────────────────
+  - phase: REVIEW_STEP
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: RS1
+        check: "For medium+ scope: a fresh Reviewer subagent was dispatched (not reusing prior context)"
+        condition: "scope_size in [medium, large]"
+        on_fail: "Dispatch a new Reviewer subagent with the current review material snapshot and previously_fixed list"
+
+      - id: RS2
+        check: "Reviewer received: review_material_snapshot, round number, previously_fixed list, and confidence_threshold"
+        on_fail: "Re-dispatch with all required context fields per handoffs contract"
+
+      - id: RS3
+        check: "Reviewer returned: findings[], summary, verdict — all present"
+        on_fail: "Re-dispatch Reviewer requesting the missing fields"
+
+      - id: RS4
+        check: "No previously-fixed item was re-reported in findings"
+        on_fail: "Filter out re-reported items before proceeding to EVALUATE"
+
+      - id: RS5
+        check: "For medium+ scope: rubric_scores is present in reviewer return with all 5 dimensions scored"
+        condition: "scope_size in [medium, large]"
+        on_fail: "Re-dispatch Reviewer with rubric_required=true. Reference references/review-rubric.md for scoring instructions."
+
+  # ─────────────────────────────────────────────
+  # EVALUATE step — per round
+  # ─────────────────────────────────────────────
+  - phase: EVALUATE_STEP
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: EV1
+        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, CONTINUE"
+        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix (nits OK, note in report). EXIT_ISSUES_FIXED = round 5, all issues fixed this session. EXIT_MAX_ROUNDS = round 5 with remaining must-fix."
+
+      - id: EV2
+        check: "EXIT_CLEAN only if: zero must-fix AND zero should-fix findings"
+        on_fail: "Findings exist — must CONTINUE to FIX step"
+
+      - id: EV3
+        check: "EXIT_MAX_ROUNDS only if: round == 5"
+        on_fail: "Rounds remain — must CONTINUE to FIX step"
+
+      - id: EV4
+        check: "In audit mode: always EXIT after first round (no fix loop)"
+        condition: "mode == audit"
+        on_fail: "Audit mode does not fix or loop — present findings and exit"
+
+      - id: EV5
+        check: "For medium+ scope: rubric threshold action is applied — PASS exits, REFINE continues, PIVOT escalates"
+        condition: "scope_size in [medium, large] and rubric_scores is present"
+        on_fail: "Check rubric weighted_score against threshold table in references/review-rubric.md and apply the correct action"
+
+      - id: EV6
+        check: "PIVOT action triggers escalation to orchestrator — do not silently continue after PIVOT"
+        condition: "rubric_scores.action == PIVOT"
+        on_fail: "Flag to orchestrator: weighted score below pivot threshold. Include lowest-scoring dimensions and recommendations."
+
+  # ─────────────────────────────────────────────
+  # FIX step — per round (review-fix mode only)
+  # ─────────────────────────────────────────────
+  - phase: FIX_STEP
+    condition: "mode == review-fix"
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: F1
+        check: "ALL must-fix items were addressed (not just some)"
+        on_fail: "Fix remaining must-fix items before proceeding"
+
+      - id: F2
+        check: "ALL should-fix items were addressed (fixed or explicitly deferred with reason)"
+        on_fail: "Fix or defer remaining should-fix items — add deferred items to remaining_items with reason_unresolved populated"
+
+      - id: F3
+        check: "Each fixed item was added to previously_fixed with description and round number"
+        on_fail: "Update previously_fixed list before proceeding to VALIDATE"
+
+  # ─────────────────────────────────────────────
+  # VALIDATE step — per round (review-fix mode only)
+  # ─────────────────────────────────────────────
+  - phase: VALIDATE_STEP
+    condition: "mode == review-fix"
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: V1
+        check: "Build was run and passed (exit code 0)"
+        on_fail: "Fix build errors before incrementing round"
+
+      - id: V2
+        check: "Tests were run and all pass (0 failures)"
+        on_fail: "Fix failing tests before incrementing round"
+
+      - id: V3
+        check: "For C# projects: cognitive complexity analysis was run on changed files"
+        condition: "project is C# and complexity tool is available"
+        on_fail: "Run complexity analysis and flag methods exceeding threshold"
+
+  # ─────────────────────────────────────────────
+  # EXIT — after loop completes
+  # ─────────────────────────────────────────────
+  - phase: EXIT
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: X1
+        check: "Final summary is fully populated per output contract"
+        on_fail: "Complete the final summary before presenting to user"
+
+      - id: X2
+        check: "If task journal exists: Review Log entry was appended with Final Result"
+        condition: "task_journal_path is not null"
+        on_fail: "Append Review Log entry to task journal"
+
+      - id: X3
+        check: "For medium+ scope: rubric_summary is populated in output with final scores and score progression"
+        condition: "scope_size in [medium, large]"
+        on_fail: "Populate rubric_summary with final_scores from last round and score_progression from all rounds"
+
+# ─────────────────────────────────────────────
+# Loop invariants
+# ─────────────────────────────────────────────
+invariants:
+  - id: INV0
+    check: "Only ONE summary is presented to the user — no intermediate results are shown during the loop"
+    scope: all_rounds
+    on_fail: "Do not print findings or summaries until the loop exits. Buffer all output for the final summary."
+
+  - id: INV1
+    check: "previously_fixed list only grows — items are never removed"
+    scope: all_rounds
+    on_fail: "Restore any removed items to previously_fixed. This list is append-only."
+
+  - id: INV2
+    check: "Confidence threshold increases: round 1-2 = 80%, round 3-4 = 85%, round 5 = 90%"
+    scope: all_rounds
+    on_fail: "Recalculate confidence_threshold from round number: rounds 1-2 = 80, rounds 3-4 = 85, round 5 = 90."
+
+  - id: INV3
+    check: "The agent never pauses between rounds to ask the user — the loop is autonomous"
+    scope: all_rounds
+    on_fail: "This is the core violation of this skill. Continue the loop without waiting."
+
+  - id: INV4
+    check: "Each round finds fewer or equal issues than the previous round"
+    scope: all_rounds
+    on_fail: "Investigate whether fixes are introducing new problems. If issue count increased, document this in the final summary as a warning."
+
+  - id: INV5
+    check: "For medium+ scope: rubric score increases correlate with finding count decreases (no drift)"
+    scope: all_rounds
+    condition: "scope_size in [medium, large] and round >= 2"
+    on_fail: >
+      Drift detected: score increased without corresponding quality improvement.
+      Per references/score-tracking.md: reset evaluator context by dispatching a fresh Reviewer
+      with stricter prompt. Add 'Drift detected in round N' to the final summary.
+
+  - id: INV6
+    check: "For medium+ scope: score does not stagnate (unchanged for 2+ rounds with findings present)"
+    scope: all_rounds
+    condition: "scope_size in [medium, large] and round >= 3"
+    on_fail: >
+      Stagnation detected: score unchanged for 2+ rounds while findings remain.
+      Escalate to orchestrator — the loop is churning without progress. Consider whether
+      remaining issues are architectural (require broader changes) or the approach needs a PIVOT.

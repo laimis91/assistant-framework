@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-tdd-skill-behavior",
+  "skill": "assistant-tdd",
+  "title": "assistant-tdd Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-tdd skill's Red-Green-Refactor enforcement.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-tdd skill instructions loaded.",
+    "Compare the local response against RED, GREEN, REFACTOR gate behavior and required RED evidence.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "bugfix-starts-with-red-evidence",
+      "title": "Bugfix starts with RED evidence",
+      "category": "red_gate_enforcement",
+      "purpose": "Checks that a bug fix begins with one failing test, verifies the right failure reason, and blocks production code until RED evidence exists.",
+      "prompt": "Use TDD to fix the bug where the skill eval runner accepts duplicate case ids.",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "The user explicitly requested TDD.",
+        "No failing regression test has been written yet."
+      ],
+      "expected_behavior": [
+        "Activates Red-Green-Refactor and records TDD as active.",
+        "Starts with RED by writing exactly one failing behavior test.",
+        "Runs the test and verifies that it fails for the right reason.",
+        "Captures RED evidence including test file, test name, command run, failure summary, and why it proves the missing behavior.",
+        "Blocks production implementation until the failing test evidence exists.",
+        "Does not batch multiple unrelated behaviors into the first RED step."
+      ],
+      "pass_criteria": [
+        "The response names RED as the first phase.",
+        "The response requires one failing test before production code.",
+        "The response requires the failure to be for the right reason.",
+        "The response lists the RED evidence needed before GREEN.",
+        "The response refuses to write production code before RED evidence."
+      ],
+      "fail_signals": [
+        "Starts by editing production code.",
+        "Writes several behavior tests in one RED cycle.",
+        "Treats a syntax error or missing import as a valid RED failure.",
+        "Promises to add tests after fixing the bug."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "RED",
+          "one failing test",
+          "right reason",
+          "RED evidence",
+          "test file",
+          "test name",
+          "command run",
+          "production code"
+        ],
+        "forbidden_substrings": [
+          "I will fix the code first",
+          "Tests can come after",
+          "Syntax error is enough",
+          "Multiple behaviors in one RED"
+        ]
+      }
+    },
+    {
+      "id": "green-refactor-runs-all-tests",
+      "title": "GREEN and REFACTOR run all tests",
+      "category": "green_refactor_verification",
+      "purpose": "Checks that GREEN implements the simplest code, then runs targeted and full tests, and that REFACTOR remains behavior-neutral with all tests green.",
+      "prompt": "The RED test is failing for the expected missing duplicate-id validation. Continue the TDD cycle.",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "A valid RED test has already failed for the intended missing behavior.",
+        "Production implementation has not yet started."
+      ],
+      "expected_behavior": [
+        "Moves to GREEN only because RED evidence is present.",
+        "Implements the simplest production change needed to pass the failing test.",
+        "Runs the previously failing test and confirms it now passes.",
+        "Runs all other tests to detect regressions.",
+        "Uses REFACTOR only for behavior-neutral cleanup.",
+        "Runs all tests again after REFACTOR and starts the next behavior with a new RED cycle."
+      ],
+      "pass_criteria": [
+        "The response gates GREEN on prior RED evidence.",
+        "The response limits implementation to the simplest passing code.",
+        "The response runs targeted and all tests in GREEN.",
+        "The response keeps REFACTOR behavior-neutral.",
+        "The response runs all tests after REFACTOR."
+      ],
+      "fail_signals": [
+        "Adds extra behavior during GREEN.",
+        "Skips the full regression suite after GREEN.",
+        "Adds new behavior during REFACTOR.",
+        "Starts the next behavior without a new RED cycle."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "GREEN",
+          "simplest",
+          "previously failing test",
+          "all tests",
+          "REFACTOR",
+          "behavior-neutral",
+          "regressions",
+          "next RED"
+        ],
+        "forbidden_substrings": [
+          "Add extra behavior",
+          "Skip all tests",
+          "New behavior during REFACTOR",
+          "No new RED needed"
+        ]
+      }
+    }
+  ]
+}

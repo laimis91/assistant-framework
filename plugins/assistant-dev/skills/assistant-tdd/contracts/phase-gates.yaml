@@ -1,0 +1,97 @@
+# TDD Phase Gate Contracts
+# The Red-Green-Refactor cycle has strict gates at each transition.
+# These are the core enforcement mechanism — violating a gate means TDD was not followed.
+
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-tdd
+
+gates:
+
+  # ─────────────────────────────────────────────
+  # RED → GREEN transition
+  # ─────────────────────────────────────────────
+  - phase: RED
+    checkpoint_start: "--- PHASE: RED ---"
+    checkpoint_end: "--- PHASE: RED COMPLETE ---"
+    exit_assertions:
+
+      - id: RED1
+        check: "Exactly ONE new test was written for the target behavior"
+        on_fail: "Write only one test per behavior. Split if testing multiple things."
+
+      - id: RED2
+        check: "The test was executed and it FAILED"
+        on_fail: "Run the test. If it passes, the behavior already exists or the test is wrong — investigate."
+
+      - id: RED3
+        check: "The test failed for the RIGHT reason (not syntax error, missing import, or wrong setup)"
+        on_fail: "Fix the test infrastructure issue. The failure must demonstrate the missing behavior."
+
+      - id: RED4
+        check: "No production code was written during the RED phase"
+        on_fail: "Delete any production code written before the test failed. Start GREEN phase cleanly."
+
+  # ─────────────────────────────────────────────
+  # GREEN → REFACTOR transition
+  # ─────────────────────────────────────────────
+  - phase: GREEN
+    checkpoint_start: "--- PHASE: GREEN ---"
+    checkpoint_end: "--- PHASE: GREEN COMPLETE ---"
+    exit_assertions:
+
+      - id: GREEN1
+        check: "The previously failing test now PASSES"
+        on_fail: "The implementation is incomplete. Continue writing the simplest code to make it pass."
+
+      - id: GREEN2
+        check: "ALL other existing tests still PASS"
+        on_fail: "The implementation broke something. Fix the regression without changing the new test."
+
+      - id: GREEN3
+        check: "Only the SIMPLEST code was written — no extra features, no 'while I'm here' additions"
+        on_fail: "Remove code that goes beyond making the failing test pass. Additional behavior needs its own RED phase."
+
+  # ─────────────────────────────────────────────
+  # REFACTOR → next RED (or exit)
+  # ─────────────────────────────────────────────
+  - phase: REFACTOR
+    checkpoint_start: "--- PHASE: REFACTOR ---"
+    checkpoint_end: "--- PHASE: REFACTOR COMPLETE ---"
+    exit_assertions:
+
+      - id: REF1
+        check: "ALL tests still PASS after refactoring"
+        on_fail: "Undo the refactoring change that broke tests. Try a smaller refactoring step."
+
+      - id: REF2
+        check: "No new behavior was added during refactoring"
+        on_fail: "New behavior belongs in a new RED phase. Remove it from this refactoring step."
+
+      - id: REF3
+        check: "Duplication introduced in GREEN was addressed (or explicitly noted as acceptable)"
+        on_fail: "Review for duplication from the GREEN step and extract/simplify"
+
+# ─────────────────────────────────────────────
+# TDD invariants
+# ─────────────────────────────────────────────
+invariants:
+  - id: INV1
+    check: "No production code exists without a preceding failing test"
+    scope: all_cycles
+    on_fail: "Delete the production code and start with a failing test. This is the iron law of TDD."
+
+  - id: INV2
+    check: "Tests run after every phase transition (RED: must fail, GREEN: must pass, REFACTOR: must pass)"
+    scope: all_cycles
+    on_fail: "Run tests immediately. Skipping test execution defeats the purpose of TDD."
+
+  - id: INV3
+    check: "Each cycle follows RED → GREEN → REFACTOR order — no skipping, no reordering"
+    scope: all_cycles
+    on_fail: "Return to the correct phase. The sequence is not negotiable."
+
+  - id: INV4
+    check: "If a test passes unexpectedly in RED, the cycle stops for investigation — not silently continued"
+    scope: all_cycles
+    on_fail: "Investigate: does the behavior already exist? Is the test wrong? Resolve before continuing."

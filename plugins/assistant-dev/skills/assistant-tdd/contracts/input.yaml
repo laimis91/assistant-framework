@@ -1,0 +1,60 @@
+# TDD Input Contract
+# Resolve these fields when TDD mode activates.
+
+schema_version: "1.0"
+contract: input
+skill: assistant-tdd
+
+fields:
+  - name: activation_reason
+    type: enum
+    required: true
+    enum_values: [user_request, plan_constraint, project_convention]
+    description: "Why TDD is active — determines strictness of enforcement"
+    on_missing: infer
+    infer_from: >
+      User said 'TDD', 'tests first', 'red green refactor' → user_request.
+      Plan includes 'TDD: active' in constraints → plan_constraint.
+      Project CLAUDE.md requires tests-first → project_convention.
+
+  - name: behaviors
+    type: object[]
+    required: true
+    description: "List of behaviors to implement via Red-Green-Refactor"
+    min_items: 1
+    validation: "Each behavior maps to one TDD cycle. Complex behaviors must be split."
+    object_fields:
+      - name: description
+        type: string
+        required: true
+        description: "What the behavior does — becomes the test name basis"
+      - name: plan_step
+        type: int
+        required: false
+        description: "Which plan step this behavior belongs to (when used with workflow)"
+    on_missing: ask
+    ask_prompt: "What behaviors should I implement with TDD? List each one."
+
+  - name: test_framework
+    type: string
+    required: true
+    description: "Testing framework in use (e.g., xUnit, NUnit, Jest, pytest)"
+    on_missing: infer
+    infer_from: "Detect from project files: *.csproj references, package.json, requirements.txt"
+
+  - name: exceptions
+    type: string[]
+    required: false
+    description: "Behaviors explicitly exempted from TDD (requires user approval)"
+    default: []
+    validation: "Each exception must have user approval and a reason"
+    examples:
+      - "Scaffolding/generated code"
+      - "Configuration-only changes"
+      - "UI layout with no logic"
+
+# Validation behavior:
+# 1. Resolve all fields before writing any test or production code
+# 2. If behaviors list is empty, ask user what to implement
+# 3. Add constraint to task journal: "TDD: active (Red-Green-Refactor enforced)"
+# 4. Log: >> TDD active | {count} behaviors | framework: {test_framework}

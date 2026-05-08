@@ -1,0 +1,229 @@
+# Workflow Output Contract
+# Defines what a completed workflow MUST produce.
+# Any agent executing this skill MUST verify all required artifacts exist
+# before printing --- WORKFLOW COMPLETE ---.
+
+schema_version: "1.0"
+contract: output
+skill: assistant-workflow
+
+artifacts:
+  - name: phase_checkpoints
+    type: string[]
+    required: true
+    condition: always
+    validation: >
+      Must contain paired entries for every phase that ran:
+      '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
+      Missing checkpoints = workflow was not followed.
+    minimum_entries:
+      # TRIAGE has no COMPLETE marker (checkpoint_end: null), so it contributes 1.
+      # All other phases contribute 2 (start + complete).
+      small: 11   # TRIAGE(1) + DISCOVER(2) + PLAN(2) + BUILD(2) + REVIEW(2) + DOCUMENT(2)
+      medium: 13  # + DECOMPOSE(2), Design optional
+      large: 15   # + DECOMPOSE(2) + DESIGN(2)
+      mega: 9     # TRIAGE(1) + DISCOVER(2) + DECOMPOSE(2) + REVIEW(2) + DOCUMENT(2); sub-task checkpoints are additional
+
+  - name: changed_files
+    type: object[]
+    required: true
+    condition: always
+    validation: "At least 1 entry unless task was determined unnecessary during Discovery"
+    object_fields:
+      - name: path
+        type: string
+        required: true
+        validation: "Relative file path that exists in the project"
+      - name: change_type
+        type: enum
+        required: true
+        enum_values: [created, modified, deleted]
+      - name: description
+        type: string
+        required: true
+        validation: "1 sentence explaining what changed and why"
+
+  - name: test_results
+    type: object
+    required: true
+    condition: always
+    validation: "passed + failed + skipped must equal total tests run. passed must be > 0."
+    object_fields:
+      - name: passed
+        type: int
+        required: true
+        validation: ">= 1 (at least one test must exist and pass)"
+      - name: failed
+        type: int
+        required: true
+        validation: "Must be 0 at workflow completion"
+      - name: skipped
+        type: int
+        required: true
+
+  - name: review_result
+    type: object
+    required: true
+    condition: always
+    validation: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result."
+    object_fields:
+      - name: quality_review_status
+        type: enum
+        required: true
+        enum_values: [clean, has_remaining]
+      - name: review_rounds
+        type: int
+        required: true
+        validation: ">= 1"
+      - name: must_fix_resolved
+        type: int
+        required: true
+      - name: should_fix_resolved
+        type: int
+        required: true
+
+  - name: spec_review_result
+    type: object
+    required: true
+    condition: always
+    validation: >
+      Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
+      Must be distinct from assistant-review quality findings. At completion, status must
+      be PASS and required_fixes must be empty or fully resolved.
+    object_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [PASS]
+      - name: scope_reviewed
+        type: string
+        required: true
+        validation: "Plan step(s), task packet(s), or component(s) reviewed"
+      - name: missing_acceptance_criteria
+        type: string[]
+        required: true
+        validation: "Empty only when none are missing"
+      - name: extra_scope
+        type: string[]
+        required: true
+        validation: "Empty only when no unapproved extra scope remains"
+      - name: changed_files_mismatch
+        type: string[]
+        required: true
+        validation: "Empty only when actual changed files match approved scope or approved deviations"
+      - name: verification_evidence_mismatch
+        type: string[]
+        required: true
+        validation: "Empty only when recorded evidence matches required commands, success signals, and criteria"
+      - name: required_fixes
+        type: string[]
+        required: true
+        validation: "Must be empty or explicitly resolved before workflow completion"
+
+  - name: manual_test_steps
+    type: string[]
+    required: true
+    condition: always
+    validation: "At least 1 actionable step the user can follow to verify the change"
+
+  - name: task_journal
+    type: file
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: "File exists at .claude/task.md and contains Status: DONE"
+    location: ".claude/task.md"
+
+  - name: context_map
+    type: file
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: "File exists at .claude/context-map.md"
+    location: ".claude/context-map.md"
+
+  - name: component_manifest
+    type: string
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: >
+      Contains ordered list of components with names, descriptions, files,
+      dependencies, and binary verification criteria. Each component has at
+      least 1 verification criterion. All criteria must be checked and passing
+      before WORKFLOW COMPLETE.
+
+  - name: component_verification_summary
+    type: object[]
+    required: true
+    condition: "size in [medium, large, mega]"
+    validation: >
+      Contains one entry per component from the manifest, in order, with task
+      packet id, RED status when TDD was active, implementation status,
+      verification command/result, criteria checked, self-check result, and
+      final status. Every component final status must be VERIFIED before
+      WORKFLOW COMPLETE.
+    object_fields:
+      - name: component_id
+        type: string
+        required: true
+      - name: component_name
+        type: string
+        required: true
+      - name: task_packet_id
+        type: string
+        required: true
+      - name: red_status
+        type: string
+        required: true
+        validation: "Use pass/fail when TDD was active, otherwise N/A"
+      - name: implementation_status
+        type: enum
+        required: true
+        enum_values: [done, blocked]
+      - name: verification_result
+        type: string
+        required: true
+        validation: "Command or inspection performed plus pass/fail result and success signal"
+      - name: criteria_checked
+        type: string
+        required: true
+        validation: "All component criteria listed with pass/fail status"
+      - name: self_check_result
+        type: string
+        required: true
+        validation: "Local sanity check result against task packet, constraints, and deviation rule"
+      - name: final_status
+        type: enum
+        required: true
+        enum_values: [VERIFIED]
+
+  - name: metrics_entry
+    type: jsonl_line
+    required: true
+    condition: always
+    validation: "Valid JSON with required keys: date, project, task, size, review_rounds, plan_deviations, build_failures"
+    location: "~/.claude/memory/metrics/workflow-metrics.jsonl"
+
+  - name: plan_document
+    type: string
+    required: true
+    condition: always
+    validation: >
+      Small: inline plan with goal, files, risks, tests.
+      Medium: standard plan per plan-template.md.
+      Large/Mega: full plan per plan-template.md including Security and Operability.
+
+  - name: user_approval
+    type: enum
+    required: true
+    condition: always
+    enum_values: [confirmed, confirmed_with_issues]
+    validation: "User explicitly confirmed 'looks good' or equivalent before Document phase"
+
+# Completeness check:
+# Before printing --- WORKFLOW COMPLETE ---, verify:
+# 1. All required artifacts for the task's size tier are present
+# 2. test_results.failed == 0
+# 3. spec_review_result.status == PASS and required_fixes are empty or resolved
+# 4. review_result.quality_review_status is not missing
+# 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component
+# 6. user_approval is confirmed or confirmed_with_issues
+# If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.

@@ -1,0 +1,39 @@
+{
+  "name": "assistant-dev",
+  "version": "0.1.0",
+  "description": "Development workflow, documentation, review, and delivery skills.",
+  "author": {
+    "name": "Assistant Framework",
+    "url": "https://github.com/laimis91/assistant-framework"
+  },
+  "homepage": "https://github.com/laimis91/assistant-framework",
+  "repository": "https://github.com/laimis91/assistant-framework",
+  "license": "MIT",
+  "keywords": [
+    "assistant-framework",
+    "development",
+    "workflow",
+    "documentation",
+    "review",
+    "testing"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Assistant Dev",
+    "shortDescription": "Development workflow and delivery skills",
+    "longDescription": "Install Assistant Framework skills for structured development, documentation, onboarding, review, security, TDD, and diagrams.",
+    "developerName": "Assistant Framework",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/laimis91/assistant-framework",
+    "defaultPrompt": [
+      "Implement this change using the workflow.",
+      "Review this code and fix the findings.",
+      "Document this feature and update tests."
+    ],
+    "brandColor": "#7C3AED",
+    "screenshots": []
+  }
+}

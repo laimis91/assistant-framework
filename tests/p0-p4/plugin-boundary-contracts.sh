@@ -24,7 +24,7 @@ test_start "plugin architecture doc exists and preserves current install compati
 if [[ -f "$plugin_doc" ]] \
     && grep -Fq "current_install_inventory: skills/assistant-*/SKILL.md" "$plugin_doc" \
     && grep -Fq "current_plugin_profile: assistant-core via --plugin assistant-core" "$plugin_doc" \
-    && grep -Fq "current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json" "$plugin_doc" \
+    && grep -Fq "current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json plugins/assistant-dev/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "no root skill directories move in this slice" "$plugin_doc" \
     && grep -Fq "Auto-discovers first-class release skills from skills/assistant-*/SKILL.md" "$FRAMEWORK_DIR/install.sh"; then
     pass
@@ -85,17 +85,18 @@ else
     fail "README must document assistant-core profile while preserving current root installer semantics"
 fi
 
-test_start "plugin scaffold slice exposes core and research manifests only"
+test_start "plugin scaffold slice exposes core, research, and dev manifests only"
 manifest_output="$(find "$FRAMEWORK_DIR" \
     -path "$FRAMEWORK_DIR/.git" -prune -o \
     \( -path "*/.codex-plugin/plugin.json" -o -name plugin.json \) -print | sort)"
-expected_manifest_output="$(printf '%s\n%s\n' \
+expected_manifest_output="$(printf '%s\n%s\n%s\n' \
     "$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" \
-    "$FRAMEWORK_DIR/plugins/assistant-research/.codex-plugin/plugin.json")"
+    "$FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" \
+    "$FRAMEWORK_DIR/plugins/assistant-research/.codex-plugin/plugin.json" | sort)"
 if [[ "$manifest_output" == "$expected_manifest_output" ]]; then
     pass
 else
-    fail "only assistant-core and assistant-research plugin manifests should exist in this scaffold slice: $manifest_output"
+    fail "only assistant-core, assistant-research, and assistant-dev plugin manifests should exist in this scaffold slice: $manifest_output"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
