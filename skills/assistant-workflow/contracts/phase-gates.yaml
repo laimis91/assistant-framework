@@ -86,7 +86,7 @@ gates:
   # ─────────────────────────────────────────────
   - phase: DECOMPOSE
     checkpoint_start: "--- PHASE: DECOMPOSE ---"
-    checkpoint_end: "--- PHASE: DECOMPOSE COMPLETE (approved) ---"
+    checkpoint_end: "--- PHASE: DECOMPOSE COMPLETE ---"
     condition: "size in [medium, large, mega]"
     exit_assertions:
 
@@ -111,15 +111,11 @@ gates:
         on_fail: "Extract shared contracts into component #1"
 
       - id: DC6
-        check: "User explicitly approved the component decomposition"
-        on_fail: "Present component manifest and wait for approval"
-
-      - id: DC7
         check: "Architect subagent was dispatched for decomposition (not done inline by Orchestrator)"
         condition: "size in [medium, large, mega]"
         on_fail: "Dispatch Architect for component decomposition — Orchestrator must not absorb this work"
 
-      - id: DC8
+      - id: DC7
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
@@ -132,8 +128,8 @@ gates:
     exit_assertions:
 
       - id: P1
-        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test"
-        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet"
+        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan also includes the component manifest from Decompose"
+        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and include the component manifest for medium+ tasks"
 
       - id: P2
         check: "Each implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify"
@@ -144,8 +140,8 @@ gates:
         on_fail: "Add risks section. Every plan has at least one risk, even if low."
 
       - id: P4
-        check: "User explicitly said 'approved' or 'approved with changes'"
-        on_fail: "Present plan and wait for approval. Do NOT proceed without it."
+        check: "User explicitly said 'approved' or 'approved with changes' to the plan, including the component manifest for medium+ tasks"
+        on_fail: "Present the full plan, including the component manifest for medium+ tasks, and wait for approval. Do NOT proceed without it."
 
       - id: P5
         check: "Plan tier matches task size (inline for small, standard for medium, full for large/mega)"
@@ -166,7 +162,7 @@ gates:
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
       - id: P9
-        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md"
+        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md and aligned to Decompose components"
         condition: "size in [medium, large, mega]"
         on_fail: "Rewrite vague implementation steps into executable task packets"
 

@@ -10,7 +10,6 @@ if [[ ! -f "$helper_file" ]]; then
     missing_runtime_helper_terms+=("workflow-phase-gates.sh exists")
 else
     for term in \
-        "assistant_phase_has_component_approval" \
         "assistant_phase_has_plan_approval" \
         "assistant_phase_review_missing_reason_key" \
         "assistant_phase_has_metrics_today"; do
@@ -37,10 +36,10 @@ test_start "workflow enforcer declares runtime phase gate warnings"
 missing_workflow_gate_terms=()
 for term in \
     "RUNTIME PHASE GATES" \
-    "Component decomposition approved" \
+    "Plan approved" \
     "Review gate complete" \
     "Metrics today" \
-    "without approved component decomposition" \
+    "WARNING: You are BUILDING without an approved plan" \
     "WARNING: Review gate incomplete" \
     "WARNING: Metrics gate incomplete"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"; then
@@ -51,6 +50,16 @@ if [[ "${#missing_workflow_gate_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow-enforcer.sh missing runtime gate terms: ${missing_workflow_gate_terms[*]}"
+fi
+
+test_start "workflow instructions do not require separate Decompose approval"
+if rg -n "Component decomposition approval required|User explicitly approved the component decomposition|without approved component decomposition|DECOMPOSE COMPLETE \(approved\)" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow" \
+    "$FRAMEWORK_DIR/hooks" \
+    "$FRAMEWORK_DIR/docs/evals" >/tmp/p0p4-stale-decompose-approval.out; then
+    fail "found stale Decompose approval requirement; see /tmp/p0p4-stale-decompose-approval.out"
+else
+    pass
 fi
 
 test_start "stop and harness gates include DOCUMENTING as active lifecycle status"

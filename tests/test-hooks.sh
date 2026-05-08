@@ -154,7 +154,6 @@ if test_start "workflow-phase-gates: detects medium approved plan/review/metrics
 Task: Runtime gate helper
 Status: DOCUMENTING
 Triaged as: medium
-Approval status: approved by user
 Plan approval: yes
 ## Review Log
 ### Spec Review #1
@@ -177,7 +176,6 @@ TASK
         . "$1"
         task_file="$2"
         assistant_phase_is_medium_plus "$task_file" \
-            && assistant_phase_has_component_approval "$task_file" \
             && assistant_phase_has_plan_approval "$task_file" \
             && assistant_phase_review_complete "$task_file" \
             && assistant_phase_has_metrics_today
@@ -202,22 +200,6 @@ TASK
         pass
     else
         fail "expected no_spec_review, got '$helper_reason'"
-    fi
-    rm -rf "$TEST_PROJECT/.claude"
-fi
-
-if test_start "workflow-phase-gates: does not treat not approved component status as approved"; then
-    mkdir -p "$TEST_PROJECT/.claude"
-    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
-# Task
-Status: PLANNING
-Triaged as: medium
-Approval status: not approved
-TASK
-    if bash -c '. "$1"; ! assistant_phase_has_component_approval "$2"' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$TEST_PROJECT/.claude/task.md"; then
-        pass
-    else
-        fail "helper treated 'not approved' component status as approved"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -3104,7 +3086,7 @@ EOF
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
-if test_start "workflow-enforcer: medium PLANNING without component approval → includes runtime gate warning"; then
+if test_start "workflow-enforcer: medium PLANNING without plan approval → reports plan state only"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
 Task: Runtime gates
@@ -3124,8 +3106,8 @@ EOF
     if [[ $HOOK_EXIT -eq 0 ]] \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
-        && echo "$HOOK_STDOUT" | grep -q "Component decomposition approved: no" \
-        && echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
+        && echo "$HOOK_STDOUT" | grep -q "Plan approved: no" \
+        && ! echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
@@ -3133,7 +3115,7 @@ EOF
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
-if test_start "workflow-enforcer: small PLANNING without component approval → no medium component warning"; then
+if test_start "workflow-enforcer: small PLANNING without plan approval → no component approval warning"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
 Task: Small runtime gates
@@ -3153,6 +3135,7 @@ EOF
     if [[ $HOOK_EXIT -eq 0 ]] \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
+        && echo "$HOOK_STDOUT" | grep -q "Plan approved: no" \
         && ! echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
         pass
     else

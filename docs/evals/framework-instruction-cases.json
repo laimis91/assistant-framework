@@ -335,7 +335,7 @@
       "purpose": "Checks that medium or larger work verifies each component independently before moving to the next component.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
-        "A medium task has an approved component manifest with ordered components.",
+        "A medium task has a component manifest with ordered components.",
         "Component 2 implementation has finished, but its verification criteria have not been checked."
       ],
       "prompt": "Component 2 is coded. Start component 3 now; we can verify everything at the end.",

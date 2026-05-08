@@ -129,8 +129,8 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 | Phase | When | Key Actions |
 |---|---|---|
 | **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. |
-| **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Approval gate. |
-| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Approval gate. |
+| **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Feed the manifest into Plan. |
+| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Single approval gate for scope, components, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
 | **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
 | **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |

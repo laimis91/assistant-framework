@@ -32,30 +32,6 @@ assistant_phase_status_is_lifecycle_active() {
     [[ "$status" == *"BUILDING"* || "$status" == *"VERIFYING"* || "$status" == *"REVIEWING"* || "$status" == *"DOCUMENTING"* ]]
 }
 
-assistant_phase_has_component_approval() {
-    local file="$1"
-    awk '
-        {
-            line = tolower($0)
-        }
-        line ~ /^component decomposition approval:[[:space:]]*yes([[:space:]]|$)/ {
-            found = 1
-        }
-        line ~ /^component approval:[[:space:]]*yes([[:space:]]|$)/ {
-            found = 1
-        }
-        line ~ /^approval status:/ && line ~ /approved/ && line !~ /(not approved|unapproved|pending)/ {
-            found = 1
-        }
-        line ~ /decompose complete \(approved\)/ {
-            found = 1
-        }
-        END {
-            exit found ? 0 : 1
-        }
-    ' "$file" 2>/dev/null
-}
-
 assistant_phase_has_plan_approval() {
     local file="$1"
     grep -qE "(^Plan approval:.*yes|PLAN COMPLETE \(approved\))" "$file" 2>/dev/null

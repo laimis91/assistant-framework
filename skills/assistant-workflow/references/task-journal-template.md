@@ -34,7 +34,7 @@ Plan approval: [yes/no + date]
 - [scope limits, e.g. "Backend only, no UI changes"]
 
 ## Plan
-[paste approved plan verbatim — steps with file paths]
+[paste approved plan verbatim — include component manifest for medium+ tasks, plus steps with file paths]
 
 ## Key Decisions
 - [decision]: [why] (Step N)
@@ -147,8 +147,8 @@ Plan approval: [yes/no + date]
 
 1. **Created** during Discover when clarification state must be tracked. Any task that enters clarification wait creates it before the wait; medium+ tasks also create it before leaving Discover even when no clarification wait is needed.
 2. **Clarification** updates — while waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
-3. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the approved component decomposition before moving on to planning. Small tasks skip this state.
-4. **Plan approval** — once ready to plan, set `Status: PLANNING`, capture the approved plan, and update `Plan approval`.
+3. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the component manifest before moving on to planning. Small tasks skip this state.
+4. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the component manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.
 5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Component Verification Ledger after each component and do not start the next component until the current one is `VERIFIED`. Check off Milestones when reached.
 6. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
 7. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING

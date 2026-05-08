@@ -245,11 +245,6 @@ if assistant_phase_has_plan_approval "$TASK_FILE"; then
     has_plan_approval="yes"
 fi
 
-has_component_approval="no"
-if assistant_phase_has_component_approval "$TASK_FILE"; then
-    has_component_approval="yes"
-fi
-
 # Check review state
 review_count=$(grep -cE "^### (Spec Review|Quality Review|Review) #[0-9]+" "$TASK_FILE" 2>/dev/null) || review_count=0
 has_final_result="no"
@@ -274,7 +269,6 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Clarification status: $clarification_status
 - Clarification defaults applied: $clarification_defaults
 - Unresolved clarification topics: $clarification_topics_summary
-- Component decomposition approved: $has_component_approval
 - Plan approved: $has_plan_approval
 - Reviews completed: $review_count
 - Final result: $has_final_result
@@ -291,7 +285,6 @@ PHASE RULES (non-negotiable):
 context+="
 
 RUNTIME PHASE GATES:
-- Component decomposition approved: $has_component_approval
 - Plan approved: $has_plan_approval
 - Review gate complete: $has_review_completion
 - Metrics today: $has_metrics_today"
@@ -315,12 +308,6 @@ if [[ "$clarification_state_unsaved" == "yes" ]]; then
     context+="
 WARNING: Clarification state is missing or unknown in the saved task journal. Write Clarification status, Clarification defaults applied, and Unresolved clarification topics before continuing.
 REMINDER: Saved clarification state must be written to the task journal before continuing."
-fi
-
-# Add gate-specific warnings
-if [[ "$is_medium_plus_task" == "yes" && "$has_component_approval" == "no" && ( "$is_planning" == "yes" || "$is_building" == "yes" ) ]]; then
-    context+="
-WARNING: You are in $status without approved component decomposition. Medium+ tasks require Decompose approval before Plan or Build."
 fi
 
 if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then

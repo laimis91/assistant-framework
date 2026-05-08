@@ -119,20 +119,15 @@ Each criterion must be:
 Good: `[ ] GET /api/items returns 200 with JSON array`
 Bad: `[ ] API works correctly`
 
-### Approval gate
+### Plan handoff
 
-Print: `>> WAITING: Component decomposition approval required`
+Persist the component manifest and carry it into Plan. Do not wait for separate
+component approval in Decompose; the Plan approval gate covers the component
+manifest, implementation packets, file scope, verification criteria, and risks
+together. If decomposition exposes ambiguity, scope expansion, or competing
+valid approaches, return to Discover for clarification before planning.
 
-Present the component manifest and WAIT:
-```
-Review the decomposition:
-- "approved" -- I'll plan each component
-- "merge [X] and [Y]" -- I'll combine and re-present
-- "split [X]" -- I'll break it down further
-- Questions -- I'll address before proceeding
-```
-
-Print: `--- PHASE: DECOMPOSE COMPLETE (approved) ---`
+Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 
 ## Phase: Plan
 
@@ -155,9 +150,10 @@ Read `references/plan-template.md` and use the correct tier:
 2. Evaluate architecture (see `playbooks/*.md` for project-type rules)
 3. Analyze 1-3 options with tradeoffs, pick one
 4. Identify risks and edge cases
-5. Write ordered implementation steps with file paths
-6. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-7. Load prompt packs only when applicable:
+5. For medium+ tasks: include the Decompose component manifest in the plan and align each task packet to a component
+6. Write ordered implementation steps with file paths
+7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
+8. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - New code: `references/prompts/test-strategy.md`
    - DB changes: `references/prompts/migration.md`
