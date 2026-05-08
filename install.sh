@@ -17,6 +17,7 @@
 #   ./install.sh --agent claude --dry-run
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
+#   ./install.sh --agent codex --plugin assistant-research  # research profile only
 #   ./install.sh --agent claude --no-hooks                  # skip hook installation
 #
 # Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
@@ -49,7 +50,7 @@ Installs the Assistant Framework skills for an AI agent.
 Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
-  --plugin NAME      Install a planned plugin profile such as assistant-core
+  --plugin NAME      Install a planned plugin profile such as assistant-core or assistant-research
   --no-hooks         Skip hook installation
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
@@ -60,7 +61,7 @@ added manually to installed skill directories. Back up customizations first.
 
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
-  Use --plugin assistant-core to install only the core profile.
+  Use --plugin assistant-core or --plugin assistant-research to install a focused profile.
 
 Memory data:
   memory-graph MCP is registered against ~/.{agent}/memory.
@@ -72,6 +73,7 @@ Examples:
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
   $(basename "$0") --agent codex --plugin assistant-core
+  $(basename "$0") --agent codex --plugin assistant-research
 EOF
     exit 0
 }
@@ -168,6 +170,21 @@ validate_plugin_manifest_dry_run() {
     dry "Plugin manifest skills match profile boundary: ${SKILLS[*]}"
 }
 
+supported_plugin_profiles() {
+    printf '%s\n' assistant-core assistant-research
+}
+
+is_supported_plugin_profile() {
+    local plugin_name="$1"
+    local supported_profile
+
+    while IFS= read -r supported_profile; do
+        [[ "$plugin_name" == "$supported_profile" ]] && return 0
+    done < <(supported_plugin_profiles)
+
+    return 1
+}
+
 apply_plugin_profile() {
     local plugin_name="$1"
     local profile_line
@@ -179,8 +196,8 @@ apply_plugin_profile() {
         fail "Unknown plugin profile: $plugin_name. Available install profiles are defined in docs/plugin-architecture.md."
     fi
 
-    if [[ "$plugin_name" != "assistant-core" ]]; then
-        fail "$plugin_name is boundary-defined but not installable yet. Supported install profile: assistant-core."
+    if ! is_supported_plugin_profile "$plugin_name"; then
+        fail "$plugin_name is boundary-defined but not installable yet. Supported install profiles: $(supported_plugin_profiles | tr '\n' ' ' | sed 's/[[:space:]]*$//')."
     fi
 
     profile_payload="${profile_line#*:}"

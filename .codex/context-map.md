@@ -1,4 +1,4 @@
-# Context Map: Assistant-Dev Plugin Manifest Scaffold
+# Context Map: Assistant-Research Install Profile
 
 ## Current Installer Surface
 - `install.sh` discovers default first-class skills from `skills/assistant-*/SKILL.md`.
@@ -6,13 +6,14 @@
 - `plugins/assistant-core/.codex-plugin/plugin.json` exists with plugin-local copies under `plugins/assistant-core/skills/`.
 - `plugins/assistant-research/.codex-plugin/plugin.json` exists with plugin-local copies under `plugins/assistant-research/skills/`.
 - `assistant-core --dry-run` validates the core manifest scaffold.
+- `assistant-research` is boundary-defined and scaffolded, but was rejected before this slice.
 - The plugin scaffolds are not marketplace-registered.
 
 ## Target Slice
-- Add `plugins/assistant-dev/.codex-plugin/plugin.json`.
-- Add plugin-local copies of `assistant-diagrams`, `assistant-docs`, `assistant-onboard`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, and `assistant-workflow`.
-- Extend plugin manifest contracts across core, research, and dev plugin scaffolds.
-- Keep `assistant-dev` boundary-only and not installable through `--plugin` yet.
+- Add `--plugin assistant-research` as an installable profile.
+- Keep installs root-inventory based, filtered to `assistant-ideate`, `assistant-research`, and `assistant-thinking`.
+- Reuse manifest-aware dry-run validation for `plugins/assistant-research/.codex-plugin/plugin.json`.
+- Keep `assistant-dev` and `assistant-unity` boundary-only and not installable through `--plugin` yet.
 - Keep marketplace registration absent.
 
 ## Key Files
@@ -25,13 +26,13 @@
 - `plugins/assistant-dev/skills/`
 - `docs/plugin-architecture.md`
 - `README.md`
-- `tests/p0-p4/plugin-manifest-contracts.sh`
+- `tests/p0-p4/installer-contracts.sh`
 - `tests/p0-p4/plugin-boundary-contracts.sh`
 - `tests/test-p0-p4-contracts.sh`
 
 ## Verification Focus
-- Dev manifest metadata is filled and points at `./skills/`.
-- Dev plugin-local skills match the `assistant-dev` boundary exactly.
-- Dev plugin-local skill copies match root source skill files excluding `.DS_Store`.
-- Only core, research, and dev plugin manifests exist.
+- `assistant-research --dry-run` lists only research skills and validates its manifest.
+- Real `assistant-research` profile installs only the three research root skills.
+- AGENTS skill table for the profile lists exactly three research skills.
+- `assistant-dev` and `assistant-unity` still use generic boundary-only rejection.
 - Marketplace registration remains absent.

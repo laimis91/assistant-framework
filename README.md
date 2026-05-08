@@ -32,13 +32,14 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
-Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The current installer still uses the root `skills/assistant-*` release inventory by default, and it also supports the first profile install:
+Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The current installer still uses the root `skills/assistant-*` release inventory by default, and it also supports focused profile installs:
 
 ```bash
 ./install.sh --agent codex --plugin assistant-core
+./install.sh --agent codex --plugin assistant-research
 ```
 
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the eight development skills. The installer performs manifest-aware dry-run validation for the core profile, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
+The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the eight development skills. The installer performs manifest-aware dry-run validation for the core and research profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
 
 Install a single skill:
 ```bash

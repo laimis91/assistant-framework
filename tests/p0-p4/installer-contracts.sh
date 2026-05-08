@@ -94,6 +94,29 @@ else
     fail "assistant-core dry-run failed; see /tmp/p0p4-install-plugin-dry.err"
 fi
 
+test_start "Codex plugin profile dry-run selects assistant-research skills only"
+INSTALL_HOME_PLUGIN_RESEARCH_DRY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_RESEARCH_DRY"
+if HOME="$INSTALL_HOME_PLUGIN_RESEARCH_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-research --no-hooks --dry-run >/tmp/p0p4-install-plugin-research-dry.out 2>/tmp/p0p4-install-plugin-research-dry.err; then
+    plugin_research_dry_output="$(cat /tmp/p0p4-install-plugin-research-dry.out)"
+    if printf '%s\n' "$plugin_research_dry_output" | grep -Fq "Plugin profile: assistant-research" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-research/.codex-plugin/plugin.json" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-research -> ./skills/" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-ideate assistant-research assistant-thinking" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-ideate/" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-research/" \
+        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-thinking/" \
+        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-workflow/" \
+        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-security/" \
+        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-memory/"; then
+        pass
+    else
+        fail "assistant-research dry-run should list only research plugin skills"
+    fi
+else
+    fail "assistant-research dry-run failed; see /tmp/p0p4-install-plugin-research-dry.err"
+fi
+
 test_start "Codex plugin profile dry-run rejects manifest skill drift"
 INSTALL_HOME_PLUGIN_DRY_DRIFT="$(mktemp -d)"
 PLUGIN_MANIFEST="$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json"
@@ -151,6 +174,45 @@ else
     fail "assistant-core plugin install failed; see /tmp/p0p4-install-plugin-core.err"
 fi
 
+test_start "Codex assistant-research plugin install installs only research skills and AGENTS rows"
+INSTALL_HOME_PLUGIN_RESEARCH="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_RESEARCH"
+if HOME="$INSTALL_HOME_PLUGIN_RESEARCH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-research --no-hooks >/tmp/p0p4-install-plugin-research.out 2>/tmp/p0p4-install-plugin-research.err; then
+    installed_research_skills_dir="$INSTALL_HOME_PLUGIN_RESEARCH/.codex/skills"
+    research_agents_file="$INSTALL_HOME_PLUGIN_RESEARCH/.codex/AGENTS.md"
+    research_agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$research_agents_file")"
+    missing_research_skill=""
+    unexpected_research_profile_skill=""
+    for research_skill in assistant-ideate assistant-research assistant-thinking; do
+        if [[ ! -d "$installed_research_skills_dir/$research_skill" ]]; then
+            missing_research_skill="$research_skill"
+            break
+        fi
+        if ! grep -Fq "| $research_skill |" "$research_agents_file"; then
+            missing_research_skill="$research_skill AGENTS.md"
+            break
+        fi
+    done
+    for non_research_skill in assistant-workflow assistant-review assistant-security assistant-memory assistant-telos assistant-docs; do
+        if [[ -d "$installed_research_skills_dir/$non_research_skill" ]] || grep -Fq "| $non_research_skill |" "$research_agents_file"; then
+            unexpected_research_profile_skill="$non_research_skill"
+            break
+        fi
+    done
+
+    if [[ -n "$missing_research_skill" ]]; then
+        fail "assistant-research plugin install missed $missing_research_skill"
+    elif [[ -n "$unexpected_research_profile_skill" ]]; then
+        fail "assistant-research plugin install included non-research skill $unexpected_research_profile_skill"
+    elif [[ "$research_agents_assistant_skill_rows" != "3" ]]; then
+        fail "expected assistant-research Codex AGENTS.md to list 3 assistant skills; found $research_agents_assistant_skill_rows"
+    else
+        pass
+    fi
+else
+    fail "assistant-research plugin install failed; see /tmp/p0p4-install-plugin-research.err"
+fi
+
 test_start "installer rejects boundary-only profiles without Unity hardcoding"
 INSTALL_HOME_PLUGIN_UNITY="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNITY"
@@ -158,6 +220,7 @@ if HOME="$INSTALL_HOME_PLUGIN_UNITY" bash "$FRAMEWORK_DIR/install.sh" --agent co
     fail "assistant-unity boundary profile should not install until it has P0/P4 coverage"
 elif grep -Fq "assistant-unity is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-unity.err \
     && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-unity.err \
+    && grep -Fq "assistant-research" /tmp/p0p4-install-plugin-unity.err \
     && ! grep -Fq "assistant-unity is local-only" "$FRAMEWORK_DIR/install.sh" \
     && ! grep -Fq "skills/unity-*" "$FRAMEWORK_DIR/install.sh"; then
     pass
@@ -171,10 +234,11 @@ p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY"
 if HOME="$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-boundary-only.out 2>/tmp/p0p4-install-plugin-boundary-only.err; then
     fail "assistant-dev should remain boundary-only until it has P0/P4 install coverage"
 elif grep -Fq "assistant-dev is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-boundary-only.err \
-    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-boundary-only.err; then
+    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-boundary-only.err \
+    && grep -Fq "assistant-research" /tmp/p0p4-install-plugin-boundary-only.err; then
     pass
 else
-    fail "boundary-only plugin profile rejection should name assistant-core as the supported install profile"
+    fail "boundary-only plugin profile rejection should name supported install profiles"
 fi
 
 test_start "installer rejects combining --skill and --plugin"
