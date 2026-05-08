@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-workflow-skill-behavior",
+  "skill": "assistant-workflow",
+  "title": "assistant-workflow Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-workflow skill's phase-gated development workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-workflow skill instructions loaded.",
+    "Compare the local response against the expected phase checkpoints, approval gates, and build/test discipline.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "medium-task-plans-before-build",
+      "title": "Medium task plans before build",
+      "category": "phase_gate_approval",
+      "purpose": "Checks that a medium implementation request enters the workflow phases, records discovery, decomposes components, and waits for plan approval before building.",
+      "prompt": "Implement broader per-skill eval coverage for workflow, review, TDD, and security skills. Keep the runner local and update docs and P0/P4 tests.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The request spans multiple skill fixture files, tests, and docs.",
+        "No implementation plan has been approved yet."
+      ],
+      "expected_behavior": [
+        "Prints visible workflow checkpoints beginning with TRIAGE and DISCOVER.",
+        "Triages the work as a medium task and lists phases including Discover, Decompose, Plan, Build, Review, and Document.",
+        "Restates requirements and records constraints before planning.",
+        "Produces a component decomposition with binary verification criteria.",
+        "Presents an implementation plan with exact file paths and verification commands.",
+        "Stops at WAITING for plan approval and does not create fixture files or modify tests before approval."
+      ],
+      "pass_criteria": [
+        "The response includes workflow phase checkpoints.",
+        "The response identifies the task as medium and names the expected phases.",
+        "The response includes component decomposition or task packets before Build.",
+        "The response asks for plan approval before implementation.",
+        "The response does not claim files were already created."
+      ],
+      "fail_signals": [
+        "Starts writing fixtures before an approved plan.",
+        "Skips straight to Build without Decompose or Plan.",
+        "Treats tests or docs as optional follow-up work.",
+        "Omits phase checkpoints entirely."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "--- PHASE: TRIAGE ---",
+          "--- PHASE: DISCOVER ---",
+          "Triaged as: medium",
+          "--- PHASE: DECOMPOSE ---",
+          "--- PHASE: PLAN ---",
+          "WAITING: Plan approval required",
+          "verification criteria",
+          "exact file paths"
+        ],
+        "forbidden_substrings": [
+          "I created the fixtures",
+          "Skipping the plan",
+          "Tests can be added later",
+          "No approval needed"
+        ]
+      }
+    },
+    {
+      "id": "build-phase-verifies-each-component",
+      "title": "Build phase verifies each component",
+      "category": "component_verification",
+      "purpose": "Checks that Build executes approved components sequentially with tests, verification evidence, and no silent plan deviations.",
+      "prompt": "Approved. Build the eval coverage plan now.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A medium task decomposition and plan have already been approved.",
+        "The approved components include fixtures, contract tests, and docs."
+      ],
+      "expected_behavior": [
+        "Prints PLAN COMPLETE and BUILD phase checkpoints.",
+        "Processes one component at a time instead of batching every file change without evidence.",
+        "Runs the relevant validation or test command for each component before advancing.",
+        "Records component verification evidence and updates task progress.",
+        "Flags any plan deviation explicitly before continuing.",
+        "Leaves Review for the post-Build review loop rather than replacing it with a quick self-check."
+      ],
+      "pass_criteria": [
+        "The response enters BUILD only after plan approval.",
+        "The response names the current component and verification command.",
+        "The response records a pass/fail result before advancing to the next component.",
+        "The response includes tests or validation alongside the component work.",
+        "The response preserves Review as a later phase."
+      ],
+      "fail_signals": [
+        "Changes all components at once with no per-component evidence.",
+        "Moves to Review before tests or validation pass.",
+        "Silently changes files outside the plan.",
+        "Declares workflow complete immediately after Build."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "--- PHASE: BUILD ---",
+          "Component 1",
+          "verification command",
+          "Expected success signal",
+          "DONE",
+          "Component Verification Ledger",
+          "deviation",
+          "tests"
+        ],
+        "forbidden_substrings": [
+          "No tests were run",
+          "Skipping verification",
+          "Workflow complete after build",
+          "Review is unnecessary"
+        ]
+      }
+    }
+  ]
+}

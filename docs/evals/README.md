@@ -91,11 +91,16 @@ those skill fixtures with the same provider-neutral constraints as the framework
 instruction eval runner. It uses local shell and `jq` only; it does not call
 provider SDKs, model APIs, or network services.
 
-This slice is a pilot, not complete coverage for all 15 first-class skills. The
-current tracked fixtures cover:
+This slice covers the highest-control first-class skills first; it is not
+complete coverage for all 15 first-class skills. The current tracked fixtures
+cover:
 
 - `skills/assistant-clarify/evals/cases.json`
+- `skills/assistant-review/evals/cases.json`
+- `skills/assistant-security/evals/cases.json`
+- `skills/assistant-tdd/evals/cases.json`
 - `skills/assistant-thinking/evals/cases.json`
+- `skills/assistant-workflow/evals/cases.json`
 
 By default, the runner discovers first-class `skills/assistant-*/SKILL.md`
 skills that have `evals/cases.json` fixtures. Local-only `skills/unity-*`
@@ -165,5 +170,6 @@ and do not replace semantic judgment.
 
 Per-skill evals complement `tools/skills/validate-skills.sh`. The source
 validator checks skill metadata and contract structure; per-skill eval fixtures
-exercise observable skill behavior. Together they are the next step toward Level
-4 per-skill conformance, with broader fixture coverage still future work.
+exercise observable skill behavior. Together they are the current Level 4
+per-skill conformance foundation, with broader fixture coverage for the
+remaining first-class skills still future work.

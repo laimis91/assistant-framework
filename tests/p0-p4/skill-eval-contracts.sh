@@ -5,6 +5,7 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
+security_fixture="$FRAMEWORK_DIR/skills/assistant-security/evals/cases.json"
 
 p0p4_skill_eval_default_fixtures() {
     find "$FRAMEWORK_DIR/skills" \
@@ -148,7 +149,11 @@ fi
 test_start "skill eval runner validates default fixture inventory"
 if validation_output="$("$skill_eval_runner" --validate-fixture 2>&1)" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-clarify/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-review/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-security/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-tdd/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-thinking/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-workflow/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "OK skill eval fixtures:"; then
     pass
 else
@@ -182,15 +187,19 @@ else
     fail "skill eval runner did not validate targeted assistant-thinking skill by SKILL.md path"
 fi
 
-test_start "skill eval runner list includes pilot skill case rows"
+test_start "skill eval runner list includes high-control skill case rows"
 default_case_count="$(p0p4_skill_eval_default_case_count)"
 if list_output="$("$skill_eval_runner" --list)" \
     && [[ "$(printf '%s\n' "$list_output" | grep -c .)" -eq "$default_case_count" ]] \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-bounded-clarification\tambiguous_multi_intent\tMulti-intent prompt asks bounded clarification' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives'; then
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation'; then
     pass
 else
-    fail "skill eval runner --list did not include expected assistant-clarify and assistant-thinking case rows"
+    fail "skill eval runner --list did not include expected high-control assistant case rows"
 fi
 
 test_start "skill eval runner list honors targeted skill selection"
@@ -206,6 +215,19 @@ else
     fail "skill eval runner --list --skill assistant-clarify did not list only assistant-clarify cases"
 fi
 
+test_start "skill eval runner list honors targeted high-control skill selection"
+security_case_count="$(jq '.cases | length' "$security_fixture")"
+if targeted_security_list_output="$("$skill_eval_runner" --list --skill assistant-security)" \
+    && [[ "$(printf '%s\n' "$targeted_security_list_output" | grep -c .)" -eq "$security_case_count" ]] \
+    && printf '%s\n' "$targeted_security_list_output" | grep -Fq $'assistant-security\tthreat-model-scopes-before-analysis\tscope_and_methodology\tThreat model scopes before analysis' \
+    && printf '%s\n' "$targeted_security_list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' \
+    && ! printf '%s\n' "$targeted_security_list_output" | grep -Fq "assistant-clarify" \
+    && ! printf '%s\n' "$targeted_security_list_output" | grep -Fq "assistant-tdd"; then
+    pass
+else
+    fail "skill eval runner --list --skill assistant-security did not list only assistant-security cases"
+fi
+
 test_start "skill eval runner emits skill-specific prompt packets with machine expectations"
 prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-prompts.XXXXXX")"
 p0p4_register_cleanup "$prompt_dir"
@@ -217,6 +239,10 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md" \
+    && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
+    && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
+    && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/bugfix-starts-with-red-evidence.md" \
+    && grep -Fq "Skill: assistant-security" "$prompt_dir/assistant-security/findings-include-severity-impact-remediation.md" \
     && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md"; then
     pass
 else
@@ -425,7 +451,9 @@ p0p4_register_cleanup "$unity_fixture_dir"
 p0p4_write_skill_eval_fixture "$unity_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-clarify" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-security" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-thinking" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-workflow" \
     && ! printf '%s\n' "$local_only_list_output" | grep -Fq "$unity_fixture_name"; then
     pass
 else
@@ -444,6 +472,24 @@ if include_local_default_output="$("$skill_eval_runner" --list)" \
     pass
 else
     fail "skill eval runner --list --include-local should include generated local-only unity fixtures while default list excludes them"
+fi
+
+test_start "skill eval docs describe six-skill high-control coverage"
+if grep -Fq "six-skill high-control slice" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-workflow" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-review" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-tdd" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "not all 15 skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "six high-control skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "not full coverage for all 15 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    pass
+else
+    fail "skill eval docs do not describe the six-skill high-control coverage slice"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
