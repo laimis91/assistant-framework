@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — Installs all Assistant Framework skills for any supported AI agent.
 #
-# Auto-discovers skills from the skills/ directory (any subdirectory with SKILL.md).
+# Auto-discovers first-class release skills from skills/assistant-*/SKILL.md.
 # Also installs hooks + legacy graph seed/import compatibility.
 #
 # Also installs hooks for automated:
@@ -33,8 +33,7 @@ TEST_HOOKS=false
 FRAMEWORK_DIR=""
 toml_files=()
 
-# Skills are auto-discovered from the skills/ directory.
-# Any subdirectory containing a SKILL.md is treated as an installable skill.
+# Skills are auto-discovered from first-class assistant-* release directories.
 SKILLS=()
 
 # ── Parse args ────────────────────────────────────────────────────────────────
@@ -57,7 +56,7 @@ Note: skill installation uses rsync --delete, which removes any files you
 added manually to installed skill directories. Back up customizations first.
 
 Skills installed:
-  Auto-discovered from skills/ directory (any subdirectory with SKILL.md).
+  Auto-discovered from skills/assistant-*/SKILL.md.
 
 Memory data:
   memory-graph MCP is registered against ~/.{agent}/memory.
@@ -391,12 +390,12 @@ HOOKS_SOURCE="$FRAMEWORK_DIR/hooks"
 
 [[ -d "$SKILLS_SOURCE" ]] || fail "Skills directory not found at $SKILLS_SOURCE"
 
-# Auto-discover skills: any subdirectory of skills/ containing a SKILL.md
+# Auto-discover first-class release skills: assistant-* directories containing SKILL.md.
 while IFS= read -r skill_md; do
     skill_dir="$(dirname "$skill_md")"
     skill_name="$(basename "$skill_dir")"
     SKILLS+=("$skill_name")
-done < <(find "$SKILLS_SOURCE" -maxdepth 2 -name "SKILL.md" -type f | sort)
+done < <(find "$SKILLS_SOURCE" -maxdepth 2 -path "$SKILLS_SOURCE/assistant-*/SKILL.md" -type f | sort)
 command -v rsync >/dev/null 2>&1 || fail "rsync is required but not installed. Install with: apt install rsync / dnf install rsync / brew install rsync"
 
 # ── Test hooks (if requested) ────────────────────────────────────────────────

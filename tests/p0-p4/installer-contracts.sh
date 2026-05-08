@@ -320,6 +320,58 @@ else
     fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"
 fi
 
+test_start "default install excludes local Unity skills"
+INSTALL_HOME_TEN="$(mktemp -d)"
+UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-contract-fixture-XXXXXX")"
+UNITY_FIXTURE_NAME="$(basename "$UNITY_FIXTURE")"
+p0p4_register_cleanup "$INSTALL_HOME_TEN" "$UNITY_FIXTURE"
+cat > "$UNITY_FIXTURE/SKILL.md" <<'UNITY_SKILL'
+---
+name: unity-local-contract-fixture
+description: Local-only Unity fixture that must not be installed by default.
+---
+
+# Unity Local Contract Fixture
+UNITY_SKILL
+if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-hooks >/tmp/p0p4-install-default-skills.out 2>/tmp/p0p4-install-default-skills.err; then
+    installed_skills_dir="$INSTALL_HOME_TEN/.codex/skills"
+    missing_assistant_skill=""
+    unexpected_installed_skill=""
+
+    while IFS= read -r source_skill_md; do
+        source_skill="$(basename "$(dirname "$source_skill_md")")"
+        if [[ ! -d "$installed_skills_dir/$source_skill" ]]; then
+            missing_assistant_skill="$source_skill"
+            break
+        fi
+    done < <(find "$FRAMEWORK_DIR/skills" -maxdepth 2 -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -type f | sort)
+
+    if [[ -d "$installed_skills_dir" ]]; then
+        while IFS= read -r installed_skill_dir; do
+            installed_skill="$(basename "$installed_skill_dir")"
+            case "$installed_skill" in
+                assistant-*) ;;
+                *)
+                    unexpected_installed_skill="$installed_skill"
+                    break
+                    ;;
+            esac
+        done < <(find "$installed_skills_dir" -mindepth 1 -maxdepth 1 -type d | sort)
+    fi
+
+    if [[ -n "$missing_assistant_skill" ]]; then
+        fail "expected default install to include first-class assistant skill $missing_assistant_skill"
+    elif [[ -n "$unexpected_installed_skill" ]]; then
+        fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
+    elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then
+        fail "expected default install to exclude local Unity fixture"
+    else
+        pass
+    fi
+else
+    fail "default install with local Unity fixture failed; see /tmp/p0p4-install-default-skills.err"
+fi
+
 test_start "Codex hook template is valid JSON with one PreToolUse key"
 if jq -e . "$FRAMEWORK_DIR/hooks/codex-settings.json" >/dev/null \
     && [[ "$(grep -o '"PreToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]]; then
