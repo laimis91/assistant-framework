@@ -335,13 +335,19 @@ description: Local-only Unity fixture that must not be installed by default.
 UNITY_SKILL
 if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-hooks >/tmp/p0p4-install-default-skills.out 2>/tmp/p0p4-install-default-skills.err; then
     installed_skills_dir="$INSTALL_HOME_TEN/.codex/skills"
+    agents_file="$INSTALL_HOME_TEN/.codex/AGENTS.md"
     missing_assistant_skill=""
+    missing_agents_skill=""
     unexpected_installed_skill=""
 
     while IFS= read -r source_skill_md; do
         source_skill="$(basename "$(dirname "$source_skill_md")")"
         if [[ ! -d "$installed_skills_dir/$source_skill" ]]; then
             missing_assistant_skill="$source_skill"
+            break
+        fi
+        if ! grep -Fq "| $source_skill |" "$agents_file"; then
+            missing_agents_skill="$source_skill"
             break
         fi
     done < <(find "$FRAMEWORK_DIR/skills" -maxdepth 2 -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -type f | sort)
@@ -361,6 +367,8 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
 
     if [[ -n "$missing_assistant_skill" ]]; then
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
+    elif [[ -n "$missing_agents_skill" ]]; then
+        fail "expected generated Codex AGENTS.md to include first-class assistant skill $missing_agents_skill"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
     elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then

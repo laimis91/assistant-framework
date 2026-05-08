@@ -1094,11 +1094,19 @@ These rules define the operating contract for every response.
 |-------|---------|-------------|
 | assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |
 | assistant-clarify | ambiguous, multi-intent, underspecified prompts | Clarify the request before execution |
-| assistant-review | review, check the code | Autonomous review-fix loop (max 5 rounds) |
-| assistant-tdd | tests first, test-driven, red green | Red-Green-Refactor with verification gates |
-| assistant-security | security, threat model, audit | STRIDE, OWASP, CVE analysis |
+| assistant-diagrams | diagram, draw, visualize, flow | Create Mermaid architecture and flow diagrams |
+| assistant-docs | document, docs, README, changelog | Generate and maintain project documentation |
+| assistant-ideate | brainstorm, ideas, options, alternatives | Structured idea generation and refinement |
 | assistant-memory | remember, save insight, preferences | Cross-session persistent memory |
-| assistant-research | research, investigate, look into | Tiered research with source verification |
+| assistant-onboard | learn codebase, onboard, map project | Systematic project orientation |
+| assistant-reflexion | reflect, lessons, retrospective | Post-task learning and calibration |
+| assistant-research | research, investigate, compare options | Tiered research with source verification |
+| assistant-review | review, check the code | Autonomous review-fix loop (max 5 rounds) |
+| assistant-security | security, threat model, audit | STRIDE, OWASP, CVE analysis |
+| assistant-skill-creator | create skill, scaffold skill, contracts | Create V1 framework skills |
+| assistant-tdd | tests first, test-driven, red green | Red-Green-Refactor with verification gates |
+| assistant-telos | telos, purpose, mission, strategy | Purpose and strategic context management |
+| assistant-thinking | think through, stress test, debate | Structured reasoning for trade-offs |
 
 ## Agents (in ~/.codex/agents/)
 
