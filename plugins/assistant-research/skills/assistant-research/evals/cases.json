@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-research-skill-behavior",
+  "skill": "assistant-research",
+  "title": "assistant-research Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-research skill's source, confidence, and verification contracts.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-research skill instructions loaded.",
+    "Compare the local response against tier selection, source confidence, URL verification, conflicts, and gaps contracts.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "technology-comparison-uses-standard-tier",
+      "title": "Technology comparison uses standard tier",
+      "category": "tier_and_synthesis",
+      "purpose": "Checks that a technology comparison uses the research tool, standard tier, confidence-scored findings, conflicts, and gaps.",
+      "prompt": "Research whether we should use shell scripts or a small .NET CLI for skill fixture validation. Compare options for maintainability.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "The user asks for a technology comparison and decision support.",
+        "No external sources have been gathered yet."
+      ],
+      "expected_behavior": [
+        "Resolves tool as research and tier as standard or stronger based on the comparison request.",
+        "Logs the research tier and question before search activity.",
+        "Searches from differentiated angles such as direct evidence, alternatives, and counter-evidence.",
+        "Synthesizes findings with HIGH, MEDIUM, or LOW confidence based on source count and quality.",
+        "Reports CONFLICTS even when none are found.",
+        "Reports GAPS for unanswered or weakly supported questions."
+      ],
+      "pass_criteria": [
+        "The response names the selected tool and tier.",
+        "The response includes confidence-scored findings.",
+        "The response distinguishes sources from verified URLs.",
+        "The response includes conflicts and gaps sections.",
+        "The response does not present single-source findings as HIGH confidence."
+      ],
+      "fail_signals": [
+        "Gives a free-form recommendation with no confidence levels.",
+        "Omits conflicts or gaps.",
+        "Treats one source as HIGH confidence without justification.",
+        "Uses duplicate search angles for standard tier."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "RESEARCH:",
+          "Tier: standard",
+          "FINDINGS",
+          "confidence",
+          "Sources",
+          "CONFLICTS",
+          "GAPS",
+          "counter-evidence"
+        ],
+        "forbidden_substrings": [
+          "No confidence levels needed",
+          "single source is HIGH",
+          "No conflicts checked",
+          "No gaps checked"
+        ]
+      }
+    },
+    {
+      "id": "url-output-verifies-links",
+      "title": "URL output verifies links",
+      "category": "url_verification",
+      "purpose": "Checks that URLs are verified before presentation and unverified or hallucinated links are removed or flagged.",
+      "prompt": "Find official docs for the latest OpenAI Responses API and give me links I can rely on.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "The user explicitly asks for reliable URLs.",
+        "Some candidate URLs may come from memory or model prior rather than search results."
+      ],
+      "expected_behavior": [
+        "Treats reliable URLs as requiring verification before presentation.",
+        "Ensures every URL presented came from a search result or verified source.",
+        "Populates verified_urls only with links that were checked as accessible.",
+        "Removes or flags unverified URLs instead of presenting them as confirmed.",
+        "Assigns LOW confidence to findings with weak or conflicting source support.",
+        "Reports gaps if a URL cannot be verified."
+      ],
+      "pass_criteria": [
+        "The response includes verified_urls or an explicit verified URLs section.",
+        "The response states that unverified URLs were removed or flagged.",
+        "The response includes source attribution for each finding.",
+        "The response includes gaps for links that could not be verified.",
+        "The response does not invent plausible-looking URLs."
+      ],
+      "fail_signals": [
+        "Presents URLs without verification.",
+        "Includes hallucinated URLs from prior knowledge.",
+        "Omits gaps when URLs could not be checked.",
+        "Claims all links are official without source evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verified_urls",
+          "verified",
+          "accessible",
+          "Sources",
+          "GAPS",
+          "LOW",
+          "remove",
+          "unverified URLs"
+        ],
+        "forbidden_substrings": [
+          "unverified URLs are fine",
+          "hallucinated URLs",
+          "No URL verification needed",
+          "official without evidence"
+        ]
+      }
+    }
+  ]
+}

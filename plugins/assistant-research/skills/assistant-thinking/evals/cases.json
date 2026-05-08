@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-thinking-skill-behavior",
+  "skill": "assistant-thinking",
+  "title": "assistant-thinking Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-thinking skill's structured reasoning contracts.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-thinking skill instructions loaded.",
+    "Compare the local response against the selected thinking tool methodology and output contract.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "architecture-decision-selects-perspectives",
+      "title": "Architecture decision selects perspectives",
+      "category": "tool_selection_methodology",
+      "purpose": "Checks that an architecture tradeoff uses the perspectives methodology before recommending a path.",
+      "prompt": "Think through whether we should replace the shell-based skill validator with a C# service. I need a structured recommendation, not just pros and cons.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user asks for an architecture decision with real tradeoffs.",
+        "No implementation work is requested; the expected output is structured reasoning."
+      ],
+      "expected_behavior": [
+        "Selects the perspectives thinking tool for an architecture and design decision.",
+        "States the tool selection before analysis and follows the perspectives methodology.",
+        "Includes distinct viewpoints such as architect, pragmatist, skeptic, and user advocate or equivalent roles.",
+        "Synthesizes convergences and tensions before giving a recommendation.",
+        "Includes key insights, a recommendation, confidence, and a genuine dissenting view.",
+        "Does not present unsupported free-form pros and cons as the full analysis."
+      ],
+      "pass_criteria": [
+        "The response names the selected tool as perspectives.",
+        "The response uses perspective-based roles or rounds rather than ad-hoc reasoning.",
+        "The recommendation is grounded in the structured analysis.",
+        "The confidence level reflects evidence and uncertainty instead of defaulting to high.",
+        "The dissenting view is a real counterpoint to the recommendation."
+      ],
+      "fail_signals": [
+        "Skips tool selection and writes generic pros and cons.",
+        "Gives a recommendation without any methodology.",
+        "Omits confidence or dissenting view.",
+        "Claims high confidence without acknowledging tradeoffs or evidence gaps."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "perspectives",
+          "architect",
+          "pragmatist",
+          "skeptic",
+          "key insights",
+          "recommendation",
+          "confidence",
+          "dissenting view"
+        ],
+        "forbidden_substrings": [
+          "No tool selection needed",
+          "generic pros and cons",
+          "No dissenting view needed",
+          "high confidence without evidence"
+        ]
+      }
+    },
+    {
+      "id": "risky-proposal-uses-stress-test",
+      "title": "Risky proposal uses stress test",
+      "category": "stress_test_recommendation",
+      "purpose": "Checks that a risky policy proposal is stress-tested with steelman, counter-argument, confidence, and dissent.",
+      "prompt": "Stress test this proposal: every skill eval must require a live model call before a release can pass.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user explicitly asks to stress test a proposal.",
+        "The eval itself must remain offline and must not call any provider, model, SDK, or network service."
+      ],
+      "expected_behavior": [
+        "Selects the stress test thinking tool and treats the proposal as an argument to evaluate.",
+        "Decomposes the proposal into testable claims or equivalent structured elements.",
+        "Identifies vulnerabilities from multiple angles such as evidence, edge cases, alternatives, and pragmatism.",
+        "Includes a steelman and a counter-argument before the verdict.",
+        "Provides a recommendation with confidence and a dissenting view.",
+        "Does not perform or require a live model call while evaluating the prompt."
+      ],
+      "pass_criteria": [
+        "The response names stress test as the selected tool or method.",
+        "The response includes both steelman and counter-argument sections.",
+        "The recommendation addresses offline/provider-neutral release constraints.",
+        "The confidence level is justified by the analysis depth.",
+        "The dissenting view is not suppressed even if the recommendation rejects the proposal."
+      ],
+      "fail_signals": [
+        "Calls or requires a provider API to answer the eval.",
+        "Accepts the live-call requirement without examining tradeoffs.",
+        "Omits steelman or counter-argument.",
+        "Omits recommendation, confidence, or dissenting view."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "stress test",
+          "claims",
+          "vulnerabilities",
+          "steelman",
+          "counter-argument",
+          "recommendation",
+          "confidence",
+          "dissenting view"
+        ],
+        "forbidden_substrings": [
+          "I called the provider API",
+          "Live model calls are required to proceed",
+          "No counter-argument needed",
+          "No dissenting view needed"
+        ]
+      }
+    }
+  ]
+}

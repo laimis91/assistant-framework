@@ -38,7 +38,7 @@ Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The curr
 ./install.sh --agent codex --plugin assistant-core
 ```
 
-The repo also includes a scaffolded Codex plugin manifest at `plugins/assistant-core/.codex-plugin/plugin.json` with plugin-local copies of the four core skills. The installer performs manifest-aware dry-run validation for this profile, but the scaffold is not marketplace-registered yet; root installs remain the compatibility path.
+The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json` and `plugins/assistant-research/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, and the research scaffold has plugin-local copies of the three research skills. The installer performs manifest-aware dry-run validation for the core profile, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
 
 Install a single skill:
 ```bash

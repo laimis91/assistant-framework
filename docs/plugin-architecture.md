@@ -1,6 +1,6 @@
 # Plugin Architecture Plan
 
-This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, plugin-local skill copies are scaffolded for `assistant-core`, and no root skill directories move in this slice.
+This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, plugin-local skill copies are scaffolded for `assistant-core` and `assistant-research`, and no root skill directories move in this slice.
 
 ## Goals
 
@@ -17,10 +17,10 @@ The installer remains root-inventory based:
 current_install_inventory: skills/assistant-*/SKILL.md
 current_plugin_profile: assistant-core via --plugin assistant-core
 current_unity_policy: skills/unity-* is outside the default assistant-* inventory
-current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json
+current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json
 ```
 
-The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below from the root inventory. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The scaffold is not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below from the root inventory. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The `plugins/assistant-research/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the three research skills, but `assistant-research` is not installable through `--plugin` yet. These scaffolds are not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -121,4 +121,11 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 - Validate manifest `name`, `skills`, and plugin-local skill copies against the `assistant-core` boundary during dry-run.
 - Keep real installs root-inventory based until marketplace registration is introduced.
 
-The next slice can scaffold the next plugin or add marketplace registration once this validation path is stable.
+### Assistant-Research Manifest Scaffold
+
+- Add `plugins/assistant-research/.codex-plugin/plugin.json`.
+- Add plugin-local copies of the three research skills under `plugins/assistant-research/skills/`.
+- Guard plugin-local copies against root skill drift with P0/P4 contracts.
+- Keep marketplace registration absent and keep `assistant-research` boundary-only until its install profile has coverage.
+
+The next slice can scaffold `assistant-dev` or add an `assistant-research` install profile once this scaffold path is stable.

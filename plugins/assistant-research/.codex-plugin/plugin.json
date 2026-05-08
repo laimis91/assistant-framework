@@ -1,0 +1,38 @@
+{
+  "name": "assistant-research",
+  "version": "0.1.0",
+  "description": "Research, ideation, and structured thinking skills.",
+  "author": {
+    "name": "Assistant Framework",
+    "url": "https://github.com/laimis91/assistant-framework"
+  },
+  "homepage": "https://github.com/laimis91/assistant-framework",
+  "repository": "https://github.com/laimis91/assistant-framework",
+  "license": "MIT",
+  "keywords": [
+    "assistant-framework",
+    "research",
+    "ideation",
+    "thinking",
+    "analysis"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Assistant Research",
+    "shortDescription": "Research, ideation, and thinking skills",
+    "longDescription": "Install Assistant Framework skills for tiered research, structured ideation, and deeper thinking workflows.",
+    "developerName": "Assistant Framework",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/laimis91/assistant-framework",
+    "defaultPrompt": [
+      "Research this topic with source confidence.",
+      "Brainstorm options and converge on a plan.",
+      "Think through this trade-off carefully."
+    ],
+    "brandColor": "#0F766E",
+    "screenshots": []
+  }
+}

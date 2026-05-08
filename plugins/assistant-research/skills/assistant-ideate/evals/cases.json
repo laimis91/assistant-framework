@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-ideate-skill-behavior",
+  "skill": "assistant-ideate",
+  "title": "assistant-ideate Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-ideate skill's structured brainstorming pipeline.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-ideate skill instructions loaded.",
+    "Compare the local response against UNDERSTAND, DIVERGE, CONVERGE, REFINE, and DECIDE contracts.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "brainstorm-diverges-before-ranking",
+      "title": "Brainstorm diverges before ranking",
+      "category": "diverge_converge_gate",
+      "purpose": "Checks that ideation understands the problem, generates at least eight ideas, then ranks all ideas before refinement.",
+      "prompt": "Brainstorm ways to make the skill eval framework more useful for future agents without adding model provider dependencies.",
+      "setup_context": [
+        "The assistant-ideate skill instructions are active.",
+        "The user asks for brainstorming and provides an important constraint.",
+        "No idea has been selected yet."
+      ],
+      "expected_behavior": [
+        "Starts with UNDERSTAND and writes a 2-3 sentence problem statement.",
+        "Records constraints, including no provider dependencies.",
+        "Runs DIVERGE before CONVERGE and produces at least 8 ideas.",
+        "Scores all ideas by impact, feasibility, alignment, novelty, and risk.",
+        "Calculates weighted_score for ranked ideas.",
+        "Advances at least the top 3 ideas to REFINE.",
+        "Ends with DECIDE and asks the user to choose, combine, reject, or request more ideas."
+      ],
+      "pass_criteria": [
+        "The response names all ideation phases in order.",
+        "The response includes at least 8 ideas before ranking.",
+        "The response scores ideas on all five criteria.",
+        "The response refines multiple candidates.",
+        "The response asks for a decision instead of presenting one option."
+      ],
+      "fail_signals": [
+        "Presents only one idea.",
+        "Ranks before generating a broad idea set.",
+        "Skips scoring criteria.",
+        "Ignores the no-provider-dependencies constraint."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "UNDERSTAND",
+          "DIVERGE",
+          "CONVERGE",
+          "REFINE",
+          "DECIDE",
+          "8 ideas",
+          "impact",
+          "feasibility",
+          "alignment",
+          "novelty",
+          "risk",
+          "weighted_score"
+        ],
+        "forbidden_substrings": [
+          "single option",
+          "skip scoring",
+          "only one idea",
+          "provider dependency is fine"
+        ]
+      }
+    },
+    {
+      "id": "prior-attempts-constraints-shape-refinement",
+      "title": "Prior attempts constraints shape refinement",
+      "category": "constraint_respecting_refinement",
+      "purpose": "Checks that ideation incorporates prior attempts and constraints while producing refined candidates and a decision point.",
+      "prompt": "Explore alternatives to another docs page for showing eval coverage. We already tried static README lists and they drift.",
+      "setup_context": [
+        "The assistant-ideate skill instructions are active.",
+        "The user supplied a prior attempt that should not be re-proposed unchanged.",
+        "The goal is to reduce coverage drift."
+      ],
+      "expected_behavior": [
+        "States the problem as reducing eval coverage drift.",
+        "Captures prior_attempts and does not re-propose static README lists unchanged.",
+        "Generates multiple ideas across at least two approaches.",
+        "Ranks ideas using the full scoring criteria.",
+        "Provides refined_candidates with elevator_pitch, how_it_works, technical_needs, risks, and first_step.",
+        "Presents a decision point with multiple choices."
+      ],
+      "pass_criteria": [
+        "The response acknowledges prior_attempts.",
+        "The response avoids reusing the rejected approach unchanged.",
+        "The response includes refined_candidates with first_step and risks.",
+        "The response presents a user decision point."
+      ],
+      "fail_signals": [
+        "Recommends another static README list as the only answer.",
+        "Ignores the prior attempt.",
+        "Skips refinement details.",
+        "Fails to ask for a user decision."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "problem_statement",
+          "prior_attempts",
+          "constraints",
+          "refined_candidates",
+          "elevator_pitch",
+          "technical_needs",
+          "risks",
+          "first_step",
+          "Decision point"
+        ],
+        "forbidden_substrings": [
+          "static README list is enough",
+          "ignore prior attempts",
+          "No risks",
+          "I selected the only option"
+        ]
+      }
+    }
+  ]
+}

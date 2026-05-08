@@ -1,0 +1,40 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-thinking
+
+artifacts:
+  - name: tool_used
+    type: enum
+    required: true
+    description: "Which thinking tool was applied"
+    enum_values: [clarify, perspectives, stress_test, deep_think, hypothesize, creative]
+    on_fail: "Re-run TOOL_SELECTION phase to identify the correct tool"
+
+  - name: key_insights
+    type: string[]
+    required: true
+    description: "Actionable insights discovered through the analysis"
+    validation: "At least 1 insight, each is a concrete and actionable finding"
+    min_items: 1
+    on_fail: "Re-run SYNTHESIS phase to extract actionable insights"
+
+  - name: recommendation
+    type: string
+    required: true
+    description: "What to do based on the analysis"
+    validation: "A clear, actionable recommendation grounded in the insights"
+    on_fail: "Re-run SYNTHESIS phase to produce a recommendation"
+
+  - name: confidence
+    type: enum
+    required: true
+    description: "How confident the analysis is in its recommendation"
+    enum_values: [high, medium, low]
+    on_fail: "Re-run SYNTHESIS phase to assess confidence level"
+
+  - name: dissenting_view
+    type: string
+    required: false
+    description: "The strongest counter-argument to the recommendation"
+    validation: "A genuine challenge, not a strawman"
+    on_fail: "Re-run ANALYSIS phase to identify the strongest counter-argument"

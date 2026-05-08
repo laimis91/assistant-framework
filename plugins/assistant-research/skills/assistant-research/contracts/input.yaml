@@ -1,0 +1,58 @@
+# Research Input Contract
+# Resolve these fields before starting any research activity.
+
+schema_version: "1.0"
+contract: input
+skill: assistant-research
+
+fields:
+  - name: question
+    type: string
+    required: true
+    description: "The question or topic to research"
+    validation: "Non-empty. Must be specific enough to search for — not 'tell me about stuff'."
+    on_missing: ask
+    ask_prompt: "What would you like me to research?"
+
+  - name: tier
+    type: enum
+    required: true
+    enum_values: [quick, standard, extensive, deep]
+    description: "Research depth — determines agent count and effort"
+    on_missing: infer
+    infer_from: >
+      Simple factual question with likely single answer → quick.
+      Technology comparison, multi-source needed → standard.
+      Decision support, comprehensive coverage → extensive.
+      Market mapping, novel domain, primary sources needed → deep.
+
+  - name: tool
+    type: enum
+    required: true
+    enum_values: [research, investigate]
+    description: "Which research tool to use"
+    on_missing: infer
+    infer_from: >
+      Broad exploration ('what options exist', 'compare') → research.
+      Deep dive on specific entity ('how does X work', 'entity profile') → investigate.
+
+  - name: output_purpose
+    type: string
+    required: false
+    description: "What the research results will be used for — scopes the search"
+    examples:
+      - "Informing a technology decision"
+      - "Background for a plan phase"
+      - "Answering a user question"
+      - "Due diligence on a vendor"
+
+  - name: known_context
+    type: string[]
+    required: false
+    description: "What the user already knows — avoid re-researching known facts"
+    default: []
+
+# Validation behavior:
+# 1. Resolve question, tier, and tool before any search activity
+# 2. Log: >> Research: {tier} | tool: {tool} | question: "{question (truncated to 80 chars)}"
+# 3. Read the corresponding tool file (research.md or investigate.md) for detailed instructions

@@ -1,6 +1,6 @@
 # Task Journal
 
-Task: Assistant-core manifest dry-run validation
+Task: Assistant-research plugin manifest scaffold
 Status: DONE
 Current phase: DOCUMENT COMPLETE
 Triaged as: medium
@@ -10,157 +10,127 @@ Clarification defaults applied: false
 Unresolved clarification topics:
 
 ## Requirements
-- Add manifest-aware validation for `./install.sh --agent codex --plugin assistant-core --dry-run`.
-- Print the assistant-core manifest path in dry-run output.
-- Validate manifest `name`, `skills`, and plugin-local skill copies against the active `assistant-core` profile boundary.
-- Reject manifest drift during dry-run with a clear error.
-- Keep real `--plugin assistant-core` installs root-inventory based.
+- Add a repo-local `assistant-research` Codex plugin scaffold.
+- Add `plugins/assistant-research/.codex-plugin/plugin.json`.
+- Add plugin-local copies of `assistant-ideate`, `assistant-research`, and `assistant-thinking`.
+- Keep `assistant-research` boundary-only and not installable through `--plugin` yet.
+- Keep root install behavior and `--plugin assistant-core` behavior unchanged.
 - Do not add marketplace registration.
 
 ## Constraints
-- Do not change default install behavior.
 - Do not move root `skills/assistant-*` directories.
-- Do not make plugin-local skill copies the real install source yet.
-- Do not add plugin manifests for other planned plugins.
-- Keep Unity handling pattern-based and avoid installer-specific Unity exclusions.
+- Do not add plugin manifests for `assistant-dev` or `assistant-unity`.
+- Do not add `.agents/plugins/marketplace.json`.
+- Do not change installer behavior in this slice.
+- Tests must verify metadata, boundary ownership, copy parity, docs, allowed manifest set, and aggregate P0/P4.
 
 ## Discovery Notes
-- `install.sh` previously resolved `--plugin assistant-core` only from `docs/plugin-architecture.md`.
-- `plugins/assistant-core/.codex-plugin/plugin.json` exists and points at `./skills/`.
-- Dry-run output previously listed selected root skills but did not mention or validate the plugin manifest.
-- Real profile installs already install only the four core root skills and generate four Codex AGENTS rows.
+- `assistant-research` boundary owns `assistant-ideate`, `assistant-research`, and `assistant-thinking`.
+- Root research skill directories include `.DS_Store` artifacts that must not be copied into plugin-local skill directories.
+- Existing manifest contracts were core-specific and needed to become plugin-generic.
+- Existing boundary contracts allowed only the assistant-core manifest before this slice.
 
 ## Requirements Restatement
-Make the assistant-core installer dry-run aware of the scaffolded Codex plugin manifest without changing real install behavior or marketplace distribution.
+Scaffold the second repo-local Codex plugin for `assistant-research` with plugin-local skill copies and generalized contracts, while leaving installer behavior and marketplace registration unchanged.
 
 ## Component Manifest
-Approval status: approved by user via "ok commit and continue" on 2026-05-08.
+Approval status: approved by user via "commit and continue" on 2026-05-08.
 
-### Component 1: Dry-Run Manifest Contracts
-- **What:** Extend installer and manifest P0/P4 contracts for dry-run manifest path output, manifest validation, drift rejection, and docs.
-- **Files:** modify `tests/p0-p4/installer-contracts.sh`; modify `tests/p0-p4/plugin-manifest-contracts.sh`.
-- **Depends on:** committed assistant-core manifest scaffold.
+### Component 1: Research Scaffold Contracts
+- **What:** Generalize plugin manifest contracts for core and research scaffolds, and update boundary contracts to allow exactly core plus research manifests.
+- **Files:** modify `tests/p0-p4/plugin-manifest-contracts.sh`; modify `tests/p0-p4/plugin-boundary-contracts.sh`.
+- **Depends on:** committed assistant-core scaffold.
 - **Verification criteria:**
-  - [x] RED: `bash tests/p0-p4/installer-contracts.sh` fails before implementation on missing dry-run manifest output and drift rejection.
-  - [x] RED: `bash tests/p0-p4/plugin-manifest-contracts.sh` fails before docs mention manifest-aware dry-run validation.
-  - [x] GREEN: focused installer and plugin manifest suites pass after implementation.
+  - [x] RED: `bash tests/p0-p4/plugin-manifest-contracts.sh` fails before research scaffold exists.
+  - [x] RED: `bash tests/p0-p4/plugin-boundary-contracts.sh` fails before research manifest exists.
+  - [x] GREEN: focused plugin suites pass after scaffold.
 
-### Component 2: Installer Dry-Run Validation
-- **What:** Add `install.sh` helper functions to locate and validate the assistant-core plugin manifest during dry-run.
-- **Files:** modify `install.sh`.
+### Component 2: Assistant-Research Plugin Scaffold
+- **What:** Add research plugin manifest and plugin-local skill copies.
+- **Files:** add `plugins/assistant-research/.codex-plugin/plugin.json`; add `plugins/assistant-research/skills/**`.
 - **Depends on:** Component 1.
 - **Verification criteria:**
-  - [x] Dry-run prints `Plugin manifest: <repo>/plugins/assistant-core/.codex-plugin/plugin.json`.
-  - [x] Dry-run validates `name: assistant-core`.
-  - [x] Dry-run validates `skills: ./skills/`.
-  - [x] Dry-run validates plugin-local skill copies match the active profile boundary.
-  - [x] Real `--plugin assistant-core` install output does not print plugin manifest metadata.
+  - [x] Manifest has filled metadata and points to `./skills/`.
+  - [x] Plugin-local skills match the `assistant-research` boundary exactly.
+  - [x] Plugin-local skill files match root source files excluding `.DS_Store`.
+  - [x] No marketplace registration file exists.
 
 ### Component 3: Documentation And Closeout
-- **What:** Update README, plugin architecture docs, context map, and task journal for manifest-aware dry-run validation.
-- **Files:** modify `README.md`; modify `docs/plugin-architecture.md`; modify `.codex/context-map.md`; modify `.codex/task.md`.
+- **What:** Update docs, README, context map, and task journal to describe the research scaffold and current compatibility state.
+- **Files:** modify `docs/plugin-architecture.md`; modify `README.md`; modify `.codex/context-map.md`; modify `.codex/task.md`.
 - **Depends on:** Components 1 and 2.
 - **Verification criteria:**
-  - [x] Docs mention manifest-aware dry-run validation.
+  - [x] Docs mention `plugins/assistant-research/.codex-plugin/plugin.json`.
+  - [x] Docs state `assistant-research` remains boundary-only until install profile coverage exists.
   - [x] Aggregate P0/P4 passes.
-  - [x] Hygiene checks pass.
 
 ## Plan
-Plan approval: yes, approved by user via "ok commit and continue" on 2026-05-08.
+Plan approval: yes, approved by user via "commit and continue" on 2026-05-08.
 
 ## Build Progress
-- Component 1: Dry-Run Manifest Contracts - DONE.
-- Component 2: Installer Dry-Run Validation - DONE.
+- Component 1: Research Scaffold Contracts - DONE.
+- Component 2: Assistant-Research Plugin Scaffold - DONE.
 - Component 3: Documentation And Closeout - DONE.
 
 ## Tests to run
-- `bash tests/p0-p4/installer-contracts.sh`
 - `bash tests/p0-p4/plugin-manifest-contracts.sh`
+- `bash tests/p0-p4/plugin-boundary-contracts.sh`
 - `bash tests/test-p0-p4-contracts.sh`
-- `bash install.sh --agent codex --plugin assistant-core --no-hooks --dry-run`
-- Real install smoke with temp `HOME`
 - `git diff --check`
-- `find tests -type f -name .DS_Store -print`
+- `find tests plugins -name .DS_Store -print`
 
 ## Review Log
 ### Spec Review #1
 - Result: PASS
-- Scope reviewed: approved dry-run validation plan; `install.sh`; installer contracts; plugin manifest contracts; README and plugin architecture docs; context/task journal.
+- Scope reviewed: approved assistant-research manifest scaffold plan; `plugins/assistant-research/.codex-plugin/plugin.json`; plugin-local skill copies; plugin manifest contracts; plugin boundary contracts; README and plugin architecture docs; workflow task artifacts.
 - Missing acceptance criteria: none.
-- Extra scope: none; real install source remains root inventory and marketplace registration remains absent.
+- Extra scope: none; installer behavior is unchanged and marketplace registration remains absent.
 - Changed files mismatch: none.
 - Verification evidence mismatch: none.
 - Required fixes: none.
 
 ### Quality Review #1
-- Result: ISSUES_FOUND
-- Rubric required: true
-- Rubric scores:
-  | Dimension | Score | Weight | Justification |
-  |---|---:|---:|---|
-  | Correctness | 4.5 | 0.30 | Dry-run validation passed, but first implementation printed manifest metadata for real profile installs too. |
-  | Code Quality | 5.0 | 0.20 | Manifest validation helpers are localized and focused on profile dry-run behavior. |
-  | Architecture | 4.5 | 0.20 | Real installs stayed root-inventory based, but real install output needed to remain unchanged for scope precision. |
-  | Security | 5.0 | 0.15 | No secret, network, auth, or permission surface was added. |
-  | Test Coverage | 5.0 | 0.15 | Tests cover dry-run happy path, drift rejection, docs, focused suites, aggregate P0/P4, and real install output. |
-  | Weighted | 4.75 | 1.00 | REFINE due to one dry-run-only scope issue. |
-- Findings:
-  - SHOULD-FIX: `install.sh` printed `Plugin manifest:` for real `--plugin assistant-core` installs. Risk category: unsafe change surface. Fix: print the manifest path only when `DRY_RUN=true`, preserving real install output.
-- Fixed in round:
-  - Limited the manifest output line to dry-run mode.
-  - Added an ad hoc real install smoke check with a temp `HOME` to assert real install output does not print `Plugin manifest:`.
-- Validation after fix:
-  - `bash tests/p0-p4/installer-contracts.sh` passed 17 checks.
-  - `bash tests/p0-p4/plugin-manifest-contracts.sh` passed 4 checks.
-  - Real install smoke check passed.
-  - `git diff --check` passed.
-  - `bash tests/test-p0-p4-contracts.sh` passed 133 checks.
-
-### Quality Review #2
 - Result: CLEAN
 - Rubric required: true
 - Rubric scores:
   | Dimension | Score | Weight | Justification |
   |---|---:|---:|---|
-  | Correctness | 5.0 | 0.30 | Dry-run now validates manifest metadata and plugin-local copies while real install output remains unchanged. |
-  | Code Quality | 5.0 | 0.20 | Validation logic is small, named, and uses structured JSON parsing through `jq`. |
-  | Architecture | 5.0 | 0.20 | The installer gains scaffold validation without changing install source, plugin registration, or default inventory. |
-  | Security | 5.0 | 0.15 | No sensitive runtime surface was introduced. |
-  | Test Coverage | 5.0 | 0.15 | Focused and aggregate suites are clean, with explicit drift and real-install smoke coverage. |
+  | Correctness | 5.0 | 0.30 | The research manifest, plugin-local skill inventory, copy parity, docs, and allowed manifest set match the approved scope. |
+  | Code Quality | 5.0 | 0.20 | Plugin manifest contract helpers now reuse boundary and copy-parity checks across multiple plugins. |
+  | Architecture | 5.0 | 0.20 | The scaffold adds a second plugin package without changing root installs, install profiles, or marketplace registration. |
+  | Security | 5.0 | 0.15 | No secret, network, auth, or permission surface was added. |
+  | Test Coverage | 5.0 | 0.15 | RED/GREEN focused tests, aggregate P0/P4, manifest metadata checks, boundary checks, copy parity, and hygiene checks are clean. |
   | Weighted | 5.00 | 1.00 | PASS. |
 - Findings: none.
 - Remaining items: none.
 
 ### Final Review Result
-- Result: ISSUES_FIXED
-- Rounds: 2
+- Result: CLEAN
+- Rounds: 1
 - Spec review result: PASS
 - Quality review result: CLEAN
 
 ## Documentation / Closeout
-- `install.sh` now locates `plugins/assistant-core/.codex-plugin/plugin.json` for `--plugin assistant-core --dry-run`.
-- Dry-run validates manifest `name`, `skills: ./skills/`, and plugin-local skill copies against the active profile boundary.
-- Dry-run rejects manifest drift, including missing `skills` metadata.
-- Real `--plugin assistant-core` installs remain root-inventory based and do not print plugin manifest metadata.
-- README and `docs/plugin-architecture.md` describe manifest-aware dry-run validation.
-- No marketplace registration or additional plugin manifests were added.
+- Added `plugins/assistant-research/.codex-plugin/plugin.json`.
+- Added plugin-local copies of `assistant-ideate`, `assistant-research`, and `assistant-thinking`.
+- Generalized plugin manifest contracts across core and research scaffolds.
+- Updated plugin boundary contracts to allow exactly core plus research manifests.
+- Updated README and `docs/plugin-architecture.md` to describe the research scaffold and boundary-only install state.
+- No installer behavior, marketplace registration, or root skill directory moves were introduced.
 
 ## Final Verification
-- RED evidence: `bash tests/p0-p4/installer-contracts.sh` failed 2 new checks before implementation.
-- RED evidence: `bash tests/p0-p4/plugin-manifest-contracts.sh` failed 1 new docs check before implementation.
-- `bash tests/p0-p4/installer-contracts.sh` - passed; 17 checks.
-- `bash tests/p0-p4/plugin-manifest-contracts.sh` - passed; 4 checks.
+- RED evidence: `bash tests/p0-p4/plugin-manifest-contracts.sh` failed 4 checks before research scaffold existed.
+- RED evidence: `bash tests/p0-p4/plugin-boundary-contracts.sh` failed 2 checks before research manifest/docs existed.
+- `bash tests/p0-p4/plugin-manifest-contracts.sh` - passed; 7 checks.
+- `bash tests/p0-p4/plugin-boundary-contracts.sh` - passed; 6 checks.
 - `bash tests/test-p0-p4-contracts.sh` - first run failed only because regenerated `tests/.DS_Store` tripped hygiene/direct-run gates.
-- `bash tests/test-p0-p4-contracts.sh` - passed; 133 checks after removing regenerated `tests/.DS_Store`.
-- `bash install.sh --agent codex --plugin assistant-core --no-hooks --dry-run` - printed manifest path and validation lines.
-- Real install smoke with temp `HOME` - passed; output does not include `Plugin manifest:`.
-- `jq -e '.name == "assistant-core" and .skills == "./skills/"' plugins/assistant-core/.codex-plugin/plugin.json` - passed.
+- `bash tests/test-p0-p4-contracts.sh` - passed; 136 checks after removing regenerated `tests/.DS_Store`.
 - `git diff --check` - passed.
-- `find tests -type f -name .DS_Store -print` - passed with no output.
+- `find tests plugins -name .DS_Store -print` - passed with no output.
 
 ## Component Verification Ledger
 | Component | Status | Command / Evidence | Criteria |
 |---|---|---|---|
-| 1. Dry-Run Manifest Contracts | VERIFIED | RED: focused installer and manifest suites failed before implementation. GREEN: `bash tests/p0-p4/installer-contracts.sh` passed 17 checks and `bash tests/p0-p4/plugin-manifest-contracts.sh` passed 4 checks. | Contracts cover manifest path output, validation lines, drift rejection, and docs. |
-| 2. Installer Dry-Run Validation | VERIFIED | Dry-run command printed manifest validation lines; real install smoke omitted `Plugin manifest:`. | Dry-run validates manifest metadata and plugin-local copies without changing real install behavior. |
-| 3. Documentation And Closeout | VERIFIED | `bash tests/test-p0-p4-contracts.sh` passed 133 checks; `git diff --check` passed; `.DS_Store` hygiene passed. | Docs and journal describe manifest-aware dry-run validation and preserve marketplace absence. |
+| 1. Research Scaffold Contracts | VERIFIED | RED: focused plugin suites failed before research scaffold. GREEN: `bash tests/p0-p4/plugin-manifest-contracts.sh` passed 7 checks and `bash tests/p0-p4/plugin-boundary-contracts.sh` passed 6 checks. | Contracts cover metadata, boundary ownership, copy parity, docs, and allowed manifest set. |
+| 2. Assistant-Research Plugin Scaffold | VERIFIED | `bash tests/p0-p4/plugin-manifest-contracts.sh` passed; `find plugins/assistant-research -name .DS_Store -print` produced no output. | Manifest exists, plugin-local copies match root sources, and no `.DS_Store` files were copied. |
+| 3. Documentation And Closeout | VERIFIED | `bash tests/test-p0-p4-contracts.sh` passed 136 checks; `git diff --check` passed; hygiene checks passed. | Docs describe research scaffold, boundary-only install state, and marketplace absence. |

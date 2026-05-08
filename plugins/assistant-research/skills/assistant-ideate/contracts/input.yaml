@@ -1,0 +1,32 @@
+schema_version: "1.0"
+contract: input
+skill: assistant-ideate
+
+fields:
+  - name: seed
+    type: string
+    required: true
+    description: "The idea, question, or problem to brainstorm around"
+    validation: "Non-empty string describing something to ideate on"
+    on_missing: ask
+
+  - name: goal
+    type: string
+    required: false
+    description: "What success looks like for this ideation"
+    validation: "Describes a desired outcome or success criterion"
+    on_missing: infer
+
+  - name: constraints
+    type: string[]
+    required: false
+    description: "Budget, timeline, tech stack, or other limitations"
+    validation: "Each item is a concrete constraint (not a vague wish)"
+    on_missing: skip
+
+  - name: prior_attempts
+    type: string[]
+    required: false
+    description: "What has been tried before — avoid re-proposing these"
+    validation: "Each item describes a previously attempted approach"
+    on_missing: skip

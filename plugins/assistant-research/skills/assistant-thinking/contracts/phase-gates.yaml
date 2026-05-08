@@ -1,0 +1,50 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-thinking
+
+gates:
+  - phase: TOOL_SELECTION
+    checkpoint_start: "--- PHASE: TOOL_SELECTION ---"
+    checkpoint_end: "--- PHASE: TOOL_SELECTION COMPLETE ---"
+    exit_assertions:
+      - id: TS1
+        check: "Correct thinking tool is identified for the problem type"
+        on_fail: "Re-evaluate the problem and match to the most appropriate tool"
+      - id: TS2
+        check: "Tool file is loaded (e.g., clarify.md, perspectives.md)"
+        on_fail: "Read the corresponding tool file before proceeding with analysis"
+
+  - phase: ANALYSIS
+    checkpoint_start: "--- PHASE: ANALYSIS ---"
+    checkpoint_end: "--- PHASE: ANALYSIS COMPLETE ---"
+    exit_assertions:
+      - id: A1
+        check: "Tool-specific methodology was followed (not ad-hoc thinking)"
+        on_fail: "Re-run the analysis following the loaded tool's structured methodology"
+      - id: A2
+        check: "Analysis depth matches the stakes level (low/medium/high)"
+        on_fail: "Deepen the analysis for high-stakes problems or simplify for low-stakes"
+
+  - phase: SYNTHESIS
+    checkpoint_start: "--- PHASE: SYNTHESIS ---"
+    checkpoint_end: "--- PHASE: SYNTHESIS COMPLETE ---"
+    exit_assertions:
+      - id: S1
+        check: "At least 1 actionable insight has been extracted"
+        on_fail: "Review the analysis output and identify concrete, actionable findings"
+      - id: S2
+        check: "A clear recommendation is formed and grounded in the insights"
+        on_fail: "Synthesize insights into a specific recommendation with rationale"
+      - id: S3
+        check: "Confidence level is assessed and reflects actual analysis depth"
+        on_fail: "Set confidence to low/medium/high based on evidence strength, not default to high"
+
+invariants:
+  - id: INV1
+    check: "Analysis follows the loaded tool's methodology, not free-form reasoning"
+    scope: all_phases
+    on_fail: "Return to the tool file and re-apply its structured approach"
+  - id: INV2
+    check: "Dissenting views are considered, not suppressed"
+    scope: all_phases
+    on_fail: "Identify and articulate the strongest counter-argument to the recommendation"
