@@ -104,7 +104,9 @@ test_start "assistant-core scaffold is documented without marketplace registrati
 marketplace_file="$FRAMEWORK_DIR/.agents/plugins/marketplace.json"
 if grep -Fq "plugins/assistant-core/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$plugin_doc" \
+    && grep -Fq "manifest-aware dry-run validation" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "manifest-aware dry-run validation" "$FRAMEWORK_DIR/README.md" \
     && [[ ! -f "$marketplace_file" ]]; then
     pass
 else

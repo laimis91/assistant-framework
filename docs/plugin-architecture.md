@@ -20,7 +20,7 @@ current_unity_policy: skills/unity-* is outside the default assistant-* inventor
 current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json
 ```
 
-The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below from the root inventory. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, but it is not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` is the first optional profile and installs the skills listed in the `assistant-core` boundary below from the root inventory. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The scaffold is not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -115,4 +115,10 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 - Guard plugin-local copies against root skill drift with P0/P4 contracts.
 - Keep marketplace registration absent.
 
-The next slice can add manifest-aware installer dry-run validation or scaffold the next plugin once this scaffold path is stable.
+### Assistant-Core Manifest Dry-Run Validation
+
+- Print `plugins/assistant-core/.codex-plugin/plugin.json` in `--plugin assistant-core --dry-run` output.
+- Validate manifest `name`, `skills`, and plugin-local skill copies against the `assistant-core` boundary during dry-run.
+- Keep real installs root-inventory based until marketplace registration is introduced.
+
+The next slice can scaffold the next plugin or add marketplace registration once this validation path is stable.

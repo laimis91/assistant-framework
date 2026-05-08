@@ -114,6 +114,60 @@ plugin_profile_line() {
     ' "$plugin_doc"
 }
 
+plugin_manifest_path() {
+    local plugin_name="$1"
+    printf '%s/plugins/%s/.codex-plugin/plugin.json\n' "$FRAMEWORK_DIR" "$plugin_name"
+}
+
+skill_in_active_profile() {
+    local candidate="$1"
+    local selected_skill
+
+    for selected_skill in "${SKILLS[@]}"; do
+        [[ "$candidate" == "$selected_skill" ]] && return 0
+    done
+
+    return 1
+}
+
+validate_plugin_manifest_dry_run() {
+    local plugin_name="$1"
+    local manifest_path
+    local manifest_name
+    local manifest_skills
+    local plugin_skills_root
+    local profile_skill
+    local plugin_skill_file
+    local plugin_skill
+
+    manifest_path="$(plugin_manifest_path "$plugin_name")"
+
+    [[ -f "$manifest_path" ]] || fail "Plugin manifest $plugin_name not found at $manifest_path"
+    command -v jq >/dev/null 2>&1 || fail "jq is required to validate plugin manifest dry-run for $plugin_name."
+
+    manifest_name="$(jq -r '.name // ""' "$manifest_path")" || fail "Plugin manifest $plugin_name is not valid JSON: $manifest_path"
+    manifest_skills="$(jq -r '.skills // ""' "$manifest_path")" || fail "Plugin manifest $plugin_name is not valid JSON: $manifest_path"
+
+    [[ "$manifest_name" == "$plugin_name" ]] || fail "Plugin manifest $plugin_name must declare name: $plugin_name"
+    [[ "$manifest_skills" == "./skills/" ]] || fail "Plugin manifest $plugin_name must declare skills: ./skills/"
+
+    plugin_skills_root="$FRAMEWORK_DIR/plugins/$plugin_name/${manifest_skills#./}"
+    plugin_skills_root="${plugin_skills_root%/}"
+    [[ -d "$plugin_skills_root" ]] || fail "Plugin manifest $plugin_name skills directory not found: $plugin_skills_root"
+
+    for profile_skill in "${SKILLS[@]}"; do
+        [[ -f "$plugin_skills_root/$profile_skill/SKILL.md" ]] || fail "Plugin manifest $plugin_name missing skill copy: $profile_skill"
+    done
+
+    while IFS= read -r plugin_skill_file; do
+        plugin_skill="$(basename "$(dirname "$plugin_skill_file")")"
+        skill_in_active_profile "$plugin_skill" || fail "Plugin manifest $plugin_name includes skill outside profile boundary: $plugin_skill"
+    done < <(find "$plugin_skills_root" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -print | sort)
+
+    dry "Validate plugin manifest: $plugin_name -> $manifest_skills"
+    dry "Plugin manifest skills match profile boundary: ${SKILLS[*]}"
+}
+
 apply_plugin_profile() {
     local plugin_name="$1"
     local profile_line
@@ -572,11 +626,19 @@ echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
 if [[ -n "$PLUGIN_PROFILE" ]]; then
     echo "  Plugin profile: $PLUGIN_PROFILE"
+    if $DRY_RUN; then
+        echo "  Plugin manifest: $(plugin_manifest_path "$PLUGIN_PROFILE")"
+    fi
 fi
 echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
 echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
+
+# Dry-run validates plugin scaffold metadata without changing the real install path.
+if [[ -n "$PLUGIN_PROFILE" ]] && $DRY_RUN; then
+    validate_plugin_manifest_dry_run "$PLUGIN_PROFILE"
+fi
 
 # ── Install skills ────────────────────────────────────────────────────────────
 

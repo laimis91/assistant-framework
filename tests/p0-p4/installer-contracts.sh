@@ -76,6 +76,9 @@ p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY"
 if HOME="$INSTALL_HOME_PLUGIN_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks --dry-run >/tmp/p0p4-install-plugin-dry.out 2>/tmp/p0p4-install-plugin-dry.err; then
     plugin_dry_output="$(cat /tmp/p0p4-install-plugin-dry.out)"
     if printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin profile: assistant-core" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-core -> ./skills/" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-clarify assistant-memory assistant-reflexion assistant-telos" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-clarify/" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-memory/" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-reflexion/" \
@@ -89,6 +92,24 @@ if HOME="$INSTALL_HOME_PLUGIN_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent code
     fi
 else
     fail "assistant-core dry-run failed; see /tmp/p0p4-install-plugin-dry.err"
+fi
+
+test_start "Codex plugin profile dry-run rejects manifest skill drift"
+INSTALL_HOME_PLUGIN_DRY_DRIFT="$(mktemp -d)"
+PLUGIN_MANIFEST="$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json"
+PLUGIN_MANIFEST_BACKUP="$(mktemp "${TMPDIR:-/tmp}/assistant-core-plugin-json.XXXXXX")"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY_DRIFT" "$PLUGIN_MANIFEST_BACKUP"
+cp "$PLUGIN_MANIFEST" "$PLUGIN_MANIFEST_BACKUP"
+jq 'del(.skills)' "$PLUGIN_MANIFEST_BACKUP" >"$PLUGIN_MANIFEST"
+if HOME="$INSTALL_HOME_PLUGIN_DRY_DRIFT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks --dry-run >/tmp/p0p4-install-plugin-dry-drift.out 2>/tmp/p0p4-install-plugin-dry-drift.err; then
+    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
+    fail "assistant-core dry-run should reject a manifest without skills metadata"
+elif grep -Fq "Plugin manifest assistant-core must declare skills: ./skills/" /tmp/p0p4-install-plugin-dry-drift.err; then
+    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
+    pass
+else
+    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
+    fail "assistant-core dry-run drift rejection should explain manifest skills metadata"
 fi
 
 test_start "Codex assistant-core plugin install installs only core skills and AGENTS rows"
