@@ -237,17 +237,33 @@ The contracts are YAML files in the skill directory. Agents read them as part of
 ### Level 2: SKILL.md references contracts (active)
 The SKILL.md explicitly says "read and follow contracts/". The Contracts section lists the files and summarizes the rules. This makes contracts visible and hard to miss.
 
-### Level 3: Hook-based validation (structural)
-Shell scripts in hooks validate contract compliance:
-- Pre-phase hooks check input contract resolution
-- Post-phase hooks check phase gate assertions
-- Stop hooks check output contract completeness
-- Example: `stop-review.sh` already enforces that the review cycle completes
+### Level 3: Hook-based validation (runtime)
+Shell scripts in hooks validate contract compliance while the workflow is running:
+- Prompt-time hooks inject active phase-gate state before the agent can skip ahead
+- Pre-tool hooks warn when active workflow ownership boundaries are crossed
+- Stop hooks check output contract completeness before task handoff
+- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, document, and metrics gates
+- `stop-review.sh` and `harness-gate.sh` enforce review, metrics, plan, and rubric completion during active build/review/document statuses
+
+The source validator is the Level 3 foundation: it gives runtime hooks a consistent, checked contract shape to rely on.
 
 ### Level 4: Conformance test suite (automated)
 YAML test cases define "given this input, skill must produce output matching this schema." Can be run as a verification step after skill modifications.
 
-**Current implementation: Level 2.** Level 3 already exists for review (stop-review.sh). Level 4 is future work.
+The validator is also the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
+
+```bash
+tools/evals/run-skill-evals.sh --validate-fixture
+tools/evals/run-skill-evals.sh --list
+tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
+tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
+```
+
+The default per-skill eval inventory is first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed. The current eval slice covers ten first-class skills: `assistant-clarify`, `assistant-thinking`, `assistant-workflow`, `assistant-review`, `assistant-tdd`, `assistant-security`, `assistant-skill-creator`, `assistant-memory`, `assistant-research`, and `assistant-onboard`; it is not full coverage for all 15 first-class skills.
+
+Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
+
+**Current implementation: Level 2 plus source structural validation, runtime phase-gate hooks, and ten-skill expanded per-skill eval fixtures.** Level 3 covers prompt-time phase-gate warnings (`workflow-enforcer.sh` + `workflow-phase-gates.sh`) and stop-time review/harness enforcement (`stop-review.sh`, `harness-gate.sh`). Wider Level 4 per-skill coverage for the remaining five first-class skills remains future work built on the validator and eval runner.
 
 ---
 

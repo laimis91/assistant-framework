@@ -503,6 +503,10 @@ if grep -Fq "ten-skill expanded coverage" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "uncovered. Local grading" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "ten first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "not full coverage for all 15 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "ten first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "ten-skill expanded per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "not full coverage for all 15 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
