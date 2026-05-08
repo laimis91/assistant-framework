@@ -1,26 +1,25 @@
-# Context Map: Complete First-Class Skill Eval Coverage
+# Context Map: Plugin Split Design and Boundary Contracts
 
-## Current Eval Surface
-- `tools/evals/run-skill-evals.sh` is the public runner for validation, listing, prompt emission, and local response grading.
-- Fixture files live at `skills/<skill>/evals/cases.json`.
-- Default inventory discovers first-class `skills/assistant-*` fixtures and excludes local-only `unity-*` fixtures unless `--include-local` is passed.
-- Default first-class coverage is complete for all 15 tracked assistant skills:
-  - `assistant-clarify`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-memory`, `assistant-onboard`, `assistant-reflexion`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-workflow`.
+## Current Release Surface
+- First-class skills live at `skills/assistant-*/SKILL.md`.
+- `install.sh` auto-discovers root `skills/assistant-*` skills and installs them into each agent home.
+- `tools/skills/validate-skills.sh` and `tools/evals/run-skill-evals.sh` default to first-class `assistant-*` inventory.
+- Local Unity skill experiments are `skills/unity-*`; they are not tracked release skills and are excluded by default.
 
-## Newly Covered First-Class Skills
-- `assistant-diagrams`: code-derived Mermaid/PlantUML diagram generation with `diagram_type`, `scope`, `source_files`, `diagram_code`, evidence, placement, and gaps.
-- `assistant-docs`: code-derived docs with `doc_type`, `scope`, `source_files`, `files_updated`, `doc_coverage`, and `review_needed`.
-- `assistant-ideate`: UNDERSTAND -> DIVERGE -> CONVERGE -> REFINE -> DECIDE pipeline; requires 8+ ideas, full scoring, refined candidates, and user decision.
-- `assistant-reflexion`: reflect/recall/stats/consolidate actions; reflect extracts lessons with confidence and records via memory; recall returns relevant lessons with confidence, date, and project.
-- `assistant-telos`: create/update/review Telos Context Files; create/update require TCF sections, review requires section findings, confirmation always required.
+## Target Slice
+- Add design documentation only: `docs/plugin-architecture.md`.
+- Add contract tests only: `tests/p0-p4/plugin-boundary-contracts.sh`.
+- Wire the new P0/P4 suite into `tests/test-p0-p4-contracts.sh`.
+- Add a README note linking the plan.
 
-## Tests And Docs
-- `tests/p0-p4/skill-eval-contracts.sh` asserts all 15 covered fixtures, representative rows for the newly covered skills, prompt emission, local-only exclusion, and docs wording.
-- README and `docs/evals/README.md` describe complete first-class coverage and keep local-only Unity skills opt-in.
-- `docs/skill-contract-design-guide.md` and the bundled `skills/assistant-skill-creator/references/skill-contract-design-guide.md` describe complete first-class per-skill eval fixtures.
+## Planned Plugin Groups
+- `assistant-core`: foundation skills for clarification, memory, reflexion, and Telos.
+- `assistant-dev`: development workflow, review, TDD, security, onboarding, docs, diagrams, and skill creation.
+- `assistant-research`: research, thinking, and ideation.
+- `assistant-unity`: optional local Unity skills, represented by `skills/unity-*`.
 
 ## Constraints
-- Keep the runner local and provider-neutral; no model/provider SDK/network behavior.
-- Add only skill-local fixture JSON, P0/P4 assertions, and coverage docs.
-- Match machine expectations to stable skill contract labels and exact casing.
-- Check coverage facts separately from wrapped Markdown prose.
+- Do not move skill directories in this slice.
+- Do not add `.codex-plugin/plugin.json` or Claude plugin manifests yet.
+- Do not change current install behavior.
+- The plugin boundary block in docs must remain simple enough for shell tests to parse.

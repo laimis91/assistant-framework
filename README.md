@@ -32,6 +32,8 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
+A plugin split is planned and contract-backed in `docs/plugin-architecture.md`; the current installer still uses the root `skills/assistant-*` release inventory until plugin manifests and install profiles are scaffolded in a later slice.
+
 Install a single skill:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking
