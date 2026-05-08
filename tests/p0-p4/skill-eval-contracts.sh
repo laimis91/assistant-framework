@@ -5,7 +5,7 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
-research_fixture="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
+telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
 
 p0p4_skill_eval_default_fixtures() {
     find "$FRAMEWORK_DIR/skills" \
@@ -149,13 +149,18 @@ fi
 test_start "skill eval runner validates default fixture inventory"
 if validation_output="$("$skill_eval_runner" --validate-fixture 2>&1)" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-clarify/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-diagrams/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-docs/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-ideate/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-memory/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-onboard/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-reflexion/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-research/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-review/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-security/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-skill-creator/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-tdd/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-telos/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-thinking/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-workflow/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "OK skill eval fixtures:"; then
@@ -201,6 +206,11 @@ if list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-reflexion\tpost-task-reflection-records-lessons\treflection_storage_contract\tPost-task reflection records lessons' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-memory\tsave-preference-uses-memory-graph\tmemory_save_contract\tSave preference uses memory graph' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
@@ -224,16 +234,16 @@ else
 fi
 
 test_start "skill eval runner list honors targeted expanded skill selection"
-research_case_count="$(jq '.cases | length' "$research_fixture")"
-if targeted_research_list_output="$("$skill_eval_runner" --list --skill assistant-research)" \
-    && [[ "$(printf '%s\n' "$targeted_research_list_output" | grep -c .)" -eq "$research_case_count" ]] \
-    && printf '%s\n' "$targeted_research_list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
-    && printf '%s\n' "$targeted_research_list_output" | grep -Fq $'assistant-research\turl-output-verifies-links\turl_verification\tURL output verifies links' \
-    && ! printf '%s\n' "$targeted_research_list_output" | grep -Fq "assistant-clarify" \
-    && ! printf '%s\n' "$targeted_research_list_output" | grep -Fq "assistant-security"; then
+telos_case_count="$(jq '.cases | length' "$telos_fixture")"
+if targeted_telos_list_output="$("$skill_eval_runner" --list --skill assistant-telos)" \
+    && [[ "$(printf '%s\n' "$targeted_telos_list_output" | grep -c .)" -eq "$telos_case_count" ]] \
+    && printf '%s\n' "$targeted_telos_list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
+    && printf '%s\n' "$targeted_telos_list_output" | grep -Fq $'assistant-telos\treview-existing-tcf-finds-chain-gaps\ttcf_review_contract\tReview existing TCF finds chain gaps' \
+    && ! printf '%s\n' "$targeted_telos_list_output" | grep -Fq "assistant-clarify" \
+    && ! printf '%s\n' "$targeted_telos_list_output" | grep -Fq "assistant-security"; then
     pass
 else
-    fail "skill eval runner --list --skill assistant-research did not list only assistant-research cases"
+    fail "skill eval runner --list --skill assistant-telos did not list only assistant-telos cases"
 fi
 
 test_start "skill eval runner emits skill-specific prompt packets with machine expectations"
@@ -246,11 +256,16 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
+    && grep -Fq "Skill: assistant-diagrams" "$prompt_dir/assistant-diagrams/architecture-diagram-derived-from-code.md" \
+    && grep -Fq "Skill: assistant-docs" "$prompt_dir/assistant-docs/architecture-doc-uses-code-evidence.md" \
+    && grep -Fq "Skill: assistant-ideate" "$prompt_dir/assistant-ideate/brainstorm-diverges-before-ranking.md" \
     && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md" \
     && grep -Fq "Skill: assistant-skill-creator" "$prompt_dir/assistant-skill-creator/new-process-skill-designs-contracts-before-build.md" \
     && grep -Fq "Skill: assistant-memory" "$prompt_dir/assistant-memory/save-preference-uses-memory-graph.md" \
+    && grep -Fq "Skill: assistant-reflexion" "$prompt_dir/assistant-reflexion/post-task-reflection-records-lessons.md" \
     && grep -Fq "Skill: assistant-research" "$prompt_dir/assistant-research/technology-comparison-uses-standard-tier.md" \
     && grep -Fq "Skill: assistant-onboard" "$prompt_dir/assistant-onboard/new-repo-onboarding-produces-orientation.md" \
+    && grep -Fq "Skill: assistant-telos" "$prompt_dir/assistant-telos/create-personal-tcf-core-sections.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
     && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
     && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/bugfix-starts-with-red-evidence.md" \
@@ -463,10 +478,15 @@ p0p4_register_cleanup "$unity_fixture_dir"
 p0p4_write_skill_eval_fixture "$unity_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-clarify" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-diagrams" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-docs" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-ideate" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-memory" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-reflexion" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-research" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-security" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-skill-creator" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-telos" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-thinking" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-workflow" \
     && ! printf '%s\n' "$local_only_list_output" | grep -Fq "$unity_fixture_name"; then
@@ -489,8 +509,13 @@ else
     fail "skill eval runner --list --include-local should include generated local-only unity fixtures while default list excludes them"
 fi
 
-test_start "skill eval docs describe ten-skill expanded coverage"
-if grep -Fq "ten-skill expanded coverage" "$FRAMEWORK_DIR/README.md" \
+test_start "skill eval docs describe complete first-class coverage"
+if grep -Fq "complete first-class skill coverage" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-ideate" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-reflexion" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-telos" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-memory" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
@@ -499,14 +524,18 @@ if grep -Fq "ten-skill expanded coverage" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-review" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-tdd" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "uncovered. Local grading" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "ten first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "not full coverage for all 15 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "ten first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && grep -Fq "ten-skill expanded per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && grep -Fq "not full coverage for all 15 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
+    && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "all 15 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "all 15 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-telos/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -517,7 +546,7 @@ if grep -Fq "ten-skill expanded coverage" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md"; then
     pass
 else
-    fail "skill eval docs do not describe the ten-skill expanded coverage slice"
+    fail "skill eval docs do not describe complete first-class coverage"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

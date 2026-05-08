@@ -1,38 +1,26 @@
-# Context Map: Expanded Level 4 Per-Skill Eval Coverage
+# Context Map: Complete First-Class Skill Eval Coverage
 
-## Eval Runner Surface
-- `tools/evals/run-skill-evals.sh` is the command entrypoint.
-- `tools/evals/lib/skill-eval-inventory.sh` discovers default first-class `skills/assistant-*` fixtures and excludes local-only `unity-*` fixtures unless `--include-local` is used.
-- `tools/evals/lib/skill-eval-fixtures.sh` validates fixture schema, skill identity, safe case ids, duplicate ids, and non-empty machine expectation arrays.
-- `tools/evals/lib/skill-eval-render.sh` emits prompt packets under `<output>/<skill>/<case-id>.md`.
-- `tools/evals/lib/skill-eval-grade.sh` locally grades response files against required and forbidden substrings.
+## Current Eval Surface
+- `tools/evals/run-skill-evals.sh` is the public runner for validation, listing, prompt emission, and local response grading.
+- Fixture files live at `skills/<skill>/evals/cases.json`.
+- Default inventory discovers first-class `skills/assistant-*` fixtures and excludes local-only `unity-*` fixtures unless `--include-local` is passed.
+- Default first-class coverage is complete for all 15 tracked assistant skills:
+  - `assistant-clarify`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-memory`, `assistant-onboard`, `assistant-reflexion`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-workflow`.
 
-## Existing Coverage
-- Current fixtures exist for ten first-class skills:
-  - `skills/assistant-clarify/evals/cases.json`
-  - `skills/assistant-memory/evals/cases.json`
-  - `skills/assistant-onboard/evals/cases.json`
-  - `skills/assistant-research/evals/cases.json`
-  - `skills/assistant-thinking/evals/cases.json`
-  - `skills/assistant-workflow/evals/cases.json`
-  - `skills/assistant-review/evals/cases.json`
-  - `skills/assistant-tdd/evals/cases.json`
-  - `skills/assistant-security/evals/cases.json`
-  - `skills/assistant-skill-creator/evals/cases.json`
-- The repo has 15 first-class `assistant-*` skills, so current default fixture coverage is 10/15.
+## Newly Covered First-Class Skills
+- `assistant-diagrams`: code-derived Mermaid/PlantUML diagram generation with `diagram_type`, `scope`, `source_files`, `diagram_code`, evidence, placement, and gaps.
+- `assistant-docs`: code-derived docs with `doc_type`, `scope`, `source_files`, `files_updated`, `doc_coverage`, and `review_needed`.
+- `assistant-ideate`: UNDERSTAND -> DIVERGE -> CONVERGE -> REFINE -> DECIDE pipeline; requires 8+ ideas, full scoring, refined candidates, and user decision.
+- `assistant-reflexion`: reflect/recall/stats/consolidate actions; reflect extracts lessons with confidence and records via memory; recall returns relevant lessons with confidence, date, and project.
+- `assistant-telos`: create/update/review Telos Context Files; create/update require TCF sections, review requires section findings, confirmation always required.
 
-## Target Skill Surfaces
-- `skills/assistant-skill-creator/SKILL.md` plus contracts define CAPTURE, DESIGN, BUILD, VALIDATE gates, required contract fields, output artifacts, and validation summary expectations.
-- `skills/assistant-memory/SKILL.md` plus contracts define memory actions, entity types, query/content requirements, confirmation output, and secret/PII safety rules.
-- `skills/assistant-research/SKILL.md` plus contracts define tier/tool selection, search/synthesize/verify pipeline, confidence levels, verified URLs, conflicts, gaps, and structured output.
-- `skills/assistant-onboard/SKILL.md` plus contracts define surface scan, architecture map, pattern recognition, knowledge gaps, project orientation, key files, conventions, memory_updated, and specific questions.
+## Tests And Docs
+- `tests/p0-p4/skill-eval-contracts.sh` asserts all 15 covered fixtures, representative rows for the newly covered skills, prompt emission, local-only exclusion, and docs wording.
+- README and `docs/evals/README.md` describe complete first-class coverage and keep local-only Unity skills opt-in.
+- `docs/skill-contract-design-guide.md` and the bundled `skills/assistant-skill-creator/references/skill-contract-design-guide.md` describe complete first-class per-skill eval fixtures.
 
-## Contract Test Surface
-- `tests/p0-p4/skill-eval-contracts.sh` is the current P0/P4 suite for per-skill eval contracts.
-- It already validates default inventory, targeted selection by name/dir/SKILL.md, listing, prompt emission, response grading, malformed fixtures, duplicate ids, local-only exclusion/inclusion, and docs coverage wording.
-- The current docs assertion names ten-skill coverage and guards the incomplete-coverage statement.
-
-## Documentation Surface
-- `README.md` has the public quick-start section for per-skill eval fixtures.
-- `docs/evals/README.md` has the detailed runner usage and current tracked fixture list.
-- `docs/skill-contract-design-guide.md` describes Level 4 conformance and currently states ten-skill expanded coverage with five remaining first-class skills as future work.
+## Constraints
+- Keep the runner local and provider-neutral; no model/provider SDK/network behavior.
+- Add only skill-local fixture JSON, P0/P4 assertions, and coverage docs.
+- Match machine expectations to stable skill contract labels and exact casing.
+- Check coverage facts separately from wrapped Markdown prose.

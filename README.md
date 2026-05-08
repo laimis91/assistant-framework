@@ -219,13 +219,15 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 
 The default eval inventory is first-class `assistant-*` skills with fixtures and
 excludes local-only `unity-*` skills unless `--include-local` is passed. Current
-coverage is ten-skill expanded coverage for `assistant-clarify`,
-`assistant-thinking`, `assistant-workflow`, `assistant-review`, `assistant-tdd`,
-`assistant-security`, `assistant-skill-creator`, `assistant-memory`,
-`assistant-research`, and `assistant-onboard`; 5 of 15 first-class skills remain
-uncovered. Local grading is heuristic substring-based checking, useful as a
-Level 4 conformance proxy but not a replacement for semantic review. Detailed
-usage is in `docs/evals/README.md`.
+coverage is complete first-class skill coverage for all 15 tracked assistant
+skills: `assistant-clarify`, `assistant-diagrams`, `assistant-docs`,
+`assistant-ideate`, `assistant-memory`, `assistant-onboard`,
+`assistant-reflexion`, `assistant-research`, `assistant-review`,
+`assistant-security`, `assistant-skill-creator`, `assistant-tdd`,
+`assistant-telos`, `assistant-thinking`, and `assistant-workflow`. Local-only
+Unity skills remain opt-in through `--include-local`. Local grading is heuristic
+substring-based checking, useful as a Level 4 conformance proxy but not a
+replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
 
 ## Structure
 

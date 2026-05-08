@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-docs-skill-behavior",
+  "skill": "assistant-docs",
+  "title": "assistant-docs Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-docs skill's code-derived documentation workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-docs skill instructions loaded.",
+    "Compare the local response against documentation input/output contracts, evidence, coverage, and review-needed handling.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "architecture-doc-uses-code-evidence",
+      "title": "Architecture doc uses code evidence",
+      "category": "code_derived_architecture_docs",
+      "purpose": "Checks that architecture documentation is generated from code evidence and returns files_updated, doc_coverage, review_needed, and gaps.",
+      "prompt": "Write architecture documentation for the skill eval runner modules under tools/evals/.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The user requested architecture docs for a concrete module.",
+        "The target module has source files and existing docs to inspect."
+      ],
+      "expected_behavior": [
+        "Resolves doc_type as architecture and scope as the skill eval runner.",
+        "Reads source_files and existing docs before describing architecture.",
+        "Updates or proposes documentation with files_updated entries.",
+        "Returns Evidence tied to source files, not memory.",
+        "Returns doc_coverage with documented areas and remaining gaps.",
+        "Sets review_needed true for inferred architecture claims that need confirmation."
+      ],
+      "pass_criteria": [
+        "The response names doc_type, scope, and source_files or evidence.",
+        "The response includes files_updated, doc_coverage, and review_needed.",
+        "The response cites actual tools/evals files.",
+        "The response flags inferred claims or gaps for review.",
+        "The response does not document hallucinated features."
+      ],
+      "fail_signals": [
+        "Writes docs from memory without reading code.",
+        "Claims full coverage while gaps remain.",
+        "Omits review_needed despite inferred architecture claims.",
+        "Documents features that are not in the source."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "doc_type",
+          "architecture",
+          "source_files",
+          "files_updated",
+          "doc_coverage",
+          "review_needed",
+          "Evidence",
+          "tools/evals"
+        ],
+        "forbidden_substrings": [
+          "from memory",
+          "hallucinated feature",
+          "No review needed for inferred claims",
+          "full coverage with no gaps"
+        ]
+      }
+    },
+    {
+      "id": "changelog-doc-uses-git-history",
+      "title": "Changelog doc uses git history",
+      "category": "history_based_changelog",
+      "purpose": "Checks that changelog documentation uses git history or supplied commits and marks inferred release notes for review.",
+      "prompt": "Generate a changelog entry for the latest skill eval coverage work.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The user asks for changelog documentation.",
+        "No commit range was explicitly supplied."
+      ],
+      "expected_behavior": [
+        "Resolves doc_type as changelog and identifies the scope.",
+        "Uses git history or asks for a range when latest work is ambiguous.",
+        "Returns files_updated with the changelog target path and change_type.",
+        "Returns doc_coverage with included and omitted changes.",
+        "Sets review_needed true when release wording is inferred.",
+        "Does not invent issue numbers, versions, or features absent from evidence."
+      ],
+      "pass_criteria": [
+        "The response uses git log or requests a commit range.",
+        "The response includes files_updated, doc_coverage, and review_needed.",
+        "The response distinguishes evidence-backed entries from gaps.",
+        "The response does not invent versions or features."
+      ],
+      "fail_signals": [
+        "Creates changelog text without commit or source evidence.",
+        "Invents version numbers, issue IDs, or release dates.",
+        "Marks review_needed false for inferred release notes.",
+        "Omits coverage or gaps."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "doc_type",
+          "changelog",
+          "git log",
+          "files_updated",
+          "doc_coverage",
+          "review_needed",
+          "Evidence",
+          "gaps"
+        ],
+        "forbidden_substrings": [
+          "No git history needed",
+          "invented version",
+          "made-up issue",
+          "review_needed: false for inferred"
+        ]
+      }
+    }
+  ]
+}
