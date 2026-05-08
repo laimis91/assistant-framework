@@ -272,9 +272,20 @@ The source validator is the Level 3 foundation: it gives hooks a consistent, che
 ### Level 4: Conformance test suite (automated)
 YAML test cases define "given this input, skill must produce output matching this schema." Can be run as a verification step after skill modifications.
 
-The validator is also the Level 4 foundation because it provides the inventory and structural checks that future per-skill conformance suites can build on. It is not full per-skill eval coverage yet.
+The validator is also the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
 
-**Current implementation: Level 2 plus source structural validation.** Level 3 already exists for review (`stop-review.sh`). Broader runtime enforcement and per-skill eval suites are next slices built on the validator.
+```bash
+tools/evals/run-skill-evals.sh --validate-fixture
+tools/evals/run-skill-evals.sh --list
+tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
+tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
+```
+
+The default per-skill eval inventory is first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed. The current eval slice is a pilot covering `assistant-clarify` and `assistant-thinking`; it is not full coverage for all 15 first-class skills.
+
+Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
+
+**Current implementation: Level 2 plus source structural validation and pilot per-skill eval fixtures.** Level 3 already exists for review (`stop-review.sh`). Broader runtime enforcement and wider Level 4 per-skill coverage are next slices built on the validator.
 
 ---
 

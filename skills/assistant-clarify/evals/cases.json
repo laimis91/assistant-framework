@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-clarify-skill-behavior",
+  "skill": "assistant-clarify",
+  "title": "assistant-clarify Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-clarify skill's clarification-first workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-clarify skill instructions loaded.",
+    "Compare the local response against the expected behavior, pass criteria, and failure signals.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "multi-intent-prompt-asks-bounded-clarification",
+      "title": "Multi-intent prompt asks bounded clarification",
+      "category": "ambiguous_multi_intent",
+      "purpose": "Checks that mixed implementation, documentation, and priority requests are clarified before execution.",
+      "prompt": "I need you to fix the onboarding flow, maybe write docs too, and make the skill stuff less confusing before the demo. Not sure if the bug or docs matters more.",
+      "setup_context": [
+        "The assistant-clarify skill instructions are active.",
+        "No prior task state resolves whether the primary outcome is a code change, documentation, or planning brief.",
+        "The user gives urgency and multiple possible deliverables but no target files or priority order."
+      ],
+      "expected_behavior": [
+        "Reflects the likely goal without calling the prompt messy or blaming the user.",
+        "Identifies that the request contains multiple possible outcomes and still needs clarification.",
+        "Produces a structured brief with knowns, unknowns, assumptions, constraints, and likely deliverables.",
+        "Asks one to three high-yield clarifying questions with bounded choices or a recommended default.",
+        "States a provisional execution target and marks the status as needs clarification.",
+        "Does not begin implementation, documentation edits, or broad refactoring before the ambiguity is reduced."
+      ],
+      "pass_criteria": [
+        "The response includes a concise interpretation or likely goal.",
+        "The structured brief separates known facts from unknowns and assumptions.",
+        "The clarifying question offers concrete options instead of a generic request for clarification.",
+        "The response preserves momentum by recommending a default or next target.",
+        "No file edits or irreversible work are proposed as already started."
+      ],
+      "fail_signals": [
+        "Asks only an open-ended clarification with no options.",
+        "Starts implementing an arbitrary onboarding or documentation change.",
+        "Assumes a broad skill-system refactor is desired.",
+        "Labels the user's prompt as chaotic, messy, confusing, or incoherent."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "likely goal",
+          "structured brief",
+          "knowns",
+          "unknowns",
+          "assumptions",
+          "clarifying questions",
+          "execution target",
+          "needs clarification"
+        ],
+        "forbidden_substrings": [
+          "What do you mean?",
+          "I will start implementing",
+          "I will do a broad refactor",
+          "Your prompt is messy"
+        ]
+      }
+    },
+    {
+      "id": "compressed-request-produces-structured-brief",
+      "title": "Compressed request produces structured brief",
+      "category": "structured_brief",
+      "purpose": "Checks that a compressed request is converted into an actionable brief with assumptions and a recommended default.",
+      "prompt": "This might be two separate asks: refactor the memory hook and write a research note, but I don't want a huge process. Help me turn it into something actionable.",
+      "setup_context": [
+        "The assistant-clarify skill instructions are active.",
+        "The user asks for help structuring the work rather than immediate implementation.",
+        "The request names two possible outcomes and a constraint against unnecessary process."
+      ],
+      "expected_behavior": [
+        "States the likely goal as turning the compressed request into an actionable execution target.",
+        "Builds a structured brief that includes knowns, unknowns, assumptions, constraints, and likely deliverables.",
+        "Separates the refactor and research-note possibilities so the user can choose a primary outcome.",
+        "Asks at most three clarifying questions and includes a recommendation or default path.",
+        "Identifies the execution target as provisional until the user confirms the priority.",
+        "Reports status as needs clarification rather than ready to implement."
+      ],
+      "pass_criteria": [
+        "The response contains a structured brief with distinct sections for knowns and unknowns.",
+        "The response includes assumptions the assistant would otherwise have to make.",
+        "The response includes a bounded choice between refactor-first and research-note-first paths.",
+        "The response includes a concrete recommendation that keeps the process lightweight.",
+        "The response does not over-expand the scope into a full workflow plan."
+      ],
+      "fail_signals": [
+        "Treats the request as already ready for BUILD.",
+        "Asks more than three clarification questions.",
+        "Provides only a taxonomy or lecture without an execution target.",
+        "Ignores the user's constraint against a huge process."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "likely goal",
+          "knowns",
+          "unknowns",
+          "constraints",
+          "likely deliverables",
+          "recommendation",
+          "execution target",
+          "needs clarification"
+        ],
+        "forbidden_substrings": [
+          "ready for BUILD",
+          "I have started the refactor",
+          "Here are five questions",
+          "This requires a huge process"
+        ]
+      }
+    }
+  ]
+}

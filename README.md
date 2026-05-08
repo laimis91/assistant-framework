@@ -205,6 +205,25 @@ tools/skills/validate-skills.sh --include-local
 tools/skills/validate-skills.sh --include-local --list
 ```
 
+### Skill Evals
+
+Provider-neutral per-skill eval fixtures live at `skills/<skill>/evals/cases.json`
+and run locally through `tools/evals/run-skill-evals.sh`:
+
+```bash
+tools/evals/run-skill-evals.sh --validate-fixture
+tools/evals/run-skill-evals.sh --list
+tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
+tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
+```
+
+The default eval inventory is first-class `assistant-*` skills with fixtures and
+excludes local-only `unity-*` skills unless `--include-local` is passed. Current
+coverage is a pilot for `assistant-clarify` and `assistant-thinking`, not all 15
+skills. Local grading is heuristic substring-based checking, useful as a Level 4
+conformance proxy but not a replacement for semantic review. Detailed usage is
+in `docs/evals/README.md`.
+
 ## Structure
 
 ```
@@ -222,6 +241,7 @@ skills/
 
   assistant-clarify/
     SKILL.md                       <- Clarification workflow for ambiguous or multi-intent prompts
+    evals/cases.json               <- Pilot provider-neutral behavior eval fixtures
 
   assistant-tdd/
     SKILL.md                       <- TDD enforcement (Red-Green-Refactor cycle)
@@ -234,6 +254,7 @@ skills/
     deep-think.md                  <- 8 analytical lenses
     hypothesize.md                 <- Goal-first + hypothesis plurality
     creative.md                    <- Low-probability sampling
+    evals/cases.json               <- Pilot provider-neutral behavior eval fixtures
 
   assistant-research/
     SKILL.md                       <- Tool descriptions and usage guidance
@@ -311,6 +332,9 @@ hooks/                             <- Automated behaviors (Claude + Codex + Gemi
 tools/
   skills/
     validate-skills.sh             <- Source validator for first-class skill metadata and contracts
+  evals/
+    run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
+    run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
   cognitive-complexity/             <- Roslyn-based complexity analyzer
   memory-graph/
     DESIGN.md                      <- Architecture and data model
