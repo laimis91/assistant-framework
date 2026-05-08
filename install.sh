@@ -469,6 +469,31 @@ PY
     fi
 }
 
+codex_cli_supports_compaction_hooks() {
+    local version_line version_parts major minor patch
+
+    if ! command -v codex >/dev/null 2>&1; then
+        # If Codex is not on PATH during install, avoid stripping latest hook
+        # support from the framework template. The user's eventual CLI will
+        # validate the config when it runs.
+        return 0
+    fi
+
+    version_line=$(codex --version 2>/dev/null || true)
+    version_parts=$(printf '%s\n' "$version_line" | sed -nE 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p' | head -1)
+    [[ -n "$version_parts" ]] || return 0
+
+    read -r major minor patch <<< "$version_parts"
+    if (( major > 0 )); then
+        return 0
+    fi
+    if (( minor >= 129 )); then
+        return 0
+    fi
+
+    return 1
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -953,6 +978,7 @@ if $INSTALL_HOOKS; then
 
     # Determine which settings template to use
     HOOKS_SETTINGS=""
+    CODEX_SUPPORTS_COMPACTION_HOOKS=true
     case "$AGENT" in
         claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
         gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
@@ -961,6 +987,9 @@ if $INSTALL_HOOKS; then
             # Hooks are read from hooks.json (not settings.json).
             HOOKS_SETTINGS="$HOOKS_SOURCE/codex-settings.json"
             CODEX_HOOKS=true
+            if ! codex_cli_supports_compaction_hooks; then
+                CODEX_SUPPORTS_COMPACTION_HOOKS=false
+            fi
             ;;
     esac
 
@@ -978,18 +1007,27 @@ if $INSTALL_HOOKS; then
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
-                    # Codex experimental hooks: SessionStart, UserPromptSubmit, Stop, PreToolUse.
+                    # Codex hooks: SessionStart, UserPromptSubmit, Stop, PreToolUse,
+                    # PostToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|post-tool-context.sh|tool-failure-advisor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
                             *) continue ;;  # skip unsupported hooks
                         esac
+                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                            case "$hook_name" in
+                                pre-compress.sh|post-compact.sh) continue ;;
+                            esac
+                        fi
                     fi
-                    # post-compact.sh and subagent-monitor.sh are Claude-only
+                    # subagent-monitor.sh is Claude-only; post-compact.sh has no Gemini event.
                     if [[ "$AGENT" != "claude" ]]; then
                         case "$hook_name" in
-                            post-compact.sh|subagent-monitor.sh) continue ;;
+                            subagent-monitor.sh) continue ;;
                         esac
+                    fi
+                    if [[ "$AGENT" == "gemini" && "$hook_name" == "post-compact.sh" ]]; then
+                        continue
                     fi
                     # task-completed.sh is Claude-only (Gemini has no TaskCompleted event)
                     if [[ "$AGENT" == "gemini" && "$hook_name" == "task-completed.sh" ]]; then
@@ -1056,6 +1094,10 @@ if $INSTALL_HOOKS; then
                         | with_entries(select((.value // []) | length > 0))
                     ' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
                     new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
+                    if [[ "${CODEX_HOOKS:-}" == "true" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                        new_hooks=$(printf '%s\n' "$new_hooks" | jq 'del(.PreCompact, .PostCompact)')
+                        info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
+                    fi
                     merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
                         def arrayify:
                             if type == "array" then . else [.] end;
@@ -1098,8 +1140,13 @@ if $INSTALL_HOOKS; then
                         info "WARNING: Failed to merge hooks into $CODEX_HOOKS_FILE"
                     fi
                 else
-                    cp "$HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
-                    ok "Created $CODEX_HOOKS_FILE (requires codex_hooks feature flag)"
+                    if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]] && command -v jq &>/dev/null; then
+                        jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
+                        ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
+                    else
+                        cp "$HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
+                        ok "Created $CODEX_HOOKS_FILE (requires codex_hooks feature flag)"
+                    fi
                 fi
                 info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
                 info "  [features]"
@@ -1345,8 +1392,14 @@ if $INSTALL_HOOKS; then
     echo ""
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
-        echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, 7 hook commands)"
-        echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate"
+        if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse, PreCompact, PostCompact — 7 events, 11 hook commands)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + compaction + post-tool context"
+        else
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse — 5 events, 9 hook commands)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + post-tool context"
+            echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
+        fi
     fi
 fi
 if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then

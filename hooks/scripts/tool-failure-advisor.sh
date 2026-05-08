@@ -1,31 +1,51 @@
 #!/usr/bin/env bash
 # tool-failure-advisor.sh — Suggests fixes for common tool failures.
 #
-# Event: PostToolUseFailure (fires when a tool call fails — Claude-only)
+# Events: Claude PostToolUseFailure, Codex PostToolUse
 #
 # Purpose: When dotnet build/test or other commands fail, detect common error
 # patterns and inject targeted fix suggestions so the agent recovers faster.
 #
 # Input (stdin JSON):
-#   {"tool_name": "Bash", "tool_input": {"command": "..."}, "error": "...", "error_type": "..."}
+#   Claude: {"tool_name": "Bash", "tool_input": {"command": "..."}, "error": "...", "error_type": "..."}
+#   Codex: {"tool_name": "Bash", "tool_input": {"command": "..."}, "tool_response": {"stderr": "...", "exit_code": 1}}
 #
 # Output (stdout):
 #   JSON with additionalContext (fix suggestions)
 #   or no output (unrecognized error)
 #
-# Claude-only: Registered in claude-settings.json under PostToolUseFailure.
-# Codex does not support this event.
+# Registered in claude-settings.json under PostToolUseFailure and codex-settings.json under PostToolUse.
 
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
-ERROR=$(echo "$INPUT" | jq -r '.error // ""')
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+IS_CODEX=false
+if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    IS_CODEX=true
+fi
+
+ERROR=$(echo "$INPUT" | jq -r '
+  if (.error | type) == "string" then .error
+  elif (.tool_response.stderr | type) == "string" and (.tool_response.stderr | length) > 0 then .tool_response.stderr
+  elif (.tool_response.stdout | type) == "string" and (.tool_response.stdout | length) > 0 then .tool_response.stdout
+  elif (.tool_response.output | type) == "string" then .tool_response.output
+  elif (.tool_response | type) == "string" then .tool_response
+  else ""
+  end' 2>/dev/null)
 
 [[ -n "$ERROR" ]] || exit 0
+
+if $IS_CODEX && echo "$INPUT" | jq -e '
+  (.tool_response.exit_code? // .tool_response.exitCode? // .exit_code? // .exitCode? // null) as $code
+  | ($code != null) and (($code | tostring) == "0")
+' >/dev/null 2>&1; then
+    exit 0
+fi
 
 advice=""
 
@@ -65,7 +85,16 @@ elif echo "$ERROR" | grep -qiE "NU1100|NU1101|Unable to resolve"; then
 fi
 
 if [[ -n "$advice" ]]; then
-    jq -cn --arg ctx "BUILD FAILURE ADVICE: $advice" '{additionalContext: $ctx}'
+    if $IS_CODEX; then
+        jq -cn --arg ctx "BUILD FAILURE ADVICE: $advice" '{
+            hookSpecificOutput: {
+                hookEventName: "PostToolUse",
+                additionalContext: $ctx
+            }
+        }'
+    else
+        jq -cn --arg ctx "BUILD FAILURE ADVICE: $advice" '{additionalContext: $ctx}'
+    fi
 fi
 
 exit 0

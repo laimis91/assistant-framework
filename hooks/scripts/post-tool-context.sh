@@ -7,20 +7,26 @@
 # so the agent has clear signal without re-reading verbose output.
 #
 # Input (stdin JSON):
-#   {"tool_name": "Bash", "tool_input": {"command": "..."}, "tool_result": "...", ...}
+#   Claude: {"tool_name": "Bash", "tool_input": {"command": "..."}, "tool_result": "...", ...}
+#   Codex: {"tool_name": "Bash", "tool_input": {"command": "..."}, "tool_response": "...", ...}
 #
 # Output (stdout):
 #   JSON with additionalContext (concise build/test result)
 #   or no output (non-dotnet commands)
 #
-# Claude-only: Registered in claude-settings.json, not in codex-settings.json.
+# Registered in claude-settings.json and codex-settings.json.
 
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
+IS_CODEX=false
+if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    IS_CODEX=true
+fi
 
 # Only process Bash tool calls
 [[ "$TOOL_NAME" == "Bash" ]] || exit 0
@@ -30,10 +36,14 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
 # Only process dotnet build/test commands
 echo "$COMMAND" | grep -qE '^\s*dotnet\s+(build|test)' || exit 0
 
-# Extract result — tool_result can be a string or an object with stdout
+# Extract result — tool_result/tool_response can be a string or an object with stdout
 RESULT=$(echo "$INPUT" | jq -r '
   if (.tool_result | type) == "string" then .tool_result
   elif (.tool_result.stdout | type) == "string" then .tool_result.stdout
+  elif (.tool_response | type) == "string" then .tool_response
+  elif (.tool_response.stdout | type) == "string" then .tool_response.stdout
+  elif (.tool_response.stderr | type) == "string" then .tool_response.stderr
+  elif (.tool_response.output | type) == "string" then .tool_response.output
   elif (.response | type) == "string" then .response
   elif (.response.stdout | type) == "string" then .response.stdout
   else ""
@@ -77,7 +87,16 @@ elif echo "$COMMAND" | grep -qE '^\s*dotnet\s+test'; then
 fi
 
 if [[ -n "$context" ]]; then
-    jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
+    if $IS_CODEX; then
+        jq -cn --arg ctx "$context" '{
+            hookSpecificOutput: {
+                hookEventName: "PostToolUse",
+                additionalContext: $ctx
+            }
+        }'
+    else
+        jq -cn --arg ctx "$context" '{additionalContext: $ctx}'
+    fi
 fi
 
 exit 0

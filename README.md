@@ -380,13 +380,14 @@ Telos skill: Checks active work against your purpose chain
 
 ## Hooks (automated behaviors)
 
-Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use the experimental `codex_hooks` feature flag and `~/.codex/hooks.json`.
+Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `codex_hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported post-tool hook.
 
 | Hook | Event | What it does |
 |---|---|---|
 | **Session start** | Session begins/resumes | Injects task journal + memory feedback into context |
 | **Pre-compress** | Before context compaction | Reminds agent to update task journal before state is lost |
-| **Post-compact** | After compaction completes (Claude only) | Re-injects task journal and feedback rules |
+| **Post-compact** | After compaction completes | Re-injects task journal and feedback rules |
+| **Post-tool context** | After build/test tool execution | Injects concise build/test status and common failure advice |
 | **Stop review** | Agent finishes responding (during active build) | Enforces self-review before task handoff |
 | **Skill router** | User submits prompt | Pattern-matches prompt against skill triggers; injects reminder to invoke the correct skill |
 | **Learning signals** | User submits prompt | Detects corrections, approvals, frustrations, and pivots; logs to signals.jsonl for trend analysis |

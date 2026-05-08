@@ -60,12 +60,12 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     fi
 fi
 
-# Only guard Edit and Write tools for orchestrator warnings.
-# The settings matcher (Edit|Write|Bash) pre-filters at the event level.
+# Only guard file-editing tools for orchestrator warnings.
+# The settings matcher pre-filters at the event level where supported.
 # This case guard is a secondary filter for the Edit/Write warning logic
 # (Bash is handled above for dotnet flag injection).
 case "$TOOL_NAME" in
-    Edit|Write|edit|write) ;;
+    Edit|Write|edit|write|apply_patch) ;;
     *) exit 0 ;;
 esac
 

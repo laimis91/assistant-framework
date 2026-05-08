@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # post-compact.sh — Re-injects task context and memory instructions after context compaction.
 #
-# Events: Claude PostCompact only (Gemini has no equivalent)
+# Events: Claude PostCompact, Codex PostCompact
 #
 # Input (stdin JSON):
 #   Claude: {"session_id": "...", ...}
+#   Codex: {"hook_event_name": "PostCompact", ...}
 #
 # Output (stdout):
-#   JSON: {"additionalContext": "..."}  (all agents, requires jq)
+#   Claude JSON: {"additionalContext": "..."}
+#   Codex JSON: {"hookSpecificOutput":{"hookEventName":"PostCompact","additionalContext":"..."}}
 #   Fallback: plain text if jq is unavailable
 #
 # Env vars used:
@@ -20,14 +22,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=$(cat)
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
 AGENT_HOME="$HOME/.claude"
+IS_CODEX=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     AGENT_HOME="$HOME/.gemini"
-elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+elif [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
     AGENT_HOME="$HOME/.codex"
+    IS_CODEX=true
 fi
 
 # Guard: if resolved AGENT_HOME doesn't exist, skip hook context
@@ -130,7 +135,16 @@ if [[ ${#context_parts[@]} -gt 0 ]]; then
     done
 
     if command -v jq >/dev/null 2>&1; then
+        if $IS_CODEX; then
+            jq -n --arg ctx "$full_context" '{
+                hookSpecificOutput: {
+                    hookEventName: "PostCompact",
+                    additionalContext: $ctx
+                }
+            }'
+        else
         jq -n --arg ctx "$full_context" '{additionalContext: $ctx}'
+        fi
     else
         echo "$full_context"
     fi

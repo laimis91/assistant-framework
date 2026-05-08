@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # pre-compress.sh — Saves task state and conversation insights before context compression.
 #
-# Events: Claude PreCompact, Gemini PreCompress
+# Events: Claude PreCompact, Gemini PreCompress, Codex PreCompact
 #
 # Input (stdin JSON):
 #   Claude: {"session_id": "...", ...}
 #   Gemini: {"session_id": "...", ...}
+#   Codex: {"hook_event_name": "PreCompact", ...}
 #
 # Output (stdout):
 #   Claude: plain text (advisory message added to context)
 #   Gemini: {"systemMessage": "..."}  (strict JSON only)
+#   Codex: {"hookSpecificOutput":{"hookEventName":"PreCompact","additionalContext":"..."}}
 #
 # Env vars used:
 #   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
@@ -23,11 +25,16 @@ set -euo pipefail
 # jq is required for Gemini JSON output
 command -v jq >/dev/null 2>&1 || JQ_MISSING=true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=$(cat)
 
 IS_GEMINI=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_GEMINI=true
+fi
+IS_CODEX=false
+if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    IS_CODEX=true
 fi
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
@@ -37,7 +44,7 @@ STATE_DIR=".claude"
 if $IS_GEMINI; then
     AGENT_HOME="$HOME/.gemini"
     STATE_DIR=".gemini"
-elif [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+elif $IS_CODEX; then
     AGENT_HOME="$HOME/.codex"
     STATE_DIR=".codex"
 fi
@@ -65,6 +72,14 @@ if $IS_GEMINI; then
     # Gemini: strict JSON on stdout only (requires jq)
     if [[ "${JQ_MISSING:-}" == "true" ]]; then exit 0; fi
     jq -n --arg msg "$MSG" '{systemMessage: $msg}'
+elif $IS_CODEX; then
+    if [[ "${JQ_MISSING:-}" == "true" ]]; then exit 0; fi
+    jq -n --arg msg "$MSG" '{
+        hookSpecificOutput: {
+            hookEventName: "PreCompact",
+            additionalContext: $msg
+        }
+    }'
 else
     # Claude: plain stdout is added to context
     echo "$MSG"
