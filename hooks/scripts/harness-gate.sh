@@ -9,7 +9,8 @@
 #   2. Score gate: rubric scores present for medium+ tasks
 #   3. Score threshold: weighted score meets minimum for completion
 #
-# Only activates for medium+ tasks (small/trivial skip harness enforcement).
+# Only activates for medium+ tasks in BUILDING/VERIFYING/REVIEWING/DOCUMENTING
+# states (small/trivial skip harness enforcement).
 #
 # Input (stdin JSON):
 #   Claude: {"stop_hook_active": bool, ...}
@@ -25,6 +26,7 @@ command -v jq >/dev/null 2>&1 || { exit 0; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/task-journal-resolver.sh"
+. "$SCRIPT_DIR/workflow-phase-gates.sh"
 
 INPUT=$(cat)
 
@@ -62,23 +64,18 @@ fi
 assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Read status
-status=$(grep -m1 "^Status:" "$TASK_FILE" 2>/dev/null || echo "")
+status="$(assistant_phase_status "$TASK_FILE" || true)"
 
-# Only enforce during active build/review phases
-if [[ "$status" != *"BUILDING"* && "$status" != *"VERIFYING"* && "$status" != *"REVIEWING"* ]]; then
+# Only enforce during active build/review/document phases
+if ! assistant_phase_status_is_lifecycle_active "$status"; then
     exit 0
 fi
 
 # Determine task size — only enforce for medium+
 # Match against the formal triage declaration to avoid false positives
 # from words like "medium" appearing in task descriptions or code comments
-is_medium_plus=false
-if grep -qE "Triaged as:.*(medium|large|mega)" "$TASK_FILE" 2>/dev/null; then
-    is_medium_plus=true
-fi
-
 # Small tasks skip harness enforcement
-if ! $is_medium_plus; then
+if ! assistant_phase_is_medium_plus "$TASK_FILE"; then
     exit 0
 fi
 
@@ -90,11 +87,10 @@ GATE_REASON=""
 #   - "Plan approval: yes" (task journal template field)
 #   - "PHASE: PLAN COMPLETE (approved)" (workflow checkpoint)
 has_plan=$(grep -m1 -E "^(Plan approval:|## Plan)" "$TASK_FILE" 2>/dev/null || echo "")
-has_plan_approval=$(grep -m1 -E "(^Plan approval:.*yes|PLAN COMPLETE \(approved\))" "$TASK_FILE" 2>/dev/null || echo "")
 
 if [[ -z "$has_plan" ]]; then
     GATE_REASON="Harness gate: No plan found in task journal. Medium+ tasks require an approved plan before building. Run the Plan phase first."
-elif [[ -z "$has_plan_approval" ]]; then
+elif ! assistant_phase_has_plan_approval "$TASK_FILE"; then
     GATE_REASON="Harness gate: Plan exists but not approved. The plan must be approved by the user before building. Present the plan and wait for approval."
 fi
 

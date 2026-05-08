@@ -973,7 +973,7 @@ if $INSTALL_HOOKS; then
                     # PreToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) ;;  # supported + shared helper dependency
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
                             *) continue ;;  # skip unsupported hooks
                         esac
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
@@ -1039,7 +1039,8 @@ if $INSTALL_HOOKS; then
                                 "post-tool-context.sh",
                                 "tool-failure-advisor.sh",
                                 "task-completed.sh",
-                                "task-journal-resolver.sh"
+                                "task-journal-resolver.sh",
+                                "workflow-phase-gates.sh"
                             ];
                         def first_shell_token:
                             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");

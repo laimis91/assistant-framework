@@ -204,8 +204,8 @@ The framework uses two complementary Stop hooks:
 
 | Hook | What It Checks | When It Blocks |
 |---|---|---|
-| `stop-review.sh` | Review happened at all | Task in BUILDING/VERIFYING without review entries |
-| `harness-gate.sh` | Full harness lifecycle | Medium+ task without plan approval, rubric scores, or passing score |
+| `stop-review.sh` | Structured review, final result, and metrics happened | Task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without review entries, final result, or today's metrics |
+| `harness-gate.sh` | Full harness lifecycle | Medium+ task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without plan approval, rubric scores, or passing score |
 
 ### harness-gate.sh checks (in order)
 
@@ -217,7 +217,7 @@ The framework uses two complementary Stop hooks:
 
 | Task Size | Enforcement |
 |---|---|
-| Small/trivial | `stop-review.sh` only (review happened) |
+| Small/trivial | `stop-review.sh` only (review, final result, and metrics happened) |
 | Medium+ | Both hooks (full harness lifecycle) |
 
 The hook detects task size by looking for `Triaged as: medium|large|mega` in the task journal — this is an explicit field in the journal template, not inferred from content.
@@ -228,7 +228,7 @@ Both hooks include loop guards to prevent infinite blocking:
 - **Claude:** `stop_hook_active` flag in input JSON — if true, the hook already fired once, allow stop
 - **Gemini:** Temp file flag (`/tmp/.assistant-harness-gate-retry-{hash}`) — set on first retry, cleared on second invocation
 
-**Framework implementation:** `hooks/scripts/harness-gate.sh`, registered in all three settings files (Claude, Gemini, Codex)
+Prompt-time runtime gate warnings are injected by `hooks/scripts/workflow-enforcer.sh`, with shared task-journal checks in `hooks/scripts/workflow-phase-gates.sh`. Stop-time blocking remains split between `hooks/scripts/stop-review.sh` and `hooks/scripts/harness-gate.sh`, registered in all three settings files (Claude, Gemini, Codex).
 
 ---
 

@@ -1,391 +1,318 @@
 # Task Journal
 
+Task: Runtime phase-gate enforcement
 Status: DONE
 Current phase: DOCUMENT COMPLETE
+Triaged as: medium
 
-## Task
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
 
-Implement the next Assistant Framework improvement slice from skill ecosystem research: add provider-neutral per-skill eval fixtures and runner support on top of the first-class skill validator.
-
-## Input Contract
-
-- Task type: feature
-- Scope hint: auto
-- Clarification status: ready
-- Clarification defaults applied: false
-- Unresolved clarification topics: none
+## Requirements
+- Add runtime phase-gate enforcement so active task journals produce actionable hook feedback before agents skip required workflow gates.
+- Keep the slice bounded to the existing hook/runtime path and avoid a broad generic YAML contract interpreter in this iteration.
+- Include tests with implementation and update docs that describe the runtime hook behavior.
 
 ## Constraints
-
-- Keep evals offline and provider-neutral; do not add provider SDK, network, or model API calls.
-- Default per-skill eval inventory must align with first-class `skills/assistant-*` skills; `skills/unity-*` remains local-only.
-- Build on existing shell and `jq` tooling; avoid new runtime dependencies.
-- Do not edit implementation files before decomposition and plan approval.
+- Preserve completed journal suppression for `Status: DONE`, `Status: DOCUMENTED`, and `--- WORKFLOW COMPLETE ---`.
+- Preserve provider-specific hook behavior for Codex, Claude, and Gemini.
+- Keep user custom hook behavior untouched.
+- Do not use destructive cleanup commands.
+- Subagent dispatch is unavailable unless explicitly requested in this environment, so context mapping and planning are recorded locally.
 
 ## Discovery Notes
-
-- Prior validator slice is committed as `892eb62 Add first-class skill validator`.
-- Existing framework evals live in `docs/evals/framework-instruction-cases.json`.
-- Existing eval runner is `tools/evals/run-framework-instruction-evals.sh`.
-- Existing P0/P4 eval coverage is `tests/p0-p4/eval-contracts.sh`.
-- No existing `skills/*/evals/*` files were found during initial discovery.
-- Code Mapper was dispatched as Lorentz, then interrupted and closed after timeout without a returned map.
-- Recovery context map was written to `.codex/context-map.md` from direct Discover evidence.
-- Agent readiness: 4/5. Build/test entrypoints, tests, agent instructions, and workflow metrics exist; shell lint/editorconfig layer was not found.
-- Requirements summary: add an offline per-skill eval path that complements the source validator, defaults to first-class `assistant-*` skills, excludes local-only Unity skills, and starts with a bounded pilot fixture set.
+- `workflow-enforcer.sh` already injects prompt-time workflow state and has clarification/plan/review reminders.
+- `stop-review.sh` blocks completion when active build/review statuses lack structured Spec Review, Quality Review, final result, or metrics.
+- `harness-gate.sh` blocks medium+ active build/review statuses without approved plan or rubric scoring.
+- Current runtime checks are concentrated around BUILD/REVIEW; earlier phase gates such as component approval and later DOCUMENTING completion are only lightly represented.
+- Agent readiness: 4/5. Documented install/test paths, a shell test suite, agent orientation docs, and runtime hook artifacts exist; no obvious lint/editorconfig baseline was found.
 
 ## Component Manifest
+Approval status: approved by user on 2026-05-08
 
-Approved by user on 2026-05-08.
+### Component 1: Shared Phase-Gate Runtime Helpers
+- **What:** Add a small shared shell helper for parsing task journal phase-gate evidence and returning normalized yes/no state. Keep this targeted to fields the hooks already depend on rather than building a generic YAML contract interpreter.
+- **Files:** `hooks/scripts/workflow-phase-gates.sh`; tests in `tests/test-hooks.sh`.
+- **Depends on:** none.
+- **Verification criteria:**
+  - [ ] Helper reports medium+ task size, phase status, plan approval, decomposition approval, review completion, and metrics markers from representative task journals.
+  - [ ] Helper treats completed journals as out of scope through existing resolver behavior, not by reintroducing stale completed-state injection.
 
-Sub-agent note: Architect was dispatched as Aquinas for component decomposition, then interrupted and closed after timeout without a returned manifest. The manifest below is a recovery decomposition from `.codex/context-map.md` and direct Discover evidence.
+### Component 2: Prompt-Time Gate Warnings
+- **What:** Extend `workflow-enforcer.sh` to inject a concise `RUNTIME PHASE GATES` section for the active phase, including explicit warnings for missing component approval before planning/building, missing plan approval before building, incomplete review before documenting, and missing metrics before completion.
+- **Files:** `hooks/scripts/workflow-enforcer.sh`; tests in `tests/test-hooks.sh`.
+- **Depends on:** Component 1.
+- **Verification criteria:**
+  - [ ] `DECOMPOSING`, `PLANNING`, `BUILDING`, `REVIEWING`, and `DOCUMENTING` journals produce phase-specific runtime gate output.
+  - [ ] Small tasks do not receive medium+ component-approval warnings.
+  - [ ] Existing clarification gate warnings still render unchanged for pending or contradictory clarification state.
 
-### Component 1: Per-skill eval runner
-- What: Add a reusable offline runner for per-skill eval fixtures, matching the existing framework eval command modes while supporting skill selection and first-class inventory defaults.
-- Files: create `tools/evals/run-skill-evals.sh`; optionally create helper modules only if runner size demands it.
-- Depends on: none.
-- Verification criteria:
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-clarify` exits 0 for a valid pilot fixture.
-  - `tools/evals/run-skill-evals.sh --list --skill assistant-clarify` lists pilot case rows.
-  - `tools/evals/run-skill-evals.sh --emit-prompts <dir> --skill assistant-clarify` writes one Markdown prompt packet per pilot case.
-  - `tools/evals/run-skill-evals.sh --responses <dir> --skill assistant-clarify` fails missing/empty/expectation-violating responses and passes generated expectation-complete responses.
+### Component 3: Stop-Time Documenting Gate Coverage
+- **What:** Harden stop-time enforcement so an active `DOCUMENTING` task cannot stop if review or metrics evidence is incomplete, while completed task journals continue to be ignored.
+- **Files:** `hooks/scripts/stop-review.sh`, `hooks/scripts/harness-gate.sh`; tests in `tests/test-hooks.sh`.
+- **Depends on:** Component 1.
+- **Verification criteria:**
+  - [ ] `DOCUMENTING` with missing structured review blocks/retries through the existing review reason path.
+  - [ ] `DOCUMENTING` with complete review but missing metrics blocks/retries through the existing metrics reason path.
+  - [ ] `Status: DONE` and `--- WORKFLOW COMPLETE ---` journals remain non-blocking.
 
-### Component 2: Pilot per-skill fixtures
-- What: Add a small pilot set of skill-local eval fixtures for behavior that is easy to judge with local machine expectations.
-- Files: create `skills/assistant-clarify/evals/cases.json`; create `skills/assistant-thinking/evals/cases.json`.
-- Depends on: Component 1 schema.
-- Verification criteria:
-  - Pilot fixtures validate with non-empty suite metadata and case arrays.
-  - Clarify fixture checks ambiguous prompt handling and structured brief output.
-  - Thinking fixture checks tool-selection/methodology behavior and dissenting-view/confidence output.
-  - Fixtures remain provider-neutral and contain no provider SDK/API/network assumptions.
+### Component 4: Runtime Contract Docs And P0-P4 Coverage
+- **What:** Update docs and P0-P4 contracts so runtime phase-gate enforcement is visible and guarded from drift.
+- **Files:** `README.md`, `docs/skill-contract-design-guide.md`, likely new `tests/p0-p4/runtime-phase-gate-contracts.sh`, `tests/test-p0-p4-contracts.sh`.
+- **Depends on:** Components 1-3.
+- **Verification criteria:**
+  - [ ] README hook table names workflow enforcer, workflow guard, stop review, and harness gate accurately.
+  - [ ] Contract design guide reflects that Level 3 now includes runtime phase-gate enforcement beyond review completion.
+  - [ ] P0-P4 suite checks for the new runtime helper/hook/doc contract strings.
 
-### Component 3: P0/P4 eval contracts
-- What: Add contract tests for the new per-skill eval runner, fixture schema, first-class inventory behavior, local-only exclusion, prompt emission, and response grading.
-- Files: modify `tests/p0-p4/eval-contracts.sh` or create `tests/p0-p4/skill-eval-contracts.sh`; modify `tests/test-p0-p4-contracts.sh` if a new suite file is created.
-- Depends on: Components 1 and 2.
-- Verification criteria:
-  - Direct skill-eval suite passes.
-  - Aggregate `bash tests/test-p0-p4-contracts.sh` includes the skill-eval suite.
-  - Default inventory checks do not require `skills/unity-*`.
-  - Malformed fixture tests fail with clear schema errors.
-
-### Component 4: Documentation and direction
-- What: Document per-skill eval usage, pilot-scope intent, and how evals complement structural validation and future Level 4 conformance.
-- Files: modify `docs/evals/README.md`; modify `docs/skill-contract-design-guide.md`; optionally modify `README.md`.
-- Depends on: Components 1-3.
-- Verification criteria:
-  - Docs show validate/list/emit/responses examples for per-skill evals.
-  - Docs state default scope and local-only Unity exclusion.
-  - Docs distinguish heuristic local grading from human/LLM judgment.
-  - Docs describe pilot fixtures as the first step toward broader per-skill coverage.
-
-## Approved Plan
-
-Approved by user on 2026-05-08. Plan:
+## Plan
+Plan approval: yes, approved by user on 2026-05-08
 
 ## Goal
-- Add an offline, provider-neutral per-skill eval path that can validate, list, emit prompts for, and locally grade skill-specific eval fixtures.
-- Keep the first slice bounded to shared runner support plus two pilot first-class skills: `assistant-clarify` and `assistant-thinking`.
+- Add runtime phase-gate enforcement to the existing hook path so active task journals produce actionable feedback before workflow gates are skipped.
+- Keep this slice focused on shell hooks and contract tests; do not implement a generic YAML phase-gate interpreter.
 
-## Constraints & decisions
-- Provider-neutral only: no SDK, endpoint, network, or model API calls.
-- Default inventory remains first-class `skills/assistant-*`; local-only `skills/unity-*` is excluded unless explicitly requested.
-- Pilot scope: do not require eval fixtures for all 15 first-class skills in this slice.
-- Use existing shell plus `jq` tooling.
-- Code Mapper and Architect were dispatched but timed out; recovery context/decomposition is recorded in this journal.
+## Constraints & decisions from Discovery
+- Completed journal suppression must remain intact for `Status: DONE`, `Status: DOCUMENTED`, and `--- WORKFLOW COMPLETE ---`.
+- Existing Codex, Claude, and Gemini hook semantics must remain compatible.
+- Runtime enforcement should build on the active task journal and existing resolver/cache behavior.
+- Current environment does not allow subagent dispatch unless explicitly requested, so implementation and verification will be performed locally under the approved task packets.
+- Non-goal: enforce every natural-language assertion in `phase-gates.yaml` at runtime in this slice.
 
 ## Research
-- Existing framework evals: `docs/evals/framework-instruction-cases.json`.
-- Existing framework runner: `tools/evals/run-framework-instruction-evals.sh`.
-- Existing eval contracts: `tests/p0-p4/eval-contracts.sh`.
-- Skill source validator inventory logic: `tools/skills/validate-skills.sh`, `tools/skills/lib/validate-inventory.sh`.
-- No existing `skills/*/evals/*` fixtures were found.
+- Prompt-time runtime context lives in `hooks/scripts/workflow-enforcer.sh`.
+- Stop-time lifecycle enforcement lives in `hooks/scripts/stop-review.sh` and `hooks/scripts/harness-gate.sh`.
+- Active task journal resolution and completed-state suppression live in `hooks/scripts/task-journal-resolver.sh`.
+- Source hook tests live in `tests/test-hooks.sh`.
+- Aggregate P0/P4 contracts are sourced from `tests/test-p0-p4-contracts.sh`.
+- Public docs that need alignment are `README.md`, `docs/skill-contract-design-guide.md`, and likely `docs/harness-design-guide.md`.
 
 ## Architecture
-- Current architecture: shell-based offline validation and contract tests.
-- Architecture for this change: add per-skill eval fixtures under each skill, a per-skill runner under `tools/evals`, and P0/P4 contracts.
+- Current architecture: shell hook scripts parse `.codex/.claude/.gemini/task.md` directly and emit JSON hook responses.
+- Architecture for this change: add a focused shared shell helper for phase-gate state, then source it from prompt-time and stop-time hooks.
 - Layer rules:
-  - Skill-local fixtures live with their owning skill.
-  - Runner logic stays in `tools/evals`; tests stay in `tests/p0-p4`.
-  - Docs explain usage and limits; docs do not define behavior not enforced by tests.
-- Dependency direction: fixtures -> runner -> P0/P4 contracts/docs.
+  - `task-journal-resolver.sh` remains responsible for finding and suppressing completed journals.
+  - `workflow-phase-gates.sh` owns journal evidence parsing for runtime phase gates.
+  - `workflow-enforcer.sh` owns prompt-time context text.
+  - `stop-review.sh` and `harness-gate.sh` own stop/after-agent blocking decisions.
+  - P0/P4 contracts guard docs and hook drift; `tests/test-hooks.sh` guards behavior.
+- Dependency direction: resolver -> phase-gate helper -> runtime hooks -> tests/docs.
 - SOLID design notes:
-  - SRP: runner owns eval operations; fixtures own skill behavior cases; tests own regression assertions.
-  - OCP: new skill eval coverage should be added by adding `skills/<skill>/evals/cases.json`, not by editing grading logic.
-  - DIP: shell tests depend on command behavior and fixture schema, not internal helper implementation.
+  - SRP: parsing helpers, prompt context, and stop decisions stay separate.
+  - OCP: new runtime gate checks should be added as helper functions and hook tests without duplicating parser logic.
+  - DIP: tests assert hook behavior and helper outputs, not internal implementation details beyond the public helper file existing.
 
 ## Analysis
 ### Options
-1. Duplicate the existing framework runner into a skill runner — fastest, but likely drifts.
-2. Add a skill-specific runner with shared local helper functions for common emit/grade behavior — better maintainability with moderate scope.
-3. Replace framework and skill eval runners with a larger generic runner — cleaner long term, too much for this slice.
+1. Add warnings directly in `workflow-enforcer.sh` only. Fast, but increases parser duplication and does not harden stop-time `DOCUMENTING`.
+2. Add a shared phase-gate helper and wire it into existing hooks. Slightly more work, lower drift risk.
+3. Build a full runtime interpreter for `contracts/phase-gates.yaml`. More complete long term, too broad and brittle for this slice.
 
 ### Decision
-- Chosen: option 2. Keep the slice bounded while avoiding needless drift in the new code.
+- Chosen: option 2. It gives actual runtime enforcement while keeping scope reviewable.
 
 ### Risks / edge cases
-- Runner schema can accidentally imply all first-class skills must have evals now; mitigate by validating discovered fixtures and documenting pilot scope.
-- Local-only Unity skills can leak into default inventory; test default exclusion with a generated local fixture.
-- Heuristic substring grading can be mistaken for semantic evaluation; docs and output must label it as local proxy grading.
-- Shell runner growth can become hard to review; split helper functions only if the implementation starts mixing unrelated responsibilities.
+- Duplicating review parsing can diverge from `stop-review.sh`; mitigate by moving reusable review-state checks into the helper.
+- `DOCUMENTING` stop-time enforcement can accidentally block completed journals; mitigate by relying on the existing resolver/completed-journal behavior and adding regression tests.
+- Prompt-time warnings can become noisy; mitigate with concise phase-specific output instead of dumping all gates every prompt.
+- Metrics checks are date-sensitive; tests must use the current date and isolated `TEST_AGENT_HOME`.
 
 ## Task packets
 
-### Task 1: Per-skill eval runner
+### Task 1: Shared phase-gate helper
 - Behavior / acceptance criteria:
-  - `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-clarify` validates a skill-local fixture.
-  - `--list` prints skill, case id, category, and title.
-  - `--emit-prompts DIR` writes Markdown prompt packets under a skill-specific path.
-  - `--responses DIR` locally grades captured responses using required/forbidden substring expectations.
-  - Default inventory excludes local-only Unity skills.
+  - Helper exposes task size, medium+ detection, current status, component approval, plan approval, review completion, and metrics-today checks.
+  - Existing stop-review structured review parsing is reusable without changing accepted review formats.
+  - Completed journal handling stays owned by `task-journal-resolver.sh`.
 - Files:
-  - Create: `tools/evals/run-skill-evals.sh`; optional `tools/evals/lib/*.sh` if needed for SRP.
-  - Modify: none expected.
-  - Test: `tests/p0-p4/skill-eval-contracts.sh`.
+  - Create: `hooks/scripts/workflow-phase-gates.sh`.
+  - Modify: `hooks/scripts/stop-review.sh` as needed to consume shared review helpers.
+  - Test: `tests/test-hooks.sh`.
 - TDD / RED step:
   - Applies: no.
   - RED command: N/A.
   - Expected failure: N/A.
 - Implementation notes / constraints:
-  - Follow existing `tools/evals/run-framework-instruction-evals.sh` command style.
-  - Keep all operations offline and provider-neutral.
-  - Targeted `--skill` should accept a skill name, skill directory, or `SKILL.md` path where practical.
+  - Keep helper functions shell-only and dependency-light.
+  - Do not source `task-journal-resolver.sh` from the helper; callers already resolve the active task journal.
+  - Preserve current structured Spec Review PASS semantics.
 - Verification:
-  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-clarify`
-  - Expected success signal: exit code 0 and a clear fixture-valid message.
+  - Command: `bash tests/test-hooks.sh --filter "stop-review"`
+  - Expected success signal: stop-review tests pass with existing review formats.
 - Deviation / rollback rule:
-  - If generic runner extraction becomes larger than the slice, keep the framework runner unchanged and isolate reusable logic in the new skill runner only.
+  - If shared extraction risks changing review semantics, keep stop-review parsing local and limit the helper to new phase-gate fields.
 - Worker status / evidence:
   - Status: pending
   - Evidence: pending
 
-### Task 2: Pilot skill fixtures
+### Task 2: Prompt-time runtime phase gates
 - Behavior / acceptance criteria:
-  - `assistant-clarify` fixture checks ambiguous prompt interpretation, structured brief, clarifying questions/defaults, execution target, and status.
-  - `assistant-thinking` fixture checks structured tool selection, methodology, recommendation, confidence, and dissenting view.
-  - Both fixtures include non-empty machine expectations and provider-neutral metadata.
+  - `workflow-enforcer.sh` emits a concise `RUNTIME PHASE GATES` section for active task journals.
+  - Medium+ `PLANNING`/`BUILDING` warns when component decomposition is not approved.
+  - Medium+ `BUILDING` warns when plan approval is missing.
+  - `REVIEWING` and `DOCUMENTING` warn when structured review completion is missing.
+  - `DOCUMENTING` warns when metrics for today are missing.
+  - Existing clarification warnings still render for pending, missing, or contradictory clarification state.
 - Files:
-  - Create: `skills/assistant-clarify/evals/cases.json`; `skills/assistant-thinking/evals/cases.json`.
-  - Modify: none expected.
-  - Test: `tests/p0-p4/skill-eval-contracts.sh`.
+  - Create: none beyond Task 1 helper.
+  - Modify: `hooks/scripts/workflow-enforcer.sh`.
+  - Test: `tests/test-hooks.sh`.
 - TDD / RED step:
   - Applies: no.
   - RED command: N/A.
   - Expected failure: N/A.
 - Implementation notes / constraints:
-  - Keep cases small and behavior-focused; do not encode provider-specific wording.
-  - Use deterministic substrings as proxy checks, not semantic grading.
+  - Keep output actionable and short.
+  - Do not warn small tasks about component approval.
+  - Keep no-task/completed-task behavior as lightweight rules only.
 - Verification:
-  - Command: `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-thinking`
-  - Expected success signal: exit code 0 and fixture-valid output.
+  - Command: `bash tests/test-hooks.sh --filter "workflow-enforcer"`
+  - Expected success signal: workflow-enforcer tests pass, including new phase-gate warning cases.
 - Deviation / rollback rule:
-  - If a pilot skill proves hard to express deterministically, replace only that pilot with another first-class utility skill and record the reason.
+  - If gate text causes brittle tests, assert stable gate labels and key warnings rather than whole paragraphs.
 - Worker status / evidence:
   - Status: pending
   - Evidence: pending
 
-### Task 3: P0/P4 skill-eval contracts
+### Task 3: Stop-time DOCUMENTING enforcement
 - Behavior / acceptance criteria:
-  - Direct skill-eval contracts pass.
-  - Aggregate P0/P4 suite sources and runs the skill-eval contracts.
-  - Malformed fixture cases fail with clear schema errors.
-  - Missing/empty/expectation-violating response directories fail, and generated expectation-complete responses pass.
-  - Generated local-only Unity fixture is not included by default.
-- Files:
-  - Create: `tests/p0-p4/skill-eval-contracts.sh`.
-  - Modify: `tests/test-p0-p4-contracts.sh`.
-  - Test: `tests/p0-p4/skill-eval-contracts.sh`.
-- TDD / RED step:
-  - Applies: no.
-  - RED command: N/A.
-  - Expected failure: N/A.
-- Implementation notes / constraints:
-  - Use unique `mktemp` fixture paths for any local-only skill tests and clean up only generated paths.
-  - Reuse P0/P4 harness helpers.
-- Verification:
-  - Command: `bash tests/p0-p4/skill-eval-contracts.sh`
-  - Expected success signal: all skill-eval contract tests pass with 0 failures.
-- Deviation / rollback rule:
-  - If aggregate runtime becomes noisy, keep the direct suite strict and add aggregate inclusion as a separate minimal assertion.
-- Worker status / evidence:
-  - Status: pending
-  - Evidence: pending
-
-### Task 4: Documentation
-- Behavior / acceptance criteria:
-  - Docs show per-skill eval validate/list/emit/responses commands.
-  - Docs state pilot scope and first-class default inventory.
-  - Docs state local-only Unity exclusion.
-  - Docs explain heuristic local grading limits and Level 4 direction.
+  - `stop-review.sh` blocks/retries active `DOCUMENTING` tasks with missing Spec Review, Quality Review, final result, or metrics.
+  - `harness-gate.sh` treats active `DOCUMENTING` medium+ tasks as lifecycle-active for plan/rubric/score checks.
+  - Completed journals remain non-blocking.
 - Files:
   - Create: none.
-  - Modify: `docs/evals/README.md`; `docs/skill-contract-design-guide.md`; `README.md`.
-  - Test: `tests/p0-p4/skill-eval-contracts.sh`; `rg -n "run-skill-evals|per-skill|local-only|pilot|Level 4" README.md docs/evals/README.md docs/skill-contract-design-guide.md`.
+  - Modify: `hooks/scripts/stop-review.sh`, `hooks/scripts/harness-gate.sh`.
+  - Test: `tests/test-hooks.sh`.
 - TDD / RED step:
   - Applies: no.
   - RED command: N/A.
   - Expected failure: N/A.
 - Implementation notes / constraints:
-  - Do not imply complete per-skill coverage until all skills have fixtures.
-  - Keep examples provider-neutral.
+  - Reuse existing reason messages where possible.
+  - Preserve Claude block and Gemini retry behavior, including loop guards.
 - Verification:
-  - Command: `rg -n "run-skill-evals|per-skill|local-only|pilot|Level 4" README.md docs/evals/README.md docs/skill-contract-design-guide.md`
-  - Expected success signal: command finds expected documentation terms in all target docs.
+  - Command: `bash tests/test-hooks.sh --filter "DOCUMENTING"`
+  - Expected success signal: new documenting tests pass for missing review, missing metrics, and completed journal bypass.
 - Deviation / rollback rule:
-  - If README becomes too noisy, keep detailed examples in `docs/evals/README.md` and only link from README.
+  - If `DOCUMENTING` proves too broad for harness scoring, keep plan/rubric checks on build/review only and document why; stop-review metrics/review coverage remains required.
+- Worker status / evidence:
+  - Status: pending
+  - Evidence: pending
+
+### Task 4: Runtime docs and P0/P4 contracts
+- Behavior / acceptance criteria:
+  - README hook table accurately names workflow enforcer, workflow guard, stop review, and harness gate.
+  - Contract design guide states Level 3 now includes runtime phase-gate enforcement beyond review completion.
+  - Harness docs mention `DOCUMENTING` lifecycle coverage if stop-time behavior changes.
+  - P0/P4 contracts assert the helper exists, hooks source it, docs describe runtime phase gates, and aggregate P0/P4 includes the new suite.
+- Files:
+  - Create: `tests/p0-p4/runtime-phase-gate-contracts.sh`.
+  - Modify: `tests/test-p0-p4-contracts.sh`, `README.md`, `docs/skill-contract-design-guide.md`, `docs/harness-design-guide.md`.
+  - Test: `tests/p0-p4/runtime-phase-gate-contracts.sh`.
+- TDD / RED step:
+  - Applies: no.
+  - RED command: N/A.
+  - Expected failure: N/A.
+- Implementation notes / constraints:
+  - Docs should describe enforced behavior, not aspirational future behavior.
+  - Keep P0/P4 checks focused on stable contract strings and source wiring.
+- Verification:
+  - Command: `bash tests/p0-p4/runtime-phase-gate-contracts.sh && bash tests/test-p0-p4-contracts.sh`
+  - Expected success signal: direct and aggregate contract suites pass.
+- Deviation / rollback rule:
+  - If aggregate P0/P4 runtime is noisy, keep direct suite strict and add only one aggregate inclusion assertion.
 - Worker status / evidence:
   - Status: pending
   - Evidence: pending
 
 ## Tests to run
-- `tools/evals/run-skill-evals.sh --validate-fixture`
-- `tools/evals/run-skill-evals.sh --list`
-- `tools/evals/run-skill-evals.sh --emit-prompts <tmpdir>`
-- `tools/evals/run-skill-evals.sh --responses <tmpdir>`
-- `tools/evals/run-framework-instruction-evals.sh --validate-fixture`
-- `bash tests/p0-p4/skill-eval-contracts.sh`
-- `bash tests/p0-p4/eval-contracts.sh`
+- `bash tests/test-hooks.sh --filter "workflow-enforcer"`
+- `bash tests/test-hooks.sh --filter "stop-review"`
+- `bash tests/test-hooks.sh --filter "harness-gate"`
+- `bash tests/test-hooks.sh --filter "DOCUMENTING"`
+- `bash tests/p0-p4/runtime-phase-gate-contracts.sh`
 - `bash tests/test-p0-p4-contracts.sh`
-- `tools/skills/validate-skills.sh`
 - `git diff --check`
 
-## Component Verification Ledger
+## Build Progress
+- Task 1: Shared phase-gate helper — DONE.
+- Task 2: Prompt-time runtime phase gates — DONE.
+- Task 3: Stop-time DOCUMENTING enforcement — DONE.
+- Task 4: Runtime docs and P0/P4 contracts — DONE.
 
+## Component Verification Ledger
 | Component | Status | Command / Evidence | Criteria |
 |---|---|---|---|
-| 1. Per-skill eval runner | VERIFIED | Builder/Tester Dalton: targeted clarify/thinking validation passed; default validation passed for 2 fixtures; list emitted 4 cases; emit wrote 4 prompt packets; generated response grading passed total=4 failed=0; `bash -n tools/evals/run-skill-evals.sh` passed. | Runner validates, lists, emits, grades, and stays provider-neutral/offline. |
-| 2. Pilot skill fixtures | VERIFIED | Builder/Tester Dalton: `jq empty` passed for both pilot fixtures; targeted runner validation passed for `assistant-clarify` and `assistant-thinking`. | Clarify and thinking fixtures validate and include machine expectations. |
-| 3. P0/P4 skill-eval contracts | VERIFIED | Builder/Tester Banach: direct `bash tests/p0-p4/skill-eval-contracts.sh` passed 13/13 and `bash tests/p0-p4/eval-contracts.sh` passed 14/14; aggregate initially failed due unrelated untracked `tests/.DS_Store`. After approved removal, Builder/Tester Descartes: `bash tests/test-p0-p4-contracts.sh` passed 100/100. | Direct and aggregate contract coverage passes; aggregate includes skill-eval suite. |
-| 4. Documentation | VERIFIED | Code Writer Heisenberg updated `docs/evals/README.md`, `docs/skill-contract-design-guide.md`, and `README.md`; Builder/Tester Hypatia verified docs coverage with `rg -n "run-skill-evals|per-skill|local-only|pilot|Level 4" README.md docs/evals/README.md docs/skill-contract-design-guide.md`. | Docs explain per-skill eval usage, pilot scope, local-only exclusion, heuristic grading limits, and Level 4 direction. |
+| 1. Shared Phase-Gate Runtime Helpers | VERIFIED | `bash tests/test-hooks.sh --filter "workflow-phase-gates"` passed 3/3; `bash -n hooks/scripts/workflow-phase-gates.sh hooks/scripts/stop-review.sh hooks/scripts/harness-gate.sh tests/test-hooks.sh` passed. | Helper reports medium+ task size, component approval, plan approval, review completion, missing-review reason, and metrics-today state; regression rejects `Approval status: not approved`. |
+| 2. Prompt-Time Gate Warnings | VERIFIED | `bash tests/test-hooks.sh --filter "workflow-enforcer"` passed 34/34. | `RUNTIME PHASE GATES` renders; medium PLANNING without component approval warns; small PLANNING does not warn; REVIEWING incomplete review warns; DOCUMENTING missing metrics warns; clarification warnings remain covered. |
+| 3. Stop-Time Documenting Gate Coverage | VERIFIED | `bash tests/test-hooks.sh --filter "stop-review"` passed 33/33; `bash tests/test-hooks.sh --filter "harness-gate"` passed 3/3; `bash tests/test-hooks.sh --filter "DOCUMENTING"` passed 6/6. | DOCUMENTING without review blocks; DOCUMENTING complete review without metrics blocks; DOCUMENTING review+metrics allows; harness gate blocks medium DOCUMENTING without plan approval and allows scored review. |
+| 4. Runtime Contract Docs And P0-P4 Coverage | VERIFIED | `bash tests/p0-p4/runtime-phase-gate-contracts.sh` passed 5/5; `bash tests/test-p0-p4-contracts.sh` passed 114/114. | README, contract guide, harness guide, helper wiring, installer dependency, and aggregate P0/P4 inclusion are covered. |
 
 ## Review Log
-
-- BUILD verification passed:
-  - `tools/evals/run-skill-evals.sh --validate-fixture`: passed, 2 fixtures validated.
-  - `tools/evals/run-skill-evals.sh --list`: passed, 4 pilot cases listed.
-  - `tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-final-prompts.jVQpxU`: passed, 4 prompt packets written.
-  - `tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-final-responses.ugErfz`: passed, total=4 passed=4 failed=0.
-  - `tools/evals/run-framework-instruction-evals.sh --validate-fixture`: passed.
-  - `tools/skills/validate-skills.sh`: passed, 15 skills validated.
-  - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 13/13.
-  - `bash tests/p0-p4/eval-contracts.sh`: passed 14/14.
-  - `bash tests/test-p0-p4-contracts.sh`: passed 100/100 after approved removal of generated untracked `tests/.DS_Store`.
-  - `rg -n "run-skill-evals|per-skill|local-only|pilot|Level 4" README.md docs/evals/README.md docs/skill-contract-design-guide.md`: passed.
+- Build verification:
+  - `bash tests/test-hooks.sh`: passed 130/130.
+  - `bash tests/test-p0-p4-contracts.sh`: passed 114/114.
   - `git diff --check`: passed.
-- Build changed files:
-  - `tools/evals/run-skill-evals.sh` created.
-  - `skills/assistant-clarify/evals/cases.json` created.
-  - `skills/assistant-thinking/evals/cases.json` created.
-  - `tests/p0-p4/skill-eval-contracts.sh` created.
+- Changed files:
+  - `hooks/scripts/workflow-phase-gates.sh` created.
+  - `hooks/scripts/workflow-enforcer.sh` modified.
+  - `hooks/scripts/stop-review.sh` modified.
+  - `hooks/scripts/harness-gate.sh` modified.
+  - `install.sh` modified.
+  - `tests/test-hooks.sh` modified.
+  - `tests/p0-p4/runtime-phase-gate-contracts.sh` created.
+  - `tests/p0-p4/codex-hook-reinstall-contracts.sh` modified.
   - `tests/test-p0-p4-contracts.sh` modified.
-  - `docs/evals/README.md` modified.
-  - `docs/skill-contract-design-guide.md` modified.
   - `README.md` modified.
-  - `.codex/context-map.md` and `.codex/task.md` updated as workflow artifacts.
-- Spec Review #1: per-skill eval slice
+  - `docs/skill-contract-design-guide.md` modified.
+  - `docs/harness-design-guide.md` modified.
+  - `.codex/task.md` and `.codex/context-map.md` updated as workflow artifacts.
+- Plan deviation:
+  - `install.sh` and `tests/p0-p4/codex-hook-reinstall-contracts.sh` were added to the change set because the new sourced helper must be copied and cleaned up with installed Codex hooks. This was disclosed during Review and verified by install/reinstall tests.
+### Spec Review #1: runtime phase-gate enforcement
   - Result: PASS
-  - Scope reviewed: Tasks 1-4 from the approved plan.
+  - Scope reviewed: Components 1-4 from the approved decomposition and task packets.
   - Missing acceptance criteria: none.
-  - Extra scope: none remaining. Approved generated-file hygiene removed untracked `tests/.DS_Store` to unblock repo guard.
-  - Changed files mismatch: none. `.codex/context-map.md` and `.codex/task.md` are workflow artifacts.
-  - Verification evidence mismatch: none. Runner, fixtures, direct skill eval contracts, framework eval contracts, aggregate P0/P4, skill validator, docs coverage, and diff hygiene evidence are recorded above.
+  - Extra scope: none. Installer dependency handling is in-scope support for the new sourced hook helper and is covered by install/reinstall tests.
+  - Changed files mismatch: none remaining. `install.sh` and `tests/p0-p4/codex-hook-reinstall-contracts.sh` were required support files for installed-hook behavior and are recorded as a plan deviation above.
+  - Verification evidence mismatch: none. Full hook suite, aggregate P0/P4 suite, runtime phase-gate contract suite, focused hook filters, and diff hygiene evidence are recorded above.
   - Required fixes: none.
-- Quality Review Round 1:
-  - Result: has_must_fix
-  - Rubric: correctness 3.5, code_quality 3.0, architecture 3.5, security 3.0, test_coverage 3.5
-  - Weighted: 3.35
-  - Finding 1 (must-fix): fixture case IDs were only non-empty strings but were used as filesystem path components, allowing path separators/traversal or duplicate IDs to corrupt emitted prompt paths.
-  - Finding 2 (should-fix): `tools/evals/run-skill-evals.sh` was a 614-line mixed-responsibility script.
-  - Fixes:
-    - Added safe unique case-ID validation that rejects `/`, `\`, `.`, `..`, and duplicates.
-    - Added P0/P4 negative tests for slash, traversal, and duplicate case IDs.
-    - Split runner responsibilities into `tools/evals/lib/skill-eval-common.sh`, `skill-eval-inventory.sh`, `skill-eval-fixtures.sh`, `skill-eval-render.sh`, and `skill-eval-grade.sh`; public runner is now a thin CLI wrapper.
-  - Validation after fixes:
-    - `bash -n tools/evals/run-skill-evals.sh tools/evals/lib/*.sh tests/p0-p4/skill-eval-contracts.sh`: passed.
-    - `tools/evals/run-skill-evals.sh --validate-fixture`: passed, 2 fixtures.
-    - `tools/evals/run-skill-evals.sh --list`: passed, 4 cases.
-    - `tools/evals/run-skill-evals.sh --emit-prompts <tmpdir>` plus generated responses smoke: passed, 4/4.
-    - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 16/16.
-    - `bash tests/test-p0-p4-contracts.sh`: passed 103/103.
-    - `git diff --check`: passed.
-- Quality Review Round 2:
-  - Result: has_must_fix
-  - Rubric: correctness 3.5, code_quality 4.0, architecture 4.0, security 3.5, test_coverage 4.0
-  - Weighted: 3.78
-  - Finding (must-fix): case ID validation still allowed control characters/newlines, which line-oriented shell loops could split into multiple prompt packet paths.
-  - Fix:
-    - Tightened `safe_case_id` to a positive allowlist: letters, digits, dot, underscore, and hyphen only, while still rejecting `.` and `..`.
-    - Added P0/P4 negative coverage for newline and tab control-character case IDs while preserving slash, traversal, and duplicate tests.
-  - Validation after fix:
-    - `bash -n tools/evals/run-skill-evals.sh tools/evals/lib/*.sh tests/p0-p4/skill-eval-contracts.sh`: passed.
-    - `tools/evals/run-skill-evals.sh --validate-fixture`: passed, 2 fixtures.
-    - `tools/evals/run-skill-evals.sh --emit-prompts <tmpdir>` plus generated responses smoke: passed, 4/4.
-    - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 18/18.
-    - `bash tests/test-p0-p4-contracts.sh`: passed 105/105.
-    - `git diff --check`: passed.
-- Quality Review Round 3:
-  - Result: has_should_fix
-  - Rubric: correctness 4.5, code_quality 4.0, architecture 4.5, security 5.0, test_coverage 4.0
-  - Weighted: 4.40
-  - Finding (should-fix): P0/P4 suite only exercised `--skill` selection for `--validate-fixture`, and lacked positive `--include-local` coverage.
-  - Fix:
-    - Added targeted tests for `--list --skill assistant-clarify`.
-    - Added targeted tests for `--emit-prompts <dir> --skill assistant-clarify`.
-    - Added flat single-skill `--responses <dir> --skill assistant-clarify` coverage.
-    - Added positive `--list --include-local` coverage with a generated local-only `skills/unity-*` fixture while preserving default exclusion.
-  - Validation after fix:
-    - `bash -n tests/p0-p4/skill-eval-contracts.sh`: passed.
-    - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 22/22.
-    - `bash tests/test-p0-p4-contracts.sh`: passed 109/109.
-    - `tools/evals/run-skill-evals.sh --validate-fixture`: passed, 2 fixtures.
-    - `tools/evals/run-skill-evals.sh --list`: passed, 4 cases.
-    - `git diff --check`: passed.
-- Quality Review Round 4:
-  - Result: clean
+### Quality Review #1
+  - Result: CLEAN
   - Rubric: correctness 4.5, code_quality 4.0, architecture 4.5, security 5.0, test_coverage 4.5
   - Weighted: 4.48
   - Findings: none.
-  - Final Result: CLEAN.
-
-## Verification Summary
-
-- Changed files:
-  - `tools/evals/run-skill-evals.sh` created as the public per-skill eval CLI.
-  - `tools/evals/lib/skill-eval-common.sh`, `skill-eval-inventory.sh`, `skill-eval-fixtures.sh`, `skill-eval-render.sh`, and `skill-eval-grade.sh` created as focused runner modules.
-  - `skills/assistant-clarify/evals/cases.json` and `skills/assistant-thinking/evals/cases.json` created as pilot fixtures.
-  - `tests/p0-p4/skill-eval-contracts.sh` created and `tests/test-p0-p4-contracts.sh` updated.
-  - `README.md`, `docs/evals/README.md`, and `docs/skill-contract-design-guide.md` updated.
-  - `.codex/context-map.md` and `.codex/task.md` updated as workflow artifacts.
-- Test coverage:
-  - `tools/evals/run-skill-evals.sh --validate-fixture`: passed, 2 fixtures.
-  - `tools/evals/run-skill-evals.sh --list`: passed, 4 pilot cases.
-  - `tools/evals/run-skill-evals.sh --emit-prompts <tmpdir>` plus generated responses smoke: passed.
-  - `tools/evals/run-framework-instruction-evals.sh --validate-fixture`: passed.
-  - `tools/skills/validate-skills.sh`: passed, 15 skills.
-  - `bash tests/p0-p4/skill-eval-contracts.sh`: passed 22/22 after review fixes.
-  - `bash tests/p0-p4/eval-contracts.sh`: passed 14/14.
-  - `bash tests/test-p0-p4-contracts.sh`: passed 109/109.
-  - `git diff --check`: passed.
-  - C# complexity gate: no `.cs` files to analyze.
-- Review result: CLEAN after 4 quality review rounds, final weighted score 4.48.
-- User confirmation: `looks good`.
-- Manual test steps:
-  - Run `tools/evals/run-skill-evals.sh --list`.
-  - Run `tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-prompts`.
-  - Run `bash tests/p0-p4/skill-eval-contracts.sh`.
-- Known limitations:
-  - This is pilot per-skill eval coverage for `assistant-clarify` and `assistant-thinking`; it does not yet provide fixtures for all 15 first-class skills.
-  - Local grading remains deterministic substring proxy checking and does not replace semantic human or LLM review.
+  - Notes: The broad `Approved by user on` component-approval fallback was removed during manual review before this round and covered with a `not approved` regression test.
 
 ## Metrics
+- Appended `/Users/laimis/.codex/memory/metrics/workflow-metrics.jsonl` entry:
+  - date: 2026-05-08
+  - task: runtime phase-gate enforcement
+  - size: medium
+  - review_rounds: 1
+  - plan_deviations: 1
+  - build_failures: 0
+  - components_verified: 4
 
-- Appended `/Users/laimis/.codex/memory/metrics/workflow-metrics.jsonl` entry for 2026-05-08.
-
-## Reflexion
-
-- Recorded memory insight: per-skill eval case IDs need filename-safe positive allowlist validation plus duplicate and control-character regression coverage.
-- Recorded memory insight: shell eval runners should be split into inventory, validation, rendering, and grading modules early.
-- Recorded `memory_reflect` reflexion id 42 for this medium feature task.
+## Verification Summary
+- Changed files:
+  - `hooks/scripts/workflow-phase-gates.sh` created as shared runtime phase-gate helper.
+  - `hooks/scripts/workflow-enforcer.sh` updated with prompt-time runtime phase gate state and warnings.
+  - `hooks/scripts/stop-review.sh` updated to use shared review/metrics helpers and enforce `DOCUMENTING`.
+  - `hooks/scripts/harness-gate.sh` updated to use shared status/plan helpers and enforce `DOCUMENTING`.
+  - `install.sh` updated to install and clean the new helper for Codex hooks.
+  - `tests/test-hooks.sh` expanded with helper, runtime warning, DOCUMENTING, harness, and installer dependency coverage.
+  - `tests/p0-p4/runtime-phase-gate-contracts.sh` added and aggregate P0/P4 wiring updated.
+  - README and contract/harness docs updated to describe runtime phase-gate enforcement.
+- Tests:
+  - `bash tests/test-hooks.sh`: passed 130/130.
+  - `bash tests/test-p0-p4-contracts.sh`: passed 114/114.
+  - `git diff --check`: passed.
+  - Real task-journal smoke: `stop-review.sh` and `harness-gate.sh` produced no block output for this completed review/metrics state.
+- Manual test steps:
+  - Run `bash tests/test-hooks.sh --filter "workflow-phase-gates"`.
+  - Run `bash tests/test-hooks.sh --filter "DOCUMENTING"`.
+  - Run `bash tests/p0-p4/runtime-phase-gate-contracts.sh`.
 
 --- WORKFLOW COMPLETE ---

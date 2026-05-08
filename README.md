@@ -431,17 +431,19 @@ Telos skill: Checks active work against your purpose chain
 
 ## Hooks (automated behaviors)
 
-Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `codex_hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported post-tool hook.
+Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `codex_hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported lifecycle and tool-use hooks.
 
 | Hook | Event | What it does |
 |---|---|---|
 | **Session start** | Session begins/resumes | Injects task journal + memory feedback into context |
+| **Skill router** | User submits prompt | Pattern-matches prompt against skill triggers; injects reminder to invoke the correct skill |
+| **Workflow enforcer** | User submits prompt | Injects current workflow state plus runtime phase-gate warnings for decomposition, plan, review, document, and metrics gates |
+| **Learning signals** | User submits prompt | Detects corrections, approvals, frustrations, and pivots; logs to signals.jsonl for trend analysis |
+| **Workflow guard** | Before tool use | Warns when direct edits happen during an active build/review workflow and keeps supported tool-use adjustments centralized |
 | **Pre-compress** | Before context compaction | Reminds agent to update task journal before state is lost |
 | **Post-compact** | After compaction completes | Re-injects task journal and feedback rules |
-| **Post-tool context** | After build/test tool execution | Injects concise build/test status and common failure advice |
-| **Stop review** | Agent finishes responding (during active build) | Enforces self-review before task handoff |
-| **Skill router** | User submits prompt | Pattern-matches prompt against skill triggers; injects reminder to invoke the correct skill |
-| **Learning signals** | User submits prompt | Detects corrections, approvals, frustrations, and pivots; logs to signals.jsonl for trend analysis |
+| **Stop review** | Agent finishes responding during active build/review/document work | Enforces structured Spec Review, Quality Review, Final Result, and metrics before task handoff |
+| **Harness gate** | Agent finishes responding during medium+ active build/review/document work | Enforces approved plan, rubric scores, and minimum weighted score |
 | **Session end** | Session terminates | Logs reminder about uncaptured insights |
 
 These replace manual steps — you no longer need to ask "did you read the task journal?" or "do a fresh review".

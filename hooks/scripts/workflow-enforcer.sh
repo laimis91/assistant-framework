@@ -26,6 +26,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Shared resolver handles nested cwd and sub-agent cache fallback.
 . "$SCRIPT_DIR/task-journal-resolver.sh"
+. "$SCRIPT_DIR/workflow-phase-gates.sh"
 
 INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
@@ -98,7 +99,7 @@ fi
 assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Read task journal state
-status="$(read_scalar_field "Status")"
+status="$(assistant_phase_status "$TASK_FILE" || true)"
 task_name="$(read_scalar_field "Task")"
 size="$(read_scalar_field "Triaged as")"
 clarification_status="$(read_scalar_field "Clarification status")"
@@ -198,6 +199,7 @@ is_decomposing="no"
 is_planning="no"
 is_building="no"
 is_reviewing="no"
+is_documenting="no"
 if [[ "$status" == *"DISCOVERING"* ]]; then
     is_discovering="yes"
 fi
@@ -213,9 +215,12 @@ fi
 if [[ "$status" == *"REVIEWING"* ]]; then
     is_reviewing="yes"
 fi
+if [[ "$status" == *"DOCUMENTING"* ]]; then
+    is_documenting="yes"
+fi
 
 requires_saved_clarification_state="no"
-if [[ "$is_medium_plus_task" == "yes" && ( "$is_discovering" == "yes" || "$is_decomposing" == "yes" || "$is_planning" == "yes" || "$is_building" == "yes" || "$is_reviewing" == "yes" ) ]]; then
+if [[ "$is_medium_plus_task" == "yes" && ( "$is_discovering" == "yes" || "$is_decomposing" == "yes" || "$is_planning" == "yes" || "$is_building" == "yes" || "$is_reviewing" == "yes" || "$is_documenting" == "yes" ) ]]; then
     requires_saved_clarification_state="yes"
 fi
 if [[ "$has_saved_clarification_state" == "yes" ]]; then
@@ -236,8 +241,13 @@ fi
 
 # Check plan approval state
 has_plan_approval="no"
-if grep -qE "(^Plan approval:.*yes|PLAN COMPLETE \(approved\))" "$TASK_FILE" 2>/dev/null; then
+if assistant_phase_has_plan_approval "$TASK_FILE"; then
     has_plan_approval="yes"
+fi
+
+has_component_approval="no"
+if assistant_phase_has_component_approval "$TASK_FILE"; then
+    has_component_approval="yes"
 fi
 
 # Check review state
@@ -245,6 +255,15 @@ review_count=$(grep -cE "^### (Spec Review|Quality Review|Review) #[0-9]+" "$TAS
 has_final_result="no"
 if grep -qE "^- Result: (CLEAN|ISSUES[_ ]FIXED|HAS[_ ]REMAINING[_ ]ITEMS)" "$TASK_FILE" 2>/dev/null; then
     has_final_result="yes"
+fi
+review_gate_status="$(assistant_phase_review_missing_reason_key "$TASK_FILE")"
+has_review_completion="no"
+if [[ "$review_gate_status" == "complete" ]]; then
+    has_review_completion="yes"
+fi
+has_metrics_today="no"
+if assistant_phase_has_metrics_today; then
+    has_metrics_today="yes"
 fi
 
 # Build phase-aware enforcement context
@@ -255,9 +274,12 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Clarification status: $clarification_status
 - Clarification defaults applied: $clarification_defaults
 - Unresolved clarification topics: $clarification_topics_summary
+- Component decomposition approved: $has_component_approval
 - Plan approved: $has_plan_approval
 - Reviews completed: $review_count
 - Final result: $has_final_result
+- Review gate complete: $has_review_completion
+- Metrics today: $has_metrics_today
 
 PHASE RULES (non-negotiable):
 1. Current phase is $status — stay in this phase until its exit criteria are met.
@@ -265,6 +287,14 @@ PHASE RULES (non-negotiable):
 3. State your current phase before your next action.
 4. If you are in BUILD: every new component MUST have tests in the same step.
 5. If you are in REVIEW: run the review-fix loop (review -> fix -> re-review) until clean or max 5 rounds. A single review pass is NOT a review."
+
+context+="
+
+RUNTIME PHASE GATES:
+- Component decomposition approved: $has_component_approval
+- Plan approved: $has_plan_approval
+- Review gate complete: $has_review_completion
+- Metrics today: $has_metrics_today"
 
 if [[ "$clarification_gate_active" == "yes" ]]; then
     context+="
@@ -288,9 +318,24 @@ REMINDER: Saved clarification state must be written to the task journal before c
 fi
 
 # Add gate-specific warnings
-if [[ "$status" == *"BUILDING"* && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
+if [[ "$is_medium_plus_task" == "yes" && "$has_component_approval" == "no" && ( "$is_planning" == "yes" || "$is_building" == "yes" ) ]]; then
+    context+="
+WARNING: You are in $status without approved component decomposition. Medium+ tasks require Decompose approval before Plan or Build."
+fi
+
+if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
     context+="
 WARNING: You are BUILDING without an approved plan. Medium+ tasks require plan approval first. STOP and get plan approved."
+fi
+
+if [[ ( "$is_reviewing" == "yes" || "$is_documenting" == "yes" ) && "$has_review_completion" == "no" ]]; then
+    context+="
+WARNING: Review gate incomplete ($review_gate_status). Complete structured Spec Review PASS, Quality Review, and Final Result before leaving REVIEW/DOCUMENT."
+fi
+
+if [[ "$is_documenting" == "yes" && "$has_metrics_today" == "no" ]]; then
+    context+="
+WARNING: Metrics gate incomplete. Record today's workflow metrics before finishing DOCUMENT."
 fi
 
 if [[ "$clarification_gate_active" == "yes" && "$requires_saved_clarification_state" == "yes" ]]; then
@@ -303,7 +348,7 @@ if [[ "$clarification_state_unsaved" == "yes" && "$requires_saved_clarification_
 WARNING: $status cannot continue until the task journal saves explicit clarification state."
 fi
 
-if [[ "$status" == *"BUILDING"* || "$status" == *"REVIEWING"* ]]; then
+if [[ "$status" == *"BUILDING"* || "$status" == *"REVIEWING"* || "$status" == *"DOCUMENTING"* ]]; then
     if [[ "$review_count" == "0" ]]; then
         context+="
 REMINDER: No reviews recorded yet. You MUST complete the review cycle before finishing."

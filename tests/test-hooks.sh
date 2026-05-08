@@ -143,6 +143,85 @@ if ! command -v jq >/dev/null 2>&1; then
     echo ""
 fi
 
+# ── workflow-phase-gates.sh tests ────────────────────────────────────────────
+
+echo "workflow-phase-gates.sh"
+
+if test_start "workflow-phase-gates: detects medium approved plan/review/metrics"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Task: Runtime gate helper
+Status: DOCUMENTING
+Triaged as: medium
+Approval status: approved by user
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    if HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash -c '
+        . "$1"
+        task_file="$2"
+        assistant_phase_is_medium_plus "$task_file" \
+            && assistant_phase_has_component_approval "$task_file" \
+            && assistant_phase_has_plan_approval "$task_file" \
+            && assistant_phase_review_complete "$task_file" \
+            && assistant_phase_has_metrics_today
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$TEST_PROJECT/.claude/task.md"; then
+        pass
+    else
+        fail "helper did not report expected approved runtime gate state"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "workflow-phase-gates: reports missing review reason"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+TASK
+    helper_reason=$(bash -c '. "$1"; assistant_phase_review_missing_reason_key "$2"' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "no_spec_review" ]]; then
+        pass
+    else
+        fail "expected no_spec_review, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: does not treat not approved component status as approved"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: PLANNING
+Triaged as: medium
+Approval status: not approved
+TASK
+    if bash -c '. "$1"; ! assistant_phase_has_component_approval "$2"' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$TEST_PROJECT/.claude/task.md"; then
+        pass
+    else
+        fail "helper treated 'not approved' component status as approved"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 # ── session-start.sh tests ────────────────────────────────────────────────────
 
 echo "session-start.sh"
@@ -602,6 +681,21 @@ if test_start "stop-review: Claude, BUILDING no review → blocks with JSON"; th
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: Claude, DOCUMENTING no review → blocks with JSON"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    echo -e "# Task\nStatus: DOCUMENTING" > "$TEST_PROJECT/.claude/task.md"
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Spec Review"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected DOCUMENTING to block without review"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 if test_start "stop-review: Claude, BUILDING with review log but no final result → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -661,6 +755,70 @@ TASK
         fail "exit=$HOOK_EXIT, should not block when two-stage review cycle is complete"
     fi
     rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING review complete but no metrics → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "metrics"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected DOCUMENTING to block without metrics"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING review complete with metrics → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow stop when DOCUMENTING review and metrics are complete"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
 
 if test_start "stop-review: Claude, canonical HAS_REMAINING_ITEMS final result → no output"; then
@@ -1476,6 +1634,63 @@ fi
 
 echo ""
 
+# ── harness-gate.sh tests ────────────────────────────────────────────────────
+
+echo "harness-gate.sh"
+
+if test_start "harness-gate: Claude, no task journal → exit 0, no output"; then
+    run_hook harness-gate.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "harness-gate: Claude, DOCUMENTING medium plan not approved → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+## Plan
+- Plan exists but is not approved.
+TASK
+    run_hook harness-gate.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Plan exists but not approved"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected DOCUMENTING medium task to block without plan approval"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "harness-gate: Claude, DOCUMENTING medium scored review → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Quality Review #1
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+TASK
+    run_hook harness-gate.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow DOCUMENTING medium task when harness gates are satisfied"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+echo ""
+
 # ── session-end.sh tests ─────────────────────────────────────────────────────
 
 echo "session-end.sh"
@@ -2159,6 +2374,8 @@ if test_start "codex install: workflow-guard installs and legacy post-tool shims
         fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
     elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/task-journal-resolver.sh" ]]; then
         fail "missing task-journal-resolver.sh after install"
+    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-phase-gates.sh" ]]; then
+        fail "missing workflow-phase-gates.sh after install"
     elif [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
         || ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" ]]; then
         fail "legacy post-tool shim scripts should be installed as executable no-ops"
@@ -2887,6 +3104,63 @@ EOF
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
+if test_start "workflow-enforcer: medium PLANNING without component approval → includes runtime gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime gates
+Status: PLANNING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: no
+EOF
+    echo '{"prompt": "continue planning", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
+        && echo "$HOOK_STDOUT" | grep -q "Component decomposition approved: no" \
+        && echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: small PLANNING without component approval → no medium component warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Small runtime gates
+Status: PLANNING
+Triaged as: small
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: no
+EOF
+    echo '{"prompt": "continue planning", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
+        && ! echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
 if test_start "workflow-enforcer: BUILDING without plan approval on medium → includes WARNING"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
@@ -2907,6 +3181,79 @@ EOF
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
+fi
+
+if test_start "workflow-enforcer: REVIEWING with incomplete review → includes review gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime review gate
+Status: REVIEWING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Approval status: approved
+Plan approval: yes
+EOF
+    echo '{"prompt": "start review", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Review gate complete: no" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Review gate incomplete"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: DOCUMENTING with review complete but no metrics → includes metrics gate warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime metrics gate
+Status: DOCUMENTING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Approval status: approved
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+EOF
+    rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
+    echo '{"prompt": "document results", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Review gate complete: yes" \
+        && echo "$HOOK_STDOUT" | grep -q "Metrics today: no" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Metrics gate incomplete"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
 
 if test_start "workflow-enforcer: BUILDING with 0 reviews → includes REMINDER"; then

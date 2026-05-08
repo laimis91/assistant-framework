@@ -54,6 +54,10 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
           {
             "type": "command",
             "command": "$FRAMEWORK_DIR/hooks/scripts/task-journal-resolver.sh --legacy"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh --legacy"
           }
         ]
       }
@@ -116,6 +120,7 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
                 "workflow-guard.sh",
                 "stop-review.sh",
                 "harness-gate.sh",
+                "workflow-phase-gates.sh",
                 "pre-compress.sh",
                 "post-compact.sh"
             ];
@@ -128,6 +133,7 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
                 or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
                 or . == ($framework_dir + "/hooks/scripts/task-completed.sh")
                 or . == ($framework_dir + "/hooks/scripts/task-journal-resolver.sh")
+                or . == ($framework_dir + "/hooks/scripts/workflow-phase-gates.sh")
                 or . == ($framework_dir + "/hooks/scripts/workflow-guard.sh")
                 or . == ($framework_dir + "/hooks/scripts/post-tool-context.sh"))),
             custom: ($commands | any(. == "/tmp/user-custom-hook.sh")),

@@ -1,70 +1,28 @@
-# Context Map
-Generated: 2026-05-08 | Task: Per-skill eval fixture slice
+# Context Map: Runtime Phase-Gate Enforcement
 
-Note: Code Mapper was dispatched as Lorentz for this medium task but did not return before timeout/interruption. This map is a recovery map from direct Discover evidence and should be treated as compact, task-scoped context.
+## Runtime Hook Entry Points
+- `hooks/scripts/workflow-enforcer.sh` injects workflow reminders and active task state on `UserPromptSubmit` / `BeforeAgent`.
+- `hooks/scripts/workflow-guard.sh` warns when edit/build tools are used during active task states.
+- `hooks/scripts/stop-review.sh` blocks stop/after-agent completion when active tasks lack structured review and metrics evidence.
+- `hooks/scripts/harness-gate.sh` blocks stop/after-agent completion when medium+ tasks lack plan approval or rubric scoring.
+- `hooks/scripts/task-journal-resolver.sh` resolves the active task journal, suppresses completed journals, and manages cached workflow state.
 
-## Entry Points
+## Hook Configuration
+- `hooks/codex-settings.json` wires SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, and PostCompact hooks.
+- `hooks/claude-settings.json` wires UserPromptSubmit, SessionStart, PreToolUse, Stop, TaskCompleted, SubagentStart, and SessionEnd hooks.
+- `hooks/gemini-settings.json` wires BeforeAgent, SessionStart, PreToolUse, PreCompress, AfterAgent, and SessionEnd hooks.
 
-- `tools/evals/run-framework-instruction-evals.sh` - existing provider-neutral offline runner for framework-level instruction eval fixtures.
-- `docs/evals/framework-instruction-cases.json` - existing framework-level eval fixture with schema metadata, cases, setup context, expected behavior, pass criteria, fail signals, and machine expectations.
-- `tests/p0-p4/eval-contracts.sh` - P0/P4 contracts for the framework eval fixture and runner.
-- `tests/test-p0-p4-contracts.sh` - aggregate P0/P4 runner; sources `tests/p0-p4/eval-contracts.sh`.
-- `tools/skills/validate-skills.sh` - first-class skill source validator added in the previous slice.
-- `tools/skills/lib/validate-inventory.sh` - selected skill inventory logic: default first-class `skills/assistant-*`; `--include-local` includes all `skills/*`.
+## Test Surface
+- `tests/test-hooks.sh` contains source-level hook tests for workflow enforcer, stop review, harness gate, resolver, installer, and provider behavior.
+- `tests/p0-p4/workflow-basics-contracts.sh` validates canonical workflow phase language and absence of stale `VERIFYING` labels in workflow docs/scripts.
+- `tests/p0-p4/spec-review-contracts.sh` validates Spec Review and Quality Review contract language.
+- `tests/p0-p4/installed-hook-smoke.sh` validates installed Codex hook behavior and completed journal suppression.
 
-## Current Eval Flow
+## Documentation Surface
+- `README.md` has the public hook/features overview and currently under-describes workflow-enforcer, workflow-guard, and harness-gate as runtime phase enforcement.
+- `docs/skill-contract-design-guide.md` describes Level 3 hook-based validation and currently frames runtime enforcement as the next improvement direction.
+- `docs/harness-design-guide.md` documents harness lifecycle behavior and medium+ detection via `Triaged as`.
 
-`docs/evals/framework-instruction-cases.json`
--> `tools/evals/run-framework-instruction-evals.sh --validate-fixture`
--> `--list` / `--emit-prompts DIR`
--> local captured responses saved as `<case-id>.txt|.md`
--> `--responses DIR` deterministic substring grading.
-
-The runner is shell plus `jq`. It does not call provider APIs, provider SDKs, or network services.
-
-## Relevant Existing Behavior
-
-- Framework eval fixture validates top-level suite metadata and non-empty case arrays.
-- Each case has `id`, `title`, `category`, `purpose`, `prompt`, `setup_context`, `expected_behavior`, `pass_criteria`, `fail_signals`, and `machine_expectations`.
-- `machine_expectations.required_substrings` and `forbidden_substrings` are non-empty arrays used for local grading.
-- Prompt emission writes one Markdown packet per case.
-- Response grading fails for missing files, empty files, exact fail-signal hits, missing required substrings, and forbidden substring hits.
-
-## Skill Inventory
-
-- First-class release skills are `skills/assistant-*/SKILL.md`.
-- `skills/unity-*` directories are local-only and must stay excluded from default release/eval requirements.
-- No existing `skills/*/evals/*` files were found during Discover.
-
-## Candidate Slice Boundaries
-
-- Create a reusable per-skill eval runner rather than extending the framework runner in place.
-- Add fixture support under individual first-class skills, starting with a small pilot set.
-- Keep per-skill eval fixtures provider-neutral and offline, matching framework eval semantics.
-- Add P0/P4 contracts that validate fixture shape, prompt emission, response grading, default inventory behavior, and local-only Unity exclusion.
-- Update docs to explain how per-skill evals complement the source validator.
-
-## Test Locations
-
-| Area | Test File | Type |
-|---|---|---|
-| Framework eval runner | `tests/p0-p4/eval-contracts.sh` | Shell contract tests |
-| Aggregate P0/P4 suite | `tests/test-p0-p4-contracts.sh` | Shell aggregate |
-| Skill source validator | `tests/p0-p4/skill-validator-contracts.sh` | Shell contract tests |
-| Eval docs | `docs/evals/README.md` | Documentation |
-| Skill contract direction | `docs/skill-contract-design-guide.md` | Documentation |
-
-## Verification Commands
-
-- `tools/evals/run-framework-instruction-evals.sh --validate-fixture`
-- `bash tests/p0-p4/eval-contracts.sh`
-- `bash tests/test-p0-p4-contracts.sh`
-- `tools/skills/validate-skills.sh`
-- `git diff --check`
-
-## Risks
-
-- Duplicating runner logic could create drift between framework-level and per-skill grading.
-- Requiring eval fixtures for all first-class skills in one slice would create a large authoring burden and noisy review.
-- Inferring eval inventory from local-only skills would violate the framework rule for Unity skills.
-- Heuristic substring grading must be presented as local proxy checks, not natural-language judgment.
+## Current Enforcement Gap
+- Prompt-time state exists but does not produce a unified runtime phase-gate summary for DECOMPOSE, PLAN, BUILD, REVIEW, and DOCUMENT.
+- Stop-time gates block build/review completion but do not consistently cover `DOCUMENTING`, which can hide unfinished review or metrics work if the status advances too early.
