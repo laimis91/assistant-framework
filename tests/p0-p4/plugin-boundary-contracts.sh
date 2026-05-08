@@ -23,7 +23,7 @@ p0p4_plugin_assignments() {
 test_start "plugin architecture doc exists and preserves current install compatibility"
 if [[ -f "$plugin_doc" ]] \
     && grep -Fq "current_install_inventory: skills/assistant-*/SKILL.md" "$plugin_doc" \
-    && grep -Fq "current_plugin_profiles: assistant-core via --plugin assistant-core; assistant-research via --plugin assistant-research" "$plugin_doc" \
+    && grep -Fq "current_plugin_profiles: assistant-core via --plugin assistant-core; assistant-research via --plugin assistant-research; assistant-dev via --plugin assistant-dev" "$plugin_doc" \
     && grep -Fq "current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json plugins/assistant-dev/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "no root skill directories move in this slice" "$plugin_doc" \
     && grep -Fq "Auto-discovers first-class release skills from skills/assistant-*/SKILL.md" "$FRAMEWORK_DIR/install.sh"; then
@@ -79,6 +79,7 @@ if grep -Fq "Plugin boundaries are contract-backed" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "docs/plugin-architecture.md" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "./install.sh --agent codex --plugin assistant-core" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "./install.sh --agent codex --plugin assistant-research" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "./install.sh --agent codex --plugin assistant-dev" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "uses the root \`skills/assistant-*\` release inventory by default" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "The release inventory is the tracked \`skills/assistant-*\` set." "$FRAMEWORK_DIR/README.md"; then
     pass

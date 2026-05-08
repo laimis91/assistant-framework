@@ -15,12 +15,12 @@ The installer remains root-inventory based:
 
 ```text
 current_install_inventory: skills/assistant-*/SKILL.md
-current_plugin_profiles: assistant-core via --plugin assistant-core; assistant-research via --plugin assistant-research
+current_plugin_profiles: assistant-core via --plugin assistant-core; assistant-research via --plugin assistant-research; assistant-dev via --plugin assistant-dev
 current_unity_policy: skills/unity-* is outside the default assistant-* inventory
 current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json plugins/assistant-dev/.codex-plugin/plugin.json
 ```
 
-The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` installs the skills listed in the `assistant-core` boundary below from the root inventory, and `--plugin assistant-research` installs the skills listed in the `assistant-research` boundary. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The `plugins/assistant-research/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the three research skills, and the installer performs manifest-aware dry-run validation for that scaffold too. The `plugins/assistant-dev/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the eight development skills. `assistant-dev` is not installable through `--plugin` yet. These scaffolds are not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` installs the skills listed in the `assistant-core` boundary below from the root inventory, `--plugin assistant-research` installs the skills listed in the `assistant-research` boundary, and `--plugin assistant-dev` installs the skills listed in the `assistant-dev` boundary. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The `plugins/assistant-research/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the three research skills, and the installer performs manifest-aware dry-run validation for that scaffold too. The `plugins/assistant-dev/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the eight development skills, and the installer performs manifest-aware dry-run validation for that scaffold too. These scaffolds are not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -143,4 +143,12 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 - Guard plugin-local copies against root skill drift with P0/P4 contracts.
 - Keep marketplace registration absent and keep `assistant-dev` boundary-only until its install profile has coverage.
 
-The next slice can add an `assistant-dev` install profile once the scaffold path is stable.
+### Assistant-Dev Profile
+
+- Add `./install.sh --agent <agent> --plugin assistant-dev`.
+- Parse profile ownership from this document.
+- Print `plugins/assistant-dev/.codex-plugin/plugin.json` in `--plugin assistant-dev --dry-run` output.
+- Validate manifest `name`, `skills`, and plugin-local skill copies against the `assistant-dev` boundary during dry-run.
+- Keep real installs root-inventory based until marketplace registration is introduced.
+
+The next slice can add marketplace registration or plugin-local install sourcing once all profile paths are stable.

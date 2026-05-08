@@ -18,6 +18,7 @@
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent codex --plugin assistant-research  # research profile only
+#   ./install.sh --agent codex --plugin assistant-dev       # development profile only
 #   ./install.sh --agent claude --no-hooks                  # skip hook installation
 #
 # Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
@@ -50,7 +51,7 @@ Installs the Assistant Framework skills for an AI agent.
 Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
-  --plugin NAME      Install a planned plugin profile such as assistant-core or assistant-research
+  --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
   --no-hooks         Skip hook installation
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
@@ -61,7 +62,7 @@ added manually to installed skill directories. Back up customizations first.
 
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
-  Use --plugin assistant-core or --plugin assistant-research to install a focused profile.
+  Use --plugin assistant-core, --plugin assistant-research, or --plugin assistant-dev to install a focused profile.
 
 Memory data:
   memory-graph MCP is registered against ~/.{agent}/memory.
@@ -74,6 +75,7 @@ Examples:
   $(basename "$0") --agent claude --skill assistant-thinking
   $(basename "$0") --agent codex --plugin assistant-core
   $(basename "$0") --agent codex --plugin assistant-research
+  $(basename "$0") --agent codex --plugin assistant-dev
 EOF
     exit 0
 }
@@ -171,7 +173,7 @@ validate_plugin_manifest_dry_run() {
 }
 
 supported_plugin_profiles() {
-    printf '%s\n' assistant-core assistant-research
+    printf '%s\n' assistant-core assistant-research assistant-dev
 }
 
 is_supported_plugin_profile() {

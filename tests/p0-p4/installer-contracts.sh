@@ -117,6 +117,34 @@ else
     fail "assistant-research dry-run failed; see /tmp/p0p4-install-plugin-research-dry.err"
 fi
 
+test_start "Codex plugin profile dry-run selects assistant-dev skills only"
+INSTALL_HOME_PLUGIN_DEV_DRY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DEV_DRY"
+if HOME="$INSTALL_HOME_PLUGIN_DEV_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks --dry-run >/tmp/p0p4-install-plugin-dev-dry.out 2>/tmp/p0p4-install-plugin-dev-dry.err; then
+    plugin_dev_dry_output="$(cat /tmp/p0p4-install-plugin-dev-dry.out)"
+    if printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin profile: assistant-dev" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-dev -> ./skills/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-diagrams/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-docs/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-onboard/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-review/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-security/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-skill-creator/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-tdd/" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-workflow/" \
+        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-memory/" \
+        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-research/" \
+        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-thinking/"; then
+        pass
+    else
+        fail "assistant-dev dry-run should list only development plugin skills"
+    fi
+else
+    fail "assistant-dev dry-run failed; see /tmp/p0p4-install-plugin-dev-dry.err"
+fi
+
 test_start "Codex plugin profile dry-run rejects manifest skill drift"
 INSTALL_HOME_PLUGIN_DRY_DRIFT="$(mktemp -d)"
 PLUGIN_MANIFEST="$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json"
@@ -213,6 +241,45 @@ else
     fail "assistant-research plugin install failed; see /tmp/p0p4-install-plugin-research.err"
 fi
 
+test_start "Codex assistant-dev plugin install installs only development skills and AGENTS rows"
+INSTALL_HOME_PLUGIN_DEV="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DEV"
+if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-dev.out 2>/tmp/p0p4-install-plugin-dev.err; then
+    installed_dev_skills_dir="$INSTALL_HOME_PLUGIN_DEV/.codex/skills"
+    dev_agents_file="$INSTALL_HOME_PLUGIN_DEV/.codex/AGENTS.md"
+    dev_agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$dev_agents_file")"
+    missing_dev_skill=""
+    unexpected_dev_profile_skill=""
+    for dev_skill in assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow; do
+        if [[ ! -d "$installed_dev_skills_dir/$dev_skill" ]]; then
+            missing_dev_skill="$dev_skill"
+            break
+        fi
+        if ! grep -Fq "| $dev_skill |" "$dev_agents_file"; then
+            missing_dev_skill="$dev_skill AGENTS.md"
+            break
+        fi
+    done
+    for non_dev_skill in assistant-clarify assistant-memory assistant-reflexion assistant-telos assistant-ideate assistant-research assistant-thinking; do
+        if [[ -d "$installed_dev_skills_dir/$non_dev_skill" ]] || grep -Fq "| $non_dev_skill |" "$dev_agents_file"; then
+            unexpected_dev_profile_skill="$non_dev_skill"
+            break
+        fi
+    done
+
+    if [[ -n "$missing_dev_skill" ]]; then
+        fail "assistant-dev plugin install missed $missing_dev_skill"
+    elif [[ -n "$unexpected_dev_profile_skill" ]]; then
+        fail "assistant-dev plugin install included non-development skill $unexpected_dev_profile_skill"
+    elif [[ "$dev_agents_assistant_skill_rows" != "8" ]]; then
+        fail "expected assistant-dev Codex AGENTS.md to list 8 assistant skills; found $dev_agents_assistant_skill_rows"
+    else
+        pass
+    fi
+else
+    fail "assistant-dev plugin install failed; see /tmp/p0p4-install-plugin-dev.err"
+fi
+
 test_start "installer rejects boundary-only profiles without Unity hardcoding"
 INSTALL_HOME_PLUGIN_UNITY="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNITY"
@@ -221,6 +288,7 @@ if HOME="$INSTALL_HOME_PLUGIN_UNITY" bash "$FRAMEWORK_DIR/install.sh" --agent co
 elif grep -Fq "assistant-unity is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-unity.err \
     && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-unity.err \
     && grep -Fq "assistant-research" /tmp/p0p4-install-plugin-unity.err \
+    && grep -Fq "assistant-dev" /tmp/p0p4-install-plugin-unity.err \
     && ! grep -Fq "assistant-unity is local-only" "$FRAMEWORK_DIR/install.sh" \
     && ! grep -Fq "skills/unity-*" "$FRAMEWORK_DIR/install.sh"; then
     pass
@@ -228,17 +296,16 @@ else
     fail "assistant-unity should use the generic boundary-only rejection without Unity-specific installer code"
 fi
 
-test_start "installer rejects boundary-only plugin profiles without scaffold support"
-INSTALL_HOME_PLUGIN_BOUNDARY_ONLY="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY"
-if HOME="$INSTALL_HOME_PLUGIN_BOUNDARY_ONLY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-boundary-only.out 2>/tmp/p0p4-install-plugin-boundary-only.err; then
-    fail "assistant-dev should remain boundary-only until it has P0/P4 install coverage"
-elif grep -Fq "assistant-dev is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-boundary-only.err \
-    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-boundary-only.err \
-    && grep -Fq "assistant-research" /tmp/p0p4-install-plugin-boundary-only.err; then
+test_start "installer rejects unknown plugin profiles"
+INSTALL_HOME_PLUGIN_UNKNOWN="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNKNOWN"
+if HOME="$INSTALL_HOME_PLUGIN_UNKNOWN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-unknown --no-hooks >/tmp/p0p4-install-plugin-unknown.out 2>/tmp/p0p4-install-plugin-unknown.err; then
+    fail "unknown plugin profile should not install"
+elif grep -Fq "Unknown plugin profile: assistant-unknown" /tmp/p0p4-install-plugin-unknown.err \
+    && grep -Fq "Available install profiles are defined in docs/plugin-architecture.md" /tmp/p0p4-install-plugin-unknown.err; then
     pass
 else
-    fail "boundary-only plugin profile rejection should name supported install profiles"
+    fail "unknown plugin profile rejection should explain where profiles are defined"
 fi
 
 test_start "installer rejects combining --skill and --plugin"
