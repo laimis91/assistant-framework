@@ -35,14 +35,6 @@ toml_files=()
 
 # Skills are auto-discovered from first-class assistant-* release directories.
 SKILLS=()
-STALE_FRAMEWORK_UNITY_SKILLS=(
-    unity-game-design
-    unity-iterate
-    unity-multiplayer
-    unity-playtest
-    unity-procedural-art
-    unity-scene-builder
-)
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 
@@ -247,36 +239,6 @@ cleanup_installed_tool_build_artifacts() {
 
     if $DRY_RUN && ! $found; then
         dry "No stale tool build artifacts found under $tools_target"
-    fi
-}
-
-cleanup_stale_framework_unity_skills() {
-    local skills_target="$1"
-    local stale_skill
-    local stale_dir
-    local found=false
-
-    if [[ ! -d "$skills_target" ]]; then
-        if $DRY_RUN; then
-            dry "Would remove known stale framework-owned Unity skills if present under $skills_target"
-        fi
-        return 0
-    fi
-
-    for stale_skill in "${STALE_FRAMEWORK_UNITY_SKILLS[@]}"; do
-        stale_dir="$skills_target/$stale_skill"
-        if [[ -d "$stale_dir" ]]; then
-            found=true
-            if $DRY_RUN; then
-                dry "Remove stale framework-owned Unity skill: $stale_dir"
-            else
-                rm -rf "$stale_dir"
-            fi
-        fi
-    done
-
-    if $DRY_RUN && ! $found; then
-        dry "No known stale framework-owned Unity skills found under $skills_target"
     fi
 }
 
@@ -552,12 +514,6 @@ echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
 echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
-
-# ── Clean stale installed local-only skills ──────────────────────────────────
-
-if [[ -z "$SINGLE_SKILL" ]]; then
-    cleanup_stale_framework_unity_skills "$SKILLS_TARGET"
-fi
 
 # ── Install skills ────────────────────────────────────────────────────────────
 

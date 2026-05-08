@@ -350,26 +350,6 @@ INSTALL_HOME_TEN="$(mktemp -d)"
 UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-contract-fixture-XXXXXX")"
 UNITY_FIXTURE_NAME="$(basename "$UNITY_FIXTURE")"
 p0p4_register_cleanup "$INSTALL_HOME_TEN" "$UNITY_FIXTURE"
-mkdir -p "$INSTALL_HOME_TEN/.codex/skills/unity-game-design" "$INSTALL_HOME_TEN/.codex/skills/custom-local-skill"
-cat > "$INSTALL_HOME_TEN/.codex/skills/unity-game-design/SKILL.md" <<'STALE_UNITY_SKILL'
----
-name: unity-game-design
-description: Stale installed Unity skill that must be removed on default install.
-triggers:
-  - pattern: "unity stale route"
-    priority: 99
----
-
-# Stale Unity Game Design
-STALE_UNITY_SKILL
-cat > "$INSTALL_HOME_TEN/.codex/skills/custom-local-skill/SKILL.md" <<'CUSTOM_LOCAL_SKILL'
----
-name: custom-local-skill
-description: User-owned local skill that must be preserved by default install.
----
-
-# Custom Local Skill
-CUSTOM_LOCAL_SKILL
 cat > "$UNITY_FIXTURE/SKILL.md" <<'UNITY_SKILL'
 ---
 name: unity-local-contract-fixture
@@ -384,7 +364,6 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
     missing_assistant_skill=""
     missing_agents_skill=""
     unexpected_installed_skill=""
-    custom_skill_dir="$installed_skills_dir/custom-local-skill"
     source_assistant_skill_count=0
     agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
 
@@ -406,7 +385,6 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
             installed_skill="$(basename "$installed_skill_dir")"
             case "$installed_skill" in
                 assistant-*) ;;
-                custom-local-skill) ;;
                 *)
                     unexpected_installed_skill="$installed_skill"
                     break
@@ -427,12 +405,6 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
     elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then
         fail "expected default install to exclude local Unity fixture"
-    elif [[ -e "$installed_skills_dir/unity-game-design" ]]; then
-        fail "expected default install to remove stale framework-owned unity-game-design skill"
-    elif grep -Fq "unity-game-design" "$agents_file"; then
-        fail "expected generated Codex AGENTS.md not to route stale unity-game-design skill"
-    elif [[ ! -f "$custom_skill_dir/SKILL.md" ]]; then
-        fail "expected default install to preserve custom non-framework skill directory"
     else
         pass
     fi
