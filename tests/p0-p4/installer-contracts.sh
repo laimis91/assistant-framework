@@ -412,12 +412,101 @@ else
     fail "default install with local Unity fixture failed; see /tmp/p0p4-install-default-skills.err"
 fi
 
-test_start "Codex hook template is valid JSON with one PreToolUse key"
+test_start "Codex hook template is valid JSON with PreToolUse and no PostToolUse key"
 if jq -e . "$FRAMEWORK_DIR/hooks/codex-settings.json" >/dev/null \
-    && [[ "$(grep -o '"PreToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]]; then
+    && [[ "$(grep -o '"PreToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]] \
+    && [[ "$(grep -o '"PostToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "0" ]]; then
     pass
 else
-    fail "hooks/codex-settings.json must parse and contain exactly one raw PreToolUse key"
+    fail "hooks/codex-settings.json must parse, contain exactly one raw PreToolUse key, and contain no PostToolUse key"
+fi
+
+test_start "Claude reinstall removes framework post-tool hooks and preserves custom hooks"
+CLAUDE_HOOK_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CLAUDE_HOOK_HOME"
+mkdir -p "$CLAUDE_HOOK_HOME/.claude"
+mkdir -p "$CLAUDE_HOOK_HOME/.claude/hooks/assistant"
+touch "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/post-tool-context.sh" \
+    "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/tool-failure-advisor.sh"
+cat > "$CLAUDE_HOOK_HOME/.claude/settings.json" <<JSON
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/user-claude-pretool.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\$HOME/.claude/hooks/assistant/post-tool-context.sh"
+          },
+          {
+            "type": "command",
+            "command": "/tmp/user-claude-posttool.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/tool-failure-advisor.sh --stale"
+          },
+          {
+            "type": "command",
+            "command": "$FRAMEWORK_DIR/hooks/scripts/tool-failure-advisor.sh --repo-stale"
+          },
+          {
+            "type": "command",
+            "command": "/tmp/user-claude-failure-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+JSON
+if HOME="$CLAUDE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow >/tmp/p0p4-install-claude-hooks.out 2>/tmp/p0p4-install-claude-hooks.err; then
+    if [[ ! -x "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/post-tool-context.sh" \
+        || ! -x "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/tool-failure-advisor.sh" ]]; then
+        fail "Claude install did not create executable legacy post-tool shims"
+    elif [[ -n "$(HOME="$CLAUDE_HOOK_HOME" bash "$CLAUDE_HOOK_HOME/.claude/hooks/assistant/tool-failure-advisor.sh" <<< '{"tool_name":"Bash","error":"Permission denied"}')" ]]; then
+        fail "Claude legacy post-tool shim should stay silent"
+    elif jq -e --arg install_home "$CLAUDE_HOOK_HOME" --arg framework_dir "$FRAMEWORK_DIR" '
+        def first_shell_token:
+            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+        [.. | objects | .command? // empty] as $commands
+        | [$commands[] | first_shell_token] as $tokens
+        | {
+            stale: ($tokens | any(. == "$HOME/.claude/hooks/assistant/post-tool-context.sh"
+                or . == ($install_home + "/.claude/hooks/assistant/tool-failure-advisor.sh")
+                or . == ($framework_dir + "/hooks/scripts/tool-failure-advisor.sh"))),
+            customPre: ($commands | any(. == "/tmp/user-claude-pretool.sh")),
+            customPost: ($commands | any(. == "/tmp/user-claude-posttool.sh")),
+            customFailure: ($commands | any(. == "/tmp/user-claude-failure-hook.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh"))
+        }
+        | (.stale | not) and .customPre and .customPost and .customFailure and .workflowGuard
+    ' "$CLAUDE_HOOK_HOME/.claude/settings.json" >/dev/null; then
+        pass
+    else
+        fail "Claude reinstall did not remove stale framework post-tool hooks, preserve custom hooks, or add workflow-guard"
+    fi
+else
+    fail "Claude hook reinstall failed; see /tmp/p0p4-install-claude-hooks.err"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

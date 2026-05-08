@@ -473,7 +473,7 @@ if test_start "pre-compress: Gemini, with task journal → valid JSON"; then
     rm -rf "$TEST_PROJECT/.gemini"
 fi
 
-if test_start "pre-compress: Codex → hookSpecificOutput PreCompact"; then
+if test_start "pre-compress: Codex → universal PreCompact JSON"; then
     local_tmp_out=$(mktemp)
     HOOK_EXIT=0
     env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/pre-compress.sh" \
@@ -483,11 +483,11 @@ if test_start "pre-compress: Codex → hookSpecificOutput PreCompact"; then
 
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
-        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PreCompact"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext | contains("CONTEXT COMPRESSION IMMINENT")' >/dev/null 2>&1; then
+        && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.systemMessage | contains("CONTEXT COMPRESSION IMMINENT")' >/dev/null 2>&1; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected Codex PreCompact hookSpecificOutput, stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected Codex PreCompact universal JSON, stdout='$HOOK_STDOUT'"
     fi
 fi
 
@@ -538,7 +538,7 @@ if test_start "post-compact: Claude, graph.jsonl rule body → no fallback or di
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "post-compact: Codex, with task journal → hookSpecificOutput PostCompact"; then
+if test_start "post-compact: Codex, with task journal → universal PostCompact JSON"; then
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
     echo -e "# Task\nStatus: BUILDING\nStep: codex post compact" > "$TEST_PROJECT/.codex/task.md"
 
@@ -549,16 +549,16 @@ if test_start "post-compact: Codex, with task journal → hookSpecificOutput Pos
     HOOK_STDOUT=$(cat "$local_tmp_out")
     rm -f "$local_tmp_out"
 
-    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.systemMessage // empty' 2>/dev/null || true)
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
-        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostCompact"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
         && [[ "$additional_context" == *"RESTORED AFTER COMPACTION"* ]] \
         && [[ "$additional_context" == *"codex post compact"* ]] \
         && [[ "$additional_context" == *"memory_context"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected Codex PostCompact context, stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected Codex PostCompact universal JSON, stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
@@ -1883,6 +1883,25 @@ if test_start "post-tool-context: Codex dotnet test response → hookSpecificOut
     fi
 fi
 
+if test_start "post-tool-context: Codex string build response → no stderr"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build"}, "tool_response": "Build succeeded."}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/post-tool-context.sh" \
+        > /tmp/_pt_out 2>/tmp/_pt_err
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_pt_out)
+    HOOK_STDERR=$(cat /tmp/_pt_err)
+    rm -f /tmp/_pt_out /tmp/_pt_err
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && [[ -z "$HOOK_STDERR" ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext | contains("BUILD: succeeded")' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex PostToolUse context without stderr, stdout='$HOOK_STDOUT', stderr='$HOOK_STDERR'"
+    fi
+fi
+
 if test_start "tool-failure-advisor: Codex failed build response → hookSpecificOutput PostToolUse"; then
     echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build"}, "tool_response": {"exit_code": 1, "stderr": "error CS0246: The type or namespace name '\''Widget'\'' could not be found"}}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
@@ -1918,8 +1937,85 @@ if test_start "tool-failure-advisor: Codex failed response without exit code →
     fi
 fi
 
+if test_start "tool-failure-advisor: Codex string failed response → hookSpecificOutput PostToolUse"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build"}, "tool_response": "error CS0246: The type or namespace name '\''Widget'\'' could not be found"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
+        > /tmp/_tf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_tf_out)
+    rm -f /tmp/_tf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext | contains("BUILD FAILURE ADVICE")' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext | contains("Missing type")' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex string failure advice, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "tool-failure-advisor: Codex string file read with fixture error → no output"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "nl -ba tests/test-hooks.sh"}, "tool_response": "error NETSDK1100: fixture text only"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
+        > /tmp/_tf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_tf_out)
+    rm -f /tmp/_tf_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "tool-failure-advisor: Codex string file read with generic fixture error → no output"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "git diff -- hooks/scripts/tool-failure-advisor.sh"}, "tool_response": "Permission denied fixture text only"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
+        > /tmp/_tf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_tf_out)
+    rm -f /tmp/_tf_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "tool-failure-advisor: Codex explicit failed generic response → advises"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "touch /root/nope"}, "tool_response": {"exit_code": 1, "stderr": "Permission denied"}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
+        > /tmp/_tf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_tf_out)
+    rm -f /tmp/_tf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext | contains("Permission denied")' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected explicit generic failure advice, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
 if test_start "tool-failure-advisor: Codex successful response → no output"; then
     echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build"}, "tool_response": {"exit_code": 0, "stdout": "Build succeeded."}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
+        > /tmp/_tf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_tf_out)
+    rm -f /tmp/_tf_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "tool-failure-advisor: Codex string successful response → no output"; then
+    echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build"}, "tool_response": "Build succeeded."}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/tool-failure-advisor.sh" \
         > /tmp/_tf_out 2>/dev/null
     HOOK_EXIT=$?
@@ -2042,9 +2138,12 @@ echo ""
 
 echo "codex install"
 
-if test_start "codex install: shared hook helper is installed and workflow-guard runs"; then
+if test_start "codex install: workflow-guard installs and legacy post-tool shims are no-op"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.129.0")
+    mkdir -p "$INSTALL_TEST_HOME/.codex/hooks/assistant"
+    touch "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
+        "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
     local_tmp_out=$(mktemp)
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
@@ -2060,19 +2159,20 @@ if test_start "codex install: shared hook helper is installed and workflow-guard
         fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
     elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/task-journal-resolver.sh" ]]; then
         fail "missing task-journal-resolver.sh after install"
-    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
-        || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" \
-        || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/pre-compress.sh" \
+    elif [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
+        || ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" ]]; then
+        fail "legacy post-tool shim scripts should be installed as executable no-ops"
+    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/pre-compress.sh" \
         || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-compact.sh" ]]; then
-        fail "missing new Codex hook scripts after install"
+        fail "missing Codex compaction hook scripts after install"
     elif ! jq -e '
-        (.hooks.PostToolUse // [] | length) == 1
-        and (.hooks.PostToolUse[0].hooks // [] | map(.command) | any(contains("post-tool-context.sh")))
-        and (.hooks.PostToolUse[0].hooks // [] | map(.command) | any(contains("tool-failure-advisor.sh")))
+        (.hooks.PostToolUse? == null)
+        and (.hooks.PreToolUse // [] | length) == 1
+        and (.hooks.PreToolUse[0].hooks // [] | map(.command) | any(contains("workflow-guard.sh")))
         and (.hooks.PreCompact // [] | length) == 1
         and (.hooks.PostCompact // [] | length) == 1
     ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
-        fail "new Codex hook events not registered in hooks.json"
+        fail "Codex hook events not registered as expected in hooks.json"
     else
         local_tmp_out=$(mktemp)
         local_tmp_err=$(mktemp)
@@ -2095,12 +2195,10 @@ if test_start "codex install: shared hook helper is installed and workflow-guard
             HOOK_STDOUT=$(cat "$local_tmp_out")
             rm -f "$local_tmp_out"
 
-            if [[ $HOOK_EXIT -eq 0 ]] \
-                && is_valid_json "$HOOK_STDOUT" \
-                && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1; then
+            if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
                 pass
             else
-                fail "installed Codex post-tool hook did not emit hookSpecificOutput, stdout='$HOOK_STDOUT'"
+                fail "legacy post-tool shim was not silent, exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
             fi
         fi
     fi
@@ -2139,23 +2237,26 @@ if test_start "codex install: installed compaction hooks detect Codex by script 
         HOOK_STDOUT=$(cat "$local_tmp_out")
         rm -f "$local_tmp_out"
 
-        additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+        additional_context=$(echo "$HOOK_STDOUT" | jq -r '.systemMessage // empty' 2>/dev/null || true)
         if [[ $HOOK_EXIT -eq 0 ]] \
             && is_valid_json "$HOOK_STDOUT" \
-            && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "PostCompact"' >/dev/null 2>&1 \
+            && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
             && [[ "$additional_context" == *"installed codex compaction"* ]]; then
             pass
         else
-            fail "installed Codex post-compact hook did not emit hookSpecificOutput, stdout='$HOOK_STDOUT', install_stdout='$INSTALL_STDOUT'"
+            fail "installed Codex post-compact hook did not emit universal JSON, stdout='$HOOK_STDOUT', install_stdout='$INSTALL_STDOUT'"
         fi
     fi
 
     rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
 fi
 
-if test_start "codex install: Codex 0.128 skips compaction hooks but keeps PostToolUse"; then
+if test_start "codex install: Codex 0.128 skips compaction hooks and keeps workflow-guard"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.128.0")
+    mkdir -p "$INSTALL_TEST_HOME/.codex/hooks/assistant"
+    touch "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
+        "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
     local_tmp_out=$(mktemp)
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
@@ -2172,12 +2273,17 @@ if test_start "codex install: Codex 0.128 skips compaction hooks but keeps PostT
     elif [[ -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/pre-compress.sh" \
         || -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-compact.sh" ]]; then
         fail "Codex 0.128 install copied unsupported compaction hook scripts"
+    elif [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
+        || ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" ]]; then
+        fail "Codex 0.128 install did not create executable legacy post-tool shims"
     elif ! jq -e '
-        (.hooks.PostToolUse // [] | length) == 1
+        (.hooks.PostToolUse? == null)
+        and (.hooks.PreToolUse // [] | length) == 1
+        and (.hooks.PreToolUse[0].hooks // [] | map(.command) | any(contains("workflow-guard.sh")))
         and (.hooks.PreCompact? == null)
         and (.hooks.PostCompact? == null)
     ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
-        fail "Codex 0.128 hooks.json did not keep PostToolUse while dropping compaction hooks"
+        fail "Codex 0.128 hooks.json did not keep workflow-guard while dropping post-tool and compaction hooks"
     elif [[ "$INSTALL_STDOUT" != *"Compaction hooks require Codex CLI 0.129.0 or newer."* ]]; then
         fail "Codex 0.128 install did not print compaction hook version guidance"
     else

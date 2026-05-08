@@ -56,21 +56,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/post-tool-context.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
-          }
-        ]
-      }
-    ],
     "PreCompact": [
       {
         "matcher": "",
