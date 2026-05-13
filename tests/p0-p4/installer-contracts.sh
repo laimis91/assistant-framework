@@ -504,6 +504,7 @@ approval_mode = "approve"
 approval_mode = "approve"
 
 [features]
+hooks = false
 codex_hooks = false
 STALE_CODEX_MCP
 chmod 600 "$INSTALL_HOME_NINE/.codex/config.toml"
@@ -536,8 +537,10 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
         || grep -q "/stale/memory-graph" "$config_file" \
         || ! grep -q '^model = "test-model"$' "$config_file" \
         || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
+        || ! grep -q '^hooks = true$' "$config_file" \
+        || grep -q '^[[:space:]]*codex_hooks[[:space:]]*=' "$config_file" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph command/args to refresh while preserving unrelated config and file mode"
+        fail "expected stale Codex memory-graph command/args and deprecated hooks flag to refresh while preserving unrelated config and file mode"
     else
         missing_tool=""
         duplicate_tool=""

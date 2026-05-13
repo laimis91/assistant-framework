@@ -8,7 +8,7 @@
 # Install location: ~/.codex/rules/workflow.rules
 # Enable in config.toml:
 #   [features]
-#   codex_hooks = true
+#   hooks = true
 
 # ── Git safety ──────────────────────────────────────────────────────────────
 

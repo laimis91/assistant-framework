@@ -2474,6 +2474,9 @@ if test_start "codex install: workflow-guard installs and legacy post-tool shims
     elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/pre-compress.sh" \
         || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-compact.sh" ]]; then
         fail "missing Codex compaction hook scripts after install"
+    elif ! grep -q '^hooks = true$' "$INSTALL_TEST_HOME/.codex/config.toml" \
+        || grep -q '^[[:space:]]*codex_hooks[[:space:]]*=' "$INSTALL_TEST_HOME/.codex/config.toml"; then
+        fail "Codex install should enable [features].hooks and avoid deprecated codex_hooks"
     elif ! jq -e '
         (.hooks.PostToolUse? == null)
         and (.hooks.PreToolUse // [] | length) == 1

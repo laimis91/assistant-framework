@@ -558,6 +558,115 @@ PY
     fi
 }
 
+ensure_codex_hooks_feature_flag() {
+    local config_file="$1"
+    local tmp_file
+    local existing_mode=""
+
+    if [[ ! -f "$config_file" ]]; then
+        mkdir -p "$(dirname "$config_file")"
+        cat > "$config_file" <<'TOML'
+# Codex CLI configuration — managed by Assistant Framework installer
+[features]
+hooks = true
+TOML
+        ok "Created $config_file with hooks enabled"
+        return 0
+    fi
+
+    case "$(uname -s)" in
+        Darwin|FreeBSD)
+            existing_mode="$(stat -f "%Lp" "$config_file" 2>/dev/null || true)"
+            ;;
+        *)
+            existing_mode="$(stat -c "%a" "$config_file" 2>/dev/null || true)"
+            ;;
+    esac
+
+    tmp_file="${config_file}.tmp"
+    if ! awk '
+        function is_section(line) {
+            return line ~ /^[[:space:]]*\[[^]]+\][[:space:]]*($|#)/
+        }
+
+        function is_features_section(line) {
+            return line ~ /^[[:space:]]*\[features\][[:space:]]*($|#)/
+        }
+
+        function flush_features_hook() {
+            if (in_features && !saw_hooks) {
+                print "hooks = true"
+                saw_hooks = 1
+            }
+        }
+
+        BEGIN {
+            in_features = 0
+            saw_features = 0
+            saw_hooks = 0
+        }
+
+        {
+            if (is_section($0)) {
+                flush_features_hook()
+                in_features = is_features_section($0)
+                if (in_features) {
+                    saw_features = 1
+                    saw_hooks = 0
+                }
+                print
+                next
+            }
+
+            if (in_features && $0 ~ /^[[:space:]]*codex_hooks[[:space:]]*=/) {
+                next
+            }
+
+            if (in_features && $0 ~ /^[[:space:]]*hooks[[:space:]]*=/) {
+                if (!saw_hooks) {
+                    print "hooks = true"
+                    saw_hooks = 1
+                }
+                next
+            }
+
+            print
+        }
+
+        END {
+            flush_features_hook()
+            if (!saw_features) {
+                if (NR > 0) {
+                    print ""
+                }
+                print "[features]"
+                print "hooks = true"
+            }
+        }
+    ' "$config_file" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        info "WARNING: Failed to update hooks feature flag in $config_file"
+        return 1
+    fi
+
+    if cmp -s "$config_file" "$tmp_file"; then
+        rm -f "$tmp_file"
+        info "hooks already enabled in $config_file"
+        return 0
+    fi
+
+    if [[ -n "$existing_mode" ]]; then
+        chmod "$existing_mode" "$tmp_file" 2>/dev/null || true
+    fi
+    if mv "$tmp_file" "$config_file"; then
+        ok "Enabled hooks in $config_file"
+    else
+        rm -f "$tmp_file"
+        info "WARNING: Failed to update hooks feature flag in $config_file"
+        return 1
+    fi
+}
+
 codex_cli_supports_compaction_hooks() {
     local version_line version_parts major minor patch
 
@@ -1008,42 +1117,13 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
         ok "Execution policy rules -> $RULES_TARGET/ (${#rules_files[@]} rules)"
     fi
 
-    # Ensure codex_hooks feature flag is enabled in config.toml
+    # Ensure the Codex hooks feature flag is enabled in config.toml.
+    # The legacy codex_hooks key is deprecated in favor of hooks.
     CODEX_CONFIG="$AGENT_HOME/config.toml"
     if $DRY_RUN; then
-        dry "Ensure codex_hooks = true in $CODEX_CONFIG"
+        dry "Ensure hooks = true in $CODEX_CONFIG"
     else
-        if [[ ! -f "$CODEX_CONFIG" ]]; then
-            mkdir -p "$(dirname "$CODEX_CONFIG")"
-            cat > "$CODEX_CONFIG" <<'TOML'
-# Codex CLI configuration — managed by Assistant Framework installer
-[features]
-codex_hooks = true
-TOML
-            ok "Created $CODEX_CONFIG with codex_hooks enabled"
-        elif ! grep -q 'codex_hooks' "$CODEX_CONFIG" 2>/dev/null; then
-            # Add codex_hooks — check if [features] section already exists
-            if grep -q '^\[features\]' "$CODEX_CONFIG" 2>/dev/null; then
-                # Append under existing [features] section (avoid duplicate TOML header)
-                sed -i.bak '/^\[features\]/a\
-codex_hooks = true' "$CODEX_CONFIG"
-                rm -f "${CODEX_CONFIG}.bak"
-            else
-                # No [features] section yet — add one
-                {
-                    echo ""
-                    echo "[features]"
-                    echo "codex_hooks = true"
-                } >> "$CODEX_CONFIG"
-            fi
-            ok "Enabled codex_hooks in $CODEX_CONFIG"
-        elif grep -q 'codex_hooks.*=.*false' "$CODEX_CONFIG" 2>/dev/null; then
-            sed -i.bak 's/codex_hooks.*=.*false/codex_hooks = true/' "$CODEX_CONFIG"
-            rm -f "${CODEX_CONFIG}.bak"
-            ok "Switched codex_hooks to true in $CODEX_CONFIG"
-        else
-            info "codex_hooks already enabled in $CODEX_CONFIG"
-        fi
+        ensure_codex_hooks_feature_flag "$CODEX_CONFIG"
     fi
 fi
 
@@ -1083,7 +1163,7 @@ if $INSTALL_HOOKS; then
         claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
         gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
         codex)
-            # Codex CLI has experimental hooks support (codex_hooks feature flag).
+            # Codex CLI has experimental hooks support (hooks feature flag).
             # Hooks are read from hooks.json (not settings.json).
             HOOKS_SETTINGS="$HOOKS_SOURCE/codex-settings.json"
             CODEX_HOOKS=true
@@ -1263,12 +1343,12 @@ if $INSTALL_HOOKS; then
                         ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
                     else
                         cp "$HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
-                        ok "Created $CODEX_HOOKS_FILE (requires codex_hooks feature flag)"
+                        ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
                     fi
                 fi
                 info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
                 info "  [features]"
-                info "  codex_hooks = true"
+                info "  hooks = true"
             # Claude/Gemini: merge hooks into settings.json
             elif [[ -f "$SETTINGS_FILE" ]]; then
                 # Settings exists — merge hooks key

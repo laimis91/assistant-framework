@@ -446,7 +446,7 @@ Telos skill: Checks active work against your purpose chain
 
 ## Hooks (automated behaviors)
 
-Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `codex_hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported lifecycle and tool-use hooks.
+Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported lifecycle and tool-use hooks.
 
 | Hook | Event | What it does |
 |---|---|---|
