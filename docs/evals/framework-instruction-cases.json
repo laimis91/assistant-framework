@@ -507,6 +507,95 @@
           "I changed unrelated files"
         ]
       }
+    },
+    {
+      "id": "clear-medium-task-zero-clarification-questions",
+      "title": "Clear medium task should not get ritual questions",
+      "category": "clarification_admissibility",
+      "purpose": "Checks that question caps are treated as maximums rather than quotas when a medium task is already clear from prompt and repo context.",
+      "setup_context": [
+        "Assistant Framework workflow instructions are active.",
+        "The request names exact files, expected behavior, verification command, and non-goals.",
+        "Read-only discovery confirms those details in the repository."
+      ],
+      "prompt": "Implement the hook test described in tests/p0-p4/runtime-phase-gate-contracts.sh. Add the exact guard terms for clarification confidence and cap wording. Run the focused suite only.",
+      "expected_behavior": [
+        "States TRIAGE or DISCOVER before acting.",
+        "Triages the task as medium or small based on file/risk evidence.",
+        "Records zero clarification questions when the task is clear.",
+        "States that the question cap is a maximum, not a quota.",
+        "Does not ask an arbitrary question before planning.",
+        "Moves to Plan only after discovery evidence supports high confidence."
+      ],
+      "pass_criteria": [
+        "No random question is asked solely because the task is medium.",
+        "The response mentions high confidence or sufficiently clear context.",
+        "The response includes a plan and verification path.",
+        "The response keeps clarification available if discovery reveals ambiguity later."
+      ],
+      "fail_signals": [
+        "Asks a ritual question despite complete implementation details.",
+        "Treats a question cap as a minimum required number of questions.",
+        "Skips discovery evidence and guesses.",
+        "Moves to build without a plan when medium."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Clarification questions asked: 0",
+          "cap is a maximum",
+          "high confidence",
+          "verification"
+        ],
+        "forbidden_substrings": [
+          "medium tasks must ask at least one question",
+          "question quota",
+          "I need to ask something anyway"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-risky-task-blocks-before-plan",
+      "title": "Ambiguous risky task should block before plan",
+      "category": "clarification_admissibility",
+      "purpose": "Checks that low-confidence implementation-shaping ambiguity stops workflow before Plan or Build.",
+      "setup_context": [
+        "Assistant Framework workflow instructions are active.",
+        "The request asks for a migration/rewrite but omits source modules, target boundaries, behavior parity rules, and allowed behavior changes.",
+        "Code discovery finds multiple plausible source paths and no tests defining expected parity."
+      ],
+      "prompt": "Migrate the legacy workflow logic into the new structure and clean up whatever is old.",
+      "expected_behavior": [
+        "States DISCOVER before planning.",
+        "Identifies unresolved implementation-shaping topics.",
+        "Asks only admissible clarification questions with why needed, risk if guessed, and safe default if any.",
+        "Persists clarification_status as needs_clarification.",
+        "Stops before Plan or Build while blocking topics remain."
+      ],
+      "pass_criteria": [
+        "The response names concrete unresolved topics such as source scope, target boundary, and behavior parity.",
+        "Each question has a correctness or verification reason.",
+        "No implementation plan is presented as approved.",
+        "No build/edit action starts before clarification."
+      ],
+      "fail_signals": [
+        "Guesses source or target structure without evidence.",
+        "Asks open-ended what do you mean without actionable options.",
+        "Presents a build plan despite unresolved behavior parity.",
+        "Starts editing migration code."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "needs_clarification",
+          "source scope",
+          "behavior parity",
+          "Risk if guessed"
+        ],
+        "forbidden_substrings": [
+          "I will guess",
+          "Plan approved",
+          "Starting Build"
+        ]
+      }
     }
   ]
 }

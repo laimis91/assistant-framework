@@ -56,6 +56,20 @@ handoffs:
         type: string
         required: true
         description: "What the task is about — scopes the mapping"
+      - name: task_type
+        type: enum
+        required: true
+        enum_values: [feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike]
+        description: "Triage task category used to focus mapping"
+      - name: risk_tier
+        type: enum
+        required: true
+        enum_values: [low, moderate, high, critical]
+        description: "Triage risk tier used to scale discovery depth"
+      - name: required_gates
+        type: string[]
+        required: true
+        description: "Gate packs selected during Triage"
       - name: target_area
         type: string
         required: false
@@ -281,6 +295,15 @@ handoffs:
         type: string[]
         required: true
         description: "All accumulated constraints"
+      - name: risk_tier
+        type: enum
+        required: true
+        enum_values: [low, moderate, high, critical]
+        description: "Triage risk tier used to choose component boundaries and verification depth"
+      - name: required_gates
+        type: string[]
+        required: true
+        description: "Gate packs selected during Triage and carried into component criteria"
       - name: task_size
         type: enum
         required: true

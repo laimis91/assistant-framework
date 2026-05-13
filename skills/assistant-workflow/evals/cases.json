@@ -114,6 +114,88 @@
           "Review is unnecessary"
         ]
       }
+    },
+    {
+      "id": "workflow-trigger-routes-dev-verbs-not-raw-code",
+      "title": "Workflow trigger routes dev verbs not raw code",
+      "category": "trigger_routing",
+      "purpose": "Checks that workflow routing is activated by concrete development verbs and bounded code-command phrasing without matching raw code discussion prompts.",
+      "prompt": "Rewrite the legacy parser into the new project structure, but also explain this code before deciding.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The framework skill router collects all matching skills.",
+        "Raw standalone `code` should not route workflow by itself."
+      ],
+      "expected_behavior": [
+        "Routes workflow because `rewrite` is a concrete development verb.",
+        "Does not claim raw `code` alone is a workflow trigger.",
+        "Treats migration/rewrite/refactor as workflow work requiring triage.",
+        "Keeps explanation/review/docs code mentions out of workflow unless a concrete dev verb is present."
+      ],
+      "pass_criteria": [
+        "The response names rewrite, migrate, refactor, implement, or fix as workflow trigger examples.",
+        "The response states raw `code` is not a standalone workflow trigger.",
+        "The response starts with Triage before planning or build."
+      ],
+      "fail_signals": [
+        "Routes workflow because the prompt contains only the word code.",
+        "Says review/explain/docs prompts always trigger workflow.",
+        "Skips Triage for a rewrite request."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "--- PHASE: TRIAGE ---",
+          "rewrite",
+          "raw `code`",
+          "not a standalone workflow trigger"
+        ],
+        "forbidden_substrings": [
+          "raw code always triggers workflow",
+          "review this code triggers workflow by itself",
+          "Skipping Triage"
+        ]
+      }
+    },
+    {
+      "id": "clarification-cap-is-not-question-quota",
+      "title": "Clarification cap is not question quota",
+      "category": "clarification_admissibility",
+      "purpose": "Checks that clear medium+ tasks can proceed with zero clarification questions while ambiguous risky tasks block before planning.",
+      "prompt": "Implement the approved hook contract test exactly as described in the issue, using the named files and expected assertion text.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The request is medium-sized but includes concrete files, behavior, and verification expectations.",
+        "No implementation-shaping ambiguity remains after reading the relevant files."
+      ],
+      "expected_behavior": [
+        "Records clarification questions asked as 0 when context is sufficient.",
+        "States the question cap is a maximum, not a quota.",
+        "Does not ask a random medium-task question.",
+        "If ambiguity appears later, returns to Discover instead of guessing."
+      ],
+      "pass_criteria": [
+        "The response records zero clarification questions or equivalent high-confidence ready state.",
+        "The response identifies question admissibility rules.",
+        "The response proceeds to Plan only after discovery evidence supports high confidence."
+      ],
+      "fail_signals": [
+        "Asks a random question solely because the task is medium.",
+        "Treats question cap as a required question count.",
+        "Builds despite unresolved implementation-shaping ambiguity."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Clarification questions asked: 0",
+          "cap is maximum, not quota",
+          "admissible",
+          "high"
+        ],
+        "forbidden_substrings": [
+          "medium tasks must ask at least one question",
+          "question quota",
+          "I will guess"
+        ]
+      }
     }
   ]
 }

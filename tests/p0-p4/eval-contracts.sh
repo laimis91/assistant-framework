@@ -36,6 +36,8 @@ if jq -e '
       "ambiguous-prompt-clarify-or-default-deterministically",
       "compaction-resume-reads-task-state-first",
       "codex-role-constraints-without-subagentstart",
+      "clear-medium-task-zero-clarification-questions",
+      "ambiguous-risky-task-blocks-before-plan",
       "executable-task-packet-before-build",
       "medium-feature-plans-before-build",
       "per-component-verification-before-advancing",
@@ -45,7 +47,7 @@ if jq -e '
       "tdd-red-before-green-handoff",
       "worker-status-packet-required"
     ]))
-    and (.cases | length >= 11)
+    and (.cases | length >= 13)
 ' "$eval_fixture" >/dev/null; then
     pass
 else
@@ -66,6 +68,18 @@ if jq -e '
     pass
 else
     fail "eval JSON missing one or more new case id/category pairs"
+fi
+
+test_start "docs eval fixture JSON includes clarification admissibility cases"
+if jq -e '
+    def case_category($id; $category):
+      any(.cases[]; .id == $id and .category == $category);
+    case_category("clear-medium-task-zero-clarification-questions"; "clarification_admissibility")
+    and case_category("ambiguous-risky-task-blocks-before-plan"; "clarification_admissibility")
+' "$eval_fixture" >/dev/null; then
+    pass
+else
+    fail "eval JSON missing clarification admissibility case id/category pairs"
 fi
 
 test_start "docs eval fixture JSON has machine expectation arrays for every case"

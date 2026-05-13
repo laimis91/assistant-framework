@@ -8,6 +8,33 @@ contract: output
 skill: assistant-workflow
 
 artifacts:
+  - name: triage_result
+    type: object
+    required: true
+    condition: always
+    validation: "Contains task_type, risk_tier, size, required_gates, and required_agents selected during Triage"
+    object_fields:
+      - name: task_type
+        type: enum
+        required: true
+        enum_values: [feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike]
+      - name: risk_tier
+        type: enum
+        required: true
+        enum_values: [low, moderate, high, critical]
+      - name: size
+        type: enum
+        required: true
+        enum_values: [small, medium, large, mega]
+      - name: required_gates
+        type: string[]
+        required: true
+        validation: "At least the common gates plus every applicable task-category gate pack"
+      - name: required_agents
+        type: string[]
+        required: true
+        validation: "Required workflow roles and skills selected from size, task type, and risk tier"
+
   - name: phase_checkpoints
     type: string[]
     required: true

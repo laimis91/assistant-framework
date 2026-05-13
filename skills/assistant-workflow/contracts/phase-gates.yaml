@@ -33,6 +33,26 @@ gates:
         check: "'>> Triaged as: {SIZE} — phases: {list}' message was printed to user"
         on_fail: "Print the triage result before continuing"
 
+      - id: T4
+        check: "task_type is set to one of: feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike"
+        on_fail: "Load references/triage-rubric.md and classify the work by task category before continuing"
+
+      - id: T5
+        check: "risk_tier is set to one of: low, moderate, high, critical"
+        on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
+
+      - id: T6
+        check: "required_gates includes common gates plus every applicable task-category gate pack"
+        on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
+
+      - id: T7
+        check: "required_agents is populated from task size, task type, and risk tier"
+        on_fail: "Select required workflow agents from references/subagent-dispatch.md and risk-specific gate packs"
+
+      - id: T8
+        check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | gates={count} | agents={count}' message was printed to user"
+        on_fail: "Print structured triage metadata before continuing"
+
   # ─────────────────────────────────────────────
   # DISCOVER → DECOMPOSE (medium+) / PLAN (small)
   # ─────────────────────────────────────────────
@@ -45,6 +65,10 @@ gates:
         check: "Requirements restated in 1-3 sentences"
         on_fail: "Write a requirements summary before proceeding"
 
+      - id: D1A
+        check: "Discovery confirms or updates task_type, risk_tier, required_gates, and required_agents based on code/context evidence"
+        on_fail: "Re-triage with code/context evidence before proceeding"
+
       - id: D2
         check: "clarification_status is ready and every implementation-shaping field is explicit, explicitly defaulted, or no longer unresolved"
         on_fail: "Persist unresolved clarification topics for every unresolved implementation-shaping field, ask structured clarification questions, and wait for explicit answers or `defaults`."
@@ -56,6 +80,14 @@ gates:
       - id: D4
         check: "If Discover prints a clarification wait for any task size: task journal exists before the wait is printed, and the clarification state is persisted before printing the wait message and before leaving Discover"
         on_fail: "Create or update .claude/task.md with Clarification status, Clarification defaults applied, and Unresolved clarification topics before printing the clarification wait message or continuing"
+
+      - id: D4A
+        check: "Clarification question cap is treated as a maximum, not a quota; clear medium+ tasks may complete Discover with zero questions when confidence is high"
+        on_fail: "Do not ask ritual questions. Record questions_asked=0, clarification_confidence=high, and clarification_admissibility=not_applicable or satisfied when prompt plus code/context are sufficient."
+
+      - id: D4B
+        check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
+        on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D5
         check: "For medium+ tasks: context map exists at .claude/context-map.md"

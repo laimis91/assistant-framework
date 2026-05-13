@@ -22,10 +22,20 @@ Write to `.claude/task.md` in the project root. This file is the single source o
 ## Task: [1-sentence description]
 Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING | DOCUMENTING | DONE
 Triaged as: [small | medium | large | mega]
+Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
+Risk tier: [low | moderate | high | critical]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
+Clarification confidence: [low | medium | high]
+Clarification questions asked: [0+]
+Clarification question cap: [0+; maximum, not quota]
+Clarification admissibility: [satisfied | needs_clarification | not_applicable]
 Unresolved clarification topics:
 - [none, or one short topic per line]
+Required gates:
+- [common gate or task-category gate from references/triage-rubric.md]
+Required agents:
+- [workflow role or skill required by size/risk/type]
 Plan approval: [yes/no + date]
 
 ## Constraints
@@ -146,15 +156,16 @@ Plan approval: [yes/no + date]
 ## Lifecycle
 
 1. **Created** during Discover when clarification state must be tracked. Any task that enters clarification wait creates it before the wait; medium+ tasks also create it before leaving Discover even when no clarification wait is needed.
-2. **Clarification** updates — while waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
-3. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the component manifest before moving on to planning. Small tasks skip this state.
-4. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the component manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.
-5. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Component Verification Ledger after each component and do not start the next component until the current one is `VERIFIED`. Check off Milestones when reached.
-6. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
-7. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
-8. **Handoff** to user — they test manually and add Review Notes
-9. **Review fixes** — fix issues, re-test, re-review, update Progress
-10. **Done** — Status: DONE, promote insights to memory, delete file
+2. **Triage metadata** — record `Task type`, `Risk tier`, `Required gates`, and `Required agents` before leaving Triage. Discovery may re-triage these fields when code/context evidence changes the risk or required gates.
+3. **Clarification** updates — question caps are maximums, not quotas. Clear medium+ tasks may record `Clarification questions asked: 0` with `Clarification confidence: high`. While waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, set confidence/cap/admissibility fields, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
+4. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the component manifest before moving on to planning. Small tasks skip this state.
+5. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the component manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.
+6. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Component Verification Ledger after each component and do not start the next component until the current one is `VERIFIED`. Check off Milestones when reached.
+7. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
+8. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
+9. **Handoff** to user — they test manually and add Review Notes
+10. **Review fixes** — fix issues, re-test, re-review, update Progress
+11. **Done** — Status: DONE, promote insights to memory, delete file
 
 ## Rules
 

@@ -19,11 +19,37 @@ fields:
   - name: task_type
     type: enum
     required: true
-    enum_values: [feature, bugfix, refactor, config, spike]
-    description: "Category of work — drives which prompt packs load"
+    enum_values: [feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike]
+    description: "Category of work — drives which task-category gate packs and prompt packs load"
     validation: "Must be one of the enum values"
     on_missing: infer
-    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'spike/explore/investigate' -> spike, else -> feature"
+    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'rewrite/port' -> rewrite, 'migrate/migration' -> migration, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'infra/deploy/hook/install' -> infra, 'security/auth/PII/payment/input validation' -> security, 'docs/readme/document/changelog' -> docs, 'spike/explore/investigate' -> spike, else -> feature"
+
+  - name: risk_tier
+    type: enum
+    required: false
+    enum_values: [low, moderate, high, critical]
+    description: "Triage risk tier inferred during Triage from impact, uncertainty, reversibility, and affected boundaries"
+    validation: "Must be one of the enum values when present"
+    default: null
+    on_missing: skip
+    infer_from: "Use references/triage-rubric.md during Triage. Escalate for public contracts, data, auth, PII, payments, irreversible changes, weak tests, or behavior-preserving legacy work."
+
+  - name: required_gates
+    type: string[]
+    required: false
+    description: "Gate names selected during Triage from the common gates and task-category gate packs"
+    validation: "Each entry is a short gate label from references/triage-rubric.md or a clearly justified project-specific gate"
+    default: []
+    on_missing: skip
+
+  - name: required_agents
+    type: string[]
+    required: false
+    description: "Agent or skill roles required by size, task type, and risk tier"
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role"
+    default: []
+    on_missing: skip
 
   - name: scope_hint
     type: enum
@@ -80,6 +106,40 @@ fields:
     on_missing: infer
     infer_from: "If any implementation-shaping field that affects files, behavior, interfaces, data shape, rollout, or verification is still unresolved, set to needs_clarification and add a deterministic topic label. Set to ready only when each such field is explicit or has an explicit default."
 
+  - name: clarification_confidence
+    type: enum
+    required: false
+    enum_values: [low, medium, high]
+    description: "Confidence that prompt plus discovered code/context is sufficient to plan safely"
+    validation: "high means no blocking implementation-shaping ambiguity remains. low requires needs_clarification unless the task is explicitly read-only."
+    default: medium
+    on_missing: skip
+
+  - name: clarification_questions_asked
+    type: int
+    required: false
+    description: "Number of clarification questions asked during Discover"
+    validation: "Must be zero or greater. May be zero for any task size when prompt plus code/context are sufficiently clear."
+    default: 0
+    on_missing: skip
+
+  - name: clarification_question_cap
+    type: int
+    required: false
+    description: "Maximum allowed clarification questions for the current size/risk, never a quota"
+    validation: "Must be zero or greater. The cap limits questions; it never requires questions."
+    default: 0
+    on_missing: skip
+
+  - name: clarification_admissibility
+    type: enum
+    required: false
+    enum_values: [satisfied, needs_clarification, not_applicable]
+    description: "Whether any asked clarification questions pass the admissibility test"
+    validation: "satisfied means every asked question affects correctness/scope/behavior/security/verification, cannot be discovered from code/context, lacks a safe default, and states risk if guessed."
+    default: not_applicable
+    on_missing: skip
+
   - name: unresolved_clarification_topics
     type: string[]
     required: true
@@ -106,5 +166,6 @@ fields:
 # 2. If on_missing=ask: present ONE focused question, wait for answer
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
-# 5. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
-# 6. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}
+# 5. Clarification question caps are maximums, not quotas. Never ask a ritual question just because a task is medium+.
+# 6. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
+# 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

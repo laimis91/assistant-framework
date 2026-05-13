@@ -5,9 +5,9 @@ effort: high
 requires:
   - assistant-memory
 triggers:
-  - pattern: "implement feature|implement the|implementing|fix bug|fix the|build feature|build the|build a|build an|refactor the|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make)|phase [0-9]"
+  - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
     priority: 40
-    min_words: 4
+    min_words: 2
     reminder: "This request matches assistant-workflow. You MUST load and follow this SKILL.md and its contracts before acting. At minimum: triage the task size, then build with tests included in the Build phase. Skipping workflow for speed is explicitly prohibited."
 ---
 
@@ -104,7 +104,7 @@ When a task includes incidental or scope-expanding refactor work:
 
 Print: `--- PHASE: TRIAGE ---`
 
-Assess task size. This determines which phases run.
+Load `references/triage-rubric.md`. Assess task type, risk tier, size, required gates, and required agents. Size determines which phases run, but risk and task type determine the gate packs.
 
 | Size | Phases |
 |---|---|
@@ -116,6 +116,7 @@ Assess task size. This determines which phases run.
 [Design] = include if task has UI work, skip for backend-only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 

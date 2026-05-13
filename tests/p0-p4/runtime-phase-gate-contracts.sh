@@ -39,6 +39,9 @@ for term in \
     "Plan approved" \
     "Review gate complete" \
     "Metrics today" \
+    "Clarification confidence" \
+    "cap is maximum, not quota" \
+    "Question admissibility" \
     "WARNING: You are BUILDING without an approved plan" \
     "WARNING: Review gate incomplete" \
     "WARNING: Metrics gate incomplete"; do

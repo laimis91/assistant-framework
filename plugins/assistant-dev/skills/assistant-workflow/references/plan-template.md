@@ -51,6 +51,12 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Goal
 - [1-3 sentence restated requirement from Discovery]
 
+## Triage result
+- Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
+- Risk tier: [low | moderate | high | critical]
+- Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
+- Required agents: [roles/skills selected from size, task type, and risk]
+
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]
 - Assumed (not explicitly asked): [assumption and reasoning]
@@ -125,6 +131,12 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 ```markdown
 ## Goal
 - [1-3 sentence restated requirement from Discovery]
+
+## Triage result
+- Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
+- Risk tier: [low | moderate | high | critical]
+- Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
+- Required agents: [roles/skills selected from size, task type, and risk]
 
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]

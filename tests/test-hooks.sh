@@ -1823,6 +1823,116 @@ if test_start "skill-router: assistant-clarify concrete prompt → no output"; t
     rm -rf "$TEST_AGENT_HOME/.claude/skills/assistant-clarify"
 fi
 
+# Test: Real assistant-workflow skill matches concrete development verbs
+if test_start "skill-router: assistant-workflow concrete development verbs → outputs reminder"; then
+    sync_real_skill assistant-workflow
+    prompts=(
+        "Rewrite the parser state machine to preserve comments."
+        "Implement the OAuth refresh flow with retry coverage."
+        "Fix the stale workflow routing cache."
+        "Migrate the cache config to the new schema."
+        "Refactor the token refresh handler for clearer ownership."
+    )
+    all_matched=true
+    missing_prompt=""
+    for prompt in "${prompts[@]}"; do
+        local_tmp_out=$(mktemp)
+        local_tmp_err=$(mktemp)
+        HOOK_EXIT=0
+        env CLAUDE_PROJECT_DIR="$TEST_PROJECT" HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/skill-router.sh" \
+            > "$local_tmp_out" 2> "$local_tmp_err" <<< "{\"prompt\": \"$prompt\"}" || HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat "$local_tmp_out")
+        HOOK_STDERR=$(cat "$local_tmp_err")
+        rm -f "$local_tmp_out" "$local_tmp_err"
+        if [[ $HOOK_EXIT -ne 0 || "$HOOK_STDOUT" != *"assistant-workflow"* ]]; then
+            all_matched=false
+            missing_prompt="$prompt"
+            break
+        fi
+    done
+    if $all_matched; then
+        pass
+    else
+        fail "prompt did not route to assistant-workflow: '$missing_prompt', exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude/skills/assistant-workflow"
+fi
+
+# Test: Real assistant-workflow skill matches safe command-style code phrasing
+if test_start "skill-router: assistant-workflow code command phrasing → outputs reminder"; then
+    sync_real_skill assistant-workflow
+    prompts=(
+        "code this"
+        "code that"
+        "code it"
+        "code the parser update"
+        "code a retry helper"
+        "code an auth adapter"
+        "code up the migration shim"
+    )
+    all_matched=true
+    missing_prompt=""
+    for prompt in "${prompts[@]}"; do
+        local_tmp_out=$(mktemp)
+        local_tmp_err=$(mktemp)
+        HOOK_EXIT=0
+        env CLAUDE_PROJECT_DIR="$TEST_PROJECT" HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/skill-router.sh" \
+            > "$local_tmp_out" 2> "$local_tmp_err" <<< "{\"prompt\": \"$prompt\"}" || HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat "$local_tmp_out")
+        HOOK_STDERR=$(cat "$local_tmp_err")
+        rm -f "$local_tmp_out" "$local_tmp_err"
+        if [[ $HOOK_EXIT -ne 0 || "$HOOK_STDOUT" != *"assistant-workflow"* ]]; then
+            all_matched=false
+            missing_prompt="$prompt"
+            break
+        fi
+    done
+    if $all_matched; then
+        pass
+    else
+        fail "prompt did not route to assistant-workflow: '$missing_prompt', exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_AGENT_HOME/.claude/skills/assistant-workflow"
+fi
+
+# Test: Real assistant-workflow skill does not match raw code mentions
+if test_start "skill-router: assistant-workflow raw code mentions → no workflow route"; then
+    sync_real_skill assistant-workflow
+    sync_real_skill assistant-docs
+    sync_real_skill assistant-review
+    prompts=(
+        "explain this code"
+        "review this code"
+        "write docs for code style"
+    )
+    workflow_matched=false
+    matched_prompt=""
+    for prompt in "${prompts[@]}"; do
+        local_tmp_out=$(mktemp)
+        local_tmp_err=$(mktemp)
+        HOOK_EXIT=0
+        env CLAUDE_PROJECT_DIR="$TEST_PROJECT" HOME="$TEST_AGENT_HOME" bash "$HOOKS_DIR/skill-router.sh" \
+            > "$local_tmp_out" 2> "$local_tmp_err" <<< "{\"prompt\": \"$prompt\"}" || HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat "$local_tmp_out")
+        HOOK_STDERR=$(cat "$local_tmp_err")
+        rm -f "$local_tmp_out" "$local_tmp_err"
+        if [[ $HOOK_EXIT -ne 0 || "$HOOK_STDOUT" == *"assistant-workflow"* ]]; then
+            workflow_matched=true
+            matched_prompt="$prompt"
+            break
+        fi
+    done
+    if ! $workflow_matched; then
+        pass
+    else
+        fail "prompt unexpectedly routed to assistant-workflow: '$matched_prompt', exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf \
+        "$TEST_AGENT_HOME/.claude/skills/assistant-workflow" \
+        "$TEST_AGENT_HOME/.claude/skills/assistant-docs" \
+        "$TEST_AGENT_HOME/.claude/skills/assistant-review"
+fi
+
 # Test: min_words gating — prompt too short
 if test_start "skill-router: prompt below min_words → no output"; then
     mkdir -p "$TEST_AGENT_HOME/.claude/skills/test-skill"
@@ -3049,6 +3159,40 @@ EOF
         && echo "$HOOK_STDOUT" | grep -q "Clarification defaults applied: true" \
         && ! echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "must remain in Discover until clarification is resolved or explicit defaults are applied"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: clarification cap is maximum not quota → ready zero questions allowed"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Add clear metrics hook
+Status: PLANNING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Clarification confidence: high
+Clarification questions asked: 0
+Clarification question cap: 4
+Clarification admissibility: not_applicable
+Unresolved clarification topics:
+Plan approval: no
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification confidence: high" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification questions: 0/4 (cap is maximum, not quota)" \
+        && echo "$HOOK_STDOUT" | grep -q "Clarification admissibility: not_applicable" \
+        && ! echo "$HOOK_STDOUT" | grep -q "CLARIFICATION GATE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "must not continue.*clarification"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"

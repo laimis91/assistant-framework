@@ -104,6 +104,10 @@ task_name="$(read_scalar_field "Task")"
 size="$(read_scalar_field "Triaged as")"
 clarification_status="$(read_scalar_field "Clarification status")"
 clarification_defaults="$(read_scalar_field "Clarification defaults applied")"
+clarification_confidence="$(read_scalar_field "Clarification confidence")"
+clarification_questions_asked="$(read_scalar_field "Clarification questions asked")"
+clarification_question_cap="$(read_scalar_field "Clarification question cap")"
+clarification_admissibility="$(read_scalar_field "Clarification admissibility")"
 clarification_topics="$(read_list_field "Unresolved clarification topics")"
 
 status=${status:-UNKNOWN}
@@ -111,6 +115,10 @@ task_name=${task_name:-unknown}
 size=${size:-unknown}
 clarification_status=${clarification_status:-unknown}
 clarification_defaults=${clarification_defaults:-unknown}
+clarification_confidence=${clarification_confidence:-unknown}
+clarification_questions_asked=${clarification_questions_asked:-unknown}
+clarification_question_cap=${clarification_question_cap:-unknown}
+clarification_admissibility=${clarification_admissibility:-unknown}
 
 has_clarification_status_field="no"
 has_clarification_defaults_field="no"
@@ -268,6 +276,9 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Phase: $status
 - Clarification status: $clarification_status
 - Clarification defaults applied: $clarification_defaults
+- Clarification confidence: $clarification_confidence
+- Clarification questions: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota)
+- Clarification admissibility: $clarification_admissibility
 - Unresolved clarification topics: $clarification_topics_summary
 - Plan approved: $has_plan_approval
 - Reviews completed: $review_count
@@ -294,6 +305,8 @@ if [[ "$clarification_gate_active" == "yes" ]]; then
 CLARIFICATION GATE:
 - Clarification is still pending.
 - Outstanding topics: $clarification_topics_summary
+- Questions asked/cap: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota)
+- Question admissibility: $clarification_admissibility
 - Any task with saved clarification state must stop until that state is valid.
 - Resume only on explicit numbered answers for the open questions or explicit \`defaults\`.
 - Do not infer answers from continuation text."

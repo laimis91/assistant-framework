@@ -54,4 +54,62 @@ else
     pass
 fi
 
+test_start "workflow triage rubric defines structured metadata and task gate packs"
+missing_triage_terms=()
+triage_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"
+for term in \
+    "Required Triage Output" \
+    "Task type" \
+    "Risk tier" \
+    "Required gates" \
+    "Required agents" \
+    "Bugfix" \
+    "Feature" \
+    "Refactor / Migration / Rewrite" \
+    "Config / Infra" \
+    "Security / Input" \
+    "Docs-Only"; do
+    if [[ ! -f "$triage_file" ]] || ! grep -Fq "$term" "$triage_file"; then
+        missing_triage_terms+=("triage-rubric.md: $term")
+    fi
+done
+for term in \
+    "references/triage-rubric.md" \
+    "Triage metadata"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
+        missing_triage_terms+=("SKILL.md: $term")
+    fi
+done
+for term in \
+    "risk_tier" \
+    "required_gates" \
+    "required_agents"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
+        missing_triage_terms+=("input.yaml: $term")
+    fi
+done
+for term in \
+    "T4" \
+    "risk_tier is set" \
+    "required_gates includes common gates" \
+    "required_agents is populated"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        missing_triage_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "Task type:" \
+    "Risk tier:" \
+    "Required gates:" \
+    "Required agents:"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
+        missing_triage_terms+=("task-journal-template.md: $term")
+    fi
+done
+if [[ "${#missing_triage_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

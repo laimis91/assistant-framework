@@ -13,6 +13,10 @@ For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `ref
 For any task that needs clarification, create or update `.claude/task.md` during Discover before printing clarification questions or any clarification wait. Persist:
 - `Clarification status: ready | needs_clarification`
 - `Clarification defaults applied: true | false`
+- `Clarification confidence: low | medium | high`
+- `Clarification questions asked: N`
+- `Clarification question cap: N` where the cap is a maximum, never a quota
+- `Clarification admissibility: satisfied | needs_clarification | not_applicable`
 - `Unresolved clarification topics:` as a markdown list
 
 For medium+ tasks, keep `.claude/task.md` for the full task lifecycle even when Discover resolves without a clarification wait.
@@ -34,13 +38,17 @@ Print: `>> Dispatching Explorer` (when applicable)
    - Observability in place? (logging, telemetry, health checks)
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
-5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field
+5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field only when the question is admissible. Admissible means the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
 6. Restate requirements in 1-3 sentences after clarification is resolved
+7. Confirm or revise `Task type`, `Risk tier`, `Required gates`, and `Required agents` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 
 **Clarification format:**
 ```
 Need to know
 1. [Question]?
+   Why needed: [correctness/scope/behavior/security/verification impact]
+   Risk if guessed: [what could break]
+   Safe default: [default, or "none"]
    a) [Option]  b) [Option]  c) [Option]
    --> Recommendation: b because [reason]
 
@@ -49,7 +57,8 @@ Reply with: "1b 2a" or "defaults".
 
 **Clarification state rules:**
 - For any task entering clarification wait, if `.claude/task.md` does not exist yet, create it before printing clarification questions or the clarification wait message.
-- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, `Clarification defaults applied: false`, and list each unresolved implementation-shaping topic.
+- Question caps are maximums, not quotas. Small tasks usually ask 0-1 questions; medium tasks may ask 0-4; large/mega tasks may ask more only when each question is admissible. A well-specified medium+ task can and should record `Clarification questions asked: 0`.
+- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, `Clarification defaults applied: false`, `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification question cap: N`, `Clarification admissibility: needs_clarification`, and list each unresolved implementation-shaping topic.
 - Print: `>> WAITING: Clarification answers required`
 - Stop after the wait message. Do not continue into Decompose or Plan while clarification is pending.
 - On resume, accept only:
@@ -60,6 +69,7 @@ Reply with: "1b 2a" or "defaults".
 - Treat clarification as pending whenever unresolved clarification topics are non-empty, even if `Clarification status` was previously recorded as `ready`.
 - If the reply is `defaults`, print the defaults being applied, set `Clarification defaults applied: true`, clear the unresolved topics list, and set `Clarification status: ready`.
 - If the reply is explicit answers, record the chosen options, set `Clarification defaults applied: false`, clear the unresolved topics list, and set `Clarification status: ready`.
+- If no questions are needed, record `Clarification status: ready`, `Clarification confidence: high`, `Clarification questions asked: 0`, `Clarification admissibility: not_applicable`, and explain briefly what code/context made the task clear.
 
 **Rules:**
 - No commands, edits, or plans that depend on unknowns
@@ -80,7 +90,7 @@ Think of components like LEGO bricks — each one is self-contained and testable
 
 **Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
-For medium+ tasks, dispatch an **Architect** to analyze the problem and propose component boundaries based on the context map and requirements.
+For medium+ tasks, dispatch an **Architect** to analyze the problem and propose component boundaries based on the context map, requirements, risk tier, and required gate packs.
 
 Print: `>> Dispatching Architect → component decomposition`
 
@@ -91,6 +101,7 @@ Print: `>> Dispatching Architect → component decomposition`
 3. **Order by dependency** — independent components first, dependent ones after their prerequisites
 4. **No circular dependencies** — if A needs B and B needs A, merge them into one component
 5. **Shared contracts first** — if multiple components share interfaces/DTOs, extract those as component #1
+6. **Gate packs become criteria** — every required task-category gate must appear in at least one component or in the plan-level verification criteria.
 
 ### Component manifest format
 
@@ -153,8 +164,10 @@ Read `references/plan-template.md` and use the correct tier:
 5. For medium+ tasks: include the Decompose component manifest in the plan and align each task packet to a component
 6. Write ordered implementation steps with file paths
 7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-8. Load prompt packs only when applicable:
+8. Carry `Task type`, `Risk tier`, `Required gates`, and `Required agents` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+9. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
+   - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
    - New code: `references/prompts/test-strategy.md`
    - DB changes: `references/prompts/migration.md`
    - TDD mode: use `assistant-tdd` skill (or `references/prompts/tdd-enforcement.md` if skill not installed)
