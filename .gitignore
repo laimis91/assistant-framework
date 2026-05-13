@@ -11,3 +11,6 @@ skills/unity-*/
 
 # V2 development (not tracked until ready)
 Assistant2/
+
+# codex journal
+.codex/
