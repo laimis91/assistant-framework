@@ -15,6 +15,23 @@ triggers:
 
 Core principles: **verify before deciding**, **right-sized ceremony**, **every idea becomes testable criteria**.
 
+## Goal
+
+Move non-trivial development work from request to verified outcome through right-sized phases, explicit gates, tests, and review.
+
+## Success Criteria
+
+- Triage, discovery, planning, build, review, and document phases run at the smallest useful depth.
+- Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- Tests or validation run with the implementation step they protect.
+- Final output reports changed files, verification evidence, residual risks, and next steps.
+
+## Constraints
+
+- Do not skip phases; scale them down for small work instead.
+- Do not ask ritual clarification or approval questions when code/context makes the next safe action clear.
+- Keep scope changes explicit and tied to correctness, security, safety, or verification risk.
+
 ## Contracts
 
 This skill enforces strict input/output contracts and phase gate assertions. Read the contract files in `contracts/` before executing the workflow. All contracts are **mandatory** and enforced.
@@ -108,7 +125,7 @@ Load `references/triage-rubric.md`. Assess task type, risk tier, size, required 
 
 | Size | Phases |
 |---|---|
-| **Small** (bugfix, typo, config, one-file) | Discover (quick) -> Plan (lightweight) -> Build -> Review -> Document |
+| **Small** (bugfix, typo, config, one-file) | Discover (quick) -> Plan (inline, no wait unless risk/ambiguity requires it) -> Build -> Review -> Document |
 | **Medium** (feature, refactor, endpoint) | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
 | **Large** (new project, multi-module) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
 | **Mega** (rewrite, 10+ files across layers) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
@@ -131,7 +148,7 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 |---|---|---|
 | **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. |
 | **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Feed the manifest into Plan. |
-| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Single approval gate for scope, components, and build plan. |
+| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, components, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
 | **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
 | **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
@@ -148,3 +165,18 @@ For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 - Mega: each sub-task gets its own brief and context.
 - Files >500 lines: search first, read sections as needed.
 - After 3+ build/fix iterations: summarize and drop stale context.
+
+## Output
+
+Return:
+- **Status** - final workflow state and whether review completed cleanly.
+- **Changed files** - paths and purpose for each change.
+- **Verification** - commands run, pass/fail results, and skipped checks with reasons.
+- **Review result** - spec and quality review outcome.
+- **Residual risk** - blockers, assumptions, or follow-up work.
+
+## Stop Rules
+
+- Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
+- Stop before medium+ Build until the plan is approved.
+- Stop before final response if build, tests, required review, or output contract evidence is missing.

@@ -28,6 +28,23 @@ triggers:
 
 On-demand security analysis. Use when touching auth, inputs, dependencies, or preparing for review.
 
+## Goal
+
+Identify concrete security risks with evidence, severity, impact, and remediation that can be acted on before release or merge.
+
+## Success Criteria
+
+- Scope, analysis type, and severity threshold are explicit.
+- Findings cite specific code, config, dependency, or threat paths.
+- Each finding includes severity, impact, and smallest useful remediation.
+- Residual risks and unassessed areas are called out separately from findings.
+
+## Constraints
+
+- Do not report generic security advice without evidence in the reviewed surface.
+- Ask only when missing scope or access prevents a trustworthy security conclusion.
+- Treat exploitable vulnerabilities and secret exposure as blockers, not nits.
+
 ## Available Tools
 
 | Tool | File | When to use |
@@ -67,3 +84,9 @@ Return:
 - **Evidence** - specific code, config, dependency, or threat path for each finding.
 - **Residual risk** - accepted risks, assumptions, or areas not assessed.
 - **Blockers** - missing access, missing context, or follow-up questions required for confidence.
+
+## Stop Rules
+
+- Stop and ask when required source, dependency, or deployment context is unavailable and affects severity.
+- Stop and escalate immediately if a secret, credential, or active exploit path is found.
+- Do not finalize a clean security result when important scope was inaccessible; report the residual risk.

@@ -1,9 +1,9 @@
 ---
 name: assistant-thinking
-description: "This skill provides structured reasoning tools for deeper analysis. Use when the user says 'think about', 'think through', 'clarify', 'perspectives on', 'stress test', 'debate', 'first principles', 'brainstorm', 'hypothesize'. Best for architecture decisions and complex trade-off analysis."
+description: "This skill provides structured reasoning tools for deeper analysis. Use when the user says 'think about', 'think through', 'clarify', 'perspectives on', 'stress test', 'debate', 'first principles', 'hypothesize'. Best for architecture decisions and complex trade-off analysis."
 effort: high
 triggers:
-  - pattern: "think about|think through|clarify|perspectives on|stress test|debate|first principles|brainstorm|hypothesize"
+  - pattern: "think about|think through|clarify|perspectives on|stress test|debate|first principles|hypothesize"
     priority: 60
     min_words: 3
     reminder: "This request matches assistant-thinking. Consider whether the Skill tool should be invoked with skill='assistant-thinking' for structured reasoning."
@@ -25,6 +25,23 @@ triggers:
 - Confidence level must reflect actual analysis depth, not default to HIGH
 
 On-demand structured reasoning. Use when you or the user needs deeper analysis — not on every task.
+
+## Goal
+
+Apply the smallest suitable reasoning method to clarify a decision, stress-test an assumption, or compare trade-offs.
+
+## Success Criteria
+
+- The selected thinking tool matches the problem and stakes level.
+- Analysis follows the tool method instead of free-form rumination.
+- A dissenting view or counterpoint is included when confidence matters.
+- The recommendation includes confidence and the gaps that limit it.
+
+## Constraints
+
+- Do not invoke deep reasoning for simple execution tasks.
+- Do not use this skill for broad brainstorming; route option generation to `assistant-ideate`.
+- Ask only when missing context would materially change the selected method or recommendation.
 
 ## Available Tools
 
@@ -60,3 +77,9 @@ Return:
 - **Recommendation** - proposed next step with confidence level.
 - **Dissenting view** - strongest counterpoint, risk, or alternative interpretation.
 - **Gaps** - assumptions, unknowns, or questions that limit confidence.
+
+## Stop Rules
+
+- Stop and ask when the decision frame or stakes are unclear enough to change the method.
+- Stop after synthesis unless the user asks to implement the recommendation.
+- If the chosen method cannot be applied with available context, report the gap instead of inventing analysis.

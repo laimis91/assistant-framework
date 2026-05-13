@@ -26,7 +26,7 @@ Discover does not complete while `Clarification status: needs_clarification`. Cl
 Print: `>> Dispatching Code Mapper → context map` (when applicable)
 Print: `>> Dispatching Explorer` (when applicable)
 
-1. Read repo: README, CLAUDE.md, AGENTS.md, key files
+1. Read repo: README, CLAUDE.md, AGENTS.md, key files. Batch independent file reads/searches when the active tool policy supports parallel calls; use sequential reads otherwise.
 2. Compare current state against request
 3. **Recall lessons**: If `assistant-reflexion` is available, check past lessons for this project type and task type. Incorporate high-confidence lessons into constraints.
    Print: `>> Found [N] relevant lessons from past tasks` (or skip silently if none)
@@ -153,7 +153,7 @@ Print: `>> Dispatching Architect` (when applicable)
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
 
 Read `references/plan-template.md` and use the correct tier:
-- Small: inline plan (goal, files, risks, tests)
+- Small: inline plan (goal, files, risks, tests). Do not wait for approval unless risk, ambiguity, user instruction, or a scope-changing decision makes approval necessary.
 - Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
 - Large/Mega: full plan (all sections including Security and Operability)
 
@@ -175,7 +175,9 @@ Read `references/plan-template.md` and use the correct tier:
 
 ### Approval gate
 
-Print: `>> WAITING: Plan approval required`
+For small tasks, print the inline plan and continue directly to Build unless the task has unresolved ambiguity, user-requested approval, destructive operations, or scope-changing choices.
+
+For medium+ tasks, print: `>> WAITING: Plan approval required`
 
 Present the plan and WAIT:
 ```
@@ -185,7 +187,7 @@ Review the plan:
 - Questions -- I'll address before proceeding
 ```
 
-Print: `--- PHASE: PLAN COMPLETE (approved) ---`
+Print: `--- PHASE: PLAN COMPLETE (approved) ---` for approved medium+ plans, or `--- PHASE: PLAN COMPLETE ---` for no-wait small plans.
 
 ## Phase: Design (UI/UX only, skip for backend)
 

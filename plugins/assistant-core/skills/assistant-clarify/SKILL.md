@@ -33,6 +33,23 @@ Read and follow these contracts before running the clarification workflow.
 
 This is a Utility skill. It has no phase gates or sub-agent handoffs.
 
+## Goal
+
+Turn ambiguous, multi-intent, or underspecified prompts into a concise execution brief without shaming the user or stalling clear work.
+
+## Success Criteria
+
+- The likely goal, deliverables, constraints, and unknowns are separated.
+- Clarifying questions are limited to one to three high-yield items.
+- Each question includes a recommended default when a safe default exists.
+- The next execution target is explicit once ambiguity is reduced.
+
+## Constraints
+
+- Ask only when guessing would materially change correctness, scope, priority, safety, or user-visible output.
+- Do not ask ritual questions when the prompt already contains enough signal to proceed.
+- Preserve the user's wording and intent; do not reframe into a different task.
+
 ## Usage
 
 Read `chaotic-prompts.md` when any of these are true:
@@ -50,3 +67,9 @@ Return:
 3. **Clarifying questions** - one to three high-yield questions with defaults or recommendations.
 4. **Execution target** - the confirmed next action once ambiguity is reduced, or the blocker if it is not.
 5. **Status** - ready to execute, needs clarification, or blocked.
+
+## Stop Rules
+
+- Stop and ask only when the next action would be meaningfully different depending on the answer.
+- Stop after presenting clarification questions; do not execute the underlying task until the user answers or accepts defaults.
+- If the request becomes clear during analysis, proceed with the execution target instead of continuing to clarify.

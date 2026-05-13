@@ -40,6 +40,21 @@ Create compact, contract-backed skills that give agents clear outcomes, validati
 - Do not add subagent handoffs to Analysis or Utility skills.
 - Do not hardcode model-version-specific prompt knobs in general-purpose skills.
 
+## Output
+
+Return:
+- **Status** - created, updated, validated, or blocked.
+- **Files** - skill, contract, eval, reference, or script paths changed.
+- **Contract summary** - category, required fields, gates, handoffs, and output artifacts.
+- **Validation** - commands or checks run and their result.
+- **Gaps** - missing inputs, deferred optional files, or risks requiring follow-up.
+
+## Stop Rules
+
+- Stop and ask when the skill purpose, category, or required behavior is ambiguous enough to change contract shape.
+- Stop before creating/updating a skill if `docs/skill-contract-design-guide.md` has not been read for skill work.
+- Stop before final response if contracts or validation checks are missing.
+
 ## Phases
 
 ```

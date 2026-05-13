@@ -28,6 +28,23 @@ Structured brainstorming pipeline that turns vague desires into ranked, actionab
 
 Core principle: **Diverge wide, converge ruthlessly, refine what survives.**
 
+## Goal
+
+Generate a broad option set, rank it against explicit criteria, and turn the strongest candidates into actionable next steps.
+
+## Success Criteria
+
+- The problem statement and constraints are explicit before ideation.
+- Divergence produces at least eight distinct ideas before scoring starts.
+- Convergence scores ideas against stated criteria and trade-offs.
+- The final output gives the user a clear decision point, not a single unexamined option.
+
+## Constraints
+
+- Do not collapse to one recommendation before the Diverge and Converge phases run.
+- Ask only when missing goals or constraints would materially change the idea space or ranking.
+- Respect explicit constraints throughout scoring and refinement.
+
 ## Pipeline
 
 ```
@@ -58,6 +75,12 @@ Return:
 - **Refined candidates** - the top options with first step, effort, risks, and dependencies.
 - **Decision point** - recommended next action, user choice requested, or open questions blocking selection.
 - **Status** - ready for decision, needs more ideation, or blocked by missing constraints.
+
+## Stop Rules
+
+- Stop and ask when the goal or hard constraints are too ambiguous to generate useful options.
+- Stop after the DECIDE phase with a clear user choice, unless the user asked for implementation.
+- Do not enter implementation; hand selected candidates to `assistant-workflow` when build work starts.
 
 ## Phase 1: Understand
 

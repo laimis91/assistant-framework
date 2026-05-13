@@ -33,6 +33,23 @@ This skill enforces strict contracts on inputs, outputs, loop gates, and reviewe
 
 Run this loop autonomously from start to finish. Continue rounds until clean or max rounds reached, keep intermediate results inside the loop, and present one final result after exit.
 
+## Goal
+
+Find concrete defects, risks, regressions, and test gaps; fix them when in review-fix mode; and return one evidence-backed final review result.
+
+## Success Criteria
+
+- Review scope and mode are resolved before the loop starts.
+- Findings are severity-ranked with file evidence and confidence.
+- In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
+- Validation runs after fixes, and a fresh review confirms the final state.
+
+## Constraints
+
+- Default to audit mode when the user asks to provide, report, list, or summarize findings.
+- Do not emit intermediate review summaries; present one final summary after loop exit.
+- Use concrete risk categories for refactor-related findings.
+
 ## Entry
 
 Determine the review scope:
@@ -159,6 +176,21 @@ After the loop completes, present ONE summary to the user:
 - **Previously-fixed list prevents re-reporting**: each round should find fewer issues.
 - **Higher confidence each round**: early rounds catch obvious issues, later rounds require higher certainty.
 - If scope is trivial (single small file, obvious change) -> one clean round can exit. If findings exist, continue looping.
+
+## Output
+
+Return:
+- **Rounds** - number of review rounds completed.
+- **Result** - CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS.
+- **Findings/fixed items** - severity, file, evidence, action, and round.
+- **Verification** - build/test commands or not-applicable reason.
+- **Residual risk** - remaining items, nits, or scope gaps.
+
+## Stop Rules
+
+- In audit mode, stop after the first review round and report findings without edits.
+- In review-fix mode, stop only when clean, blocked, or max rounds is reached.
+- Stop and report a blocker if required review material is unavailable or empty.
 
 ### Drift detection (medium+ scope)
 

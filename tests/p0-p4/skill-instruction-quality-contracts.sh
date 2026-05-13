@@ -10,26 +10,6 @@ p0p4_root_skill_files() {
     find "$FRAMEWORK_DIR/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -print | sort
 }
 
-p0p4_skill_output_allowlist_reason() {
-    case "$1" in
-        skills/assistant-review/SKILL.md)
-            printf '%s\n' "review output is contract-backed by contracts/output.yaml and the final review summary template"
-            ;;
-        skills/assistant-skill-creator/SKILL.md)
-            printf '%s\n' "skill creation output is contract-backed by contracts/output.yaml and the validate-phase summary"
-            ;;
-        skills/assistant-tdd/SKILL.md)
-            printf '%s\n' "TDD output is contract-backed by contracts/output.yaml and cycle-log requirements"
-            ;;
-        skills/assistant-workflow/SKILL.md)
-            printf '%s\n' "workflow output is contract-backed by contracts/output.yaml and visible workflow checkpoints"
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
 p0p4_section_has_term() {
     local file="$1"
     local heading="$2"
@@ -116,28 +96,27 @@ else
     fail "root skill inventory should include only assistant-* skills: ${non_assistant_inventory_skills[*]}"
 fi
 
-test_start "root skills declare output sections or documented exceptions"
-missing_output_sections=()
+test_start "root skills declare outcome-shaped sections"
+missing_skill_sections=()
+required_skill_sections=(
+    "## Goal"
+    "## Success Criteria"
+    "## Constraints"
+    "## Output"
+    "## Stop Rules"
+)
 while IFS= read -r skill_file; do
     rel_path="${skill_file#$FRAMEWORK_DIR/}"
-    if grep -Eq '^## Output[[:space:]]*$' "$skill_file"; then
-        continue
-    fi
-
-    if reason="$(p0p4_skill_output_allowlist_reason "$rel_path")"; then
-        if [[ -z "$reason" ]]; then
-            missing_output_sections+=("$rel_path: allowlist reason is empty")
-        elif [[ ! -f "$(dirname "$skill_file")/contracts/output.yaml" ]]; then
-            missing_output_sections+=("$rel_path: allowlisted without contracts/output.yaml")
+    for heading in "${required_skill_sections[@]}"; do
+        if ! grep -Eq "^${heading}[[:space:]]*$" "$skill_file"; then
+            missing_skill_sections+=("$rel_path: $heading")
         fi
-    else
-        missing_output_sections+=("$rel_path")
-    fi
+    done
 done < <(p0p4_root_skill_files)
-if [[ "${#missing_output_sections[@]}" -eq 0 ]]; then
+if [[ "${#missing_skill_sections[@]}" -eq 0 ]]; then
     pass
 else
-    fail "root SKILL.md files need a ## Output section or documented contract-backed exception: ${missing_output_sections[*]}"
+    fail "root SKILL.md files need outcome-shaped root sections: ${missing_skill_sections[*]}"
 fi
 
 test_start "assistant-clarify declares utility input and output contracts"
@@ -199,6 +178,69 @@ if [[ "${#clarify_contract_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
+fi
+
+test_start "assistant-review audit mode covers findings-only requests"
+review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
+review_audit_failures=()
+for term in \
+    "provide findings" \
+    "report findings" \
+    "list findings" \
+    "summarize findings" \
+    "review against" \
+    "audit. Otherwise"; do
+    if ! grep -Fq "$term" "$review_input"; then
+        review_audit_failures+=("missing $term")
+    fi
+done
+
+if [[ "${#review_audit_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review findings-only prompts must infer audit mode: ${review_audit_failures[*]}"
+fi
+
+test_start "assistant-ideate owns brainstorming trigger"
+thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
+ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"
+brainstorm_trigger_failures=()
+if grep -Eq '^(description:|  - pattern:).*brainstorm' "$thinking_skill"; then
+    brainstorm_trigger_failures+=("assistant-thinking frontmatter still routes brainstorm")
+fi
+if ! grep -Eq '^(description:|  - pattern:).*brainstorm' "$ideate_skill"; then
+    brainstorm_trigger_failures+=("assistant-ideate frontmatter does not route brainstorm")
+fi
+
+if [[ "${#brainstorm_trigger_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "brainstorm prompts should route to ideate only: ${brainstorm_trigger_failures[*]}"
+fi
+
+test_start "assistant-workflow small plans can proceed without ritual approval"
+workflow_small_failures=()
+workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
+workflow_phase_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+
+for file_and_term in \
+    "$workflow_skill::inline plan and proceeds without ceremony unless risk requires approval" \
+    "$workflow_phases::print the inline plan and continue directly to Build" \
+    "$workflow_output::not_required_small" \
+    "$workflow_phase_gates::no-wait eligibility was recorded"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq "$term" "$file"; then
+        workflow_small_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#workflow_small_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-workflow small plans must support no-wait approval: ${workflow_small_failures[*]}"
 fi
 
 test_start "high-control skills pair restrictions with actionable guidance"

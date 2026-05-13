@@ -58,6 +58,8 @@ Print: `>> Onboarding: Surface scan`
 
 Read in this order (stop early if small project):
 
+When the active adapter supports parallel reads, batch independent reads such as README, agent instructions, `.gitignore`, root listing, build files, and CI config. If parallel reads are unavailable, use the order below.
+
 1. **README.md** — stated purpose, setup instructions
 2. **CLAUDE.md** — existing agent instructions
 3. **.gitignore** — what's excluded reveals what's used

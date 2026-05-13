@@ -28,6 +28,23 @@ This skill enforces strict gate assertions at every RED -> GREEN -> REFACTOR tra
 
 Enforces the Red-Green-Refactor cycle. When active, every production change begins with a failing test.
 
+## Goal
+
+Protect behavior changes with a verified Red-Green-Refactor loop before production code is trusted.
+
+## Success Criteria
+
+- Each behavior starts with a test that fails for the intended reason.
+- Production code is limited to the minimal change required to pass the failing test.
+- Targeted and relevant regression tests pass before the next cycle.
+- Cycle evidence is recorded in the task journal or returned output.
+
+## Constraints
+
+- Do not write production code before RED evidence exists.
+- Do not treat syntax errors, missing imports, or flaky failures as valid RED evidence.
+- Ask only when the target behavior or acceptable test scope is materially unclear.
+
 ## The Iron Law
 
 Production code starts after a failing test proves the missing behaviour. Recovery: if implementation appears before its test, **delete the code**, write the test, verify RED, then implement GREEN. This is mandatory because code written before tests has unknown coverage and cannot be trusted.
@@ -173,3 +190,18 @@ This skill enhances the Build loop in `assistant-workflow`:
 5. Log RED/GREEN/REFACTOR in task journal
 6. Repeat from 1
 ```
+
+## Output
+
+Return:
+- **Status** - current cycle state or completion result.
+- **Cycle log** - RED, GREEN, and REFACTOR evidence with commands and outcomes.
+- **Changed files** - tests and production files touched.
+- **Verification** - targeted and regression test results.
+- **Gaps** - missing behavior details, skipped exceptions, or blockers.
+
+## Stop Rules
+
+- Stop before production edits when RED evidence is missing or invalid.
+- Stop and fix the test when RED passes unexpectedly or fails for the wrong reason.
+- Stop and repair regressions before starting the next behavior cycle.

@@ -242,8 +242,8 @@ artifacts:
     type: enum
     required: true
     condition: always
-    enum_values: [confirmed, confirmed_with_issues]
-    validation: "User explicitly confirmed 'looks good' or equivalent before Document phase"
+    enum_values: [confirmed, confirmed_with_issues, not_required_small]
+    validation: "Medium+ tasks require explicit confirmation before Document. Small tasks may use not_required_small only when the inline plan proceeded without risk/ambiguity requiring approval."
 
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
@@ -252,5 +252,5 @@ artifacts:
 # 3. spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. review_result.quality_review_status is not missing
 # 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component
-# 6. user_approval is confirmed or confirmed_with_issues
+# 6. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.

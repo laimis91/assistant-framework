@@ -72,7 +72,7 @@ fields:
     description: "review-fix: autonomous loop that fixes issues. audit: report only, no fixes."
     default: review-fix
     on_missing: infer
-    infer_from: "User says 'audit', 'review only', 'just review', 'don't fix' → audit. Otherwise → review-fix."
+    infer_from: "User says 'audit', 'review only', 'just review', 'don't fix', 'provide findings', 'report findings', 'list findings', 'summarize findings', or 'review against' → audit. Otherwise → review-fix."
 
   - name: task_journal_path
     type: string

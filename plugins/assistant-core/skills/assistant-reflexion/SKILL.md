@@ -26,6 +26,23 @@ Cross-task learning system where insights from task N improve performance on tas
 
 Core principle: **Every task should make the next task better.**
 
+## Goal
+
+Convert task outcomes, mistakes, calibration signals, and reusable lessons into future-facing memory without saving noise.
+
+## Success Criteria
+
+- Reflection uses concrete task evidence, not vibes or generic advice.
+- Lessons are actionable, scoped to project/task type, and assigned confidence.
+- Pre-task recall returns relevant lessons with confidence and source context.
+- Memory updates avoid secrets, PII, and facts already obvious from the repo.
+
+## Constraints
+
+- Do not store broad platitudes or easily rediscoverable repository facts as lessons.
+- Ask only when task identity or intended reflection action is materially unclear.
+- Keep reflection output concise and focused on future behavior change.
+
 ## Two Modes
 
 ### Mode 1: Post-Task Reflection (after completing work)
@@ -235,6 +252,12 @@ Return:
 - **Artifacts** - memory/reflexion/strategy entries written, or "none" if read-only.
 - **Next use** - how the lessons should influence future discovery, planning, build, or review work.
 - **Status** - reflected, recalled, consolidated, or blocked by missing context.
+
+## Stop Rules
+
+- Stop before recording memory when a lesson is not actionable or evidence-backed.
+- Stop and refuse to store secrets, credentials, or sensitive personal data.
+- If memory tools are unavailable, report the reflection result but mark persistence as blocked.
 
 ## Visibility
 

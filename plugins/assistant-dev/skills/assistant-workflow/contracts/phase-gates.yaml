@@ -156,7 +156,7 @@ gates:
   # ─────────────────────────────────────────────
   - phase: PLAN
     checkpoint_start: "--- PHASE: PLAN ---"
-    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) ---"
+    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved medium+ plans; --- PHASE: PLAN COMPLETE --- for no-wait small plans"
     exit_assertions:
 
       - id: P1
@@ -172,8 +172,8 @@ gates:
         on_fail: "Add risks section. Every plan has at least one risk, even if low."
 
       - id: P4
-        check: "User explicitly said 'approved' or 'approved with changes' to the plan, including the component manifest for medium+ tasks"
-        on_fail: "Present the full plan, including the component manifest for medium+ tasks, and wait for approval. Do NOT proceed without it."
+        check: "For medium+ tasks, user explicitly said 'approved' or 'approved with changes' to the plan, including the component manifest. For small tasks, the inline plan was printed and either no-wait eligibility was recorded or approval was requested for risk/ambiguity."
+        on_fail: "For medium+ tasks, present the full plan including component manifest and wait for approval. For small tasks, record why the inline plan can proceed without waiting or request approval when risk/ambiguity requires it."
 
       - id: P5
         check: "Plan tier matches task size (inline for small, standard for medium, full for large/mega)"

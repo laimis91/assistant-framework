@@ -27,6 +27,23 @@ Based on [Daniel Miessler's Telos](https://github.com/danielmiessler/Telos) — 
 
 **Core idea:** Help entities of any size — individuals, teams, organizations — articulate what they are about and how they're pursuing their purpose. The output is a Telos Context File (TCF) that gives AI agents strategic context about *why* you do what you do.
 
+## Goal
+
+Create, update, or review Telos Context Files that connect problems, mission, goals, strategies, projects, and lived progress.
+
+## Success Criteria
+
+- Create actions produce at least Problems, Mission, and Goals.
+- Updates preserve existing sections and change only the requested focus areas.
+- Reviews identify missing, weak, stale, or disconnected sections.
+- Projects and strategies trace backward to mission and problems.
+
+## Constraints
+
+- Do not invent personal values, goals, history, or organizational facts.
+- Ask when a missing answer would change the user's mission, goals, or strategic framing.
+- Keep sensitive personal content out of durable files unless the user explicitly provides and approves it.
+
 ## The Explainability Chain
 
 ```
@@ -171,6 +188,12 @@ When beginning a task, optionally check it against telos:
 - Is this the highest-leverage thing to work on right now?
 
 This is a gentle filter, not a gate. The user decides.
+
+## Stop Rules
+
+- Stop and ask before creating or rewriting mission-critical sections from assumptions.
+- Stop and report gaps when no existing TCF can be found for update/review.
+- Do not persist sensitive personal context unless the user explicitly asks to include it.
 
 ## TCF File Format (Personal)
 

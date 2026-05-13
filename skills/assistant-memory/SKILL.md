@@ -23,6 +23,23 @@ triggers:
 
 The memory-graph MCP backed by the local memory store is the cross-session source of truth for memory across projects and sessions.
 
+## Goal
+
+Save, retrieve, update, or remove durable memories through memory-graph MCP while keeping session scratch state separate from cross-session knowledge.
+
+## Success Criteria
+
+- The requested memory action is resolved before using MCP tools.
+- Saved memories have the right entity type and avoid secrets, credentials, and PII.
+- Recall/search results cite the MCP query or project context used.
+- No markdown task/session files are treated as durable memory.
+
+## Constraints
+
+- Use memory-graph MCP as the source of truth for cross-session memory.
+- Store only durable rules, preferences, decisions, and non-obvious insights.
+- Ask only when the memory action, entity identity, or save content is materially ambiguous.
+
 ## Memory Storage
 
 All cross-session memory is accessed through **memory-graph MCP tools**, backed by the local memory store under `~/.claude/memory`. Project-local session/task markdown files are for session state only, not cross-session memory storage.
@@ -88,3 +105,9 @@ Return:
 - Use `memory_consolidate` periodically to decay stale insights and archive low-confidence ones.
 - Use `memory_stats` to check memory system health.
 - Never store secrets, API keys, credentials, or PII in memory.
+
+## Stop Rules
+
+- Stop and ask before saving when the content, entity type, or intended scope is unclear.
+- Stop and refuse to store secrets, credentials, or sensitive personal data.
+- If MCP tools are unavailable, report the memory operation as blocked instead of pretending it was saved.
