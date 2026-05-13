@@ -1487,6 +1487,8 @@ These rules define the operating contract for every response.
 6. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 5 rounds). Continue until the review is clean or the max round is reached.
 
 7. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
+
+8. CONTEXT BUDGET: Keep generated guidance concise. Load detailed skill references only when the active task requires them, avoid duplicating AGENTS.md content in replies, and preserve user custom sections below the installer block.
 </behavioral_rules>
 
 ## Skills (loaded from ~/.codex/skills/)

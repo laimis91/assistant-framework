@@ -27,7 +27,8 @@
       "expected_behavior": [
         "Resolves tool as research and tier as standard or stronger based on the comparison request.",
         "Logs the research tier and question before search activity.",
-        "Searches from differentiated angles such as direct evidence, alternatives, and counter-evidence.",
+        "Applies an evidence budget using differentiated angles such as direct evidence, alternatives, and counter-evidence.",
+        "Treats subagent dispatch as optional and adapter-aware rather than mandatory.",
         "Synthesizes findings with HIGH, MEDIUM, or LOW confidence based on source count and quality.",
         "Reports CONFLICTS even when none are found.",
         "Reports GAPS for unanswered or weakly supported questions."
@@ -43,24 +44,28 @@
         "Gives a free-form recommendation with no confidence levels.",
         "Omits conflicts or gaps.",
         "Treats one source as HIGH confidence without justification.",
-        "Uses duplicate search angles for standard tier."
+        "Uses duplicate search angles for standard tier.",
+        "Claims a fixed number of parallel agents is mandatory in every adapter."
       ],
       "machine_expectations": {
         "required_substrings": [
           "RESEARCH:",
           "Tier: standard",
+          "Evidence budget",
           "FINDINGS",
           "confidence",
           "Sources",
           "CONFLICTS",
           "GAPS",
-          "counter-evidence"
+          "counter-evidence",
+          "adapter-aware"
         ],
         "forbidden_substrings": [
           "No confidence levels needed",
           "single source is HIGH",
           "No conflicts checked",
-          "No gaps checked"
+          "No gaps checked",
+          "3 agents are mandatory"
         ]
       }
     },

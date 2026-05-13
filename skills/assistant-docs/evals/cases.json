@@ -113,6 +113,50 @@
           "review_needed: false for inferred"
         ]
       }
+    },
+    {
+      "id": "clear-doc-request-proceeds-without-ritual-question",
+      "title": "Clear doc request proceeds without ritual question",
+      "category": "clarification_admissibility",
+      "purpose": "Checks that a clear documentation request proceeds from source evidence without asking random clarification questions.",
+      "prompt": "Update the README setup section from the package scripts and existing install docs.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The requested doc_type, scope, and source files can be inferred from repo context.",
+        "No user preference is needed before inspecting files."
+      ],
+      "expected_behavior": [
+        "Infers doc_type as README and scope as setup instructions.",
+        "Reads package scripts and existing install docs before writing.",
+        "Proceeds without asking a ritual clarification question.",
+        "Records assumptions or review needs if evidence is incomplete."
+      ],
+      "pass_criteria": [
+        "The response identifies inferred doc_type and scope.",
+        "The response uses source evidence.",
+        "The response does not ask a broad generic question.",
+        "The response records review needs or assumptions when needed."
+      ],
+      "fail_signals": [
+        "Asks what documentation to update despite the prompt being clear.",
+        "Asks a random preference question before reading source files.",
+        "Writes from memory without source evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "doc_type",
+          "README",
+          "scope",
+          "source evidence",
+          "proceed",
+          "review needs"
+        ],
+        "forbidden_substrings": [
+          "What documentation should I update?",
+          "Any preferences?",
+          "No source evidence needed"
+        ]
+      }
     }
   ]
 }

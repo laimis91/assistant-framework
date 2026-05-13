@@ -18,7 +18,7 @@ fields:
     type: enum
     required: true
     enum_values: [quick, standard, extensive, deep]
-    description: "Research depth — determines agent count and effort"
+    description: "Research depth — determines evidence budget, source diversity, and effort"
     on_missing: infer
     infer_from: >
       Simple factual question with likely single answer → quick.

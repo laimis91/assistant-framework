@@ -26,6 +26,22 @@ Creates accurate Mermaid diagrams from code analysis. Covers the developer's vis
 
 Core principle: **Diagrams should be generated from code, not drawn from memory.**
 
+## Goal
+
+Generate diagrams that make real code structure or behavior easier to understand without inventing components.
+
+## Success Criteria
+
+- Diagram type, scope, evidence, placement, and gaps are explicit.
+- Every node and edge is traceable to inspected code, configuration, or user-provided context.
+- Mermaid output is small enough to read and structured enough to render.
+
+## Constraints
+
+- Ask only when diagram type or scope materially changes the result and cannot be inferred from prompt/context.
+- If multiple diagram types are plausible, choose the best fit from source evidence or ask one bounded question.
+- Do not add aspirational boxes, future architecture, or unlabeled relationships unless the user explicitly asks for a proposed design.
+
 ## Available Diagram Types
 
 | Type | File | Best for |
@@ -51,6 +67,8 @@ Input arrives
     ├─ "state" / "lifecycle" / "transitions"  → state-diagram.md
     └─ ambiguous                              → ask user or pick best fit
 ```
+
+Prefer picking the best fit when the user's intent and code context point clearly to one type. Ask only when the choice would materially change what gets inspected or drawn.
 
 ## General Protocol
 
@@ -108,3 +126,9 @@ Return:
 - **Label relationships** — unlabeled arrows are useless
 - **Use consistent styling** — same type of component gets same shape
 - **Test rendering** — Mermaid syntax errors are common, validate mentally
+
+## Stop Rules
+
+- Stop and ask one focused question when neither scope nor diagram type can be inferred safely.
+- Stop and report gaps when required source files or relationships cannot be inspected.
+- Do not finalize if the diagram contains elements without source evidence.

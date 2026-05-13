@@ -23,6 +23,23 @@ Create V1 framework skills with proper contracts following the [contract design 
 | **Output** | `contracts/output.yaml` | Artifacts that must exist when done |
 | **Phase Gates** | `contracts/phase-gates.yaml` | Assertions at each phase transition |
 
+## Goal
+
+Create compact, contract-backed skills that give agents clear outcomes, validation boundaries, and safe fallback behavior without loading unnecessary prose into every turn.
+
+## Success Criteria
+
+- The skill has the required contract tier for its category.
+- Root `SKILL.md` states Goal, Success criteria, Constraints, Output, and Stop rules when they change behavior.
+- Required inputs use `ask` only for material, non-discoverable missing data; otherwise they infer, skip, or fail with a concrete reason.
+- Evals or contract guards cover both positive routing and at least one false-positive or unsafe behavior case.
+
+## Constraints
+
+- Keep `SKILL.md` concise; move long examples and procedures into `references/`.
+- Do not add subagent handoffs to Analysis or Utility skills.
+- Do not hardcode model-version-specific prompt knobs in general-purpose skills.
+
 ## Phases
 
 ```
@@ -141,9 +158,14 @@ triggers:
 ```
 
 Body structure:
-1. **Contracts table** — Link to contract files with one-line purpose
-2. **Phases/Steps** — How the skill executes (phases for Process/Analysis, steps for Utility)
-3. **References** — Pointers to sub-files loaded on demand
+1. **Goal** — User-visible outcome the skill produces
+2. **Success criteria** — What must be true before completion
+3. **Constraints** — Scope, evidence, safety, side-effect, and adapter limits
+4. **Contracts table** — Link to contract files with one-line purpose
+5. **Phases/Steps** — How the skill executes (phases for Process/Analysis, steps for Utility)
+6. **Output** — Required response or artifact shape
+7. **Stop rules** — When to ask, retry, fall back, abstain, or stop
+8. **References** — Pointers to sub-files loaded on demand
 
 Keep SKILL.md under 500 lines. If longer, split into sub-files in `references/`.
 
@@ -161,9 +183,9 @@ Print: `--- PHASE: BUILD COMPLETE ---`
 
 ### Phase 4: VALIDATE — Check Against Design Guide Rules
 
-Run through the 10 contract design guide rules as a checklist. Read `references/contract-design-checklist.md` for the full list.
+Run through the 12 contract design guide rules as a checklist. Read `references/contract-design-checklist.md` for the full list.
 
-**Must pass all 10:**
+**Must pass all 12:**
 
 1. Required fields have `on_missing` actions
 2. Enum types list all values (no open-ended enums)
@@ -175,6 +197,8 @@ Run through the 10 contract design guide rules as a checklist. Read `references/
 8. Conditional fields use `condition:`
 9. Ambiguous fields have `examples:`
 10. Cross-phase invariants exist for drift prevention (if applicable)
+11. Root SKILL.md has compact Goal, Success criteria, Constraints, Output, and Stop rules when the skill has non-trivial behavior
+12. Clarification prompts are admissible: material to outcome, not discoverable from context/source, no safe default
 
 If any rule fails: fix the contract, explain what was wrong, and re-check.
 
@@ -198,4 +222,6 @@ Print: `--- PHASE: VALIDATE COMPLETE ---`
 - **Start simple.** A Utility skill with 3 input fields and 2 output artifacts is better than an over-designed Process skill. You can always add phases later.
 - **Steal from existing skills.** Look at `assistant-memory` (Utility), `assistant-ideate` (Analysis), or `assistant-workflow` (Process) for your tier's pattern.
 - **Descriptions are triggers.** The `description:` field in frontmatter is what the skill router uses for matching. Be specific about when to trigger — include example phrases.
+- **Add negative triggers.** Include at least one eval or test showing when the skill must not route or must not ask a clarification.
+- **Ask only when it changes the result.** Question budgets are caps, not quotas; proceed with stated defaults when context is enough.
 - **Progressive loading matters.** SKILL.md loads into context whenever triggered. Keep it lean. Put detailed reference material in sub-files.

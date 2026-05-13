@@ -66,6 +66,8 @@ MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:
 
 4. WORKING BUFFER: Write only session-state scratch notes to $STATE_DIR/working-buffer.md.
 
+5. RESPONSE PHASES: Preserve the distinction between user-visible progress updates and completed answers. Commentary/progress belongs in session or working-buffer notes; final outcome, verification, blockers, and next steps belong in the task journal.
+
 This is your only chance to preserve state. Act now before compression."
 
 if $IS_GEMINI; then

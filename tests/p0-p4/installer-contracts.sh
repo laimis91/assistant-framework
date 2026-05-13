@@ -33,10 +33,12 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "File edits, code implementation, builds/tests, and independent review are owned by those specialized agents" "$agents_file" \
-            && grep -Fq "The orchestrator does not edit files or write code directly." "$agents_file"; then
+            && grep -Fq "The orchestrator does not edit files or write code directly." "$agents_file" \
+            && grep -Fq "CONTEXT BUDGET: Keep generated guidance concise." "$agents_file" \
+            && grep -Fq "preserve user custom sections below the installer block" "$agents_file"; then
             pass
         else
-            fail "expected one Codex framework block, one protocol block, and current generated wording"
+            fail "expected one Codex framework block, one protocol block, current generated wording, and context budget guidance"
         fi
     else
         fail "second install failed; see /tmp/p0p4-install-2.err"

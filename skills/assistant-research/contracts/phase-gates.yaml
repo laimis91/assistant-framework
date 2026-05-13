@@ -17,18 +17,18 @@ gates:
     exit_assertions:
 
       - id: S1
-        check: "Agent count matches tier: quick=1, standard=3, extensive=6-12, deep=iterative"
-        on_fail: "Adjust agent count to match the selected tier"
+        check: "Evidence budget matches tier: quick=1 authoritative source or 2 weak sources, standard=3 differentiated research angles, extensive=3+ angles with 2+ credible sources per major claim, deep=iterative until sources stop changing the answer"
+        on_fail: "Adjust research depth to match the selected tier or downgrade confidence for unsupported claims"
 
       - id: S2
-        check: "For standard tier: 3 agents searched from different angles (direct, alternative, counter-evidence)"
+        check: "For standard tier: 3 differentiated angles were covered (direct evidence, alternative perspective, counter-evidence)"
         condition: "tier == standard"
-        on_fail: "Dispatch agents with differentiated search angles, not duplicate queries"
+        on_fail: "Search differentiated angles instead of duplicate queries; use subagents only when the active adapter and user/tool policy permit delegation"
 
       - id: S3
         check: "For extensive tier: at least 3 research angles were identified before searching"
         condition: "tier == extensive"
-        on_fail: "Generate research angles via structured thinking before dispatching agents"
+        on_fail: "Generate research angles via structured thinking before searching or delegating"
 
       - id: S4
         check: "Raw search results are available for synthesis — not discarded prematurely"
@@ -96,3 +96,8 @@ invariants:
     check: "The output follows the structured format defined in output.yaml — not free-form prose"
     scope: all_phases
     on_fail: "Reformat output to match the required FINDINGS/CONFLICTS/GAPS structure"
+
+  - id: INV4
+    check: "Subagent dispatch is optional and adapter-aware; research angles and evidence diversity remain required when delegation is unavailable"
+    scope: all_phases
+    on_fail: "Run the missing research angles sequentially and record that delegation was unavailable"

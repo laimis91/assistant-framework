@@ -545,7 +545,9 @@ if test_start "pre-compress: Codex → universal PreCompact JSON"; then
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -e '.systemMessage | contains("CONTEXT COMPRESSION IMMINENT")' >/dev/null 2>&1; then
+        && echo "$HOOK_STDOUT" | jq -e '.systemMessage | contains("CONTEXT COMPRESSION IMMINENT")' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.systemMessage | contains("RESPONSE PHASES")' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -e '.systemMessage | contains("final outcome, verification, blockers, and next steps")' >/dev/null 2>&1; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected Codex PreCompact universal JSON, stdout='$HOOK_STDOUT'"
@@ -616,7 +618,9 @@ if test_start "post-compact: Codex, with task journal → universal PostCompact 
         && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
         && [[ "$additional_context" == *"RESTORED AFTER COMPACTION"* ]] \
         && [[ "$additional_context" == *"codex post compact"* ]] \
-        && [[ "$additional_context" == *"memory_context"* ]]; then
+        && [[ "$additional_context" == *"memory_context"* ]] \
+        && [[ "$additional_context" == *"Preserve response phase separation after compaction"* ]] \
+        && [[ "$additional_context" == *"progress/commentary updates are not final answers"* ]]; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected Codex PostCompact universal JSON, stdout='$HOOK_STDOUT'"

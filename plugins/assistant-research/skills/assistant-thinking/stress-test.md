@@ -14,7 +14,7 @@ Find the fundamental flaw in an idea, decision, or approach. Produces both the s
 Break the idea into 6-12 atomic claims. Each claim should be independently testable.
 
 ### Step 2: Attack from 4-8 angles
-Launch 4-8 agents (via Agent tool) with distinct attack perspectives:
+Cover 4-8 distinct attack perspectives. If the active adapter and user/tool policy permit parallel agents, each perspective can be delegated independently. If delegation is unavailable, run the perspectives sequentially in the main session and record that fallback.
 
 | Perspective | Attacks via |
 |---|---|
@@ -25,7 +25,7 @@ Launch 4-8 agents (via Agent tool) with distinct attack perspectives:
 | **Second-order** | Unintended consequences, downstream effects |
 | **Pragmatic** | Implementation reality vs theoretical ideal |
 
-Each agent reviews the claims and identifies weaknesses from their angle.
+Each perspective reviews the claims and identifies weaknesses from that angle.
 
 ### Step 3: Synthesize
 

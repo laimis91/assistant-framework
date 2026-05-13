@@ -1,8 +1,8 @@
 # Contract Design Checklist
 
-Validate every new or modified skill against these 10 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
+Validate every new or modified skill against these 12 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
 
-## The 10 Rules
+## The 12 Rules
 
 ### 1. Required fields have `on_missing` actions
 - [ ] Every field with `required: true` has an `on_missing:` value
@@ -54,6 +54,16 @@ Validate every new or modified skill against these 10 rules from the [contract d
 - [ ] At least one `invariant:` with `scope: all_phases` (for Process/Analysis skills)
 - [ ] Invariants cover things that must ALWAYS be true, not just at gates
 - [ ] N/A for Utility skills (no phases)
+
+### 11. Root instructions are outcome-shaped
+- [ ] Non-trivial skills state Goal, Success criteria, Constraints, Output, and Stop rules
+- [ ] Root `SKILL.md` stays compact; detailed examples live in `references/`
+- [ ] The sections describe behavior-changing guidance, not decorative prose
+
+### 12. Clarification prompts are admissible
+- [ ] `on_missing: ask` is used only for missing data that materially changes the outcome
+- [ ] The answer cannot be discovered from prompt, context, local files, or safe defaults
+- [ ] Question budgets are maximums, not quotas; clear prompts proceed without ritual questions
 
 ## Quick Reference: Contract Tier Requirements
 

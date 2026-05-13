@@ -26,6 +26,22 @@ Covers the developer's documentation weakness by generating accurate, maintainab
 
 Core principle: **docs should be generated from truth (code), not written from memory.**
 
+## Goal
+
+Produce documentation that is accurate, maintainable, and traceable to source evidence.
+
+## Success Criteria
+
+- Every concrete claim is backed by code, git history, existing docs, or user-provided source material.
+- Review-needed items identify inferred or stale claims instead of silently presenting them as fact.
+- The selected doc mode, scope, output files, evidence, and remaining gaps are explicit.
+
+## Constraints
+
+- Do not invent features, issue numbers, versions, metrics, roadmap status, or examples to make docs sound stronger.
+- Ask only when missing audience, scope, target file, or doc type materially changes the output and cannot be inferred from the request or repo.
+- If evidence is weak, write generic wording with placeholders or mark the claim for review.
+
 ## Available Modes
 
 | Mode | File | When to use |
@@ -50,6 +66,8 @@ Input arrives
     ├─ "explain this" / "doc this code"      → explainer.md
     └─ ambiguous                             → ask user
 ```
+
+When the request is clear enough to choose a mode and scope from local context, proceed without ritual questions and record any assumptions in **Review needs**.
 
 ## General Protocol
 
@@ -97,3 +115,9 @@ Report staleness to user. Offer to update.
 - **Don't hallucinate features** — only document what exists in code
 - **Don't create docs the project doesn't need** — a 50-line script doesn't need architecture docs
 - **Don't duplicate** — if info exists elsewhere, link to it
+
+## Stop Rules
+
+- Stop and ask one focused question only when the missing answer changes audience, scope, target artifact, public contract wording, or verification.
+- Stop and report gaps when required source files, git history, or docs cannot be accessed.
+- Do not finalize docs until changed claims have source evidence or are clearly marked for review.

@@ -26,6 +26,23 @@ Systematic protocol for learning a new codebase. Produces structured project ori
 
 Core principle: **Understand before acting. Map the territory before navigating it.**
 
+## Goal
+
+Build a compact, evidence-based orientation for the project so future development starts from real structure, commands, conventions, and gaps.
+
+## Success Criteria
+
+- Surface scan, architecture mapping, pattern recognition, and gap reporting are complete for the selected depth.
+- Key files include path and purpose; conventions include pattern and concrete example.
+- Questions are specific to discovered gaps, not generic prompts.
+- Artifacts and durable memory updates are reported accurately.
+
+## Constraints
+
+- Ask only when the focus area or depth materially changes which files are inspected and cannot be inferred from the user's request.
+- Do not edit production code during onboarding.
+- Do not claim full coverage from a representative sample; label gaps and assumptions clearly.
+
 ## When to Activate
 
 - First time working with a repository
@@ -59,6 +76,7 @@ Extract:
 Print: `>> Onboarding: Architecture mapping`
 
 For medium+ projects, dispatch a **Code Mapper** subagent if available.
+If delegation is unavailable in the active adapter or tool policy, perform a lightweight local map and record that Code Mapper dispatch was unavailable.
 
 Map:
 - **Entry points**: where execution starts
@@ -186,3 +204,9 @@ When returning to a known project after significant time:
 - **Ask about unknowns** — don't guess business logic or domain concepts
 - **Keep memory concise** — under 100 lines, focused on what matters for development
 - **Update, don't overwrite** — if memory.md exists, update sections, don't regenerate
+
+## Stop Rules
+
+- Stop and ask one focused question when project path, focus area, or onboarding depth cannot be inferred and changes the inspection plan.
+- Stop and report blocked status when required files cannot be read.
+- Do not proceed to code changes as part of onboarding.

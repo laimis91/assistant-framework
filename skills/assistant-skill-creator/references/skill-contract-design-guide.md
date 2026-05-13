@@ -8,6 +8,18 @@ A skill without contracts is a suggestion. A skill with contracts is a specifica
 
 Every skill MUST define what it accepts, what it produces, and what must be true at every transition point. Agents treat prose instructions as guidance; they treat typed schemas as constraints.
 
+Keep the root `SKILL.md` outcome-shaped and compact. For complex skills, include only the sections that change behavior:
+
+- **Goal** — the user-visible outcome the skill exists to produce.
+- **Success criteria** — what must be true before the final response or artifact is complete.
+- **Constraints** — evidence, safety, side-effect, adapter, and scope limits.
+- **Output** — the required response or artifact shape.
+- **Stop rules** — when to ask, retry, fall back, abstain, or stop.
+
+### Ask/Proceed Policy
+
+Clarification questions are allowed only when the missing answer materially changes correctness, scope, public contract, security, data shape, rollout, or verification, cannot be discovered from provided context or local source, and has no safe default. Question budgets are maximums, not quotas. When the prompt and context are sufficient, proceed and record assumptions or defaults instead of asking ritual questions.
+
 ---
 
 ## Research Findings
@@ -143,6 +155,8 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 - **Human-readable**: Any developer can read and understand the contracts
 - **Self-documenting**: Descriptions and validation rules explain intent
 - **Recoverable**: Every failure has a defined corrective action
+- **Outcome-shaped**: Root instructions state the goal, success criteria, constraints, output, and stop rules before detailed procedure
+- **Material clarification only**: `on_missing: ask` is reserved for implementation-shaping missing data that cannot be safely inferred or discovered
 
 ### Field schema
 

@@ -51,6 +51,6 @@ artifacts:
   - name: validation_summary
     type: string
     required: true
-    description: "Summary of validation results against the 10 contract design guide rules"
-    validation: "Must report pass/fail for all 10 rules. No failures allowed in final output."
+    description: "Summary of validation results against the 12 contract design guide rules"
+    validation: "Must report pass/fail for all 12 rules. No failures allowed in final output."
     on_fail: "Fix failing rules and re-validate"

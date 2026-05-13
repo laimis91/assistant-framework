@@ -82,14 +82,16 @@
         "Uses the existing skill shortcut and reads the existing SKILL.md instead of asking for all capture fields again.",
         "Enters DESIGN using the existing skill purpose, category, and triggers.",
         "Builds the contract files required for the inferred skill category.",
-        "Runs VALIDATE against the 10 contract design guide rules.",
+        "Runs VALIDATE against the 12 contract design guide rules.",
+        "Checks compact Goal, Success criteria, Constraints, Output, and Stop rules for non-trivial skills.",
+        "Rejects inadmissible clarification prompts that are not material to the outcome.",
         "Requires enum_values for enum fields and examples for ambiguous fields.",
         "Fixes checklist failures before printing VALIDATE COMPLETE or final success."
       ],
       "pass_criteria": [
         "The response names existing_skill_path or existing skill shortcut behavior.",
         "The response includes the VALIDATE phase and validation summary.",
-        "The response references all 10 contract design guide rules.",
+        "The response references all 12 contract design guide rules.",
         "The response fixes missing enum_values or examples before completion.",
         "The response does not claim validation passed with known failures."
       ],
@@ -106,7 +108,10 @@
           "--- PHASE: BUILD ---",
           "--- PHASE: VALIDATE ---",
           "validation summary",
-          "10 contract design guide rules",
+          "12 contract design guide rules",
+          "Success criteria",
+          "Stop rules",
+          "admissible",
           "enum_values",
           "examples",
           "VALIDATE COMPLETE"

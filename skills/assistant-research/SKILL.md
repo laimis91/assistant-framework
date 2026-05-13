@@ -25,6 +25,23 @@ triggers:
 
 On-demand investigation capabilities with tiered depth and URL verification.
 
+## Goal
+
+Answer research questions with evidence-weighted findings, verified URLs, explicit conflicts, and clear gaps.
+
+## Success Criteria
+
+- Research depth matches the decision risk and evidence available.
+- Findings include confidence levels based on source quality and agreement.
+- URLs are verified before presentation or explicitly omitted/flagged.
+- Conflicts and gaps are reported even when the answer is otherwise clear.
+
+## Constraints
+
+- Ask only when the missing scope materially changes source selection, depth, jurisdiction/domain, or decision criteria and cannot be inferred.
+- Do not present single-source claims as high confidence unless the source is primary/official and the claim is directly supported.
+- Do not hardcode subagent counts as mandatory behavior; use evidence budgets and research angles that fit the active adapter.
+
 ## Available Tools
 
 | Tool | File | When to use |
@@ -59,3 +76,9 @@ Return:
 - **Sources** - verified URLs only, with enough context to understand relevance.
 - **Conflicts** - conflicting evidence or interpretations, or "none found".
 - **Gaps** - unanswered questions, weak evidence, stale sources, or recommended next checks.
+
+## Stop Rules
+
+- Stop and ask one focused question only when scope or decision criteria would materially change source selection or interpretation.
+- Stop and report a gap when required sources are inaccessible, stale, conflicting, or too weak for the requested confidence.
+- Do not finalize with unverified URLs.

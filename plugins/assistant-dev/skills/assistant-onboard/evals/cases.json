@@ -28,6 +28,7 @@
         "Requires or infers project_path and defaults depth to standard when unspecified.",
         "Prints onboarding progress steps for Surface scan, Architecture mapping, Pattern recognition, Identifying unknowns, and Generating project orientation.",
         "Reads README, agent instructions, gitignore, root listing, build files, and CI/CD config before deeper mapping.",
+        "Uses Code Mapper when available and records an adapter-aware fallback when delegation is unavailable.",
         "Samples representative files for conventions instead of reading every file.",
         "Returns project_summary, key_files, conventions, artifacts, gaps, and status.",
         "Uses project-local orientation as an artifact and treats durable cross-session memory as knowledge graph backed."
@@ -49,6 +50,7 @@
         "required_substrings": [
           "Surface scan",
           "Architecture mapping",
+          "adapter-aware",
           "Pattern recognition",
           "key_files",
           "conventions",

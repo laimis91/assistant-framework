@@ -4,36 +4,40 @@ Tiered information gathering — scale effort to the question's importance.
 
 ## Modes
 
-| Mode | Agents | When to use |
+| Mode | Evidence budget | When to use |
 |---|---|---|
-| **Quick** | 1 (WebSearch) | Simple lookup, known answer exists somewhere |
-| **Standard** | 3 parallel | Most research needs, need cross-validation |
-| **Extensive** | 6-12 parallel | Deep multi-domain, need comprehensive coverage |
-| **Deep** | Iterative | Market mapping, threat landscapes, novel domains |
+| **Quick** | 1 authoritative source or 2 weak sources | Simple lookup, known answer exists somewhere |
+| **Standard** | 3 differentiated research angles | Most research needs, need cross-validation |
+| **Extensive** | 3+ angles with 2+ credible sources per major claim | Deep multi-domain, need comprehensive coverage |
+| **Deep** | Iterative until sources stop changing the answer | Market mapping, threat landscapes, novel domains |
 
 ## Quick Research
-Single WebSearch query. Verify any URLs found (see `url-verify.md`).
+Use the narrowest query likely to find an authoritative answer. Verify any URLs found (see `url-verify.md`).
 
 ## Standard Research
-Launch 3 agents in parallel, each with a different angle on the same question:
-1. **Agent 1**: Direct answer — search for the most authoritative source
-2. **Agent 2**: Alternative perspective — search from a different angle or keyword set
-3. **Agent 3**: Counter-evidence — search for reasons the obvious answer might be wrong
+Cover 3 differentiated research angles:
+1. **Direct evidence** — search for the most authoritative source
+2. **Alternative perspective** — search from a different angle or keyword set
+3. **Counter-evidence** — search for reasons the obvious answer might be wrong
 
 Synthesize: What agrees? What's unique? What conflicts?
 
 ## Extensive Research
-Generate 3 research angles via deep thinking. Launch 2-4 agents per angle.
-Synthesize by theme, cross-validate claims across agents.
+Generate 3+ research angles via structured thinking. For each major claim, seek at least 2 credible sources or mark the claim LOW confidence.
+Synthesize by theme and cross-validate claims across angles.
 
 ## Deep Investigation
 Iterative progressive research:
-1. Broad landscape scan (6-12 agents)
+1. Broad landscape scan across differentiated source classes
 2. Score entities/findings by importance
 3. Deep-dive the highest-value findings
 4. Repeat until coverage is sufficient
 
 Use `memory_add_insight` to record notable findings in the knowledge graph for future sessions.
+
+## Adapter-Aware Delegation
+
+Research angles are required; subagent dispatch is optional. If the active adapter and user/tool policy permit parallel agents, each angle can be delegated independently. If not, run the angles sequentially in the main session and record that delegation was unavailable. Never reduce source diversity just because delegation is unavailable.
 
 ## Mandatory: URL Verification
 **Every URL presented to the user MUST be verified.** See `url-verify.md`.
@@ -55,6 +59,7 @@ Always show confidence level with findings. Flag LOW-confidence findings explici
 ```
 RESEARCH: [question]
 Mode: [quick/standard/extensive/deep]
+Evidence budget: [source/angle target and whether it was met]
 
 FINDINGS
 1. [finding] — confidence: HIGH
