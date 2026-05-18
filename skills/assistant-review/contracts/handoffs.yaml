@@ -98,12 +98,20 @@ handoffs:
       - name: review_focus
         type: string[]
         required: false
-        description: "Specific areas to focus on if the orchestrator wants targeted review"
+        description: "Specific areas to focus on if the orchestrator wants targeted review. The default review focus still includes the clean-code principle lens from references/review-principles.md."
         examples:
           - "security"
           - "error handling"
           - "test coverage"
           - "architecture violations"
+          - "SOLID/KISS/DRY/YAGNI and readability"
+
+      - name: quality_principles_required
+        type: boolean
+        required: false
+        default: true
+        description: "Whether Reviewer must apply SOLID, KISS, DRY, YAGNI, and readability checks from references/review-principles.md"
+        notes: "Default true for every review. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
 
       - name: rubric_required
         type: boolean
@@ -171,6 +179,33 @@ handoffs:
           - name: detail
             type: string
             required: true
+
+      - name: principle_checks
+        type: object
+        required: false
+        condition: "quality_principles_required is true"
+        description: "Compact confirmation that the clean-code principle lens was applied"
+        object_fields:
+          - name: solid
+            type: string
+            required: true
+            description: "SOLID observations or 'no concrete risk found'"
+          - name: kiss
+            type: string
+            required: true
+            description: "KISS observations or 'no concrete risk found'"
+          - name: dry
+            type: string
+            required: true
+            description: "DRY observations or 'no concrete risk found'"
+          - name: yagni
+            type: string
+            required: true
+            description: "YAGNI observations or 'no concrete risk found'"
+          - name: readability
+            type: string
+            required: true
+            description: "Readability observations or 'no concrete risk found'"
 
       - name: verdict
         type: enum
@@ -260,5 +295,6 @@ handoffs:
 # 5. Filter any findings that match previously_fixed descriptions
 # 6. If rubric_required: verify rubric_scores is present with all dimensions
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
-# 8. If re-dispatch needed: include explicit note about what was missing
+# 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
+# 9. If re-dispatch needed: include explicit note about what was missing
 # ─────────────────────────────────────────────

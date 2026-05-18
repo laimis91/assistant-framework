@@ -64,6 +64,10 @@ gates:
         condition: "scope_size in [medium, large]"
         on_fail: "Re-dispatch Reviewer with rubric_required=true. Reference references/review-rubric.md for scoring instructions."
 
+      - id: RS6
+        check: "Reviewer applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
+        on_fail: "Re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only."
+
   # ─────────────────────────────────────────────
   # EVALUATE step — per round
   # ─────────────────────────────────────────────

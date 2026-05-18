@@ -114,6 +114,56 @@
           "Clean despite must-fix"
         ]
       }
+    },
+    {
+      "id": "review-applies-clean-code-principles",
+      "title": "Review applies clean-code principles",
+      "category": "principle_and_readability_lens",
+      "purpose": "Checks that review responses apply SOLID, KISS, DRY, YAGNI, and readability as evidence-backed review lenses instead of vague style slogans.",
+      "prompt": "Review this feature branch for code cleanliness too. Check SOLID, KISS, DRY, YAGNI, and readability, then fix actionable issues.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope has application code, tests, and at least one abstraction change.",
+        "The user explicitly asks for clean-code principle review in addition to normal review."
+      ],
+      "expected_behavior": [
+        "Loads or applies the review-principles reference.",
+        "Checks SOLID, KISS, DRY, YAGNI, and readability.",
+        "Reports principle findings only when tied to concrete evidence and risk.",
+        "Distinguishes duplicated knowledge from coincidental similar code.",
+        "Flags speculative abstraction or future-only behavior as YAGNI only when it adds current complexity.",
+        "Provides the smallest durable fix for each actionable principle finding."
+      ],
+      "pass_criteria": [
+        "The response mentions SOLID, KISS, DRY, YAGNI, and readability.",
+        "The response ties principle findings to concrete risk and evidence.",
+        "The response avoids acronym-only findings.",
+        "The response names the smallest durable fix for actionable items."
+      ],
+      "fail_signals": [
+        "Reports 'violates SOLID' without evidence.",
+        "Treats all similar-looking code as DRY violations.",
+        "Uses YAGNI to avoid maintaining code health.",
+        "Mentions readability without a specific comprehension burden."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "SOLID",
+          "KISS",
+          "DRY",
+          "YAGNI",
+          "readability",
+          "concrete risk",
+          "evidence",
+          "smallest durable fix"
+        ],
+        "forbidden_substrings": [
+          "violates SOLID",
+          "all duplication is bad",
+          "YAGNI means skip refactoring",
+          "hard to read because it is ugly"
+        ]
+      }
     }
   ]
 }

@@ -299,4 +299,37 @@ else
     fail "high-control skill restrictions need nearby paired guidance: ${missing_paired_guidance[*]}"
 fi
 
+test_start "assistant-review applies clean-code principles with evidence"
+review_principle_failures=()
+review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
+review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_phases="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+
+for file_and_term in \
+    "$review_skill::references/review-principles.md" \
+    "$review_skill::Principle and Readability Lens" \
+    "$review_skill::SOLID, KISS, DRY, YAGNI, and readability" \
+    "$review_principles::duplicated knowledge, not merely similar-looking code" \
+    "$review_principles::YAGNI is not permission to neglect code health" \
+    "$review_principles::Readability is a human judgment" \
+    "$review_principles::smallest durable change" \
+    "$review_rubric::right-sized SOLID/KISS/DRY/YAGNI adherence" \
+    "$review_handoffs::quality_principles_required" \
+    "$review_phases::references/review-principles.md" \
+    "$review_evals::review-applies-clean-code-principles"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        review_principle_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#review_principle_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review clean-code principle lens is incomplete: ${review_principle_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

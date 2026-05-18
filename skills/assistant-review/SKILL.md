@@ -41,6 +41,7 @@ Find concrete defects, risks, regressions, and test gaps; fix them when in revie
 
 - Review scope and mode are resolved before the loop starts.
 - Findings are severity-ranked with file evidence and confidence.
+- Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
 - Validation runs after fixes, and a fresh review confirms the final state.
 
@@ -49,6 +50,7 @@ Find concrete defects, risks, regressions, and test gaps; fix them when in revie
 - Default to audit mode when the user asks to provide, report, list, or summarize findings.
 - Do not emit intermediate review summaries; present one final summary after loop exit.
 - Use concrete risk categories for refactor-related findings.
+- Treat clean-code principles as evidence lenses, not acronym-driven style rules.
 
 ## Entry
 
@@ -69,10 +71,17 @@ Use refactor-related findings only for concrete actionable risk. Allowed risk ca
 - hidden dependency/ownership
 - brittle testing
 - poor extension seam
+- readability/maintainability drag
 
 Every refactor-related finding MUST state the risk category, affected surface, evidence from the review material, and the smallest durable fix that addresses the risk within the normal finding text.
 
 Use concrete risk framing instead of generic convention, style, cleanliness, or improvement language. Request broad cleanup only when a smaller durable fix cannot remove the risk.
+
+## Principle and Readability Lens
+
+Load `references/review-principles.md` before each REVIEW step. Apply SOLID, KISS, DRY, YAGNI, and readability checks to the review material. Report a principle finding only when the evidence shows concrete risk, such as duplicated knowledge that will diverge, speculative abstraction, hidden coupling, substitution breakage, needless branching, or code whose intent is hard to recover.
+
+For each principle/readability finding, include the violated lens, affected surface, concrete evidence, risk category, and smallest durable fix. Do not report acronym-only findings such as "violates SOLID" without naming the observed behavior and the user-facing or maintainer risk.
 
 ## The Loop
 
@@ -86,6 +95,7 @@ while round <= 5:
   1. REVIEW
      - Dispatch a Reviewer subagent (or self-review for small scope)
      - Provide: review material snapshot, previously_fixed list, round number
+     - Load and apply references/review-principles.md as the clean-code lens
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
@@ -97,6 +107,9 @@ while round <= 5:
        - Round 1-2: 80%+
        - Round 3-4: 85%+
        - Round 5: 90%+
+       Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
+       references/review-principles.md. Report principle issues only when tied
+       to concrete evidence, concrete risk, and the smallest durable fix.
        Score against the rubric (5 dimensions) per references/review-rubric.md."
 
   2. EVALUATE

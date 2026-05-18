@@ -13,10 +13,14 @@ Structured scoring system for evaluator calibration. Replaces open-ended "find i
 | Dimension | Weight | What It Measures |
 |---|---|---|
 | **Correctness** | 0.30 | Bugs, logic errors, edge cases, acceptance criteria met |
-| **Code Quality** | 0.20 | Readability, naming, maintainability, SOLID adherence |
+| **Code Quality** | 0.20 | Readability, naming, maintainability, right-sized SOLID/KISS/DRY/YAGNI adherence |
 | **Architecture** | 0.20 | Layer boundaries, dependency direction, pattern consistency |
 | **Security** | 0.15 | Injection, auth bypass, data exposure, OWASP top 10 |
 | **Test Coverage** | 0.15 | New behavior tested, edge cases covered, test quality |
+
+## Clean-Code Principle Lens
+
+Before scoring Code Quality and Architecture, load `references/review-principles.md`. Apply SOLID, KISS, DRY, YAGNI, and readability as concrete risk lenses. Do not score down for acronym-only preferences; score down when the reviewed material shows evidence of duplicated knowledge, speculative abstraction, hidden coupling, needless complexity, brittle responsibilities, or readability/maintainability drag.
 
 ## Score Anchors
 
@@ -36,11 +40,11 @@ Each dimension is scored 1-5. Use these anchors to calibrate:
 
 | Score | Anchor |
 |---|---|
-| **5** | Clean, self-documenting code. Consistent with repo conventions. No code smells. |
-| **4** | Readable and maintainable. Minor inconsistency (e.g., one method slightly too long). |
-| **3** | Works but some areas hard to follow. Mixed naming conventions or unclear intent. |
-| **2** | Multiple code smells. God method, unclear responsibilities, copy-paste patterns. |
-| **1** | Unmaintainable. No structure, magic numbers, misleading names, tangled logic. |
+| **5** | Clear, self-documenting code. Names, control flow, responsibilities, and abstractions make intent easy to recover. SOLID/KISS/DRY/YAGNI are applied where they reduce real risk. |
+| **4** | Readable and maintainable. Minor inconsistency or localized complexity, but no duplicated knowledge, speculative abstraction, or unclear responsibility that would meaningfully slow future change. |
+| **3** | Works but some areas are hard to follow. Mixed abstraction levels, unclear names, mild duplication of knowledge, or slightly overbuilt seams create maintenance friction. |
+| **2** | Multiple code smells. Large/mixed-responsibility units, misleading names, copy-paste business rules, unnecessary indirection, or speculative branches create concrete change risk. |
+| **1** | Unmaintainable. Tangled logic, hidden state, broad interfaces, magic values, duplicated rules, or future-only architecture make safe modification impractical. |
 
 ### Architecture (weight: 0.20)
 
@@ -116,6 +120,7 @@ When scoring, the reviewer MUST:
 3. **Use the anchors** — pick the anchor that most closely matches, then adjust +/- 0.5 if between anchors
 4. **Never score higher than evidence supports** — when uncertain, round down
 5. **Weight security appropriately** — a single critical vulnerability caps the weighted score at 2.0 regardless of other dimensions
+6. **Apply principle checks with evidence** — use `references/review-principles.md`, but report SOLID/KISS/DRY/YAGNI/readability issues only when tied to concrete risk and the smallest durable fix
 
 ## Rubric Override: Critical Findings
 

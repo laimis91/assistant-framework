@@ -66,7 +66,7 @@ Replace open-ended "find issues" with structured scoring against concrete dimens
 | Dimension | Weight | What It Measures |
 |---|---|---|
 | Correctness | 0.30 | Bugs, logic errors, edge cases, acceptance criteria |
-| Code Quality | 0.20 | Readability, naming, maintainability, SOLID |
+| Code Quality | 0.20 | Readability, naming, maintainability, right-sized SOLID/KISS/DRY/YAGNI |
 | Architecture | 0.20 | Layer boundaries, dependency direction, patterns |
 | Security | 0.15 | Injection, auth, data exposure, OWASP top 10 |
 | Test Coverage | 0.15 | New behavior tested, edge cases, test quality |
