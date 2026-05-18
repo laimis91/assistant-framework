@@ -10,6 +10,7 @@ INSTALL_HOME="$(mktemp -d)"
 FIXTURE_FRAMEWORK="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME" "$FIXTURE_FRAMEWORK"
 mkdir -p "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/contracts" \
+    "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/evals" \
     "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/references"
 cp "$FRAMEWORK_DIR/install.sh" "$FIXTURE_FRAMEWORK/install.sh"
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/SKILL.md" <<'SKILL_FIXTURE'
@@ -37,13 +38,25 @@ cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/references/task-jour
 Write to `.claude/task.md` in nested references.
 Read `~/.claude/agents/code-writer.md` for worker-specific instructions.
 REFERENCE_FIXTURE
+cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/evals/cases.json" <<'EVAL_FIXTURE'
+[
+  {
+    "id": "json-path-substitution",
+    "setup_context": [
+      "An existing project `.claude/telos.md` may be present.",
+      "A global file may live at `~/.claude/memory/graph.jsonl`."
+    ]
+  }
+]
+EVAL_FIXTURE
 if HOME="$INSTALL_HOME" bash "$FIXTURE_FRAMEWORK/install.sh" --agent codex --skill path-substitution-contract --no-hooks >/tmp/p0p4-install-subst.out 2>/tmp/p0p4-install-subst.err; then
     installed_skill="$INSTALL_HOME/.codex/skills/path-substitution-contract"
     installed_root="$installed_skill/SKILL.md"
     installed_contract="$installed_skill/contracts/output.yaml"
     installed_reference="$installed_skill/references/task-journal-template.md"
+    installed_eval="$installed_skill/evals/cases.json"
 
-    if [[ ! -f "$installed_root" || ! -f "$installed_contract" || ! -f "$installed_reference" ]]; then
+    if [[ ! -f "$installed_root" || ! -f "$installed_contract" || ! -f "$installed_reference" || ! -f "$installed_eval" ]]; then
         fail "expected Codex fixture skill files to be installed"
     elif ! grep -Fq "Load ~/.codex/skills/path-substitution-contract/SKILL.md before acting." "$installed_root"; then
         fail "expected root SKILL.md to contain substituted ~/.codex skill path"
@@ -59,12 +72,18 @@ if HOME="$INSTALL_HOME" bash "$FIXTURE_FRAMEWORK/install.sh" --agent codex --ski
         fail "expected nested reference file to contain substituted .codex task path"
     elif ! grep -Fq 'Read `~/.codex/agents/code-writer.md` for worker-specific instructions.' "$installed_reference"; then
         fail "expected nested reference file to contain substituted ~/.codex agent path"
+    elif ! grep -Fq 'An existing project `.codex/telos.md` may be present.' "$installed_eval"; then
+        fail "expected JSON eval fixture to contain substituted .codex project path"
+    elif ! grep -Fq 'A global file may live at `~/.codex/memory/graph.jsonl`.' "$installed_eval"; then
+        fail "expected JSON eval fixture to contain substituted ~/.codex memory path"
     elif grep -Fq "~/.claude/skills/path-substitution-contract/SKILL.md" "$installed_root" \
         || grep -Fq '`.claude/task.md`' "$installed_root" \
         || grep -Fq 'location: ".claude/task.md"' "$installed_contract" \
         || grep -Fq 'location: "~/.claude/memory/metrics/workflow-metrics.jsonl"' "$installed_contract" \
         || grep -Fq '`.claude/task.md`' "$installed_reference" \
-        || grep -Fq '`~/.claude/agents/code-writer.md`' "$installed_reference"; then
+        || grep -Fq '`~/.claude/agents/code-writer.md`' "$installed_reference" \
+        || grep -Fq '`.claude/telos.md`' "$installed_eval" \
+        || grep -Fq '`~/.claude/memory/graph.jsonl`' "$installed_eval"; then
         fail "found representative unsubstituted .claude path in installed Codex fixture skill"
     else
         pass

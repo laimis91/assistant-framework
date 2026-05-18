@@ -812,6 +812,7 @@ for skill in "${SKILLS[@]}"; do
                 -name "*.md" -o \
                 -name "*.yaml" -o \
                 -name "*.yml" -o \
+                -name "*.json" -o \
                 -name "*.conf" -o \
                 -name "*.toml" \
             \))
