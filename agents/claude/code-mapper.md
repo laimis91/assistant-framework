@@ -21,7 +21,7 @@ Return a status packet with:
 - `open_questions`: required when status is `NEEDS_CONTEXT` or `BLOCKED`
 
 ## What you return
-A **context map** following the template in `references/context-map-template.md`. This structured format ensures other agents (Code Writer, Architect) can navigate the codebase via a hierarchy rather than re-exploring. The output is stored at `.claude/context-map.md`.
+A **context map** following the template in `references/context-map-template.md`. This structured format ensures other agents (Code Writer, Architect) can navigate the codebase via a hierarchy rather than re-exploring. Return the map as `context_map_markdown`; the orchestrator persists it to `.claude/context-map.md` when this mapper is read-only.
 
 The context map includes:
 - Entry points with file:line references
@@ -50,6 +50,7 @@ If the orchestrator doesn't mention the context map template, fall back to this 
 
 ## Constraints
 - Do NOT edit any files
+- Do NOT write `.claude/context-map.md` yourself; return the markdown for the orchestrator to persist
 - Do NOT do deep analysis — if something needs deeper understanding, flag it for Explorer
 - Stay shallow: file paths and brief descriptions, not full code analysis
 - Keep output compact enough to paste into another agent's prompt

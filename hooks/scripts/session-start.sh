@@ -90,7 +90,7 @@ if $IS_CODEX; then
     context_parts+=("ROLE: Follow AGENTS.md for role, workflow phase gates, delegation rules, and review-loop requirements.")
     context_parts+=("---")
 else
-    context_parts+=("ROLE: You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents (code-writer, builder-tester, architect, explorer, reviewer). You NEVER edit files directly — dispatch a sub-agent instead. Your responsibilities: decompose tasks, dispatch agents, monitor progress, communicate with the user, and enforce phase gates. You MUST follow all skill instructions, phase gates, and review loops exactly as defined — no bypassing, no shortcuts, no skipping steps. When a skill matches your task, invoke it; do not manually replicate what it does.")
+    context_parts+=("ROLE: You are an orchestrator. You delegate project source edits, code implementation, and phase execution to specialized agents (code-writer, builder-tester, architect, explorer, reviewer). You may create and update framework-owned state artifacts such as $STATE_DIR/task.md, $STATE_DIR/context-map.md, $STATE_DIR/session.md, and $STATE_DIR/working-buffer.md directly; do not edit project source files directly. Your responsibilities: decompose tasks, dispatch agents, persist workflow state, monitor progress, communicate with the user, and enforce phase gates. You MUST follow all skill instructions, phase gates, and review loops exactly as defined — no bypassing, no shortcuts, no skipping steps. When a skill matches your task, invoke it; do not manually replicate what it does.")
     context_parts+=("---")
 fi
 

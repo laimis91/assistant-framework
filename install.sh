@@ -285,7 +285,13 @@ strip_memory_protocol_from_file() {
         }
 
         function is_orchestrator_role_line(line) {
-            return line == "You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions." \
+            return (index(line, "You are an orchestrator for memory-aware workflow.") == 1 \
+                    && index(line, "The orchestrator may create and update framework-owned state artifacts such as .") > 0 \
+                    && index(line, "/task.md, .") > 0 \
+                    && index(line, "/context-map.md, .") > 0 \
+                    && index(line, "/session.md, and .") > 0 \
+                    && index(line, "/working-buffer.md; it does not edit project source files directly.") > 0) \
+                || line == "You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions." \
                 || (index(line, "You are an orchestrator. You " "delegate ALL " "file editing") == 1 \
                     && index(line, "code implementation, and " "phase execution") > 0)
         }
@@ -1469,14 +1475,14 @@ if [[ "$AGENT" == "codex" ]]; then
 
 ## Role
 
-You are an orchestrator for development work. Coordinate specialized agents (code-writer, builder-tester, architect, explorer, reviewer), keep phase gates visible, and communicate progress. File edits, code implementation, builds/tests, and independent review are owned by those specialized agents; gather context, clarify requirements, decompose work, and prepare handoffs yourself when that does not modify files. Follow matching skill instructions, phase gates, and review loops exactly. When a skill matches your task, invoke it instead of replacing it with ad hoc steps.
+You are an orchestrator for development work. Coordinate specialized agents (code-writer, builder-tester, architect, explorer, reviewer), keep phase gates visible, and communicate progress. File edits, code implementation, builds/tests, and independent review are owned by those specialized agents; framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md are owned by the orchestrator. Gather context, clarify requirements, decompose work, persist workflow state, and prepare handoffs yourself when that does not modify project source files. Follow matching skill instructions, phase gates, and review loops exactly. When a skill matches your task, invoke it instead of replacing it with ad hoc steps.
 
 <behavioral_rules>
 These rules define the operating contract for every response.
 
 1. SKILL ROUTING: Before acting on ANY request, check if it matches an installed skill in ~/.codex/skills/. When a skill matches, load and follow the skill's SKILL.md before proceeding; use the skill workflow as the source of truth.
 
-2. ORCHESTRATOR OWNERSHIP: Coordinate the work; keep file edits and code implementation with code-writer, builds/tests with builder-tester, and independent review with reviewer. The orchestrator does not edit files or write code directly.
+2. ORCHESTRATOR OWNERSHIP: Coordinate the work; keep project source edits and code implementation with code-writer, builds/tests with builder-tester, and independent review with reviewer. The orchestrator may create and update framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md; it does not edit project source files directly.
 
 3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
 
@@ -1511,7 +1517,7 @@ $AGENTS_SKILL_ROWS
 ## Memory
 
 - Global: memory-graph MCP backed by ~/.codex/memory (local memory store)
-- Project state: .codex/session.md, .codex/working-buffer.md, and .codex/task.md at project root
+- Project state: .codex/session.md, .codex/working-buffer.md, .codex/context-map.md, and .codex/task.md at project root; these are ignored framework-owned state artifacts the orchestrator may update directly
 - Rules and preferences are retrieved at session start via memory_context; hooks do not inject rule bodies.
 
 ## Conventions

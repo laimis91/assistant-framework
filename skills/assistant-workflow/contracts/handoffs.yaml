@@ -175,6 +175,10 @@ handoffs:
             type: enum
             required: true
             enum_values: [unit, integration, e2e]
+      - name: context_map_markdown
+        type: string
+        required: true
+        description: "Compact context map markdown for the orchestrator to persist to .claude/context-map.md when the mapper is read-only"
     on_missing_field: "Re-dispatch CodeMapper with explicit request for the missing field"
 
   # ─────────────────────────────────────────────

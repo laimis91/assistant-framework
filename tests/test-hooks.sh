@@ -2114,6 +2114,59 @@ if test_start "workflow-guard: Codex apply_patch with BUILDING status → output
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
 
+if test_start "workflow-guard: Codex Edit of state artifact → no output"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/.codex/task.md"}}\n' "$TEST_PROJECT" | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-guard: Codex apply_patch only state artifacts → no output"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    jq -n --arg patch $'*** Begin Patch\n*** Update File: .codex/task.md\n@@\n-Status: BUILDING [step 2/3]\n+Status: BUILDING [step 3/3]\n*** End Patch' \
+        '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-guard: Codex apply_patch mixed source and state → outputs warning"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    jq -n --arg patch $'*** Begin Patch\n*** Update File: .codex/task.md\n@@\n-old\n+new\n*** Update File: src/App.cs\n@@\n-old\n+new\n*** End Patch' \
+        '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
 if test_start "workflow-guard: dotnet build without --tl → adds --tl:on"; then
     echo '{"tool_name": "Bash", "tool_input": {"command": "dotnet build src/MyApp.csproj"}}' | \
         HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \

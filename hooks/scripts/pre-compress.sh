@@ -51,7 +51,7 @@ fi
 
 MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:
 
-1. TASK JOURNAL: If $STATE_DIR/task.md exists, update it with current progress (including Artifact Registry and Milestones), key decisions, and next steps.
+1. TASK JOURNAL: If active workflow work lacks $STATE_DIR/task.md, create it now. Then update it with current progress (including Artifact Registry and Milestones), key decisions, blockers, and next steps. This framework-owned state artifact may be written directly by the orchestrator.
 
 2. SESSION STATE: Update $STATE_DIR/session.md with:
    - What was discussed and decided this session
@@ -64,7 +64,7 @@ MSG="CONTEXT COMPRESSION IMMINENT — preserve state now:
    - New project/technology relationships → use memory_add_entity and memory_add_relation
    - Task reflexions, decisions, or recurring patterns → use memory_reflect, memory_decide, or memory_pattern
 
-4. WORKING BUFFER: Write only session-state scratch notes to $STATE_DIR/working-buffer.md.
+4. WORKING BUFFER: Write only session-state scratch notes to $STATE_DIR/working-buffer.md. This is also a framework-owned state artifact.
 
 5. RESPONSE PHASES: Preserve the distinction between user-visible progress updates and completed answers. Commentary/progress belongs in session or working-buffer notes; final outcome, verification, blockers, and next steps belong in the task journal.
 

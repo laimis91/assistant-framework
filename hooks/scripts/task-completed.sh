@@ -88,7 +88,7 @@ MSG="TASK COMPLETED — capture learnings before moving on:
    - Status: DONE
    - Notes: [anything useful for future work]
 
-7. TASK JOURNAL: Update $STATE_DIR/task.md status to DONE."
+7. TASK JOURNAL: Create $STATE_DIR/task.md if active workflow work lacks it, then update status to DONE. Leave ignored state files in place unless the user asks for cleanup."
 
 if [[ -n "$WARNINGS" ]]; then
     MSG="$WARNINGS

@@ -8,7 +8,7 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The context map is stored at `.claude/context-map.md` and used by Code Writer and Architect instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
+For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if the active mapper is read-only, the orchestrator persists that markdown to `.claude/context-map.md`. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
 
 For any task that needs clarification, create or update `.claude/task.md` during Discover before printing clarification questions or any clarification wait. Persist:
 - `Clarification status: ready | needs_clarification`
@@ -20,6 +20,8 @@ For any task that needs clarification, create or update `.claude/task.md` during
 - `Unresolved clarification topics:` as a markdown list
 
 For medium+ tasks, keep `.claude/task.md` for the full task lifecycle even when Discover resolves without a clarification wait.
+
+Workflow state artifacts (`.claude/task.md`, `.claude/context-map.md`, `.claude/session.md`, and `.claude/working-buffer.md`) are framework-owned, ignored state. The orchestrator may create and update them directly. This exception never applies to project source, docs, tests, config, or generated app artifacts.
 
 Discover does not complete while `Clarification status: needs_clarification`. Clarification waiting is a Discover substate, not a separate workflow phase.
 
@@ -210,13 +212,13 @@ Print: `--- PHASE: BUILD ---`
 
 ### Task journal
 
-For medium+ tasks, create `.claude/task.md` using `references/task-journal-template.md` during Discover and keep updating it through Build. This file survives context compression — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
+For medium+ tasks, create `.claude/task.md` using `references/task-journal-template.md` during Discover and keep updating it through Build. This file survives context compression — it's the single source of truth for the current task. The orchestrator owns this workflow state artifact and may update it directly. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
 ### Orchestrator delegation rule
 
-**The orchestrator NEVER edits files or writes code directly.** All file changes go through sub-agents:
+**The orchestrator NEVER edits project source files or writes implementation/test code directly.** Framework-owned state artifacts (`.claude/task.md`, `.claude/context-map.md`, `.claude/session.md`, `.claude/working-buffer.md`) are the exception and may be updated directly. All project source changes go through sub-agents:
 - **Code Writer** (`code-writer`): implements code following the plan
 - **Builder/Tester** (`builder-tester`): builds, writes tests, runs tests
 

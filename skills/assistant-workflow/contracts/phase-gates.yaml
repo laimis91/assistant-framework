@@ -79,7 +79,7 @@ gates:
 
       - id: D4
         check: "If Discover prints a clarification wait for any task size: task journal exists before the wait is printed, and the clarification state is persisted before printing the wait message and before leaving Discover"
-        on_fail: "Create or update .claude/task.md with Clarification status, Clarification defaults applied, and Unresolved clarification topics before printing the clarification wait message or continuing"
+        on_fail: "Create or update the orchestrator-owned .claude/task.md state artifact with Clarification status, Clarification defaults applied, and Unresolved clarification topics before printing the clarification wait message or continuing"
 
       - id: D4A
         check: "Clarification question cap is treated as a maximum, not a quota; clear medium+ tasks may complete Discover with zero questions when confidence is high"
@@ -92,7 +92,7 @@ gates:
       - id: D5
         check: "For medium+ tasks: context map exists at .claude/context-map.md"
         condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Code Mapper before proceeding to Plan"
+        on_fail: "Dispatch Code Mapper, then persist the returned context map markdown to the orchestrator-owned .claude/context-map.md state artifact before proceeding to Plan"
 
       - id: D6
         check: "For medium+ tasks: agent readiness score was assessed and printed"

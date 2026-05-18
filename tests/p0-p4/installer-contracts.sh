@@ -33,7 +33,9 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "File edits, code implementation, builds/tests, and independent review are owned by those specialized agents" "$agents_file" \
-            && grep -Fq "The orchestrator does not edit files or write code directly." "$agents_file" \
+            && grep -Fq "The orchestrator may create and update framework-owned state artifacts" "$agents_file" \
+            && grep -Fq ".codex/context-map.md" "$agents_file" \
+            && grep -Fq "it does not edit project source files directly" "$agents_file" \
             && grep -Fq "CONTEXT BUDGET: Keep generated guidance concise." "$agents_file" \
             && grep -Fq "preserve user custom sections below the installer block" "$agents_file"; then
             pass
@@ -450,10 +452,14 @@ if HOME="$INSTALL_HOME_FOUR" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --s
     preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$gemini_file")"
     if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
         && grep -q "User-managed Gemini heading before installer content." "$gemini_file" \
+        && grep -Fq ".gemini/task.md" "$gemini_file" \
+        && grep -Fq ".gemini/context-map.md" "$gemini_file" \
+        && ! grep -Fq ".codex/task.md" "$gemini_file" \
+        && ! grep -Fq ".claude/task.md" "$gemini_file" \
         && ! grep -q "Interrupted installer-owned Gemini memory content" "$gemini_file"; then
         pass
     else
-        fail "expected substituted Gemini installer block to be replaced once while preserving user content"
+        fail "expected substituted Gemini installer block to be replaced once, use .gemini state paths, and preserve user content"
     fi
 else
     fail "Gemini install after truncated memory protocol failed; see /tmp/p0p4-install-gemini-truncated.err"

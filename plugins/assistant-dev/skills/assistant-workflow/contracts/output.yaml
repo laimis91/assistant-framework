@@ -157,14 +157,14 @@ artifacts:
     type: file
     required: true
     condition: "size in [medium, large, mega]"
-    validation: "File exists at .claude/task.md and contains Status: DONE"
+    validation: "Ignored orchestrator-owned state artifact exists at .claude/task.md and contains Status: DONE"
     location: ".claude/task.md"
 
   - name: context_map
     type: file
     required: true
     condition: "size in [medium, large, mega]"
-    validation: "File exists at .claude/context-map.md"
+    validation: "Ignored orchestrator-owned state artifact exists at .claude/context-map.md"
     location: ".claude/context-map.md"
 
   - name: component_manifest

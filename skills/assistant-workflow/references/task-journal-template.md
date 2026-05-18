@@ -1,6 +1,6 @@
 # Task Journal Template
 
-Write to `.claude/task.md` in the project root. This file is the single source of truth for the current task — it survives context compression and session continuations.
+Write to `.claude/task.md` in the project root. This file is the single source of truth for the current task — it survives context compression and session continuations. It is a framework-owned ignored state artifact, so the orchestrator may create and update it directly.
 
 ## When to create
 - Any task that enters clarification wait: during Discover, before printing clarification questions or the wait message
@@ -165,7 +165,7 @@ Plan approval: [yes/no + date]
 8. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
 9. **Handoff** to user — they test manually and add Review Notes
 10. **Review fixes** — fix issues, re-test, re-review, update Progress
-11. **Done** — Status: DONE, promote insights to memory, delete file
+11. **Done** — Status: DONE, promote insights to memory, and leave the ignored state file in place unless the user asks for cleanup
 
 ## Rules
 

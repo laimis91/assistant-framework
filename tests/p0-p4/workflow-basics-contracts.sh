@@ -112,4 +112,46 @@ else
     fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
 fi
 
+test_start "workflow state artifacts are orchestrator-owned and ignored"
+missing_state_terms=()
+for term in \
+    "framework-owned, ignored state" \
+    "The orchestrator may create and update them directly" \
+    "This exception never applies to project source" \
+    "The Code Mapper returns context map markdown" \
+    "persists that markdown"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+        missing_state_terms+=("phases.md: $term")
+    fi
+done
+for term in \
+    "orchestrator-owned .claude/task.md state artifact" \
+    "persist the returned context map markdown"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        missing_state_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "context_map_markdown" \
+    "orchestrator to persist to .claude/context-map.md"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
+        missing_state_terms+=("handoffs.yaml: $term")
+    fi
+done
+for term in \
+    "This framework-owned state artifact may be written directly by the orchestrator" \
+    "workflow-guard.sh"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/pre-compress.sh" "$FRAMEWORK_DIR/hooks/scripts/workflow-guard.sh"; then
+        missing_state_terms+=("hooks: $term")
+    fi
+done
+if ! grep -Fq ".codex/" "$FRAMEWORK_DIR/.gitignore"; then
+    missing_state_terms+=(".gitignore: .codex/")
+fi
+if [[ "${#missing_state_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow state artifact ownership missing terms: ${missing_state_terms[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

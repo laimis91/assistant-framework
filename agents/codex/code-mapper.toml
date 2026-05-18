@@ -19,7 +19,7 @@ Return a status packet with:
 - `open_questions`: required when status is `NEEDS_CONTEXT` or `BLOCKED`
 
 ## What you return
-A compact, structured file map grouped by concern. Example format:
+Return `context_map_markdown`: a compact context map following the active workflow template. The orchestrator persists that markdown to `.codex/context-map.md` because this mapper is read-only. Also include a compact structured file map grouped by concern. Example format:
 
 **Auth module:**
 - Service: src/Auth/AuthService.cs
@@ -37,6 +37,7 @@ A compact, structured file map grouped by concern. Example format:
 
 ## Constraints
 - Do NOT edit any files
+- Do NOT write `.codex/context-map.md` yourself; return the markdown for the orchestrator to persist
 - Do NOT do deep analysis — if something needs deeper understanding, flag it for Explorer
 - Stay shallow: file paths and brief descriptions, not full code analysis
 - Keep output compact enough to paste into another agent's prompt

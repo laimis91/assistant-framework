@@ -62,9 +62,9 @@ MSG="SESSION ENDING — capture state before closing:
    - Did the user correct your approach or state a preference? → Use memory_add_entity (Rule or Preference)
    - Did you discover a non-obvious gotcha or pattern? → Use memory_add_insight or memory_pattern
    - Did you learn a durable project relationship? → Use memory_add_entity and memory_add_relation
-   - Keep $STATE_DIR/session.md and $STATE_DIR/task.md for session state only.
+   - Keep $STATE_DIR/session.md and $STATE_DIR/task.md for session state only. These framework-owned state artifacts may be written directly by the orchestrator.
 
-6. TASK CLEANUP: If $STATE_DIR/task.md exists and the task is complete, update its status to DONE."
+6. TASK CLEANUP: If active workflow work lacks $STATE_DIR/task.md, create it with the final status before ending. If $STATE_DIR/task.md exists and the task is complete, update its status to DONE. Leave ignored state files in place unless the user asks for cleanup."
 
 # Check for active non-DONE task — add specific reminder
 for dir in .claude .gemini .codex; do

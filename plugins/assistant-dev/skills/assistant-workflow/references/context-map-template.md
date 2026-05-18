@@ -7,7 +7,7 @@ Think of this as the "smart data structure" — if the map is right, the impleme
 
 ## When to generate
 - Medium+ tasks during Discover phase
-- Code Mapper produces this as its primary output
+- Code Mapper produces this as its primary output. If the mapper is read-only, it returns the markdown and the orchestrator writes it to `.claude/context-map.md`.
 - Regenerated per-session (not persisted across sessions — codebase may have changed)
 
 ## Template
@@ -53,3 +53,4 @@ Generated: [date] | Task: [1-sentence description]
 - File paths must be relative to project root
 - If the codebase is too large, focus on the modules the task touches
 - Add `.claude/context-map.md` to `.gitignore` — this is ephemeral, per-session only
+- If `.claude/context-map.md` was accidentally tracked, remove it from the git index while preserving the local file
