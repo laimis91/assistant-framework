@@ -29,11 +29,11 @@ public sealed class MemoryContextTool : IMemoryTool
             "properties": {
                 "project": {
                     "type": "string",
-                    "description": "Project name to get context for"
+                    "description": "Exact project name to get context for. Do not pass natural-language recall queries here; use memory_search for that."
                 },
                 "path": {
                     "type": "string",
-                    "description": "Project path (used to auto-detect project name if project is not specified)"
+                    "description": "Project path used to auto-detect project context. Do not pass keyword lists or phrases here; use memory_search for recall."
                 }
             }
         }

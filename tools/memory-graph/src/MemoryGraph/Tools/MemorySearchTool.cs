@@ -30,6 +30,7 @@ public sealed class MemorySearchTool : IMemoryTool
         Name = Name,
         Description = "Search all memory content: entities, reflexions, decisions, strategy lessons. " +
                       "Uses FTS5 full-text search for ranked results. " +
+                      "For recall, prefer a few distinctive terms or explicit OR alternatives over long natural-language phrases. " +
                       "Optionally filter by source type (entity, reflexion, decision, strategy).",
         InputSchema = ToolHelpers.ParseSchema("""
         {
@@ -134,6 +135,28 @@ public sealed class MemorySearchTool : IMemoryTool
             return [];
         }
 
+        var strictResults = SearchFtsWithLiveEntitiesCore(query, filters);
+        if (strictResults.Count > 0)
+        {
+            return strictResults;
+        }
+
+        var relaxedQuery = BuildRelaxedOrQuery(query);
+        if (string.IsNullOrEmpty(relaxedQuery))
+        {
+            return strictResults;
+        }
+
+        return SearchFtsWithLiveEntitiesCore(relaxedQuery, filters);
+    }
+
+    private List<FtsResult> SearchFtsWithLiveEntitiesCore(string query, SearchFilters filters)
+    {
+        if (_store is null)
+        {
+            return [];
+        }
+
         var sourceTypeFilter = filters.GetStoreSourceTypeFilter();
         var entityTypeFilter = filters.GetStoreEntityTypeFilter();
         var fetchLimit = SearchResultLimit;
@@ -156,6 +179,70 @@ public sealed class MemorySearchTool : IMemoryTool
 
             fetchLimit = Math.Min(fetchLimit * 2, MaxFtsFetchLimit);
         }
+    }
+
+    private static string? BuildRelaxedOrQuery(string query)
+    {
+        var tokens = TokenizeRelaxedQuery(query).ToList();
+        if (tokens.Any(token => !token.IsQuoted && IsFtsOperator(token.Text)))
+        {
+            return null;
+        }
+
+        var terms = tokens
+            .SelectMany(ExpandRelaxedTerms)
+            .Where(term => !string.IsNullOrWhiteSpace(term))
+            .Where(term => !IsFtsOperator(term))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return terms.Count > 1
+            ? string.Join(" OR ", terms)
+            : null;
+    }
+
+    private static IEnumerable<string> ExpandRelaxedTerms(RelaxedQueryToken token)
+    {
+        if (!token.IsQuoted)
+        {
+            yield return token.Text;
+            yield break;
+        }
+
+        foreach (var term in token.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            yield return term;
+        }
+    }
+
+    private static IEnumerable<RelaxedQueryToken> TokenizeRelaxedQuery(string query)
+    {
+        var tokenizer = new RelaxedQueryTokenizer();
+
+        foreach (var c in query)
+        {
+            var token = tokenizer.Read(c);
+            if (token.HasValue && HasSearchText(token.Value))
+            {
+                yield return token.Value;
+            }
+        }
+
+        var finalToken = tokenizer.Flush();
+        if (finalToken.HasValue && HasSearchText(finalToken.Value))
+        {
+            yield return finalToken.Value;
+        }
+    }
+
+    private static bool HasSearchText(RelaxedQueryToken token)
+    {
+        return !string.IsNullOrWhiteSpace(token.Text);
+    }
+
+    private static bool IsFtsOperator(string text)
+    {
+        return text is "AND" or "OR" or "NOT";
     }
 
     private bool MatchesFilters(FtsResult result, SearchFilters filters)
@@ -185,6 +272,67 @@ public sealed class MemorySearchTool : IMemoryTool
         return entity is not null && entity.Name.Equals(result.SourceId, StringComparison.Ordinal)
             ? entity
             : null;
+    }
+
+    private readonly record struct RelaxedQueryToken(string Text, bool IsQuoted);
+
+    private sealed class RelaxedQueryTokenizer
+    {
+        private readonly List<char> _current = [];
+        private bool _inQuote;
+        private bool _tokenWasQuoted;
+
+        public RelaxedQueryToken? Read(char c)
+        {
+            if (c == '"')
+            {
+                return ReadQuote();
+            }
+
+            if (char.IsWhiteSpace(c) && !_inQuote)
+            {
+                return ReadWhitespace();
+            }
+
+            _current.Add(c);
+            return null;
+        }
+
+        public RelaxedQueryToken? Flush()
+        {
+            return _current.Count > 0 ? CreateToken(_tokenWasQuoted) : null;
+        }
+
+        private RelaxedQueryToken? ReadQuote()
+        {
+            if (_inQuote)
+            {
+                var token = _current.Count > 0 ? CreateToken(isQuoted: true) : (RelaxedQueryToken?)null;
+                _current.Clear();
+                _inQuote = false;
+                _tokenWasQuoted = false;
+                return token;
+            }
+
+            var pending = Flush();
+            _inQuote = true;
+            _tokenWasQuoted = true;
+            return pending;
+        }
+
+        private RelaxedQueryToken? ReadWhitespace()
+        {
+            var token = Flush();
+            _tokenWasQuoted = false;
+            return token;
+        }
+
+        private RelaxedQueryToken CreateToken(bool isQuoted)
+        {
+            var token = new RelaxedQueryToken(new string(_current.ToArray()), isQuoted);
+            _current.Clear();
+            return token;
+        }
     }
 
     private sealed class SearchFilters

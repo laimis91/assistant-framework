@@ -80,6 +80,60 @@ public sealed class MemorySearchToolIntegrationTests : ToolIntegrationTestBase
     }
 
     [Fact]
+    public void Search_RelaxesLongKeywordQueryWhenStrictTermsDoNotAllMatch()
+    {
+        var (graph, registry, store) = CreateFullTestSetup();
+        using (store)
+        {
+            graph.AddOrUpdateEntity("Other PC Memory Retrieval", EntityType.Insight, [
+                "When memory-graph works on one PC but returns no data on another, check MCP config registration and the local memory store."
+            ]);
+            store.IndexInFts(
+                "entity",
+                "Other PC Memory Retrieval",
+                "Other PC Memory Retrieval",
+                "When memory-graph works on one PC but returns no data on another, check MCP config registration and the local memory store.",
+                "Insight");
+
+            var result = registry.Execute("memory_search", ParseArgs("""
+                {"query": "memory graph retrieval across PCs memory_context memory_search empty store diagnostics", "types": ["Insight"]}
+                """));
+
+            Assert.False(result.IsError);
+            var text = result.Content[0].Text;
+            Assert.Contains("Other PC Memory Retrieval", text);
+            Assert.Contains("\"searchMode\":\"fts5\"", text);
+        }
+    }
+
+    [Fact]
+    public void Search_RelaxesQuotedPhraseWhenExactPhraseDoesNotExist()
+    {
+        var (graph, registry, store) = CreateFullTestSetup();
+        using (store)
+        {
+            graph.AddOrUpdateEntity("Cross Machine Memory Bugs", EntityType.Insight, [
+                "For cross-machine memory bugs, verify config registration and memory data presence before changing retrieval logic."
+            ]);
+            store.IndexInFts(
+                "entity",
+                "Cross Machine Memory Bugs",
+                "Cross Machine Memory Bugs",
+                "For cross-machine memory bugs, verify config registration and memory data presence before changing retrieval logic.",
+                "Insight");
+
+            var result = registry.Execute("memory_search", ParseArgs("""
+                {"query": "\"cross PC memory retrieval failure\"", "types": ["Insight"]}
+                """));
+
+            Assert.False(result.IsError);
+            var text = result.Content[0].Text;
+            Assert.Contains("Cross Machine Memory Bugs", text);
+            Assert.Contains("\"searchMode\":\"fts5\"", text);
+        }
+    }
+
+    [Fact]
     public void Search_GraphFallbackHandlesBooleanOrTerms()
     {
         var (_, registry) = CreateTestSetup();
