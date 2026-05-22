@@ -101,7 +101,7 @@ For C# projects, run the cognitive complexity tool against changed files:
 bash "<framework-tools>/cognitive-complexity/run-complexity.sh" --changed --verbose
 ```
 
-Where `<framework-tools>` is the installed tools directory (typically `~/.claude/tools`, `~/.codex/tools`, or `~/.gemini/tools`).
+Where `<framework-tools>` is the installed tools directory (typically `~/{agent_state_dir}/tools`).
 
 - **Threshold: 15** (SonarSource default). Methods above this are flagged.
 - Flagged methods are **must-fix** — refactor to reduce complexity before merge.

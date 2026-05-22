@@ -101,9 +101,9 @@ Adds organizational structure on top of the core chain:
 
 ## Storage
 
-Telos Context File lives at `~/.claude/telos.md` — global, cross-project, loaded at every session start.
+Telos Context File lives at `~/{agent_state_dir}/telos.md` — global, cross-project, loaded at every session start.
 
-For team/corporate context in a specific repo, use `.claude/telos.md` at the project root.
+For team/corporate context in a specific repo, use `{agent_state_dir}/telos.md` at the project root.
 
 ## Commands
 
@@ -154,13 +154,13 @@ Don't push — these are valuable but not required for a useful TCF.
 
 List with connections to the chain.
 
-After each step, confirm with the user before moving on. When complete, write `~/.claude/telos.md`.
+After each step, confirm with the user before moving on. When complete, write `~/{agent_state_dir}/telos.md`.
 
 **Corporate/Team TCF creation** follows the same pattern but with organizational scope — company goals, team structure, KPIs, risk register, project tables.
 
 ### Update (`telos update` / `update telos`)
 
-Read the existing `~/.claude/telos.md`, present it, and ask what changed. Common updates:
+Read the existing `~/{agent_state_dir}/telos.md`, present it, and ask what changed. Common updates:
 - New project → verify it connects to the chain
 - Goal achieved → celebrate, remove or mark done, add next one
 - Challenge resolved → update strategies
@@ -170,7 +170,7 @@ Read the existing `~/.claude/telos.md`, present it, and ask what changed. Common
 
 ### Review (`telos review` / `review telos`)
 
-Read `~/.claude/telos.md` and check the explainability chain:
+Read `~/{agent_state_dir}/telos.md` and check the explainability chain:
 - Does every project trace back to a problem?
 - Are there orphan projects (no chain connection)?
 - Are there goals with no active projects (stalled)?
@@ -247,7 +247,7 @@ Path: Problems → Mission → Narratives → Goals → Challenges → Strategie
 
 ## How Agents Use Telos
 
-When `~/.claude/telos.md` is loaded at session start:
+When `~/{agent_state_dir}/telos.md` is loaded at session start:
 - **Ideation**: Score ideas partly on telos alignment — does this serve the mission?
 - **Planning**: When multiple approaches exist, prefer the one aligned with stated goals
 - **Prioritization**: If the user asks "what should I work on?" — consult telos

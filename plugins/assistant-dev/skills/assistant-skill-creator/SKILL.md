@@ -37,7 +37,7 @@ Create compact, contract-backed skills that give agents clear outcomes, validati
 - Keep `SKILL.md` concise; move long examples and procedures into `references/`.
 - Do not add subagent handoffs to Analysis or Utility skills.
 - Do not hardcode model-version-specific prompt knobs in general-purpose skills.
-- Keep skills company-safe and agent-agnostic: no mandatory Claude/Hermes/Codex runtime assumptions unless the skill is explicitly about that tool.
+- Keep skills company-safe and agent-agnostic: no mandatory Claude/Gemini/Codex runtime assumptions unless the skill is explicitly about that tool.
 - Treat memory, metrics, hooks, subagents, external tools, and generated state paths as optional/configurable and policy-gated.
 - Prefer local files and repo-native validation. Do not add SaaS calls, installers, or external dependencies without explicit user approval.
 - Do not encode secrets, private endpoints, customer data, or workplace-specific confidential details in examples, evals, or templates.

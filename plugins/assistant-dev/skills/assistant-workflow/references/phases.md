@@ -412,7 +412,7 @@ Then print completion markers and exit.
 
 ### Metrics entry format (all sizes)
 
-Append one JSONL line to the agent's configured local workflow metrics location when metrics are enabled and policy-allowed (for example `~/.claude/memory/metrics/workflow-metrics.jsonl`, `~/.codex/memory/metrics/workflow-metrics.jsonl`, `~/.gemini/memory/metrics/workflow-metrics.jsonl`, or another configured local path):
+Append one JSONL line to the agent's configured local workflow metrics location when metrics are enabled and policy-allowed (for example `~/{agent_state_dir}/memory/metrics/workflow-metrics.jsonl`, or another configured local path):
 ```json
 {"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":[],"agent_readiness_score":null,"components_count":null,"components_verified":null}
 ```

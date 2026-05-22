@@ -1,6 +1,6 @@
 # Subagent Role Definitions
 
-Reference for dispatching subagents via the Agent tool. When the framework's custom agents are installed (`~/.claude/agents/` or `~/.codex/agents/`), use agent names directly as subagent_type — each agent carries its own system prompt, tool restrictions, and model settings.
+Reference for dispatching subagents via the Agent tool. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), use agent names directly as subagent_type — each agent carries its own system prompt, tool restrictions, and model settings.
 
 ## Installed agents
 
@@ -21,7 +21,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 | Agent | Model | Access | Phase(s) | Purpose |
 |---|---|---|---|---|
-| `code-mapper` | haiku | Read-only | Discover | Produces context map (`.claude/context-map.md`) — entry points, interfaces, data flow, conventions |
+| `code-mapper` | haiku | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | sonnet | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | opus | Read-only | Decompose, Plan, Design | Component decomposition, implementation blueprints, design direction |
 | `code-writer` | opus | Write | Build | Implements code following a plan. No builds, no tests, no review |

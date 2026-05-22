@@ -5,7 +5,19 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "Codex skill install substitutes representative .claude paths in copied instruction/config files"
+test_start "installable skill and protocol sources use {agent_state_dir} instead of raw .claude paths"
+RAW_CLAUDE_SCAN_OUT="/tmp/p0p4-raw-claude-installable-scan.out"
+if rg -n '(~?/)?\.claude/' \
+    "$FRAMEWORK_DIR/skills" \
+    "$FRAMEWORK_DIR/plugins" \
+    "$FRAMEWORK_DIR/memory-protocol.md" \
+    >"$RAW_CLAUDE_SCAN_OUT"; then
+    fail "installable skill/protocol sources must not contain raw .claude paths; see $RAW_CLAUDE_SCAN_OUT"
+else
+    pass
+fi
+
+test_start "Codex skill install substitutes {agent_state_dir} placeholders in copied instruction/config files"
 INSTALL_HOME="$(mktemp -d)"
 FIXTURE_FRAMEWORK="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME" "$FIXTURE_FRAMEWORK"
@@ -21,30 +33,30 @@ description: "Fixture for install-time path substitution."
 
 # Path Substitution Contract
 
-Load ~/.claude/skills/path-substitution-contract/SKILL.md before acting.
-Persist active work in `.claude/task.md`.
+Load ~/{agent_state_dir}/skills/path-substitution-contract/SKILL.md before acting.
+Persist active work in `{agent_state_dir}/task.md`.
 Claude-specific prose can stay when it is not an agent state path.
 SKILL_FIXTURE
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/contracts/output.yaml" <<'CONTRACT_FIXTURE'
 artifacts:
   - name: task_journal
-    location: ".claude/task.md"
+    location: "{agent_state_dir}/task.md"
   - name: workflow_metrics
-    location: "~/.claude/memory/metrics/workflow-metrics.jsonl"
+    location: "~/{agent_state_dir}/memory/metrics/workflow-metrics.jsonl"
 CONTRACT_FIXTURE
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/references/task-journal-template.md" <<'REFERENCE_FIXTURE'
 # Task Journal Template
 
-Write to `.claude/task.md` in nested references.
-Read `~/.claude/agents/code-writer.md` for worker-specific instructions.
+Write to `{agent_state_dir}/task.md` in nested references.
+Read `~/{agent_state_dir}/agents/code-writer.md` for worker-specific instructions.
 REFERENCE_FIXTURE
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/evals/cases.json" <<'EVAL_FIXTURE'
 [
   {
     "id": "json-path-substitution",
     "setup_context": [
-      "An existing project `.claude/telos.md` may be present.",
-      "A global file may live at `~/.claude/memory/graph.jsonl`."
+      "An existing project `{agent_state_dir}/telos.md` may be present.",
+      "A global file may live at `~/{agent_state_dir}/memory/graph.jsonl`."
     ]
   }
 ]
@@ -76,15 +88,11 @@ if HOME="$INSTALL_HOME" bash "$FIXTURE_FRAMEWORK/install.sh" --agent codex --ski
         fail "expected JSON eval fixture to contain substituted .codex project path"
     elif ! grep -Fq 'A global file may live at `~/.codex/memory/graph.jsonl`.' "$installed_eval"; then
         fail "expected JSON eval fixture to contain substituted ~/.codex memory path"
-    elif grep -Fq "~/.claude/skills/path-substitution-contract/SKILL.md" "$installed_root" \
-        || grep -Fq '`.claude/task.md`' "$installed_root" \
-        || grep -Fq 'location: ".claude/task.md"' "$installed_contract" \
-        || grep -Fq 'location: "~/.claude/memory/metrics/workflow-metrics.jsonl"' "$installed_contract" \
-        || grep -Fq '`.claude/task.md`' "$installed_reference" \
-        || grep -Fq '`~/.claude/agents/code-writer.md`' "$installed_reference" \
-        || grep -Fq '`.claude/telos.md`' "$installed_eval" \
-        || grep -Fq '`~/.claude/memory/graph.jsonl`' "$installed_eval"; then
-        fail "found representative unsubstituted .claude path in installed Codex fixture skill"
+    elif grep -Fq "{agent_state_dir}" "$installed_root" \
+        || grep -Fq "{agent_state_dir}" "$installed_contract" \
+        || grep -Fq "{agent_state_dir}" "$installed_reference" \
+        || grep -Fq "{agent_state_dir}" "$installed_eval"; then
+        fail "found unresolved {agent_state_dir} placeholder in installed Codex fixture skill"
     else
         pass
     fi

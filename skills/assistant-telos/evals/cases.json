@@ -74,7 +74,7 @@
       "prompt": "Review my project Telos file and tell me where the strategy chain is incomplete.",
       "setup_context": [
         "The assistant-telos skill instructions are active.",
-        "An existing project `.claude/telos.md` may be present.",
+        "An existing project `{agent_state_dir}/telos.md` may be present.",
         "The user asks for review rather than create or update."
       ],
       "expected_behavior": [

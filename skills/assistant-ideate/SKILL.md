@@ -209,7 +209,7 @@ Which resonates? Options:
 
 When brainstorming within an existing project:
 
-1. Read `.claude/memory.md` for project-local orientation if present; use the knowledge graph for cross-session memory
+1. Read `{agent_state_dir}/memory.md` for project-local orientation if present; use the knowledge graph for cross-session memory
 2. Scan for TODOs, FIXMEs, and complexity hotspots
 3. Check recent git history for momentum/direction
 4. Consider what the existing architecture enables vs. constrains

@@ -3,14 +3,15 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "memory protocol source uses Claude template paths for agent substitution"
-if grep -Fq ".claude/task.md" "$FRAMEWORK_DIR/memory-protocol.md" \
-    && grep -Fq ".claude/context-map.md" "$FRAMEWORK_DIR/memory-protocol.md" \
+test_start "memory protocol source uses {agent_state_dir} template paths for agent substitution"
+if grep -Fq "{agent_state_dir}/task.md" "$FRAMEWORK_DIR/memory-protocol.md" \
+    && grep -Fq "{agent_state_dir}/context-map.md" "$FRAMEWORK_DIR/memory-protocol.md" \
+    && ! grep -Fq ".claude/task.md" "$FRAMEWORK_DIR/memory-protocol.md" \
     && ! grep -Fq ".codex/task.md" "$FRAMEWORK_DIR/memory-protocol.md" \
     && ! grep -Fq ".gemini/task.md" "$FRAMEWORK_DIR/memory-protocol.md"; then
     pass
 else
-    fail "memory-protocol.md must use .claude template state paths so installer substitution can emit .codex or .gemini"
+    fail "memory-protocol.md must use {agent_state_dir} template state paths so installer substitution can emit .claude, .codex, or .gemini"
 fi
 
 test_start "memory protocol wording avoids graph-only storage and matching installed-agent paths"

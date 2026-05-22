@@ -132,7 +132,7 @@ Present only specific gaps to the user. Do not ask generic "anything else?" ques
 
 Print: `>> Onboarding: Generating project orientation`
 
-Create or update a project-local orientation artifact only when allowed by user/project policy. Prefer the active agent's configured project note path; examples include `.claude/memory.md`, `.codex/memory.md`, `.gemini/memory.md`, `.assistant/memory.md`, or a documented repo-local equivalent. If no safe path is known, do not write a file; return the orientation in the response.
+Create or update a project-local orientation artifact only when allowed by user/project policy. Prefer the active agent's configured project note path; examples include `{agent_state_dir}/memory.md`, or a documented repo-local equivalent. If no safe path is known, do not write a file; return the orientation in the response.
 
 ```markdown
 # [Project Name]
@@ -224,7 +224,7 @@ Return:
 
 When returning to a known project after significant time:
 
-1. Read existing project-local orientation if present and policy-allowed (`.claude/memory.md`, `.assistant/memory.md`, or configured equivalent)
+1. Read existing project-local orientation if present and policy-allowed (`{agent_state_dir}/memory.md`, or configured equivalent)
 2. Check `git log --since="[last session date]"` for changes when git history is available
 3. Update orientation only with stable conventions or structural changes; otherwise report refresh results without writing
 4. Print: `>> Refreshed project context — [N] changes since last session`
