@@ -15,7 +15,7 @@ fields:
     infer_from: >
       User said 'TDD', 'tests first', 'red green refactor' → user_request.
       Plan includes 'TDD: active' in constraints → plan_constraint.
-      Project CLAUDE.md requires tests-first → project_convention.
+      Project instructions or conventions (AGENTS.md, CLAUDE.md, README, CONTRIBUTING.md, or equivalent) require tests-first → project_convention.
 
   - name: behaviors
     type: object[]
@@ -34,6 +34,29 @@ fields:
         description: "Which plan step this behavior belongs to (when used with workflow)"
     on_missing: ask
     ask_prompt: "What behaviors should I implement with TDD? List each one."
+
+  - name: debugging_evidence
+    type: object
+    required: conditional
+    condition: "when behavior is a bugfix whose root cause was not already obvious"
+    description: "assistant-debugging evidence used to define the RED regression test"
+    validation: "Must include reproduction_status, root_cause_or_mitigation, confidence, and original_failure_path; do not start RED for unknown-cause bugfixes without this evidence or a documented blocker"
+    on_missing: fail
+    object_fields:
+      - name: reproduction_status
+        type: enum
+        required: true
+        enum_values: [yes, partial, blocked, no]
+      - name: root_cause_or_mitigation
+        type: string
+        required: true
+      - name: original_failure_path
+        type: string
+        required: true
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
 
   - name: test_framework
     type: string

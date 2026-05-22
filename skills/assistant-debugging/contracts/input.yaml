@@ -1,0 +1,63 @@
+schema_version: "1.0"
+contract: input
+skill: assistant-debugging
+
+fields:
+  - name: symptom
+    type: string
+    required: true
+    description: "Observed failure, error, incorrect behavior, or user-reported problem"
+    on_missing: ask
+    ask_prompt: "What failure or incorrect behavior should I debug? Include the error, command, or user-visible symptom if available."
+    validation: "Must describe an observable failure or behavior difference"
+
+  - name: expected_behavior
+    type: string
+    required: false
+    description: "What should have happened instead"
+    on_missing: infer
+    infer_from: "Infer from tests, docs, code contracts, or user prompt when safe; otherwise record unknown"
+    default: "unknown"
+    validation: "Must be inferred from local/source context or explicitly marked unknown"
+
+  - name: scope
+    type: string
+    required: true
+    description: "Files, command, test, endpoint, workflow, or subsystem to inspect"
+    on_missing: infer
+    infer_from: "Use supplied paths, failing command, stack trace, git diff, tests, or local repository context"
+    validation: "Must identify a bounded area or explain why initial scope is broad"
+
+  - name: reproduction_target
+    type: string
+    required: false
+    description: "Smallest safe command, test, script, request, or manual path that should reproduce the symptom"
+    on_missing: infer
+    infer_from: "Infer from error output, test names, package scripts, CI config, README, or nearby tests"
+    default: "not_yet_known"
+    validation: "Must be a safe local/dev target or explicitly marked not_yet_known"
+
+  - name: severity
+    type: enum
+    required: false
+    description: "Impact level of the failure"
+    enum_values: [critical, high, medium, low]
+    default: medium
+    on_missing: skip
+    validation: "Use critical/high only for security, data loss, production outage, or major user impact"
+
+  - name: constraints
+    type: string[]
+    required: false
+    description: "Safety, environment, policy, time, or no-touch constraints"
+    default: []
+    on_missing: skip
+    validation: "Must include explicit constraints from user/project instructions when present"
+
+  - name: can_modify_code
+    type: boolean
+    required: false
+    description: "Whether the task includes permission to edit code after diagnosis"
+    default: true
+    on_missing: skip
+    validation: "False when user asked only for investigation, explanation, or audit"

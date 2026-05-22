@@ -36,6 +36,12 @@ artifacts:
             type: string
             required: true
             validation: "Must describe WHY the test failed (not syntax error or missing import)"
+          - name: debugging_trace
+            type: string
+            required: conditional
+            condition: "when the behavior is a bugfix"
+            description: "How the RED test traces to assistant-debugging reproduction/root-cause evidence"
+            validation: "Must cite original failure path or reproduction evidence for bugfix RED tests"
           - name: verified_failing
             type: boolean
             required: true

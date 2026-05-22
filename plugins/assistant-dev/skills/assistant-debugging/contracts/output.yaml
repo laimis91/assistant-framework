@@ -1,0 +1,146 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-debugging
+
+artifacts:
+  - name: status
+    type: enum
+    required: true
+    description: "Debugging outcome"
+    enum_values: [fixed, root_cause_found, mitigated, not_reproduced, blocked, inconclusive]
+    validation: "Must match the evidence gathered and must not claim fixed without verification"
+    on_fail: "Downgrade status to the strongest evidence-supported outcome and explain the missing proof"
+
+  - name: symptom_summary
+    type: string
+    required: true
+    description: "Observed failure and expected behavior"
+    validation: "Must include the observed behavior and expected behavior or explicitly say expected behavior is unknown"
+    on_fail: "Re-read the prompt, reproduction output, or local docs/tests and summarize symptom plus expected behavior"
+
+  - name: reproduction
+    type: object
+    required: true
+    description: "Reproduction attempt and result"
+    validation: "Must include target, command_or_steps, observed_result, and reproduced status"
+    on_fail: "Run or document the smallest safe reproduction attempt, or record the exact blocker"
+    object_fields:
+      - name: target
+        type: string
+        required: true
+        description: "Test, command, endpoint, workflow, or manual path attempted"
+      - name: command_or_steps
+        type: string
+        required: true
+        description: "Exact command or steps used, redacted when sensitive"
+      - name: observed_result
+        type: string
+        required: true
+        description: "Observed failure, pass, or blocker"
+      - name: reproduced
+        type: enum
+        required: true
+        enum_values: [yes, no, blocked, partial]
+        description: "Whether the reported symptom was reproduced"
+
+  - name: hypotheses
+    type: object[]
+    required: true
+    description: "Ranked possible causes considered during diagnosis"
+    validation: "At least three hypotheses unless fewer_hypotheses_reason is populated; each includes evidence and diagnostic result"
+    on_fail: "Add missing plausible hypotheses or explain why the evidence supports fewer than three"
+    object_fields:
+      - name: rank
+        type: int
+        required: true
+        description: "Priority order for diagnosis"
+      - name: cause
+        type: string
+        required: true
+        description: "Plausible cause statement"
+      - name: supporting_evidence
+        type: string
+        required: true
+        description: "Evidence that makes this cause plausible"
+      - name: disconfirming_evidence
+        type: string
+        required: true
+        description: "Evidence against this cause, or what would refute it"
+      - name: diagnostic_check
+        type: string
+        required: true
+        description: "Check run or planned to test this hypothesis"
+      - name: result
+        type: enum
+        required: true
+        enum_values: [confirmed, refuted, inconclusive, not_run]
+        description: "Diagnostic result for this hypothesis"
+
+  - name: fewer_hypotheses_reason
+    type: string
+    required: conditional
+    condition: "when fewer than three hypotheses are listed"
+    description: "Why fewer than three hypotheses are justified"
+    on_missing: fail
+    validation: "Must cite constraining evidence, not convenience"
+
+  - name: root_cause
+    type: string
+    required: conditional
+    condition: "when status is fixed, root_cause_found, or mitigated"
+    description: "Confirmed or best-supported cause of the failure"
+    on_missing: fail
+    validation: "Must be backed by reproduction and diagnostic evidence; mitigations must be labeled"
+
+  - name: confidence
+    type: enum
+    required: true
+    description: "Confidence in the root cause or outcome"
+    enum_values: [high, medium, low]
+    validation: "High requires reproduction plus verification; low requires residual risk explanation"
+    on_fail: "Adjust confidence to match evidence and note missing proof"
+
+  - name: fix_summary
+    type: object
+    required: conditional
+    condition: "when code, config, docs, or tests were changed"
+    description: "Files changed and why the change addresses the cause"
+    on_missing: fail
+    validation: "Must map each changed file to the confirmed cause or verification need"
+    object_fields:
+      - name: files_changed
+        type: string[]
+        required: true
+        description: "Files changed during the fix"
+      - name: rationale
+        type: string
+        required: true
+        description: "Why these changes address the cause rather than only the symptom"
+
+  - name: verification
+    type: object[]
+    required: true
+    description: "Commands, tests, inspections, or manual checks used to verify outcome"
+    validation: "Must include original reproduction path when available and at least one relevant regression check or explain why not feasible"
+    on_fail: "Run missing verification or record why it is blocked; do not count skipped checks as proof"
+    object_fields:
+      - name: command_or_check
+        type: string
+        required: true
+        description: "Command, test, inspection, or manual check"
+      - name: result
+        type: enum
+        required: true
+        enum_values: [passed, failed, skipped, blocked]
+        description: "Verification result"
+      - name: evidence
+        type: string
+        required: true
+        description: "Output, observation, or reason supporting the result"
+
+  - name: residual_risks
+    type: string[]
+    required: true
+    description: "Remaining uncertainty, skipped checks, blocked diagnostics, or follow-up risks"
+    validation: "Use an empty list only when reproduction, fix, and regression verification all passed"
+    on_fail: "List residual uncertainty or explain why none remains"

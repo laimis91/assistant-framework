@@ -123,8 +123,8 @@ test_start "workflow phase gates require recorded component evidence before adva
 missing_component_gate_terms=()
 for term in \
     "- id: B12" \
-    "independently checked, passing, and recorded with command/result evidence in the task journal component verification ledger" \
-    "record command/result evidence in the task journal ledger" \
+    "independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward component ledger" \
+    "record command/result evidence in the configured task journal or equivalent carried-forward state" \
     "- id: B13" \
     "each component has a final status of VERIFIED, including self-check result, before the next component started" \
     "components must be verified sequentially with evidence before advancing"; do

@@ -296,7 +296,7 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
-The default per-skill eval inventory is first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed. The current eval slice covers all 15 first-class skills: `assistant-clarify`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-memory`, `assistant-onboard`, `assistant-reflexion`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, and `assistant-workflow`.
+The default per-skill eval inventory is first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed. The current eval slice covers all 16 first-class skills: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-memory`, `assistant-onboard`, `assistant-reflexion`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, and `assistant-workflow`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 

@@ -7,29 +7,62 @@ artifacts:
   - name: project_summary
     type: string
     required: true
-    description: "What the project does, its tech stack, and architecture overview"
-    validation: "Non-empty, covers purpose, stack, and structure"
+    description: "What the project does, its tech stack, architecture overview, approximate size, and primary build/test/run commands"
+    validation: "Non-empty, covers purpose, stack, structure, size estimate, and commands when discoverable"
+    on_fail: "Re-run onboarding surface scan and summarize purpose, stack, structure, size estimate, and discoverable commands"
 
   - name: key_files
     type: object[]
     required: true
     description: "Important files in the project with their purpose"
     validation: "Each entry must include path (string) and purpose (string)"
+    on_fail: "Inspect project structure and add key files with path and purpose"
 
   - name: conventions
     type: object[]
     required: true
     description: "Coding patterns and conventions observed in the project"
     validation: "Each entry must include pattern (string) and example (string)"
+    on_fail: "Sample representative files and add conventions with concrete examples"
 
-  - name: memory_updated
+  - name: risky_areas
+    type: object[]
+    required: true
+    description: "Surfaces that need extra care in future work and why"
+    validation: "Each entry includes path_or_surface and risk_reason"
+    on_fail: "Identify risky surfaces or explicitly include an empty list with no risks found after inspection"
+
+  - name: likely_change_points
+    type: object[]
+    required: true
+    description: "Files or directories future features/fixes will likely touch"
+    validation: "Each entry includes path_or_directory and when_to_use"
+    on_fail: "Map likely future change points or explicitly include an empty list when none are identifiable"
+
+  - name: artifacts
+    type: string[]
+    required: true
+    description: "Orientation or memory files created/updated, or ['none'] if no files changed"
+    validation: "Must accurately reflect filesystem writes"
+    on_fail: "Set artifacts to written paths or ['none'] when no orientation artifact was created"
+
+  - name: artifact_updated
     type: boolean
     required: true
-    description: "Whether .claude/memory.md was created or updated"
-    validation: "Must accurately reflect whether the file was written"
+    description: "Whether a project-local orientation artifact was created or updated"
+    validation: "Must accurately reflect whether artifacts[] includes a file write"
+    on_fail: "Set artifact_updated true only when artifacts[] names written files; otherwise set false"
+
+  - name: durable_memory_updated
+    type: boolean
+    required: true
+    description: "Whether approved local durable memory/knowledge graph was updated separately from orientation artifacts"
+    validation: "True only when a policy-approved durable memory backend was updated; false when memory was unavailable, disallowed, or skipped"
+    on_fail: "Set durable_memory_updated according to the approved durable memory backend result, not orientation artifacts"
 
   - name: questions
     type: string[]
     required: true
     description: "Open questions for the user about the project"
     validation: "Specific questions about unclear areas — not generic prompts"
+    on_fail: "Replace generic questions with specific project gaps or use an empty list when no questions remain"

@@ -26,6 +26,22 @@ fields:
     validation: "Each entry must be a valid file path"
     on_missing: infer
 
+  - name: audience
+    type: enum
+    required: false
+    description: "Intended audience for the documentation"
+    validation: "Defaults to internal when not specified; public docs require extra sensitivity review"
+    on_missing: infer
+    enum_values: [internal, public, maintainers, onboarding]
+
+  - name: evidence_policy
+    type: enum
+    required: false
+    description: "How strictly claims must be backed by local source evidence"
+    validation: "Use strict for public or release docs"
+    on_missing: infer
+    enum_values: [strict, normal]
+
   - name: format
     type: enum
     required: false

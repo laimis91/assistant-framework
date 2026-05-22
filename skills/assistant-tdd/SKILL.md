@@ -30,7 +30,7 @@ Enforces the Red-Green-Refactor cycle. When active, every production change begi
 
 ## Goal
 
-Protect behavior changes with a verified Red-Green-Refactor loop before production code is trusted.
+Protect behavior changes with a verified Red-Green-Refactor loop before production code is trusted. In normal development workflow, tests-first is the default for behavior changes, even when the user did not explicitly say "TDD".
 
 ## Success Criteria
 
@@ -53,8 +53,9 @@ Production code starts after a failing test proves the missing behaviour. Recove
 
 This skill activates when:
 - The user explicitly requests TDD ("use TDD", "tests first", "red green refactor")
+- `assistant-workflow` is building a behavior change, bug fix, or interface-affecting refactor and records `TDD: active` in the plan constraints
 - The plan includes `TDD: active` in constraints
-- The project's CLAUDE.md or conventions require tests-first
+- The project's CLAUDE.md, AGENTS.md, README, or conventions require tests-first
 
 When active, add to the task journal constraints:
 ```
@@ -122,21 +123,24 @@ Advance only when the current gate passes. Recovery: if the test does not fail i
 - Refactors that change interfaces (characterization tests first)
 - Any behaviour in the test plan from `assistant-workflow`
 
-**Exceptions (require explicit user approval to skip):**
+**Exceptions (require explicit user approval when TDD is active):**
 - Throwaway prototypes / spikes
 - Generated code (scaffolding, migrations)
-- Configuration-only changes
+- Documentation-only changes
+- Configuration-only changes with no behavior logic
 - UI layout / styling with no logic
+
+Approved exceptions are outside the TDD cycle log. Record the approval and reason in the owning workflow/plan, then use the workflow's normal validation rules instead of claiming TDD completion for that behavior.
 
 ## Bug fix pattern
 
 Bug fixes get their own TDD variant:
 
-1. **Reproduce**: write a test that demonstrates the bug (RED - test fails showing the bug exists)
-2. **Fix**: make the minimal change to fix the bug (GREEN - test passes)
-3. **Protect**: verify no regressions, refactor if needed (REFACTOR - all tests green)
+1. **Reproduce**: write a failing test that demonstrates the bug (RED - the failure proves the bug exists)
+2. **Fix**: make the minimal change to fix the bug (GREEN - the failing test now passes)
+3. **Protect**: keep the regression test, verify no regressions, refactor only if needed
 
-This protects against silent bug regressions.
+If the bug cannot be reproduced with a meaningful test yet, do not enter a TDD cycle. First load and follow `assistant-debugging` (or use the same direct fallback when unavailable/policy-disallowed), gather enough reproduction/root-cause evidence to write a meaningful failing regression test, then return to RED.
 
 ## Common shortcuts and required response
 
@@ -175,7 +179,7 @@ When TDD is active, the Spec Review (Stage 1) adds an extra check:
 
 ## Pairing with assistant-workflow
 
-This skill enhances the Build loop in `assistant-workflow`:
+This skill enhances the Build loop in `assistant-workflow`. For unknown-cause bugfixes, `assistant-debugging` runs first; this skill starts only after the failure mechanism is understood enough to define RED regression evidence:
 - Step 6 in the Build loop activates Red-Green-Refactor per plan step
 - The test plan from `references/prompts/test-strategy.md` defines the behaviours to TDD
 - The review cycle verifies TDD discipline was maintained

@@ -30,7 +30,7 @@ On-demand security analysis. Use when touching auth, inputs, dependencies, or pr
 
 ## Goal
 
-Identify concrete security risks with evidence, severity, impact, and remediation that can be acted on before release or merge.
+Identify concrete security risks with evidence, severity, impact, and remediation that can be acted on before release or merge. Keep the analysis practical and company-safe: local-first, no secret exposure, no unapproved external scanners, and no generic security essays.
 
 ## Success Criteria
 
@@ -44,6 +44,8 @@ Identify concrete security risks with evidence, severity, impact, and remediatio
 - Do not report generic security advice without evidence in the reviewed surface.
 - Ask only when missing scope or access prevents a trustworthy security conclusion.
 - Treat exploitable vulnerabilities and secret exposure as blockers, not nits.
+- Do not paste, log, or repeat secrets. Redact values and cite only the file/location.
+- Do not require external SaaS scanners, remote code upload, or unapproved dependency installs; use local/repo-native checks when available.
 
 ## Available Tools
 
@@ -66,6 +68,39 @@ Read the relevant tool file when the situation calls for it.
 
 **Deep analysis:**
 For thorough threat modeling, also load `prompts/threat-model.md` — it provides a detailed prompt pack for comprehensive STRIDE analysis.
+
+## Practical Review Checklist
+
+Always scan relevant surfaces for:
+- **Secrets exposure**: committed tokens, private keys, credentials, `.env` leaks, sensitive logs.
+- **Auth and authorization**: missing checks, confused roles, tenant isolation, IDOR, privilege escalation.
+- **Input handling**: validation gaps, injection paths, unsafe parsing, untrusted file names.
+- **Data access**: SQL/NoSQL injection, overbroad queries, missing row-level filters, unsafe migrations.
+- **Shell/process execution**: command injection, unsanitized arguments, PATH/env trust, unsafe temp files.
+- **Path and file operations**: path traversal, unsafe extraction, symlink races, broad delete/write.
+- **Network and integrations**: SSRF, webhook verification, TLS assumptions, replay handling, timeout/retry abuse.
+- **Serialization**: unsafe deserialization, object injection, prototype pollution, untrusted YAML/XML.
+- **Dependency/config risk**: vulnerable packages, dangerous debug flags, permissive CORS, exposed admin endpoints.
+- **Privacy/logging**: PII leakage, customer data in telemetry, excessive error detail.
+
+Only report checklist items with evidence in the reviewed scope. If a category is relevant but unassessed, list it under residual risk rather than inventing a finding.
+
+## Finding Template
+
+```markdown
+### [severity] Short title
+
+- Category: injection | auth bypass | secret exposure | unsafe dependency | etc.
+- File: file path or `project-level`
+- Description: what the security issue is
+- Evidence: file:line/config/dependency/threat path, with secrets redacted
+- Attack path: how an attacker or misuse reaches the issue
+- Impact: data, integrity, availability, compliance, or privilege impact
+- Remediation: smallest useful fix
+- Verification: command/test/manual check that would prove the fix
+```
+
+The contract-required fields are `severity`, `category`, `description`, `impact`, and `remediation`; include them exactly in every finding. Use lowercase severity values (`critical`, `high`, `medium`, `low`) when producing structured output.
 
 ## Severity Scale
 

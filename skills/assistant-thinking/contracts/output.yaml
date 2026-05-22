@@ -38,3 +38,33 @@ artifacts:
     description: "The strongest counter-argument to the recommendation"
     validation: "A genuine challenge, not a strawman"
     on_fail: "Re-run ANALYSIS phase to identify the strongest counter-argument"
+
+  - name: gaps_or_assumptions
+    type: string[]
+    required: true
+    description: "Known gaps, assumptions, or evidence limits that affect confidence"
+    validation: "Use an empty list only when confidence is high and no material gaps remain"
+    on_fail: "List the uncertainty limits or explicitly justify why no material gaps remain"
+
+  - name: evidence_or_observations
+    type: string[]
+    required: true
+    description: "Facts, observations, test results, or user-provided constraints the reasoning used"
+    validation: "At least one entry unless the task is purely hypothetical"
+    on_fail: "Add the facts, observations, tests, or constraints used; for hypothetical tasks state that no external evidence was available"
+
+  - name: decision_artifacts
+    type: object
+    required: conditional
+    condition: "tool_used in [perspectives, stress_test, deep_think] and the output is a decision"
+    description: "Options, criteria, and validation step for decision-oriented reasoning"
+    validation: "Includes options considered, decision criteria, selected option, and next validation step"
+    on_fail: "Re-run decision synthesis and include options considered, criteria, selected option, and validation or rollback step"
+
+  - name: debug_artifacts
+    type: object
+    required: conditional
+    condition: "tool_used == hypothesize"
+    description: "Hypotheses, tests, disconfirming evidence, and conclusion for debugging uncertainty"
+    validation: "Includes at least three hypotheses unless fewer are plausible, tests performed or proposed, and what would disprove the current conclusion"
+    on_fail: "Re-run hypothesis analysis and include hypotheses, tests, disconfirming evidence, and conclusion"

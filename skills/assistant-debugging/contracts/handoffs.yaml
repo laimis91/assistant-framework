@@ -1,0 +1,78 @@
+# Debugging handoff contracts
+# Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
+
+schema_version: "1.0"
+contract: handoffs
+skill: assistant-debugging
+
+handoffs:
+  - name: debugging_investigation
+    from: DebuggingOrchestrator
+    to: Investigator
+    phase: ISOLATE
+    context_fields:
+      - name: symptom
+        type: string
+        required: true
+        description: "Observed failure to investigate"
+      - name: reproduction_evidence
+        type: object
+        required: true
+        description: "Command/steps/result from reproduction phase"
+      - name: hypotheses
+        type: object[]
+        required: true
+        description: "Ranked hypotheses and diagnostic checks to evaluate"
+      - name: constraints
+        type: string[]
+        required: false
+        description: "Safety and environment constraints"
+        default: []
+    return_fields:
+      - name: diagnostic_results
+        type: object[]
+        required: true
+        description: "Checks run with evidence and hypothesis status"
+      - name: confirmed_root_cause
+        type: string
+        required: conditional
+        condition: "when evidence identifies a cause"
+        description: "Confirmed or best-supported cause"
+      - name: residual_uncertainty
+        type: string[]
+        required: true
+        description: "Remaining unknowns or blocked diagnostics"
+    on_missing_field: "Re-dispatch Investigator with the missing field request or continue direct investigation with the missing evidence recorded as residual risk"
+
+  - name: debugging_fix
+    from: DebuggingOrchestrator
+    to: Fixer
+    phase: FIX
+    context_fields:
+      - name: root_cause
+        type: string
+        required: true
+        description: "Confirmed cause or explicitly labeled mitigation target"
+      - name: reproduction_evidence
+        type: object
+        required: true
+        description: "Original failing path used to verify the fix"
+      - name: constraints
+        type: string[]
+        required: false
+        description: "No-touch files, safety policy, and verification requirements"
+        default: []
+    return_fields:
+      - name: changed_files
+        type: string[]
+        required: true
+        description: "Files changed for fix or regression test"
+      - name: fix_rationale
+        type: string
+        required: true
+        description: "Why the change addresses root cause rather than only symptom"
+      - name: verification_run
+        type: object[]
+        required: true
+        description: "Checks run by the fixer and their results"
+    on_missing_field: "Ask Fixer to supply missing field before accepting the fix, or inspect the diff directly and record the gap"

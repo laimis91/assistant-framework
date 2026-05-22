@@ -55,8 +55,11 @@ gates:
         condition: "skill_category is process"
         on_fail: "Design handoff schemas with explicit field matching"
       - id: SD5
-        check: "User has reviewed and approved the contract design"
-        on_fail: "Present the design to the user and wait for approval"
+        check: "User has reviewed and approved the contract design, unless this is a small low-risk edit to an existing skill with explicit direction and reversible changes"
+        on_fail: "Present the design to the user and wait for approval, or record why the small-edit exception applies"
+      - id: SD6
+        check: "Policy/runtime assumptions are explicit, optional/configurable, and have fallback behavior"
+        on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples"
 
   - phase: BUILD
     checkpoint_start: "--- PHASE: BUILD ---"
@@ -120,6 +123,9 @@ gates:
       - id: SV2
         check: "SKILL.md body is under 500 lines"
         on_fail: "Split content into sub-files under references/"
+      - id: SV3
+        check: "No hidden runtime-specific assumptions, mandatory external tools, hardcoded state paths, or sensitive examples are present unless explicitly scoped and policy-gated"
+        on_fail: "Make assumptions optional/configurable, add fallback behavior, replace hardcoded paths with placeholders, or remove sensitive examples"
 
 invariants:
   - id: INV1

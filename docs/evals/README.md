@@ -91,11 +91,12 @@ those skill fixtures with the same provider-neutral constraints as the framework
 instruction eval runner. It uses local shell and `jq` only; it does not call
 provider SDKs, model APIs, or network services.
 
-This slice now covers all 15 first-class `assistant-*` skills. Local-only Unity
+This slice now covers all 16 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is
 passed. The current tracked first-class fixtures are:
 
 - `skills/assistant-clarify/evals/cases.json`
+- `skills/assistant-debugging/evals/cases.json`
 - `skills/assistant-diagrams/evals/cases.json`
 - `skills/assistant-docs/evals/cases.json`
 - `skills/assistant-ideate/evals/cases.json`

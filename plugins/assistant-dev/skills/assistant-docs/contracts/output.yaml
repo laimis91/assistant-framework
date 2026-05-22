@@ -25,6 +25,21 @@ artifacts:
         required: true
         description: "What documentation was added or changed"
 
+  - name: evidence_sources
+    type: object[]
+    required: true
+    description: "Source files, tests, configs, existing docs, git history, or user-provided material used as documentation truth"
+    min_items: 1
+    validation: "Every concrete doc claim should trace to at least one evidence source or be listed in review_items"
+    on_fail: "Inspect source material and record evidence before finalizing docs"
+    object_fields:
+      - name: source
+        type: string
+        required: true
+      - name: claims_supported
+        type: string
+        required: true
+
   - name: doc_coverage
     type: string
     required: true
@@ -32,9 +47,16 @@ artifacts:
     validation: "Non-empty string covering both documented and undocumented areas"
     on_fail: "Re-run skill to produce the missing artifact"
 
-  - name: review_needed
-    type: boolean
+  - name: review_items
+    type: string[]
     required: true
-    description: "Whether generated docs need user review before committing"
-    validation: "True when docs contain inferred information or cover complex areas"
-    on_fail: "Re-run skill to produce the missing artifact"
+    description: "Inferred, stale, conflicting, or audience-sensitive claims requiring user or maintainer review; empty only when none remain"
+    validation: "Must list every unverified or sensitive claim instead of silently presenting it as fact"
+    on_fail: "Move unsupported claims to review_items or remove them from docs"
+
+  - name: safety_notes
+    type: string[]
+    required: true
+    description: "Redactions, sensitive/internal details omitted, or ['none'] when no safety-sensitive content was encountered"
+    validation: "Must not include the sensitive value itself"
+    on_fail: "Redact sensitive content and summarize the omission without exposing values"

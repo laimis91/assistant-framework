@@ -35,7 +35,7 @@ Run this loop autonomously from start to finish. Continue rounds until clean or 
 
 ## Goal
 
-Find concrete defects, risks, regressions, and test gaps; fix them when in review-fix mode; and return one evidence-backed final review result.
+Find concrete defects, risks, regressions, and test gaps; fix them when in review-fix mode; and return one evidence-backed final review result. Reviews must be useful in company environments: local-first, policy-safe, and focused on actionable engineering risk rather than generic style preferences.
 
 ## Success Criteria
 
@@ -57,9 +57,42 @@ Find concrete defects, risks, regressions, and test gaps; fix them when in revie
 Determine the review scope:
 - If the user specified files, pasted content, or a diff -> review that material
 - If there are uncommitted changes -> review those (`git diff`)
-- If there's an active task journal (`.claude/task.md`) -> review all changes from that task
+- If there's an active configured task journal, agent-state task file (`{agent_state_dir}/task.md`), or carried-forward task packet -> review all changes from that task
 - If the user requests an audit of current file contents -> review the relevant files even without a diff
 - Otherwise -> ask the user what to review
+
+## Review Modes
+
+Use the smallest mode that answers the request; combine modes when reviewing implementation work.
+
+- **Spec review**: compare the diff/code to the stated goal and acceptance criteria. Report missing behavior, scope creep, and mismatched semantics.
+- **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
+- **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
+- **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
+- **Maintainability review**: apply SOLID/KISS/DRY/YAGNI/readability only when a concrete risk exists.
+- **Security handoff**: invoke `assistant-security` when the reviewed surface touches auth, permissions, secrets, input handling, persistence, shell commands, dependency/config changes, network calls, or external integrations.
+
+Finding format:
+
+```markdown
+- Severity: must-fix | should-fix | nit
+- Evidence: file:line or diff hunk plus observed behavior
+- Impact: what can break, leak, regress, or become hard to maintain
+- Recommendation: smallest useful fix
+- Confidence: percentage matching the active review-round threshold
+```
+
+Severity mapping:
+- **must-fix**: correctness/security/regression issue that should block completion or release.
+- **should-fix**: concrete risk that should be resolved in the review-fix loop but may not block an audit report.
+- **nit**: low-priority observation with limited impact.
+
+## Company-Safe Review Rules
+
+- Prefer local diffs, local commands, and repo-native checks.
+- Do not require external SaaS scanners, remote LLM review, or unapproved package installs.
+- Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
+- If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
 
 ## Refactor-Related Findings
 
@@ -95,6 +128,9 @@ while round <= 5:
   1. REVIEW
      - Dispatch a Reviewer subagent (or self-review for small scope)
      - Provide: review material snapshot, previously_fixed list, round number
+     - First run Spec Review against the user request and acceptance criteria
+     - Then run Regression/Test/Maintainability modes as applicable
+     - If security-sensitive surfaces are present, hand off to `assistant-security`
      - Load and apply references/review-principles.md as the clean-code lens
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
@@ -140,7 +176,7 @@ while round <= 5:
   4. VALIDATE
      - Run build + tests if applicable
      - If build/tests fail -> fix and re-verify before continuing
-     - For C# projects: run `bash ~/.claude/tools/cognitive-complexity/run-complexity.sh --changed` and flag methods exceeding threshold (adjust path for agent: `~/.codex/tools/...` or `~/.gemini/tools/...`)
+     - For C# projects: run the configured local cognitive-complexity check when available and policy-allowed, then flag methods exceeding threshold; if unavailable/disallowed, record that explicitly and use equivalent review evidence from source inspection, tests, and focused complexity reasoning.
 
   5. round += 1 -> go to step 1
 ```
@@ -197,6 +233,7 @@ Return:
 - **Result** - CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS.
 - **Findings/fixed items** - severity, file, evidence, action, and round.
 - **Verification** - build/test commands or not-applicable reason.
+- **Bugfix evidence review** - when applicable, whether reproduction/root-cause evidence and regression linkage were reviewed.
 - **Residual risk** - remaining items, nits, or scope gaps.
 
 ## Stop Rules

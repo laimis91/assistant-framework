@@ -178,7 +178,7 @@ handoffs:
       - name: context_map_markdown
         type: string
         required: true
-        description: "Compact context map markdown for the orchestrator to persist to .claude/context-map.md when the mapper is read-only"
+        description: "Compact context map markdown for the orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or carry forward inline when file writes are unavailable"
     on_missing_field: "Re-dispatch CodeMapper with explicit request for the missing field"
 
   # ─────────────────────────────────────────────

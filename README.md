@@ -1,24 +1,25 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 15 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, self-improving reflexion, and purpose-driven context (Telos).
+A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, self-improving reflexion, and purpose-driven context (Telos).
 
 ## What it does
 
 1. **Structured Workflow** — TRIAGE > DISCOVER > PLAN > BUILD & TEST > DOCUMENT with approval gates and two-stage review
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
 3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
-4. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
-5. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
-6. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
-7. **Memory System** — Cross-session learning: user preferences, feedback rules, task insights, project context
-8. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
-9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
-10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
-11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-12. **Review Automation** — Autonomous review/fix/re-review loop with confidence thresholds
-13. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
-14. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
-15. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
+4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
+5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
+6. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
+7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
+8. **Memory System** — Cross-session learning: user preferences, feedback rules, task insights, project context
+9. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
+10. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
+11. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
+12. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
+13. **Review Automation** — Autonomous review/fix/re-review loop with confidence thresholds
+14. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
+15. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
+16. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 
 ## Installation
 
@@ -40,7 +41,7 @@ Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The curr
 ./install.sh --agent codex --plugin assistant-dev
 ```
 
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the eight development skills. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
+The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the nine development skills. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
 
 Install a single skill:
 ```bash
@@ -82,6 +83,11 @@ Triggers on: messy prompt, unclear prompt, figure out what I mean, help me struc
 Test-Driven Development enforcement: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
 
 Triggers on: TDD, tests first, test-driven, write the test first, red green refactor
+
+### assistant-debugging
+Evidence-first debugging: reproduce or bound the failure, rank competing hypotheses, isolate root cause, apply the smallest durable fix, and verify with original reproduction plus regression checks.
+
+Triggers on: debug, root cause, investigate failure, flaky test, failing test, production issue
 
 ### assistant-thinking
 Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, hypothesize, creative.
@@ -229,8 +235,8 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 
 The default eval inventory is first-class `assistant-*` skills with fixtures and
 excludes local-only `unity-*` skills unless `--include-local` is passed. Current
-coverage is complete first-class skill coverage for all 15 tracked assistant
-skills: `assistant-clarify`, `assistant-diagrams`, `assistant-docs`,
+coverage is complete first-class skill coverage for all 16 tracked assistant
+skills: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`,
 `assistant-ideate`, `assistant-memory`, `assistant-onboard`,
 `assistant-reflexion`, `assistant-research`, `assistant-review`,
 `assistant-security`, `assistant-skill-creator`, `assistant-tdd`,

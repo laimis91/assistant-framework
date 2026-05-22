@@ -129,7 +129,8 @@ if HOME="$INSTALL_HOME_PLUGIN_DEV_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent 
     if printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin profile: assistant-dev" \
         && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" \
         && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-dev -> ./skills/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-debugging assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow" \
+        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-debugging/" \
         && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-diagrams/" \
         && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-docs/" \
         && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-onboard/" \
@@ -254,7 +255,7 @@ if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent code
     dev_agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$dev_agents_file")"
     missing_dev_skill=""
     unexpected_dev_profile_skill=""
-    for dev_skill in assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow; do
+    for dev_skill in assistant-debugging assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow; do
         if [[ ! -d "$installed_dev_skills_dir/$dev_skill" ]]; then
             missing_dev_skill="$dev_skill"
             break
@@ -275,8 +276,8 @@ if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent code
         fail "assistant-dev plugin install missed $missing_dev_skill"
     elif [[ -n "$unexpected_dev_profile_skill" ]]; then
         fail "assistant-dev plugin install included non-development skill $unexpected_dev_profile_skill"
-    elif [[ "$dev_agents_assistant_skill_rows" != "8" ]]; then
-        fail "expected assistant-dev Codex AGENTS.md to list 8 assistant skills; found $dev_agents_assistant_skill_rows"
+    elif [[ "$dev_agents_assistant_skill_rows" != "9" ]]; then
+        fail "expected assistant-dev Codex AGENTS.md to list 9 assistant skills; found $dev_agents_assistant_skill_rows"
     else
         pass
     fi

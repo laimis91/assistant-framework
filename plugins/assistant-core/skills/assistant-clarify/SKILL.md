@@ -6,7 +6,7 @@ triggers:
   - pattern: "chaotic prompt|messy prompt|unclear prompt|figure out what i mean|help me structure this|turn this into a structured prompt|clarify my request|not sure how to ask this|can you make sense of this|i'm not sure what i'm asking|not sure what i need|help me untangle this|sort this out with me|i have a few things mixed together|this might be two separate asks|i'm deciding between|should i do x or y"
     priority: 75
     min_words: 4
-    reminder: "This request matches assistant-clarify. Invoke it to restate the likely goal, ask 1-3 high-yield clarification questions, and convert the input into a structured brief before proceeding."
+    reminder: "This request matches assistant-clarify. Invoke it to restate the likely goal, ask 0-3 high-yield clarification questions only when needed, apply safe defaults when possible, and convert the input into a structured brief before proceeding."
 ---
 
 # Clarification Workflow
@@ -35,20 +35,33 @@ This is a Utility skill. It has no phase gates or sub-agent handoffs.
 
 ## Goal
 
-Turn ambiguous, multi-intent, or underspecified prompts into a concise execution brief without shaming the user or stalling clear work.
+Turn ambiguous, multi-intent, or underspecified prompts into a concise execution brief without shaming the user or stalling clear work. Preserve momentum by acting with safe defaults when ambiguity does not materially change the next action.
 
 ## Success Criteria
 
 - The likely goal, deliverables, constraints, and unknowns are separated.
-- Clarifying questions are limited to one to three high-yield items.
+- Clarifying questions are limited to zero to three high-yield items.
 - Each question includes a recommended default when a safe default exists.
 - The next execution target is explicit once ambiguity is reduced.
+- If safe defaults are enough, status is `ready_to_execute` and execution may proceed without asking ritual questions.
 
 ## Constraints
 
 - Ask only when guessing would materially change correctness, scope, priority, safety, or user-visible output.
 - Do not ask ritual questions when the prompt already contains enough signal to proceed.
 - Preserve the user's wording and intent; do not reframe into a different task.
+- Prefer bounded choices and a recommended default over open-ended interrogation.
+- Treat company/security constraints as real blockers: do not ask for secrets or request unapproved external sharing as a clarification shortcut.
+
+## Decision Rule: Ask or Act
+
+Before asking, classify the ambiguity:
+
+- **Safe default**: one interpretation is obvious and reversible. State the assumption and proceed.
+- **Bounded choice**: 2-3 plausible paths would change the output. Ask one multiple-choice question with a recommendation.
+- **Material blocker**: action could be wrong, unsafe, destructive, policy-violating, or expensive. Stop and ask.
+
+Default to action for low-risk discovery steps such as reading local files, inspecting existing project docs, or drafting a provisional brief.
 
 ## Usage
 
@@ -64,12 +77,12 @@ Read `chaotic-prompts.md` when any of these are true:
 Return:
 1. **Interpretation** - the user's likely goal in one or two sentences.
 2. **Structured brief** - knowns, unknowns, assumptions, constraints, and likely deliverables.
-3. **Clarifying questions** - one to three high-yield questions with defaults or recommendations.
+3. **Clarifying questions** - zero to three high-yield questions with defaults or recommendations. Use an empty list when ready to execute.
 4. **Execution target** - the confirmed next action once ambiguity is reduced, or the blocker if it is not.
 5. **Status** - ready to execute, needs clarification, or blocked.
 
 ## Stop Rules
 
 - Stop and ask only when the next action would be meaningfully different depending on the answer.
-- Stop after presenting clarification questions; do not execute the underlying task until the user answers or accepts defaults.
+- Stop after presenting clarification questions only when status is `needs_clarification` or `blocked`.
 - If the request becomes clear during analysis, proceed with the execution target instead of continuing to clarify.

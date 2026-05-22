@@ -17,7 +17,7 @@ fields:
       User specified files → files.
       User provided pasted content or an arbitrary text/file snapshot → content.
       Uncommitted changes exist (git diff non-empty) → changes.
-      Active task journal (.claude/task.md) exists → task.
+      Active configured task journal, agent-state task file ({agent_state_dir}/task.md), or carried-forward task packet exists → task.
       User provided PR number/URL → pr.
       None of the above → ask.
 

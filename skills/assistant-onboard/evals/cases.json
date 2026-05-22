@@ -37,7 +37,7 @@
         "The response includes the required onboarding phases.",
         "The response outputs key_files with path and purpose.",
         "The response outputs conventions with pattern and example.",
-        "The response records memory_updated accurately.",
+        "The response records artifact_updated and durable_memory_updated accurately.",
         "The response lists specific gaps or questions."
       ],
       "fail_signals": [
@@ -54,7 +54,8 @@
           "Pattern recognition",
           "key_files",
           "conventions",
-          "memory_updated",
+          "artifact_updated",
+          "durable_memory_updated",
           "questions",
           "Status"
         ],

@@ -1,0 +1,105 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-debugging
+
+gates:
+  - phase: SCOPE
+    checkpoint_start: "--- PHASE: SCOPE ---"
+    checkpoint_end: "--- PHASE: SCOPE COMPLETE ---"
+    exit_assertions:
+      - id: SC1
+        check: "Symptom is described as an observable failure or behavior difference"
+        on_fail: "Ask for the missing symptom or extract it from the supplied logs, error, failing command, or test output"
+      - id: SC2
+        check: "Scope is bounded to files, command, test, endpoint, workflow, or subsystem before diagnostics begin"
+        on_fail: "Inspect local context to infer scope or ask one material narrowing question"
+      - id: SC3
+        check: "Safety constraints and destructive/production boundaries are recorded before commands run"
+        on_fail: "Record constraints and avoid destructive or production-affecting diagnostics until approved"
+
+  - phase: REPRODUCE
+    checkpoint_start: "--- PHASE: REPRODUCE ---"
+    checkpoint_end: "--- PHASE: REPRODUCE COMPLETE ---"
+    exit_assertions:
+      - id: RP1
+        check: "A smallest safe reproduction target was attempted or a concrete blocker was recorded"
+        on_fail: "Find and run the narrowest safe local command/test/manual path, or document why none is available"
+      - id: RP2
+        check: "Reproduction evidence includes command_or_steps, observed_result, and match to reported symptom"
+        on_fail: "Re-run or document reproduction with exact input/output and symptom match"
+      - id: RP3
+        check: "No code changes were made before reproduction or reproduction blocker was recorded"
+        on_fail: "Revert speculative edits or label them as discarded, then return to reproduction evidence"
+
+  - phase: HYPOTHESIZE
+    checkpoint_start: "--- PHASE: HYPOTHESIZE ---"
+    checkpoint_end: "--- PHASE: HYPOTHESIZE COMPLETE ---"
+    exit_assertions:
+      - id: HY1
+        check: "At least three plausible hypotheses are listed unless fewer_hypotheses_reason cites constraining evidence"
+        on_fail: "Add missing hypotheses across code, config, data, environment, and recent-change surfaces or justify fewer"
+      - id: HY2
+        check: "Every hypothesis has supporting evidence, disconfirming evidence or refutation signal, and next diagnostic check"
+        on_fail: "Complete the hypothesis table before running more diagnostics"
+      - id: HY3
+        check: "The next diagnostic is chosen by highest signal and lowest safe cost, not by edit convenience"
+        on_fail: "Re-rank diagnostic checks by evidence value, safety, and cost"
+
+  - phase: ISOLATE
+    checkpoint_start: "--- PHASE: ISOLATE ---"
+    checkpoint_end: "--- PHASE: ISOLATE COMPLETE ---"
+    exit_assertions:
+      - id: IS1
+        check: "At least one diagnostic result confirms, refutes, or materially narrows a hypothesis"
+        on_fail: "Run a targeted diagnostic or inspect evidence that can distinguish between hypotheses"
+      - id: IS2
+        check: "Root cause claim is backed by evidence that explains the observed symptom"
+        on_fail: "Downgrade to inconclusive/mitigated or continue diagnostics before claiming root cause"
+      - id: IS3
+        check: "Disconfirming evidence is recorded for major rejected hypotheses"
+        on_fail: "Record why competing hypotheses were refuted or remain residual risk"
+
+  - phase: FIX
+    checkpoint_start: "--- PHASE: FIX ---"
+    checkpoint_end: "--- PHASE: FIX COMPLETE ---"
+    condition: "when can_modify_code is true and a fix or mitigation is attempted"
+    exit_assertions:
+      - id: FX1
+        check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
+        on_fail: "Remove unrelated changes or document approved scope expansion"
+      - id: FX2
+        check: "Behavior changes include a regression test when feasible"
+        on_fail: "Add a regression test or record why a test is not feasible and what alternative verification was used"
+      - id: FX3
+        check: "Fix is the smallest durable change and does not rely on temporary diagnostics"
+        on_fail: "Remove temporary logging/debug changes or justify their retention"
+
+  - phase: VERIFY
+    checkpoint_start: "--- PHASE: VERIFY ---"
+    checkpoint_end: "--- PHASE: VERIFY COMPLETE ---"
+    exit_assertions:
+      - id: VF1
+        check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
+        on_fail: "Run original reproduction path again or downgrade the status"
+      - id: VF2
+        check: "Relevant regression/build/lint/manual verification is recorded with pass/fail/blocked result"
+        on_fail: "Run available regression checks or record why each unavailable check is blocked"
+      - id: VF3
+        check: "Skipped or blocked checks are listed as residual risks and not counted as proof"
+        on_fail: "Move skipped/blocked checks into residual_risks and adjust confidence"
+
+invariants:
+  - id: INV1
+    check: "No random patching: every edit traces to a confirmed or strongly supported hypothesis"
+    scope: all_phases
+    on_fail: "Revert or isolate speculative edits and return to hypothesis testing"
+
+  - id: INV2
+    check: "Reports redact secrets, tokens, customer data, private payloads, and sensitive hostnames"
+    scope: all_phases
+    on_fail: "Redact sensitive values and cite only safe locations or descriptions"
+
+  - id: INV3
+    check: "Root cause, status, and confidence never exceed the available evidence"
+    scope: all_phases
+    on_fail: "Downgrade status/confidence and list missing evidence as residual risk"

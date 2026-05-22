@@ -124,6 +124,30 @@ artifacts:
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
             description: "Whether score change correlates with finding count change"
 
+  - name: bugfix_evidence_review
+    type: object
+    required: conditional
+    condition: "review material represents a bugfix or workflow task_type == bugfix"
+    description: "Review of reproduction/root-cause evidence and regression linkage for bugfixes"
+    validation: "Must state whether assistant-debugging evidence or an explicit not-applicable/blocker rationale was reviewed, and whether regression coverage traces to the isolated failure mechanism"
+    object_fields:
+      - name: debugging_evidence_present
+        type: boolean
+        required: true
+      - name: reproduction_or_blocker
+        type: string
+        required: true
+      - name: root_cause_or_mitigation
+        type: string
+        required: true
+      - name: regression_linkage
+        type: enum
+        required: true
+        enum_values: [confirmed, missing, not_applicable, blocked]
+      - name: residual_debugging_risks
+        type: string[]
+        required: true
+
   - name: build_verification
     type: object
     required: true

@@ -88,6 +88,16 @@ fields:
     on_missing: skip
     infer_from: "User says 'TDD', 'tests first', 'red green refactor' -> true"
 
+  - name: debugging_mode
+    type: enum
+    required: false
+    enum_values: [not_applicable, root_cause_unknown, root_cause_known, completed, blocked]
+    description: "Whether assistant-debugging must run before bugfix implementation/TDD"
+    default: not_applicable
+    on_missing: infer
+    infer_from: "task_type == bugfix and cause is not already evidenced -> root_cause_unknown; task_type == bugfix with clear reproduction/root-cause evidence -> root_cause_known; non-bugfix -> not_applicable"
+    validation: "Unknown-cause bugfixes must not proceed to implementation until debugging_mode is completed or blocked with evidence"
+
   - name: acceptance_criteria
     type: string[]
     required: false

@@ -149,6 +149,7 @@ fi
 test_start "skill eval runner validates default fixture inventory"
 if validation_output="$("$skill_eval_runner" --validate-fixture 2>&1)" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-clarify/evals/cases.json" \
+    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-debugging/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-diagrams/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-docs/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-ideate/evals/cases.json" \
@@ -204,17 +205,20 @@ if list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tclarification-cap-is-not-question-quota\tclarification_admissibility\tClarification cap is not question quota' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-reflexion\tpost-task-reflection-records-lessons\treflection_storage_contract\tPost-task reflection records lessons' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-memory\tsave-preference-uses-memory-graph\tmemory_save_contract\tSave preference uses memory graph' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-memory\tsave-preference-uses-approved-local-backend\tmemory_save_contract\tSave preference uses approved local backend' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation'; then
     pass
@@ -258,19 +262,22 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
     && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
+    && grep -Fq "Skill: assistant-debugging" "$prompt_dir/assistant-debugging/bugfix-reproduces-before-patching.md" \
     && grep -Fq "Skill: assistant-diagrams" "$prompt_dir/assistant-diagrams/architecture-diagram-derived-from-code.md" \
     && grep -Fq "Skill: assistant-docs" "$prompt_dir/assistant-docs/architecture-doc-uses-code-evidence.md" \
     && grep -Fq "Skill: assistant-ideate" "$prompt_dir/assistant-ideate/brainstorm-diverges-before-ranking.md" \
     && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md" \
     && grep -Fq "Skill: assistant-skill-creator" "$prompt_dir/assistant-skill-creator/new-process-skill-designs-contracts-before-build.md" \
-    && grep -Fq "Skill: assistant-memory" "$prompt_dir/assistant-memory/save-preference-uses-memory-graph.md" \
+    && grep -Fq "Skill: assistant-memory" "$prompt_dir/assistant-memory/save-preference-uses-approved-local-backend.md" \
     && grep -Fq "Skill: assistant-reflexion" "$prompt_dir/assistant-reflexion/post-task-reflection-records-lessons.md" \
     && grep -Fq "Skill: assistant-research" "$prompt_dir/assistant-research/technology-comparison-uses-standard-tier.md" \
     && grep -Fq "Skill: assistant-onboard" "$prompt_dir/assistant-onboard/new-repo-onboarding-produces-orientation.md" \
     && grep -Fq "Skill: assistant-telos" "$prompt_dir/assistant-telos/create-personal-tcf-core-sections.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
+    && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/unknown-cause-bugfix-routes-through-debugging-before-tdd.md" \
     && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
     && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/bugfix-starts-with-red-evidence.md" \
+    && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/unknown-cause-bugfix-waits-for-debugging-evidence.md" \
     && grep -Fq "Skill: assistant-security" "$prompt_dir/assistant-security/findings-include-severity-impact-remediation.md" \
     && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md"; then
     pass
@@ -480,6 +487,7 @@ p0p4_register_cleanup "$unity_fixture_dir"
 p0p4_write_skill_eval_fixture "$unity_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-clarify" \
+    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-debugging" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-diagrams" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-docs" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-ideate" \
@@ -513,6 +521,7 @@ fi
 
 test_start "skill eval docs describe complete first-class coverage"
 if grep -Fq "complete first-class skill coverage" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-ideate" "$FRAMEWORK_DIR/README.md" \
@@ -528,11 +537,12 @@ if grep -Fq "complete first-class skill coverage" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "all 15 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "all 16 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "all 15 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "all 16 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \

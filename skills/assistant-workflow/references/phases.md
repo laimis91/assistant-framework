@@ -8,9 +8,9 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if the active mapper is read-only, the orchestrator persists that markdown to `.claude/context-map.md`. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
+For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
 
-For any task that needs clarification, create or update `.claude/task.md` during Discover before printing clarification questions or any clarification wait. Persist:
+For any task that needs clarification, create or update `{agent_state_dir}/task.md` during Discover only when local state artifacts are configured and policy-allowed. Otherwise, include the same state in the response before printing clarification questions or any clarification wait. Persist:
 - `Clarification status: ready | needs_clarification`
 - `Clarification defaults applied: true | false`
 - `Clarification confidence: low | medium | high`
@@ -19,9 +19,9 @@ For any task that needs clarification, create or update `.claude/task.md` during
 - `Clarification admissibility: satisfied | needs_clarification | not_applicable`
 - `Unresolved clarification topics:` as a markdown list
 
-For medium+ tasks, keep `.claude/task.md` for the full task lifecycle even when Discover resolves without a clarification wait.
+For medium+ tasks, keep the task journal or equivalent carried-forward state for the full task lifecycle even when Discover resolves without a clarification wait.
 
-Workflow state artifacts (`.claude/task.md`, `.claude/context-map.md`, `.claude/session.md`, and `.claude/working-buffer.md`) are framework-owned, ignored state. The orchestrator may create and update them directly. This exception never applies to project source, docs, tests, config, or generated app artifacts.
+Workflow state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and `{agent_state_dir}/working-buffer.md`) are framework-owned, ignored state when an agent state directory is configured and policy allows local state files. The orchestrator may create and update them directly. If state files are unavailable, carry the equivalent state in the response/plan packet. This exception never applies to project source, docs, tests, config, or generated app artifacts.
 
 Discover does not complete while `Clarification status: needs_clarification`. Clarification waiting is a Discover substate, not a separate workflow phase.
 
@@ -43,6 +43,7 @@ Print: `>> Dispatching Explorer` (when applicable)
 5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field only when the question is admissible. Admissible means the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
 6. Restate requirements in 1-3 sentences after clarification is resolved
 7. Confirm or revise `Task type`, `Risk tier`, `Required gates`, and `Required agents` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
+8. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
 **Clarification format:**
 ```
@@ -58,7 +59,7 @@ Reply with: "1b 2a" or "defaults".
 ```
 
 **Clarification state rules:**
-- For any task entering clarification wait, if `.claude/task.md` does not exist yet, create it before printing clarification questions or the clarification wait message.
+- For any task entering clarification wait, if no task journal/state packet exists yet, create one when local state artifacts are configured and policy-allowed; otherwise include the same state in the response before printing clarification questions or the clarification wait message.
 - Question caps are maximums, not quotas. Small tasks usually ask 0-1 questions; medium tasks may ask 0-4; large/mega tasks may ask more only when each question is admissible. A well-specified medium+ task can and should record `Clarification questions asked: 0`.
 - Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, `Clarification defaults applied: false`, `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification question cap: N`, `Clarification admissibility: needs_clarification`, and list each unresolved implementation-shaping topic.
 - Print: `>> WAITING: Clarification answers required`
@@ -172,6 +173,7 @@ Read `references/plan-template.md` and use the correct tier:
    - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
    - New code: `references/prompts/test-strategy.md`
    - DB changes: `references/prompts/migration.md`
+   - Unknown-cause bugfix: use `assistant-debugging` first; only transition into TDD when reproduction/root-cause evidence can define a meaningful regression test.
    - TDD mode: use `assistant-tdd` skill (or `references/prompts/tdd-enforcement.md` if skill not installed)
    - **SOLID (plan phase):** Review `references/prompts/solid-principles.md` graduated enforcement table to fill SOLID design notes in the plan template's Architecture section (medium+ tasks).
 
@@ -212,19 +214,21 @@ Print: `--- PHASE: BUILD ---`
 
 ### Task journal
 
-For medium+ tasks, create `.claude/task.md` using `references/task-journal-template.md` during Discover and keep updating it through Build. This file survives context compression — it's the single source of truth for the current task. The orchestrator owns this workflow state artifact and may update it directly. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
+For medium+ tasks, create a task journal using `references/task-journal-template.md` during Discover when local state artifacts are configured and policy-allowed, and keep updating it through Build. If local state files are unavailable, keep the same state in the plan/response packet. This state survives handoffs — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
 ### Orchestrator delegation rule
 
-**The orchestrator NEVER edits project source files or writes implementation/test code directly.** Framework-owned state artifacts (`.claude/task.md`, `.claude/context-map.md`, `.claude/session.md`, `.claude/working-buffer.md`) are the exception and may be updated directly. All project source changes go through sub-agents:
+**Preferred when subagents are available:** the orchestrator does not edit project source files or write implementation/test code directly. Framework-owned state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, `{agent_state_dir}/working-buffer.md`) are the exception only when configured and policy-allowed, and may be updated directly. If local state files are unavailable, carry equivalent state in the plan/response packet. Project source changes go through sub-agents:
 - **Code Writer** (`code-writer`): implements code following the plan
 - **Builder/Tester** (`builder-tester`): builds, writes tests, runs tests
 
-Think of it like a general who directs the battle but never picks up a rifle. The orchestrator dispatches, monitors, and course-corrects — but the agents do the actual work.
+**Fallback when subagents are unavailable or policy-disallowed:** the active agent may implement, test, and review directly, but must preserve the same phases, contracts, evidence requirements, and review/security gates. Do not pretend delegation happened; record `subagents_unavailable` and the direct-execution evidence.
 
-For each non-TDD step: dispatch Code Writer with the plan step + context map → when done, dispatch Builder/Tester to verify → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
+Think of the subagent path like a general who directs the battle but never picks up a rifle. When that infrastructure is unavailable, switch to the fallback path and keep the same evidence trail.
+
+For each non-TDD step: dispatch Code Writer with the plan step + context map when available, or execute directly in fallback mode → verify via Builder/Tester when available, or run verification directly in fallback mode → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
 
 ### Build loop
 
@@ -246,9 +250,10 @@ Print: `>> Step [N]/[total]: [description]`
 Print: `>> Dispatching Code Writer → [step description]` (non-TDD)
 Print: `>> Dispatching Builder/Tester → RED evidence` (TDD active)
 
-1. Non-TDD: dispatch Code Writer for one plan step at a time, then dispatch Builder/Tester for build + test and update the task journal
-2. TDD active: run the TDD sandwich for the step, with Builder/Tester RED before Code Writer GREEN and Builder/Tester VERIFY/REFACTOR-SAFETY afterward
-3. If implementation or verification fails: dispatch Code Writer to fix before the next step
+1. Bugfix with unknown cause: complete `assistant-debugging` first, or record a concrete blocked/inconclusive debugging result. Do not patch until reproduction/root-cause evidence identifies a fix target or mitigation.
+2. Non-TDD: dispatch Code Writer for one plan step at a time, then dispatch Builder/Tester for build + test and update the task journal
+3. TDD active: run the TDD sandwich for the step, with Builder/Tester RED before Code Writer GREEN and Builder/Tester VERIFY/REFACTOR-SAFETY afterward. For bugfixes, the RED test must trace to the original reproduction/debugging evidence.
+4. If implementation or verification fails and the cause is unclear: return to `assistant-debugging` before another patch attempt; otherwise dispatch Code Writer to fix before the next step
 4. Tests alongside code, not after
 5. **SOLID check** after each step: load `references/prompts/solid-principles.md` and evaluate the graduated checklist (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega). Fix violations before moving to the next step.
 6. **TDD mode** (when active): use the TDD sandwich per step:
@@ -302,7 +307,7 @@ Print: `--- PHASE: REVIEW ---`
 
 Print: `>> Stage 1: Spec Review`
 
-Load and follow `references/prompts/spec-review.md`. Compare implementation against the approved plan or approved task packets/components and produce a structured spec compliance result before Stage 2.
+Load and follow `references/prompts/spec-review.md`. Compare implementation against the approved plan or approved task packets/components and produce a structured spec compliance result before Stage 2. For bugfixes, include the `assistant-debugging` reproduction/root-cause evidence in the review material and check that the regression test or validation path actually covers the isolated failure mechanism.
 
 Quality review cannot satisfy spec review. Spec review checks scope and acceptance compliance; quality review checks correctness, maintainability, architecture, security, and coverage after spec compliance is clear.
 
@@ -340,10 +345,13 @@ For medium+ tasks: full two-stage review with autonomous quality loop via `assis
 
 ### Status gate
 
-The stop hook (`~/.claude/hooks/assistant/stop-review.sh`) enforces the review cycle structurally:
-- If the task journal status is BUILDING or REVIEWING **and** the Review Log is missing entries or a Final Result, the agent is **blocked from stopping**.
-- The agent must complete the full review cycle and write the Final Result before it can present results to the user.
-- This is not advisory — the hook prevents the agent from finishing without review.
+When local hooks are configured and policy-allowed, use them to enforce the review cycle structurally. Example: a configured stop hook can block completion while the task journal/status packet is BUILDING or REVIEWING and the Review Log is missing entries or a Final Result.
+
+When hooks are unavailable, enforce the same gate manually before presenting results:
+- Review Log or equivalent review result must exist.
+- Final Result must be recorded.
+- The agent must complete the full review cycle before presenting results to the user.
+- Do not claim the hook ran unless it actually exists and executed.
 
 Print: `--- PHASE: REVIEW COMPLETE ---`
 
@@ -398,13 +406,13 @@ Then print completion markers and exit.
 2. Code comments where "why" isn't obvious
 3. Complete `references/release-readiness-checklist.md`
 4. If user-facing changes: generate release notes using `references/prompts/release-notes.md`
-5. Use `memory_add_insight` to capture learnings in the knowledge graph
-6. **Task completion metrics**: Append a JSONL entry (see format below)
+5. If local memory tools are approved and available, capture durable learnings in the configured local memory store; otherwise skip memory updates and report durable insights in the final response
+6. **Task completion metrics**: Append a JSONL entry when local metrics are configured and policy allows it (see format below)
 7. **Post-task reflection**: If `assistant-reflexion` is available, load and follow it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
 
 ### Metrics entry format (all sizes)
 
-Append one JSONL line to the agent's workflow metrics location (for example `~/.claude/memory/metrics/workflow-metrics.jsonl`, `~/.codex/memory/metrics/workflow-metrics.jsonl`, or `~/.gemini/memory/metrics/workflow-metrics.jsonl`):
+Append one JSONL line to the agent's configured local workflow metrics location when metrics are enabled and policy-allowed (for example `~/{agent_state_dir}/memory/metrics/workflow-metrics.jsonl`, or another configured local path):
 ```json
 {"date":"YYYY-MM-DD","project":"[name]","task":"[description]","size":"[small/medium/large/mega]","retriage":false,"review_rounds":N,"plan_deviations":N,"build_failures":N,"criteria_defined":N,"criteria_skipped":[],"agent_readiness_score":null,"components_count":null,"components_verified":null}
 ```

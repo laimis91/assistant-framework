@@ -9,7 +9,7 @@
   "model_specific_api_calls": false,
   "recommended_use": [
     "Run each case with the assistant-docs skill instructions loaded.",
-    "Compare the local response against documentation input/output contracts, evidence, coverage, and review-needed handling.",
+    "Compare the local response against documentation input/output contracts, evidence, coverage, and review-items/evidence/safety handling.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
@@ -17,7 +17,7 @@
       "id": "architecture-doc-uses-code-evidence",
       "title": "Architecture doc uses code evidence",
       "category": "code_derived_architecture_docs",
-      "purpose": "Checks that architecture documentation is generated from code evidence and returns files_updated, doc_coverage, review_needed, and gaps.",
+      "purpose": "Checks that architecture documentation is generated from code evidence and returns files_updated, evidence_sources, doc_coverage, review_items, safety_notes, and gaps.",
       "prompt": "Write architecture documentation for the skill eval runner modules under tools/evals/.",
       "setup_context": [
         "The assistant-docs skill instructions are active.",
@@ -30,11 +30,11 @@
         "Updates or proposes documentation with files_updated entries.",
         "Returns Evidence tied to source files, not memory.",
         "Returns doc_coverage with documented areas and remaining gaps.",
-        "Sets review_needed true for inferred architecture claims that need confirmation."
+        "Lists inferred architecture claims in review_items and includes evidence_sources plus safety_notes."
       ],
       "pass_criteria": [
         "The response names doc_type, scope, and source_files or evidence.",
-        "The response includes files_updated, doc_coverage, and review_needed.",
+        "The response includes files_updated, evidence_sources, doc_coverage, review_items, and safety_notes.",
         "The response cites actual tools/evals files.",
         "The response flags inferred claims or gaps for review.",
         "The response does not document hallucinated features."
@@ -42,7 +42,7 @@
       "fail_signals": [
         "Writes docs from memory without reading code.",
         "Claims full coverage while gaps remain.",
-        "Omits review_needed despite inferred architecture claims.",
+        "Omits review_items despite inferred architecture claims.",
         "Documents features that are not in the source."
       ],
       "machine_expectations": {
@@ -52,8 +52,8 @@
           "source_files",
           "files_updated",
           "doc_coverage",
-          "review_needed",
-          "Evidence",
+          "review_items",
+          "evidence_sources",
           "tools/evals"
         ],
         "forbidden_substrings": [
@@ -80,19 +80,19 @@
         "Uses git history or asks for a range when latest work is ambiguous.",
         "Returns files_updated with the changelog target path and change_type.",
         "Returns doc_coverage with included and omitted changes.",
-        "Sets review_needed true when release wording is inferred.",
+        "Lists inferred release wording in review_items and includes evidence_sources plus safety_notes.",
         "Does not invent issue numbers, versions, or features absent from evidence."
       ],
       "pass_criteria": [
         "The response uses git log or requests a commit range.",
-        "The response includes files_updated, doc_coverage, and review_needed.",
+        "The response includes files_updated, evidence_sources, doc_coverage, review_items, and safety_notes.",
         "The response distinguishes evidence-backed entries from gaps.",
         "The response does not invent versions or features."
       ],
       "fail_signals": [
         "Creates changelog text without commit or source evidence.",
         "Invents version numbers, issue IDs, or release dates.",
-        "Marks review_needed false for inferred release notes.",
+        "Marks review_items empty for inferred release notes.",
         "Omits coverage or gaps."
       ],
       "machine_expectations": {
@@ -102,15 +102,15 @@
           "git log",
           "files_updated",
           "doc_coverage",
-          "review_needed",
-          "Evidence",
+          "review_items",
+          "evidence_sources",
           "gaps"
         ],
         "forbidden_substrings": [
           "No git history needed",
           "invented version",
           "made-up issue",
-          "review_needed: false for inferred"
+          "review_items: [] for inferred"
         ]
       }
     },

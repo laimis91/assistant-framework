@@ -114,6 +114,49 @@
           "No new RED needed"
         ]
       }
+    },
+    {
+      "id": "unknown-cause-bugfix-waits-for-debugging-evidence",
+      "title": "Unknown-cause bugfix waits for debugging evidence",
+      "category": "debugging_bridge",
+      "purpose": "Checks that assistant-tdd refuses to start RED for unknown-cause bugs until assistant-debugging evidence can define a meaningful regression test.",
+      "prompt": "Use TDD to fix the intermittent checkout total bug, but I do not have a reproduction yet.",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "The bug is unknown-cause and lacks a reproduction path.",
+        "assistant-debugging is available."
+      ],
+      "expected_behavior": [
+        "Does not start a TDD cycle immediately.",
+        "Routes to assistant-debugging or equivalent fallback first.",
+        "Requires reproduction/root-cause evidence before RED.",
+        "Records debugging evidence needed for the regression test."
+      ],
+      "pass_criteria": [
+        "The response says RED is blocked until meaningful debugging evidence exists.",
+        "The response names assistant-debugging.",
+        "The response requires reproduction/root-cause evidence and original failure path."
+      ],
+      "fail_signals": [
+        "Writes a test before the failure mechanism is known.",
+        "Says any generic failing test is enough.",
+        "Skips debugging and patches first."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assistant-debugging",
+          "RED",
+          "reproduction",
+          "root-cause evidence",
+          "regression test",
+          "blocked"
+        ],
+        "forbidden_substrings": [
+          "generic failing test is enough",
+          "patch first",
+          "skip debugging"
+        ]
+      }
     }
   ]
 }

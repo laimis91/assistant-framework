@@ -92,7 +92,7 @@ for term in \
     "T4" \
     "risk_tier is set" \
     "required_gates includes common gates" \
-    "required_agents is populated"; do
+    "required_agents or fallback execution roles are populated"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_triage_terms+=("phase-gates.yaml: $term")
     fi
@@ -125,15 +125,15 @@ for term in \
     fi
 done
 for term in \
-    "orchestrator-owned .claude/task.md state artifact" \
-    "persist the returned context map markdown"; do
+    "orchestrator-owned {agent_state_dir}/task.md state artifact" \
+    "persist the context map to {agent_state_dir}/context-map.md when allowed"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_state_terms+=("phase-gates.yaml: $term")
     fi
 done
 for term in \
     "context_map_markdown" \
-    "orchestrator to persist to .claude/context-map.md"; do
+    "orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
         missing_state_terms+=("handoffs.yaml: $term")
     fi

@@ -42,10 +42,10 @@ artifacts:
   - name: clarification_questions
     type: object[]
     required: true
-    description: "One to three high-yield questions with defaults or recommendations"
-    min_items: 1
-    validation: "Contains no more than three questions; each question includes a recommended default or bounded choices"
-    on_fail: "Ask the smallest necessary set of one to three clarification questions before proceeding."
+    description: "Zero to three high-yield questions with defaults or recommendations. Empty when safe defaults make the request ready to execute."
+    min_items: 0
+    validation: "Contains no more than three questions; each question includes a recommended default or bounded choices. Empty list is allowed only when status is ready_to_execute."
+    on_fail: "Ask the smallest necessary set of zero to three clarification questions before proceeding."
     object_fields:
       - name: question
         type: string

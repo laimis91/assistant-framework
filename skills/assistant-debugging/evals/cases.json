@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "assistant-debugging-skill-behavior",
+  "skill": "assistant-debugging",
+  "title": "assistant-debugging Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-debugging skill's evidence-first root-cause workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "recommended_use": [
+    "Run each case with the assistant-debugging skill instructions loaded.",
+    "Compare the local response against reproduce, hypothesize, isolate, fix, verify, and residual-risk requirements.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "bugfix-reproduces-before-patching",
+      "title": "Bugfix reproduces before patching",
+      "category": "reproduction_gate",
+      "purpose": "Checks that a bug report is reproduced or blocked before code edits and that hypotheses are built from evidence.",
+      "prompt": "Debug why the checkout total is wrong after discounts and fix it.",
+      "setup_context": [
+        "The assistant-debugging skill instructions are active.",
+        "The repository contains tests and pricing code, but no failing command was supplied.",
+        "Code modification is allowed after diagnosis."
+      ],
+      "expected_behavior": [
+        "Defines symptom, expected behavior, and bounded scope before editing.",
+        "Runs or identifies the smallest safe reproduction path before patching.",
+        "Lists at least three hypotheses or justifies fewer with evidence.",
+        "Chooses diagnostics based on signal and safety.",
+        "Does not patch checkout code before reproduction evidence or blocker is recorded."
+      ],
+      "pass_criteria": [
+        "The response includes reproduction evidence or a specific reproduction blocker.",
+        "The response includes hypotheses with supporting and disconfirming evidence.",
+        "The response states that no code patch happens before reproduction or blocker.",
+        "The response reports status and confidence based on evidence."
+      ],
+      "fail_signals": [
+        "Immediately patches likely files without reproduction.",
+        "Lists only one theory without justification.",
+        "Claims root cause from a stack trace alone.",
+        "Treats skipped tests as validation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "symptom",
+          "reproduction",
+          "hypotheses",
+          "disconfirming evidence",
+          "diagnostic",
+          "status",
+          "confidence",
+          "residual risks"
+        ],
+        "forbidden_substrings": [
+          "patched without reproduction",
+          "only one hypothesis",
+          "root cause from stack trace alone",
+          "skipped tests prove"
+        ]
+      }
+    },
+    {
+      "id": "flaky-test-isolates-competing-causes",
+      "title": "Flaky test isolates competing causes",
+      "category": "hypothesis_isolation",
+      "purpose": "Checks that flaky failures are diagnosed with competing causes, repeated/targeted checks, and residual uncertainty instead of overconfident fixes.",
+      "prompt": "Investigate this flaky test. It fails in CI sometimes but passes locally.",
+      "setup_context": [
+        "The assistant-debugging skill instructions are active.",
+        "The user supplied no CI logs yet.",
+        "The failure may involve timing, ordering, environment, or data dependency."
+      ],
+      "expected_behavior": [
+        "Records missing CI logs as a blocker or residual risk when unavailable.",
+        "Lists timing, order dependence, environment mismatch, and shared state/data hypotheses when plausible.",
+        "Uses repeated or targeted local runs only when safe and useful.",
+        "Avoids claiming fixed unless the flaky path is reproduced or confidence is otherwise justified.",
+        "Returns blocked, inconclusive, mitigated, or fixed status according to evidence."
+      ],
+      "pass_criteria": [
+        "The response includes multiple competing hypotheses.",
+        "The response distinguishes reproduced, partial, blocked, or not_reproduced status.",
+        "The response includes residual risks for unavailable CI evidence.",
+        "The response avoids overclaiming confidence."
+      ],
+      "fail_signals": [
+        "Assumes timing is the cause without checks.",
+        "Marks fixed after one local pass.",
+        "Ignores missing CI logs.",
+        "Runs destructive diagnostics."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "flaky",
+          "hypotheses",
+          "reproduced",
+          "blocked",
+          "residual risks",
+          "confidence",
+          "verification",
+          "CI logs"
+        ],
+        "forbidden_substrings": [
+          "timing is definitely the cause",
+          "fixed after one local pass",
+          "No CI logs needed",
+          "destructive diagnostics"
+        ]
+      }
+    }
+  ]
+}

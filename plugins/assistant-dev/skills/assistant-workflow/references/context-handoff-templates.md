@@ -2,7 +2,7 @@
 
 Use these when continuing work across conversations. Ask the AI to generate the appropriate summary before ending a session.
 
-**Note:** If a task journal (`.claude/task.md`) exists, it supersedes these templates during active work — the journal already contains the full task state. Use these templates only when no task journal exists or for non-standard handoff scenarios.
+**Note:** If a task journal (`{agent_state_dir}/task.md` or equivalent carried-forward state) exists, it supersedes these templates during active work — the journal already contains the full task state. Use these templates only when no task journal exists or for non-standard handoff scenarios.
 
 ## Prompt to generate a handoff summary
 

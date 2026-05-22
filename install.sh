@@ -219,9 +219,10 @@ apply_plugin_profile() {
 
 substitute_agent_paths_in_stream() {
     if [[ "$AGENT" == "claude" ]]; then
-        cat
+        sed -e "s|{agent_state_dir}|.${AGENT}|g"
     else
         sed \
+            -e "s|{agent_state_dir}|.${AGENT}|g" \
             -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
             -e "s|\`\.claude/|\`.${AGENT}/|g" \
             -e "s|\"~/\.claude/|\"~/.${AGENT}/|g" \
@@ -245,9 +246,14 @@ substitute_agent_paths_in_stream() {
 substitute_agent_paths_in_file() {
     local target_file="$1"
 
-    [[ "$AGENT" != "claude" ]] || return 0
+    if [[ "$AGENT" == "claude" ]]; then
+        sed -i.bak -e "s|{agent_state_dir}|.${AGENT}|g" "$target_file"
+        rm -f "${target_file}.bak"
+        return 0
+    fi
 
     sed -i.bak \
+        -e "s|{agent_state_dir}|.${AGENT}|g" \
         -e "s|\`~/\.claude/|\`~/.${AGENT}/|g" \
         -e "s|\`\.claude/|\`.${AGENT}/|g" \
         -e "s|\"~/\.claude/|\"~/.${AGENT}/|g" \
@@ -787,6 +793,7 @@ for skill in "${SKILLS[@]}"; do
 
     if $DRY_RUN; then
         dry "rsync $source_dir/ -> $target_dir/"
+        dry "Substitute agent state path placeholders in copied $skill instruction/config files"
         if [[ "$AGENT" != "claude" ]]; then
             dry "Substitute .claude/ paths with .${AGENT}/ in copied $skill instruction/config files"
         fi
@@ -804,19 +811,20 @@ for skill in "${SKILLS[@]}"; do
                 cp "$agent_preset" "$agent_conf"
             fi
 
-            # Substitute agent-specific state directory paths in instruction/config files.
-            # Targets values and path references, not every prose mention of Claude.
-            while IFS= read -r instruction_file; do
-                substitute_agent_paths_in_file "$instruction_file"
-            done < <(find "$target_dir" -type f \( \
-                -name "*.md" -o \
-                -name "*.yaml" -o \
-                -name "*.yml" -o \
-                -name "*.json" -o \
-                -name "*.conf" -o \
-                -name "*.toml" \
-            \))
         fi
+
+        # Substitute agent-specific state directory paths in instruction/config files.
+        # Targets values and path references, not every prose mention of Claude.
+        while IFS= read -r instruction_file; do
+            substitute_agent_paths_in_file "$instruction_file"
+        done < <(find "$target_dir" -type f \( \
+            -name "*.md" -o \
+            -name "*.yaml" -o \
+            -name "*.yml" -o \
+            -name "*.json" -o \
+            -name "*.conf" -o \
+            -name "*.toml" \
+        \))
 
         ok "$skill -> $target_dir"
     fi

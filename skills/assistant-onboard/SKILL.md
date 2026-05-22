@@ -16,15 +16,22 @@ triggers:
 | File | Purpose |
 |---|---|
 | [`contracts/input.yaml`](contracts/input.yaml) | project_path, focus_area, depth |
-| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], memory_updated, questions[] |
+| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, durable_memory_updated, questions[] |
 
 - `project_path` is required; `depth` defaults to standard when not specified
 - `key_files` entries include path and purpose; `conventions` entries include pattern and example
+- `risky_areas` and `likely_change_points` make the orientation actionable for future development work
 - `questions` must be specific to unclear areas discovered during onboarding
 
-Systematic protocol for learning a new codebase. Produces structured project orientation that accelerates future work; durable cross-session memory still lives in the knowledge graph.
+Systematic protocol for learning a new codebase. Produces structured project orientation that accelerates future work. Project-local orientation artifacts are optional and must follow the active agent/workplace policy; do not assume third-party memory tooling is available.
 
 Core principle: **Understand before acting. Map the territory before navigating it.**
+
+Company-safe defaults:
+- Read local project files and run read-only/local discovery commands only.
+- Do not install analyzers, upload source, or call external services without explicit approval.
+- Do not store secrets, customer data, private URLs, or transient task progress in orientation artifacts.
+- Prefer agent-agnostic project notes; if the environment has a configured agent memory path, use that path, otherwise report the orientation in the response without writing files.
 
 ## Goal
 
@@ -34,6 +41,8 @@ Build a compact, evidence-based orientation for the project so future developmen
 
 - Surface scan, architecture mapping, pattern recognition, and gap reporting are complete for the selected depth.
 - Key files include path and purpose; conventions include pattern and concrete example.
+- Build/test/run commands are identified from project files when available.
+- Risky areas and likely change points are called out for future development work.
 - Questions are specific to discovered gaps, not generic prompts.
 - Artifacts and durable memory updates are reported accurately.
 
@@ -42,6 +51,8 @@ Build a compact, evidence-based orientation for the project so future developmen
 - Ask only when the focus area or depth materially changes which files are inspected and cannot be inferred from the user's request.
 - Do not edit production code during onboarding.
 - Do not claim full coverage from a representative sample; label gaps and assumptions clearly.
+- Do not create or overwrite orientation/memory files unless the user or project policy allows it.
+- Do not persist secrets, credentials, private endpoints, or temporary task status.
 
 ## When to Activate
 
@@ -60,12 +71,12 @@ Read in this order (stop early if small project):
 
 When the active adapter supports parallel reads, batch independent reads such as README, agent instructions, `.gitignore`, root listing, build files, and CI config. If parallel reads are unavailable, use the order below.
 
-1. **README.md** — stated purpose, setup instructions
-2. **CLAUDE.md** — existing agent instructions
+1. **README.md / docs index** — stated purpose, setup instructions
+2. **Agent/project instructions** — AGENTS.md, CLAUDE.md, CONTRIBUTING.md, `.cursorrules`, or equivalent
 3. **.gitignore** — what's excluded reveals what's used
 4. **Root directory listing** — project shape
-5. **Build files** — .csproj, package.json, Makefile, Dockerfile
-6. **CI/CD config** — .github/workflows, azure-pipelines.yml
+5. **Build files** — .csproj, package.json, pyproject.toml, Makefile, Dockerfile, go.mod, Cargo.toml, etc.
+6. **CI/CD config** — .github/workflows, azure-pipelines.yml, GitLab CI, build scripts
 
 Extract:
 - Project name and purpose
@@ -100,9 +111,9 @@ Identify the project's conventions by reading 3-5 representative files:
 - DI patterns (registration style, lifetime choices)
 - Code organization within files (ordering of members, regions)
 
-### Phase 4: Knowledge Gaps
+### Phase 4: Knowledge Gaps and Risky Areas
 
-Print: `>> Onboarding: Identifying unknowns`
+Print: `>> Onboarding: Identifying unknowns and risk areas`
 
 List what you still don't understand:
 - Areas of code that seem complex or unusual
@@ -110,13 +121,18 @@ List what you still don't understand:
 - Dependencies whose purpose isn't clear
 - Configuration values that need context
 
-Present gaps to user for clarification.
+Also identify practical development guidance:
+- **Risky areas**: auth, permissions, persistence, migrations, external integrations, shell/file operations, weak tests, unclear ownership
+- **Likely change points**: files/directories most future tasks are likely to touch
+- **Verification entry points**: focused test/build commands and smoke checks discovered locally
+
+Present only specific gaps to the user. Do not ask generic "anything else?" questions.
 
 ### Phase 5: Generate Project Orientation
 
 Print: `>> Onboarding: Generating project orientation`
 
-Create or update `.claude/memory.md` as a generated project-local orientation artifact, not as the cross-session memory source of truth:
+Create or update a project-local orientation artifact only when allowed by user/project policy. Prefer the active agent's configured project note path; examples include `.claude/memory.md`, `.codex/memory.md`, `.gemini/memory.md`, `.assistant/memory.md`, or a documented repo-local equivalent. If no safe path is known, do not write a file; return the orientation in the response.
 
 ```markdown
 # [Project Name]
@@ -151,16 +167,25 @@ Create or update `.claude/memory.md` as a generated project-local orientation ar
 - [path]: [purpose]
 - [path]: [purpose]
 
+## Risky Areas
+- [path/surface]: [risk and why it matters]
+
+## Likely Change Points
+- [path/directory]: [when future work should look here]
+
+## Verification Entry Points
+- [command]: [what it validates]
+
 ## Gotchas
 - [non-obvious thing 1]
 - [non-obvious thing 2]
 ```
 
-Record discoveries in the knowledge graph:
-- `memory_add_entity` — register the project (type Project) with key observations
-- `memory_add_relation` — link technology dependencies (Uses), patterns (Follows), conventions (HasConvention)
-- `memory_add_insight` — record discovered conventions and non-obvious findings
-- `memory_add_entity` with type `Rule` — if any behavioral constraints are discovered (e.g., "never force-push to main")
+Durable memory / knowledge graph updates are optional and policy-dependent:
+- If local memory tools are approved and available, record only stable conventions, project identity, and non-obvious development rules.
+- If memory tools are unavailable or policy-disallowed, skip durable memory updates and set `durable_memory_updated=false` in the report.
+- Project-local orientation artifacts are tracked separately in `artifacts[]`; writing an orientation file does not imply durable memory was updated.
+- Never store secrets, internal credentials, private endpoints, customer data, transient task progress, PR numbers, or issue status.
 
 ### Phase 6: Report
 
@@ -173,19 +198,24 @@ Project: [name]
 Stack: [tech stack summary]
 Architecture: [pattern]
 Size: [small/medium/large] (~[N] files, ~[N]k lines)
+Commands: [build/test/run summary]
 Conventions: [key conventions]
+Risky areas: [auth/data/integration/test gaps/etc.]
+Likely change points: [top directories/files]
 Unknowns: [any remaining gaps]
 
-Project orientation saved to .claude/memory.md
+Project orientation: [saved to path | returned in response only]
 Ready to work on this codebase.
 ```
 
 ## Output
 
 Return:
-- **Project summary** - purpose, stack, architecture, and approximate size.
+- **Project summary** - purpose, stack, architecture, approximate size, and primary build/test/run commands.
 - **Key files** - important paths with their role in the system.
 - **Conventions** - discovered patterns with concrete examples.
+- **Risky areas** - surfaces that need extra care in future work and why.
+- **Likely change points** - files/directories future features or fixes will likely touch.
 - **Artifacts** - orientation or memory files created or updated, or "none" if no files changed.
 - **Gaps** - unknowns, assumptions, and specific questions for the user.
 - **Status** - onboarded, partially onboarded, or blocked by missing access/context.
@@ -194,9 +224,9 @@ Return:
 
 When returning to a known project after significant time:
 
-1. Read existing `.claude/memory.md` if present
-2. Check `git log --since="[last session date]"` for changes
-3. Update memory with new information
+1. Read existing project-local orientation if present and policy-allowed (`.claude/memory.md`, `.assistant/memory.md`, or configured equivalent)
+2. Check `git log --since="[last session date]"` for changes when git history is available
+3. Update orientation only with stable conventions or structural changes; otherwise report refresh results without writing
 4. Print: `>> Refreshed project context — [N] changes since last session`
 
 ## Rules
@@ -204,7 +234,7 @@ When returning to a known project after significant time:
 - **Never skip Phase 1** — even for "quick" tasks in a new repo
 - **Don't read everything** — sample representative files, don't read every file
 - **Ask about unknowns** — don't guess business logic or domain concepts
-- **Keep memory concise** — under 100 lines, focused on what matters for development
+- **Keep memory concise** — under 100 lines, focused on stable development conventions
 - **Update, don't overwrite** — if memory.md exists, update sections, don't regenerate
 
 ## Stop Rules

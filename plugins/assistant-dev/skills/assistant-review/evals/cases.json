@@ -164,6 +164,47 @@
           "hard to read because it is ugly"
         ]
       }
+    },
+    {
+      "id": "bugfix-review-checks-debugging-evidence",
+      "title": "Bugfix review checks debugging evidence",
+      "category": "bugfix_evidence_review",
+      "purpose": "Checks that assistant-review treats missing reproduction/root-cause evidence as a review risk for bugfixes.",
+      "prompt": "Review this bugfix diff. It changes checkout total calculation and adds a regression test.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material is a bugfix.",
+        "The diff does not clearly show reproduction/root-cause evidence."
+      ],
+      "expected_behavior": [
+        "Checks for assistant-debugging evidence or an explicit blocker/not-applicable rationale.",
+        "Verifies the regression test traces to the isolated failure mechanism.",
+        "Reports missing reproduction/root-cause evidence as a concrete review risk when absent."
+      ],
+      "pass_criteria": [
+        "The response includes bugfix evidence review.",
+        "The response mentions reproduction/root-cause evidence and regression linkage.",
+        "The response does not accept passing tests alone as sufficient proof."
+      ],
+      "fail_signals": [
+        "Accepts the bugfix because tests pass without checking root cause.",
+        "Ignores missing reproduction evidence.",
+        "Treats debugging evidence as style preference."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "bugfix evidence review",
+          "reproduction",
+          "root-cause evidence",
+          "regression linkage",
+          "assistant-debugging"
+        ],
+        "forbidden_substrings": [
+          "tests pass so enough",
+          "style preference",
+          "ignore reproduction"
+        ]
+      }
     }
   ]
 }

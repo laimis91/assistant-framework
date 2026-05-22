@@ -9,15 +9,15 @@
   "model_specific_api_calls": false,
   "recommended_use": [
     "Run each case with the assistant-memory skill instructions loaded.",
-    "Compare the local response against memory action, entity type, MCP evidence, confirmation, and safety requirements.",
+    "Compare the local response against memory action, entity type, configured local backend/tool evidence, confirmation, and safety requirements.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
     {
-      "id": "save-preference-uses-memory-graph",
-      "title": "Save preference uses memory graph",
+      "id": "save-preference-uses-approved-local-backend",
+      "title": "Save preference uses approved local backend",
       "category": "memory_save_contract",
-      "purpose": "Checks that saving a user preference uses memory-graph MCP, records the right entity type, and returns evidence plus confirmation.",
+      "purpose": "Checks that saving a user preference uses an approved configured local memory backend or reports an explicit unavailable/policy-disallowed fallback, records the right entity type, and returns evidence plus confirmation.",
       "prompt": "Remember this preference: when I ask for review, lead with findings and keep summaries brief.",
       "setup_context": [
         "The assistant-memory skill instructions are active.",
@@ -26,7 +26,7 @@
       ],
       "expected_behavior": [
         "Resolves action as save and entity_type as Preference.",
-        "Uses memory-graph MCP rather than writing a markdown file as cross-session memory.",
+        "Uses an approved configured local memory backend rather than writing a markdown file as cross-session memory, or reports backend_unavailable/policy_disallowed without pretending the save happened.",
         "Records the preference content with an appropriate entity name.",
         "Returns action_taken, entity_name, evidence, and confirmation.",
         "Does not store unrelated obvious facts or repo-visible information.",
@@ -35,14 +35,14 @@
       "pass_criteria": [
         "The response identifies action as save.",
         "The response identifies entity_type as Preference.",
-        "The response names the memory-graph MCP tool used.",
+        "The response names the configured local memory backend/tool used or explicitly reports backend_unavailable/policy_disallowed.",
         "The response includes concise confirmation.",
         "The response does not treat project-local markdown as cross-session memory."
       ],
       "fail_signals": [
         "Writes the preference only to .codex or .claude markdown.",
         "Stores it as a generic Insight despite being a preference.",
-        "Omits evidence of the MCP operation.",
+        "Omits evidence of the memory operation or blocked/no-op reason.",
         "Saves unrelated obvious facts."
       ],
       "machine_expectations": {
@@ -51,15 +51,15 @@
           "save",
           "entity_type",
           "Preference",
-          "memory_add_entity",
-          "memory-graph",
+          "storage_backend",
+          "durability_decision",
           "entity_name",
           "confirmation"
         ],
         "forbidden_substrings": [
           "Saved only to markdown",
           "entity_type: Insight",
-          "No MCP evidence",
+          "No memory evidence",
           "obvious facts"
         ]
       }

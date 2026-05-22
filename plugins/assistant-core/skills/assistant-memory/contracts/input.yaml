@@ -12,6 +12,15 @@ fields:
     on_missing: ask
     enum_values: [save, recall, update, forget, search]
 
+  - name: policy_context
+    type: enum
+    required: false
+    description: "Whether durable memory is allowed in the current environment"
+    validation: "Use unknown only until project/workplace policy is discovered"
+    on_missing: infer
+    infer_from: "If user or project says no memory/persistence/external tools -> disallowed; if configured local backend exists and policy allows -> allowed; otherwise unknown"
+    enum_values: [allowed, disallowed, unknown]
+
   - name: content
     type: string
     required: conditional

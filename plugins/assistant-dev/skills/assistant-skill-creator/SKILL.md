@@ -2,8 +2,6 @@
 name: assistant-skill-creator
 description: "This skill creates new V1 skills with proper contracts, phase gates, and handoffs following the contract design guide. Use when the user says 'create skill', 'new skill', 'add contracts', 'skill contracts', 'scaffold skill'. Also activates when validating existing skill contract compliance."
 effort: medium
-requires:
-  - assistant-memory
 triggers:
   - pattern: "create skill|new skill|add contracts|skill contracts|scaffold skill|create a skill|make a skill|build a skill"
     priority: 75
@@ -39,6 +37,10 @@ Create compact, contract-backed skills that give agents clear outcomes, validati
 - Keep `SKILL.md` concise; move long examples and procedures into `references/`.
 - Do not add subagent handoffs to Analysis or Utility skills.
 - Do not hardcode model-version-specific prompt knobs in general-purpose skills.
+- Keep skills company-safe and agent-agnostic: no mandatory Claude/Hermes/Codex runtime assumptions unless the skill is explicitly about that tool.
+- Treat memory, metrics, hooks, subagents, external tools, and generated state paths as optional/configurable and policy-gated.
+- Prefer local files and repo-native validation. Do not add SaaS calls, installers, or external dependencies without explicit user approval.
+- Do not encode secrets, private endpoints, customer data, or workplace-specific confidential details in examples, evals, or templates.
 
 ## Output
 
@@ -47,6 +49,7 @@ Return:
 - **Files** - skill, contract, eval, reference, or script paths changed.
 - **Contract summary** - category, required fields, gates, handoffs, and output artifacts.
 - **Validation** - commands or checks run and their result.
+- **Policy safety summary** - memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples used or explicitly absent; fallback behavior for anything optional/configurable.
 - **Gaps** - missing inputs, deferred optional files, or risks requiring follow-up.
 
 ## Stop Rules
@@ -78,8 +81,9 @@ Gather the following from the user (or infer from context):
 | **Utility** | Single-pass: accept input, produce output | input + output |
 
 4. **Triggers** — What user phrases should activate this skill?
-5. **Dependencies** — Does it require other skills? (e.g., `assistant-memory`)
+5. **Dependencies** — Does it require other skills? Avoid dependencies unless required; prefer optional references and fallback behavior. Do not require `assistant-memory` just to record lessons.
 6. **Effort** — low, medium, or high
+7. **Policy/runtime assumptions** — any memory, hooks, subagents, external commands, state paths, or SaaS/tooling dependencies must be explicit, optional/configurable, and policy-gated unless the skill is specifically for that runtime.
 
 If the user has a vague idea, help them sharpen it:
 - "What should the skill produce as output?"
@@ -137,7 +141,7 @@ If the skill includes a multi-round loop (review, refinement, optimization), rea
 
 These patterns add rubric return fields to handoffs, drift invariants to phase-gates, and score progression to output contracts. Most loop-based Process skills will use all four.
 
-Present the contract design to the user for review before building.
+Present the contract design to the user for review before building. For small, low-risk edits to an existing skill, proceed without a separate approval round when the requested direction is explicit and reversible; still record assumptions.
 
 Print: `--- PHASE: DESIGN COMPLETE ---`
 
@@ -162,7 +166,7 @@ skills/<skill-name>/
 name: <skill-name>
 description: "<what it does>. <when to trigger>. Triggers on: '<trigger phrases>'."
 effort: <low|medium|high>
-requires:              # optional
+requires:              # optional; only when no safe fallback exists
   - <dependency>
 triggers:
   - pattern: "<regex pattern for routing>"
@@ -175,7 +179,7 @@ triggers:
 Body structure:
 1. **Goal** — User-visible outcome the skill produces
 2. **Success criteria** — What must be true before completion
-3. **Constraints** — Scope, evidence, safety, side-effect, and adapter limits
+3. **Constraints** — Scope, evidence, safety, side-effect, company policy, and adapter/runtime limits
 4. **Contracts table** — Link to contract files with one-line purpose
 5. **Phases/Steps** — How the skill executes (phases for Process/Analysis, steps for Utility)
 6. **Output** — Required response or artifact shape
@@ -214,6 +218,7 @@ Run through the 12 contract design guide rules as a checklist. Read `references/
 10. Cross-phase invariants exist for drift prevention (if applicable)
 11. Root SKILL.md has compact Goal, Success criteria, Constraints, Output, and Stop rules when the skill has non-trivial behavior
 12. Clarification prompts are admissible: material to outcome, not discoverable from context/source, no safe default
+13. Company-safe/agent-agnostic check passes: no hidden Claude/Hermes/Codex assumptions, external tool installs, mandatory memory/hooks/subagents, hardcoded state paths, or sensitive examples unless explicitly scoped and policy-gated
 
 If any rule fails: fix the contract, explain what was wrong, and re-check.
 
@@ -235,8 +240,9 @@ Print: `--- PHASE: VALIDATE COMPLETE ---`
 ## Tips
 
 - **Start simple.** A Utility skill with 3 input fields and 2 output artifacts is better than an over-designed Process skill. You can always add phases later.
-- **Steal from existing skills.** Look at `assistant-memory` (Utility), `assistant-ideate` (Analysis), or `assistant-workflow` (Process) for your tier's pattern.
+- **Steal from existing skills.** Look at `assistant-memory` (Utility), `assistant-ideate` (Analysis), or `assistant-workflow` (Process) for your tier's pattern — but do not copy runtime-specific assumptions blindly.
 - **Descriptions are triggers.** The `description:` field in frontmatter is what the skill router uses for matching. Be specific about when to trigger — include example phrases.
 - **Add negative triggers.** Include at least one eval or test showing when the skill must not route or must not ask a clarification.
 - **Ask only when it changes the result.** Question budgets are caps, not quotas; proceed with stated defaults when context is enough.
 - **Progressive loading matters.** SKILL.md loads into context whenever triggered. Keep it lean. Put detailed reference material in sub-files.
+- **Policy gates matter.** If a skill mentions memory, metrics, hooks, subagents, generated state paths, installs, network calls, or external tools, define the fallback when those are unavailable or disallowed.

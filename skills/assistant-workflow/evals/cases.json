@@ -196,6 +196,56 @@
           "I will guess"
         ]
       }
+    },
+    {
+      "id": "unknown-cause-bugfix-routes-through-debugging-before-tdd",
+      "title": "Unknown-cause bugfix routes through debugging before TDD",
+      "category": "debugging_tdd_routing",
+      "purpose": "Checks that workflow uses assistant-debugging for unknown-cause bugfixes before entering assistant-tdd or patching code.",
+      "prompt": "Fix the intermittent checkout total bug. I do not know why it happens yet, but use TDD once you can reproduce it.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The task is a bugfix and the root cause is not known.",
+        "No reproduction command or failing regression test has been supplied yet."
+      ],
+      "expected_behavior": [
+        "Triages the task as a bugfix with debugging_mode root_cause_unknown.",
+        "Loads or routes through assistant-debugging before implementation or assistant-tdd.",
+        "Requires reproduction or a concrete blocker plus competing hypotheses before patching.",
+        "Transitions to assistant-tdd only after debugging evidence can define a meaningful RED regression test.",
+        "Keeps review expectations tied to reproduction/root-cause evidence."
+      ],
+      "pass_criteria": [
+        "The response includes assistant-debugging before assistant-tdd.",
+        "The response records debugging_mode or equivalent root-cause unknown status.",
+        "The response requires reproduction, hypotheses, and disconfirming evidence before code changes.",
+        "The response says TDD starts only after a meaningful regression test can be written from debugging evidence."
+      ],
+      "fail_signals": [
+        "Starts patching code before reproduction or debugging evidence.",
+        "Enters TDD immediately despite not knowing what regression test should fail.",
+        "Claims root cause without hypotheses or disconfirming evidence.",
+        "Treats assistant-debugging as optional for unknown-cause bugfixes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "--- PHASE: TRIAGE ---",
+          "bugfix",
+          "debugging_mode",
+          "assistant-debugging",
+          "reproduction",
+          "hypotheses",
+          "disconfirming evidence",
+          "assistant-tdd",
+          "regression test"
+        ],
+        "forbidden_substrings": [
+          "patch first",
+          "TDD immediately",
+          "root cause is obvious",
+          "debugging is optional"
+        ]
+      }
     }
   ]
 }

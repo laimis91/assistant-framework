@@ -194,11 +194,11 @@ if grep -Fq "plugins/assistant-core/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugins/assistant-dev/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the three research skills" "$plugin_doc" \
-    && grep -Fq "plugin-local copies of the eight development skills" "$plugin_doc" \
+    && grep -Fq "plugin-local copies of the nine development skills" "$plugin_doc" \
     && grep -Fq "manifest-aware dry-run validation" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the four core skills" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "plugin-local copies of the three research skills" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "plugin-local copies of the eight development skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "plugin-local copies of the nine development skills" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "manifest-aware dry-run validation" "$FRAMEWORK_DIR/README.md" \
     && [[ ! -f "$marketplace_file" ]]; then
     pass

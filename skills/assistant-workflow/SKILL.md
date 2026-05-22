@@ -2,8 +2,6 @@
 name: assistant-workflow
 description: "This skill provides a structured development workflow with phases: triage, discover, decompose when needed, plan, design when needed, build, review, document. Tests are part of Build; Review is the post-build verification loop. Use when the user says 'build', 'implement', 'fix', 'refactor', 'plan', 'create', 'add feature', 'idea', 'how should I approach', 'break this down', 'start working on'. Also activates for any non-trivial development task requiring discovery and planning before coding."
 effort: high
-requires:
-  - assistant-memory
 triggers:
   - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
     priority: 40
@@ -13,24 +11,51 @@ triggers:
 
 # Development Workflow
 
-Core principles: **verify before deciding**, **right-sized ceremony**, **every idea becomes testable criteria**.
+Core principles: **verify before deciding**, **right-sized ceremony**, **every idea becomes testable criteria**, **tests travel with the implementation**, and **final answers need evidence**.
 
 ## Goal
 
-Move non-trivial development work from request to verified outcome through right-sized phases, explicit gates, tests, and review.
+Move non-trivial development work from request to verified outcome through right-sized phases, explicit gates, tests, review, and company-safe execution.
+
+This skill is intentionally agent-agnostic: it must work in restricted company environments where third-party tools, remote AI services, unapproved package installs, and external code sharing may be prohibited. Use the repo's native tools first, document assumptions, and never require framework-specific infrastructure to produce good development results.
 
 ## Success Criteria
 
 - Triage, discovery, planning, build, review, and document phases run at the smallest useful depth.
 - Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
-- Tests or validation run with the implementation step they protect.
+- Behavior changes have tests or explicit validation attached to the implementation step they protect.
 - Final output reports changed files, verification evidence, residual risks, and next steps.
+- Company-safe constraints are respected: no unapproved external installs, no code/secrets exfiltration, and no hidden dependency on third-party agent tooling.
 
 ## Constraints
 
 - Do not skip phases; scale them down for small work instead.
 - Do not ask ritual clarification or approval questions when code/context makes the next safe action clear.
 - Keep scope changes explicit and tied to correctness, security, safety, or verification risk.
+- Do not install tools, upload code, call external services, or paste proprietary content into third-party systems unless the user explicitly approved that path.
+- Prefer local, repo-native commands (`npm test`, `dotnet test`, `pytest`, project scripts, existing linters) over introducing new tooling.
+
+## Company-Safe Mode
+
+Assume company repositories may have strict policy until proven otherwise.
+
+Default behavior:
+- Read local files and run local project commands only.
+- Do not add dependencies, CLIs, services, browser extensions, MCP servers, or agent-specific integrations without explicit approval.
+- Do not send source code, logs with secrets, stack traces containing customer data, credentials, or private URLs to external services.
+- Do not store secrets, tokens, internal endpoints, or temporary task progress in long-term memory.
+- If a requested action conflicts with policy, propose a local/manual alternative and state the trade-off.
+
+Allowed without extra approval when already available in the repo/environment:
+- Existing test/build/lint/typecheck commands.
+- Existing package manager commands that do not install new dependencies.
+- Reading documentation, configs, source files, and tests in the checked-out repo.
+
+Ask before:
+- Installing or upgrading dependencies.
+- Enabling external integrations.
+- Running destructive commands or migrations.
+- Sharing code or artifacts outside the local environment.
 
 ## Contracts
 
@@ -110,6 +135,18 @@ Criteria:
 Approve these criteria? Then I'll triage and plan.
 ```
 
+## Acceptance Criteria Quality Bar
+
+Criteria must be useful to implementers and reviewers.
+
+Good criteria are:
+- **Atomic**: one independently verifiable behavior per bullet.
+- **Binary**: pass/fail is clear.
+- **Observable**: test, command, UI behavior, API response, or documented artifact can prove it.
+- **Scoped**: avoids vague words like "complete", "robust", "clean", or "better" unless decomposed.
+
+If a criterion contains `and`, `with`, `all`, `every`, `complete`, or multiple failure modes, split it before planning.
+
 ## Refactor Guidance
 
 When a task includes incidental or scope-expanding refactor work:
@@ -137,6 +174,17 @@ Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] 
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 
+### Risk tiers
+
+Use the contract/rubric values exactly: `low`, `moderate`, `high`, or `critical`.
+
+- **low**: local, reversible, tested, no public behavior or data impact.
+- **moderate**: multiple files, shared helpers, unclear edge cases, or moderate verification work.
+- **high**: public contracts, data shape, migration, behavior parity, security-sensitive paths, weak tests, or multi-layer coupling.
+- **critical**: irreversible data loss risk, auth bypass, secret exposure, payment/security boundary, or production outage risk.
+
+High and critical work require an explicit risk note in the plan and a review/security gate before finalizing. Critical work also requires an approval gate before Build.
+
 ## Phase Execution
 
 Load `references/phases.md` and execute the phase matching your current stage. Each phase has:
@@ -146,7 +194,7 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 
 | Phase | When | Key Actions |
 |---|---|---|
-| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. |
+| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
 | **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Feed the manifest into Plan. |
 | **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, components, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
@@ -156,6 +204,41 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 
 For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
+
+## Planning Checklist
+
+Medium+ plans must include:
+- **Goal**: one sentence.
+- **Non-goals**: what will not be changed.
+- **Acceptance criteria**: atomic checklist.
+- **Likely files**: exact paths when known; otherwise directories and discovery tasks.
+- **Implementation steps**: ordered, small enough to verify independently.
+- **Test strategy**: failing tests, focused tests, regression checks, or explicit validation when tests are not feasible.
+- **Risk/security notes**: especially for high-risk surfaces.
+- **Rollback/mitigation**: only when deployment/data/config risk exists.
+
+Small tasks still need an inline plan, but it may be 2-5 bullets.
+
+## Build Rules
+
+- For behavior changes, use tests-first by default: reproduce/RED, implement/GREEN, refactor only after green.
+- If tests-first is not feasible, state the exception and run the smallest reliable validation command.
+- For bug fixes, reproduce the bug with a failing test or minimal command before fixing whenever feasible.
+- When a bugfix starts with unknown cause, load and follow `assistant-debugging` during Discover/Build before entering `assistant-tdd`; capture reproduction, hypotheses, disconfirming evidence, root cause status, confidence, and residual risks.
+- Once the failure mechanism is understood, transition into `assistant-tdd` with a regression test based on the original reproduction path.
+- Never claim a fix works from code inspection alone when a command, test, or local reproduction is available.
+- If verification fails and the next fix is obvious, fix and rerun. If the cause is unclear, switch back to `assistant-debugging` instead of random patching.
+
+## Review and Security Gates
+
+Before final output for medium+ or high-risk work:
+- Run the relevant build/test/lint/typecheck commands available in the repo.
+- Review the diff against the acceptance criteria.
+- For bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or a clear reason it was not applicable.
+- Use `assistant-review` for quality/spec review when the change is non-trivial.
+- Use `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
+
+Review findings must cite evidence and concrete risk. Avoid generic style feedback unless it affects correctness, security, maintainability, or test reliability.
 
 ## Context Management
 
@@ -169,11 +252,14 @@ For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 ## Output
 
 Return:
-- **Status** - final workflow state and whether review completed cleanly.
+- **Status** - complete, partially complete, blocked, or plan ready.
 - **Changed files** - paths and purpose for each change.
 - **Verification** - commands run, pass/fail results, and skipped checks with reasons.
-- **Review result** - spec and quality review outcome.
-- **Residual risk** - blockers, assumptions, or follow-up work.
+- **Review result** - spec, quality, and security review outcome when applicable.
+- **Residual risk** - blockers, assumptions, policy constraints, or follow-up work.
+- **Next step** - one practical recommendation.
+
+Do not use phrases like "should work", "probably fixed", or "looks good" unless immediately qualified with evidence or uncertainty.
 
 ## Stop Rules
 

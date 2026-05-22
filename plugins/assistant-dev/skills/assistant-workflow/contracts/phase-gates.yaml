@@ -46,8 +46,8 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents is populated from task size, task type, and risk tier"
-        on_fail: "Select required workflow agents from references/subagent-dispatch.md and risk-specific gate packs"
+        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, and available/policy-allowed execution infrastructure"
+        on_fail: "Select required workflow agents when available, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs"
 
       - id: T8
         check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | gates={count} | agents={count}' message was printed to user"
@@ -78,8 +78,8 @@ gates:
         on_fail: "Update the saved clarification state so clarification_defaults_applied is explicit true/false and unresolved topics are cleared before continuing"
 
       - id: D4
-        check: "If Discover prints a clarification wait for any task size: task journal exists before the wait is printed, and the clarification state is persisted before printing the wait message and before leaving Discover"
-        on_fail: "Create or update the orchestrator-owned .claude/task.md state artifact with Clarification status, Clarification defaults applied, and Unresolved clarification topics before printing the clarification wait message or continuing"
+        check: "If Discover prints a clarification wait for any task size: task journal exists before the wait when local state artifacts are configured/policy-allowed, or equivalent clarification state is included in the response before the wait"
+        on_fail: "Create or update the orchestrator-owned {agent_state_dir}/task.md state artifact when a local state directory is configured and policy allows it; otherwise include Clarification status, defaults applied, and unresolved topics in the response before printing the clarification wait message or continuing"
 
       - id: D4A
         check: "Clarification question cap is treated as a maximum, not a quota; clear medium+ tasks may complete Discover with zero questions when confidence is high"
@@ -90,9 +90,9 @@ gates:
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D5
-        check: "For medium+ tasks: context map exists at .claude/context-map.md"
+        check: "For medium+ tasks: context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
         condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Code Mapper, then persist the returned context map markdown to the orchestrator-owned .claude/context-map.md state artifact before proceeding to Plan"
+        on_fail: "Dispatch Code Mapper or perform local mapping, then persist the context map to {agent_state_dir}/context-map.md when allowed; otherwise carry the context map content forward in the plan packet"
 
       - id: D6
         check: "For medium+ tasks: agent readiness score was assessed and printed"
@@ -104,14 +104,14 @@ gates:
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
       - id: D8
-        check: "For medium+ tasks: Code Mapper subagent was dispatched to produce context map (not explored inline by Orchestrator)"
+        check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Code Mapper subagent — Orchestrator must not absorb mapping work"
+        on_fail: "Produce a context map using an available subagent or direct fallback; record which path was used"
 
       - id: D9
-        check: "For large+ tasks: Explorer subagent was dispatched to trace execution paths"
+        check: "For large+ tasks: execution paths were traced by Explorer subagent when available/policy-allowed, or traced directly in fallback mode with equivalent evidence"
         condition: "size in [large, mega]"
-        on_fail: "Dispatch Explorer subagent — deep analysis requires dedicated agent focus"
+        on_fail: "Trace execution paths using an available Explorer subagent or direct fallback; record which path was used"
 
   # ─────────────────────────────────────────────
   # DISCOVER → DECOMPOSE (medium+ only)
@@ -143,9 +143,9 @@ gates:
         on_fail: "Extract shared contracts into component #1"
 
       - id: DC6
-        check: "Architect subagent was dispatched for decomposition (not done inline by Orchestrator)"
+        check: "Component decomposition was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent criteria and evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Architect for component decomposition — Orchestrator must not absorb this work"
+        on_fail: "Produce component decomposition using an available Architect subagent or direct fallback; record which path was used"
 
       - id: DC7
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
@@ -185,9 +185,9 @@ gates:
         on_fail: "Fill Security and Operability sections per plan-template.md"
 
       - id: P7
-        check: "For large+ tasks: Architect subagent was dispatched for implementation blueprint (not planned inline by Orchestrator)"
+        check: "For large+ tasks: implementation blueprint was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent architectural analysis"
         condition: "size in [large, mega]"
-        on_fail: "Dispatch Architect subagent — complex plans require dedicated architectural analysis"
+        on_fail: "Produce implementation blueprint using an available Architect subagent or direct fallback; record which path was used"
 
       - id: P8
         check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
@@ -224,8 +224,8 @@ gates:
         on_fail: "Wait for design approval"
 
       - id: DS3
-        check: "Architect subagent was dispatched for design direction proposal"
-        on_fail: "Dispatch Architect subagent to propose design direction — Orchestrator creates the mockup, Architect defines the direction"
+        check: "Design direction proposal was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode before mockup creation"
+        on_fail: "Produce design direction using an available Architect subagent or direct fallback; record which path was used"
 
   # ─────────────────────────────────────────────
   # BUILD → REVIEW
@@ -244,8 +244,13 @@ gates:
         on_fail: "Fix build errors. Do not enter Review with a broken build."
 
       - id: B3
-        check: "At least 1 test exists and was executed"
-        on_fail: "Write at least one test for the changed code before proceeding"
+        check: "At least one relevant verification exists and passed: runnable tests for code changes, or documented validation_results for docs/no-op/discovery/non-runnable workflows"
+        on_fail: "Add or run an appropriate verification and record a passing result before proceeding"
+
+      - id: B3A
+        check: "Unknown-cause bugfixes completed assistant-debugging or recorded a concrete debugging blocker before implementation; no random patching occurred before reproduction/root-cause evidence"
+        condition: "task_type == bugfix and debugging_mode in [root_cause_unknown, completed, blocked]"
+        on_fail: "Return to assistant-debugging: reproduce or record blocker, evaluate hypotheses, and identify root cause or mitigation target before patching."
 
       - id: B4
         check: "All tests pass (0 failures)"
@@ -256,40 +261,40 @@ gates:
         on_fail: "If any code diverges from the plan, print the deviation message and get resolution"
 
       - id: B6
-        check: "For medium+ tasks: task journal is updated with progress for all completed steps"
+        check: "For medium+ tasks: task journal or equivalent carried-forward state is updated with progress for all completed steps"
         condition: "size in [medium, large, mega]"
-        on_fail: "Update task journal Progress section"
+        on_fail: "Update the configured task journal when available, or the carried-forward task state packet when local state artifacts are unavailable/disallowed"
 
       - id: B7
         check: "Tests were written alongside code, not in a batch after all implementation"
-        on_fail: "This is a process violation. Note it in the task journal for the reflexion phase."
+        on_fail: "This is a process violation. Note it in the configured task journal or equivalent carried-forward state for the reflection phase."
 
       - id: B8
         check: "SOLID principles checklist was evaluated for each implementation step (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega per references/prompts/solid-principles.md)"
         on_fail: "Load references/prompts/solid-principles.md and evaluate the graduated checklist for each completed step. Fix any violations before proceeding to Review."
 
       - id: B9
-        check: "Code Writer subagent was dispatched for implementation (Orchestrator does not write production code inline)"
-        on_fail: "Dispatch Code Writer subagent — separation of orchestration and implementation is required"
+        check: "Implementation was performed by Code Writer subagent when subagents are available/policy-allowed, or directly in fallback mode with the same plan/deviation/verification evidence"
+        on_fail: "Implement using an available Code Writer subagent or direct fallback; record which path was used"
 
       - id: B10
-        check: "Builder/Tester subagent was dispatched to build and run tests (Orchestrator does not absorb build/test work)"
-        on_fail: "Dispatch Builder/Tester subagent — build output must be absorbed by a dedicated agent"
+        check: "Build/test/validation was performed by Builder/Tester subagent when subagents are available/policy-allowed, or directly in fallback mode with equivalent command/result evidence"
+        on_fail: "Validate using an available Builder/Tester subagent or direct fallback; record which path was used"
 
       - id: B11
-        check: "For medium+ tasks: Code Writer and Builder/Tester were dispatched per component (not once for all components batched together)"
+        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per component; otherwise direct fallback processed components sequentially with equivalent evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Each component must have its own Code Writer → Builder/Tester cycle. Re-dispatch per component."
+        on_fail: "Process each component separately using available subagents or direct fallback; do not batch all components without per-component evidence"
 
       - id: B12
-        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal component verification ledger"
+        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward component ledger"
         condition: "size in [medium, large, mega]"
-        on_fail: "Run verification criteria for each component, record command/result evidence in the task journal ledger, and fix failing criteria before proceeding to Review."
+        on_fail: "Run verification criteria for each component, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
       - id: B13
         check: "For medium+ tasks: each component has a final status of VERIFIED, including self-check result, before the next component started"
         condition: "size in [medium, large, mega]"
-        on_fail: "This is a process violation — components must be verified sequentially with evidence before advancing. Note in task journal for reflexion."
+        on_fail: "This is a process violation — components must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
 
   # ─────────────────────────────────────────────
   # REVIEW → DOCUMENT
@@ -312,27 +317,32 @@ gates:
         on_fail: "Load and follow assistant-review SKILL.md and contracts. Do not manually dispatch reviewers."
 
       - id: R3
-        check: "Verification summary is written with: changed files, test coverage, review result, manual test steps, known limitations"
-        on_fail: "Write verification summary in task journal"
+        check: "Verification summary is written with: changed files, test/validation coverage, review result, manual validation steps when applicable, known limitations"
+        on_fail: "Write verification summary in the configured task journal, output contract, or equivalent carried-forward state"
+
+      - id: R3A
+        check: "For bugfixes, review material includes reproduction/root-cause evidence or an explicit not_applicable/blocker rationale, and verifies that regression coverage follows from that evidence"
+        condition: "task_type == bugfix"
+        on_fail: "Add debugging evidence to the review material or downgrade confidence/status before final review."
 
       - id: R4
         check: "User confirmed 'looks good' or equivalent approval"
         on_fail: "Present verification summary and wait for user confirmation"
 
       - id: R5
-        check: "For medium+ tasks: task journal Review Log has Final Result entry"
+        check: "For medium+ tasks: task journal, output contract, or equivalent carried-forward review state has Final Result entry"
         condition: "size in [medium, large, mega]"
-        on_fail: "Write Final Result entry in task journal Review Log"
+        on_fail: "Write Final Result entry in the configured task journal or equivalent carried-forward review state"
 
       - id: R6
         check: "For medium+ tasks: rubric scores present in Quality Review entries (Rubric: and Weighted: lines)"
         condition: "size in [medium, large, mega]"
-        on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md. The harness-gate.sh hook will block completion without rubric scores."
+        on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
 
       - id: R7
         check: "For medium+ tasks: final rubric weighted score >= 3.0 (minimum completion threshold)"
         condition: "size in [medium, large, mega]"
-        on_fail: "Weighted score below 3.0 — the code needs significant improvement. Fix lowest-scoring dimensions and re-review. The harness-gate.sh hook enforces this structurally."
+        on_fail: "Weighted score below 3.0 — the code needs significant improvement. Fix lowest-scoring dimensions and re-review. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
 
   # ─────────────────────────────────────────────
   # DOCUMENT → COMPLETE
@@ -348,8 +358,8 @@ gates:
         on_fail: "Review what documentation needs updating (README, CHANGELOG, code comments)"
 
       - id: DOC2
-        check: "Metrics JSONL entry was appended to workflow-metrics.jsonl"
-        on_fail: "Append metrics entry to workflow-metrics.jsonl — required for all task sizes"
+        check: "Metrics JSONL entry was appended when local metrics are configured and policy-allowed; otherwise metrics_unavailable_or_disallowed is recorded in the output/final response"
+        on_fail: "Append metrics when configured and allowed, or explicitly record why metrics were skipped"
 
       - id: DOC3
         check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
@@ -373,7 +383,7 @@ invariants:
   - id: INV3
     check: "Every phase prints its start checkpoint before any work and its end checkpoint after assertions pass"
     scope: all_phases
-    on_fail: "Re-print the missing checkpoint marker and note the skipped protocol step in the task journal"
+    on_fail: "Re-print the missing checkpoint marker and note the skipped protocol step in the configured task journal or equivalent carried-forward state"
 
   - id: INV4
     check: "If scope grows beyond initial triage during any phase, stop and re-triage"

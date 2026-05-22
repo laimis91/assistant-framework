@@ -1,6 +1,6 @@
 # Task Journal Template
 
-Write to `.claude/task.md` in the project root. This file is the single source of truth for the current task — it survives context compression and session continuations. It is a framework-owned ignored state artifact, so the orchestrator may create and update it directly.
+Write to `{agent_state_dir}/task.md` in the project root when a local agent state directory is configured and policy allows local state artifacts. If no safe state directory is available, keep the same content in the response/plan packet. This state is the single source of truth for the current task — it survives context compression and session continuations when persisted. It is a framework-owned ignored state artifact, so the orchestrator may create and update it directly when allowed.
 
 ## When to create
 - Any task that enters clarification wait: during Discover, before printing clarification questions or the wait message
@@ -75,6 +75,15 @@ Plan approval: [yes/no + date]
 - Unit: [what's covered]
 - Integration: [what's covered, or "N/A"]
 - E2E: [what's covered, or "N/A"]
+
+## Debugging Evidence (bugfixes)
+
+- Debugging mode: [not_applicable | root_cause_unknown | root_cause_known | completed | blocked]
+- Reproduction status: [yes | no | partial | blocked | N/A]
+- Hypotheses considered: [count or N/A]
+- Root cause / mitigation target: [summary or N/A]
+- Transition to TDD: [ready | blocked | not_applicable]
+- Residual risks: [list]
 
 ## Verification Summary
 [filled after all build steps complete]
@@ -165,13 +174,13 @@ Plan approval: [yes/no + date]
 8. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
 9. **Handoff** to user — they test manually and add Review Notes
 10. **Review fixes** — fix issues, re-test, re-review, update Progress
-11. **Done** — Status: DONE, promote insights to memory, and leave the ignored state file in place unless the user asks for cleanup
+11. **Done** — Status: DONE, promote durable insights to approved local memory if available, and leave the ignored state file in place unless the user asks for cleanup
 
 ## Rules
 
 - Keep entries concise — this is a log, not documentation
 - Resume from clarification waits only on explicit numbered answers or explicit `defaults`
 - Constraints are checked before each Build step
-- On context continuation: read `.claude/task.md` FIRST, before any other action
+- On context continuation: read the configured task journal FIRST when it exists, before any other action
 - Never delete constraints unless the user explicitly removes them
 - The Verification Summary replaces the need for context-handoff templates during active work

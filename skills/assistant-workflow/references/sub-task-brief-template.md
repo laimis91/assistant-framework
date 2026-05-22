@@ -67,7 +67,7 @@ Include the actual code/signatures, not just names.]
 - [ ] Tests pass: [specific test command]
 
 ### What to do
-Read `.claude/memory.md` for project context before starting.
+Read configured project-local memory/context (for example `{agent_state_dir}/memory.md`, `.assistant/memory.md`, or another documented equivalent) when available and policy-allowed before starting.
 Run: Plan → [Design →] Build.
 Follow project conventions.
 Add code comments where intent isn't obvious.

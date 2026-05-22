@@ -8,7 +8,7 @@ artifacts:
     type: enum
     required: true
     description: "The memory operation that was performed"
-    enum_values: [save, recall, update, forget, search]
+    enum_values: [save, recall, update, forget, search, no_op, blocked]
     on_fail: "Re-run skill to produce the missing artifact"
 
   - name: entity_name
@@ -37,9 +37,23 @@ artifacts:
         required: true
         description: "How relevant the result is to the query"
 
+  - name: storage_backend
+    type: string
+    required: true
+    description: "Configured local memory backend or explicit reason no backend was used"
+    validation: "Non-empty; use 'unavailable' or 'policy-disallowed' when blocked"
+    on_fail: "Report the actual backend or blocked reason"
+
+  - name: durability_decision
+    type: enum
+    required: true
+    description: "Whether the content qualified for durable memory"
+    enum_values: [durable_saved, durable_updated, durable_deleted, durable_found, skipped_not_durable, refused_sensitive, backend_unavailable, policy_disallowed]
+    on_fail: "Classify the save/search result against the memory durability and sensitivity rules"
+
   - name: confirmation
     type: string
     required: true
-    description: "Human-readable description of what was done"
+    description: "Human-readable description of what was done, found, skipped, refused, or blocked"
     validation: "Non-empty, concise summary of the action taken"
     on_fail: "Re-run skill to produce the missing artifact"

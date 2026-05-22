@@ -13,6 +13,7 @@ artifacts:
     required: true
     condition: always
     validation: "Contains task_type, risk_tier, size, required_gates, and required_agents selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, and required_agents or fallback roles"
     object_fields:
       - name: task_type
         type: enum
@@ -43,6 +44,7 @@ artifacts:
       Must contain paired entries for every phase that ran:
       '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
       Missing checkpoints = workflow was not followed.
+    on_fail: "Reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
     minimum_entries:
       # TRIAGE has no COMPLETE marker (checkpoint_end: null), so it contributes 1.
       # All other phases contribute 2 (start + complete).
@@ -56,6 +58,7 @@ artifacts:
     required: true
     condition: always
     validation: "At least 1 entry unless task was determined unnecessary during Discovery"
+    on_fail: "List changed files or record that Discovery determined no change was necessary"
     object_fields:
       - name: path
         type: string
@@ -70,16 +73,54 @@ artifacts:
         required: true
         validation: "1 sentence explaining what changed and why"
 
+  - name: debugging_result
+    type: object
+    required: conditional
+    condition: "task_type == bugfix and debugging_mode in [root_cause_unknown, completed, blocked] or assistant-debugging was used"
+    description: "Evidence-first debugging summary for bugfixes whose cause was unknown or needed confirmation"
+    validation: "Must summarize reproduction, hypotheses, root cause status, confidence, residual risks, and whether/why the task transitioned into assistant-tdd"
+    on_fail: "Load assistant-debugging, reproduce or record the blocker, evaluate competing hypotheses, and populate debugging evidence before implementation or TDD handoff"
+    object_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [fixed, root_cause_found, mitigated, not_reproduced, blocked, inconclusive]
+      - name: reproduction_status
+        type: enum
+        required: true
+        enum_values: [yes, no, blocked, partial]
+      - name: hypotheses_count
+        type: int
+        required: true
+        validation: ">= 3 unless fewer_hypotheses_reason is populated in assistant-debugging output"
+      - name: root_cause
+        type: string
+        required: true
+        validation: "Confirmed cause, mitigation target, or explicit unknown/inconclusive status"
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+      - name: transition_to_tdd
+        type: enum
+        required: true
+        enum_values: [ready, not_applicable, blocked]
+        validation: "ready only when a meaningful regression test can be written from debugging evidence"
+      - name: residual_risks
+        type: string[]
+        required: true
+
   - name: test_results
     type: object
     required: true
-    condition: always
-    validation: "passed + failed + skipped must equal total tests run. passed must be > 0."
+    condition: "runnable tests exist or task changes behavior"
+    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. Use validation_results when tests are not applicable."
+    on_fail: "Re-run tests or move non-test verification to validation_results with explicit not-applicable reason for tests"
     object_fields:
       - name: passed
         type: int
         required: true
-        validation: ">= 1 (at least one test must exist and pass)"
+        validation: ">= 0 (may be 0 only when tests were not applicable and validation_results is populated)"
       - name: failed
         type: int
         required: true
@@ -88,11 +129,30 @@ artifacts:
         type: int
         required: true
 
+  - name: validation_results
+    type: object[]
+    required: true
+    condition: "always"
+    validation: "At least one test, build, lint, typecheck, inspection, dry-run, or manual validation entry with result=passed must be recorded for completed implementation workflows. Docs-only/no-op/discovery tasks may complete without passed validation only when the reason is explicitly recorded. Skipped/not_applicable entries do not satisfy completion evidence."
+    on_fail: "Run an appropriate verification and record passed evidence, or record an explicit docs-only/no-op/discovery exception reason"
+    object_fields:
+      - name: command_or_check
+        type: string
+        required: true
+      - name: result
+        type: enum
+        required: true
+        enum_values: [passed, failed, skipped, not_applicable]
+      - name: evidence
+        type: string
+        required: true
+
   - name: review_result
     type: object
     required: true
     condition: always
     validation: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result."
+    on_fail: "Run assistant-review quality review and record quality status, rounds, and resolved findings"
     object_fields:
       - name: quality_review_status
         type: enum
@@ -117,6 +177,7 @@ artifacts:
       Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
       Must be distinct from assistant-review quality findings. At completion, status must
       be PASS and required_fixes must be empty or fully resolved.
+    on_fail: "Run dedicated spec compliance review until status is PASS and required fixes are empty or resolved"
     object_fields:
       - name: status
         type: enum
@@ -152,20 +213,23 @@ artifacts:
     required: true
     condition: always
     validation: "At least 1 actionable step the user can follow to verify the change"
+    on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
 
   - name: task_journal
     type: file
-    required: true
-    condition: "size in [medium, large, mega]"
-    validation: "Ignored orchestrator-owned state artifact exists at .claude/task.md and contains Status: DONE"
-    location: ".claude/task.md"
+    required: conditional
+    condition: "size in [medium, large, mega] and agent_state_dir is configured and policy allows local state artifacts"
+    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md and contains Status: DONE"
+    on_fail: "Create or update task journal when configured and policy-allowed, or record carried-forward state fallback"
+    location: "{agent_state_dir}/task.md"
 
   - name: context_map
     type: file
-    required: true
-    condition: "size in [medium, large, mega]"
-    validation: "Ignored orchestrator-owned state artifact exists at .claude/context-map.md"
-    location: ".claude/context-map.md"
+    required: conditional
+    condition: "size in [medium, large, mega] and agent_state_dir is configured and policy allows local state artifacts"
+    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/context-map.md"
+    on_fail: "Create context map when configured and policy-allowed, or include context map in carried-forward plan/task packet"
+    location: "{agent_state_dir}/context-map.md"
 
   - name: component_manifest
     type: string
@@ -176,6 +240,7 @@ artifacts:
       dependencies, and binary verification criteria. Each component has at
       least 1 verification criterion. All criteria must be checked and passing
       before WORKFLOW COMPLETE.
+    on_fail: "Return to DECOMPOSE/PLAN and produce a component manifest with dependencies and binary verification criteria"
 
   - name: component_verification_summary
     type: object[]
@@ -187,6 +252,7 @@ artifacts:
       verification command/result, criteria checked, self-check result, and
       final status. Every component final status must be VERIFIED before
       WORKFLOW COMPLETE.
+    on_fail: "Run and record per-component verification evidence until every component final_status is VERIFIED"
     object_fields:
       - name: component_id
         type: string
@@ -224,10 +290,11 @@ artifacts:
 
   - name: metrics_entry
     type: jsonl_line
-    required: true
-    condition: always
+    required: conditional
+    condition: "local metrics are configured and policy allows persistent workflow metrics"
     validation: "Valid JSON with required keys: date, project, task, size, review_rounds, plan_deviations, build_failures"
-    location: "~/.claude/memory/metrics/workflow-metrics.jsonl"
+    on_fail: "Append valid metrics when configured and policy-allowed, or record metrics unavailable/disallowed in final output"
+    location: "{agent_metrics_path}/workflow-metrics.jsonl"
 
   - name: plan_document
     type: string
@@ -237,6 +304,7 @@ artifacts:
       Small: inline plan with goal, files, risks, tests.
       Medium: standard plan per plan-template.md.
       Large/Mega: full plan per plan-template.md including Security and Operability.
+    on_fail: "Write or update the plan document for the task size before proceeding"
 
   - name: user_approval
     type: enum
@@ -244,11 +312,12 @@ artifacts:
     condition: always
     enum_values: [confirmed, confirmed_with_issues, not_required_small]
     validation: "Medium+ tasks require explicit confirmation before Document. Small tasks may use not_required_small only when the inline plan proceeded without risk/ambiguity requiring approval."
+    on_fail: "Obtain user approval or justify not_required_small eligibility before completion"
 
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
 # 1. All required artifacts for the task's size tier are present
-# 2. test_results.failed == 0
+# 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
 # 3. spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. review_result.quality_review_status is not missing
 # 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component

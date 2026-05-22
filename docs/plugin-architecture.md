@@ -20,7 +20,7 @@ current_unity_policy: skills/unity-* is outside the default assistant-* inventor
 current_plugin_manifests: plugins/assistant-core/.codex-plugin/plugin.json plugins/assistant-research/.codex-plugin/plugin.json plugins/assistant-dev/.codex-plugin/plugin.json
 ```
 
-The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` installs the skills listed in the `assistant-core` boundary below from the root inventory, `--plugin assistant-research` installs the skills listed in the `assistant-research` boundary, and `--plugin assistant-dev` installs the skills listed in the `assistant-dev` boundary. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The `plugins/assistant-research/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the three research skills, and the installer performs manifest-aware dry-run validation for that scaffold too. The `plugins/assistant-dev/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the eight development skills, and the installer performs manifest-aware dry-run validation for that scaffold too. These scaffolds are not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
+The default install remains the root `skills/assistant-*` inventory. `--plugin assistant-core` installs the skills listed in the `assistant-core` boundary below from the root inventory, `--plugin assistant-research` installs the skills listed in the `assistant-research` boundary, and `--plugin assistant-dev` installs the skills listed in the `assistant-dev` boundary. The `plugins/assistant-core/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the four core skills for Codex plugin packaging, and the installer performs manifest-aware dry-run validation for that scaffold. The `plugins/assistant-research/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the three research skills, and the installer performs manifest-aware dry-run validation for that scaffold too. The `plugins/assistant-dev/.codex-plugin/plugin.json` scaffold includes plugin-local copies of the nine development skills, and the installer performs manifest-aware dry-run validation for that scaffold too. These scaffolds are not marketplace-registered yet. Do not move root skills or add more install behavior until the same slice has P0/P4 coverage for that behavior.
 
 ## Planned Plugin Inventory
 
@@ -29,7 +29,7 @@ The block below is the authoritative planned ownership map. Contract tests parse
 ```text
 PLUGIN_BOUNDARY_START
 assistant-core: assistant-clarify assistant-memory assistant-reflexion assistant-telos
-assistant-dev: assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow
+assistant-dev: assistant-debugging assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow
 assistant-research: assistant-ideate assistant-research assistant-thinking
 assistant-unity: skills/unity-*
 PLUGIN_BOUNDARY_END
@@ -48,6 +48,7 @@ Foundation skills that are useful across development, research, and personal con
 
 Development execution skills:
 
+- `assistant-debugging`
 - `assistant-diagrams`
 - `assistant-docs`
 - `assistant-onboard`
@@ -139,7 +140,7 @@ Manifests must be generated from the ownership map or guarded against it, so ski
 ### Assistant-Dev Manifest Scaffold
 
 - Add `plugins/assistant-dev/.codex-plugin/plugin.json`.
-- Add plugin-local copies of the eight development skills under `plugins/assistant-dev/skills/`.
+- Add plugin-local copies of the nine development skills under `plugins/assistant-dev/skills/`.
 - Guard plugin-local copies against root skill drift with P0/P4 contracts.
 - Keep marketplace registration absent and keep `assistant-dev` boundary-only until its install profile has coverage.
 

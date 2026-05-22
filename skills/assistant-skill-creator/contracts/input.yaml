@@ -54,12 +54,20 @@ fields:
   - name: dependencies
     type: string[]
     required: false
-    description: "Other skills this skill requires (listed in 'requires:' frontmatter)"
+    description: "Other skills this skill requires. Only include hard dependencies when no safe fallback exists; otherwise document optional references in SKILL.md."
     default: []
     on_missing: skip
     examples:
-      - ["assistant-memory"]
-      - ["assistant-memory", "assistant-review"]
+      - ["assistant-review"]
+      - []
+
+  - name: policy_constraints
+    type: string[]
+    required: false
+    description: "Company, privacy, runtime, or tool-use constraints the generated skill must honor"
+    default: []
+    on_missing: infer
+    infer_from: "Include any user/project constraints such as no external tools, local-only, no memory writes, no subagents, no network calls"
 
   - name: effort_level
     type: enum
