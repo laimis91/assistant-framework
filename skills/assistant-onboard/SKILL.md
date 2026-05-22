@@ -224,7 +224,7 @@ Return:
 
 When returning to a known project after significant time:
 
-1. Read existing project-local orientation if present and policy-allowed (`{agent_state_dir}/memory.md` or configured equivalent)
+1. Read existing project-local orientation if present and policy-allowed (`{agent_state_dir}/memory.md`, or configured equivalent)
 2. Check `git log --since="[last session date]"` for changes when git history is available
 3. Update orientation only with stable conventions or structural changes; otherwise report refresh results without writing
 4. Print: `>> Refreshed project context — [N] changes since last session`

@@ -1,6 +1,24 @@
 # Subagent Role Definitions
 
-Reference for dispatching subagents via the Agent tool. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), use agent names directly as subagent_type — each agent carries its own system prompt, tool restrictions, and model settings.
+Reference for dispatching subagents via the Agent tool. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), use agent names directly as `subagent_type` — each agent carries its own system prompt, tool restrictions, and provider-specific model settings when that runtime supports them.
+
+## Model selection guidance
+
+Use **capability tiers**, not provider-specific model names, when deciding which model a role should use. Different runtimes name models differently, and some (for example Gemini CLI today) may not support custom per-role model files yet.
+
+| Tier | Use for | Selection rule |
+|---|---|---|
+| **Fast / economical** | Shallow mapping, file inventory, locating entry points | Cheapest/fastest model that can follow structured output reliably |
+| **Balanced / standard** | Deep reading, build/test loops, noisy output summarization | Default strong coding model for day-to-day reasoning and tool use |
+| **Strongest / deep reasoning** | Architecture, implementation, high-confidence review | Best available coding/reasoning model; spend tokens here when mistakes are expensive |
+
+Provider examples are only examples, not requirements:
+
+- Claude: fast ≈ Haiku, balanced ≈ Sonnet, strongest ≈ Opus.
+- Codex/OpenAI: fast ≈ the configured lightweight coding model, balanced ≈ the default coding model, strongest ≈ the highest-reasoning coding model available in the environment.
+- Gemini: fast ≈ Flash-class, balanced ≈ Pro-class/default coding model, strongest ≈ highest-reasoning Pro/Ultra-class model available.
+
+If the runtime does not expose model overrides for subagents, keep the role separation and tool-access constraints; use the default model and include the tier as guidance in the dispatch prompt.
 
 ## Installed agents
 
@@ -19,14 +37,14 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 ## Agent summary
 
-| Agent | Model | Access | Phase(s) | Purpose |
+| Agent | Recommended tier | Access | Phase(s) | Purpose |
 |---|---|---|---|---|
-| `code-mapper` | haiku | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
-| `explorer` | sonnet | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
-| `architect` | opus | Read-only | Decompose, Plan, Design | Component decomposition, implementation blueprints, design direction |
-| `code-writer` | opus | Write | Build | Implements code following a plan. No builds, no tests, no review |
-| `builder-tester` | sonnet | Write | Build | Builds, writes tests, runs tests. Returns concise summaries, not logs |
-| `reviewer` | opus | Read-only | Review | Finds bugs, security issues, architecture violations, structural problems |
+| `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
+| `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
+| `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Component decomposition, implementation blueprints, design direction |
+| `code-writer` | Strongest / deep reasoning | Write | Build | Implements code following a plan. No builds, no tests, no review |
+| `builder-tester` | Balanced / standard | Write | Build | Builds, writes tests, runs tests. Returns concise summaries, not logs |
+| `reviewer` | Strongest / deep reasoning | Read-only | Review | Finds bugs, security issues, architecture violations, structural problems |
 
 ## Dispatch rules by task size
 
@@ -58,15 +76,15 @@ Confidence threshold: Round 1-2: 80%+ | Round 3-4: 85%+ | Round 5: 90%+
 
 ## Fallback: agents not installed
 
-If custom agents are not installed, use these built-in subagent types with inline prompts:
+If custom agents are not installed, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
-| Role | Fallback subagent_type | Model override |
+| Role | Fallback subagent_type | Recommended tier |
 |---|---|---|
-| Code Mapper | `Explore` | haiku (default) |
-| Explorer | `Explore` | sonnet |
-| Architect | `general-purpose` | opus |
-| Code Writer | `general-purpose` | opus |
-| Builder/Tester | `general-purpose` | sonnet |
-| Reviewer | `general-purpose` | opus |
+| Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
+| Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
+| Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
+| Code Writer | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
+| Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
+| Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 
-When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). See the agent definition files in the framework's `agents/claude/` directory for the complete prompts.
+When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Prefer the matching role definition for the active runtime under the framework's `agents/` directory when available; otherwise adapt the closest provider-neutral role prompt.
