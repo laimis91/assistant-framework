@@ -34,6 +34,12 @@ PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
 
 PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
+STATE_DIR=".claude"
+if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
+    STATE_DIR=".gemini"
+elif [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+    STATE_DIR=".codex"
+fi
 
 emit_workflow_rules_context() {
     local context
@@ -44,7 +50,13 @@ emit_workflow_rules_context() {
 - You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
 - Tests are part of BUILD and accompany features in the SAME step, not later.
 - REVIEW is the post-build verification loop (not one-shot — loop until clean).
-- State your current phase before your next action."
+- State your current phase before your next action.
+
+STATE BOOTSTRAP (when no active task journal is present):
+- For any development/code-work request, create or refresh $STATE_DIR/task.md before planning or implementation.
+- For medium, large, or mega tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
+- These are framework-owned state artifacts; writing them directly is allowed and expected.
+- A completed/deleted task journal does not mean state is optional for the next task."
 
     jq -cn --arg ctx "$context" '{
         hookSpecificOutput: {

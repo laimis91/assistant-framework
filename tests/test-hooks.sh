@@ -2692,6 +2692,9 @@ EOF
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit"' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && echo "$HOOK_STDOUT" | grep -q "STATE BOOTSTRAP" \
+        && echo "$HOOK_STDOUT" | grep -q ".claude/task.md" \
+        && echo "$HOOK_STDOUT" | grep -q ".claude/context-map.md" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
@@ -2768,6 +2771,9 @@ EOF
     rm -f /tmp/_wf_out
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES" \
+        && echo "$HOOK_STDOUT" | grep -q "STATE BOOTSTRAP" \
+        && echo "$HOOK_STDOUT" | grep -q ".codex/task.md" \
+        && echo "$HOOK_STDOUT" | grep -q ".codex/context-map.md" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Completed codex task"; then
         pass
