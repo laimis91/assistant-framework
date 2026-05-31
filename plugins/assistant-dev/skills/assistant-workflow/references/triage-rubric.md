@@ -11,6 +11,7 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 - `Triaged as`: `small`, `medium`, `large`, or `mega`
 - `Required agents`: the roles required by size and risk
 - `Required gates`: the common gates plus every applicable task-category gate pack
+- `Search mode`: `none`, `lightweight`, or `candidate_search`
 
 ## Size Rules
 
@@ -31,6 +32,17 @@ Escalate size when risk exceeds file count. Auth, PII, payments, destructive dat
 | `moderate` | Multiple files, shared helpers, unclear edge cases, or moderate verification work. |
 | `high` | Public contracts, data shape, migration, behavior parity, security-sensitive paths, weak tests, or multi-layer coupling. |
 | `critical` | Irreversible data loss risk, auth bypass, secret exposure, payment/security boundary, or production outage risk. |
+
+
+## Search Mode Rules
+
+Use `search_mode` to decide how much pre-code option exploration is useful. Keep ordinary tasks fast; do not add candidate-search ceremony unless it reduces real uncertainty.
+
+- `none`: the safe path is obvious and acceptance criteria already constrain implementation.
+- `lightweight`: there are 1-3 obvious options worth comparing in the plan's Analysis section.
+- `candidate_search`: use Candidate Search when the request has explicit alternatives, open-ended architecture/design, optimization goals, high uncertainty, repeated failed attempts, unclear/flaky bugs, or a reviewer-requested pivot.
+
+When `candidate_search` is selected, load `references/candidate-search.md`. The goal tree must decompose existing acceptance criteria/component verification criteria; the archive is stored at `{agent_state_dir}/candidate-search.md` only when local state is configured and policy-allowed, otherwise inline in the plan/task packet.
 
 ## Common Gates
 

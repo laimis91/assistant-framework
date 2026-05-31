@@ -25,6 +25,7 @@ This skill is intentionally agent-agnostic: it must work in restricted company e
 - Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
 - Behavior changes have tests or explicit validation attached to the implementation step they protect.
 - Final output reports changed files, verification evidence, residual risks, and next steps.
+- Candidate Search is used for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots — not as default ceremony.
 - Company-safe constraints are respected: no unapproved external installs, no code/secrets exfiltration, and no hidden dependency on third-party agent tooling.
 
 ## Constraints
@@ -158,7 +159,7 @@ When a task includes incidental or scope-expanding refactor work:
 
 Print: `--- PHASE: TRIAGE ---`
 
-Load `references/triage-rubric.md`. Assess task type, risk tier, size, required gates, and required agents. Size determines which phases run, but risk and task type determine the gate packs.
+Load `references/triage-rubric.md`. Assess task type, risk tier, size, required gates, required agents, and `search_mode`. Size determines which phases run, but risk and task type determine the gate packs.
 
 | Size | Phases |
 |---|---|
@@ -170,7 +171,7 @@ Load `references/triage-rubric.md`. Assess task type, risk tier, size, required 
 [Design] = include if task has UI work, skip for backend-only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
-Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count] | search=[search_mode]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 
@@ -203,6 +204,7 @@ Load `references/phases.md` and execute the phase matching your current stage. E
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
 For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
+For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 
 ## Planning Checklist

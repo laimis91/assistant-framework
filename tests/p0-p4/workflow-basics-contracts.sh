@@ -112,6 +112,73 @@ else
     fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
 fi
 
+test_start "workflow candidate-search phase 1 contracts are present and company-safe"
+missing_candidate_terms=()
+for term in \
+    "search_mode" \
+    "none, lightweight, candidate_search" \
+    "candidate_search triggers"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
+        missing_candidate_terms+=("input.yaml: $term")
+    fi
+done
+for term in \
+    "candidate_search_result" \
+    "goal_tree" \
+    "candidate_archive" \
+    "selected_candidate" \
+    "plan_deviation"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
+        missing_candidate_terms+=("output.yaml: $term")
+    fi
+done
+for term in \
+    "CS1" \
+    "candidate archive exists at {agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed" \
+    "Post-approval candidate pivots are recorded as plan deviations"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        missing_candidate_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "references/candidate-search.md" \
+    "Candidate Search"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
+        missing_candidate_terms+=("SKILL.md: $term")
+    fi
+    if [[ ! -f "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md" ]] || ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md"; then
+        missing_candidate_terms+=("candidate-search.md: $term")
+    fi
+done
+for term in \
+    "Search mode:" \
+    "Candidate search summary:" \
+    "Candidate archive:"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
+        missing_candidate_terms+=("plan-template.md: $term")
+    fi
+done
+for term in \
+    "docs/plans/bes-candidate-search-phase-2.md" \
+    "docs/plans/bes-candidate-search-phase-3.md"; do
+    if [[ ! -f "$FRAMEWORK_DIR/$term" ]]; then
+        missing_candidate_terms+=("future plan missing: $term")
+    fi
+done
+if [[ "${#missing_candidate_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow candidate-search phase 1 contract missing terms: ${missing_candidate_terms[*]}"
+fi
+
+test_start "workflow candidate-search root and assistant-dev plugin copies stay in sync"
+if [[ -d "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" ]] \
+    && diff -qr "$FRAMEWORK_DIR/skills/assistant-workflow" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" >/tmp/p0p4-candidate-plugin-parity.out; then
+    pass
+else
+    fail "assistant-workflow plugin copy is not in sync; see /tmp/p0p4-candidate-plugin-parity.out"
+fi
+
 test_start "workflow state artifacts are orchestrator-owned and ignored"
 missing_state_terms=()
 for term in \

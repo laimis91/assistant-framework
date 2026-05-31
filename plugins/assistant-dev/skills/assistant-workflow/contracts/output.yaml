@@ -12,8 +12,8 @@ artifacts:
     type: object
     required: true
     condition: always
-    validation: "Contains task_type, risk_tier, size, required_gates, and required_agents selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, and required_agents or fallback roles"
+    validation: "Contains task_type, risk_tier, size, required_gates, required_agents, and search_mode selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, and search_mode"
     object_fields:
       - name: task_type
         type: enum
@@ -35,6 +35,11 @@ artifacts:
         type: string[]
         required: true
         validation: "Required workflow roles and skills selected from size, task type, and risk tier"
+      - name: search_mode
+        type: enum
+        required: true
+        enum_values: [none, lightweight, candidate_search]
+        validation: "Selected during Triage from uncertainty, alternatives, optimization pressure, repeated failures, unclear bugs, and reviewer-requested pivots"
 
   - name: phase_checkpoints
     type: string[]
@@ -296,6 +301,59 @@ artifacts:
     on_fail: "Append valid metrics when configured and policy-allowed, or record metrics unavailable/disallowed in final output"
     location: "{agent_metrics_path}/workflow-metrics.jsonl"
 
+  - name: candidate_search_result
+    type: object
+    required: conditional
+    condition: "search_mode == candidate_search"
+    description: "BES-style candidate-search result used before committing to a plan or when an approved plan needs a candidate pivot"
+    validation: "Contains goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, and plan_deviation when the selected candidate changes an approved plan."
+    on_fail: "Load references/candidate-search.md, reconstruct the archive from criteria/options considered, score candidates, and re-approve any post-approval plan deviation before Build continues"
+    object_fields:
+      - name: goal_tree
+        type: string
+        required: true
+        validation: "Decomposes existing acceptance criteria or component verification criteria; does not invent unrelated success criteria"
+      - name: candidate_archive
+        type: object[]
+        required: true
+        validation: "At least two candidates unless a single feasible path is explicitly justified"
+        object_fields:
+          - name: id
+            type: string
+            required: true
+          - name: summary
+            type: string
+            required: true
+          - name: lineage
+            type: string
+            required: true
+            validation: "Origin and operator such as seed, mutate, rewrite, combine, translocate, delete, or repair"
+          - name: scores
+            type: string
+            required: true
+            validation: "Objective fit, verifiability, feasibility, risk, and simplicity scores or rationale"
+      - name: selected_candidate
+        type: string
+        required: true
+        validation: "References one candidate id from candidate_archive"
+      - name: scoring_rubric
+        type: string
+        required: true
+        validation: "Names the pre-code rubric dimensions used to score candidates: objective fit, verifiability, feasibility, risk, and simplicity"
+      - name: selection_reason
+        type: string
+        required: true
+        validation: "Explains why this candidate best satisfies the pre-code rubric"
+      - name: archive_location
+        type: string
+        required: true
+        validation: "{agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed; otherwise inline in the plan/task packet"
+      - name: plan_deviation
+        type: string
+        required: false
+        condition: "candidate search occurred after plan approval or selected candidate changes approved scope/files/behavior/risk"
+        validation: "Records deviation, impact, rollback/re-approval status, and user approval when required"
+
   - name: plan_document
     type: string
     required: true
@@ -321,5 +379,6 @@ artifacts:
 # 3. spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. review_result.quality_review_status is not missing
 # 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component
-# 6. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
+# 6. candidate_search_result exists when search_mode == candidate_search and any plan_deviation is approved before Build
+# 7. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.

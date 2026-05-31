@@ -18,6 +18,8 @@ For any task that needs clarification, create or update `{agent_state_dir}/task.
 - `Clarification question cap: N` where the cap is a maximum, never a quota
 - `Clarification admissibility: satisfied | needs_clarification | not_applicable`
 - `Unresolved clarification topics:` as a markdown list
+- `Search mode: none | lightweight | candidate_search`
+- `Candidate archive: {agent_state_dir}/candidate-search.md | inline | N/A`
 
 For medium+ tasks, keep the task journal or equivalent carried-forward state for the full task lifecycle even when Discover resolves without a clarification wait.
 
@@ -167,8 +169,9 @@ Read `references/plan-template.md` and use the correct tier:
 5. For medium+ tasks: include the Decompose component manifest in the plan and align each task packet to a component
 6. Write ordered implementation steps with file paths
 7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-8. Carry `Task type`, `Risk tier`, `Required gates`, and `Required agents` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
-9. Load prompt packs only when applicable:
+8. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+9. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/component criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
+10. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
    - New code: `references/prompts/test-strategy.md`
