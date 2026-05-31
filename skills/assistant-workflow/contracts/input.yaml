@@ -107,6 +107,32 @@ fields:
     on_missing: skip
     notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
 
+  - name: search_mode
+    type: enum
+    required: false
+    enum_values: [none, lightweight, candidate_search]
+    description: "Whether planning should evaluate one obvious path, a lightweight options list, or a BES-style candidate search before committing to an approach. Allowed values: none, lightweight, candidate_search"
+    validation: "Must be one of: none, lightweight, candidate_search. candidate_search triggers only for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots."
+    default: none
+    on_missing: infer
+    infer_from: "Use candidate_search for explicit alternatives, open-ended architecture/design, optimization-heavy work, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots; use lightweight for ordinary tasks with 1-3 obvious options; otherwise none."
+
+  - name: candidate_search_goal
+    type: string
+    required: false
+    description: "Single objective used to decompose the goal tree when search_mode=candidate_search"
+    validation: "Derived from acceptance criteria and component verification criteria; must not create a second source of truth."
+    default: null
+    on_missing: skip
+
+  - name: candidate_search_constraints
+    type: string[]
+    required: false
+    description: "Constraints and non-goals that every candidate must satisfy"
+    validation: "Each entry must come from user constraints, approved plan boundaries, policy constraints, or discovered project constraints."
+    default: []
+    on_missing: skip
+
   - name: clarification_status
     type: enum
     required: true

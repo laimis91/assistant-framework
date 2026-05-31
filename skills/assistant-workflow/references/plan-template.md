@@ -56,6 +56,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
+- Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]
@@ -85,6 +86,11 @@ Covers the essentials without Security/Operability overhead. Fill this in during
   - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
 
 ## Analysis
+### Candidate search summary
+- Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
+- Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
+- Goal tree source: [acceptance criteria/component criteria used]
+
 ### Options
 1. [approach] — [tradeoff]
 2. [approach] — [tradeoff]
@@ -137,6 +143,7 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 - Risk tier: [low | moderate | high | critical]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
+- Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]
@@ -187,6 +194,11 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 - Runbook updates: [new on-call procedures needed?]
 
 ## Analysis
+### Candidate search summary
+- Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
+- Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
+- Goal tree source: [acceptance criteria/component criteria used]
+
 ### Options
 1. [approach] — [tradeoff]
 2. [approach] — [tradeoff]

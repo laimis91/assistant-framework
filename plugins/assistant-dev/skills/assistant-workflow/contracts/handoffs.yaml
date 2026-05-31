@@ -313,6 +313,16 @@ handoffs:
         required: true
         enum_values: [medium, large, mega]
         description: "Determines component count range (medium: 2-7, large/mega: 3-7)"
+      - name: search_mode
+        type: enum
+        required: false
+        enum_values: [none, lightweight, candidate_search]
+        description: "Whether decomposition should prepare for one path, lightweight options, or a Candidate Search archive"
+      - name: candidate_search_summary
+        type: string
+        required: false
+        condition: "search_mode == candidate_search"
+        description: "Selected candidate, archive location, and constraints from references/candidate-search.md if Candidate Search already ran"
     return_fields:
       - name: status
         type: enum
@@ -421,6 +431,16 @@ handoffs:
         type: string[]
         required: true
         description: "All accumulated constraints"
+      - name: search_mode
+        type: enum
+        required: false
+        enum_values: [none, lightweight, candidate_search]
+        description: "Whether planning should use one path, lightweight options, or Candidate Search"
+      - name: candidate_search_summary
+        type: string
+        required: false
+        condition: "search_mode == candidate_search"
+        description: "Goal tree summary, selected candidate, scoring rationale, archive location, and any plan_deviation status"
       - name: component_manifest
         type: object[]
         required: false
@@ -475,6 +495,11 @@ handoffs:
         required: false
         condition: "status is DEVIATED"
         description: "What the blueprint had to change from the requested scope or approved direction"
+      - name: candidate_search_result
+        type: object
+        required: false
+        condition: "search_mode == candidate_search"
+        description: "Pre-code candidate selection result matching workflow output contract fields: goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, archive_location, and plan_deviation when applicable"
       - name: implementation_steps
         type: object[]
         required: true

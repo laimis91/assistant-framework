@@ -206,6 +206,26 @@ gates:
         check: "Each task packet includes a deviation/rollback rule, or small inline plan explicitly states how deviations are handled"
         on_fail: "Add deviation/rollback handling before seeking plan approval"
 
+      - id: CS1
+        check: "When search_mode == candidate_search: goal tree decomposes the existing acceptance criteria and component verification criteria"
+        condition: "search_mode == candidate_search"
+        on_fail: "Load references/candidate-search.md and rewrite the goal tree from approved criteria instead of creating a second source of truth"
+
+      - id: CS2
+        check: "When search_mode == candidate_search: candidate archive exists at {agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed, or is carried inline in the plan/task packet"
+        condition: "search_mode == candidate_search"
+        on_fail: "Create the candidate archive in configured local state when allowed; otherwise embed the archive in the plan/task packet with redaction and retention notes"
+
+      - id: CS3
+        check: "When search_mode == candidate_search: candidates are scored with the pre-code rubric: objective fit, verifiability, feasibility, risk, and simplicity"
+        condition: "search_mode == candidate_search"
+        on_fail: "Score each candidate using references/candidate-search.md before selecting an approach"
+
+      - id: CS4
+        check: "Post-approval candidate pivots are recorded as plan deviations and re-approved when scope, files, behavior, or risk changes"
+        condition: "search_mode == candidate_search"
+        on_fail: "Print the plan deviation, update plan_deviation, and wait for user approval before Build continues"
+
   # ─────────────────────────────────────────────
   # DESIGN → BUILD (UI tasks only)
   # ─────────────────────────────────────────────
