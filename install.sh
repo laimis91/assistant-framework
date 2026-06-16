@@ -1446,13 +1446,15 @@ These rules define the operating contract for every response.
 
 4. PLAN BEFORE BUILD: For medium+ tasks, you MUST have an approved plan before writing implementation code. Present the plan, wait for approval, THEN build.
 
-5. TESTS WITH FEATURES: Every new component or feature MUST have tests in the SAME step. Include the test with the implementation work.
+5. CLARIFY BEFORE PLAN: During preparation/DISCOVER and PLAN, do not silently assume answers to implementation-shaping unknowns. If a missing answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification, cannot be discovered locally, and has no safe default, ask bounded clarification questions and wait. If the path is clear, record explicit assumptions/defaults before planning.
 
-6. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 5 rounds). Continue until the review is clean or the max round is reached.
+6. TESTS WITH FEATURES: Every new component or feature MUST have tests in the SAME step. Include the test with the implementation work.
 
-7. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
+7. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 5 rounds). Continue until the review is clean or the max round is reached.
 
-8. CONTEXT BUDGET: Keep generated guidance concise. Load detailed skill references only when the active task requires them, avoid duplicating AGENTS.md content in replies, and preserve user custom sections below the installer block.
+8. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
+
+9. CONTEXT BUDGET: Keep generated guidance concise. Load detailed skill references only when the active task requires them, avoid duplicating AGENTS.md content in replies, and preserve user custom sections below the installer block.
 </behavioral_rules>
 
 ## Skills (loaded from ~/.codex/skills/)

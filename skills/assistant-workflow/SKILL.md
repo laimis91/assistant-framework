@@ -32,6 +32,8 @@ This skill is intentionally agent-agnostic: it must work in restricted company e
 
 - Do not skip phases; scale them down for small work instead.
 - Do not ask ritual clarification or approval questions when code/context makes the next safe action clear.
+- Do ask bounded clarification questions during Discover/preparation before planning when an implementation-shaping unknown would change correctness, scope, behavior, data, public contract, security, migration safety, or verification, cannot be discovered locally, and has no safe default.
+- Do not enter Plan by silently assuming answers to unresolved implementation-shaping unknowns; either ask and wait, explicitly apply safe defaults, or record why local context made the path clear.
 - Keep scope changes explicit and tied to correctness, security, safety, or verification risk.
 - Do not install tools, upload code, call external services, or paste proprietary content into third-party systems unless the user explicitly approved that path.
 - Prefer local, repo-native commands (`npm test`, `dotnet test`, `pytest`, project scripts, existing linters) over introducing new tooling.
