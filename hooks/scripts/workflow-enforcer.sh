@@ -55,6 +55,9 @@ emit_workflow_rules_context() {
 STATE BOOTSTRAP (when no active task journal is present):
 - For any development/code-work request, create or refresh $STATE_DIR/task.md before planning or implementation.
 - For medium, large, or mega tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
+- During preparation/DISCOVER, resolve clarification readiness before PLAN: if any implementation-shaping unknown affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from local context; and has no safe default, ask bounded clarification questions and WAIT.
+- If no clarification is needed, explicitly record Clarification status: ready, Clarification defaults applied: false, Clarification questions asked: 0, and Unresolved clarification topics: none before planning.
+- Do not enter PLAN by silently assuming answers to unresolved implementation-shaping unknowns; either ask, apply explicit safe defaults, or state why code/context makes the path clear.
 - These are framework-owned state artifacts; writing them directly is allowed and expected.
 - A completed/deleted task journal does not mean state is optional for the next task."
 

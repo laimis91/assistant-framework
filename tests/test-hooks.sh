@@ -2695,6 +2695,9 @@ EOF
         && echo "$HOOK_STDOUT" | grep -q "STATE BOOTSTRAP" \
         && echo "$HOOK_STDOUT" | grep -q ".claude/task.md" \
         && echo "$HOOK_STDOUT" | grep -q ".claude/context-map.md" \
+        && echo "$HOOK_STDOUT" | grep -q "resolve clarification readiness before PLAN" \
+        && echo "$HOOK_STDOUT" | grep -q "ask bounded clarification questions and WAIT" \
+        && echo "$HOOK_STDOUT" | grep -q "Do not enter PLAN by silently assuming answers" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
@@ -2774,6 +2777,8 @@ EOF
         && echo "$HOOK_STDOUT" | grep -q "STATE BOOTSTRAP" \
         && echo "$HOOK_STDOUT" | grep -q ".codex/task.md" \
         && echo "$HOOK_STDOUT" | grep -q ".codex/context-map.md" \
+        && echo "$HOOK_STDOUT" | grep -q "resolve clarification readiness before PLAN" \
+        && echo "$HOOK_STDOUT" | grep -q "Do not enter PLAN by silently assuming answers" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Completed codex task"; then
         pass
