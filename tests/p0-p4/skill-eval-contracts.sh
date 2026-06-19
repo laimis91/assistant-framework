@@ -118,6 +118,10 @@ p0p4_write_skill_eval_responses() {
                     fi
                     printf '%s\n' "$required"
                 done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file")
+                while IFS= read -r seeded_anchor; do
+                    printf '%s
+' "$seeded_anchor"
+                done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .seeded_defects[]? | (.detection_anchors[]?, .evidence_anchors[]?, .acceptable_severities[]?, .finding_markers[]?)' "$fixture_file")
             } >"$response_path"
         done < <(jq -r '.cases[].id' "$fixture_file")
     done < <(p0p4_skill_eval_default_fixtures)
@@ -135,6 +139,10 @@ p0p4_write_skill_eval_flat_responses() {
             while IFS= read -r required; do
                 printf '%s\n' "$required"
             done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file")
+            while IFS= read -r seeded_anchor; do
+                printf '%s
+' "$seeded_anchor"
+            done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .seeded_defects[]? | (.detection_anchors[]?, .evidence_anchors[]?, .acceptable_severities[]?, .finding_markers[]?)' "$fixture_file")
         } >"$output_dir/$id.txt"
     done < <(jq -r '.cases[].id' "$fixture_file")
 }
@@ -276,6 +284,8 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/unknown-cause-bugfix-routes-through-debugging-before-tdd.md" \
     && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
+    && grep -Fq "## Seeded Defects / Measurable Assertions" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
+    && grep -Fq "refund-special-case-bypasses-shared-guards" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
     && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/bugfix-starts-with-red-evidence.md" \
     && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/unknown-cause-bugfix-waits-for-debugging-evidence.md" \
     && grep -Fq "Skill: assistant-security" "$prompt_dir/assistant-security/findings-include-severity-impact-remediation.md" \
@@ -349,6 +359,58 @@ else
     fail "skill eval runner --responses did not report forbidden substrings clearly"
 fi
 
+test_start "skill eval runner fails for missing seeded defect anchors"
+seeded_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-seeded-defect.XXXXXX")"
+seeded_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-seeded-defect-output.XXXXXX")"
+p0p4_register_cleanup "$seeded_dir" "$seeded_output"
+p0p4_write_skill_eval_responses "$seeded_dir"
+# Remove the fixture-specific seeded anchors while keeping the generic required substrings to prove seeded defects are separately measured.
+python3 - "$seeded_dir/assistant-review/code-review-checks-behavioral-contracts.txt" <<'PYSEED'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+remove = {
+    "refund special-case path", "bypass", "skipped validation", "idempotency",
+    "order endpoint", "refund", "validation", "authorization", "audit",
+    "config defaults", "public API/schema/client/docs", "interface-implementation alignment",
+    "config", "public API", "schema", "docs",
+    "test inheritance", "fake/incomplete implementation", "refund happy path",
+    "inherited order/refund behavior", "tests", "must-fix", "should-fix", "nit",
+}
+lines = [line for line in path.read_text().splitlines() if line not in remove]
+path.write_text("\n".join(lines) + "\n")
+PYSEED
+if "$skill_eval_runner" --responses "$seeded_dir" >"$seeded_output" 2>&1; then
+    fail "skill eval runner --responses unexpectedly passed with missing seeded defect anchors"
+elif grep -Fq $'FAIL	assistant-review	code-review-checks-behavioral-contracts' "$seeded_output" \
+    && grep -Fq "seeded defect assertion failure" "$seeded_output" \
+    && grep -Fq "seeded_defect_failures=" "$seeded_output"; then
+    pass
+else
+    fail "skill eval runner --responses did not report seeded defect assertion failures clearly"
+fi
+
+test_start "skill eval runner enforces false positive marker budget"
+false_positive_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-false-positive.XXXXXX")"
+false_positive_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-false-positive-output.XXXXXX")"
+p0p4_register_cleanup "$false_positive_dir" "$false_positive_output"
+p0p4_write_skill_eval_responses "$false_positive_dir"
+{
+    printf '%s
+' "rewrite the whole service"
+    printf '%s
+' "block merge because names are subjective"
+    printf '%s
+' "unrelated architectural rewrite"
+} >>"$false_positive_dir/assistant-review/code-review-checks-behavioral-contracts.txt"
+if "$skill_eval_runner" --responses "$false_positive_dir" >"$false_positive_output" 2>&1; then
+    fail "skill eval runner --responses unexpectedly passed with false positive markers above budget"
+elif grep -Fq $'FAIL	assistant-review	code-review-checks-behavioral-contracts' "$false_positive_output"     && grep -Fq "false positive marker budget failure" "$false_positive_output"     && grep -Fq "false_positive_marker_failures=" "$false_positive_output"; then
+    pass
+else
+    fail "skill eval runner --responses did not report false positive marker budget failures clearly"
+fi
+
 test_start "skill eval runner passes generated responses with all required substrings"
 passing_response_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-passing.XXXXXX")"
 passing_response_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-passing-output.XXXXXX")"
@@ -357,7 +419,9 @@ p0p4_write_skill_eval_responses "$passing_response_dir"
 if "$skill_eval_runner" --responses "$passing_response_dir" >"$passing_response_output" 2>&1 \
     && grep -Fq "Summary: total=$default_case_count passed=$default_case_count failed=0" "$passing_response_output" \
     && grep -Fq "missing_required_substrings=0" "$passing_response_output" \
-    && grep -Fq "forbidden_substring_hits=0" "$passing_response_output"; then
+    && grep -Fq "forbidden_substring_hits=0" "$passing_response_output" \
+    && grep -Fq "seeded_defect_failures=0" "$passing_response_output" \
+    && grep -Fq "false_positive_marker_failures=0" "$passing_response_output"; then
     pass
 else
     fail "skill eval runner --responses did not pass generated all-required response set"
