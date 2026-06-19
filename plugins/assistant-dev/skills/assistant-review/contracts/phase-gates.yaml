@@ -87,6 +87,10 @@ gates:
         condition: "agentic_loop_safety_review_required is true"
         on_fail: "Re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, and cost/token guardrails."
 
+      - id: RS_RULE_DISTILLATION
+        check: "When blocker/must-fix findings or recurring contract/checklist/eval gaps exist: review_finding_rule_distillation classifies them as one_off_fix, permanent_rule_candidate, or no_action with evidence and promotion decision"
+        on_fail: "Load references/review-finding-permanent-rule.md and classify applicable findings before final review output"
+
   # ─────────────────────────────────────────────
   # EVALUATE step — per round
   # ─────────────────────────────────────────────

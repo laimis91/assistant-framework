@@ -68,6 +68,7 @@ Use the smallest mode that answers the request; combine modes when reviewing imp
 - **Spec review**: compare the diff/code to the stated goal and acceptance criteria. Report missing behavior, scope creep, and mismatched semantics.
 - **Behavioral contract review**: for code changes, check preserved behavior/invariants, interface-implementation alignment, inherited test coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
 - **Agentic loop safety review**: for agent/workflow/tool loops, check max steps/time budget, stop condition, retry/empty-result handling, tool-error handling, low-confidence escalation, and cost/token guardrails.
+- **Review finding distillation**: for blocker/must-fix findings, classify whether the issue is a one-off fix or a permanent rule candidate using `references/review-finding-permanent-rule.md`.
 - **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
 - **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
 - **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
@@ -364,3 +365,8 @@ On DRIFT, the next Reviewer dispatch MUST include this addition to its prompt:
 > Apply maximum skepticism. Score conservatively; when uncertain, round DOWN."
 
 On 3+ DRIFT occurrences: stop the loop and present findings for manual review.
+
+
+## Review Finding Rule Distillation
+
+At the end of review, load `references/review-finding-permanent-rule.md` for every blocker or must-fix finding. Classify each as `one_off_fix`, `permanent_rule_candidate`, or `no_action`. Promote only recurring process gaps, fake-pass eval gaps, missing contracts, missing checklists, or high-impact repeatable failure modes; do not promote style nits or one-off file-specific issues into broad rules.

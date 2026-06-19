@@ -523,6 +523,68 @@
           "uncertain outcomes can continue"
         ]
       }
+    },
+    {
+      "id": "review-finding-distills-permanent-rule-candidates",
+      "title": "Review finding distills permanent rule candidates",
+      "category": "review_finding_rule_distillation",
+      "purpose": "Checks that assistant-review classifies blocker and must-fix findings into one-off fixes versus permanent rule candidates instead of only patching the current PR.",
+      "prompt": "Review a framework PR where an eval passes with checklist headings only and misses a planted contract failure. Report blockers and whether any finding should become a permanent framework rule.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material includes a blocker: an eval can fake-pass by naming headings without fixture-specific evidence.",
+        "The same class of failure could recur across other skill evals unless a contract/eval rule is added.",
+        "The review also includes a style nit that should not be promoted into a permanent rule."
+      ],
+      "expected_behavior": [
+        "Loads or applies references/review-finding-permanent-rule.md.",
+        "Reports the current blocker with evidence, impact, recommendation, and confidence.",
+        "Adds Review Finding Rule Distillation for blocker and must-fix findings.",
+        "Classifies the fake-pass eval gap as permanent_rule_candidate rather than only one_off_fix.",
+        "Classifies one-off issues as one_off_fix when they are not recurring rule candidates.",
+        "Rejects or defers style nits instead of promoting them as permanent rules.",
+        "Names rule target such as eval, phase_gate, output_contract, checklist, or skill_reference.",
+        "Proposes a verification/eval update that would catch future checklist-heading-only fake passes.",
+        "Includes scope and exclusions to avoid broad ceremony."
+      ],
+      "pass_criteria": [
+        "The response includes review_finding_rule_distillation or Review Finding Rule Distillation.",
+        "The classification includes permanent_rule_candidate for the recurring fake-pass eval gap.",
+        "The packet includes finding, evidence, failure pattern, rule target, proposed rule, verification/eval update, scope/exclusions, and promotion decision.",
+        "The response distinguishes one-off fixes from permanent rule candidates.",
+        "The response does not promote the style nit into a permanent rule."
+      ],
+      "fail_signals": [
+        "Only recommends fixing the current PR without classifying the recurring rule gap.",
+        "Promotes a pure style nit as a permanent rule.",
+        "Omits verification/eval update for the rule.",
+        "Treats checklist-heading-only eval passing as acceptable.",
+        "Skips classification for blocker or must-fix findings."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Review Finding Rule Distillation",
+          "permanent_rule_candidate",
+          "one_off_fix",
+          "failure pattern",
+          "rule target",
+          "proposed rule",
+          "verification/eval update",
+          "scope and exclusions",
+          "promotion decision",
+          "fake-pass",
+          "fixture-specific evidence",
+          "style nit",
+          "defer"
+        ],
+        "forbidden_substrings": [
+          "only fix this PR",
+          "style nit becomes permanent rule",
+          "no eval update needed",
+          "checklist headings are enough",
+          "skip blocker classification"
+        ]
+      }
     }
   ]
 }

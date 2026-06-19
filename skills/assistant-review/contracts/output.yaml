@@ -6,6 +6,45 @@ contract: output
 skill: assistant-review
 
 artifacts:
+  - name: review_finding_rule_distillation
+    type: object[]
+    required: conditional
+    condition: "review has blocker or must-fix findings, or a finding exposes recurring process, contract, checklist, or eval gaps"
+    description: "Classification of review findings into one-off fixes versus permanent rule candidates"
+    validation: "Each applicable finding must include evidence, failure pattern, classification, target, proposed rule or no-action rationale, verification/eval update, scope/exclusions, and promotion decision"
+    on_fail: "Load references/review-finding-permanent-rule.md and classify blocker/must-fix findings before final review output"
+    object_fields:
+      - name: finding
+        type: string
+        required: true
+      - name: evidence
+        type: string
+        required: true
+      - name: failure_pattern
+        type: string
+        required: true
+      - name: classification
+        type: enum
+        enum_values: [one_off_fix, permanent_rule_candidate, no_action]
+        required: true
+      - name: rule_target
+        type: enum
+        enum_values: [checklist, input_contract, output_contract, phase_gate, handoff, eval, template, skill_reference, none]
+        required: true
+      - name: proposed_rule
+        type: string
+        required: true
+      - name: verification_eval_update
+        type: string
+        required: true
+      - name: scope_and_exclusions
+        type: string
+        required: true
+      - name: promotion_decision
+        type: enum
+        enum_values: [promote, defer, reject]
+        required: true
+
   - name: final_summary
     type: object
     required: true
