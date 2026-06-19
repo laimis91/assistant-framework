@@ -37,6 +37,120 @@ artifacts:
         description: "URLs that were verified as accessible"
         validation: "Every URL listed here was checked and returned a valid response"
 
+  - name: perspective_scan
+    type: object[]
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Five expert lenses used before synthesis"
+    min_items: 5
+    validation: "Includes practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, and historian_or_pattern_matcher lenses with confidence levels and source notes."
+    on_fail: "Re-run the perspective scan using five-lens-briefing.md before synthesizing."
+    object_fields:
+      - name: lens
+        type: enum
+        required: true
+        enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
+      - name: core_position
+        type: string
+        required: true
+      - name: strongest_evidence_or_source_notes
+        type: string
+        required: true
+      - name: likely_blind_spot
+        type: string
+        required: true
+      - name: unique_insight
+        type: string
+        required: true
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+
+  - name: contradiction_map
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Where the five lenses agree, disagree, and leave gaps"
+    validation: "Names direct conflicts, consensus, strongest/weakest evidence, biggest unresolved question, and missing angle."
+    on_fail: "Map contradictions before writing the synthesis; do not present a single-perspective briefing."
+    object_fields:
+      - name: direct_conflicts
+        type: string[]
+        required: true
+      - name: strongest_evidence
+        type: string
+        required: true
+      - name: weakest_evidence
+        type: string
+        required: true
+      - name: consensus
+        type: string[]
+        required: true
+      - name: biggest_unresolved_question
+        type: string
+        required: true
+      - name: missing_angle_or_gap
+        type: string
+        required: true
+
+  - name: synthesis_briefing
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Decision-ready synthesis of the perspective scan and contradiction map"
+    validation: "Includes executive summary, ranked findings, hidden connection, actionable implication, recommendation, and frontier question."
+    on_fail: "Rewrite the synthesis using all five lenses and the contradiction map."
+    object_fields:
+      - name: executive_summary
+        type: string
+        required: true
+      - name: ranked_key_findings
+        type: string[]
+        required: true
+        min_items: 3
+      - name: hidden_connection
+        type: string
+        required: true
+      - name: actionable_implication
+        type: string
+        required: true
+      - name: recommendation
+        type: enum
+        required: true
+        enum_values: [do, wait, avoid, investigate_further]
+      - name: frontier_question
+        type: string
+        required: true
+
+  - name: peer_review
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Self-critique of the briefing before final presentation"
+    validation: "Includes confidence scores, weakest claim, bias check, missing sixth perspective, falsification test, and revised recommendation if needed."
+    on_fail: "Run the peer review step and revise or downgrade claims before finalizing."
+    object_fields:
+      - name: confidence_scores
+        type: string[]
+        required: true
+      - name: weakest_claim
+        type: string
+        required: true
+      - name: bias_check
+        type: string
+        required: true
+      - name: missing_sixth_perspective
+        type: string
+        required: true
+      - name: falsification_test
+        type: string
+        required: true
+      - name: revised_recommendation_if_needed
+        type: string
+        required: true
+
+
   - name: conflicts
     type: object[]
     required: true
@@ -85,6 +199,16 @@ artifacts:
 #
 # RESEARCH: {question}
 # Tier: {quick/standard/extensive/deep}
+# Method: {source_research/five_lens_briefing}
+#
+# PERSPECTIVE SCAN (required when method=five_lens_briefing)
+# - {lens}: {core_position} — confidence: {HIGH/MEDIUM/LOW}
+#
+# CONTRADICTION MAP (required when method=five_lens_briefing)
+# - {direct conflicts, consensus, unresolved question, missing angle}
+#
+# SYNTHESIS / PEER REVIEW (required when method=five_lens_briefing)
+# - {decision-ready synthesis and self-critique}
 #
 # FINDINGS
 # 1. {finding} — confidence: {HIGH/MEDIUM/LOW}
@@ -93,6 +217,9 @@ artifacts:
 #
 # CONFLICTS
 # - {source A} says X, {source B} says Y — {assessment}
+#
+# SOURCES / VERIFIED URLS
+# - {verified URL or source note with relevance}
 #
 # GAPS
 # - {what we couldn't find}
@@ -104,3 +231,4 @@ artifacts:
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
+# 7. For five_lens_briefing, perspective_scan, contradiction_map, synthesis_briefing, and peer_review are present

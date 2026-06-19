@@ -34,6 +34,16 @@ gates:
         check: "Raw search results are available for synthesis — not discarded prematurely"
         on_fail: "Retain all search results until synthesis is complete"
 
+      - id: S5
+        check: "For five_lens_briefing: the five required lenses were covered before synthesis (practitioner, academic/technical expert, skeptic, economist/incentives analyst, historian/pattern matcher)"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Read five-lens-briefing.md and complete the missing lenses before synthesizing"
+
+      - id: S6
+        check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
+
   # ─────────────────────────────────────────────
   # SYNTHESIZE → VERIFY
   # ─────────────────────────────────────────────
@@ -57,6 +67,16 @@ gates:
       - id: SY4
         check: "Each finding has a confidence level assigned based on source count and quality"
         on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
+
+      - id: SY5
+        check: "For five_lens_briefing: a contradiction map exists before the synthesis and names conflicts, consensus, unresolved question, and missing angle"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Create the contradiction map before writing the synthesis"
+
+      - id: SY6
+        check: "For five_lens_briefing: the synthesis uses all five lenses and includes a peer review/self-critique before presentation"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Revise the synthesis with all lenses and run the peer review step from five-lens-briefing.md"
 
   # ─────────────────────────────────────────────
   # VERIFY → PRESENT
@@ -101,3 +121,8 @@ invariants:
     check: "Subagent dispatch is optional and adapter-aware; research angles and evidence diversity remain required when delegation is unavailable"
     scope: all_phases
     on_fail: "Run the missing research angles sequentially and record that delegation was unavailable"
+
+  - id: INV5
+    check: "For five_lens_briefing, the final recommendation is not stronger than the verified evidence and peer review support"
+    scope: all_phases
+    on_fail: "Downgrade the recommendation, mark investigate_further, or verify the decision-critical claims before finalizing"

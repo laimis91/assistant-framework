@@ -47,6 +47,7 @@ Answer research questions with evidence-weighted findings, verified URLs, explic
 | Tool | File | When to use |
 |---|---|---|
 | **Research** | `research.md` | Information gathering at 4 tiers: quick / standard / extensive / deep |
+| **Five-Lens Briefing** | `five-lens-briefing.md` | STORM-inspired perspective scan → contradiction map → synthesis → peer review for decision-grade research |
 | **Investigate** | `investigate.md` | Deep entity/domain investigation with ethical framework |
 | **Verify URLs** | `url-verify.md` | Validate any URLs before presenting to user |
 
@@ -59,6 +60,12 @@ Read the relevant tool file when the situation calls for it.
 - **Standard**: Multi-source comparison, technology evaluation
 - **Extensive**: Comprehensive analysis, decision support with multiple perspectives
 - **Deep**: Full investigation with primary sources, expert synthesis
+
+**Choosing the right method:**
+- **source_research**: factual lookup, source collection, comparison where direct evidence is enough.
+- **five_lens_briefing**: decision-grade research where practitioner reality, evidence, skepticism, incentives, historical parallels, contradictions, and peer review matter.
+
+For five-lens work, read `five-lens-briefing.md` and still verify decision-critical claims with source-backed research.
 
 **When to use Investigate vs Research:**
 - Research: "What caching libraries exist for .NET?" (broad exploration)
@@ -76,6 +83,7 @@ Return:
 - **Sources** - verified URLs only, with enough context to understand relevance.
 - **Conflicts** - conflicting evidence or interpretations, or "none found".
 - **Gaps** - unanswered questions, weak evidence, stale sources, or recommended next checks.
+- **Five-lens artifacts** - when using `five_lens_briefing`, include perspective scan, contradiction map, synthesis, and peer review.
 
 ## Stop Rules
 

@@ -36,6 +36,23 @@ fields:
       Broad exploration ('what options exist', 'compare') → research.
       Deep dive on specific entity ('how does X work', 'entity profile') → investigate.
 
+  - name: research_method
+    type: enum
+    required: true
+    enum_values: [source_research, five_lens_briefing]
+    description: "Source-first lookup versus STORM-inspired multi-perspective decision briefing"
+    on_missing: infer
+    infer_from: >
+      Simple lookup, direct facts, or ordinary source collection → source_research.
+      Decision support, due diligence, strategy, investing/trading, architecture, vendor/tool evaluation,
+      unfamiliar domains, controversial/hyped topics, or prompts asking for deep understanding → five_lens_briefing.
+
+  - name: user_role_or_goal
+    type: string
+    required: false
+    description: "The user's role, decision, or intended action that the briefing should optimize for"
+    default: "unspecified"
+
   - name: output_purpose
     type: string
     required: false
@@ -53,6 +70,6 @@ fields:
     default: []
 
 # Validation behavior:
-# 1. Resolve question, tier, and tool before any search activity
-# 2. Log: >> Research: {tier} | tool: {tool} | question: "{question (truncated to 80 chars)}"
-# 3. Read the corresponding tool file (research.md or investigate.md) for detailed instructions
+# 1. Resolve question, tier, tool, and research_method before any search activity
+# 2. Log: >> Research: {tier} | tool: {tool} | method: {research_method} | question: "{question (truncated to 80 chars)}"
+# 3. Read the corresponding tool file (research.md, five-lens-briefing.md, or investigate.md) for detailed instructions

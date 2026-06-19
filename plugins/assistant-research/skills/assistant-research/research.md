@@ -2,6 +2,11 @@
 
 Tiered information gathering — scale effort to the question's importance.
 
+## Methods
+
+- **source_research** — default source-first workflow for factual questions, comparisons, and investigations.
+- **five_lens_briefing** — STORM-inspired decision briefing. Read `five-lens-briefing.md` when the topic needs practitioner, academic/technical expert, skeptic, incentives, and historical lenses before synthesis.
+
 ## Modes
 
 | Mode | Evidence budget | When to use |
@@ -23,8 +28,11 @@ Cover 3 differentiated research angles:
 Synthesize: What agrees? What's unique? What conflicts?
 
 ## Extensive Research
-Generate 3+ research angles via structured thinking. For each major claim, seek at least 2 credible sources or mark the claim LOW confidence.
-Synthesize by theme and cross-validate claims across angles.
+Generate 3+ research angles via structured thinking. For decision-grade questions, prefer the `five_lens_briefing` method: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.
+For each major claim, seek at least 2 credible sources or mark the claim LOW confidence. Synthesize by theme and cross-validate claims across angles.
+
+## Five-Lens Briefing
+Use `five-lens-briefing.md` when the question is not just "what is true?" but "how should I understand this and what should I do?" The method requires a perspective scan, contradiction map, synthesis, and peer review. It is compatible with standard, extensive, or deep tiers depending on risk and evidence needs.
 
 ## Deep Investigation
 Iterative progressive research:

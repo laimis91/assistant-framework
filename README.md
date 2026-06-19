@@ -95,7 +95,7 @@ Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, 
 Triggers on: think about, clarify, perspectives, stress test, brainstorm, debate
 
 ### assistant-research
-Tiered research (quick/standard/extensive/deep), deep investigation, URL verification.
+Tiered research (quick/standard/extensive/deep), five-lens decision briefing, deep investigation, URL verification.
 
 Triggers on: research, investigate, look into, find out, what is
 
@@ -280,6 +280,7 @@ skills/
   assistant-research/
     SKILL.md                       <- Tool descriptions and usage guidance
     research.md                    <- Tiered: quick / standard / extensive / deep
+    five-lens-briefing.md          <- STORM-inspired decision briefing: perspective scan / contradictions / synthesis / peer review
     investigate.md                 <- Deep investigation with ethical framework
     url-verify.md                  <- URL verification protocol
 

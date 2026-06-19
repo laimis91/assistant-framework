@@ -119,6 +119,61 @@
           "official without evidence"
         ]
       }
+    },
+    {
+      "id": "five-lens-decision-briefing-uses-storm-style-workflow",
+      "title": "Five-lens decision briefing uses perspective scan and peer review",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that decision-grade research uses the five-lens method, contradiction map, synthesis, verification, and peer review instead of a one-shot summary.",
+      "prompt": "Research whether I should invest time in learning a new AI coding assistant framework for my .NET architecture work. I want a decision-grade briefing, not a generic summary.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "The user asks for decision-grade research with practical implications.",
+        "External source access may be available but claims still need confidence and URL verification before final presentation."
+      ],
+      "expected_behavior": [
+        "Resolves research_method as five_lens_briefing and tier as extensive or deep when decision risk warrants it.",
+        "Runs the five required lenses: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
+        "Builds a contradiction map before synthesis.",
+        "Produces a recommendation no stronger than the verified evidence supports.",
+        "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",
+        "Separates lens inference from source-backed findings and verifies decision-critical URLs before presenting them."
+      ],
+      "pass_criteria": [
+        "The response names method as five_lens_briefing.",
+        "The response includes PERSPECTIVE SCAN, CONTRADICTION MAP, SYNTHESIS, PEER REVIEW, SOURCES/VERIFIED URLS, and GAPS sections.",
+        "The recommendation is do, wait, avoid, or investigate_further with confidence caveats.",
+        "Unsourced or weakly sourced lens claims are LOW confidence or listed as gaps."
+      ],
+      "fail_signals": [
+        "Answers from one generic perspective only.",
+        "Skips contradiction mapping.",
+        "Skips peer review or self-critique.",
+        "Presents lens speculation as verified fact.",
+        "Makes a strong recommendation without source verification."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Method: five_lens_briefing",
+          "PERSPECTIVE SCAN",
+          "Practitioner",
+          "Skeptic",
+          "Economist",
+          "Historian",
+          "CONTRADICTION MAP",
+          "SYNTHESIS",
+          "PEER REVIEW",
+          "weakest claim",
+          "falsification",
+          "GAPS"
+        ],
+        "forbidden_substrings": [
+          "No peer review needed",
+          "contradictions can be skipped",
+          "verified without sources",
+          "single generic perspective"
+        ]
+      }
     }
   ]
 }
