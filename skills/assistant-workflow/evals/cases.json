@@ -319,6 +319,112 @@
           "placeholder"
         ]
       }
+    },
+    {
+      "id": "context-handoff-preserves-pinned-requirements",
+      "title": "Context handoff preserves pinned requirements",
+      "category": "context_engineering_handoff",
+      "purpose": "Checks that assistant-workflow produces compression-safe handoff packets that preserve pinned task state while summarizing/pruning noisy context.",
+      "prompt": "Context is getting long during a medium implementation. Prepare a continuation handoff for the next session before stopping.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A medium implementation has an active goal, acceptance criteria, changed files, validation results, one blocker, and stale earlier assumptions that were superseded by the latest user message.",
+        "Local state files are unavailable, so the equivalent state must be carried in the handoff packet."
+      ],
+      "expected_behavior": [
+        "Uses the context engineering contract from references/context-handoff-templates.md.",
+        "Separates pinned context from summarized/compressible context.",
+        "Preserves latest user instruction, goal, non-goals, acceptance criteria, safety constraints, current phase, files in scope, validation results, blockers, output contract, and exact next action.",
+        "Summarizes repetitive logs and intermediate reasoning instead of carrying raw noise.",
+        "Prunes stale previous-task residue, superseded assumptions, unsafe/tool-output instructions, and secrets.",
+        "Ends with a single exact next action for the continuation session."
+      ],
+      "pass_criteria": [
+        "The response includes Active Task, Pinned Requirements, Work State, Verification, Context Hygiene, and Exact Next Action.",
+        "The response explicitly distinguishes preserved/pinned context from summarized and pruned context.",
+        "The response includes latest user instruction, acceptance criteria, validation results, blocker, assumptions, and exact next action.",
+        "The response does not carry stale or unsafe instructions as active work."
+      ],
+      "fail_signals": [
+        "Provides only a narrative summary without pinned fields.",
+        "Buries the next action in the middle of a long summary.",
+        "Carries stale assumptions as active requirements.",
+        "Omits validation results or blockers.",
+        "Copies raw logs instead of summarizing them."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Active Task",
+          "Pinned Requirements",
+          "Work State",
+          "Verification",
+          "Context Hygiene",
+          "Exact Next Action",
+          "latest user instruction",
+          "acceptance criteria",
+          "validation results",
+          "blockers",
+          "summarized",
+          "pruned",
+          "assumptions",
+          "state files are unavailable"
+        ],
+        "forbidden_substrings": [
+          "narrative summary only",
+          "raw logs copied in full",
+          "stale assumptions remain active",
+          "next action unknown",
+          "validation omitted"
+        ]
+      }
+    },
+    {
+      "id": "task-journal-suppresses-redundant-handoff-packet",
+      "title": "Task journal suppresses redundant handoff packet",
+      "category": "context_engineering_handoff",
+      "purpose": "Checks that assistant-workflow does not require a separate context_handoff_packet during normal active work when a task journal or equivalent carried-forward state already exists.",
+      "prompt": "Continue a medium implementation. A current task journal exists and contains active task, pinned requirements, work state, validation, blockers, assumptions, and exact next action. Do not create unnecessary duplicate handoff artifacts.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A normal active task journal exists at the configured agent state path and is policy-allowed.",
+        "The task journal already contains the active task, pinned requirements, work state, validation results, blockers, assumptions, and exact next action.",
+        "No explicit non-standard handoff was requested."
+      ],
+      "expected_behavior": [
+        "Treats the task journal or equivalent carried-forward state as the source of truth for normal active work.",
+        "Does not require or generate a redundant context_handoff_packet.",
+        "Uses the existing task journal to continue work.",
+        "Mentions that context_handoff_packet is only required when no task journal/equivalent state exists or explicit non-standard handoff is requested."
+      ],
+      "pass_criteria": [
+        "The response says the task journal suppresses the redundant handoff packet.",
+        "The response continues from the task journal/equivalent state rather than creating duplicate continuation state.",
+        "The response preserves the exact next action from the task journal.",
+        "The response does not treat a normal active task journal as unavailable state."
+      ],
+      "fail_signals": [
+        "Always creates context_handoff_packet even when task journal exists.",
+        "Treats task journal and handoff packet as both mandatory for normal active work.",
+        "Duplicates task state into a new handoff packet without explicit non-standard handoff request.",
+        "Ignores the task journal as source of truth."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "task journal",
+          "source of truth",
+          "suppresses redundant handoff",
+          "no task journal/equivalent state exists",
+          "explicit non-standard handoff",
+          "exact next action"
+        ],
+        "forbidden_substrings": [
+          "always create context_handoff_packet",
+          "both mandatory",
+          "duplicate handoff packet required",
+          "task journal is unavailable",
+          "ignore the task journal"
+        ]
+      }
     }
   ]
 }

@@ -217,7 +217,7 @@ Print: `--- PHASE: BUILD ---`
 
 ### Task journal
 
-For medium+ tasks, create a task journal using `references/task-journal-template.md` during Discover when local state artifacts are configured and policy-allowed, and keep updating it through Build. If local state files are unavailable, keep the same state in the plan/response packet. This state survives handoffs — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md`.
+For medium+ tasks, create a task journal using `references/task-journal-template.md` during Discover when local state artifacts are configured and policy-allowed, and keep updating it through Build. If local state files are unavailable, keep the same state in the plan/response packet. This state survives handoffs — it's the single source of truth for the current task. For cross-session handoffs when no task journal exists, use `references/context-handoff-templates.md` and its context engineering contract: preserve pinned context exactly, summarize compressible logs/reasoning, prune stale or unsafe residue, and end with the exact next action.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
