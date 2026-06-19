@@ -205,6 +205,84 @@
           "ignore reproduction"
         ]
       }
+    },
+    {
+      "id": "skill-workflow-review-checks-semantic-contracts",
+      "title": "Skill workflow review checks semantic contracts",
+      "category": "semantic_contract_review",
+      "purpose": "Checks that assistant-review reviews skill/workflow changes for inherited contracts, method-template drift, eval coverage, external method fidelity, high-stakes guards, and mirror surfaces.",
+      "prompt": "Review this assistant-research skill change. It adds a new method template, output contract fields, phase gates, and evals. Check whether the workflow is semantically contract-safe before I merge it.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material touches skills/assistant-research, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and a plugin-local copy.",
+        "The new method adapts a named external research method and can emit do/wait/avoid recommendations."
+      ],
+      "expected_behavior": [
+        "Infers change_kind as skill_or_workflow and semantic_contract_review_required as true.",
+        "Checks that method-specific templates satisfy inherited base output artifacts or explicitly condition the base contract.",
+        "Checks SKILL.md/templates/contracts/phase gates/handoffs/references for artifact and field alignment.",
+        "Checks eval machine expectations for both new behavior and inherited base contract artifacts.",
+        "Checks whether the external named method's defining loop is preserved by a testable artifact.",
+        "Checks high-stakes recommendation guardrails for finance/trading/legal/medical/safety-critical recommendations.",
+        "Checks root and plugin-local copies plus generated/docs/hook surfaces that can drive behavior.",
+        "Reports semantic findings using the normal finding format with Evidence, Impact, Recommendation, and Confidence, or explicitly states no concrete risk found for each checklist area.",
+        "Cites concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and plugin-local copies when assessing semantic contract risk.",
+        "Attempts to falsify the new eval by considering whether a plausible incomplete response could pass machine expectations without satisfying the base contract."
+      ],
+      "pass_criteria": [
+        "The response includes semantic contract review.",
+        "The response mentions inherited contract obligations and template-contract alignment.",
+        "The response checks eval inheritance coverage and external-method signature fidelity.",
+        "The response checks high-stakes recommendation guards and mirror-surface sync.",
+        "Findings include concrete evidence, impact, smallest fix, and confidence.",
+        "The response includes evidence-bearing checks, not only checklist names.",
+        "The response names concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, evals/cases.json, and plugin-local copy.",
+        "The response includes Evidence, Impact, Recommendation, and Confidence for semantic findings or explicitly says no concrete risk found for a checklist area."
+      ],
+      "fail_signals": [
+        "Treats skill review as Markdown style only.",
+        "Checks only new headings and ignores inherited base artifacts.",
+        "Approves a named-method adaptation without identifying the defining loop.",
+        "Ignores high-stakes do/wait/avoid recommendations.",
+        "Ignores plugin-local copy drift.",
+        "Only lists checklist category names without evidence.",
+        "Does not cite any reviewed file or contract surface.",
+        "Does not include Evidence, Impact, Recommendation, and Confidence for findings.",
+        "Does not consider whether eval machine expectations can pass incomplete outputs."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "semantic contract review",
+          "inherited contract",
+          "template-contract alignment",
+          "eval inheritance",
+          "external-method signature",
+          "high-stakes",
+          "mirror-surface",
+          "plugin-local",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:",
+          "SKILL.md",
+          "contracts/output.yaml",
+          "evals/cases.json",
+          "base output artifacts",
+          "method-specific template",
+          "machine expectations",
+          "no concrete risk found"
+        ],
+        "forbidden_substrings": [
+          "Markdown style only",
+          "inherited artifacts do not matter",
+          "no need to check evals",
+          "method signature is irrelevant",
+          "plugin copies can drift",
+          "checklist names are enough",
+          "no file evidence needed",
+          "machine expectations do not need inherited artifacts"
+        ]
+      }
     }
   ]
 }

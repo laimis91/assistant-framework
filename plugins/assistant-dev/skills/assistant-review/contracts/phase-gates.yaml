@@ -34,6 +34,10 @@ gates:
         check: "mode is resolved (review-fix or audit)"
         on_fail: "Default to review-fix unless user explicitly requested audit"
 
+      - id: E5
+        check: "change_kind and semantic_contract_review_required are resolved before review starts"
+        on_fail: "Infer change_kind from touched paths/material and set semantic_contract_review_required=true for skill/workflow/framework changes"
+
   # ─────────────────────────────────────────────
   # REVIEW step — per round
   # ─────────────────────────────────────────────
@@ -67,6 +71,11 @@ gates:
       - id: RS6
         check: "Reviewer applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
         on_fail: "Re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only."
+
+      - id: RS7
+        check: "When semantic_contract_review_required is true: Reviewer applied the Semantic Contract Review Checklist and returned semantic_contract_checks"
+        condition: "semantic_contract_review_required is true"
+        on_fail: "Re-dispatch Reviewer requesting semantic_contract_checks for inherited contracts, template-contract alignment, eval inheritance, external-method signature fidelity, high-stakes guards, and mirror-surface sync."
 
   # ─────────────────────────────────────────────
   # EVALUATE step — per round
@@ -214,3 +223,10 @@ invariants:
       Stagnation detected: score unchanged for 2+ rounds while findings remain.
       Escalate to orchestrator — the loop is churning without progress. Consider whether
       remaining issues are architectural (require broader changes) or the approach needs a PIVOT.
+
+
+  - id: INV7
+    check: "For skill/workflow/framework changes, semantic contract review is not skipped or treated as a style-only review"
+    scope: all_rounds
+    condition: "semantic_contract_review_required is true"
+    on_fail: "Run the Semantic Contract Review Checklist before declaring the review clean; report missing inherited artifacts, weak evals, method-signature drift, high-stakes guard gaps, or mirror drift as findings."

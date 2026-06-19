@@ -113,6 +113,13 @@ handoffs:
         description: "Whether Reviewer must apply SOLID, KISS, DRY, YAGNI, and readability checks from references/review-principles.md"
         notes: "Default true for every review. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
 
+      - name: semantic_contract_review_required
+        type: boolean
+        required: false
+        default: false
+        description: "Whether Reviewer must apply the Semantic Contract Review Checklist for skill/workflow/framework changes"
+        notes: "Set true for changes under skills/, plugin-local skill copies, contracts, evals, prompts, hooks/generated instructions that drive agent behavior, or named-method adaptations."
+
       - name: rubric_required
         type: boolean
         required: false
@@ -179,6 +186,37 @@ handoffs:
           - name: detail
             type: string
             required: true
+
+      - name: semantic_contract_checks
+        type: object
+        required: false
+        condition: "semantic_contract_review_required is true"
+        description: "Compact confirmation that semantic contract review was applied"
+        object_fields:
+          - name: inherited_contract_obligations
+            type: string
+            required: true
+            description: "Whether method/template outputs satisfy inherited base contracts or condition them explicitly"
+          - name: template_contract_alignment
+            type: string
+            required: true
+            description: "Whether SKILL.md/templates/contracts/phase gates/handoffs/references name consistent artifacts"
+          - name: eval_inheritance_coverage
+            type: string
+            required: true
+            description: "Whether evals require both new behavior and inherited base artifacts"
+          - name: external_method_signature_fidelity
+            type: string
+            required: true
+            description: "Whether named-method adaptations preserve the defining loop or mark not applicable"
+          - name: high_stakes_recommendation_guard
+            type: string
+            required: true
+            description: "Whether high-stakes recommendation paths have appropriate guardrails or are not applicable"
+          - name: mirror_surface_sync
+            type: string
+            required: true
+            description: "Whether root/plugin/generated/docs/hook surfaces that can drive behavior are synced or not applicable"
 
       - name: principle_checks
         type: object
