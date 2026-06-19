@@ -37,6 +37,164 @@ artifacts:
         description: "URLs that were verified as accessible"
         validation: "Every URL listed here was checked and returned a valid response"
 
+  - name: perspective_scan
+    type: object[]
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Five expert lenses used before synthesis"
+    min_items: 5
+    validation: "Includes practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, and historian_or_pattern_matcher lenses with confidence levels and source notes."
+    on_fail: "Re-run the perspective scan using five-lens-briefing.md before synthesizing."
+    object_fields:
+      - name: lens
+        type: enum
+        required: true
+        enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
+      - name: core_position
+        type: string
+        required: true
+      - name: strongest_evidence_or_source_notes
+        type: string
+        required: true
+      - name: likely_blind_spot
+        type: string
+        required: true
+      - name: unique_insight
+        type: string
+        required: true
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+
+  - name: question_trace
+    type: object[]
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "STORM-style per-lens question trace and evidence ledger before contradiction mapping"
+    min_items: 5
+    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, a follow-up question, and evidence status."
+    on_fail: "Build the question trace/evidence ledger before contradiction mapping or synthesis; do not synthesize directly from fixed lenses."
+    object_fields:
+      - name: lens
+        type: enum
+        required: true
+        enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
+      - name: question
+        type: string
+        required: true
+        description: "Lens-specific research question asked before synthesis"
+      - name: answer
+        type: string
+        required: true
+        description: "Source-grounded answer, inference-only answer, or explicit unresolved gap"
+      - name: sources_or_verified_urls
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Sources, verified URLs, or an explicit no-source/unresolved marker"
+      - name: follow_up_question
+        type: string
+        required: true
+      - name: follow_up_answer_or_gap
+        type: string
+        required: true
+      - name: evidence_status
+        type: enum
+        required: true
+        enum_values: [source_backed, inference_only, unresolved]
+
+
+  - name: contradiction_map
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Where the five lenses agree, disagree, and leave gaps"
+    validation: "Names direct conflicts, consensus, strongest/weakest evidence, biggest unresolved question, and missing angle."
+    on_fail: "Map contradictions before writing the synthesis; do not present a single-perspective briefing."
+    object_fields:
+      - name: direct_conflicts
+        type: string[]
+        required: true
+      - name: strongest_evidence
+        type: string
+        required: true
+      - name: weakest_evidence
+        type: string
+        required: true
+      - name: consensus
+        type: string[]
+        required: true
+      - name: biggest_unresolved_question
+        type: string
+        required: true
+      - name: missing_angle_or_gap
+        type: string
+        required: true
+
+  - name: synthesis_briefing
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Decision-ready synthesis of the perspective scan and contradiction map"
+    validation: "Includes executive summary, ranked findings, hidden connection, actionable implication, recommendation, and frontier question."
+    on_fail: "Rewrite the synthesis using all five lenses and the contradiction map."
+    object_fields:
+      - name: executive_summary
+        type: string
+        required: true
+      - name: ranked_key_findings
+        type: string[]
+        required: true
+        min_items: 3
+      - name: hidden_connection
+        type: string
+        required: true
+      - name: actionable_implication
+        type: string
+        required: true
+      - name: recommendation
+        type: enum
+        required: true
+        enum_values: [do, wait, avoid, investigate_further]
+        validation: "For finance/trading, legal, medical, safety-critical, or similarly high-impact decisions, default to investigate_further unless verified evidence, explicit user context, and peer review support a stronger recommendation."
+      - name: high_stakes_caveat
+        type: string
+        required: conditional
+        condition: "topic involves finance/trading, legal, medical, safety-critical, or similarly high-impact decisions"
+        description: "Educational due-diligence/risk caveat and user-context limits for high-stakes recommendations"
+      - name: frontier_question
+        type: string
+        required: true
+
+  - name: peer_review
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Self-critique of the briefing before final presentation"
+    validation: "Includes confidence scores, weakest claim, bias check, missing sixth perspective, falsification test, and revised recommendation if needed."
+    on_fail: "Run the peer review step and revise or downgrade claims before finalizing."
+    object_fields:
+      - name: confidence_scores
+        type: string[]
+        required: true
+      - name: weakest_claim
+        type: string
+        required: true
+      - name: bias_check
+        type: string
+        required: true
+      - name: missing_sixth_perspective
+        type: string
+        required: true
+      - name: falsification_test
+        type: string
+        required: true
+      - name: revised_recommendation_if_needed
+        type: string
+        required: true
+
+
   - name: conflicts
     type: object[]
     required: true
@@ -85,14 +243,31 @@ artifacts:
 #
 # RESEARCH: {question}
 # Tier: {quick/standard/extensive/deep}
+# Method: {source_research/five_lens_briefing}
+#
+# PERSPECTIVE SCAN (required when method=five_lens_briefing)
+# - {lens}: {core_position} — confidence: {HIGH/MEDIUM/LOW}
+#
+# QUESTION TRACE / EVIDENCE LEDGER (required when method=five_lens_briefing)
+# - {lens}: question, answer, sources/verified URLs, follow-up question, follow-up answer or gap, evidence status
+#
+# CONTRADICTION MAP (required when method=five_lens_briefing)
+# - {direct conflicts, consensus, unresolved question, missing angle}
+#
+# SYNTHESIS / PEER REVIEW (required when method=five_lens_briefing)
+# - {decision-ready synthesis and self-critique}
 #
 # FINDINGS
-# 1. {finding} — confidence: {HIGH/MEDIUM/LOW}
+# 1. {source-backed factual claim or decision insight} — confidence: {HIGH/MEDIUM/LOW}
 #    Sources: {source 1}, {source 2}
+#    Verified URLs: {verified URL 1, verified URL 2 if any}
 # 2. ...
 #
 # CONFLICTS
 # - {source A} says X, {source B} says Y — {assessment}
+#
+# SOURCES / VERIFIED URLS
+# - {verified URL or source note with relevance}
 #
 # GAPS
 # - {what we couldn't find}
@@ -104,3 +279,6 @@ artifacts:
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
+# 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, and peer_review are present
+# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis
+# 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
