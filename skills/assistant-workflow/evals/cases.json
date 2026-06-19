@@ -377,6 +377,54 @@
           "validation omitted"
         ]
       }
+    },
+    {
+      "id": "task-journal-suppresses-redundant-handoff-packet",
+      "title": "Task journal suppresses redundant handoff packet",
+      "category": "context_engineering_handoff",
+      "purpose": "Checks that assistant-workflow does not require a separate context_handoff_packet during normal active work when a task journal or equivalent carried-forward state already exists.",
+      "prompt": "Continue a medium implementation. A current task journal exists and contains active task, pinned requirements, work state, validation, blockers, assumptions, and exact next action. Do not create unnecessary duplicate handoff artifacts.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A normal active task journal exists at the configured agent state path and is policy-allowed.",
+        "The task journal already contains the active task, pinned requirements, work state, validation results, blockers, assumptions, and exact next action.",
+        "No explicit non-standard handoff was requested."
+      ],
+      "expected_behavior": [
+        "Treats the task journal or equivalent carried-forward state as the source of truth for normal active work.",
+        "Does not require or generate a redundant context_handoff_packet.",
+        "Uses the existing task journal to continue work.",
+        "Mentions that context_handoff_packet is only required when no task journal/equivalent state exists or explicit non-standard handoff is requested."
+      ],
+      "pass_criteria": [
+        "The response says the task journal suppresses the redundant handoff packet.",
+        "The response continues from the task journal/equivalent state rather than creating duplicate continuation state.",
+        "The response preserves the exact next action from the task journal.",
+        "The response does not treat a normal active task journal as unavailable state."
+      ],
+      "fail_signals": [
+        "Always creates context_handoff_packet even when task journal exists.",
+        "Treats task journal and handoff packet as both mandatory for normal active work.",
+        "Duplicates task state into a new handoff packet without explicit non-standard handoff request.",
+        "Ignores the task journal as source of truth."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "task journal",
+          "source of truth",
+          "suppresses redundant handoff",
+          "no task journal/equivalent state exists",
+          "explicit non-standard handoff",
+          "exact next action"
+        ],
+        "forbidden_substrings": [
+          "always create context_handoff_packet",
+          "both mandatory",
+          "duplicate handoff packet required",
+          "task journal is unavailable",
+          "ignore the task journal"
+        ]
+      }
     }
   ]
 }
