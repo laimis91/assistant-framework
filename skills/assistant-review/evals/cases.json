@@ -472,21 +472,24 @@
         "Checks capped retry behavior and empty-result fallback for web search/retrieval.",
         "Checks tool/API error handling instead of silent continuation.",
         "Checks progress or stagnation detection across iterations.",
-        "Checks cost/token guardrails for repeated LLM, paid API, subagent, or large-context calls."
+        "Checks cost/token guardrails for repeated LLM, paid API, subagent, or large-context calls.",
+        "Checks low-confidence escalation when the loop cannot prove progress or reliable completion."
       ],
       "pass_criteria": [
         "The response includes agentic loop safety review.",
         "The response flags missing max steps/time/cost budget or explains why present.",
         "The response checks stop condition, retry cap, empty-result handling, and tool-error handling.",
         "The response checks progress/stagnation detection and cost/token guardrails.",
-        "Findings include Evidence, Impact, Recommendation, and Confidence with concrete loop surfaces."
+        "Findings include Evidence, Impact, Recommendation, and Confidence with concrete loop surfaces.",
+        "The response names low-confidence escalation as a loop-safety outcome when evidence/progress is insufficient."
       ],
       "fail_signals": [
         "Treats the loop as self-managing.",
         "Says retries can continue until the model is satisfied.",
         "Ignores empty search results.",
         "Ignores tool errors or API failures.",
-        "Ignores repeated LLM/subagent cost or token usage."
+        "Ignores repeated LLM/subagent cost or token usage.",
+        "Ignores low-confidence escalation for uncertain loop outcomes."
       ],
       "machine_expectations": {
         "required_substrings": [
@@ -503,7 +506,10 @@
           "Evidence:",
           "Impact:",
           "Recommendation:",
-          "Confidence:"
+          "Confidence:",
+          "low-confidence escalation",
+          "insufficient evidence",
+          "uncertain outcome"
         ],
         "forbidden_substrings": [
           "self-managing loop",
@@ -511,7 +517,10 @@
           "until the model is satisfied",
           "empty results can be ignored",
           "tool errors can be ignored",
-          "cost does not matter"
+          "cost does not matter",
+          "confidence does not matter",
+          "no need to escalate uncertainty",
+          "uncertain outcomes can continue"
         ]
       }
     }
