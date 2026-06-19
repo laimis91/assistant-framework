@@ -270,3 +270,8 @@ Do not use phrases like "should work", "probably fixed", or "looks good" unless 
 - Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
 - Stop before medium+ Build until the plan is approved.
 - Stop before final response if build, tests, required review, or output contract evidence is missing.
+
+
+## Verified Skill Distillation
+
+Use `references/verified-skill-distillation.md` before promoting successful workflows or review lessons into skills, constraints, or evals.

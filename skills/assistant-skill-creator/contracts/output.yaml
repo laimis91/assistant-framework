@@ -61,3 +61,45 @@ artifacts:
     description: "How the skill handles memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples"
     validation: "Must state either 'none used' or describe the optional/configurable fallback for each runtime/tooling assumption"
     on_fail: "Add policy gates or fallback behavior before finalizing the skill"
+
+
+  - name: distillation_verification
+    type: object
+    required: conditional
+    condition: "creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
+    description: "Verifier-approved distillation packet proving the skill should be saved"
+    validation: "verifier_result must be approved and the full distillation packet must be present before skill files are written"
+    on_fail: "Load references/verified-skill-distillation.md and request verifier approval or return revision checklist before writing the skill"
+    object_fields:
+      - name: candidate_workflow
+        type: string
+        required: true
+      - name: inputs
+        type: string[]
+        required: true
+      - name: process_steps
+        type: string[]
+        required: true
+      - name: output_artifact
+        type: string
+        required: true
+      - name: verification_gate
+        type: string
+        required: true
+      - name: learned_constraints
+        type: string[]
+        required: true
+      - name: scope_and_non_goals
+        type: string
+        required: true
+      - name: evidence
+        type: string
+        required: true
+      - name: verifier_result
+        type: enum
+        enum_values: [approved, rejected, needs_revision]
+        required: true
+      - name: promotion_decision
+        type: enum
+        enum_values: [create_skill, update_skill, add_constraint, skip]
+        required: true

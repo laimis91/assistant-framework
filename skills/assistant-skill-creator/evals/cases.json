@@ -123,6 +123,102 @@
           "skip VALIDATE"
         ]
       }
+    },
+    {
+      "id": "skill-creator-requires-verified-distillation",
+      "title": "Skill creator requires verified distillation",
+      "category": "verified_skill_distillation",
+      "purpose": "Checks that assistant-skill-creator does not save reusable skills from unverified workflow lessons.",
+      "prompt": "Create a new skill from this workflow we just ran once. It seemed useful, but no verifier has reviewed whether it is reusable.",
+      "setup_context": [
+        "The assistant-skill-creator instructions are active.",
+        "The proposed skill comes from a single completed workflow and lacks verifier approval.",
+        "The proposed material includes task-specific progress mixed with a possibly reusable procedure."
+      ],
+      "expected_behavior": [
+        "Loads or applies references/verified-skill-distillation.md.",
+        "Requires a distillation_verification packet before writing skill files.",
+        "Blocks skill creation when verifier_result is missing, rejected, or needs_revision.",
+        "Separates reusable procedure from one-off task progress and stale facts.",
+        "Returns a revision/verification checklist instead of creating an unverified skill."
+      ],
+      "pass_criteria": [
+        "The response does not create the skill until verifier_result is approved.",
+        "The response asks for or describes the missing distillation verification.",
+        "The response identifies one-off/stale material that must not be saved.",
+        "The response names verification gate and evidence requirements."
+      ],
+      "fail_signals": [
+        "Creates the skill immediately from one run.",
+        "Saves task progress as durable skill content.",
+        "Omits verifier_result.",
+        "Says verification is optional for distillation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verified distillation",
+          "distillation_verification",
+          "verifier_result",
+          "approved",
+          "verification gate",
+          "evidence",
+          "revision checklist",
+          "one-off task progress"
+        ],
+        "forbidden_substrings": [
+          "create the skill immediately",
+          "one run is enough",
+          "save task progress",
+          "verification is optional"
+        ]
+      }
+    },
+    {
+      "id": "skill-save-requires-verified-distillation",
+      "title": "Skill save requires verified distillation",
+      "category": "verified_skill_distillation",
+      "purpose": "Checks that assistant-skill-creator does not create/update skill files from a workflow lesson until distillation is verified.",
+      "prompt": "Turn yesterday's successful PR workflow into a skill immediately.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "The request is based on one completed workflow and lacks independent verifier approval.",
+        "The workflow includes transient PR-specific details."
+      ],
+      "expected_behavior": [
+        "Runs VERIFIED_DISTILLATION before BUILD.",
+        "Requires distillation_verification with verifier_result approved.",
+        "Does not write skill files until approval exists.",
+        "Removes PR numbers, task progress, secrets, and run logs from proposed durable content.",
+        "Returns a revision checklist when verifier approval is missing."
+      ],
+      "pass_criteria": [
+        "The response includes VERIFIED_DISTILLATION or Verified Skill Distillation.",
+        "The response requires verifier_result approved before writing files.",
+        "The response refuses immediate unverified skill creation.",
+        "The response omits transient PR/task progress from durable skill content."
+      ],
+      "fail_signals": [
+        "Creates the skill immediately without verification.",
+        "Stores PR numbers or task logs in the skill.",
+        "Treats a single successful run as sufficient evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "VERIFIED_DISTILLATION",
+          "distillation_verification",
+          "verifier_result",
+          "approved",
+          "before writing",
+          "revision checklist",
+          "PR numbers",
+          "task progress"
+        ],
+        "forbidden_substrings": [
+          "created the skill immediately",
+          "single successful run is enough",
+          "stored PR numbers"
+        ]
+      }
     }
   ]
 }

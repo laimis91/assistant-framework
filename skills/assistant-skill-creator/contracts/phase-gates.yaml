@@ -61,6 +61,19 @@ gates:
         check: "Policy/runtime assumptions are explicit, optional/configurable, and have fallback behavior"
         on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples"
 
+
+  - phase: VERIFIED_DISTILLATION
+    checkpoint_start: "--- PHASE: VERIFIED DISTILLATION ---"
+    checkpoint_end: "--- PHASE: VERIFIED DISTILLATION COMPLETE ---"
+    condition: "creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
+    exit_assertions:
+      - id: DISTILLATION1
+        check: "distillation_verification exists and verifier_result is approved before skill files are written"
+        on_fail: "Do not write the skill; load references/verified-skill-distillation.md and request verifier approval or return revision checklist"
+      - id: DISTILLATION2
+        check: "distillation_verification includes candidate workflow, inputs, process steps, output artifact, verification gate, learned constraints, scope/non-goals, evidence, verifier result, and promotion decision"
+        on_fail: "Return the missing packet fields for revision before creating or updating skill files"
+
   - phase: BUILD
     checkpoint_start: "--- PHASE: BUILD ---"
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"

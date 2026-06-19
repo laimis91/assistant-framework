@@ -396,6 +396,10 @@ gates:
         check: "Metrics JSONL entry was appended when local metrics are configured and policy-allowed; otherwise metrics_unavailable_or_disallowed is recorded in the output/final response"
         on_fail: "Append metrics when configured and allowed, or explicitly record why metrics were skipped"
 
+      - id: DOC_SKILL_DISTILLATION
+        check: "If work produced a repeatable workflow, recurring lesson, user-requested reusable procedure, or skill/constraint candidate: verified_skill_distillation exists and verifier_result is approved before promotion, or promotion_decision is skip with rationale"
+        on_fail: "Load references/verified-skill-distillation.md, create the distillation packet, and send it to an independent verifier before saving any reusable skill or constraint"
+
       - id: DOC3
         check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
         on_fail: "Do not print workflow complete until all document assertions pass"
@@ -428,3 +432,10 @@ invariants:
     check: "If scope grows beyond initial triage during any phase, stop and re-triage"
     scope: all_phases
     on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"
+
+
+  - phase: PLAN
+    exit_assertions:
+      - id: P_VERIFIED_DISTILLATION
+        check: "When promoting a workflow or review lesson into durable skill/constraint/eval knowledge: verified_skill_distillation exists and verifier_result is approved before durable files are written"
+        on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"

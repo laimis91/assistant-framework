@@ -427,3 +427,8 @@ Append one JSONL line to the agent's configured local workflow metrics location 
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`
+
+
+## Verified Skill Distillation
+
+When a completed workflow or review lesson should become durable framework knowledge, load `references/verified-skill-distillation.md`. Do not create or update skill files until the distillation packet has verifier_result `approved`. Prefer updating contracts, checklists, or evals over creating a new skill when the lesson is narrow.
