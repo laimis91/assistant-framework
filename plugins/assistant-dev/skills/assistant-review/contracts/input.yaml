@@ -93,6 +93,17 @@ fields:
     on_missing: infer
     infer_from: "true when change_kind is skill_or_workflow or mixed with skill/workflow surfaces; otherwise false unless user requests semantic/contract review"
 
+  - name: behavioral_contract_review_required
+    type: boolean
+    required: true
+    description: "Whether to apply the Behavioral Contract Review Checklist for behavior-bearing code changes"
+    on_missing: infer
+    infer_from: >
+      true when change_kind is code or mixed and the reviewed material touches public APIs, domain/business logic,
+      persistence/migrations, auth/permissions, money/payments/trading, config/feature flags, external protocols/SDKs,
+      algorithms, infrastructure/deployment, generated schemas/clients, or other behavior-bearing surfaces.
+      false for docs-only/config-only changes that cannot affect runtime behavior unless the user requests behavioral review.
+
   - name: task_journal_path
     type: string
     required: false
@@ -115,6 +126,6 @@ fields:
         required: true
 
 # Validation behavior:
-# 1. Resolve review_scope, review_material_snapshot, change_kind, and semantic_contract_review_required before entering the loop
+# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, and behavioral_contract_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
-# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
+# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | files: {count}

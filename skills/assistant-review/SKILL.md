@@ -66,6 +66,7 @@ Determine the review scope:
 Use the smallest mode that answers the request; combine modes when reviewing implementation work.
 
 - **Spec review**: compare the diff/code to the stated goal and acceptance criteria. Report missing behavior, scope creep, and mismatched semantics.
+- **Behavioral contract review**: for code changes, check preserved behavior/invariants, interface-implementation alignment, inherited test coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
 - **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
 - **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
 - **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
@@ -94,6 +95,34 @@ Severity mapping:
 - Do not require external SaaS scanners, remote LLM review, or unapproved package installs.
 - Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
 - If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
+
+## Behavioral Contract Review Checklist
+
+Use this checklist when reviewing code changes that affect public APIs, domain/business logic, persistence/migrations, auth/permissions, money/payments/trading, config/feature flags, external protocols/SDKs, algorithms, infrastructure/deployment, generated schemas/clients, or other behavior-bearing surfaces.
+
+1. **Existing behavior and invariants**
+   - Identify the existing behavior, invariants, compatibility assumptions, and edge cases that the code must preserve.
+   - Check whether a new specialized path bypasses shared validation, authorization, transactions, rate limits, logging, error handling, cancellation, idempotency, or cleanup.
+
+2. **Interface ↔ implementation alignment**
+   - Verify public methods, DTOs, API schemas/OpenAPI, CLI help, config names/defaults, docs/examples, generated clients, and implementation behavior agree.
+   - If one surface changed, check every consumer-visible mirror surface that can still describe or drive the old behavior.
+
+3. **Test inheritance coverage**
+   - Tests must cover inherited behavior plus new behavior, not only the happy path of the new feature.
+   - Ask whether a fake or incomplete implementation could still pass the tests; if yes, report the missing assertion or fixture.
+
+4. **External protocol / algorithm fidelity**
+   - When implementing or adapting a known protocol, SDK flow, RFC, algorithm, or business rule, identify its defining semantic steps before approving.
+   - Examples: OAuth state/redirect validation, retry backoff + max attempts + idempotency, cache invalidation, payment authorization/capture/refund semantics, migration rollback/safety steps.
+
+5. **High-impact operation guards**
+   - For code that can affect money, auth, permissions, personal data, deletion, production deploys, safety, or irreversible actions, require appropriate guardrails: validation, explicit approval, dry-run, limits, audit logs, rollback/compensation, and failure-mode handling.
+
+6. **Runtime surface sync**
+   - Check code, tests, docs, config, migrations, generated clients, examples, CLI help, API schemas, deployment manifests, feature flags, telemetry, and runbooks when they can affect or describe runtime behavior.
+
+Report behavioral contract findings with normal severity, file evidence, impact, smallest fix, and confidence. Treat bypassed invariants, public-contract drift, weak inherited tests, protocol safety-step omissions, and missing high-impact guards as must-fix/should-fix depending on release risk.
 
 ## Semantic Contract Review Checklist
 
@@ -160,6 +189,7 @@ while round <= 5:
      - Dispatch a Reviewer subagent (or self-review for small scope)
      - Provide: review material snapshot, previously_fixed list, round number
      - First run Spec Review against the user request and acceptance criteria
+     - For behavior-bearing code changes: apply the Behavioral Contract Review Checklist before declaring clean
      - Then run Regression/Test/Maintainability modes as applicable
      - If security-sensitive surfaces are present, hand off to `assistant-security`
      - Load and apply references/review-principles.md as the clean-code lens
@@ -178,6 +208,9 @@ while round <= 5:
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
+       For behavior-bearing code changes, apply the Behavioral Contract Review Checklist:
+       existing invariants, interface-implementation alignment, inherited test coverage,
+       protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
        For skill/workflow/framework changes, also apply the Semantic Contract Review Checklist:
        inherited contract obligations, template-contract alignment, eval inheritance,
        external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.
@@ -269,6 +302,7 @@ Return:
 - **Findings/fixed items** - severity, file, evidence, action, and round.
 - **Verification** - build/test commands or not-applicable reason.
 - **Bugfix evidence review** - when applicable, whether reproduction/root-cause evidence and regression linkage were reviewed.
+- **Behavioral contract review** - when applicable, whether existing invariants, interface alignment, inherited tests, protocol fidelity, high-impact guards, and runtime surfaces were checked.
 - **Semantic contract review** - when applicable, whether inherited contracts, method signatures, eval coverage, high-stakes guards, and mirror surfaces were checked.
 - **Residual risk** - remaining items, nits, or scope gaps.
 
