@@ -453,6 +453,76 @@
         "block merge because names are subjective",
         "unrelated architectural rewrite"
       ]
+    },
+    {
+      "id": "agentic-loop-review-checks-runaway-safety",
+      "title": "Agentic loop review checks runaway safety",
+      "category": "agentic_loop_safety_review",
+      "purpose": "Checks that assistant-review reviews autonomous loops for stop conditions, retry/empty-result handling, tool-error routing, progress detection, and cost/token guardrails.",
+      "prompt": "Review this research-agent workflow change. It adds a loop that searches the web, calls an LLM to summarize each result, retries empty searches, and dispatches subagents until it thinks the report is good enough.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material adds an agentic research loop with repeated web search, LLM summarization, empty-result retries, and subagent dispatch.",
+        "The diff does not clearly show max step count, explicit stop condition, retry cap, empty-result fallback, or cost/token guardrails."
+      ],
+      "expected_behavior": [
+        "Infers agentic_loop_safety_review_required as true.",
+        "Checks bounded execution such as max steps, max rounds, timeout, or cost/token budget.",
+        "Checks for explicit success, budget, blocker, and escalation stop conditions.",
+        "Checks capped retry behavior and empty-result fallback for web search/retrieval.",
+        "Checks tool/API error handling instead of silent continuation.",
+        "Checks progress or stagnation detection across iterations.",
+        "Checks cost/token guardrails for repeated LLM, paid API, subagent, or large-context calls.",
+        "Checks low-confidence escalation when the loop cannot prove progress or reliable completion."
+      ],
+      "pass_criteria": [
+        "The response includes agentic loop safety review.",
+        "The response flags missing max steps/time/cost budget or explains why present.",
+        "The response checks stop condition, retry cap, empty-result handling, and tool-error handling.",
+        "The response checks progress/stagnation detection and cost/token guardrails.",
+        "Findings include Evidence, Impact, Recommendation, and Confidence with concrete loop surfaces.",
+        "The response names low-confidence escalation as a loop-safety outcome when evidence/progress is insufficient."
+      ],
+      "fail_signals": [
+        "Treats the loop as self-managing.",
+        "Says retries can continue until the model is satisfied.",
+        "Ignores empty search results.",
+        "Ignores tool errors or API failures.",
+        "Ignores repeated LLM/subagent cost or token usage.",
+        "Ignores low-confidence escalation for uncertain loop outcomes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "agentic loop safety review",
+          "max steps",
+          "stop condition",
+          "retry cap",
+          "empty-result",
+          "tool-error",
+          "progress/stagnation",
+          "cost/token",
+          "repeated LLM",
+          "subagent",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:",
+          "low-confidence escalation",
+          "insufficient evidence",
+          "uncertain outcome"
+        ],
+        "forbidden_substrings": [
+          "self-managing loop",
+          "retry forever",
+          "until the model is satisfied",
+          "empty results can be ignored",
+          "tool errors can be ignored",
+          "cost does not matter",
+          "confidence does not matter",
+          "no need to escalate uncertainty",
+          "uncertain outcomes can continue"
+        ]
+      }
     }
   ]
 }

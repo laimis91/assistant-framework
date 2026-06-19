@@ -283,3 +283,29 @@ Most loop-based skills will use all four. Simple refinement loops (e.g., "retry 
 ## Full reference
 
 See `docs/harness-design-guide.md` for the complete design guide with architecture rationale, research references, and evolution principles.
+
+
+---
+
+## Pattern 5: Agentic Loop Safety
+
+Apply this pattern whenever a Process skill includes autonomous or repeated execution: agent loops, retry loops, search/retrieval loops, multi-round subagent dispatch, model/tool call loops, or background jobs.
+
+Required design fields:
+
+- **Bounded execution:** max steps/rounds, timeout, or budget.
+- **Stop condition:** explicit success, clean exit, max-budget exit, blocker exit, and escalation path.
+- **Retry policy:** capped retries scoped to transient failures only.
+- **Empty-result handling:** fallback, broaden-once, report no evidence, ask/escalate, or exit.
+- **Tool-error handling:** failures route to retry, fallback, blocker, or degraded result; never silent continuation.
+- **Progress signal:** each iteration must produce new evidence, fewer findings, better score, or another measurable improvement.
+- **Cost/token guard:** paid API/model/subagent/large-context loops need cost/time/token awareness.
+
+Contract placement:
+
+- Put the loop bounds and retry policy in `contracts/input.yaml` or phase-gate configuration when user/config controlled.
+- Put step-level assertions in `contracts/phase-gates.yaml`.
+- Put final budget/loop outcome reporting in `contracts/output.yaml`.
+- Put worker/subagent loop fields in `contracts/handoffs.yaml` when a subagent participates.
+
+A loop without bounds, stop conditions, empty-result handling, and tool-error routing is incomplete even if it works in a happy-path demo.

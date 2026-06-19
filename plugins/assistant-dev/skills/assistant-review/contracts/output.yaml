@@ -124,6 +124,35 @@ artifacts:
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
             description: "Whether score change correlates with finding count change"
 
+  - name: agentic_loop_safety_review
+    type: object
+    required: conditional
+    condition: "agentic_loop_safety_review_required is true"
+    description: "Review of runaway-loop and repeated-tool-call safety risks"
+    validation: "Must state whether bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, and cost/token guardrails were checked"
+    object_fields:
+      - name: bounded_execution
+        type: string
+        required: true
+      - name: stop_condition
+        type: string
+        required: true
+      - name: retry_and_empty_result_handling
+        type: string
+        required: true
+      - name: tool_error_handling
+        type: string
+        required: true
+      - name: progress_and_stagnation_detection
+        type: string
+        required: true
+      - name: cost_token_guardrails
+        type: string
+        required: true
+      - name: loop_safety_findings_summary
+        type: string
+        required: true
+
   - name: behavioral_contract_review
     type: object
     required: conditional
@@ -281,3 +310,4 @@ artifacts:
 # 4. If mode=audit: audit_report contains all findings, no fixes were applied
 # 5. If semantic_contract_review_required=true: semantic_contract_review is populated and semantic findings are included in final_summary/audit_report
 # 6. If behavioral_contract_review_required=true: behavioral_contract_review is populated and behavioral findings are included in final_summary/audit_report
+# 7. If agentic_loop_safety_review_required=true: agentic_loop_safety_review is populated and loop-safety findings are included in final_summary/audit_report

@@ -127,6 +127,13 @@ handoffs:
         description: "Whether Reviewer must apply the Behavioral Contract Review Checklist for behavior-bearing code changes"
         notes: "Set true for public API, domain/business logic, persistence, auth/permissions, money, config/feature flag, external protocol/SDK, algorithm, infra/deploy, generated schema/client, or similar runtime-behavior changes."
 
+      - name: agentic_loop_safety_review_required
+        type: boolean
+        required: false
+        default: false
+        description: "Whether Reviewer must apply the Agentic Loop Safety Checklist"
+        notes: "Set true for agent/workflow/retry/search/tool/subagent/background loops or repeated model/API calls."
+
       - name: rubric_required
         type: boolean
         required: false
@@ -193,6 +200,37 @@ handoffs:
           - name: detail
             type: string
             required: true
+
+      - name: agentic_loop_safety_checks
+        type: object
+        required: false
+        condition: "agentic_loop_safety_review_required is true"
+        description: "Compact confirmation that agentic loop safety review was applied"
+        object_fields:
+          - name: bounded_execution
+            type: string
+            required: true
+            description: "Whether max steps/rounds/time/cost budget exists and is appropriate"
+          - name: stop_condition
+            type: string
+            required: true
+            description: "Whether success, budget, blocker, and escalation exits are explicit"
+          - name: retry_and_empty_result_handling
+            type: string
+            required: true
+            description: "Whether retries and empty results have capped fallback behavior"
+          - name: tool_error_handling
+            type: string
+            required: true
+            description: "Whether tool/API failures route to retry, fallback, blocker, or degraded result"
+          - name: progress_and_stagnation_detection
+            type: string
+            required: true
+            description: "Whether repeated iterations require progress and handle stagnation"
+          - name: cost_token_guardrails
+            type: string
+            required: true
+            description: "Whether paid API/model/subagent/large-context loops have budget awareness"
 
       - name: behavioral_contract_checks
         type: object

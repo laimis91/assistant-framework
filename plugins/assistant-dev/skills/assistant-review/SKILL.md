@@ -67,6 +67,7 @@ Use the smallest mode that answers the request; combine modes when reviewing imp
 
 - **Spec review**: compare the diff/code to the stated goal and acceptance criteria. Report missing behavior, scope creep, and mismatched semantics.
 - **Behavioral contract review**: for code changes, check preserved behavior/invariants, interface-implementation alignment, inherited test coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
+- **Agentic loop safety review**: for agent/workflow/tool loops, check max steps/time budget, stop condition, retry/empty-result handling, tool-error handling, low-confidence escalation, and cost/token guardrails.
 - **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
 - **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
 - **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
@@ -95,6 +96,36 @@ Severity mapping:
 - Do not require external SaaS scanners, remote LLM review, or unapproved package installs.
 - Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
 - If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
+
+## Agentic Loop Safety Checklist
+
+Use this checklist when reviewing changes that add or modify autonomous loops: agent loops, review/fix loops, research/search loops, retry loops, tool-calling loops, multi-agent orchestration, background jobs, or any workflow that repeatedly calls models, tools, APIs, or subagents.
+
+1. **Bounded execution**
+   - Require an explicit max step/round count, timeout, or budget.
+   - The bound must be low enough to prevent runaway cost/time while still allowing expected completion.
+
+2. **Stop condition**
+   - Require a concrete success/exit condition, not only “until done”.
+   - The loop should stop on clean success, max budget, unrecoverable blocker, or explicit escalation.
+
+3. **Retry and empty-result handling**
+   - Retries must be capped and scoped to transient failures.
+   - Empty search/retrieval/tool results must have a defined fallback: broaden query once, report no evidence, ask/escalate, or exit — never infinite retry.
+
+4. **Tool-error handling**
+   - Tool/API failures must be observed and routed to retry, fallback, blocker, or degraded result.
+   - Silent failures must not produce confident final answers.
+
+5. **Progress and stagnation detection**
+   - Repeated iterations should show new evidence, fewer findings, better score, or another progress signal.
+   - If progress stalls, reset context/evaluator, pivot, or escalate instead of continuing.
+
+6. **Cost/token guardrails**
+   - Loops that call paid APIs, large models, web search, subagents, or large-context prompts need cost/time/token awareness.
+   - Prefer summaries, batching, narrowed scope, or early exit when budget risk grows.
+
+Report loop-safety findings with normal severity, evidence, impact, smallest fix, and confidence. Treat missing stop conditions, unbounded retries, ignored empty results, silent tool failures, or paid-API loops without budgets as must-fix/should-fix depending on risk.
 
 ## Behavioral Contract Review Checklist
 
@@ -189,6 +220,7 @@ while round <= 5:
      - Dispatch a Reviewer subagent (or self-review for small scope)
      - Provide: review material snapshot, previously_fixed list, round number
      - First run Spec Review against the user request and acceptance criteria
+     - For agent/workflow/tool loop changes: apply the Agentic Loop Safety Checklist before declaring clean
      - For behavior-bearing code changes: apply the Behavioral Contract Review Checklist before declaring clean
      - Then run Regression/Test/Maintainability modes as applicable
      - If security-sensitive surfaces are present, hand off to `assistant-security`
@@ -208,6 +240,9 @@ while round <= 5:
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
+       For agent/workflow/tool loop changes, apply the Agentic Loop Safety Checklist:
+       max steps/time budget, stop condition, retry/empty-result handling,
+       tool-error handling, progress/stagnation detection, and cost/token guardrails.
        For behavior-bearing code changes, apply the Behavioral Contract Review Checklist:
        existing invariants, interface-implementation alignment, inherited test coverage,
        protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
@@ -302,6 +337,7 @@ Return:
 - **Findings/fixed items** - severity, file, evidence, action, and round.
 - **Verification** - build/test commands or not-applicable reason.
 - **Bugfix evidence review** - when applicable, whether reproduction/root-cause evidence and regression linkage were reviewed.
+- **Agentic loop safety review** - when applicable, whether bounds, stop conditions, retry/empty handling, tool-error routing, progress checks, and cost/token guards were checked.
 - **Behavioral contract review** - when applicable, whether existing invariants, interface alignment, inherited tests, protocol fidelity, high-impact guards, and runtime surfaces were checked.
 - **Semantic contract review** - when applicable, whether inherited contracts, method signatures, eval coverage, high-stakes guards, and mirror surfaces were checked.
 - **Residual risk** - remaining items, nits, or scope gaps.
