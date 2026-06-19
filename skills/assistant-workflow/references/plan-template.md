@@ -8,6 +8,15 @@ No separate plan document needed. Include directly in your response:
 
 ```markdown
 **Goal:** [1 sentence]
+**Artifact Contract:**
+- Artifact type: [code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other]
+- Required files or deliverables: [exact paths or named artifact]
+- Output format/schema: [format]
+- Acceptance criteria: [binary checks]
+- Verification command or method: [command / inspection / review]
+- Expected success signal: [exact pass signal]
+- Owner/consumer: [who uses it]
+- Non-goals/exclusions: [what not to produce]
 **Files:** [list of files to change]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
@@ -110,6 +119,17 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Output-plan match: [artifact/verification alignment]
 - Fallback path: [subagent path or direct equivalent]
 - Decision: proceed | revise_decomposition | return_to_discover
+
+## Artifact Contract
+
+- Artifact type: code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other
+- Required files or deliverables: [exact paths or named external artifacts]
+- Output format/schema: [markdown/json/yaml/csv/pdf/etc.]
+- Acceptance criteria: [binary user-visible checks]
+- Verification command or method: [command, inspection, manual validation, or review gate]
+- Expected success signal: [exact passing output, created file, PR URL, green test, approved review]
+- Owner/consumer: [user, reviewer, downstream tool, runtime]
+- Non-goals/exclusions: [what must not be produced]
 
 ## Task packets
 Use the Executable Task Packet structure for each implementation unit. Order packets by dependency and align each packet to one component from Decompose when components exist.

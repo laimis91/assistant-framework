@@ -86,6 +86,9 @@ EOF
         ],
         "forbidden_substrings": [
           "fixture forbidden"
+        ],
+        "ordered_substrings": [
+          ["fixture first", "fixture second"]
         ]
       }
     }
@@ -118,6 +121,10 @@ p0p4_write_skill_eval_responses() {
                     fi
                     printf '%s\n' "$required"
                 done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file")
+                while IFS= read -r ordered; do
+                    printf '%s
+' "$ordered"
+                done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.ordered_substrings[]?[]' "$fixture_file")
                 while IFS= read -r seeded_anchor; do
                     printf '%s
 ' "$seeded_anchor"
@@ -139,6 +146,10 @@ p0p4_write_skill_eval_flat_responses() {
             while IFS= read -r required; do
                 printf '%s\n' "$required"
             done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file")
+            while IFS= read -r ordered; do
+                printf '%s
+' "$ordered"
+            done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.ordered_substrings[]?[]' "$fixture_file")
             while IFS= read -r seeded_anchor; do
                 printf '%s
 ' "$seeded_anchor"
@@ -409,6 +420,28 @@ elif grep -Fq $'FAIL	assistant-review	code-review-checks-behavioral-contracts' "
     pass
 else
     fail "skill eval runner --responses did not report false positive marker budget failures clearly"
+fi
+
+
+test_start "skill eval runner fails for ordered substring order"
+ordered_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-ordered.XXXXXX")"
+ordered_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-ordered-output.XXXXXX")"
+p0p4_register_cleanup "$ordered_dir" "$ordered_output"
+fixture_tmp="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-ordered-fixture.XXXXXX")"
+p0p4_register_cleanup "$fixture_tmp"
+p0p4_write_skill_eval_fixture "$fixture_tmp/assistant-fixture-ordered"
+mkdir -p "$ordered_dir/assistant-fixture-ordered"
+cat >"$ordered_dir/assistant-fixture-ordered/fixture-case.txt" <<'EOF_ORDERED'
+fixture required
+fixture second
+fixture first
+EOF_ORDERED
+if "$skill_eval_runner" --responses "$ordered_dir" --skill "$fixture_tmp/assistant-fixture-ordered" >"$ordered_output" 2>&1; then
+    fail "skill eval runner --responses unexpectedly passed with ordered substrings reversed"
+elif grep -Fq $'FAIL	assistant-fixture-ordered	fixture-case' "$ordered_output"     && grep -Fq "ordered substring assertion failure" "$ordered_output"     && grep -Fq "ordered_substring_failures=" "$ordered_output"; then
+    pass
+else
+    fail "skill eval runner --responses did not report ordered substring failures clearly"
 fi
 
 test_start "skill eval runner passes generated responses with all required substrings"

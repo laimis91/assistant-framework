@@ -306,6 +306,40 @@ artifacts:
         required: true
 
 
+  - name: artifact_contract
+    type: object
+    required: conditional
+    condition: "task proceeds beyond discovery into plan, build, or documentable deliverable"
+    description: "Artifact-first deliverable contract that makes the user-visible output concrete before implementation"
+    validation: "Must include artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
+    on_fail: "Load references/artifact-first-output-contract.md and define the Artifact Contract before Plan or Build"
+    object_fields:
+      - name: artifact_type
+        type: enum
+        enum_values: [code, docs, report, dataset, chart, slide_deck, plan, eval, PR, config, other]
+        required: true
+      - name: required_files_or_deliverables
+        type: string[]
+        required: true
+      - name: output_format_schema
+        type: string
+        required: true
+      - name: acceptance_criteria
+        type: string[]
+        required: true
+      - name: verification_command_or_method
+        type: string
+        required: true
+      - name: expected_success_signal
+        type: string
+        required: true
+      - name: owner_consumer
+        type: string
+        required: true
+      - name: non_goals_exclusions
+        type: string[]
+        required: true
+
   - name: decomposition_plan_review
     type: object
     required: conditional

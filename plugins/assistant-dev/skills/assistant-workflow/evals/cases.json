@@ -538,6 +538,70 @@
           "verifier approval optional"
         ]
       }
+    },
+    {
+      "id": "artifact-first-contract-before-task-packets",
+      "title": "Artifact-first contract before task packets",
+      "category": "artifact_first_output_contract",
+      "purpose": "Checks that assistant-workflow defines concrete deliverables and success signals before implementation planning.",
+      "prompt": "Plan a medium framework improvement that should produce a PR with skill, contract, and eval changes.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The user asks for implementation, but the deliverable could be vague unless the artifact is defined first.",
+        "The task should produce concrete files, validation commands, a PR, and review gates."
+      ],
+      "expected_behavior": [
+        "Loads or applies references/artifact-first-output-contract.md before Plan.",
+        "Includes Artifact Contract before task packets.",
+        "Names artifact type such as PR, code, docs, eval, config, report, or other.",
+        "Lists required files or deliverables and output format/schema.",
+        "Lists binary acceptance criteria.",
+        "Lists verification command or method and expected success signal.",
+        "Names owner/consumer and non-goals/exclusions.",
+        "Maps task packets to required artifacts or acceptance criteria."
+      ],
+      "pass_criteria": [
+        "The response includes an Artifact Contract section before task packets.",
+        "The contract includes artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions.",
+        "The plan does not proceed with vague deliverables such as comprehensive report or improve workflow without concrete outputs.",
+        "Task packets map to artifacts or acceptance criteria.",
+        "The local eval enforces Artifact Contract before task packets using ordered_substrings."
+      ],
+      "fail_signals": [
+        "Starts task packets before defining deliverables.",
+        "Uses vague artifact descriptions without exact files or success signal.",
+        "Omits verification command or method.",
+        "Omits non-goals/exclusions.",
+        "Claims implementation complete with no concrete artifact."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Artifact Contract",
+          "artifact type",
+          "required files or deliverables",
+          "output format/schema",
+          "acceptance criteria",
+          "verification command or method",
+          "expected success signal",
+          "owner/consumer",
+          "non-goals/exclusions",
+          "task packets",
+          "PR"
+        ],
+        "forbidden_substrings": [
+          "deliverable TBD",
+          "comprehensive report is enough",
+          "no success signal needed",
+          "verification omitted",
+          "no concrete artifact"
+        ],
+        "ordered_substrings": [
+          [
+            "Artifact Contract",
+            "task packets"
+          ]
+        ]
+      }
     }
   ]
 }
