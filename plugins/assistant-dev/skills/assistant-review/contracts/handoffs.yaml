@@ -120,6 +120,13 @@ handoffs:
         description: "Whether Reviewer must apply the Semantic Contract Review Checklist for skill/workflow/framework changes"
         notes: "Set true for changes under skills/, plugin-local skill copies, contracts, evals, prompts, hooks/generated instructions that drive agent behavior, or named-method adaptations."
 
+      - name: behavioral_contract_review_required
+        type: boolean
+        required: false
+        default: false
+        description: "Whether Reviewer must apply the Behavioral Contract Review Checklist for behavior-bearing code changes"
+        notes: "Set true for public API, domain/business logic, persistence, auth/permissions, money, config/feature flag, external protocol/SDK, algorithm, infra/deploy, generated schema/client, or similar runtime-behavior changes."
+
       - name: rubric_required
         type: boolean
         required: false
@@ -186,6 +193,37 @@ handoffs:
           - name: detail
             type: string
             required: true
+
+      - name: behavioral_contract_checks
+        type: object
+        required: false
+        condition: "behavioral_contract_review_required is true"
+        description: "Compact confirmation that behavioral contract review was applied"
+        object_fields:
+          - name: existing_behavior_and_invariants
+            type: string
+            required: true
+            description: "Whether existing behavior, invariants, compatibility assumptions, and edge cases still hold"
+          - name: interface_implementation_alignment
+            type: string
+            required: true
+            description: "Whether public APIs, DTOs, schemas, docs/examples, config, generated clients, and implementation agree"
+          - name: test_inheritance_coverage
+            type: string
+            required: true
+            description: "Whether tests cover inherited behavior plus new behavior and cannot pass a fake/incomplete implementation"
+          - name: protocol_algorithm_fidelity
+            type: string
+            required: true
+            description: "Whether known protocol/algorithm/business-rule semantics are preserved or not applicable"
+          - name: high_impact_operation_guards
+            type: string
+            required: true
+            description: "Whether money/auth/data deletion/privacy/safety/production-impact paths have appropriate guardrails or not applicable"
+          - name: runtime_surface_sync
+            type: string
+            required: true
+            description: "Whether code/tests/docs/config/migrations/generated clients/deploy/runbook surfaces are synced or not applicable"
 
       - name: semantic_contract_checks
         type: object

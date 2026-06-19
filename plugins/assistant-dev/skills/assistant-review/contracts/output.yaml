@@ -124,6 +124,35 @@ artifacts:
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
             description: "Whether score change correlates with finding count change"
 
+  - name: behavioral_contract_review
+    type: object
+    required: conditional
+    condition: "behavioral_contract_review_required is true"
+    description: "Review of behavioral compatibility risks for code changes"
+    validation: "Must state whether existing invariants, interface alignment, inherited test coverage, protocol/algorithm fidelity, high-impact guards, and runtime surfaces were checked"
+    object_fields:
+      - name: existing_behavior_and_invariants
+        type: string
+        required: true
+      - name: interface_implementation_alignment
+        type: string
+        required: true
+      - name: test_inheritance_coverage
+        type: string
+        required: true
+      - name: protocol_algorithm_fidelity
+        type: string
+        required: true
+      - name: high_impact_operation_guards
+        type: string
+        required: true
+      - name: runtime_surface_sync
+        type: string
+        required: true
+      - name: behavioral_findings_summary
+        type: string
+        required: true
+
   - name: semantic_contract_review
     type: object
     required: conditional
@@ -251,3 +280,4 @@ artifacts:
 # 3. If task journal exists: Review Log has been updated with entry + Final Result
 # 4. If mode=audit: audit_report contains all findings, no fixes were applied
 # 5. If semantic_contract_review_required=true: semantic_contract_review is populated and semantic findings are included in final_summary/audit_report
+# 6. If behavioral_contract_review_required=true: behavioral_contract_review is populated and behavioral findings are included in final_summary/audit_report
