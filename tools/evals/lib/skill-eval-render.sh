@@ -25,6 +25,19 @@ emit_prompts() {
                 def bullets($items):
                   if ($items | length) > 0 then $items | map("- " + .) | join("\n")
                   else "- (none)" end;
+                def seeded_defects_section:
+                  if ((.seeded_defects? // []) | length) > 0 then
+                    "## Seeded Defects / Measurable Assertions\n\n"
+                    + (.seeded_defects | map(
+                        "- " + .id + ": " + .description + "\n"
+                        + "  - Must detect: " + ((.must_detect // true) | tostring) + "\n"
+                        + "  - Detection anchors: " + (.detection_anchors | join(", ")) + "\n"
+                        + "  - Evidence anchors: " + (.evidence_anchors | join(", "))
+                        + (if (.acceptable_severities? // [] | length) > 0 then "\n  - Acceptable severities: " + (.acceptable_severities | join(", ")) else "" end)
+                        + (if (.finding_markers? // [] | length) > 0 then "\n  - Finding markers: " + (.finding_markers | join("; ")) else "" end)
+                      ) | join("\n"))
+                    + "\n\n"
+                  else "" end;
                 .cases[]
                 | select(.id == $id)
                 | "# " + .title + "\n\n"
@@ -38,6 +51,7 @@ emit_prompts() {
                   + "## Expected Behavior\n\n" + bullets(.expected_behavior) + "\n\n"
                   + "## Pass Criteria\n\n" + bullets(.pass_criteria) + "\n\n"
                   + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n\n"
+                  + seeded_defects_section
                   + "## Machine Expectations\n\n"
                   + "### Required Substrings\n\n"
                   + bullets(.machine_expectations.required_substrings) + "\n\n"

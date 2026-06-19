@@ -373,7 +373,86 @@
           "config defaults are irrelevant",
           "refunds are not money-impacting"
         ]
-      }
+      },
+      "false_positive_budget": 1,
+      "seeded_defects": [
+        {
+          "id": "refund-special-case-bypasses-shared-guards",
+          "description": "The fixture asks for review of a refund special-case path in a public order endpoint; a measurable answer should detect bypass risk around shared validation/authorization/idempotency/audit behavior.",
+          "must_detect": true,
+          "detection_anchors": [
+            "refund special-case path",
+            "bypass",
+            "skipped validation",
+            "idempotency"
+          ],
+          "evidence_anchors": [
+            "order endpoint",
+            "refund",
+            "validation",
+            "authorization",
+            "audit"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ],
+          "finding_markers": [
+            "refund special-case path bypasses shared validation/authorization/idempotency/audit behavior"
+          ]
+        },
+        {
+          "id": "config-public-contract-drift",
+          "description": "The fixture includes config default changes; a measurable answer should check public API/schema/client/docs/config alignment rather than only the new behavior.",
+          "must_detect": true,
+          "detection_anchors": [
+            "config defaults",
+            "public API/schema/client/docs",
+            "interface-implementation alignment"
+          ],
+          "evidence_anchors": [
+            "config",
+            "public API",
+            "schema",
+            "docs"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix",
+            "nit"
+          ],
+          "finding_markers": [
+            "config defaults must align with public API/schema/client/docs"
+          ]
+        },
+        {
+          "id": "happy-path-only-test-gap",
+          "description": "The fixture asks for inherited behavior coverage; a measurable answer should challenge whether tests only cover the new refund happy path and could pass a fake/incomplete implementation.",
+          "must_detect": true,
+          "detection_anchors": [
+            "test inheritance",
+            "fake/incomplete implementation",
+            "refund happy path"
+          ],
+          "evidence_anchors": [
+            "inherited order/refund behavior",
+            "tests",
+            "refund"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ],
+          "finding_markers": [
+            "tests must fail for a fake implementation that only handles the refund happy path"
+          ]
+        }
+      ],
+      "false_positive_markers": [
+        "rewrite the whole service",
+        "block merge because names are subjective",
+        "unrelated architectural rewrite"
+      ]
     }
   ]
 }

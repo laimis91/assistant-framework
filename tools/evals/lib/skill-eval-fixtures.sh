@@ -103,6 +103,46 @@ validate_fixture() {
             "case[\($index)] missing or invalid object field: machine_expectations"
           end;
 
+        def optional_bool($value):
+          if $value == null then true else ($value | type == "boolean") end;
+
+        def optional_nonnegative_int($value):
+          if $value == null then true else (($value | type == "number") and ($value >= 0) and (($value % 1) == 0)) end;
+
+        def case_seeded_defects($index):
+          if has("false_positive_budget") and (optional_nonnegative_int(.false_positive_budget) | not) then
+            "case[\($index)] false_positive_budget must be a non-negative integer when present"
+          elif has("false_positive_markers") and (.false_positive_markers | nonempty_string_array | not) then
+            "case[\($index)] false_positive_markers must be a non-empty string array when present"
+          elif has("seeded_defects") then
+            if (.seeded_defects | type != "array") or (.seeded_defects | length == 0) then
+              "case[\($index)] seeded_defects must be a non-empty array when present"
+            else
+              .seeded_defects | to_entries[] | .key as $defect_index | .value |
+                if type != "object" then
+                  "case[\($index)].seeded_defects[\($defect_index)] must be an object"
+                elif (.id? | nonempty_string | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] missing or invalid string field: id"
+                elif (.description? | nonempty_string | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] missing or invalid string field: description"
+                elif (optional_bool(.must_detect? // null) | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] must_detect must be boolean when present"
+                elif (.detection_anchors? | nonempty_string_array | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] missing or invalid non-empty string array field: detection_anchors"
+                elif (.evidence_anchors? | nonempty_string_array | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] missing or invalid non-empty string array field: evidence_anchors"
+                elif has("acceptable_severities") and (.acceptable_severities | nonempty_string_array | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] acceptable_severities must be a non-empty string array when present"
+                elif has("finding_markers") and (.finding_markers | nonempty_string_array | not) then
+                  "case[\($index)].seeded_defects[\($defect_index)] finding_markers must be a non-empty string array when present"
+                else
+                  empty
+                end
+            end
+          else
+            empty
+          end;
+
         if type != "object" then
           "fixture root must be a JSON object"
         else
@@ -133,7 +173,8 @@ validate_fixture() {
                  case_string_array($index; "expected_behavior"),
                  case_string_array($index; "pass_criteria"),
                  case_string_array($index; "fail_signals"),
-                 case_machine_expectations($index)
+                 case_machine_expectations($index),
+                 case_seeded_defects($index)
                end
            else empty end)
         end

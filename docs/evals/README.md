@@ -150,8 +150,8 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/clarify-eval-prompts --skill 
 ```
 
 Prompt packets are written under `<output>/<skill>/<case-id>.md` and include the
-setup context, prompt, expected behavior, pass criteria, fail signals, and
-machine expectations.
+setup context, prompt, expected behavior, pass criteria, fail signals, optional
+seeded defects / measurable assertions, and machine expectations.
 
 Run each prompt packet with the target assistant and save captured responses as
 `<response-dir>/<skill>/<case-id>.txt` or `<response-dir>/<skill>/<case-id>.md`.
@@ -174,12 +174,20 @@ tools/evals/run-skill-evals.sh --list --include-local
 
 The response grader is heuristic/local grading. It checks missing files, empty
 responses, exact fail-signal phrase hits where useful, missing required
-substrings, and forbidden substring hits. These deterministic checks are proxies
-for behavior conformance; they complement human review or a separate LLM judge
-and do not replace semantic judgment.
+substrings, forbidden substring hits, and optional `seeded_defects` measurable
+assertions. Seeded defects make evals more measurable by requiring captured
+responses to detect fixture-specific planted risks with detection anchors,
+evidence anchors, acceptable severity labels, and optional finding markers. Cases
+can also define `false_positive_markers` plus `false_positive_budget` to fail
+over-broad responses that invent too many unrelated blockers. These deterministic checks are
+proxies for behavior conformance; they complement human review or a separate LLM
+judge and do not replace semantic judgment.
 
 Per-skill evals complement `tools/skills/validate-skills.sh`. The source
 validator checks skill metadata and contract structure; per-skill eval fixtures
-exercise observable skill behavior. Together they are the current Level 4
-per-skill conformance foundation for first-class assistant skills, with
-local-only skill experiments remaining opt-in through `--include-local`.
+exercise observable skill behavior. For review-style skills, prefer
+`seeded_defects` for important scenarios so the score answers "did the reviewer
+catch the planted issue?" instead of only "did the response mention the expected
+headings?" Together they are the current Level 4 per-skill conformance
+foundation for first-class assistant skills, with local-only skill experiments
+remaining opt-in through `--include-local`.
