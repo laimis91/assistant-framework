@@ -61,7 +61,7 @@ Return:
 ## Phases
 
 ```
-CAPTURE → DESIGN → BUILD → VALIDATE
+CAPTURE → DESIGN → VERIFIED_DISTILLATION (conditional) → BUILD → VALIDATE
 ```
 
 ### Phase 1: CAPTURE — Understand the Skill
@@ -144,6 +144,17 @@ These patterns add rubric return fields to handoffs, drift invariants to phase-g
 Present the contract design to the user for review before building. For small, low-risk edits to an existing skill, proceed without a separate approval round when the requested direction is explicit and reversible; still record assumptions.
 
 Print: `--- PHASE: DESIGN COMPLETE ---`
+
+### Conditional Phase: VERIFIED_DISTILLATION — Approve Reusable Lessons Before Writing
+
+Run this phase before BUILD when creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested "save this as a skill" request.
+
+1. Load `references/verified-skill-distillation.md`.
+2. Require the full distillation packet: candidate workflow, inputs, process steps, output artifact, verification gate, learned constraints, scope/non-goals, evidence, verifier result, and promotion decision.
+3. If `verifier_result` is not `approved`, do not write skill files. Return the missing verification or revision checklist.
+4. Remove one-off task progress, PR numbers, secrets, run logs, and stale facts before continuing.
+
+Print: `--- PHASE: VERIFIED DISTILLATION COMPLETE ---`
 
 ### Phase 3: BUILD — Create the Files
 
@@ -235,6 +246,7 @@ Print: `--- PHASE: VALIDATE COMPLETE ---`
 - [Contract Design Guide](references/skill-contract-design-guide.md) — mandatory reading before designing contracts
 - [Contract Design Checklist](references/contract-design-checklist.md) — validation checklist for Phase 4
 - [Harness Patterns](references/harness-patterns.md) — rubric, drift detection, gates, and separation patterns for loop-based Process skills
+- [Verified Skill Distillation](references/verified-skill-distillation.md) — verifier-approved promotion from workflow lesson to reusable skill
 - Existing skills in `skills/` — use as examples for your category tier
 
 ## Tips

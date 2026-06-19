@@ -483,3 +483,43 @@ artifacts:
 # 6. candidate_search_result exists when search_mode == candidate_search and any plan_deviation is approved before Build
 # 7. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
+  - name: verified_skill_distillation
+    type: object
+    required: conditional
+    condition: "workflow produced a repeatable process, recurring lesson, user-requested reusable procedure, or skill/constraint candidate"
+    description: "Verifier-approved promotion packet for turning a successful workflow or review lesson into a reusable skill or constraint"
+    validation: "Must include candidate workflow, inputs, process steps, output artifact, verification gate, learned constraints, scope/non-goals, evidence, verifier result, and promotion decision"
+    on_fail: "Load references/verified-skill-distillation.md; create the packet; send it to an independent verifier before saving any skill or constraint"
+    object_fields:
+      - name: candidate_workflow
+        type: string
+        required: true
+      - name: inputs
+        type: string[]
+        required: true
+      - name: process_steps
+        type: string[]
+        required: true
+      - name: output_artifact
+        type: string
+        required: true
+      - name: verification_gate
+        type: string
+        required: true
+      - name: learned_constraints
+        type: string[]
+        required: true
+      - name: scope_and_non_goals
+        type: string
+        required: true
+      - name: evidence_from_current_run
+        type: string
+        required: true
+      - name: verifier_result
+        type: enum
+        enum_values: [approved, rejected, needs_revision]
+        required: true
+      - name: promotion_decision
+        type: enum
+        enum_values: [create_skill, update_skill, add_constraint, skip]
+        required: true
