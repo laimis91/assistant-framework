@@ -35,8 +35,8 @@ gates:
         on_fail: "Default to review-fix unless user explicitly requested audit"
 
       - id: E5
-        check: "change_kind, semantic_contract_review_required, and behavioral_contract_review_required are resolved before review starts"
-        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes and behavioral_contract_review_required=true for behavior-bearing code changes"
+        check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required are resolved before review starts"
+        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
 
   # ─────────────────────────────────────────────
   # REVIEW step — per round
@@ -81,6 +81,11 @@ gates:
         check: "When behavioral_contract_review_required is true: Reviewer applied the Behavioral Contract Review Checklist and returned behavioral_contract_checks"
         condition: "behavioral_contract_review_required is true"
         on_fail: "Re-dispatch Reviewer requesting behavioral_contract_checks for existing invariants, interface-implementation alignment, inherited tests, protocol/algorithm fidelity, high-impact guards, and runtime-surface sync."
+
+      - id: RS9
+        check: "When agentic_loop_safety_review_required is true: Reviewer applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
+        condition: "agentic_loop_safety_review_required is true"
+        on_fail: "Re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, and cost/token guardrails."
 
   # ─────────────────────────────────────────────
   # EVALUATE step — per round
@@ -242,3 +247,10 @@ invariants:
     scope: all_rounds
     condition: "behavioral_contract_review_required is true"
     on_fail: "Run the Behavioral Contract Review Checklist before declaring the review clean; report invariant bypasses, public-contract drift, weak inherited tests, protocol semantic gaps, missing high-impact guards, or runtime surface drift as findings."
+
+
+  - id: INV9
+    check: "For agent/workflow/tool loop changes, loop safety review is not skipped or treated as style-only review"
+    scope: all_rounds
+    condition: "agentic_loop_safety_review_required is true"
+    on_fail: "Run the Agentic Loop Safety Checklist before declaring the review clean; report missing bounds, stop conditions, retry caps, empty-result handling, tool-error routing, stagnation detection, or cost/token guards as findings."

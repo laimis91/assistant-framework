@@ -104,6 +104,16 @@ fields:
       algorithms, infrastructure/deployment, generated schemas/clients, or other behavior-bearing surfaces.
       false for docs-only/config-only changes that cannot affect runtime behavior unless the user requests behavioral review.
 
+  - name: agentic_loop_safety_review_required
+    type: boolean
+    required: true
+    description: "Whether to apply the Agentic Loop Safety Checklist"
+    on_missing: infer
+    infer_from: >
+      true when reviewed material adds or changes agent loops, workflow loops, retry loops, research/search loops,
+      tool-calling loops, multi-agent orchestration, background jobs, subagent dispatch loops, or repeated model/API calls.
+      false when no autonomous/repeated execution path is present unless the user requests loop-safety review.
+
   - name: task_journal_path
     type: string
     required: false
@@ -126,6 +136,6 @@ fields:
         required: true
 
 # Validation behavior:
-# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, and behavioral_contract_review_required before entering the loop
+# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
-# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
+# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
