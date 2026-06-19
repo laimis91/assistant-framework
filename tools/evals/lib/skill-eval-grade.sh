@@ -52,6 +52,34 @@ count_missing_required_substrings() {
     printf '%s\n' "$misses"
 }
 
+
+count_ordered_substring_failures() {
+    local fixture_file="$1"
+    local id="$2"
+    local response_path="$3"
+    local ordered_json
+    local needle
+    local response_text
+    local remaining
+    local failures=0
+
+    response_text="$(tr '[:upper:]' '[:lower:]' <"$response_path")"
+    while IFS= read -r ordered_json; do
+        remaining="$response_text"
+        while IFS= read -r needle; do
+            needle="$(printf '%s' "$needle" | tr '[:upper:]' '[:lower:]')"
+            if [[ "$remaining" == *"$needle"* ]]; then
+                remaining="${remaining#*"$needle"}"
+            else
+                failures=$((failures + 1))
+                break
+            fi
+        done < <(jq -r '.[]' <<<"$ordered_json")
+    done < <(jq -c --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.ordered_substrings[]?' "$fixture_file")
+
+    printf '%s\n' "$failures"
+}
+
 count_forbidden_substring_hits() {
     local fixture_file="$1"
     local id="$2"
@@ -164,6 +192,7 @@ grade_responses() {
     local signal_failures=0
     local missing_required_failures=0
     local forbidden_substring_failures=0
+    local ordered_substring_failures=0
     local seeded_defect_failures=0
     local false_positive_marker_failures=0
     local index
@@ -176,6 +205,7 @@ grade_responses() {
     local fail_signal_hits
     local required_misses
     local forbidden_hits
+    local ordered_failures
     local seeded_failures
     local false_positive_failures
     local status
@@ -206,6 +236,7 @@ grade_responses() {
                 fail_signal_hits="$(count_fail_signal_hits "$fixture_file" "$id" "$response_path")"
                 required_misses="$(count_missing_required_substrings "$fixture_file" "$id" "$response_path")"
                 forbidden_hits="$(count_forbidden_substring_hits "$fixture_file" "$id" "$response_path")"
+                ordered_failures="$(count_ordered_substring_failures "$fixture_file" "$id" "$response_path")"
                 seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$response_path")"
                 false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$response_path")"
                 if [[ "$fail_signal_hits" -gt 0 ]]; then
@@ -230,6 +261,15 @@ grade_responses() {
                         reason="$forbidden_hits forbidden substring hit(s)"
                     fi
                     forbidden_substring_failures=$((forbidden_substring_failures + forbidden_hits))
+                fi
+                if [[ "$ordered_failures" -gt 0 ]]; then
+                    if [[ "$status" == "FAIL" ]]; then
+                        reason="$reason; $ordered_failures ordered substring assertion failure(s)"
+                    else
+                        status="FAIL"
+                        reason="$ordered_failures ordered substring assertion failure(s)"
+                    fi
+                    ordered_substring_failures=$((ordered_substring_failures + ordered_failures))
                 fi
                 if [[ "$seeded_failures" -gt 0 ]]; then
                     if [[ "$status" == "FAIL" ]]; then
@@ -262,8 +302,8 @@ grade_responses() {
     done
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s seeded_defect_failures=%s false_positive_marker_failures=%s skills=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "${#FIXTURE_FILES[@]}"
+    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s skills=%s\n' \
+        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "${#FIXTURE_FILES[@]}"
 
     [[ "$failed" -eq 0 ]]
 }

@@ -161,7 +161,7 @@ Print: `>> Dispatching Architect` (when applicable)
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
 
-Read `references/plan-template.md` and use the correct tier:
+Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Then read `references/plan-template.md` and use the correct tier:
 - Small: inline plan (goal, files, risks, tests). Do not wait for approval unless risk, ambiguity, user instruction, or a scope-changing decision makes approval necessary.
 - Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
 - Large/Mega: full plan (all sections including Security and Operability)
@@ -170,7 +170,8 @@ Read `references/plan-template.md` and use the correct tier:
 2. Evaluate architecture (see `playbooks/*.md` for project-type rules)
 3. Analyze 1-3 options with tradeoffs, pick one
 4. Identify risks and edge cases
-5. For medium+ tasks: include the Decompose component manifest in the plan and align each task packet to a component
+5. Put the Artifact Contract before task packets and map every medium+ task packet to at least one required artifact or acceptance criterion
+6. For medium+ tasks: include the Decompose component manifest in the plan and align each task packet to a component
 6. Write ordered implementation steps with file paths
 7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
 8. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
