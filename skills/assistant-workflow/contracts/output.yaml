@@ -306,6 +306,37 @@ artifacts:
         required: true
 
 
+  - name: decomposition_plan_review
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Cheap-before-expensive review of component/subagent decomposition before Plan/Build"
+    validation: "Must state scope understanding, component/subagent count sanity, step/cost budget, dependency order, output-plan match, fallback path, and proceed/revise/return decision"
+    on_fail: "Load references/decomposition-plan-review.md and repair the decomposition review packet before entering Plan"
+    object_fields:
+      - name: scope_understanding
+        type: string
+        required: true
+      - name: component_subagent_count
+        type: string
+        required: true
+      - name: step_cost_budget
+        type: string
+        required: true
+      - name: dependency_order
+        type: string
+        required: true
+      - name: output_plan_match
+        type: string
+        required: true
+      - name: fallback_path
+        type: string
+        required: true
+      - name: decision
+        type: enum
+        enum_values: [proceed, revise_decomposition, return_to_discover]
+        required: true
+
   - name: component_manifest
     type: string
     required: true

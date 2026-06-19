@@ -101,6 +101,16 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ### Risks / edge cases
 - [risk]: [mitigation]
 
+## Decomposition Plan Review
+
+- Scope understanding: [pass/fix needed + evidence]
+- Component/subagent count: [count + sanity rationale]
+- Step/cost budget: [budget or direct-fallback rationale]
+- Dependency order: [summary]
+- Output-plan match: [artifact/verification alignment]
+- Fallback path: [subagent path or direct equivalent]
+- Decision: proceed | revise_decomposition | return_to_discover
+
 ## Task packets
 Use the Executable Task Packet structure for each implementation unit. Order packets by dependency and align each packet to one component from Decompose when components exist.
 
@@ -208,6 +218,16 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 
 ### Risks / edge cases
 - [risk]: [mitigation]
+
+## Decomposition Plan Review
+
+- Scope understanding: [pass/fix needed + evidence]
+- Component/subagent count: [count + sanity rationale]
+- Step/cost budget: [budget or direct-fallback rationale]
+- Dependency order: [summary]
+- Output-plan match: [artifact/verification alignment]
+- Fallback path: [subagent path or direct equivalent]
+- Decision: proceed | revise_decomposition | return_to_discover
 
 ## Task packets
 Use the Executable Task Packet structure for each implementation unit. Order packets by dependency, align packets to Decompose components, and keep each packet independently verifiable before the next component starts.

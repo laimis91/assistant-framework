@@ -190,7 +190,7 @@ High and critical work require an explicit risk note in the plan and a review/se
 
 ## Phase Execution
 
-Load `references/phases.md` and execute the phase matching your current stage. Use `references/context-budget-and-pattern-retrieval.md` when material is large or when editing framework patterns. Use `references/context-handoff-templates.md` for context engineering and continuation packets when no task journal/equivalent state exists, or when an explicit non-standard handoff is requested. Each phase has:
+Load `references/phases.md` and execute the phase matching your current stage. Use `references/context-budget-and-pattern-retrieval.md` when material is large or when editing framework patterns. Use `references/decomposition-plan-review.md` before medium+ work leaves Decompose. Use `references/context-handoff-templates.md` for context engineering and continuation packets when no task journal/equivalent state exists, or when an explicit non-standard handoff is requested. Each phase has:
 - Entry checkpoint: `--- PHASE: [name] ---`
 - Exit checkpoint: `--- PHASE: [name] COMPLETE ---`
 - Approval gates where indicated (WAIT for user)
