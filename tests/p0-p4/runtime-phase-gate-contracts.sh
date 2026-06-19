@@ -65,7 +65,7 @@ else
     pass
 fi
 
-test_start "stop and harness gates include DOCUMENTING as active lifecycle status"
+test_start "stop gate and legacy harness helper include DOCUMENTING as active lifecycle status"
 missing_documenting_terms=()
 for hook_file in \
     "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh" \
@@ -95,7 +95,7 @@ missing_runtime_doc_terms=()
 for term in \
     "Workflow enforcer" \
     "runtime phase-gate warnings" \
-    "Harness gate"; do
+    "Consolidated strict stop gate"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/README.md"; then
         missing_runtime_doc_terms+=("README.md: $term")
     fi

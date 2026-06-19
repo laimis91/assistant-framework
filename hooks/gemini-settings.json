@@ -79,14 +79,7 @@
             "type": "command",
             "command": "$HOME/.gemini/hooks/assistant/stop-review.sh",
             "timeout": 5000,
-            "description": "Checks if self-review was done before agent finishes"
-          },
-          {
-            "name": "assistant-harness-gate",
-            "type": "command",
-            "command": "$HOME/.gemini/hooks/assistant/harness-gate.sh",
-            "timeout": 5000,
-            "description": "Enforces harness lifecycle: plan approval, rubric scores, score thresholds"
+            "description": "Consolidated strict stop gate for plan approval, review, rubric, and metrics"
           }
         ]
       }

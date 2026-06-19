@@ -1720,11 +1720,11 @@ if $INSTALL_HOOKS; then
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
         if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, PostCompact — 6 events, 9 hook commands)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate + compaction"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, PostCompact — 6 events, consolidated stop gate)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + compaction"
         else
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, 7 hook commands)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + harness-gate"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, consolidated stop gate)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review"
             echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
         fi
     fi

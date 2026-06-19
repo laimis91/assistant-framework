@@ -1618,6 +1618,150 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: Claude, DOCUMENTING medium no plan → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "No plan found"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block without plan"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium plan not approved → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+## Plan
+- Plan exists but is not approved.
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Plan exists but is not approved"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block without plan approval"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium missing rubric → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing rubric scores"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block without rubric scores"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium low weighted score → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness 2.5, code_quality 2.5, architecture 2.5, security 2.5, test_coverage 2.5
+- Weighted: 2.50
+### Final result
+- Result: CLEAN
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "below minimum threshold"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block on low weighted score"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium valid completion → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow DOCUMENTING medium task when consolidated stop gates are satisfied"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 echo ""
 
 # ── harness-gate.sh tests ────────────────────────────────────────────────────

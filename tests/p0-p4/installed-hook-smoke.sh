@@ -51,7 +51,7 @@ p0p4_installed_hook_payload() {
     esac
 }
 
-if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; then
+if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err" --hook-profile strict; then
     mkdir -p "$HOOK_SMOKE_PROJECT/.codex"
     cat > "$HOOK_SMOKE_PROJECT/.codex/task.md" <<'TASK'
 Task: stale completed smoke task

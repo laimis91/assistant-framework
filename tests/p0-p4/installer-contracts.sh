@@ -798,11 +798,11 @@ if HOME="$CLAUDE_STRICT_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --
             harnessGate: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/harness-gate.sh")),
             workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"))
         }
-        | .workflowGuard and .stopReview and .harnessGate and .workflowEnforcer
+        | .workflowGuard and .stopReview and (.harnessGate | not) and .workflowEnforcer
     ' "$CLAUDE_STRICT_HOME/.claude/settings.json" >/dev/null; then
         pass
     else
-        fail "Claude strict hook profile should install workflow guard, stop review, harness gate, and workflow enforcer"
+        fail "Claude strict hook profile should install workflow guard, consolidated stop review, and workflow enforcer without harness gate"
     fi
 else
     fail "Claude strict hook install failed; see /tmp/p0p4-install-claude-strict-hooks.err"

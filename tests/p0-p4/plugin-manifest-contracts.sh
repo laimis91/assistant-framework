@@ -187,6 +187,25 @@ else
     fail "assistant-dev plugin skill copies must match root source without .DS_Store files"
 fi
 
+test_start "assistant plugin generated skill mirrors pass sync script"
+if [[ -x "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh" ]] \
+    && "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh" --check >/tmp/p0p4-plugin-sync.out 2>/tmp/p0p4-plugin-sync.err \
+    && grep -Fq "generated skill mirrors" /tmp/p0p4-plugin-sync.out; then
+    pass
+else
+    fail "assistant plugin generated skill mirrors must pass tools/plugins/sync-plugin-skills.sh --check; see /tmp/p0p4-plugin-sync.err"
+fi
+
+test_start "assistant plugin sync check cleans per-plugin temp files"
+plugin_sync_tmp="$(mktemp -d)"
+p0p4_register_cleanup "$plugin_sync_tmp"
+if TMPDIR="$plugin_sync_tmp" "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh" --check >/tmp/p0p4-plugin-sync-cleanup.out 2>/tmp/p0p4-plugin-sync-cleanup.err \
+    && [[ -z "$(find "$plugin_sync_tmp" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
+    pass
+else
+    fail "tools/plugins/sync-plugin-skills.sh --check should clean all per-plugin temp files; see /tmp/p0p4-plugin-sync-cleanup.err"
+fi
+
 test_start "assistant plugin scaffolds are documented without marketplace registration"
 marketplace_file="$FRAMEWORK_DIR/.agents/plugins/marketplace.json"
 if grep -Fq "plugins/assistant-core/.codex-plugin/plugin.json" "$plugin_doc" \

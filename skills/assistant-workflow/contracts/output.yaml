@@ -7,11 +7,31 @@ schema_version: "1.0"
 contract: output
 skill: assistant-workflow
 
+# Completion evidence is tiered so small/low-risk work does not inherit the
+# full medium+ harness. Artifact definitions below remain the source of truth;
+# these tiers define which artifacts are required by default for each class.
+completion_tiers:
+  small:
+    required_artifacts: [changed_files, validation_results, manual_test_steps, user_approval]
+    conditional_artifacts: [triage_result, test_results, debugging_result, artifact_contract]
+    review_gate: "self-review or explicit validation summary unless risk_tier in [high, critical]"
+    checkpoint_policy: "inline plan/check summary is enough; phase_checkpoints are strict-profile only"
+  medium:
+    required_artifacts: [triage_result, changed_files, validation_results, spec_review_result, review_result, manual_test_steps, plan_document, user_approval]
+    conditional_artifacts: [test_results, task_journal, context_map, component_manifest, component_verification_summary, metrics_entry, candidate_search_result]
+    review_gate: "spec review plus quality review, with evidence matched to the approved plan"
+    checkpoint_policy: "task journal or carried-forward state records phase transitions"
+  large_critical:
+    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, spec_review_result, review_result, manual_test_steps, task_journal, context_map, context_budget_note, component_manifest, component_verification_summary, plan_document, user_approval]
+    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, metrics_entry, candidate_search_result, verified_skill_distillation]
+    review_gate: "full strict evidence, security/operability review when applicable, and all component criteria verified"
+    checkpoint_policy: "explicit phase checkpoints are required"
+
 artifacts:
   - name: triage_result
     type: object
-    required: true
-    condition: always
+    required: conditional
+    condition: "size in [medium, large, mega] or hook_profile == strict or risk_tier in [high, critical]"
     validation: "Contains task_type, risk_tier, size, required_gates, required_agents, and search_mode selected during Triage"
     on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, and search_mode"
     object_fields:
@@ -43,8 +63,8 @@ artifacts:
 
   - name: phase_checkpoints
     type: string[]
-    required: true
-    condition: always
+    required: conditional
+    condition: "hook_profile == strict or size in [large, mega] or local task journal is enforcing phase gates"
     validation: >
       Must contain paired entries for every phase that ran:
       '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
@@ -154,8 +174,8 @@ artifacts:
 
   - name: review_result
     type: object
-    required: true
-    condition: always
+    required: conditional
+    condition: "size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict"
     validation: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result."
     on_fail: "Run assistant-review quality review and record quality status, rounds, and resolved findings"
     object_fields:
@@ -176,8 +196,8 @@ artifacts:
 
   - name: spec_review_result
     type: object
-    required: true
-    condition: always
+    required: conditional
+    condition: "size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict"
     validation: >
       Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
       Must be distinct from assistant-review quality findings. At completion, status must
@@ -216,7 +236,7 @@ artifacts:
   - name: manual_test_steps
     type: string[]
     required: true
-    condition: always
+    condition: "user-runnable behavior changed or release handoff needs manual verification"
     validation: "At least 1 actionable step the user can follow to verify the change"
     on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
 
@@ -491,8 +511,8 @@ artifacts:
 
   - name: plan_document
     type: string
-    required: true
-    condition: always
+    required: conditional
+    condition: "size in [medium, large, mega] or hook_profile == strict; small work may use the inline plan in final response"
     validation: >
       Small: inline plan with goal, files, risks, tests.
       Medium: standard plan per plan-template.md.
@@ -501,18 +521,18 @@ artifacts:
 
   - name: user_approval
     type: enum
-    required: true
-    condition: always
+    required: conditional
+    condition: "size in [medium, large, mega] or risk/ambiguity requires approval; small low-risk work may use not_required_small"
     enum_values: [confirmed, confirmed_with_issues, not_required_small]
     validation: "Medium+ tasks require explicit confirmation before Document. Small tasks may use not_required_small only when the inline plan proceeded without risk/ambiguity requiring approval."
     on_fail: "Obtain user approval or justify not_required_small eligibility before completion"
 
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
-# 1. All required artifacts for the task's size tier are present
+# 1. All required artifacts for the task's completion_tier are present
 # 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
-# 3. spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. review_result.quality_review_status is not missing
+# 3. When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: spec_review_result.status == PASS and required_fixes are empty or resolved
+# 4. When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: review_result.quality_review_status is not missing
 # 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component
 # 6. candidate_search_result exists when search_mode == candidate_search and any plan_deviation is approved before Build
 # 7. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks

@@ -37,10 +37,6 @@
           {
             "type": "command",
             "command": "$HOME/.codex/hooks/assistant/stop-review.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.codex/hooks/assistant/harness-gate.sh"
           }
         ]
       }

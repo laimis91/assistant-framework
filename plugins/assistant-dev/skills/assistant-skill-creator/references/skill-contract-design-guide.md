@@ -257,7 +257,7 @@ Shell scripts in hooks validate contract compliance while the workflow is runnin
 - Pre-tool hooks warn when active workflow ownership boundaries are crossed
 - Stop hooks check output contract completeness before task handoff
 - `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, document, and metrics gates
-- `stop-review.sh` and `harness-gate.sh` enforce review, metrics, plan, and rubric completion during active build/review/document statuses
+- `stop-review.sh` is the consolidated strict stop gate for review, metrics, plan, and rubric completion during active build/review/document statuses
 
 The source validator is the Level 3 foundation: it gives runtime hooks a consistent, checked contract shape to rely on.
 
@@ -277,7 +277,7 @@ The default per-skill eval inventory is first-class `skills/assistant-*` skills 
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
-**Current implementation: Level 2 plus source structural validation, runtime phase-gate hooks, and complete first-class per-skill eval fixtures.** Level 3 covers prompt-time phase-gate warnings (`workflow-enforcer.sh` + `workflow-phase-gates.sh`) and stop-time review/harness enforcement (`stop-review.sh`, `harness-gate.sh`). Local-only skill experiments remain opt-in through `--include-local`.
+**Current implementation: Level 2 plus source structural validation, runtime phase-gate hooks, and complete first-class per-skill eval fixtures.** Level 3 covers prompt-time phase-gate warnings (`workflow-enforcer.sh` + `workflow-phase-gates.sh`) and consolidated stop-time review/harness enforcement (`stop-review.sh`). Local-only skill experiments remain opt-in through `--include-local`.
 
 ---
 

@@ -83,8 +83,7 @@ Skills are routed by the `skill-router.sh` hook, which pattern-matches user prom
 | `learning-signals.sh` | UserPromptSubmit | Detect corrections/approvals for trend analysis |
 | `workflow-enforcer.sh` | UserPromptSubmit | Inject workflow phase state + enforcement rules on every prompt (combats rule drift) |
 | `workflow-guard.sh` | PreToolUse | Warn when orchestrator uses Edit/Write directly during active task (reinforces delegation) |
-| `stop-review.sh` | Stop | Enforce self-review before task completion |
-| `harness-gate.sh` | Stop | Enforce harness lifecycle: plan approval, rubric scores, score thresholds (medium+ tasks) |
+| `stop-review.sh` | Stop | Consolidated strict stop gate: plan approval, review, rubric, and metrics before task completion |
 | `pre-compress.sh` | PreCompact | Save state before context compression |
 | `post-compact.sh` | PostCompact | Re-inject context after compaction |
 | `task-completed.sh` | TaskCompleted | Post-task processing |
