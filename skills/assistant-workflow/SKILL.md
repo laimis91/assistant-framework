@@ -190,7 +190,7 @@ High and critical work require an explicit risk note in the plan and a review/se
 
 ## Phase Execution
 
-Load `references/phases.md` and execute the phase matching your current stage. Each phase has:
+Load `references/phases.md` and execute the phase matching your current stage. Use `references/context-budget-and-pattern-retrieval.md` when material is large or when editing framework patterns. Each phase has:
 - Entry checkpoint: `--- PHASE: [name] ---`
 - Exit checkpoint: `--- PHASE: [name] COMPLETE ---`
 - Approval gates where indicated (WAIT for user)
