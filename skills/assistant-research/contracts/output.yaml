@@ -119,6 +119,12 @@ artifacts:
         type: enum
         required: true
         enum_values: [do, wait, avoid, investigate_further]
+        validation: "For finance/trading, legal, medical, safety-critical, or similarly high-impact decisions, default to investigate_further unless verified evidence, explicit user context, and peer review support a stronger recommendation."
+      - name: high_stakes_caveat
+        type: string
+        required: conditional
+        condition: "topic involves finance/trading, legal, medical, safety-critical, or similarly high-impact decisions"
+        description: "Educational due-diligence/risk caveat and user-context limits for high-stakes recommendations"
       - name: frontier_question
         type: string
         required: true
@@ -211,8 +217,9 @@ artifacts:
 # - {decision-ready synthesis and self-critique}
 #
 # FINDINGS
-# 1. {finding} — confidence: {HIGH/MEDIUM/LOW}
+# 1. {source-backed factual claim or decision insight} — confidence: {HIGH/MEDIUM/LOW}
 #    Sources: {source 1}, {source 2}
+#    Verified URLs: {verified URL 1, verified URL 2 if any}
 # 2. ...
 #
 # CONFLICTS
@@ -232,3 +239,4 @@ artifacts:
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
 # 7. For five_lens_briefing, perspective_scan, contradiction_map, synthesis_briefing, and peer_review are present
+# 8. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context

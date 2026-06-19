@@ -15,6 +15,16 @@ Prefer `five_lens_briefing` when any of these are true:
 
 Do not use this as ceremony for simple factual lookups. Use quick or standard `source_research` instead.
 
+## High-stakes constraint
+
+For finance/trading, legal, medical, safety-critical, or similarly high-impact decisions:
+
+- frame the output as educational due diligence and decision support, not professional advice or an instruction to act
+- state user-context and risk caveats before any recommendation
+- verify decision-critical claims with real sources before strengthening a recommendation
+- default the recommendation to `investigate_further` unless verified evidence, explicit user context, and the peer review all support a stronger `do`, `wait`, or `avoid` recommendation
+- never recommend executing a trade, legal action, medical action, or other irreversible high-stakes action without qualified professional/user approval
+
 ## Workflow
 
 ### 1. Scope and source plan
@@ -61,7 +71,7 @@ Combine the scan and contradiction map into a decision-ready briefing:
 - for each finding, which lenses support and challenge it
 - hidden connection visible only after combining lenses
 - practical implication for the user's role/goal
-- recommended action: do / wait / avoid / investigate further
+- recommended action: do / wait / avoid / investigate further, with high-stakes caveats when applicable
 - frontier question that would most change the conclusion
 
 ### 5. Peer review
@@ -111,12 +121,23 @@ CONTRADICTION MAP
 - Biggest unresolved question: ...
 - Missing angle/gap: ...
 
+FINDINGS
+1. [source-backed factual claim or decision insight] — confidence: [HIGH/MEDIUM/LOW]
+   Sources: [source names]
+   Verified URLs: [verified URLs, if any]
+2. ...
+
+CONFLICTS
+- [source or lens A] says X; [source or lens B] says Y — [assessment]
+- none found, if conflicts were explicitly checked and none were found
+
 SYNTHESIS
 - Executive summary: ...
 - Key findings ranked by reliability: ...
 - Hidden connection: ...
 - Actionable implication for [role/goal]: ...
 - Recommendation: do / wait / avoid / investigate further
+- High-stakes caveat/context, if applicable: ...
 - Frontier question: ...
 
 PEER REVIEW

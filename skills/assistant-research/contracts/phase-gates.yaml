@@ -126,3 +126,8 @@ invariants:
     check: "For five_lens_briefing, the final recommendation is not stronger than the verified evidence and peer review support"
     scope: all_phases
     on_fail: "Downgrade the recommendation, mark investigate_further, or verify the decision-critical claims before finalizing"
+
+  - id: INV6
+    check: "For finance/trading, legal, medical, safety-critical, or similarly high-impact topics, the output is framed as educational due diligence with risk/context caveats and defaults to investigate_further unless verified evidence, explicit user context, and peer review support a stronger recommendation"
+    scope: all_phases
+    on_fail: "Add high-stakes caveats and downgrade the recommendation to investigate_further unless the stronger recommendation is explicitly justified"

@@ -125,7 +125,7 @@
       "title": "Five-lens decision briefing uses perspective scan and peer review",
       "category": "five_lens_briefing",
       "purpose": "Checks that decision-grade research uses the five-lens method, contradiction map, synthesis, verification, and peer review instead of a one-shot summary.",
-      "prompt": "Research whether I should invest time in learning a new AI coding assistant framework for my .NET architecture work. I want a decision-grade briefing, not a generic summary.",
+      "prompt": "Research whether I should invest money in a new AI coding assistant company for my .NET architecture work. I want a decision-grade briefing, not a generic summary.",
       "setup_context": [
         "The assistant-research skill instructions are active.",
         "The user asks for decision-grade research with practical implications.",
@@ -137,13 +137,16 @@
         "Builds a contradiction map before synthesis.",
         "Produces a recommendation no stronger than the verified evidence supports.",
         "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",
-        "Separates lens inference from source-backed findings and verifies decision-critical URLs before presenting them."
+        "Separates lens inference from source-backed findings and verifies decision-critical URLs before presenting them.",
+        "Includes the base FINDINGS and CONFLICTS sections required for all assistant-research outputs, with confidence-scored source-backed findings.",
+        "For investment/trading or similarly high-stakes topics, frames the output as educational due diligence with risk/context caveats and defaults to investigate_further unless stronger action is justified."
       ],
       "pass_criteria": [
         "The response names method as five_lens_briefing.",
-        "The response includes PERSPECTIVE SCAN, CONTRADICTION MAP, SYNTHESIS, PEER REVIEW, SOURCES/VERIFIED URLS, and GAPS sections.",
+        "The response includes PERSPECTIVE SCAN, CONTRADICTION MAP, FINDINGS, CONFLICTS, SYNTHESIS, PEER REVIEW, SOURCES/VERIFIED URLS, and GAPS sections.",
         "The recommendation is do, wait, avoid, or investigate_further with confidence caveats.",
-        "Unsourced or weakly sourced lens claims are LOW confidence or listed as gaps."
+        "Unsourced or weakly sourced lens claims are LOW confidence or listed as gaps.",
+        "The response includes high-stakes caveats for financial/investment use and avoids direct trade/action instructions."
       ],
       "fail_signals": [
         "Answers from one generic perspective only.",
@@ -165,13 +168,25 @@
           "PEER REVIEW",
           "weakest claim",
           "falsification",
-          "GAPS"
+          "GAPS",
+          "FINDINGS",
+          "confidence",
+          "Sources",
+          "CONFLICTS",
+          "SOURCES / VERIFIED URLS",
+          "educational due diligence",
+          "risk",
+          "investigate_further"
         ],
         "forbidden_substrings": [
           "No peer review needed",
           "contradictions can be skipped",
           "verified without sources",
-          "single generic perspective"
+          "single generic perspective",
+          "No findings needed",
+          "No conflicts checked",
+          "execute the trade",
+          "professional financial advice"
         ]
       }
     }
