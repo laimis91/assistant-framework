@@ -278,6 +278,34 @@ artifacts:
         type: string
         required: false
 
+  - name: context_handoff_packet
+    type: object
+    required: conditional
+    condition: "no task journal/equivalent carried-forward state exists, or explicit non-standard handoff is requested"
+    description: "Compression-safe continuation packet following references/context-handoff-templates.md"
+    validation: "Pinned context is separated from summarized/pruned context and exact next action is present"
+    on_fail: "When no task journal/equivalent state exists or explicit non-standard handoff is requested, create a handoff packet with Active Task, Pinned Requirements, Work State, Verification, Context Hygiene, and Exact Next Action"
+    object_fields:
+      - name: active_task
+        type: string
+        required: true
+      - name: pinned_requirements
+        type: string
+        required: true
+      - name: work_state
+        type: string
+        required: true
+      - name: verification
+        type: string
+        required: true
+      - name: context_hygiene
+        type: string
+        required: true
+      - name: exact_next_action
+        type: string
+        required: true
+
+
   - name: component_manifest
     type: string
     required: true

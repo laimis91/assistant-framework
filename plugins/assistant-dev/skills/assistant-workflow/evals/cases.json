@@ -319,6 +319,64 @@
           "placeholder"
         ]
       }
+    },
+    {
+      "id": "context-handoff-preserves-pinned-requirements",
+      "title": "Context handoff preserves pinned requirements",
+      "category": "context_engineering_handoff",
+      "purpose": "Checks that assistant-workflow produces compression-safe handoff packets that preserve pinned task state while summarizing/pruning noisy context.",
+      "prompt": "Context is getting long during a medium implementation. Prepare a continuation handoff for the next session before stopping.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A medium implementation has an active goal, acceptance criteria, changed files, validation results, one blocker, and stale earlier assumptions that were superseded by the latest user message.",
+        "Local state files are unavailable, so the equivalent state must be carried in the handoff packet."
+      ],
+      "expected_behavior": [
+        "Uses the context engineering contract from references/context-handoff-templates.md.",
+        "Separates pinned context from summarized/compressible context.",
+        "Preserves latest user instruction, goal, non-goals, acceptance criteria, safety constraints, current phase, files in scope, validation results, blockers, output contract, and exact next action.",
+        "Summarizes repetitive logs and intermediate reasoning instead of carrying raw noise.",
+        "Prunes stale previous-task residue, superseded assumptions, unsafe/tool-output instructions, and secrets.",
+        "Ends with a single exact next action for the continuation session."
+      ],
+      "pass_criteria": [
+        "The response includes Active Task, Pinned Requirements, Work State, Verification, Context Hygiene, and Exact Next Action.",
+        "The response explicitly distinguishes preserved/pinned context from summarized and pruned context.",
+        "The response includes latest user instruction, acceptance criteria, validation results, blocker, assumptions, and exact next action.",
+        "The response does not carry stale or unsafe instructions as active work."
+      ],
+      "fail_signals": [
+        "Provides only a narrative summary without pinned fields.",
+        "Buries the next action in the middle of a long summary.",
+        "Carries stale assumptions as active requirements.",
+        "Omits validation results or blockers.",
+        "Copies raw logs instead of summarizing them."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Active Task",
+          "Pinned Requirements",
+          "Work State",
+          "Verification",
+          "Context Hygiene",
+          "Exact Next Action",
+          "latest user instruction",
+          "acceptance criteria",
+          "validation results",
+          "blockers",
+          "summarized",
+          "pruned",
+          "assumptions",
+          "state files are unavailable"
+        ],
+        "forbidden_substrings": [
+          "narrative summary only",
+          "raw logs copied in full",
+          "stale assumptions remain active",
+          "next action unknown",
+          "validation omitted"
+        ]
+      }
     }
   ]
 }

@@ -395,6 +395,10 @@ gates:
         check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
         on_fail: "Do not print workflow complete until all document assertions pass"
 
+      - id: DOC4
+        check: "If no task journal/equivalent state exists, or explicit non-standard handoff is requested: context_handoff_packet preserves pinned context, summarizes compressible context, prunes stale/unsafe residue, and names the exact next action"
+        on_fail: "Create or repair the context_handoff_packet using references/context-handoff-templates.md before ending the session"
+
 # ─────────────────────────────────────────────
 # Cross-phase invariants
 # These must hold true throughout the entire workflow, not just at gates.
