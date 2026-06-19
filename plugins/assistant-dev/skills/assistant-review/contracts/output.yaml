@@ -124,6 +124,35 @@ artifacts:
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
             description: "Whether score change correlates with finding count change"
 
+  - name: semantic_contract_review
+    type: object
+    required: conditional
+    condition: "semantic_contract_review_required is true"
+    description: "Review of semantic contract risks for skill/workflow/framework changes"
+    validation: "Must state whether inherited contracts, template-contract alignment, eval inheritance, external-method signature fidelity, high-stakes guards, and mirror surfaces were checked"
+    object_fields:
+      - name: inherited_contract_obligations
+        type: string
+        required: true
+      - name: template_contract_alignment
+        type: string
+        required: true
+      - name: eval_inheritance_coverage
+        type: string
+        required: true
+      - name: external_method_signature_fidelity
+        type: string
+        required: true
+      - name: high_stakes_recommendation_guard
+        type: string
+        required: true
+      - name: mirror_surface_sync
+        type: string
+        required: true
+      - name: semantic_findings_summary
+        type: string
+        required: true
+
   - name: bugfix_evidence_review
     type: object
     required: conditional
@@ -221,3 +250,4 @@ artifacts:
 # 2. If mode=review-fix: build_verification shows passed and 0 test failures
 # 3. If task journal exists: Review Log has been updated with entry + Final Result
 # 4. If mode=audit: audit_report contains all findings, no fixes were applied
+# 5. If semantic_contract_review_required=true: semantic_contract_review is populated and semantic findings are included in final_summary/audit_report

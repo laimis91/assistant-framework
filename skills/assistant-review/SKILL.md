@@ -69,6 +69,7 @@ Use the smallest mode that answers the request; combine modes when reviewing imp
 - **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
 - **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
 - **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
+- **Semantic contract review**: for skill/workflow/framework changes, check contract inheritance, method-template alignment, eval coverage, method-signature fidelity, and high-stakes recommendation guards before judging the change clean.
 - **Maintainability review**: apply SOLID/KISS/DRY/YAGNI/readability only when a concrete risk exists.
 - **Security handoff**: invoke `assistant-security` when the reviewed surface touches auth, permissions, secrets, input handling, persistence, shell commands, dependency/config changes, network calls, or external integrations.
 
@@ -93,6 +94,36 @@ Severity mapping:
 - Do not require external SaaS scanners, remote LLM review, or unapproved package installs.
 - Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
 - If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
+
+## Semantic Contract Review Checklist
+
+Use this checklist when reviewing changes to skills, workflow docs, contracts, evals, prompts, generated instructions, agent frameworks, or named-method adaptations. This is a semantic review, not just a YAML/Markdown syntax check.
+
+1. **Inherited contract obligations**
+   - If a specialized method/template is added inside an existing skill, confirm it still satisfies every base input/output artifact required by that skill.
+   - If the method intentionally does not satisfy a base artifact, the base contract must be explicitly made conditional and evals must cover both paths.
+
+2. **Template ↔ contract alignment**
+   - Check that method templates, `SKILL.md`, `contracts/output.yaml`, `contracts/input.yaml`, phase gates, handoffs, and references name the same artifacts and fields.
+   - Required artifacts must include recovery guidance (`on_fail` or equivalent) where the contract design guide expects it.
+
+3. **Eval coverage inheritance**
+   - Evals for a new method must require both the new behavior and inherited base artifacts.
+   - Machine expectations should fail on plausible incomplete responses, not only confirm the new section headings.
+
+4. **External-method signature fidelity**
+   - When adapting a named paper/tool/framework method, identify its defining loop before approving. Do not preserve only the visible surface shape.
+   - Require a testable artifact proving the defining loop happened. Example: STORM requires perspective-guided questions, source-grounded answers, follow-up questions, then synthesis — not just fixed perspectives.
+
+5. **High-stakes recommendation guard**
+   - If the workflow can emit `do`, `wait`, `avoid`, approval, trade, legal, medical, security, safety, or other high-impact recommendations, require domain guardrails.
+   - Guardrails should include educational/due-diligence framing where appropriate, risk/user-context caveats, verification requirements, and conservative defaults such as `investigate_further` unless stronger action is justified.
+
+6. **Mirror surfaces**
+   - Root skill and plugin-local copies must be synced.
+   - Generated installer/global instruction templates, hooks, docs, references, and eval contract tests must be updated when they can drive the old behavior.
+
+Report semantic contract findings as normal findings with file evidence, impact, smallest fix, and confidence. Treat missing inherited artifacts, evals that pass incomplete outputs, or high-stakes recommendation drift as must-fix/should-fix depending on release risk.
 
 ## Refactor-Related Findings
 
@@ -132,6 +163,7 @@ while round <= 5:
      - Then run Regression/Test/Maintainability modes as applicable
      - If security-sensitive surfaces are present, hand off to `assistant-security`
      - Load and apply references/review-principles.md as the clean-code lens
+     - For skill/workflow/framework changes: apply the Semantic Contract Review Checklist before declaring clean
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
        "This is review round {round}. The following items were already
@@ -146,6 +178,9 @@ while round <= 5:
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
+       For skill/workflow/framework changes, also apply the Semantic Contract Review Checklist:
+       inherited contract obligations, template-contract alignment, eval inheritance,
+       external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.
        Score against the rubric (5 dimensions) per references/review-rubric.md."
 
   2. EVALUATE
@@ -234,6 +269,7 @@ Return:
 - **Findings/fixed items** - severity, file, evidence, action, and round.
 - **Verification** - build/test commands or not-applicable reason.
 - **Bugfix evidence review** - when applicable, whether reproduction/root-cause evidence and regression linkage were reviewed.
+- **Semantic contract review** - when applicable, whether inherited contracts, method signatures, eval coverage, high-stakes guards, and mirror surfaces were checked.
 - **Residual risk** - remaining items, nits, or scope gaps.
 
 ## Stop Rules

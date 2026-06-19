@@ -74,6 +74,25 @@ fields:
     on_missing: infer
     infer_from: "User says 'audit', 'review only', 'just review', 'don't fix', 'provide findings', 'report findings', 'list findings', 'summarize findings', or 'review against' → audit. Otherwise → review-fix."
 
+  - name: change_kind
+    type: enum
+    required: true
+    enum_values: [code, docs, skill_or_workflow, config, mixed]
+    description: "Dominant kind of material under review; skill_or_workflow triggers semantic contract review"
+    on_missing: infer
+    infer_from: >
+      Changes under skills/, plugins/*/skills/, contracts/, evals/, prompts, hooks that inject workflow behavior,
+      generated instruction templates, agent-framework docs, or named-method adaptations → skill_or_workflow.
+      Application source changes → code. Documentation-only changes → docs. Config-only changes → config.
+      Multiple categories → mixed.
+
+  - name: semantic_contract_review_required
+    type: boolean
+    required: true
+    description: "Whether to apply the Semantic Contract Review Checklist"
+    on_missing: infer
+    infer_from: "true when change_kind is skill_or_workflow or mixed with skill/workflow surfaces; otherwise false unless user requests semantic/contract review"
+
   - name: task_journal_path
     type: string
     required: false
@@ -96,6 +115,6 @@ fields:
         required: true
 
 # Validation behavior:
-# 1. Resolve review_scope and review_material_snapshot before entering the loop
+# 1. Resolve review_scope, review_material_snapshot, change_kind, and semantic_contract_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
-# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | files: {count}
+# 3. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
