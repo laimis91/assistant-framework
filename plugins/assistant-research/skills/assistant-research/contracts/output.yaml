@@ -67,6 +67,44 @@ artifacts:
         required: true
         enum_values: [high, medium, low]
 
+  - name: question_trace
+    type: object[]
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "STORM-style per-lens question trace and evidence ledger before contradiction mapping"
+    min_items: 5
+    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, a follow-up question, and evidence status."
+    on_fail: "Build the question trace/evidence ledger before contradiction mapping or synthesis; do not synthesize directly from fixed lenses."
+    object_fields:
+      - name: lens
+        type: enum
+        required: true
+        enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
+      - name: question
+        type: string
+        required: true
+        description: "Lens-specific research question asked before synthesis"
+      - name: answer
+        type: string
+        required: true
+        description: "Source-grounded answer, inference-only answer, or explicit unresolved gap"
+      - name: sources_or_verified_urls
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Sources, verified URLs, or an explicit no-source/unresolved marker"
+      - name: follow_up_question
+        type: string
+        required: true
+      - name: follow_up_answer_or_gap
+        type: string
+        required: true
+      - name: evidence_status
+        type: enum
+        required: true
+        enum_values: [source_backed, inference_only, unresolved]
+
+
   - name: contradiction_map
     type: object
     required: conditional
@@ -210,6 +248,9 @@ artifacts:
 # PERSPECTIVE SCAN (required when method=five_lens_briefing)
 # - {lens}: {core_position} — confidence: {HIGH/MEDIUM/LOW}
 #
+# QUESTION TRACE / EVIDENCE LEDGER (required when method=five_lens_briefing)
+# - {lens}: question, answer, sources/verified URLs, follow-up question, follow-up answer or gap, evidence status
+#
 # CONTRADICTION MAP (required when method=five_lens_briefing)
 # - {direct conflicts, consensus, unresolved question, missing angle}
 #
@@ -238,5 +279,6 @@ artifacts:
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
-# 7. For five_lens_briefing, perspective_scan, contradiction_map, synthesis_briefing, and peer_review are present
-# 8. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
+# 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, and peer_review are present
+# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis
+# 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context

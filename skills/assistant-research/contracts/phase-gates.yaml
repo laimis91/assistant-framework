@@ -44,6 +44,11 @@ gates:
         condition: "research_method == five_lens_briefing"
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
+      - id: S7
+        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, one follow-up question, and evidence status before contradiction mapping"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
+
   # ─────────────────────────────────────────────
   # SYNTHESIZE → VERIFY
   # ─────────────────────────────────────────────
@@ -69,12 +74,17 @@ gates:
         on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
 
       - id: SY5
+        check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Add or repair the question trace/evidence ledger and downgrade unsupported answers before synthesizing"
+
+      - id: SY6
         check: "For five_lens_briefing: a contradiction map exists before the synthesis and names conflicts, consensus, unresolved question, and missing angle"
         condition: "research_method == five_lens_briefing"
         on_fail: "Create the contradiction map before writing the synthesis"
 
-      - id: SY6
-        check: "For five_lens_briefing: the synthesis uses all five lenses and includes a peer review/self-critique before presentation"
+      - id: SY7
+        check: "For five_lens_briefing: the synthesis uses all five lenses, the question trace/evidence ledger, and includes a peer review/self-critique before presentation"
         condition: "research_method == five_lens_briefing"
         on_fail: "Revise the synthesis with all lenses and run the peer review step from five-lens-briefing.md"
 

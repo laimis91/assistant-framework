@@ -49,7 +49,22 @@ For each lens produce:
 - one unique insight no other lens supplied
 - confidence level and source notes
 
-### 3. Contradiction map
+### 3. Question trace / evidence ledger
+
+STORM is not just fixed perspectives; it is perspective-guided question asking with retrieval-backed answers and follow-up questions before synthesis. Before building the contradiction map, create a lightweight question trace:
+
+For each lens:
+
+- ask at least one lens-specific research question that lens would naturally ask
+- answer it with source-grounded evidence when tools/sources are available
+- record sources or verified URLs used for the answer
+- ask one follow-up question prompted by the first answer, contradiction, or gap
+- answer the follow-up when evidence is available; otherwise mark it as an open gap
+- label whether each answer is source-backed, inference-only, or unresolved
+
+Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
+
+### 4. Contradiction map
 
 Find where the lenses disagree. The disagreements are usually the highest-value part of the briefing.
 
@@ -62,7 +77,7 @@ Include:
 - the biggest unresolved question
 - what none of the lenses addressed
 
-### 4. Synthesis briefing
+### 5. Synthesis briefing
 
 Combine the scan and contradiction map into a decision-ready briefing:
 
@@ -74,7 +89,7 @@ Combine the scan and contradiction map into a decision-ready briefing:
 - recommended action: do / wait / avoid / investigate further, with high-stakes caveats when applicable
 - frontier question that would most change the conclusion
 
-### 5. Peer review
+### 6. Peer review
 
 Self-critique before presenting:
 
@@ -108,6 +123,19 @@ PERSPECTIVE SCAN
    Evidence/source notes: ...
    Blind spot: ...
    Unique insight: ...
+2. Academic / technical expert — ...
+3. Skeptic — ...
+4. Economist / incentives analyst — ...
+5. Historian / pattern matcher — ...
+
+QUESTION TRACE / EVIDENCE LEDGER
+1. Practitioner
+   Question: ...
+   Source-grounded answer: ...
+   Sources / verified URLs: ...
+   Follow-up question: ...
+   Follow-up answer or open gap: ...
+   Evidence status: source-backed / inference-only / unresolved
 2. Academic / technical expert — ...
 3. Skeptic — ...
 4. Economist / incentives analyst — ...

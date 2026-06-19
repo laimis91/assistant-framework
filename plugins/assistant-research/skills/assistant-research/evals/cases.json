@@ -134,6 +134,7 @@
       "expected_behavior": [
         "Resolves research_method as five_lens_briefing and tier as extensive or deep when decision risk warrants it.",
         "Runs the five required lenses: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
+        "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis.",
         "Builds a contradiction map before synthesis.",
         "Produces a recommendation no stronger than the verified evidence supports.",
         "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",
@@ -143,10 +144,11 @@
       ],
       "pass_criteria": [
         "The response names method as five_lens_briefing.",
-        "The response includes PERSPECTIVE SCAN, CONTRADICTION MAP, FINDINGS, CONFLICTS, SYNTHESIS, PEER REVIEW, SOURCES/VERIFIED URLS, and GAPS sections.",
+        "The response includes PERSPECTIVE SCAN, QUESTION TRACE / EVIDENCE LEDGER, CONTRADICTION MAP, FINDINGS, CONFLICTS, SYNTHESIS, PEER REVIEW, SOURCES/VERIFIED URLS, and GAPS sections.",
         "The recommendation is do, wait, avoid, or investigate_further with confidence caveats.",
         "Unsourced or weakly sourced lens claims are LOW confidence or listed as gaps.",
-        "The response includes high-stakes caveats for financial/investment use and avoids direct trade/action instructions."
+        "The response includes high-stakes caveats for financial/investment use and avoids direct trade/action instructions.",
+        "Question trace entries distinguish source-backed answers from inference-only or unresolved gaps before synthesis."
       ],
       "fail_signals": [
         "Answers from one generic perspective only.",
@@ -176,7 +178,13 @@
           "SOURCES / VERIFIED URLS",
           "educational due diligence",
           "risk",
-          "investigate_further"
+          "investigate_further",
+          "QUESTION TRACE / EVIDENCE LEDGER",
+          "Question:",
+          "Follow-up question",
+          "Evidence status",
+          "source-backed",
+          "unresolved"
         ],
         "forbidden_substrings": [
           "No peer review needed",
@@ -186,7 +194,10 @@
           "No findings needed",
           "No conflicts checked",
           "execute the trade",
-          "professional financial advice"
+          "professional financial advice",
+          "No question trace needed",
+          "synthesize directly from lenses",
+          "source-grounded answers optional"
         ]
       }
     }
