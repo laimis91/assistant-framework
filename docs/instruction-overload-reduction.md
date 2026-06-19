@@ -1,0 +1,67 @@
+# Instruction Overload Reduction Plan
+
+This document captures the source-grounded simplification strategy for Assistant Framework. The goal is to keep useful workflow discipline while reducing default prompt pressure, duplicated rules, and hook-driven ceremony.
+
+## Research sources
+
+- OpenAI Model Spec — instruction hierarchy and conflict resolution: https://model-spec.openai.com/2025-09-12.html
+- OpenAI prompt engineering guide — structured prompts, clear sections, eval-driven iteration: https://developers.openai.com/api/docs/guides/prompt-engineering
+- Anthropic skill best practices — concise skills, progressive disclosure, evaluation-driven development: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md
+- Anthropic skills overview — metadata first, skill body on trigger, resources loaded only as needed: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview.md
+- Claude Code hooks docs — hooks can add `additionalContext`, so every installed context hook is prompt debt: https://docs.anthropic.com/en/docs/claude-code/hooks
+- Gemini CLI hooks docs — hooks run synchronously and can be enabled/disabled as a configured lifecycle surface: https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/index.md
+- Codex config profiles — profile selection as explicit configuration overlay: https://developers.openai.com/codex/config-advanced
+- Lost in the Middle — long contexts can hide relevant information, so default prompts should stay small: https://arxiv.org/abs/2307.03172
+
+## Principles
+
+1. **Progressive disclosure:** default prompts and hooks should expose only the next useful rule. Detailed contracts, rubrics, and examples should load on demand.
+2. **One rule owner:** each durable rule should live in one authoritative layer. Other layers should reference it instead of restating it.
+3. **Profile strictness:** strict workflow enforcement should be opt-in. The default installation should be low-friction.
+4. **Evidence over ceremony:** completion should depend on verification evidence, not on filling every possible metadata artifact.
+5. **Eval-backed expansion:** new standing instructions, gates, or hooks need a failing scenario and a targeted test/eval.
+
+## Implemented first slice
+
+### Hook profiles
+
+`install.sh` now supports:
+
+- `--hook-profile minimal` — default. Installs skill routing plus session/compaction context hooks.
+- `--hook-profile strict` — full legacy enforcement hook stack.
+- `--hook-profile none` — no hooks.
+- `--no-hooks` — backward-compatible alias for `none`.
+
+Minimal profile registers only:
+
+- `skill-router.sh`
+- `session-start.sh`
+- `pre-compress.sh`
+- `post-compact.sh`
+
+This removes the highest-friction default hooks from normal installs:
+
+- `workflow-enforcer.sh`
+- `workflow-guard.sh`
+- `stop-review.sh`
+- `harness-gate.sh`
+- `learning-signals.sh`
+- `task-completed.sh`
+- `subagent-monitor.sh`
+- `session-end.sh`
+
+### Codex hook feature flag
+
+Codex `hooks = true` is now enabled only when installing a non-`none` hook profile. `--no-hooks` / `--hook-profile none` no longer enables hook infrastructure.
+
+### Phase gate source of truth cleanup
+
+The duplicate `PLAN` phase block in `assistant-workflow/contracts/phase-gates.yaml` was collapsed into the main `PLAN` block so `P_VERIFIED_DISTILLATION` has a single owner.
+
+## Remaining recommended follow-up work
+
+1. **Tier `assistant-workflow/contracts/output.yaml`:** small / medium / large-critical completion artifacts instead of one broad artifact set.
+2. **Reduce `phase-gates.yaml`:** keep only blockers that prevent real failures; move most checks to guidance.
+3. **Consolidate stop gates:** if strict mode remains, merge `stop-review.sh` and `harness-gate.sh` into one stop gate with one failure reason.
+4. **Replace plugin-local skill mirrors:** generate plugin copies from root skills or validate them as generated artifacts to avoid conflict-prone duplication.
+5. **Add prompt bloat linting:** flag duplicated modal rules and every-prompt hook injection unless justified by eval coverage.

@@ -173,6 +173,10 @@ gates:
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
 
+      - id: P_VERIFIED_DISTILLATION
+        check: "When promoting a workflow or review lesson into durable skill/constraint/eval knowledge: verified_skill_distillation exists and verifier_result is approved before durable files are written"
+        on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
+
       - id: P1
         check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan also includes the component manifest from Decompose"
         on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and include the component manifest for medium+ tasks"
@@ -436,10 +440,3 @@ invariants:
     check: "If scope grows beyond initial triage during any phase, stop and re-triage"
     scope: all_phases
     on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"
-
-
-  - phase: PLAN
-    exit_assertions:
-      - id: P_VERIFIED_DISTILLATION
-        check: "When promoting a workflow or review lesson into durable skill/constraint/eval knowledge: verified_skill_distillation exists and verifier_result is approved before durable files are written"
-        on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"

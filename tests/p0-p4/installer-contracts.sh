@@ -488,7 +488,7 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
-test_start "Codex reinstall refreshes stale memory-graph MCP config, tool approvals, and file mode"
+test_start "Codex reinstall refreshes stale memory-graph MCP config, preserves no-hooks profile, and file mode"
 INSTALL_HOME_NINE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_NINE"
 mkdir -p "$INSTALL_HOME_NINE/.codex"
@@ -546,10 +546,10 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
         || grep -q "/stale/memory-graph" "$config_file" \
         || ! grep -q '^model = "test-model"$' "$config_file" \
         || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
-        || ! grep -q '^hooks = true$' "$config_file" \
-        || grep -q '^[[:space:]]*codex_hooks[[:space:]]*=' "$config_file" \
+        || ! grep -q '^hooks = false$' "$config_file" \
+        || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph command/args and deprecated hooks flag to refresh while preserving unrelated config and file mode"
+        fail "expected stale Codex memory-graph command/args to refresh while preserving unrelated config, disabled hooks profile, and file mode"
     else
         missing_tool=""
         duplicate_tool=""
@@ -697,7 +697,7 @@ else
     fail "hooks/codex-settings.json must parse, contain exactly one raw PreToolUse key, and contain no PostToolUse key"
 fi
 
-test_start "Claude reinstall removes framework post-tool hooks and preserves custom hooks"
+test_start "Claude default hook profile is minimal and preserves custom hooks"
 CLAUDE_HOOK_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CLAUDE_HOOK_HOME"
 mkdir -p "$CLAUDE_HOOK_HOME/.claude"
@@ -773,16 +773,110 @@ if HOME="$CLAUDE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --sk
             customPre: ($commands | any(. == "/tmp/user-claude-pretool.sh")),
             customPost: ($commands | any(. == "/tmp/user-claude-posttool.sh")),
             customFailure: ($commands | any(. == "/tmp/user-claude-failure-hook.sh")),
-            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh"))
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/skill-router.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh")),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/stop-review.sh"))
         }
-        | (.stale | not) and .customPre and .customPost and .customFailure and .workflowGuard
+        | (.stale | not) and .customPre and .customPost and .customFailure and .skillRouter and (.workflowGuard | not) and (.stopReview | not)
     ' "$CLAUDE_HOOK_HOME/.claude/settings.json" >/dev/null; then
         pass
     else
-        fail "Claude reinstall did not remove stale framework post-tool hooks, preserve custom hooks, or add workflow-guard"
+        fail "Claude default install should remove stale post-tool hooks, preserve custom hooks, install minimal skill routing, and omit strict workflow guard/stop hooks"
     fi
 else
     fail "Claude hook reinstall failed; see /tmp/p0p4-install-claude-hooks.err"
+fi
+
+test_start "Claude strict hook profile installs enforcement hooks"
+CLAUDE_STRICT_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CLAUDE_STRICT_HOME"
+if HOME="$CLAUDE_STRICT_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-claude-strict-hooks.out 2>/tmp/p0p4-install-claude-strict-hooks.err; then
+    if jq -e '
+        {
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh")),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/stop-review.sh")),
+            harnessGate: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/harness-gate.sh")),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"))
+        }
+        | .workflowGuard and .stopReview and .harnessGate and .workflowEnforcer
+    ' "$CLAUDE_STRICT_HOME/.claude/settings.json" >/dev/null; then
+        pass
+    else
+        fail "Claude strict hook profile should install workflow guard, stop review, harness gate, and workflow enforcer"
+    fi
+else
+    fail "Claude strict hook install failed; see /tmp/p0p4-install-claude-strict-hooks.err"
+fi
+
+test_start "Claude strict-to-minimal reinstall prunes strict framework hooks and preserves custom hooks"
+CLAUDE_DOWNGRADE_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CLAUDE_DOWNGRADE_HOME"
+if HOME="$CLAUDE_DOWNGRADE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-claude-downgrade-strict.out 2>/tmp/p0p4-install-claude-downgrade-strict.err; then
+    tmp_settings="$CLAUDE_DOWNGRADE_HOME/.claude/settings.json.tmp"
+    jq '.hooks.UserPromptSubmit[0].hooks += [{"type":"command","command":"/tmp/user-claude-custom.sh"}]' "$CLAUDE_DOWNGRADE_HOME/.claude/settings.json" > "$tmp_settings" \
+        && mv "$tmp_settings" "$CLAUDE_DOWNGRADE_HOME/.claude/settings.json"
+    if HOME="$CLAUDE_DOWNGRADE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow >/tmp/p0p4-install-claude-downgrade-minimal.out 2>/tmp/p0p4-install-claude-downgrade-minimal.err; then
+        if jq -e '
+            [.. | objects | .command? // empty] as $commands
+            | {
+                custom: ($commands | any(. == "/tmp/user-claude-custom.sh")),
+                skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/skill-router.sh")),
+                workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh")),
+                stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/stop-review.sh")),
+                harnessGate: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/harness-gate.sh")),
+                workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"))
+            }
+            | .custom and .skillRouter and (.workflowGuard | not) and (.stopReview | not) and (.harnessGate | not) and (.workflowEnforcer | not)
+        ' "$CLAUDE_DOWNGRADE_HOME/.claude/settings.json" >/dev/null; then
+            pass
+        else
+            fail "Claude strict-to-minimal reinstall should prune strict framework hooks while preserving custom hooks"
+        fi
+    else
+        fail "Claude downgrade reinstall failed; see /tmp/p0p4-install-claude-downgrade-minimal.err"
+    fi
+else
+    fail "Claude strict setup for downgrade failed; see /tmp/p0p4-install-claude-downgrade-strict.err"
+fi
+
+test_start "Gemini strict-to-minimal reinstall prunes strict framework hooks"
+GEMINI_DOWNGRADE_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$GEMINI_DOWNGRADE_HOME"
+if HOME="$GEMINI_DOWNGRADE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-gemini-downgrade-strict.out 2>/tmp/p0p4-install-gemini-downgrade-strict.err; then
+    if HOME="$GEMINI_DOWNGRADE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow >/tmp/p0p4-install-gemini-downgrade-minimal.out 2>/tmp/p0p4-install-gemini-downgrade-minimal.err; then
+        if jq -e '
+            {
+                skillRouter: ([.hooks.BeforeAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/skill-router.sh")),
+                workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/workflow-guard.sh")),
+                stopReview: ([.hooks.AfterAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/stop-review.sh")),
+                harnessGate: ([.hooks.AfterAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/harness-gate.sh")),
+                workflowEnforcer: ([.hooks.BeforeAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/workflow-enforcer.sh"))
+            }
+            | .skillRouter and (.workflowGuard | not) and (.stopReview | not) and (.harnessGate | not) and (.workflowEnforcer | not)
+        ' "$GEMINI_DOWNGRADE_HOME/.gemini/settings.json" >/dev/null; then
+            pass
+        else
+            fail "Gemini strict-to-minimal reinstall should prune strict framework hooks"
+        fi
+    else
+        fail "Gemini downgrade reinstall failed; see /tmp/p0p4-install-gemini-downgrade-minimal.err"
+    fi
+else
+    fail "Gemini strict setup for downgrade failed; see /tmp/p0p4-install-gemini-downgrade-strict.err"
+fi
+
+test_start "Codex --no-hooks does not enable hooks feature flag or create hooks.json"
+CODEX_NO_HOOKS_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CODEX_NO_HOOKS_HOME"
+if HOME="$CODEX_NO_HOOKS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-codex-no-hooks.out 2>/tmp/p0p4-install-codex-no-hooks.err; then
+    if [[ ! -f "$CODEX_NO_HOOKS_HOME/.codex/hooks.json" ]] \
+        && ! grep -Fq "hooks = true" "$CODEX_NO_HOOKS_HOME/.codex/config.toml"; then
+        pass
+    else
+        fail "Codex --no-hooks should not create hooks.json or enable hooks feature flag"
+    fi
+else
+    fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
