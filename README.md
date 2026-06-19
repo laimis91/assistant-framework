@@ -55,9 +55,13 @@ Preview without making changes:
 
 Each skill auto-triggers independently based on what you're doing.
 
-Skip hooks if you only want skills:
+Hook profiles control how much lifecycle automation is installed. The default is `minimal`: skill routing plus session/compaction context helpers. This follows the prompt-load reduction plan in `docs/instruction-overload-reduction.md`. Use `strict` only when you want the full enforcement stack (`workflow-enforcer`, guard, stop review, harness gate, etc.), or `none`/`--no-hooks` for skills only:
+
 ```bash
-./install.sh --agent claude --no-hooks
+./install.sh --agent claude --hook-profile minimal  # default, low-friction
+./install.sh --agent claude --hook-profile strict   # full enforcement hooks
+./install.sh --agent claude --hook-profile none     # skills/tools only
+./install.sh --agent claude --no-hooks              # alias for none
 ```
 
 Test hooks before installing:

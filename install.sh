@@ -19,7 +19,9 @@
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent codex --plugin assistant-research  # research profile only
 #   ./install.sh --agent codex --plugin assistant-dev       # development profile only
-#   ./install.sh --agent claude --no-hooks                  # skip hook installation
+#   ./install.sh --agent claude --hook-profile minimal      # default low-friction hooks
+#   ./install.sh --agent claude --hook-profile strict       # full enforcement hooks
+#   ./install.sh --agent claude --no-hooks                  # alias for --hook-profile none
 #
 # Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
 # only if it doesn't already exist — existing legacy data is never overwritten.
@@ -33,6 +35,7 @@ DRY_RUN=false
 SINGLE_SKILL=""
 PLUGIN_PROFILE=""
 INSTALL_HOOKS=true
+HOOK_PROFILE="minimal"
 TEST_HOOKS=false
 FRAMEWORK_DIR=""
 toml_files=()
@@ -52,7 +55,8 @@ Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
   --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
-  --no-hooks         Skip hook installation
+  --hook-profile P  Hook profile: minimal (default), strict, or none
+  --no-hooks         Alias for --hook-profile none
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
   -h, --help         Show this help
@@ -73,6 +77,8 @@ Examples:
   $(basename "$0") --agent claude
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
+  $(basename "$0") --agent claude --hook-profile strict
+  $(basename "$0") --agent claude --hook-profile none
   $(basename "$0") --agent codex --plugin assistant-core
   $(basename "$0") --agent codex --plugin assistant-research
   $(basename "$0") --agent codex --plugin assistant-dev
@@ -85,7 +91,8 @@ while [[ $# -gt 0 ]]; do
         --agent)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; AGENT="$2"; shift 2 ;;
         --skill)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; SINGLE_SKILL="$2"; shift 2 ;;
         --plugin)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PLUGIN_PROFILE="$2"; shift 2 ;;
-        --no-hooks)   INSTALL_HOOKS=false; shift ;;
+        --hook-profile) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; HOOK_PROFILE="$2"; INSTALL_HOOKS=true; shift 2 ;;
+        --no-hooks)   INSTALL_HOOKS=false; HOOK_PROFILE="none"; shift ;;
         --test-hooks) TEST_HOOKS=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         -h|--help)  usage ;;
@@ -93,12 +100,84 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "$HOOK_PROFILE" in
+    minimal|strict|none) ;;
+    *) echo "Unknown hook profile: $HOOK_PROFILE (expected minimal, strict, or none)" >&2; exit 1 ;;
+esac
+if [[ "$HOOK_PROFILE" == "none" ]]; then
+    INSTALL_HOOKS=false
+fi
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 fail() { echo "Error: $1" >&2; exit 1; }
 info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
+
+hook_profile_allowed_json() {
+    case "$HOOK_PROFILE" in
+        minimal)
+            printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
+            ;;
+        strict)
+            printf '%s\n' 'null'
+            ;;
+        none)
+            printf '%s\n' '[]'
+            ;;
+    esac
+}
+
+hook_selected_for_profile() {
+    local hook_name="$1"
+    case "$HOOK_PROFILE" in
+        strict) return 0 ;;
+        minimal)
+            case "$hook_name" in
+                skill-router.sh|session-start.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) return 0 ;;
+                *) return 1 ;;
+            esac
+            ;;
+        none) return 1 ;;
+    esac
+}
+
+write_profiled_hooks_settings() {
+    local source_settings="$1"
+    local target_settings="$2"
+    local allowed_json
+    allowed_json="$(hook_profile_allowed_json)"
+
+    if [[ "$HOOK_PROFILE" == "strict" ]]; then
+        cp "$source_settings" "$target_settings"
+        return 0
+    fi
+
+    command -v jq >/dev/null 2>&1 || fail "jq is required for --hook-profile $HOOK_PROFILE"
+    jq --argjson allowed "$allowed_json" '
+        def first_shell_token:
+            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+        def command_basename:
+            (. // "") | first_shell_token | split("/") | last;
+        .hooks = (
+            (.hooks // {})
+            | with_entries(
+                .value = (
+                    (.value | if type == "array" then . else [.] end)
+                    | map(
+                        .hooks = (
+                            (.hooks // [])
+                            | map(select(((.command // "") | command_basename) as $name | ($allowed | index($name)) != null))
+                        )
+                    )
+                    | map(select((.hooks // []) | length > 0))
+                )
+            )
+            | with_entries(select((.value // []) | length > 0))
+        )
+    ' "$source_settings" > "$target_settings"
+}
 
 plugin_profile_line() {
     local plugin_name="$1"
@@ -725,6 +804,7 @@ if [[ -n "$PLUGIN_PROFILE" ]]; then
 fi
 echo "  Skills target: $SKILLS_TARGET"
 echo "  Hooks target: $HOOKS_TARGET"
+echo "  Hook profile: $HOOK_PROFILE"
 echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
 
@@ -1081,13 +1161,15 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
         ok "Execution policy rules -> $RULES_TARGET/ (${#rules_files[@]} rules)"
     fi
 
-    # Ensure the Codex hooks feature flag is enabled in config.toml.
+    # Ensure the Codex hooks feature flag is enabled only when a non-none hook profile is installed.
     # The legacy codex_hooks key is deprecated in favor of hooks.
-    CODEX_CONFIG="$AGENT_HOME/config.toml"
-    if $DRY_RUN; then
-        dry "Ensure hooks = true in $CODEX_CONFIG"
-    else
-        ensure_codex_hooks_feature_flag "$CODEX_CONFIG"
+    if $INSTALL_HOOKS; then
+        CODEX_CONFIG="$AGENT_HOME/config.toml"
+        if $DRY_RUN; then
+            dry "Ensure hooks = true in $CODEX_CONFIG"
+        else
+            ensure_codex_hooks_feature_flag "$CODEX_CONFIG"
+        fi
     fi
 fi
 
@@ -1138,8 +1220,12 @@ if $INSTALL_HOOKS; then
     esac
 
     if [[ -n "$HOOKS_SETTINGS" && -f "$HOOKS_SETTINGS" ]]; then
+        PROFILED_HOOKS_SETTINGS="$(mktemp)"
+        write_profiled_hooks_settings "$HOOKS_SETTINGS" "$PROFILED_HOOKS_SETTINGS"
+        trap 'rm -f "$PROFILED_HOOKS_SETTINGS"' EXIT
         if $DRY_RUN; then
-            dry "Copy hook scripts to $HOOKS_TARGET/"
+            dry "Hook profile: $HOOK_PROFILE"
+            dry "Copy selected hook scripts to $HOOKS_TARGET/"
             if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
                 dry "Merge hook configuration into $AGENT_HOME/hooks.json"
             else
@@ -1151,6 +1237,9 @@ if $INSTALL_HOOKS; then
             if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
                 for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
                     hook_name="$(basename "$hook_script")"
+                    if ! hook_selected_for_profile "$hook_name"; then
+                        continue
+                    fi
                     # Post-tool diagnostic hooks are intentionally no longer
                     # installed by default; workflow-guard remains the
                     # universal tool-use hook across agents.
@@ -1200,7 +1289,7 @@ if $INSTALL_HOOKS; then
                         'exit 0' > "$HOOKS_TARGET/$legacy_hook"
                     chmod +x "$HOOKS_TARGET/$legacy_hook"
                 done
-                ok "Hook scripts -> $HOOKS_TARGET/"
+                ok "Hook scripts -> $HOOKS_TARGET/ ($HOOK_PROFILE profile)"
             else
                 info "No hook scripts found in $HOOKS_SOURCE/scripts/"
             fi
@@ -1255,7 +1344,7 @@ if $INSTALL_HOOKS; then
                         )
                         | with_entries(select((.value // []) | length > 0))
                     ' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
-                    new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
+                    new_hooks=$(jq '.hooks' "$PROFILED_HOOKS_SETTINGS")
                     if [[ "${CODEX_HOOKS:-}" == "true" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
                         new_hooks=$(printf '%s\n' "$new_hooks" | jq 'del(.PreCompact, .PostCompact)')
                         info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
@@ -1303,10 +1392,10 @@ if $INSTALL_HOOKS; then
                     fi
                 else
                     if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]] && command -v jq &>/dev/null; then
-                        jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
+                        jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$PROFILED_HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
                         ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
                     else
-                        cp "$HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
+                        cp "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
                         ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
                     fi
                 fi
@@ -1319,17 +1408,31 @@ if $INSTALL_HOOKS; then
                 if command -v jq &>/dev/null; then
                     # Use jq to merge (preserves existing settings)
                     existing_hooks=$(jq --arg agent "$AGENT" --arg hooks_target "$HOOKS_TARGET" '
-                        def removed_post_tool_hook_names:
+                        def assistant_framework_hook_names:
                             [
+                                "session-start.sh",
+                                "skill-router.sh",
+                                "learning-signals.sh",
+                                "workflow-enforcer.sh",
+                                "workflow-guard.sh",
+                                "stop-review.sh",
+                                "harness-gate.sh",
+                                "subagent-monitor.sh",
+                                "post-compact.sh",
+                                "pre-compress.sh",
+                                "session-end.sh",
                                 "post-tool-context.sh",
-                                "tool-failure-advisor.sh"
+                                "tool-failure-advisor.sh",
+                                "task-completed.sh",
+                                "task-journal-resolver.sh",
+                                "workflow-phase-gates.sh"
                             ];
                         def first_shell_token:
                             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-                        def removed_post_tool_hook_command:
+                        def assistant_framework_hook_command:
                             (. // "") as $command
                             | ($command | first_shell_token) as $token
-                            | any(removed_post_tool_hook_names[]; . as $hook_name |
+                            | any(assistant_framework_hook_names[]; . as $hook_name |
                                 $token == ("$HOME/." + $agent + "/hooks/assistant/" + $hook_name)
                                 or $token == ($hooks_target + "/" + $hook_name)
                                 or ($token | endswith("/." + $agent + "/hooks/assistant/" + $hook_name))
@@ -1342,7 +1445,7 @@ if $INSTALL_HOOKS; then
                                 | map(
                                     .hooks = (
                                         (.hooks // [])
-                                        | map(select(((.command // "") | removed_post_tool_hook_command) | not))
+                                        | map(select(((.command // "") | assistant_framework_hook_command) | not))
                                     )
                                 )
                                 | map(select((.hooks // []) | length > 0))
@@ -1350,7 +1453,7 @@ if $INSTALL_HOOKS; then
                         )
                         | with_entries(select((.value // []) | length > 0))
                     ' "$SETTINGS_FILE" 2>/dev/null || echo '{}')
-                    new_hooks=$(jq '.hooks' "$HOOKS_SETTINGS")
+                    new_hooks=$(jq '.hooks' "$PROFILED_HOOKS_SETTINGS")
 
                     # Array-aware merge: concatenate arrays per event key, merge
                     # matcher groups, and deduplicate hooks by command. This
@@ -1399,11 +1502,11 @@ if $INSTALL_HOOKS; then
                     fi
                 else
                     info "WARNING: jq not found. Hook scripts installed but settings.json not updated."
-                    info "Manually merge $HOOKS_SETTINGS into $SETTINGS_FILE"
+                    info "Manually merge $PROFILED_HOOKS_SETTINGS into $SETTINGS_FILE"
                 fi
             else
                 # No settings — copy hook settings as new file
-                cp "$HOOKS_SETTINGS" "$SETTINGS_FILE"
+                cp "$PROFILED_HOOKS_SETTINGS" "$SETTINGS_FILE"
                 ok "Created $SETTINGS_FILE with hook configuration"
             fi
         fi

@@ -2502,7 +2502,7 @@ echo ""
 
 echo "codex install"
 
-if test_start "codex install: workflow-guard installs and legacy post-tool shims are no-op"; then
+if test_start "codex strict install: workflow-guard installs and legacy post-tool shims are no-op"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.129.0")
     mkdir -p "$INSTALL_TEST_HOME/.codex/hooks/assistant"
@@ -2512,7 +2512,7 @@ if test_start "codex install: workflow-guard installs and legacy post-tool shims
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
 
-    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex \
+    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --hook-profile strict \
         > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
 
     INSTALL_STDOUT=$(cat "$local_tmp_out")
@@ -2620,7 +2620,7 @@ if test_start "codex install: installed compaction hooks detect Codex by script 
     rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
 fi
 
-if test_start "codex install: Codex 0.128 skips compaction hooks and keeps workflow-guard"; then
+if test_start "codex strict install: Codex 0.128 skips compaction hooks and keeps workflow-guard"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.128.0")
     mkdir -p "$INSTALL_TEST_HOME/.codex/hooks/assistant"
@@ -2630,7 +2630,7 @@ if test_start "codex install: Codex 0.128 skips compaction hooks and keeps workf
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
 
-    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex \
+    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --hook-profile strict \
         > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
 
     INSTALL_STDOUT=$(cat "$local_tmp_out")
