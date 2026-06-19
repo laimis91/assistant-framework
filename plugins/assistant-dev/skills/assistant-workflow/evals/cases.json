@@ -425,6 +425,73 @@
           "ignore the task journal"
         ]
       }
+    },
+    {
+      "id": "decomposition-plan-review-gates-medium-work",
+      "title": "Decomposition plan review gates medium work",
+      "category": "decomposition_plan_review",
+      "purpose": "Checks that medium+ work reviews component/subagent decomposition before spending implementation effort.",
+      "prompt": "Prepare a medium assistant-workflow implementation plan with several components and possible subagent execution.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The task is medium+ and has a component manifest with possible subagent dispatch.",
+        "The user did not explicitly ask for decomposition review.",
+        "The initial split may over-delegate, has unclear step budget, and must prove the output plan matches the requested deliverable."
+      ],
+      "expected_behavior": [
+        "Loads or applies references/decomposition-plan-review.md before leaving Decompose.",
+        "Checks scope understanding against accepted goals and acceptance criteria.",
+        "Checks component/subagent count sanity for the task size and risk.",
+        "Checks bounded step, round, time, or cost budget before dispatch.",
+        "Checks dependency order and shared-contract sequencing.",
+        "Checks output-plan match: artifacts, files, verification criteria, and expected success signals.",
+        "Records fallback path when subagents are unavailable or policy-disallowed.",
+        "Uses decision proceed, revise_decomposition, or return_to_discover and does not enter Plan unless decision is proceed.",
+        "Applies the decomposition review gate even when the user only asks for an implementation plan, not an explicit review."
+      ],
+      "pass_criteria": [
+        "The response includes a Decomposition Plan Review packet.",
+        "The packet includes scope understanding, component/subagent count, step/cost budget, dependency order, output-plan match, fallback path, and decision.",
+        "The response revises decomposition or returns to Discover when the split is excessive, unbounded, or output-mismatched.",
+        "The response carries the review packet into Plan for medium+ work.",
+        "The plan template includes the Decomposition Plan Review packet before task packets for medium+/large work."
+      ],
+      "fail_signals": [
+        "Skips decomposition review because components already exist.",
+        "Dispatches subagents before checking count sanity or budget.",
+        "Accepts an unbounded step budget.",
+        "Does not verify output artifacts or success signals match the requested deliverable.",
+        "Treats direct fallback as no evidence required.",
+        "Only performs decomposition review when the user explicitly asks for it."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Decomposition Plan Review",
+          "scope understanding",
+          "component/subagent count",
+          "step/cost budget",
+          "dependency order",
+          "output-plan match",
+          "fallback path",
+          "decision",
+          "proceed",
+          "revise_decomposition",
+          "return_to_discover",
+          "expected success signal",
+          "implementation plan",
+          "user did not explicitly ask",
+          "before task packets"
+        ],
+        "forbidden_substrings": [
+          "skip decomposition review",
+          "dispatch before review",
+          "unbounded step budget is fine",
+          "output plan does not matter",
+          "fallback requires no evidence",
+          "only if explicitly requested",
+          "no review needed for ordinary plan"
+        ]
+      }
     }
   ]
 }

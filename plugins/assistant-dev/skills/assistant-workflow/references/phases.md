@@ -135,11 +135,15 @@ Each criterion must be:
 Good: `[ ] GET /api/items returns 200 with JSON array`
 Bad: `[ ] API works correctly`
 
+### Decomposition Plan Review
+
+Before leaving Decompose for medium+ work, load `references/decomposition-plan-review.md` and review the component/subagent plan. Record the Decomposition Plan Review packet: scope understanding, component/subagent count sanity, step/cost budget, dependency order, output-plan match, fallback path, and decision (`proceed`, `revise_decomposition`, or `return_to_discover`). If the decision is not `proceed`, repair decomposition or return to Discover before Plan.
+
 ### Plan handoff
 
-Persist the component manifest and carry it into Plan. Do not wait for separate
+Persist the component manifest and Decomposition Plan Review packet, then carry both into Plan. Do not wait for separate
 component approval in Decompose; the Plan approval gate covers the component
-manifest, implementation packets, file scope, verification criteria, and risks
+manifest, decomposition review, implementation packets, file scope, verification criteria, and risks
 together. If decomposition exposes ambiguity, scope expansion, or competing
 valid approaches, return to Discover for clarification before planning.
 

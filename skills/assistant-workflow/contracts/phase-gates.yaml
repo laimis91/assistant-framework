@@ -156,6 +156,11 @@ gates:
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
+      - id: DC8
+        check: "For medium+ tasks: decomposition_plan_review exists and decision is proceed after checking scope understanding, component/subagent count sanity, step/cost budget, dependency order, output-plan match, and fallback path"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Load references/decomposition-plan-review.md, repair the component/subagent plan, and do not enter Plan until the review decision is proceed"
+
   # ─────────────────────────────────────────────
   # DECOMPOSE → PLAN (or PLAN directly for small)
   # ─────────────────────────────────────────────
