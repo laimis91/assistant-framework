@@ -236,6 +236,48 @@ artifacts:
     on_fail: "Create context map when configured and policy-allowed, or include context map in carried-forward plan/task packet"
     location: "{agent_state_dir}/context-map.md"
 
+  - name: context_budget_note
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
+    description: "Record of exact, summarized, omitted, and split/delegated context"
+    validation: "Must list exact/pinned material, summarized material, omitted/deferred material, and split/delegation plan or not_applicable reason"
+    on_fail: "Load references/context-budget-and-pattern-retrieval.md and add Context Budget note to plan/task packet"
+    object_fields:
+      - name: exact_pinned
+        type: string[]
+        required: true
+      - name: summarized
+        type: string[]
+        required: true
+      - name: omitted_or_deferred
+        type: string[]
+        required: true
+      - name: split_or_delegation_plan
+        type: string
+        required: true
+
+  - name: pattern_retrieval_note
+    type: object
+    required: conditional
+    condition: "editing framework skills, contracts, evals, hooks, templates, or workflow patterns"
+    description: "Local pattern retrieval record used before editing framework surfaces"
+    validation: "Must name real searched pattern paths/queries, canonical pattern path used, counterexample/edge case path checked, or explicit no-pattern rationale; template placeholders do not satisfy this artifact"
+    on_fail: "Search local repo for similar patterns and record the result before editing"
+    object_fields:
+      - name: similar_patterns_searched
+        type: string[]
+        required: true
+      - name: canonical_pattern_used
+        type: string
+        required: true
+      - name: counterexample_or_edge_case_checked
+        type: string
+        required: true
+      - name: no_pattern_rationale
+        type: string
+        required: false
+
   - name: component_manifest
     type: string
     required: true

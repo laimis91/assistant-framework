@@ -246,3 +246,18 @@ Use the Executable Task Packet structure for each implementation unit. Order pac
 | Medium | Standard | Promote to Full if the task touches auth, PII, payments, or infra |
 | Large | Full | Always |
 | Mega | Full (per sub-task) | Always |
+
+
+## Context Budget
+
+- Exact/pinned: [goal, acceptance criteria, safety constraints, exact errors, files in scope, validation requirements]
+- Summarized: [logs, tool output, conversation history, repetitive evidence]
+- Omitted/deferred: [out-of-scope files/results and why]
+- Split/delegation plan: [component/task split when material exceeds one faithful context]
+
+## Pattern Retrieval
+
+- Similar patterns searched: [real repo paths or search queries; no placeholders]
+- Canonical pattern used: [real repo path, or N/A with no-pattern rationale]
+- Counterexample/edge case checked: [real repo path, or N/A with explanation]
+- No-pattern rationale: [when no local pattern exists]

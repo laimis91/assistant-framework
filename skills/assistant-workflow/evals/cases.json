@@ -246,6 +246,79 @@
           "debugging is optional"
         ]
       }
+    },
+    {
+      "id": "large-task-records-context-budget-and-patterns",
+      "title": "Large task records context budget and patterns",
+      "category": "context_budget_pattern_retrieval",
+      "purpose": "Checks that assistant-workflow handles large context by preserving exact evidence, summarizing noise, splitting/delegating when needed, and retrieving local patterns before framework edits.",
+      "prompt": "Plan this medium+ assistant-framework change. The repo has long logs, many similar skill contracts, and several eval fixtures. Do not stuff everything into the prompt; prepare the implementation plan.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The task is medium+ and edits framework skill/contracts/evals surfaces.",
+        "There are long logs and many similar local patterns available in the repo."
+      ],
+      "expected_behavior": [
+        "Loads or applies context-budget-and-pattern-retrieval guidance.",
+        "Keeps goal, acceptance criteria, safety constraints, exact errors, files in scope, and validation requirements exact/pinned.",
+        "Summarizes repetitive logs/tool output/history after extracting evidence.",
+        "Lists omitted or deferred material with reasons.",
+        "Splits or delegates scope when material exceeds faithful single-context review.",
+        "Searches similar local skills/contracts/evals/hooks before editing.",
+        "Records canonical pattern used and counterexample/edge case checked, or explains no-pattern rationale.",
+        "Uses real local paths or search queries, not only placeholder labels, for similar patterns searched.",
+        "Names a concrete canonical pattern path such as a comparable skill contract/eval file, or gives an explicit no-pattern rationale.",
+        "Names a concrete counterexample/edge-case path or explains why none exists."
+      ],
+      "pass_criteria": [
+        "The plan includes Context Budget and Pattern Retrieval sections.",
+        "The Context Budget section includes exact/pinned, summarized, omitted/deferred, and split/delegation plan fields.",
+        "The Pattern Retrieval section includes similar patterns searched, canonical pattern used, and counterexample/edge case checked.",
+        "The plan avoids raw-log stuffing and does not proceed with a new framework shape without local pattern retrieval.",
+        "The Pattern Retrieval section contains non-placeholder repo paths or search queries.",
+        "The canonical pattern and counterexample/edge case are concrete paths or explicit no-pattern rationales."
+      ],
+      "fail_signals": [
+        "Includes all raw logs in the prompt.",
+        "Says context budget is unnecessary for medium+ work.",
+        "Skips local pattern search before editing framework contracts.",
+        "Does not say what was omitted or summarized.",
+        "Plans to review everything in one prompt without split or delegation rationale.",
+        "Leaves [paths/queries] or other placeholders in Pattern Retrieval.",
+        "Uses N/A for canonical pattern without no-pattern rationale.",
+        "Uses N/A for counterexample without explanation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Context Budget",
+          "Exact/pinned",
+          "Summarized",
+          "Omitted/deferred",
+          "Split/delegation plan",
+          "Pattern Retrieval",
+          "Similar patterns searched",
+          "Canonical pattern used",
+          "Counterexample/edge case checked",
+          "acceptance criteria",
+          "validation requirements",
+          "local patterns",
+          "skills/assistant-",
+          "contracts/",
+          "evals/cases.json",
+          "no-pattern rationale"
+        ],
+        "forbidden_substrings": [
+          "raw logs in full",
+          "context budget is unnecessary",
+          "skip local pattern search",
+          "review everything in one prompt",
+          "no need to summarize",
+          "[paths/queries]",
+          "Canonical pattern used: N/A",
+          "Counterexample/edge case checked: N/A",
+          "placeholder"
+        ]
+      }
     }
   ]
 }

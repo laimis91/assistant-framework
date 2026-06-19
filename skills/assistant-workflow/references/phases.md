@@ -8,7 +8,7 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
+For medium+ tasks or large review/research inputs, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
 
 For any task that needs clarification, create or update `{agent_state_dir}/task.md` during Discover only when local state artifacts are configured and policy-allowed. Otherwise, include the same state in the response before printing clarification questions or any clarification wait. Persist:
 - `Clarification status: ready | needs_clarification`
@@ -95,7 +95,7 @@ Think of components like LEGO bricks — each one is self-contained and testable
 
 **Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
-For medium+ tasks, dispatch an **Architect** to analyze the problem and propose component boundaries based on the context map, requirements, risk tier, and required gate packs.
+For medium+ tasks, dispatch an **Architect** to analyze the problem and propose component boundaries based on the context map, requirements, risk tier, required gate packs, and the Context Budget note. When editing framework skills/contracts/evals/hooks, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
 Print: `>> Dispatching Architect → component decomposition`
 

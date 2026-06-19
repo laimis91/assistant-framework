@@ -89,6 +89,11 @@ gates:
         check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
+      - id: D_CONTEXT_BUDGET
+        check: "For medium+ tasks or large material: context_budget_note records exact/pinned, summarized, omitted/deferred, and split/delegation plan"
+        condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
+        on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
+
       - id: D5
         check: "For medium+ tasks: context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
         condition: "size in [medium, large, mega]"
@@ -192,6 +197,11 @@ gates:
       - id: P8
         check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
+
+      - id: P_PATTERN_RETRIEVAL
+        check: "When editing framework skills, contracts, evals, hooks, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical pattern path used, and counterexample/edge case path checked or explicit no-pattern rationale"
+        condition: "task touches framework skills, contracts, evals, hooks, templates, or workflow patterns"
+        on_fail: "Search local repo for similar patterns and record Pattern Retrieval before implementation; placeholders such as [paths/queries] or N/A without rationale do not satisfy this gate"
 
       - id: P9
         check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md and aligned to Decompose components"
