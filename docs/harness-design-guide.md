@@ -48,7 +48,7 @@ Convention alone is insufficient — agents under pressure collapse roles. Use *
 The framework uses all four levels:
 - **Convention:** `assistant-workflow` SKILL.md defines the three-agent flow
 - **File gates:** Task journal must have plan approval before build, review entries before completion
-- **Hook enforcement:** `stop-review.sh` blocks stop without review; `harness-gate.sh` blocks stop without plan approval + rubric scores
+- **Hook enforcement:** `stop-review.sh` is the consolidated strict stop gate for review, plan approval, rubric scores, and metrics
 - **Tool-level:** Reviewer agent tools = `Read, Grep, Glob, LS` (no Edit, Write, or Bash)
 
 ---
@@ -198,16 +198,15 @@ On DRIFT detection, the next reviewer dispatch includes an explicitly stricter p
 
 Without structural enforcement, agents under time pressure will collapse the harness — skipping the plan, self-reviewing, or accepting low scores. Convention-based rules are like speed limit signs with no police.
 
-### Solution: Shell hooks that block completion
+### Solution: One shell stop hook that blocks completion
 
-The framework uses two complementary Stop hooks:
+The framework uses one consolidated Stop hook in strict profiles:
 
 | Hook | What It Checks | When It Blocks |
 |---|---|---|
-| `stop-review.sh` | Structured review, final result, and metrics happened | Task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without review entries, final result, or today's metrics |
-| `harness-gate.sh` | Full harness lifecycle | Medium+ task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without plan approval, rubric scores, or passing score |
+| `stop-review.sh` | Full strict stop lifecycle | Task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without required plan approval, review entries, final result, medium+ rubric score, or today's metrics |
 
-### harness-gate.sh checks (in order)
+### Consolidated stop-review.sh strict checks (in order)
 
 1. **Plan gate:** Task journal has `Plan approval: yes` or `PHASE: PLAN COMPLETE (approved)` → blocks if missing
 2. **Rubric gate:** Task journal has `Rubric:` and `Weighted:` lines in review entries → blocks if missing (medium+ only)
@@ -217,18 +216,18 @@ The framework uses two complementary Stop hooks:
 
 | Task Size | Enforcement |
 |---|---|
-| Small/trivial | `stop-review.sh` only (review, final result, and metrics happened) |
-| Medium+ | Both hooks (full harness lifecycle) |
+| Small/trivial | `stop-review.sh` checks review, final result, and metrics when strict workflow state is active |
+| Medium+ | `stop-review.sh` checks the full harness lifecycle: plan, review, rubric, score, and metrics |
 
 The hook detects task size by looking for `Triaged as: medium|large|mega` in the task journal — this is an explicit field in the journal template, not inferred from content.
 
 ### Loop prevention
 
-Both hooks include loop guards to prevent infinite blocking:
+The stop hook includes loop guards to prevent infinite blocking:
 - **Claude:** `stop_hook_active` flag in input JSON — if true, the hook already fired once, allow stop
-- **Gemini:** Temp file flag (`/tmp/.assistant-harness-gate-retry-{hash}`) — set on first retry, cleared on second invocation
+- **Gemini:** Temp file flag (`/tmp/.assistant-stop-review-retry-{hash}`) — set on first retry, cleared on second invocation
 
-Prompt-time runtime gate warnings are injected by `hooks/scripts/workflow-enforcer.sh`, with shared task-journal checks in `hooks/scripts/workflow-phase-gates.sh`. Stop-time blocking remains split between `hooks/scripts/stop-review.sh` and `hooks/scripts/harness-gate.sh`, registered in all three settings files (Claude, Gemini, Codex).
+Prompt-time runtime gate warnings are injected by `hooks/scripts/workflow-enforcer.sh`, with shared task-journal checks in `hooks/scripts/workflow-phase-gates.sh`. Stop-time blocking is consolidated in `hooks/scripts/stop-review.sh`, registered as the single strict stop gate in all three settings files (Claude, Gemini, Codex). `hooks/scripts/harness-gate.sh` remains only as a legacy compatibility script and reference implementation.
 
 ---
 

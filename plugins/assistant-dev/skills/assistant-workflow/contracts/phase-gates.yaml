@@ -3,13 +3,26 @@
 # Think of these as type checks at function boundaries — the output of phase N
 # must satisfy the input contract of phase N+1.
 #
-# Any agent executing this skill MUST evaluate all assertions for the current
+# Any agent executing this skill MUST evaluate `exit_assertions` for the current
 # phase before printing --- PHASE: {name} COMPLETE ---.
-# If any assertion fails, the agent MUST resolve it before proceeding.
+# If an exit assertion fails, the agent MUST resolve it before proceeding.
+# `guidance_assertions` are non-blocking reminders unless `strict_only` policy,
+# strict hooks, or explicit project policy opts into stricter enforcement.
+#
+# Gate severity is tiered to avoid turning every useful reminder into a hard
+# blocker. `exit_assertions` are blockers because missing them has caused real
+# failures. `guidance_assertions` are recommended checks that should shape the
+# work, but they do not by themselves block progress unless strict hooks or
+# project policy opt into stricter enforcement.
 
 schema_version: "1.0"
 contract: phase-gates
 skill: assistant-workflow
+
+gate_tiers:
+  blocker: "Prevents phase transition; missing evidence would make the workflow unsafe or unverifiable."
+  guidance: "Preferred discipline; record or follow when useful, but do not ask ritual questions or block low-risk progress solely for this item."
+  strict_only: "Enforced only when hook_profile == strict or project policy explicitly requests full harness enforcement."
 
 gates:
 
@@ -29,10 +42,6 @@ gates:
         check: "phases list is populated and matches the size-to-phases mapping table"
         on_fail: "Correct phases list to match the selected size"
 
-      - id: T3
-        check: "'>> Triaged as: {SIZE} — phases: {list}' message was printed to user"
-        on_fail: "Print the triage result before continuing"
-
       - id: T4
         check: "task_type is set to one of: feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike"
         on_fail: "Load references/triage-rubric.md and classify the work by task category before continuing"
@@ -49,9 +58,17 @@ gates:
         check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, and available/policy-allowed execution infrastructure"
         on_fail: "Select required workflow agents when available, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs"
 
+    guidance_assertions:
+
+      - id: T3
+        severity: guidance
+        check: "'>> Triaged as: {SIZE} — phases: {list}' message was printed to user when helpful for shared context"
+        on_fail: "Print or summarize the triage result before continuing when the user needs visibility"
+
       - id: T8
+        severity: guidance
         check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | gates={count} | agents={count}' message was printed to user"
-        on_fail: "Print structured triage metadata before continuing"
+        on_fail: "Print structured triage metadata when medium+ complexity or user visibility needs it"
 
   # ─────────────────────────────────────────────
   # DISCOVER → DECOMPOSE (medium+) / PLAN (small)
@@ -99,11 +116,6 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Dispatch Code Mapper or perform local mapping, then persist the context map to {agent_state_dir}/context-map.md when allowed; otherwise carry the context map content forward in the plan packet"
 
-      - id: D6
-        check: "For medium+ tasks: agent readiness score was assessed and printed"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Run agent readiness check and print score"
-
       - id: D7
         check: "constraints list is captured (may be empty, but must be explicitly set)"
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
@@ -117,6 +129,14 @@ gates:
         check: "For large+ tasks: execution paths were traced by Explorer subagent when available/policy-allowed, or traced directly in fallback mode with equivalent evidence"
         condition: "size in [large, mega]"
         on_fail: "Trace execution paths using an available Explorer subagent or direct fallback; record which path was used"
+
+    guidance_assertions:
+
+      - id: D6
+        severity: guidance
+        check: "For medium+ tasks: agent readiness score was assessed and printed when subagent routing is uncertain"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Run agent readiness check when delegation choice is material; otherwise record direct execution/fallback rationale"
 
   # ─────────────────────────────────────────────
   # DISCOVER → DECOMPOSE (medium+ only)
@@ -185,10 +205,6 @@ gates:
         check: "Each implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify"
         on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
 
-      - id: P3
-        check: "Risks section is populated — at minimum 'Low risk: single-file change' for small tasks"
-        on_fail: "Add risks section. Every plan has at least one risk, even if low."
-
       - id: P4
         check: "For medium+ tasks, user explicitly said 'approved' or 'approved with changes' to the plan, including the component manifest. For small tasks, the inline plan was printed and either no-wait eligibility was recorded or approval was requested for risk/ambiguity."
         on_fail: "For medium+ tasks, present the full plan including component manifest and wait for approval. For small tasks, record why the inline plan can proceed without waiting or request approval when risk/ambiguity requires it."
@@ -249,6 +265,13 @@ gates:
         condition: "search_mode == candidate_search"
         on_fail: "Print the plan deviation, update plan_deviation, and wait for user approval before Build continues"
 
+    guidance_assertions:
+
+      - id: P3
+        severity: guidance
+        check: "Risks section is populated — at minimum 'Low risk: single-file change' for small tasks"
+        on_fail: "Add risks section when risk is non-obvious; small obvious changes may state low-risk inline"
+
   # ─────────────────────────────────────────────
   # DESIGN → BUILD (UI tasks only)
   # ─────────────────────────────────────────────
@@ -308,27 +331,6 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Update the configured task journal when available, or the carried-forward task state packet when local state artifacts are unavailable/disallowed"
 
-      - id: B7
-        check: "Tests were written alongside code, not in a batch after all implementation"
-        on_fail: "This is a process violation. Note it in the configured task journal or equivalent carried-forward state for the reflection phase."
-
-      - id: B8
-        check: "SOLID principles checklist was evaluated for each implementation step (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega per references/prompts/solid-principles.md)"
-        on_fail: "Load references/prompts/solid-principles.md and evaluate the graduated checklist for each completed step. Fix any violations before proceeding to Review."
-
-      - id: B9
-        check: "Implementation was performed by Code Writer subagent when subagents are available/policy-allowed, or directly in fallback mode with the same plan/deviation/verification evidence"
-        on_fail: "Implement using an available Code Writer subagent or direct fallback; record which path was used"
-
-      - id: B10
-        check: "Build/test/validation was performed by Builder/Tester subagent when subagents are available/policy-allowed, or directly in fallback mode with equivalent command/result evidence"
-        on_fail: "Validate using an available Builder/Tester subagent or direct fallback; record which path was used"
-
-      - id: B11
-        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per component; otherwise direct fallback processed components sequentially with equivalent evidence"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Process each component separately using available subagents or direct fallback; do not batch all components without per-component evidence"
-
       - id: B12
         check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward component ledger"
         condition: "size in [medium, large, mega]"
@@ -338,6 +340,34 @@ gates:
         check: "For medium+ tasks: each component has a final status of VERIFIED, including self-check result, before the next component started"
         condition: "size in [medium, large, mega]"
         on_fail: "This is a process violation — components must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
+
+    guidance_assertions:
+
+      - id: B7
+        severity: guidance
+        check: "Tests were written alongside code, not in a batch after all implementation"
+        on_fail: "If batching happened, note it as process debt and ensure regression evidence still proves the behavior"
+
+      - id: B8
+        severity: guidance
+        check: "SOLID principles checklist was evaluated for each implementation step (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega per references/prompts/solid-principles.md)"
+        on_fail: "Load references/prompts/solid-principles.md when design risk is material; otherwise use code review to catch concrete violations"
+
+      - id: B9
+        severity: guidance
+        check: "Implementation was performed by Code Writer subagent when subagents are available/policy-allowed, or directly in fallback mode with the same plan/deviation/verification evidence"
+        on_fail: "Record whether implementation used a subagent or direct fallback when that affects review confidence"
+
+      - id: B10
+        severity: guidance
+        check: "Build/test/validation was performed by Builder/Tester subagent when subagents are available/policy-allowed, or directly in fallback mode with equivalent command/result evidence"
+        on_fail: "Record validation owner only when delegation is relevant; command/result evidence remains the blocker"
+
+      - id: B11
+        severity: guidance
+        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per component; otherwise direct fallback processed components sequentially with equivalent evidence"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Prefer component-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
 
   # ─────────────────────────────────────────────
   # REVIEW → DOCUMENT
@@ -377,12 +407,16 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Write Final Result entry in the configured task journal or equivalent carried-forward review state"
 
+    guidance_assertions:
+
       - id: R6
+        severity: strict_only
         check: "For medium+ tasks: rubric scores present in Quality Review entries (Rubric: and Weighted: lines)"
         condition: "size in [medium, large, mega]"
         on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
 
       - id: R7
+        severity: strict_only
         check: "For medium+ tasks: final rubric weighted score >= 3.0 (minimum completion threshold)"
         condition: "size in [medium, large, mega]"
         on_fail: "Weighted score below 3.0 — the code needs significant improvement. Fix lowest-scoring dimensions and re-review. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."

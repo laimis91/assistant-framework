@@ -16,7 +16,9 @@
 #
 # Behavior:
 #   Only activates when task journal is in BUILDING/VERIFYING/REVIEWING/DOCUMENTING state.
-#   Checks three conditions: (1) Review Log has a latest structured "### Spec Review #N"
+#   Consolidated strict stop gate checks plan approval, structured review, optional rubric scores,
+#   and metrics in one hook so users see one stop reason instead of competing hook blockers.
+#   Review checks require: (1) Review Log has a latest structured "### Spec Review #N"
 #   entry with "- Result: PASS" and resolved required fixes, (2) Review Log has a
 #   "### Quality Review #N" entry after that pass, (3) Review Log has a "- Result:"
 #   final summary line after that quality review.
@@ -77,6 +79,27 @@ if ! assistant_phase_status_is_lifecycle_active "$status"; then
     exit 0
 fi
 
+# Medium+ strict harness checks are consolidated here instead of registering a
+# second Stop/AfterAgent hook. Emit only the first actionable blocker.
+if assistant_phase_is_medium_plus "$TASK_FILE"; then
+    has_plan=$(grep -m1 -E "^(Plan approval:|## Plan)" "$TASK_FILE" 2>/dev/null || true)
+    if [[ -z "$has_plan" ]]; then
+        HARNESS_REASON="No plan found in task journal. Medium+ strict workflows require an approved plan before building. Run the Plan phase first."
+    elif ! assistant_phase_has_plan_approval "$TASK_FILE"; then
+        HARNESS_REASON="Plan exists but is not approved. Present the plan, wait for user approval, and record Plan approval: yes before continuing."
+    fi
+fi
+
+if [[ -n "${HARNESS_REASON:-}" ]]; then
+    if $IS_GEMINI; then
+        touch "${RETRY_FLAG}"
+        jq -n --arg reason "$HARNESS_REASON" '{decision: "retry", reason: $reason}'
+    else
+        jq -n --arg reason "$HARNESS_REASON" '{decision: "block", reason: $reason}'
+    fi
+    exit 0
+fi
+
 # Check if review cycle was completed:
 # 1. Review Log must have a latest structured Spec Review entry with Result: PASS
 #    and no unresolved required fixes
@@ -109,6 +132,33 @@ if [[ "$review_missing_key" != "complete" ]]; then
             decision: "block",
             reason: $reason
         }'
+    fi
+    exit 0
+fi
+
+if assistant_phase_is_medium_plus "$TASK_FILE"; then
+    has_rubric=$(grep -m1 -E "^- Rubric:" "$TASK_FILE" 2>/dev/null || true)
+    has_weighted=$(grep -m1 -E "^- Weighted:" "$TASK_FILE" 2>/dev/null || true)
+
+    if [[ -z "$has_rubric" || -z "$has_weighted" ]]; then
+        HARNESS_REASON="Quality review is complete but missing rubric scores. Medium+ strict workflows require '- Rubric:' and '- Weighted:' lines per references/review-rubric.md."
+    else
+        latest_weighted=$(grep -E "^- Weighted:" "$TASK_FILE" 2>/dev/null | tail -1 | grep -oE "[0-9]+\.[0-9]+" || true)
+        if [[ -n "$latest_weighted" ]]; then
+            score_x100=$(awk -v score="$latest_weighted" 'BEGIN { printf "%d", score * 100 }')
+            if [[ "$score_x100" -lt 300 ]]; then
+                HARNESS_REASON="Rubric weighted score ($latest_weighted) is below minimum threshold (3.0). Improve the lowest-scoring dimensions and rerun the review before stopping."
+            fi
+        fi
+    fi
+fi
+
+if [[ -n "${HARNESS_REASON:-}" ]]; then
+    if $IS_GEMINI; then
+        touch "${RETRY_FLAG}"
+        jq -n --arg reason "$HARNESS_REASON" '{decision: "retry", reason: $reason}'
+    else
+        jq -n --arg reason "$HARNESS_REASON" '{decision: "block", reason: $reason}'
     fi
     exit 0
 fi

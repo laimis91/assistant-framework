@@ -41,7 +41,7 @@ Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The curr
 ./install.sh --agent codex --plugin assistant-dev
 ```
 
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the nine development skills. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
+The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the nine development skills. These plugin-local copies are generated release artifacts from the root `skills/assistant-*` source of truth; verify or refresh them with `tools/plugins/sync-plugin-skills.sh --check` and `tools/plugins/sync-plugin-skills.sh --apply`. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
 
 Install a single skill:
 ```bash
@@ -55,7 +55,7 @@ Preview without making changes:
 
 Each skill auto-triggers independently based on what you're doing.
 
-Hook profiles control how much lifecycle automation is installed. The default is `minimal`: skill routing plus session/compaction context helpers. This follows the prompt-load reduction plan in `docs/instruction-overload-reduction.md`. Use `strict` only when you want the full enforcement stack (`workflow-enforcer`, guard, stop review, harness gate, etc.), or `none`/`--no-hooks` for skills only:
+Hook profiles control how much lifecycle automation is installed. The default is `minimal`: skill routing plus session/compaction context helpers. This follows the prompt-load reduction plan in `docs/instruction-overload-reduction.md`. Use `strict` only when you want the full enforcement stack (`workflow-enforcer`, guard, consolidated stop review, etc.), or `none`/`--no-hooks` for skills only:
 
 ```bash
 ./install.sh --agent claude --hook-profile minimal  # default, low-friction
@@ -468,8 +468,7 @@ Hooks fire automatically on agent lifecycle events. Installed for Claude Code, G
 | **Workflow guard** | Before tool use | Warns when direct edits happen during an active build/review workflow and keeps supported tool-use adjustments centralized |
 | **Pre-compress** | Before context compaction | Reminds agent to update task journal before state is lost |
 | **Post-compact** | After compaction completes | Re-injects task journal and feedback rules |
-| **Stop review** | Agent finishes responding during active build/review/document work | Enforces structured Spec Review, Quality Review, Final Result, and metrics before task handoff |
-| **Harness gate** | Agent finishes responding during medium+ active build/review/document work | Enforces approved plan, rubric scores, and minimum weighted score |
+| **Stop review** | Agent finishes responding during active build/review/document work | Consolidated strict stop gate: approved medium+ plan, structured Spec Review, Quality Review, Final Result, medium+ rubric score, and metrics before task handoff |
 | **Session end** | Session terminates | Logs reminder about uncaptured insights |
 
 These replace manual steps — you no longer need to ask "did you read the task journal?" or "do a fresh review".

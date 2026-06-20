@@ -1,6 +1,6 @@
 # Plugin Architecture Plan
 
-This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, plugin-local skill copies are scaffolded for `assistant-core`, `assistant-research`, and `assistant-dev`, and no root skill directories move in this slice.
+This document defines the planned plugin split for Assistant Framework V1. It is a contract-backed design artifact plus the source of truth for installer profile ownership. The current release still installs first-class skills from the root `skills/assistant-*` inventory by default, plugin-local skill copies are scaffolded for `assistant-core`, `assistant-research`, and `assistant-dev`, and no root skill directories move in this slice. Plugin-local skill copies are generated release artifacts from the root skill source of truth; keep them synchronized with `tools/plugins/sync-plugin-skills.sh --check` or `tools/plugins/sync-plugin-skills.sh --apply`.
 
 ## Goals
 

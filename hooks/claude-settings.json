@@ -70,10 +70,6 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/assistant/stop-review.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/assistant/harness-gate.sh"
           }
         ]
       }
