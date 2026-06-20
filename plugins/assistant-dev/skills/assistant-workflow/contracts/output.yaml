@@ -461,7 +461,7 @@ artifacts:
     required: conditional
     condition: "search_mode == candidate_search"
     description: "BES-style candidate-search result used before committing to a plan or when an approved plan needs a candidate pivot"
-    validation: "Contains goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, and plan_deviation when the selected candidate changes an approved plan."
+    validation: "Contains goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, search_exit_summary, and plan_deviation when the selected candidate changes an approved plan."
     on_fail: "Load references/candidate-search.md, reconstruct the archive from criteria/options considered, score candidates, and re-approve any post-approval plan deviation before Build continues"
     object_fields:
       - name: goal_tree
@@ -503,6 +503,33 @@ artifacts:
         type: string
         required: true
         validation: "{agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed; otherwise inline in the plan/task packet"
+      - name: search_exit_summary
+        type: object
+        required: true
+        validation: "Records the candidate-search budget and why search stopped; prevents unbounded option loops and success claims after empty or exhausted search"
+        object_fields:
+          - name: max_candidates
+            type: int
+            required: true
+            description: "Candidate budget chosen before search or the documented cap for this run"
+          - name: candidates_considered
+            type: int
+            required: true
+            description: "Number of candidates actually evaluated, including rejected candidates"
+          - name: repair_iterations
+            type: int
+            required: false
+            description: "Number of mutate/repair/pivot iterations used after initial candidates"
+            default: 0
+          - name: exit_reason
+            type: enum
+            required: true
+            enum_values: [selected, single_path_justified, max_budget, blocked, plan_deviation_pending_approval]
+            description: "Why candidate search stopped"
+          - name: empty_result_handling
+            type: string
+            required: true
+            description: "What happened if no viable candidate was found, or why this was not applicable"
       - name: plan_deviation
         type: string
         required: false
@@ -534,7 +561,7 @@ artifacts:
 # 3. When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: review_result.quality_review_status is not missing
 # 5. For medium+ tasks, component_verification_summary has one VERIFIED entry per component
-# 6. candidate_search_result exists when search_mode == candidate_search and any plan_deviation is approved before Build
+# 6. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
 # 7. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
   - name: verified_skill_distillation

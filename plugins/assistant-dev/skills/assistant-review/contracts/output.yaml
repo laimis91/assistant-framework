@@ -168,7 +168,7 @@ artifacts:
     required: conditional
     condition: "agentic_loop_safety_review_required is true"
     description: "Review of runaway-loop and repeated-tool-call safety risks"
-    validation: "Must state whether bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, and cost/token guardrails were checked"
+    validation: "Must state whether bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation were checked"
     object_fields:
       - name: bounded_execution
         type: string
@@ -186,6 +186,9 @@ artifacts:
         type: string
         required: true
       - name: cost_token_guardrails
+        type: string
+        required: true
+      - name: low_confidence_escalation
         type: string
         required: true
       - name: loop_safety_findings_summary

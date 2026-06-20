@@ -265,6 +265,11 @@ gates:
         condition: "search_mode == candidate_search"
         on_fail: "Print the plan deviation, update plan_deviation, and wait for user approval before Build continues"
 
+      - id: CS5
+        check: "When search_mode == candidate_search: candidate_search_result includes search_exit_summary with candidate budget, candidates considered, exit reason, and empty-result handling"
+        condition: "search_mode == candidate_search"
+        on_fail: "Add search_exit_summary before Plan completes so the search cannot be mistaken for an unbounded or silently exhausted loop"
+
     guidance_assertions:
 
       - id: P3

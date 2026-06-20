@@ -1046,6 +1046,6 @@ handoffs:
 # 1. Before dispatching: verify all required context_fields are populated
 # 2. After return: verify all required return_fields are present, including the worker status packet
 # 3. If on_missing_field action is "re-dispatch": retry once with explicit request
-# 4. If second dispatch also missing fields: log the gap, fill manually, and continue
-# 5. Never silently proceed with missing required fields — always log what was missing
+# 4. If second dispatch also misses required fields: log the gap and route to direct fallback, BLOCKED, or a degraded result with explicit evidence; do not fabricate required fields
+# 5. Never silently proceed with missing required fields — always log what was missing and how the missing evidence was resolved, deferred, or blocked
 # ─────────────────────────────────────────────

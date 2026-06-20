@@ -231,6 +231,10 @@ handoffs:
             type: string
             required: true
             description: "Whether paid API/model/subagent/large-context loops have budget awareness"
+          - name: low_confidence_escalation
+            type: string
+            required: true
+            description: "Whether insufficient evidence, uncertain outcomes, or low confidence route to escalation, fallback, BLOCKED, or degraded result instead of claiming success"
 
       - name: behavioral_contract_checks
         type: object
