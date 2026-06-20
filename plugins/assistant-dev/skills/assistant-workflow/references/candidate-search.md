@@ -106,6 +106,7 @@ Record:
 - selection reason
 - rejected candidates and why
 - archive location
+- search exit summary: max candidates, candidates considered, repair iterations, exit reason, and empty-result handling
 - whether this changes approved scope/files/behavior/risk
 
 Then write task packets from the selected candidate only. Rejected candidates are evidence, not scope permission.
@@ -148,6 +149,12 @@ If the pivot is implementation-local and does not change approved scope/files/be
 - Selected candidate:
 - Selection reason:
 - Rejected candidates:
+- Search exit summary:
+  - Max candidates:
+  - Candidates considered:
+  - Repair iterations:
+  - Exit reason: selected | single_path_justified | max_budget | blocked | plan_deviation_pending_approval
+  - Empty-result handling:
 - Plan deviation: none | [details and approval status]
 ```
 
@@ -160,4 +167,5 @@ Before Plan completes when `search_mode: candidate_search`:
 - At least two candidates are considered unless a one-path justification is explicit.
 - Scores use objective fit, verifiability, feasibility, risk, and simplicity.
 - Selected candidate has a clear verification path.
+- Search exit summary records the pre-set candidate budget, candidates considered, exit reason, and handling for empty/no-viable-result cases.
 - Post-approval pivots are recorded as plan deviations and re-approved when required.

@@ -41,6 +41,23 @@ else
     pass
 fi
 
+test_start "agentic loop safety review requires low-confidence escalation evidence"
+missing_loop_safety_terms=()
+for file in \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; do
+    if ! grep -Fq "low-confidence escalation" "$file" && ! grep -Fq "low_confidence_escalation" "$file"; then
+        missing_loop_safety_terms+=("$file")
+    fi
+done
+if [[ "${#missing_loop_safety_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "agentic loop safety lacks low-confidence escalation in: ${missing_loop_safety_terms[*]}"
+fi
+
 test_start "workflow templates and scripts do not use stale Build & Test or VERIFYING labels"
 if rg -n "Build & Test|VERIFYING" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" \
@@ -127,6 +144,8 @@ for term in \
     "goal_tree" \
     "candidate_archive" \
     "selected_candidate" \
+    "search_exit_summary" \
+    "empty_result_handling" \
     "plan_deviation"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
         missing_candidate_terms+=("output.yaml: $term")
@@ -135,6 +154,8 @@ done
 for term in \
     "CS1" \
     "candidate archive exists at {agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed" \
+    "CS5" \
+    "candidate_search_result includes search_exit_summary" \
     "Post-approval candidate pivots are recorded as plan deviations"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_candidate_terms+=("phase-gates.yaml: $term")
