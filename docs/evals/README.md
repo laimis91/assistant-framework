@@ -18,6 +18,7 @@ under common operating conditions:
 - per-slice verification before advancing
 - separate spec review and quality review gates
 - structured worker status packets from subagents
+- subagent authorization denial direct fallback
 - Codex role constraints without SubagentStart reinforcement
 
 ## Framework Instruction Fixtures

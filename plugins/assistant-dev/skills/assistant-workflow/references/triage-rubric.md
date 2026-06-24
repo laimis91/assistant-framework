@@ -10,6 +10,9 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 - `Risk tier`: `low`, `moderate`, `high`, or `critical`
 - `Triaged as`: `small`, `medium`, `large`, or `mega`
 - `Required agents`: the roles required by size and risk
+- `Subagent policy state`: `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, or `policy_disallowed`
+- `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
+- `Subagent authorization scope`: roles/phases/actions explicitly authorized by the user, or empty when none
 - `Required gates`: the common gates plus every applicable task-category gate pack
 - `Search mode`: `none`, `lightweight`, or `candidate_search`
 
@@ -102,4 +105,4 @@ Start from the size table in `references/subagent-dispatch.md`, then add risk-dr
 - `config/infra` gate: include Builder/Tester smoke or dry-run verification
 - `docs-only`: no Code Writer/Builder handoff unless runnable examples or generated docs change
 
-If required agents differ from the standard size flow, record the reason in the task journal.
+If required agents differ from the standard size flow, record the reason in the task journal. Required agents name role responsibilities; `Subagent execution mode` determines whether those roles are delegated or performed as direct fallback evidence.

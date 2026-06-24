@@ -36,6 +36,10 @@ Required gates:
 - [common gate or task-category gate from references/triage-rubric.md]
 Required agents:
 - [workflow role or skill required by size/risk/type]
+Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+Subagent execution mode: [delegated | direct_fallback | not_applicable]
+Subagent authorization scope:
+- [roles/phases/actions covered by user authorization, or none]
 Plan approval: [yes/no + date]
 
 ## Constraints
@@ -165,7 +169,7 @@ Plan approval: [yes/no + date]
 ## Lifecycle
 
 1. **Created** during Discover when clarification state must be tracked. Any task that enters clarification wait creates it before the wait; medium+ tasks also create it before leaving Discover even when no clarification wait is needed.
-2. **Triage metadata** — record `Task type`, `Risk tier`, `Required gates`, and `Required agents` before leaving Triage. Discovery may re-triage these fields when code/context evidence changes the risk or required gates.
+2. **Triage metadata** — record `Task type`, `Risk tier`, `Required gates`, `Required agents`, `Subagent policy state`, `Subagent execution mode`, and `Subagent authorization scope` before leaving Triage. Discovery may re-triage these fields when code/context evidence changes the risk or required gates.
 3. **Clarification** updates — question caps are maximums, not quotas. Clear medium+ tasks may record `Clarification questions asked: 0` with `Clarification confidence: high`. While waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, set confidence/cap/admissibility fields, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
 4. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the slice manifest before moving on to planning. Small tasks skip this state.
 5. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the slice manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.

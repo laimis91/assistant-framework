@@ -51,6 +51,34 @@ fields:
     default: []
     on_missing: skip
 
+  - name: subagent_policy_state
+    type: enum
+    required: false
+    enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+    description: "Whether subagent spawning is allowed for this task under the active adapter and user/tool policy"
+    validation: "Must describe the current authorization or availability state before any subagent dispatch occurs"
+    default: not_required
+    on_missing: infer
+    infer_from: "Use authorization_required when the active tool policy requires explicit user permission before spawning subagents; use delegation_authorized after explicit user approval; use authorization_denied when the user declines; use subagents_unavailable when the adapter has no subagent mechanism; use policy_disallowed when policy forbids spawning; use not_required when the workflow phase does not need subagents."
+
+  - name: subagent_execution_mode
+    type: enum
+    required: false
+    enum_values: [delegated, direct_fallback, not_applicable]
+    description: "How role responsibilities will be executed for this task"
+    validation: "delegated requires subagent_policy_state=delegation_authorized or not_required in an adapter that permits subagents; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable applies when no subagent role is required"
+    default: not_applicable
+    on_missing: infer
+    infer_from: "If required_agents is empty, use not_applicable. If subagent_policy_state is delegation_authorized, or not_required in an adapter that permits subagents, use delegated. If authorization is required but not granted, authorization is denied, subagents are unavailable, or policy disallows spawning, use direct_fallback."
+
+  - name: subagent_authorization_scope
+    type: string[]
+    required: false
+    description: "Roles, phases, or actions covered by explicit user authorization for subagent spawning"
+    validation: "Empty when no authorization was needed or granted. Non-empty when subagent_policy_state=delegation_authorized."
+    default: []
+    on_missing: skip
+
   - name: scope_hint
     type: enum
     required: false

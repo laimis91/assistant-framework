@@ -44,17 +44,18 @@ if jq -e '
       "review-loop-continues-after-findings",
       "small-fix-stays-lightweight",
       "spec-review-not-replaced-by-quality-review",
+      "subagent-authorization-denied-direct-fallback",
       "tdd-red-before-green-handoff",
       "worker-status-packet-required"
     ]))
-    and (.cases | length >= 13)
+    and (.cases | length >= 14)
 ' "$eval_fixture" >/dev/null; then
     pass
 else
     fail "eval JSON is invalid or missing required behavior cases"
 fi
 
-test_start "docs eval fixture JSON includes six new case areas"
+test_start "docs eval fixture JSON includes seven new case areas"
 if jq -e '
     def case_category($id; $category):
       any(.cases[]; .id == $id and .category == $category);
@@ -63,6 +64,7 @@ if jq -e '
     and case_category("per-slice-verification-before-advancing"; "slice_verification")
     and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
     and case_category("worker-status-packet-required"; "subagent_handoffs")
+    and case_category("subagent-authorization-denied-direct-fallback"; "subagent_authorization")
     and case_category("codex-role-constraints-without-subagentstart"; "role_constraints")
 ' "$eval_fixture" >/dev/null; then
     pass
@@ -107,6 +109,7 @@ for term in \
     "per-slice verification before advancing" \
     "separate spec review and quality review gates" \
     "structured worker status packets from subagents" \
+    "subagent authorization denial direct fallback" \
     "Codex role constraints without SubagentStart reinforcement"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/README.md"; then
         missing_eval_readme_terms+=("$term")

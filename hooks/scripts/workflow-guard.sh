@@ -5,7 +5,7 @@
 #
 # Purpose: Reinforce the orchestrator-only pattern. When a task journal is active,
 # the orchestrator should delegate file editing to sub-agents (code-writer,
-# builder-tester), not edit files directly. This hook injects a warning
+# builder-tester) only when delegation is authorized and available. This hook injects a warning
 # reminder — it does NOT block the action (sub-agents also trigger PreToolUse
 # and we can't distinguish them from the main agent).
 #
@@ -150,7 +150,7 @@ fi
 
 # Inject warning — NOT a block (sub-agents also trigger this hook)
 jq -cn --arg tool "$TOOL_NAME" '{
-  systemMessage: ("WARNING: You are using " + $tool + " directly during an active task. As the orchestrator, you should delegate file editing to sub-agents (code-writer for implementation, builder-tester for tests). Dispatch an agent instead of editing directly. If this is a sub-agent making this edit, disregard this warning.")
+  systemMessage: ("WARNING: You are using " + $tool + " directly during an active task. As the orchestrator, use code-writer/builder-tester subagents only when delegation is authorized and available. If subagent authorization is required and has not been granted, record direct fallback evidence instead of dispatching. If this is a sub-agent making this edit, disregard this warning.")
 }'
 
 exit 0

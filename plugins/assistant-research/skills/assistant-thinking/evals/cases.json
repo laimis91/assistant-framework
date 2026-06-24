@@ -28,6 +28,7 @@
         "Selects the perspectives thinking tool for an architecture and design decision.",
         "States the tool selection before analysis and follows the perspectives methodology.",
         "Includes distinct viewpoints such as architect, pragmatist, skeptic, and user advocate or equivalent roles.",
+        "Resolves and records whether perspective roles were delegated or run sequentially in fallback.",
         "Synthesizes convergences and tensions before giving a recommendation.",
         "Includes key insights, a recommendation, confidence, and a genuine dissenting view.",
         "Does not present unsupported free-form pros and cons as the full analysis."
@@ -36,6 +37,7 @@
         "The response names the selected tool as perspectives.",
         "The response uses perspective-based roles or rounds rather than ad-hoc reasoning.",
         "The recommendation is grounded in the structured analysis.",
+        "The response records the delegation path for the perspective roles.",
         "The confidence level reflects evidence and uncertainty instead of defaulting to high.",
         "The dissenting view is a real counterpoint to the recommendation."
       ],
@@ -52,6 +54,7 @@
           "pragmatist",
           "skeptic",
           "key insights",
+          "delegation path",
           "recommendation",
           "confidence",
           "dissenting view"
@@ -79,6 +82,7 @@
         "Selects the stress test thinking tool and treats the proposal as an argument to evaluate.",
         "Decomposes the proposal into testable claims or equivalent structured elements.",
         "Identifies vulnerabilities from multiple angles such as evidence, edge cases, alternatives, and pragmatism.",
+        "Resolves and records whether attack perspectives were delegated or run sequentially in fallback.",
         "Includes a steelman and a counter-argument before the verdict.",
         "Provides a recommendation with confidence and a dissenting view.",
         "Does not perform or require a live model call while evaluating the prompt."
@@ -87,6 +91,7 @@
         "The response names stress test as the selected tool or method.",
         "The response includes both steelman and counter-argument sections.",
         "The recommendation addresses offline/provider-neutral release constraints.",
+        "The response records the delegation path for the attack perspectives.",
         "The confidence level is justified by the analysis depth.",
         "The dissenting view is not suppressed even if the recommendation rejects the proposal."
       ],
@@ -103,6 +108,7 @@
           "vulnerabilities",
           "steelman",
           "counter-argument",
+          "delegation path",
           "recommendation",
           "confidence",
           "dissenting view"

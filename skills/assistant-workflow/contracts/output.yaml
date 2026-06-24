@@ -32,8 +32,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or hook_profile == strict or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, required_gates, required_agents, and search_mode selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, and search_mode"
+    validation: "Contains task_type, risk_tier, size, required_gates, required_agents, subagent policy state, execution mode, authorization scope, and search_mode selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, and search_mode"
     object_fields:
       - name: task_type
         type: enum
@@ -55,6 +55,20 @@ artifacts:
         type: string[]
         required: true
         validation: "Required workflow roles and skills selected from size, task type, and risk tier"
+      - name: subagent_policy_state
+        type: enum
+        required: true
+        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+        validation: "Resolved before any subagent dispatch. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or policy_disallowed before Build/Review."
+      - name: subagent_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, direct_fallback, not_applicable]
+        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning; not_applicable means no subagent role is needed."
+      - name: subagent_authorization_scope
+        type: string[]
+        required: true
+        validation: "Empty unless explicit authorization was granted. When populated, names the authorized roles, phases, or actions."
       - name: search_mode
         type: enum
         required: true

@@ -1,6 +1,8 @@
 # Review Handoff Contracts
 # Defines the data shape between Orchestrator and Reviewer subagent.
-# The review skill dispatches a fresh Reviewer each round for medium+ scope.
+# The review skill dispatches a fresh Reviewer each round for medium+ scope only
+# when subagent_execution_mode=delegated. Direct fallback uses the same review
+# fields as local evidence without spawning a subagent.
 
 schema_version: "1.0"
 contract: handoffs
@@ -32,7 +34,7 @@ handoffs:
     from: Orchestrator
     to: Reviewer
     phase: REVIEW_STEP
-    notes: "Fresh Reviewer dispatch each round for medium+ scope. For trivial/small, self-review is acceptable."
+    notes: "Fresh Reviewer dispatch each round for medium+ scope when subagent_execution_mode=delegated. For direct_fallback, preserve the same fields as local review evidence without spawning. For trivial/small, self-review is acceptable."
 
     context_fields:
       - name: review_material_snapshot
@@ -402,11 +404,11 @@ handoffs:
             required: false
             description: "If a critical finding caps the score, describe it here"
 
-    on_missing_field: "Re-dispatch Reviewer. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+    on_missing_field: "In delegated mode, re-dispatch Reviewer. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
 
 # ─────────────────────────────────────────────
 # Validation behavior:
-# 1. Before dispatch: verify all required context_fields are populated
+# 1. Before delegated dispatch or direct-fallback review: verify all required context_fields are populated
 # 2. Compute confidence_threshold from round number (not hardcoded in prompt)
 # 3. After return: verify status, findings[], summary, evidence, and verdict are all present
 # 4. Filter any findings with confidence_pct < confidence_threshold
@@ -414,5 +416,5 @@ handoffs:
 # 6. If rubric_required: verify rubric_scores is present with all dimensions
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
-# 9. If re-dispatch needed: include explicit note about what was missing
+# 9. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
 # ─────────────────────────────────────────────

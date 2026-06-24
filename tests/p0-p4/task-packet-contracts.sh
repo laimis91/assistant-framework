@@ -627,8 +627,15 @@ workflow_sync_pairs=(
     "skills/assistant-workflow/scripts/decompose.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/decompose.sh"
     "skills/assistant-workflow/scripts/check-integration.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/check-integration.sh"
     "skills/assistant-workflow/scripts/run-agents.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/run-agents.sh"
+    "skills/assistant-workflow/contracts/input.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml"
     "skills/assistant-workflow/contracts/output.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"
     "skills/assistant-workflow/contracts/handoffs.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml"
+    "skills/assistant-workflow/references/phases.md|plugins/assistant-dev/skills/assistant-workflow/references/phases.md"
+    "skills/assistant-workflow/references/plan-template.md|plugins/assistant-dev/skills/assistant-workflow/references/plan-template.md"
+    "skills/assistant-workflow/references/subagent-dispatch.md|plugins/assistant-dev/skills/assistant-workflow/references/subagent-dispatch.md"
+    "skills/assistant-workflow/references/task-journal-template.md|plugins/assistant-dev/skills/assistant-workflow/references/task-journal-template.md"
+    "skills/assistant-workflow/references/triage-rubric.md|plugins/assistant-dev/skills/assistant-workflow/references/triage-rubric.md"
     "skills/assistant-workflow/references/sub-task-brief-template.md|plugins/assistant-dev/skills/assistant-workflow/references/sub-task-brief-template.md"
     "skills/assistant-workflow/references/context-handoff-templates.md|plugins/assistant-dev/skills/assistant-workflow/references/context-handoff-templates.md"
     "skills/assistant-workflow/references/mega-and-patterns.md|plugins/assistant-dev/skills/assistant-workflow/references/mega-and-patterns.md"
@@ -646,25 +653,68 @@ else
     fail "assistant-workflow root/plugin mirrors differ: ${workflow_unsynced_pairs[*]}"
 fi
 
-test_start "workflow subagent permission gate is explicit before fallback"
+test_start "workflow subagent policy state gates delegation before fallback"
 missing_workflow_subagent_gate=()
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/SKILL.md"; do
-    for term in \
-        "For subagent roles and dispatch rules, load \`references/subagent-dispatch.md\`." \
-        "If the active tool policy permits subagents only after explicit user authorization" \
-        "ask for that delegation permission before switching to direct fallback" \
-        "This workflow expects Code Writer, Builder/Tester, and Reviewer subagents. May I use subagents for this task?"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing_workflow_subagent_gate+=("${file#$FRAMEWORK_DIR/}: $term")
+workflow_subagent_gate_surfaces=(
+    "skills/assistant-workflow/SKILL.md"
+    "skills/assistant-workflow/contracts/input.yaml"
+    "skills/assistant-workflow/contracts/output.yaml"
+    "skills/assistant-workflow/contracts/phase-gates.yaml"
+    "skills/assistant-workflow/references/subagent-dispatch.md"
+    "skills/assistant-workflow/references/phases.md"
+    "plugins/assistant-dev/skills/assistant-workflow/SKILL.md"
+    "plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml"
+    "plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml"
+    "plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"
+    "plugins/assistant-dev/skills/assistant-workflow/references/subagent-dispatch.md"
+    "plugins/assistant-dev/skills/assistant-workflow/references/phases.md"
+)
+for surface in "${workflow_subagent_gate_surfaces[@]}"; do
+    if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
+        missing_workflow_subagent_gate+=("$surface: file missing")
+    fi
+done
+workflow_subagent_gate_terms=(
+    "skills/assistant-workflow/SKILL.md|subagent_policy_state"
+    "skills/assistant-workflow/SKILL.md|subagent_execution_mode"
+    "skills/assistant-workflow/SKILL.md|subagent_authorization_scope"
+    "skills/assistant-workflow/SKILL.md|ask once"
+    "skills/assistant-workflow/SKILL.md|direct fallback with equivalent role, phase, verification, and review evidence"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state"
+    "skills/assistant-workflow/contracts/input.yaml|authorization_required"
+    "skills/assistant-workflow/contracts/input.yaml|delegation_authorized"
+    "skills/assistant-workflow/contracts/input.yaml|authorization_denied"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
+    "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/output.yaml|subagent_policy_state"
+    "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
+    "skills/assistant-workflow/contracts/output.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_AUTH"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|explicit user authorization is obtained before spawning any subagent"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with authorization_denied"
+    "skills/assistant-workflow/references/subagent-dispatch.md|Delegation Policy State"
+    "skills/assistant-workflow/references/subagent-dispatch.md|If the active tool policy requires explicit user authorization before spawning subagents, ask once"
+    "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
+    "skills/assistant-workflow/references/subagent-dispatch.md|MUST NOT spawn subagents"
+    "skills/assistant-workflow/references/subagent-dispatch.md|direct fallback evidence"
+    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
+    "skills/assistant-workflow/references/phases.md|subagent_execution_mode=delegated"
+    "skills/assistant-workflow/references/phases.md|Direct fallback mode"
+)
+for pair in "${workflow_subagent_gate_terms[@]}"; do
+    IFS='|' read -r root_surface term <<< "$pair"
+    plugin_surface="plugins/assistant-dev/$root_surface"
+    for surface in "$root_surface" "$plugin_surface"; do
+        if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$surface"; then
+            missing_workflow_subagent_gate+=("$surface: $term")
         fi
     done
 done
 if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-workflow must explicitly ask for subagent permission before direct fallback: ${missing_workflow_subagent_gate[*]}"
+    fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
 test_start "workflow live output plan and decomposition review reject stale sub-task framing"

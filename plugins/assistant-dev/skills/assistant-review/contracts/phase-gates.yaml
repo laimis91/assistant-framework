@@ -38,6 +38,10 @@ gates:
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required are resolved before review starts"
         on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
 
+      - id: E6
+        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are resolved before any Reviewer subagent dispatch"
+        on_fail: "Resolve the active adapter/tool policy. Ask once when explicit authorization is required, or set direct_fallback/not_applicable and record why no Reviewer subagent will be spawned."
+
   # ─────────────────────────────────────────────
   # REVIEW step — per round
   # ─────────────────────────────────────────────
@@ -47,17 +51,22 @@ gates:
     exit_assertions:
 
       - id: RS1
-        check: "For medium+ scope: a fresh Reviewer subagent was dispatched (not reusing prior context)"
-        condition: "scope_size in [medium, large]"
+        check: "For medium+ scope in delegated mode: a fresh Reviewer subagent was dispatched (not reusing prior context)"
+        condition: "scope_size in [medium, large] and subagent_execution_mode == delegated"
         on_fail: "Dispatch a new Reviewer subagent with the current review material snapshot and previously_fixed list"
 
+      - id: RS1A
+        check: "For medium+ scope in direct fallback mode: review context was reset or isolated enough to reduce stale-context risk, and that fresh-context evidence is recorded"
+        condition: "scope_size in [medium, large] and subagent_execution_mode == direct_fallback"
+        on_fail: "Create a fresh review material snapshot, clear stale assumptions, record direct-fallback review evidence, and do not claim a Reviewer subagent was dispatched"
+
       - id: RS2
-        check: "Reviewer received: review_material_snapshot, round number, previously_fixed list, and confidence_threshold"
-        on_fail: "Re-dispatch with all required context fields per handoffs contract"
+        check: "Reviewer or direct-fallback review context received: review_material_snapshot, round number, previously_fixed list, and confidence_threshold"
+        on_fail: "In delegated mode, re-dispatch with all required context fields per handoffs contract. In direct fallback mode, rebuild the fresh review context packet before continuing."
 
       - id: RS3
-        check: "Reviewer returned: findings[], summary, verdict — all present"
-        on_fail: "Re-dispatch Reviewer requesting the missing fields"
+        check: "Reviewer or direct-fallback review returned: findings[], summary, verdict — all present"
+        on_fail: "In delegated mode, re-dispatch Reviewer requesting the missing fields. In direct fallback mode, complete the missing review fields before evaluating."
 
       - id: RS4
         check: "No previously-fixed item was re-reported in findings"
@@ -66,26 +75,26 @@ gates:
       - id: RS5
         check: "For medium+ scope: rubric_scores is present in reviewer return with all 5 dimensions scored"
         condition: "scope_size in [medium, large]"
-        on_fail: "Re-dispatch Reviewer with rubric_required=true. Reference references/review-rubric.md for scoring instructions."
+        on_fail: "In delegated mode, re-dispatch Reviewer with rubric_required=true. In direct fallback mode, score the fresh review context before continuing. Reference references/review-rubric.md for scoring instructions."
 
       - id: RS6
-        check: "Reviewer applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
-        on_fail: "Re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only."
+        check: "Reviewer or direct-fallback review applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
+        on_fail: "In delegated mode, re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only. In direct fallback mode, complete principle_checks against the fresh review context."
 
       - id: RS7
-        check: "When semantic_contract_review_required is true: Reviewer applied the Semantic Contract Review Checklist and returned semantic_contract_checks"
+        check: "When semantic_contract_review_required is true: Reviewer or direct-fallback review applied the Semantic Contract Review Checklist and returned semantic_contract_checks"
         condition: "semantic_contract_review_required is true"
-        on_fail: "Re-dispatch Reviewer requesting semantic_contract_checks for inherited contracts, template-contract alignment, eval inheritance, external-method signature fidelity, high-stakes guards, and mirror-surface sync."
+        on_fail: "In delegated mode, re-dispatch Reviewer requesting semantic_contract_checks for inherited contracts, template-contract alignment, eval inheritance, external-method signature fidelity, high-stakes guards, and mirror-surface sync. In direct fallback mode, complete those semantic_contract_checks before declaring clean."
 
       - id: RS8
-        check: "When behavioral_contract_review_required is true: Reviewer applied the Behavioral Contract Review Checklist and returned behavioral_contract_checks"
+        check: "When behavioral_contract_review_required is true: Reviewer or direct-fallback review applied the Behavioral Contract Review Checklist and returned behavioral_contract_checks"
         condition: "behavioral_contract_review_required is true"
-        on_fail: "Re-dispatch Reviewer requesting behavioral_contract_checks for existing invariants, interface-implementation alignment, inherited tests, protocol/algorithm fidelity, high-impact guards, and runtime-surface sync."
+        on_fail: "In delegated mode, re-dispatch Reviewer requesting behavioral_contract_checks for existing invariants, interface-implementation alignment, inherited tests, protocol/algorithm fidelity, high-impact guards, and runtime-surface sync. In direct fallback mode, complete those behavioral_contract_checks before declaring clean."
 
       - id: RS9
-        check: "When agentic_loop_safety_review_required is true: Reviewer applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
+        check: "When agentic_loop_safety_review_required is true: Reviewer or direct-fallback review applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
         condition: "agentic_loop_safety_review_required is true"
-        on_fail: "Re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation."
+        on_fail: "In delegated mode, re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation. In direct fallback mode, complete those agentic_loop_safety_checks before declaring clean."
 
       - id: RS_RULE_DISTILLATION
         check: "When blocker/must-fix findings or recurring contract/checklist/eval gaps exist: review_finding_rule_distillation classifies them as one_off_fix, permanent_rule_candidate, or no_action with evidence and promotion decision"

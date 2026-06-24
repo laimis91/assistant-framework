@@ -8,7 +8,7 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks or large review/research inputs, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. For medium+ tasks, dispatch a **Code Mapper** to produce a context map (see `references/context-map-template.md`). The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also dispatch an **Explorer** to trace execution paths and understand behavior.
+For medium+ tasks or large review/research inputs, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. Resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before spawning any subagent. For medium+ tasks, produce a **Code Mapper** context map (see `references/context-map-template.md`) by dispatching Code Mapper only when `subagent_execution_mode=delegated`; otherwise produce the same map directly in fallback mode. The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also trace execution paths with Explorer in delegated mode or direct fallback in non-delegated mode.
 
 For any task that needs clarification, create or update `{agent_state_dir}/task.md` during Discover only when local state artifacts are configured and policy-allowed. Otherwise, include the same state in the response before printing clarification questions or any clarification wait. Persist:
 - `Clarification status: ready | needs_clarification`
@@ -27,8 +27,10 @@ Workflow state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/contex
 
 Discover does not complete while `Clarification status: needs_clarification`. Clarification waiting is a Discover substate, not a separate workflow phase.
 
-Print: `>> Dispatching Code Mapper → context map` (when applicable)
-Print: `>> Dispatching Explorer` (when applicable)
+Print: `>> Dispatching Code Mapper → context map` (when `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Code Mapper responsibility → context map` (when `subagent_execution_mode=direct_fallback`)
+Print: `>> Dispatching Explorer` (when `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mode=direct_fallback`)
 
 1. Read repo: README, CLAUDE.md, AGENTS.md, key files. Batch independent file reads/searches when the active tool policy supports parallel calls; use sequential reads otherwise.
 2. Compare current state against request
@@ -44,7 +46,7 @@ Print: `>> Dispatching Explorer` (when applicable)
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
 5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field only when the question is admissible. Admissible means the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
 6. Restate requirements in 1-3 sentences after clarification is resolved
-7. Confirm or revise `Task type`, `Risk tier`, `Required gates`, and `Required agents` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
+7. Confirm or revise `Task type`, `Risk tier`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 8. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
 **Clarification format:**
@@ -95,9 +97,10 @@ A slice is not a layer, folder, module, broad feature bucket, setup step, or bro
 
 **Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
-For medium+ tasks, dispatch an **Architect** to analyze the problem and propose slice boundaries based on the context map, requirements, risk tier, required gate packs, and the Context Budget note. When editing framework skills/contracts/evals/hooks, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
+For medium+ tasks, produce Architect-level slice boundaries based on the context map, requirements, risk tier, required gate packs, and the Context Budget note. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform direct fallback with equivalent criteria and evidence. When editing framework skills/contracts/evals/hooks, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
-Print: `>> Dispatching Architect → strict slice decomposition`
+Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
 
 ### Decomposition rules
 
@@ -163,9 +166,10 @@ Print: `--- PHASE: PLAN ---`
 
 **Goal:** Concrete, reviewable implementation plan.
 
-For large tasks, dispatch an **Architect** — it analyzes existing patterns (using Code Mapper/Explorer output) and returns a structured implementation blueprint.
+For large tasks, produce an Architect-level implementation blueprint from existing patterns and Code Mapper/Explorer output. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise produce the same blueprint directly in fallback mode.
 
-Print: `>> Dispatching Architect` (when applicable)
+Print: `>> Dispatching Architect` (when `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_mode=direct_fallback`)
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
 
@@ -182,7 +186,7 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 6. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
 6. Write ordered implementation steps with file paths
 7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-8. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+8. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
 9. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/slice criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
 10. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
@@ -236,15 +240,13 @@ Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay 
 
 ### Orchestrator delegation rule
 
-**Preferred when subagents are available:** the orchestrator does not edit project source files or write implementation/test code directly. Framework-owned state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, `{agent_state_dir}/working-buffer.md`) are the exception only when configured and policy-allowed, and may be updated directly. If local state files are unavailable, carry equivalent state in the plan/response packet. Project source changes go through sub-agents:
+**Delegated mode (`subagent_execution_mode=delegated`):** the orchestrator does not edit project source files or write implementation/test code directly. Framework-owned state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, `{agent_state_dir}/working-buffer.md`) are the exception only when configured and policy-allowed, and may be updated directly. If local state files are unavailable, carry equivalent state in the plan/response packet. Project source changes go through sub-agents:
 - **Code Writer** (`code-writer`): implements code following the plan
 - **Builder/Tester** (`builder-tester`): builds, writes tests, runs tests
 
-**Fallback when subagents are unavailable or policy-disallowed:** the active agent may implement, test, and review directly, but must preserve the same phases, contracts, evidence requirements, and review/security gates. Do not pretend delegation happened; record `subagents_unavailable` and the direct-execution evidence.
+**Direct fallback mode (`subagent_execution_mode=direct_fallback`):** when authorization is denied, subagents are unavailable, or policy disallows spawning, the active agent may implement, test, and review directly, but must preserve the same phases, contracts, evidence requirements, and review/security gates. Do not pretend delegation happened; record `subagent_policy_state`, `subagent_execution_mode`, and the direct-execution evidence.
 
-Think of the subagent path like a general who directs the battle but never picks up a rifle. When that infrastructure is unavailable, switch to the fallback path and keep the same evidence trail.
-
-For each non-TDD step: dispatch Code Writer with the plan step + context map when available, or execute directly in fallback mode → verify via Builder/Tester when available, or run verification directly in fallback mode → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
+For each non-TDD step: dispatch Code Writer with the plan step + context map only in delegated mode, or execute directly in fallback mode → verify via Builder/Tester only in delegated mode, or run verification directly in fallback mode → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
 
 ### Build loop
 
@@ -263,13 +265,15 @@ Before starting each medium+ slice:
 For the current slice task packet:
 
 Print: `>> Step [N]/[total]: [description]`
-Print: `>> Dispatching Code Writer → [step description]` (non-TDD)
-Print: `>> Dispatching Builder/Tester → RED evidence` (TDD active)
+Print: `>> Dispatching Code Writer → [step description]` (non-TDD, delegated mode)
+Print: `>> Direct fallback Code Writer responsibility → [step description]` (non-TDD, direct fallback mode)
+Print: `>> Dispatching Builder/Tester → RED evidence` (TDD active) when delegated mode is active
+Print: `>> Direct fallback Builder/Tester responsibility → RED evidence` (TDD active) when direct fallback mode is active
 
 1. Bugfix with unknown cause: complete `assistant-debugging` first, or record a concrete blocked/inconclusive debugging result. Do not patch until reproduction/root-cause evidence identifies a fix target or mitigation.
-2. Non-TDD: dispatch Code Writer for one plan step at a time, then dispatch Builder/Tester for build + test and update the task journal
-3. TDD active: run the TDD sandwich for the step, with Builder/Tester RED before Code Writer GREEN and Builder/Tester VERIFY/REFACTOR-SAFETY afterward. For bugfixes, the RED test must trace to the original reproduction/debugging evidence.
-4. If implementation or verification fails and the cause is unclear: return to `assistant-debugging` before another patch attempt; otherwise dispatch Code Writer to fix before the next step
+2. Non-TDD: in delegated mode, dispatch Code Writer for one plan step at a time, then Builder/Tester for build + test; in direct fallback, perform the same role responsibilities directly and update the task journal with role-equivalent evidence
+3. TDD active: run the TDD sandwich for the step, with Builder/Tester RED before Code Writer GREEN and Builder/Tester VERIFY/REFACTOR-SAFETY afterward. In direct fallback, preserve those role boundaries in the evidence even though one agent performs the work. For bugfixes, the RED test must trace to the original reproduction/debugging evidence.
+4. If implementation or verification fails and the cause is unclear: return to `assistant-debugging` before another patch attempt; otherwise dispatch Code Writer in delegated mode or perform the Code Writer responsibility directly in fallback mode before the next step
 4. Tests alongside code, not after
 5. **SOLID check** after each step: load `references/prompts/solid-principles.md` and evaluate the graduated checklist (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega). Fix violations before moving to the next step.
 6. **TDD mode** (when active): use the TDD sandwich per step:
@@ -285,7 +289,7 @@ Per-slice verification is a Build-phase gate. It does not replace the full Revie
 
 After implementation for a slice is done, verify the slice against its criteria from the DECOMPOSE phase before moving on:
 
-1. Dispatch Builder/Tester to run the slice's verification command and any relevant build/test checks from the task packet
+1. Dispatch Builder/Tester in delegated mode, or perform the Builder/Tester responsibility directly in fallback mode, to run the slice's verification command and any relevant build/test checks from the task packet
 2. Check each acceptance criterion from the slice manifest independently — mark pass/fail with the command/result or inspection evidence used
 3. Record verification evidence in the task journal slice verification ledger, including RED status when TDD was active, implementation status, command/result, criteria checked, and final status
 4. Run a small self-check/local sanity check: compare changed files and behavior against the task packet, constraints, and deviation rule; record the result in the ledger
@@ -348,10 +352,10 @@ Print: `>> Spec Review: [PASS / FAIL — found N required fixes]`
 
 Print: `>> Stage 2: Quality Review — loading assistant-review SKILL.md`
 
-**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 5 rounds) with visible progress. Do NOT implement the review loop inline when a delegated review agent is available — use the skill instructions so the loop is applied consistently.
+**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 5 rounds) with visible progress. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — use the skill instructions so the loop is applied consistently.
 
 The `assistant-review` skill will:
-- Dispatch Reviewer subagents
+- Dispatch Reviewer subagents in delegated mode, or preserve fresh-review evidence in direct fallback mode
 - Fix must-fix and should-fix items
 - Re-review automatically
 - Return a final clean/remaining summary

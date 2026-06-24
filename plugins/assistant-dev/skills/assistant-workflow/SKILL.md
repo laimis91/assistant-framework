@@ -197,7 +197,7 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 
 | Phase | When | Key Actions |
 |---|---|---|
-| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
+| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: produce Code Mapper context map via delegated mode or direct fallback. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
 | **Decompose** | Medium+ | Produce one or more smallest iterable slices with strict acceptance and verification fields. Feed the slice manifest into Plan. |
 | **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, slices, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
@@ -205,8 +205,7 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 | **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
-For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
-If the active tool policy permits subagents only after explicit user authorization, ask for that delegation permission before switching to direct fallback for code, test, or review work. A sufficient prompt is: `This workflow expects Code Writer, Builder/Tester, and Reviewer subagents. May I use subagents for this task?`
+For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. If the active tool policy requires explicit user authorization, ask once for the needed delegation scope. A sufficient prompt is: `This workflow expects Code Writer, Builder/Tester, and Reviewer subagents for [scope]. May I use subagents for this task?` If authorization is denied, subagents are unavailable, or policy disallows spawning, use direct fallback with equivalent role, phase, verification, and review evidence.
 For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 

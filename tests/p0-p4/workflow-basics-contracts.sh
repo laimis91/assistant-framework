@@ -80,6 +80,9 @@ for term in \
     "Risk tier" \
     "Required gates" \
     "Required agents" \
+    "Subagent policy state" \
+    "Subagent execution mode" \
+    "Subagent authorization scope" \
     "Bugfix" \
     "Feature" \
     "Refactor / Migration / Rewrite" \
@@ -100,16 +103,21 @@ done
 for term in \
     "risk_tier" \
     "required_gates" \
-    "required_agents"; do
+    "required_agents" \
+    "subagent_policy_state" \
+    "subagent_execution_mode" \
+    "subagent_authorization_scope"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
         missing_triage_terms+=("input.yaml: $term")
     fi
 done
 for term in \
     "T4" \
+    "T9" \
     "risk_tier is set" \
     "required_gates includes common gates" \
-    "required_agents or fallback execution roles are populated"; do
+    "required_agents or fallback execution roles are populated" \
+    "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_triage_terms+=("phase-gates.yaml: $term")
     fi
@@ -118,7 +126,10 @@ for term in \
     "Task type:" \
     "Risk tier:" \
     "Required gates:" \
-    "Required agents:"; do
+    "Required agents:" \
+    "Subagent policy state:" \
+    "Subagent execution mode:" \
+    "Subagent authorization scope:"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
         missing_triage_terms+=("task-journal-template.md: $term")
     fi

@@ -332,4 +332,32 @@ else
     fail "assistant-review clean-code principle lens is incomplete: ${review_principle_failures[*]}"
 fi
 
+test_start "assistant-review direct fallback does not require reviewer dispatch"
+review_fallback_failures=()
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+
+for file_and_term in \
+    "$review_skill::Use fresh direct-fallback review context" \
+    "$review_input::subagent_execution_mode" \
+    "$review_input::direct_fallback" \
+    "$review_output::review_delegation_path" \
+    "$review_output::fresh direct-fallback context" \
+    "$review_phases::RS1A" \
+    "$review_phases::In direct fallback mode, complete" \
+    "$review_handoffs::when subagent_execution_mode=delegated" \
+    "$review_handoffs::Direct fallback uses the same review" \
+    "$review_handoffs::In direct fallback mode, complete the local review evidence"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        review_fallback_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#review_fallback_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review direct fallback still implies mandatory Reviewer dispatch: ${review_fallback_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

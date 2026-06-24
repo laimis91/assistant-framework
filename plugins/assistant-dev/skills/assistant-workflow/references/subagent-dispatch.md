@@ -1,8 +1,20 @@
 # Subagent Dispatch — Roles and Rules
 
-Dispatch specialized agents instead of doing everything sequentially. Each has constrained access — a reviewer cannot edit files, a code writer doesn't run tests.
+Use specialized agents when the active tool policy and user authorization allow delegation. Each role has constrained access — a reviewer cannot edit files, a code writer doesn't run tests. When subagents are unavailable, denied, or policy-disallowed, keep the same role responsibilities as direct fallback evidence instead of pretending delegation happened.
 
 For full role prompts, read `references/subagent-roles.md`.
+
+## Delegation Policy State
+
+Before spawning any subagent, resolve:
+
+| Field | Values | Meaning |
+|---|---|---|
+| `subagent_policy_state` | `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, `policy_disallowed` | Whether spawning subagents is allowed for this task and adapter |
+| `subagent_execution_mode` | `delegated`, `direct_fallback`, `not_applicable` | Whether work is executed by subagents, by direct fallback with equivalent evidence, or without any subagent role |
+| `subagent_authorization_scope` | list of roles/phases/actions | What the user explicitly authorized, when authorization was required |
+
+If the active tool policy requires explicit user authorization before spawning subagents, ask once for the required scope before the first spawn. If the user declines, no subagent tool exists, or policy disallows spawning, use `direct_fallback` and preserve the same phase gates, role separation, verification evidence, and review evidence.
 
 ## Roles
 
@@ -26,7 +38,7 @@ For full role prompts, read `references/subagent-roles.md`.
 
 ## Phase-to-subagent requirements
 
-Every phase has a declared agent responsibility. Phases without subagent dispatch are handled directly by the Orchestrator with explicit justification.
+Every phase has a declared role responsibility. Phases without a subagent role are handled directly by the Orchestrator with explicit justification. Phases with a subagent role dispatch only when `subagent_execution_mode=delegated`; otherwise the Orchestrator records direct fallback evidence for the same role responsibility.
 
 | Phase | Subagent(s) | Condition | Justification |
 |---|---|---|---|
@@ -41,7 +53,7 @@ Every phase has a declared agent responsibility. Phases without subagent dispatc
 | **REVIEW** | Reviewer | All sizes | Independent review via `assistant-review` skill |
 | **DOCUMENT** | — (Orchestrator direct) | All sizes | Documentation generation is orchestrator's synthesis work |
 
-**Rule:** If a phase's subagent column shows a dispatch, you MUST dispatch it. The Orchestrator should not absorb subagent work — separation of concerns keeps each agent focused.
+**Rule:** If `subagent_execution_mode=delegated` and a phase's subagent column shows a dispatch, you MUST dispatch that role. If `subagent_execution_mode=direct_fallback`, you MUST NOT spawn subagents; instead record which role responsibility was handled directly and what equivalent evidence proves it.
 
 ## Dispatch rules by task size
 
@@ -54,10 +66,10 @@ Every phase has a declared agent responsibility. Phases without subagent dispatc
 
 ## Dispatch guidelines
 
-- **Every task gets at minimum**: Code Writer → Builder/Tester → Reviewer. No code ships without build + test + review.
-- **Every medium+ task gets Architect for decomposition**: The Architect proposes smallest iterable slice boundaries — the Orchestrator doesn't decompose alone.
+- **Every task gets at minimum**: Code Writer → Builder/Tester → Reviewer responsibilities. In delegated mode these are subagents; in direct fallback they are explicitly recorded role-equivalent steps. No code ships without build + test + review evidence.
+- **Every medium+ task gets Architect decomposition responsibility**: In delegated mode the Architect proposes smallest iterable slice boundaries; in direct fallback the same criteria and evidence are recorded directly.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)
 - **Code Mapper runs first** on medium+ tasks — its output feeds into Architect and Code Writer
-- **Reviewer gets a fresh dispatch each round** during the quality review loop — stale context weakens reviews
+- **Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is authorized; direct fallback must reset review context and record how stale-context risk was controlled
 - **Main session stays Orchestrator**: owns user communication, final integration, handoffs
 - **Do not dispatch agents for small inline tasks** within a larger workflow (e.g., a one-line fix during review doesn't need a Code Writer agent)

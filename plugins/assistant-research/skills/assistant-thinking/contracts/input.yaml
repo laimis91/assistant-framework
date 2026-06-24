@@ -24,6 +24,34 @@ fields:
     enum_values: [low, medium, high]
     on_missing: infer
 
+  - name: subagent_policy_state
+    type: enum
+    required: false
+    enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+    description: "Whether independent perspective/stress-test subagents may be spawned under the active adapter and user/tool policy"
+    validation: "Must be resolved before spawning subagents for perspectives or high-stakes stress tests"
+    default: not_required
+    on_missing: infer
+    infer_from: "Use authorization_required when the active tool policy requires explicit user permission before spawning subagents; use delegation_authorized after explicit user approval; use authorization_denied when the user declines; use subagents_unavailable when the adapter has no subagent mechanism; use policy_disallowed when policy forbids spawning; use not_required when the selected thinking tool does not need subagents."
+
+  - name: subagent_execution_mode
+    type: enum
+    required: false
+    enum_values: [delegated, sequential_fallback, not_applicable]
+    description: "Whether independent roles are executed by subagents, sequentially in the main session, or not needed"
+    validation: "delegated requires authorization or a policy that permits subagents; sequential_fallback is required when authorization is denied, subagents are unavailable, or policy disallows spawning"
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use delegated for authorized perspectives or high-stakes stress-test subagents. Use sequential_fallback when subagents are not authorized/available/allowed. Use not_applicable for tools that do not use independent subagents."
+
+  - name: subagent_authorization_scope
+    type: string[]
+    required: false
+    description: "Perspective roles or stress-test attack angles covered by explicit user authorization"
+    validation: "Empty unless explicit authorization was granted. Non-empty when subagent_policy_state=delegation_authorized."
+    default: []
+    on_missing: skip
+
   - name: existing_position
     type: string
     required: false

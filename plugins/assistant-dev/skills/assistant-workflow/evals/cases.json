@@ -453,7 +453,8 @@
         "Checks bounded step, round, time, or cost budget before dispatch.",
         "Checks dependency order and shared-contract sequencing.",
         "Checks output-plan match: artifacts, files, verification criteria, and expected success signals.",
-        "Records fallback path when subagents are unavailable or policy-disallowed.",
+        "Resolves subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope before any subagent dispatch.",
+        "Asks once when authorization is required, or records direct_fallback when authorization is denied, unavailable, or policy-disallowed.",
         "Uses decision proceed, revise_decomposition, or return_to_discover and does not enter Plan unless decision is proceed.",
         "Applies the decomposition review gate even when the user only asks for an implementation plan, not an explicit review."
       ],
@@ -466,7 +467,7 @@
       ],
       "fail_signals": [
         "Skips decomposition review because slices already exist.",
-        "Dispatches subagents before checking count sanity or budget.",
+        "Dispatches subagents before checking count sanity, budget, or subagent authorization state.",
         "Accepts an unbounded step budget.",
         "Does not verify output artifacts or success signals match the requested deliverable.",
         "Treats direct fallback as no evidence required.",
@@ -489,7 +490,11 @@
           "implementation plan",
           "user did not explicitly ask",
           "before task packets",
-          "broad-split rejection"
+          "broad-split rejection",
+          "subagent_policy_state",
+          "subagent_execution_mode",
+          "subagent_authorization_scope",
+          "direct_fallback"
         ],
         "forbidden_substrings": [
           "skip decomposition review",
@@ -497,6 +502,7 @@
           "unbounded step budget is fine",
           "output plan does not matter",
           "fallback requires no evidence",
+          "spawn subagents before authorization",
           "only if explicitly requested",
           "no review needed for ordinary plan",
           "component_manifest",

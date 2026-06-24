@@ -25,7 +25,7 @@ No separate plan document needed. Include directly in your response:
 
 ## Executable Task Packet
 
-For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan.
+For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
 
 ```markdown
 ### Task [ID]: [short name]
@@ -75,6 +75,9 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
+- Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+- Subagent execution mode: [delegated | direct_fallback | not_applicable]
+- Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)

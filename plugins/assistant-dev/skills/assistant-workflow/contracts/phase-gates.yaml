@@ -55,8 +55,12 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, and available/policy-allowed execution infrastructure"
-        on_fail: "Select required workflow agents when available, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs"
+        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode"
+        on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs"
+
+      - id: T9
+        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents"
+        on_fail: "Resolve the active adapter/tool policy. If explicit authorization is required, set subagent_policy_state=authorization_required and ask before spawning; otherwise set delegated, direct_fallback, or not_applicable."
 
     guidance_assertions:
 
@@ -83,7 +87,7 @@ gates:
         on_fail: "Write a requirements summary before proceeding"
 
       - id: D1A
-        check: "Discovery confirms or updates task_type, risk_tier, required_gates, and required_agents based on code/context evidence"
+        check: "Discovery confirms or updates task_type, risk_tier, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
         on_fail: "Re-triage with code/context evidence before proceeding"
 
       - id: D2
@@ -120,15 +124,19 @@ gates:
         check: "constraints list is captured (may be empty, but must be explicitly set)"
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
+      - id: D_SUBAGENT_AUTH
+        check: "If subagent_policy_state == authorization_required: explicit user authorization is obtained before spawning any subagent, or subagent_execution_mode is set to direct_fallback with authorization_denied, subagents_unavailable, or policy_disallowed evidence"
+        on_fail: "Ask once for the needed delegation scope before spawning subagents, or record direct fallback evidence and continue without pretending delegation happened"
+
       - id: D8
-        check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent evidence"
+        check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Produce a context map using an available subagent or direct fallback; record which path was used"
+        on_fail: "Produce a context map using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: D9
-        check: "For large+ tasks: execution paths were traced by Explorer subagent when available/policy-allowed, or traced directly in fallback mode with equivalent evidence"
+        check: "For large+ tasks: execution paths were traced by Explorer subagent when subagent_execution_mode=delegated, or traced directly in fallback mode with equivalent evidence"
         condition: "size in [large, mega]"
-        on_fail: "Trace execution paths using an available Explorer subagent or direct fallback; record which path was used"
+        on_fail: "Trace execution paths using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
     guidance_assertions:
 
@@ -168,9 +176,9 @@ gates:
         on_fail: "Convert broad layer/module/folder/feature/component or setup-only work into a smallest observable deliverable slice, or merge it into the slice that uses it"
 
       - id: DC6
-        check: "Slice decomposition was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent criteria and evidence"
+        check: "Slice decomposition was produced by Architect subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent criteria and evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Produce slice decomposition using an available Architect subagent or direct fallback; record which path was used"
+        on_fail: "Produce slice decomposition using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: DC7
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
@@ -219,9 +227,9 @@ gates:
         on_fail: "Fill Security and Operability sections per plan-template.md"
 
       - id: P7
-        check: "For large+ tasks: implementation blueprint was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent architectural analysis"
+        check: "For large+ tasks: implementation blueprint was produced by Architect subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent architectural analysis"
         condition: "size in [large, mega]"
-        on_fail: "Produce implementation blueprint using an available Architect subagent or direct fallback; record which path was used"
+        on_fail: "Produce implementation blueprint using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: P8
         check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
@@ -295,8 +303,8 @@ gates:
         on_fail: "Wait for design approval"
 
       - id: DS3
-        check: "Design direction proposal was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode before mockup creation"
-        on_fail: "Produce design direction using an available Architect subagent or direct fallback; record which path was used"
+        check: "Design direction proposal was produced by Architect subagent when subagent_execution_mode=delegated, or produced directly in fallback mode before mockup creation"
+        on_fail: "Produce design direction using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
   # ─────────────────────────────────────────────
   # BUILD → REVIEW
@@ -360,17 +368,17 @@ gates:
 
       - id: B9
         severity: guidance
-        check: "Implementation was performed by Code Writer subagent when subagents are available/policy-allowed, or directly in fallback mode with the same plan/deviation/verification evidence"
+        check: "Implementation was performed by Code Writer subagent when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
         on_fail: "Record whether implementation used a subagent or direct fallback when that affects review confidence"
 
       - id: B10
         severity: guidance
-        check: "Build/test/validation was performed by Builder/Tester subagent when subagents are available/policy-allowed, or directly in fallback mode with equivalent command/result evidence"
+        check: "Build/test/validation was performed by Builder/Tester subagent when subagent_execution_mode=delegated, or directly in fallback mode with equivalent command/result evidence"
         on_fail: "Record validation owner only when delegation is relevant; command/result evidence remains the blocker"
 
       - id: B11
         severity: guidance
-        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per slice; otherwise direct fallback processed slices sequentially with equivalent evidence"
+        check: "For medium+ tasks with subagent_execution_mode=delegated: Code Writer and Builder/Tester were dispatched per slice; otherwise direct fallback processed slices sequentially with equivalent evidence"
         condition: "size in [medium, large, mega]"
         on_fail: "Prefer slice-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
 
