@@ -16,7 +16,7 @@
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Agent does everything itself, never dispatches | Task triaged as "small" — dispatch rules say minimum is Code Writer → Builder/Tester → Reviewer but agent may interpret small tasks as "do it all inline" | Tell the agent explicitly: "use subagents for this task" |
+| Agent does everything itself, never dispatches | Subagent authorization was not granted, subagents are unavailable, policy disallows spawning, or the task was small enough for direct fallback | If you want delegation, explicitly say "use subagents for this task"; otherwise check that the response records direct fallback evidence |
 | Claude uses wrong subagent type | Skill file not loaded or outdated | Re-run `install.sh --agent claude`, verify `~/.claude/skills/assistant-workflow/SKILL.md` has the new 6-role table |
 | Codex says "unknown agent" | TOML files not installed | Check `ls ~/.codex/agents/*.toml` — should show 6 files |
 | Codex ignores agents entirely | Codex may not read `~/.codex/agents/` automatically | Check Codex docs for `agents_dir` config in `~/.codex/config.toml`, or verify with `codex --list-agents` |
@@ -45,10 +45,10 @@ grep "^name" ~/.codex/agents/*.toml
 
 ## If subagents still aren't used
 
-The most likely issue is that the agent **chooses not to** dispatch subagents because it judges the task as simple enough to handle alone. You can force it:
+First check whether subagent spawning is authorized and available for the active tool. If explicit authorization is required, the agent must not spawn subagents until you ask for them. You can authorize a scope explicitly:
 
 - "Use the code-mapper agent to map the codebase first"
 - "Dispatch a reviewer subagent for the quality review"
 - "Run Code Writer and Builder/Tester as separate agents, not inline"
 
-If this happens consistently, it may mean the dispatch rules in the skill need stronger language (e.g., "MUST dispatch" instead of "dispatch"). Update the wording in `skills/assistant-workflow/SKILL.md` under the "Dispatch rules by task size" section to use MUST instead of suggested language, then re-run `install.sh`.
+If this happens consistently after authorization, check that `subagent_policy_state=delegation_authorized` and `subagent_execution_mode=delegated` are recorded. If authorization is denied, unavailable, or policy-disallowed, the correct behavior is direct fallback with equivalent role, verification, and review evidence.

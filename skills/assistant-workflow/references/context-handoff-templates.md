@@ -132,41 +132,41 @@ Files changed so far:
 Continue from step [N].
 ```
 
-## Template 3: Starting a sub-task session
+## Template 3: Starting a strict slice packet session
 
-When starting a decomposed sub-task:
+When starting a decomposed slice:
 
 ```
-[Paste the Sub-Task Brief from the decomposition phase]
+[Paste the strict slice brief / slice packet from the decomposition phase]
 
 The repo is attached. Run the standard workflow:
 Plan → [Design if UI] → Build.
 
 Follow project conventions. Do not modify files outside your scope.
-Work on branch: [branch name].
+Work on branch: feature/[mega-task]/slice-[slice_id].
 ```
 
 ## Template 4: Integration session
 
-When all sub-tasks are done:
+When all slices are verified:
 
 ```
 Integration phase for [project name].
 
-Completed sub-tasks:
+Completed verified slices:
 1. [name]: [what was built, key files changed, branch]
 2. [name]: [what was built, key files changed, branch]
 3. [name]: [what was built, key files changed, branch]
 
-Shared contracts: [list interfaces/DTOs/schemas]
+Verified prerequisite slice outputs: [list interfaces/DTOs/schemas/artifacts/configs with evidence]
 
 Integrate:
-1. Merge all sub-task branches into integration branch
+1. Merge all slice branches into integration branch
 2. Resolve conflicts
-3. Verify all contracts are correctly implemented
-4. Wire components together (DI, routes, configs)
+3. Confirm verified prerequisite slice outputs are present and consumed
+4. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
 5. Run full integration test suite
-6. Fix mismatches
+6. Fix integration mismatches
 
 [Include relevant file paths]
 ```

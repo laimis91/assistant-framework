@@ -1,19 +1,19 @@
 # Spec Compliance Review (Stage 1)
 
-Use this before quality review. This review answers one question: did the actual change implement the approved task packet/component, and only that packet/component?
+Use this before quality review. This review answers one question: did the actual change implement the approved task packet/slice, and only that task packet/slice?
 
 Quality review cannot satisfy this review. Code style, architecture, and maintainability feedback belongs in Stage 2.
 
 ## Inputs
 
-- Approved plan or task packet/component manifest
+- Approved plan or task packet/slice manifest
 - Changed files list and `git diff`
 - Build/test/verification evidence recorded during Build
-- Task journal component verification ledger for medium+ tasks
+- Task journal slice verification ledger for medium+ tasks
 
 ## Protocol
 
-1. Check each approved task packet/component against the actual changes.
+1. Check each approved task packet/slice against the actual changes.
 2. Confirm every acceptance criterion is implemented or explicitly deferred with approval.
 3. Confirm changed files match the approved file list, or each mismatch has an approved deviation.
 4. Confirm verification evidence matches the required command, expected success signal, and criteria checked.
@@ -25,7 +25,7 @@ Quality review cannot satisfy this review. Code style, architecture, and maintai
 ```markdown
 ### Spec Review #[N]: [task name]
 - Result: PASS | FAIL
-- Scope reviewed: [plan step(s), task packet(s), or component(s)]
+- Scope reviewed: [plan step(s), task packet(s), or slice(s)]
 - Missing acceptance criteria: [none, or list]
 - Extra scope: [none, or list with file paths and disposition]
 - Changed files mismatch: [none, or expected vs actual]

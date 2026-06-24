@@ -197,15 +197,15 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 
 | Phase | When | Key Actions |
 |---|---|---|
-| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
-| **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Feed the manifest into Plan. |
-| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, components, and build plan. |
+| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: produce Code Mapper context map via delegated mode or direct fallback. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
+| **Decompose** | Medium+ | Produce one or more smallest iterable slices with strict acceptance and verification fields. Feed the slice manifest into Plan. |
+| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, slices, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
 | **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
 | **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
-For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
+For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. If the active tool policy requires explicit user authorization, ask once for the needed delegation scope. A sufficient prompt is: `This workflow expects Code Writer, Builder/Tester, and Reviewer subagents for [scope]. May I use subagents for this task?` If authorization is denied, subagents are unavailable, or policy disallows spawning, use direct fallback with equivalent role, phase, verification, and review evidence.
 For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 
@@ -249,7 +249,7 @@ Review findings must cite evidence and concrete risk. Avoid generic style feedba
 - **On continuation**: read the active project task journal FIRST; it has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
-- Mega: each sub-task gets its own brief and context.
+- Mega: each slice gets its own strict slice brief and context.
 - Files >500 lines: search first, read sections as needed.
 - After 3+ build/fix iterations: summarize and drop stale context.
 

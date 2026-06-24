@@ -27,7 +27,7 @@ This skill enforces strict contracts on inputs, outputs, loop gates, and reviewe
 **Rules:**
 - Resolve all input contract fields before entering the loop
 - Check phase gate assertions at every step transition within each round
-- Include all required context fields when dispatching Reviewer subagents
+- Include all required context fields when dispatching Reviewer subagents, and record direct-fallback review evidence when subagents are not authorized/available/allowed
 - Validate all required return fields when Reviewer completes
 - Verify all output contract artifacts before presenting the final summary
 
@@ -218,7 +218,9 @@ score_history = []
 while round <= 5:
 
   1. REVIEW
-     - Dispatch a Reviewer subagent (or self-review for small scope)
+     - Dispatch a fresh Reviewer subagent when `subagent_execution_mode=delegated`
+     - Use fresh direct-fallback review context when `subagent_execution_mode=direct_fallback`
+     - Use self-review only for trivial/small scope or direct fallback mode with recorded fresh-context evidence
      - Provide: review material snapshot, previously_fixed list, round number
      - First run Spec Review against the user request and acceptance criteria
      - For agent/workflow/tool loop changes: apply the Agentic Loop Safety Checklist before declaring clean

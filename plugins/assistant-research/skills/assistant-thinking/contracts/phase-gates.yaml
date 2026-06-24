@@ -24,6 +24,9 @@ gates:
       - id: A2
         check: "Analysis depth matches the stakes level (low/medium/high)"
         on_fail: "Deepen the analysis for high-stakes problems or simplify for low-stakes"
+      - id: A3
+        check: "For perspectives and high-stakes stress_test: subagent_policy_state and subagent_execution_mode are resolved before any subagent spawn; sequential fallback is recorded when authorization is denied, unavailable, or policy-disallowed"
+        on_fail: "Ask once for explicit delegation authorization when required, or run roles/angles sequentially and record the fallback path"
 
   - phase: SYNTHESIS
     checkpoint_start: "--- PHASE: SYNTHESIS ---"
@@ -48,3 +51,7 @@ invariants:
     check: "Dissenting views are considered, not suppressed"
     scope: all_phases
     on_fail: "Identify and articulate the strongest counter-argument to the recommendation"
+  - id: INV3
+    check: "The analysis never claims subagents were used unless subagent_execution_mode=delegated"
+    scope: all_phases
+    on_fail: "Correct the synthesis to distinguish delegated execution from sequential fallback"

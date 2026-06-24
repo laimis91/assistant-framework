@@ -25,10 +25,14 @@ No separate plan document needed. Include directly in your response:
 
 ## Executable Task Packet
 
-For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan.
+For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
 
 ```markdown
 ### Task [ID]: [short name]
+- name: [task packet name; must populate current_task_packet.name]
+- Slice: [slice_id] [slice_name, or "N/A for small task"]
+- Observable increment: [what becomes visible/verifiable after this slice]
+- Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Behavior / acceptance criteria:
   - [binary observable behavior]
   - [binary observable behavior]
@@ -36,15 +40,21 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
   - Test: [exact test paths or "none"]
+- Enabling changes included:
+  - [setup, contracts, wiring, or "none"]
+- Depends on: [slice ids or "none"]
 - TDD / RED step:
-  - Applies: [yes/no]
+  - tdd_applies: [true/false]
   - RED command: [command or "N/A"]
   - Expected failure: [specific failing test/assertion or "N/A"]
 - Implementation notes / constraints:
-  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+  - implementation_notes:
+    - [existing pattern to follow, dependency rule, non-goal, or boundary]
 - Verification:
   - Command: [exact command]
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Evidence to record:
+  - [test result, eval fixture, changed file, review note, or artifact proof]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -65,6 +75,9 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
+- Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+- Subagent execution mode: [delegated | direct_fallback | not_applicable]
+- Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)
@@ -98,7 +111,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ### Candidate search summary
 - Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
 - Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
-- Goal tree source: [acceptance criteria/component criteria used]
+- Goal tree source: [acceptance criteria/slice criteria used]
 
 ### Options
 1. [approach] — [tradeoff]
@@ -113,11 +126,12 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Decomposition Plan Review
 
 - Scope understanding: [pass/fix needed + evidence]
-- Component/subagent count: [count + sanity rationale]
+- Slice/subagent count: [count + sanity rationale]
 - Step/cost budget: [budget or direct-fallback rationale]
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
 - Fallback path: [subagent path or direct equivalent]
+- Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
 - Decision: proceed | revise_decomposition | return_to_discover
 
 ## Artifact Contract
@@ -131,25 +145,55 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
+## Slice manifest from Decompose
+
+[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
+
+- slice_id:
+- name:
+- observable_increment:
+- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
+- acceptance_criteria:
+- files_to_create:
+- files_to_modify:
+- files_to_test:
+- enabling_changes_included:
+- depends_on:
+- verification_command:
+- expected_success_signal:
+- evidence_to_record:
+- deviation_rollback_rule:
+- single_slice_rationale: [required only when exactly one slice exists]
+
 ## Task packets
-Use the Executable Task Packet structure for each implementation unit. Order packets by dependency and align each packet to one component from Decompose when components exist.
+Use the Executable Task Packet structure for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
 
 ### Task [ID]: [short name]
+- name: [task packet name; must populate current_task_packet.name]
+- Slice: [slice_id] [slice_name]
+- Observable increment: [what becomes visible/verifiable after this slice]
+- Deliverable type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - Behavior / acceptance criteria:
   - [binary observable behavior]
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
   - Test: [exact test paths or "none"]
+- Enabling changes included:
+  - [setup, contracts, wiring, or "none"]
+- Depends on: [slice ids or "none"]
 - TDD / RED step:
-  - Applies: [yes/no]
+  - tdd_applies: [true/false]
   - RED command: [command or "N/A"]
   - Expected failure: [specific failing test/assertion or "N/A"]
 - Implementation notes / constraints:
-  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+  - implementation_notes:
+    - [existing pattern to follow, dependency rule, non-goal, or boundary]
 - Verification:
   - Command: [exact command]
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Evidence to record:
+  - [test result, eval fixture, changed file, review note, or artifact proof]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -227,7 +271,7 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 ### Candidate search summary
 - Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
 - Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
-- Goal tree source: [acceptance criteria/component criteria used]
+- Goal tree source: [acceptance criteria/slice criteria used]
 
 ### Options
 1. [approach] — [tradeoff]
@@ -242,32 +286,63 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 ## Decomposition Plan Review
 
 - Scope understanding: [pass/fix needed + evidence]
-- Component/subagent count: [count + sanity rationale]
+- Slice/subagent count: [count + sanity rationale]
 - Step/cost budget: [budget or direct-fallback rationale]
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
 - Fallback path: [subagent path or direct equivalent]
+- Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
 - Decision: proceed | revise_decomposition | return_to_discover
 
+## Slice manifest from Decompose
+
+[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
+
+- slice_id:
+- name:
+- observable_increment:
+- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
+- acceptance_criteria:
+- files_to_create:
+- files_to_modify:
+- files_to_test:
+- enabling_changes_included:
+- depends_on:
+- verification_command:
+- expected_success_signal:
+- evidence_to_record:
+- deviation_rollback_rule:
+- single_slice_rationale: [required only when exactly one slice exists]
+
 ## Task packets
-Use the Executable Task Packet structure for each implementation unit. Order packets by dependency, align packets to Decompose components, and keep each packet independently verifiable before the next component starts.
+Use the Executable Task Packet structure for each approved slice. Order packets by dependency, consume the Decompose slice manifest directly, and keep each slice independently verifiable before the next slice starts.
 
 ### Task [ID]: [short name]
+- name: [task packet name; must populate current_task_packet.name]
+- Slice: [slice_id] [slice_name]
+- Observable increment: [what becomes visible/verifiable after this slice]
+- Deliverable type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - Behavior / acceptance criteria:
   - [binary observable behavior]
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
   - Test: [exact test paths or "none"]
+- Enabling changes included:
+  - [setup, contracts, wiring, or "none"]
+- Depends on: [slice ids or "none"]
 - TDD / RED step:
-  - Applies: [yes/no]
+  - tdd_applies: [true/false]
   - RED command: [command or "N/A"]
   - Expected failure: [specific failing test/assertion or "N/A"]
 - Implementation notes / constraints:
-  - [existing pattern to follow, dependency rule, non-goal, or boundary]
+  - implementation_notes:
+    - [existing pattern to follow, dependency rule, non-goal, or boundary]
 - Verification:
   - Command: [exact command]
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+- Evidence to record:
+  - [test result, eval fixture, changed file, review note, or artifact proof]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -285,7 +360,7 @@ Use the Executable Task Packet structure for each implementation unit. Order pac
 | Small | Inline | Never — if it needs these, re-triage as Medium |
 | Medium | Standard | Promote to Full if the task touches auth, PII, payments, or infra |
 | Large | Full | Always |
-| Mega | Full (per sub-task) | Always |
+| Mega | Full (per slice) | Always |
 
 
 ## Context Budget
@@ -293,7 +368,7 @@ Use the Executable Task Packet structure for each implementation unit. Order pac
 - Exact/pinned: [goal, acceptance criteria, safety constraints, exact errors, files in scope, validation requirements]
 - Summarized: [logs, tool output, conversation history, repetitive evidence]
 - Omitted/deferred: [out-of-scope files/results and why]
-- Split/delegation plan: [component/task split when material exceeds one faithful context]
+- Split/delegation plan: [slice/task split when material exceeds one faithful context]
 
 ## Pattern Retrieval
 

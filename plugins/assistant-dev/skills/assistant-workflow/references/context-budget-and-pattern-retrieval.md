@@ -24,7 +24,7 @@ Use this reference when a task has large review/research material, many files, l
    - Secrets or proprietary values that are not needed for continuation.
 
 4. **Split instead of stuffing**
-   - If material is too large to review faithfully, split by component, task packet, or risk surface.
+   - If material is too large to review faithfully, split by slice, task packet, or risk surface.
    - Delegate isolated inspections instead of placing all raw context in one prompt.
    - Carry a context index: paths, commands, evidence excerpts, and what was intentionally omitted.
 

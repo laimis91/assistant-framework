@@ -37,7 +37,7 @@ missing_template_spec_terms=()
 for term in \
     "### Spec Review #1" \
     "- Result: PASS | FAIL" \
-    "- Scope reviewed: [plan step(s), task packet(s), or component(s)]" \
+    "- Scope reviewed: [plan step(s), task packet(s), or slice(s)]" \
     "- Missing acceptance criteria: [none, or list]" \
     "- Extra scope: [none, or list with file paths and disposition]" \
     "- Changed files mismatch: [none, or expected vs actual]" \

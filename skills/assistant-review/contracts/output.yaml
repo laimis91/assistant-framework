@@ -6,6 +6,30 @@ contract: output
 skill: assistant-review
 
 artifacts:
+  - name: review_delegation_path
+    type: object
+    required: conditional
+    condition: "scope_size in [medium, large] or subagent_execution_mode in [delegated, direct_fallback]"
+    description: "How Reviewer responsibility was executed"
+    validation: "States subagent policy state, execution mode, authorization scope, and whether review used a fresh Reviewer subagent or fresh direct-fallback context"
+    on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when they were not authorized or available"
+    object_fields:
+      - name: subagent_policy_state
+        type: enum
+        required: true
+        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: subagent_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, direct_fallback, not_applicable]
+      - name: subagent_authorization_scope
+        type: string[]
+        required: true
+      - name: fresh_context_evidence
+        type: string
+        required: true
+        validation: "Names the fresh Reviewer dispatch, or the direct-fallback context reset used to reduce stale review risk"
+
   - name: review_finding_rule_distillation
     type: object[]
     required: conditional

@@ -53,6 +53,30 @@ artifacts:
     validation: "At least one entry unless the task is purely hypothetical"
     on_fail: "Add the facts, observations, tests, or constraints used; for hypothetical tasks state that no external evidence was available"
 
+  - name: delegation_path
+    type: object
+    required: conditional
+    condition: "tool_used in [perspectives, stress_test]"
+    description: "How independent roles or attack angles were executed"
+    validation: "States subagent_policy_state, subagent_execution_mode, authorization scope when any, and whether roles/angles were delegated or run sequentially in fallback"
+    on_fail: "Record delegated execution or sequential fallback before presenting synthesis; do not imply subagents were used when they were not authorized or available"
+    object_fields:
+      - name: subagent_policy_state
+        type: enum
+        required: true
+        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: subagent_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, sequential_fallback, not_applicable]
+      - name: subagent_authorization_scope
+        type: string[]
+        required: true
+      - name: execution_note
+        type: string
+        required: true
+        validation: "Names whether roles/angles were delegated or run sequentially, with the reason"
+
   - name: decision_artifacts
     type: object
     required: conditional

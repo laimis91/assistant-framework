@@ -14,7 +14,9 @@ Find the fundamental flaw in an idea, decision, or approach. Produces both the s
 Break the idea into 6-12 atomic claims. Each claim should be independently testable.
 
 ### Step 2: Attack from 4-8 angles
-Cover 4-8 distinct attack perspectives. If the active adapter and user/tool policy permit parallel agents, each perspective can be delegated independently. If delegation is unavailable, run the perspectives sequentially in the main session and record that fallback.
+Cover 4-8 distinct attack perspectives. For high-stakes stress tests, prefer one independent subagent per attack perspective when available and authorized. Resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before spawning. If the active tool policy requires explicit user authorization before spawning subagents, ask once: `This reasoning method works best with independent stress-test subagents. May I use subagents for this stress test?`
+
+If approved, delegate each attack perspective with only the argument, claims, constraints, and perspective brief. If denied, unavailable, or policy-disallowed, run the perspectives sequentially in the main session and record `subagent_execution_mode=sequential_fallback`.
 
 | Perspective | Attacks via |
 |---|---|
@@ -59,6 +61,7 @@ VERDICT
 Core strength: [one sentence]
 Core vulnerability: [one sentence]
 Recommendation: [proceed / revise / abandon] because [reason]
+Delegation path: [delegated or sequential_fallback + policy state]
 ```
 
 ## Lightweight variant

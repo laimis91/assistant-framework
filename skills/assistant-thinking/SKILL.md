@@ -46,6 +46,7 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 - Do not invoke deep reasoning for simple execution tasks.
 - Do not use this skill for broad brainstorming; route option generation to `assistant-ideate`.
 - Ask only when missing context would materially change the selected method or recommendation.
+- For `Perspectives` and high-stakes `Stress Test`, resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before spawning subagents. If the active tool policy requires explicit user authorization, ask once before spawning: `This reasoning method works best with independent perspective subagents. May I use subagents for this debate/stress test?` If authorization is denied, subagents are unavailable, or policy disallows spawning, run the roles/angles sequentially and record that fallback in the synthesis.
 - Do not invent evidence. Mark unverified claims as assumptions and identify how to validate them.
 - Do not paste secrets, proprietary source, customer data, or sensitive logs into external tools as part of reasoning.
 
@@ -119,6 +120,7 @@ Return:
 - **Gaps** - assumptions, unknowns, or questions that limit confidence.
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
+- **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and authorization scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.
 
 ## Stop Rules

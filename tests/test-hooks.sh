@@ -3466,7 +3466,7 @@ EOF
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
         && echo "$HOOK_STDOUT" | grep -q "Plan approved: no" \
-        && ! echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
+        && ! echo "$HOOK_STDOUT" | grep -q "without separate decomposition approval"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
@@ -3474,7 +3474,7 @@ EOF
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
-if test_start "workflow-enforcer: small PLANNING without plan approval → no component approval warning"; then
+if test_start "workflow-enforcer: small PLANNING without plan approval → no decomposition approval warning"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
 Task: Small runtime gates
@@ -3495,7 +3495,7 @@ EOF
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "RUNTIME PHASE GATES" \
         && echo "$HOOK_STDOUT" | grep -q "Plan approved: no" \
-        && ! echo "$HOOK_STDOUT" | grep -q "without approved component decomposition"; then
+        && ! echo "$HOOK_STDOUT" | grep -q "without separate decomposition approval"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"

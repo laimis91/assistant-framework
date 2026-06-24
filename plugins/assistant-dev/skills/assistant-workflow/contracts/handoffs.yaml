@@ -303,16 +303,16 @@ handoffs:
         type: enum
         required: true
         enum_values: [low, moderate, high, critical]
-        description: "Triage risk tier used to choose component boundaries and verification depth"
+        description: "Triage risk tier used to choose smallest iterable slice boundaries and verification depth"
       - name: required_gates
         type: string[]
         required: true
-        description: "Gate packs selected during Triage and carried into component criteria"
+        description: "Gate packs selected during Triage and carried into slice criteria"
       - name: task_size
         type: enum
         required: true
         enum_values: [medium, large, mega]
-        description: "Determines component count range (medium: 2-7, large/mega: 3-7)"
+        description: "Determines slice depth; produce one or more smallest iterable slices and justify a single-slice manifest when correct"
       - name: search_mode
         type: enum
         required: false
@@ -351,46 +351,80 @@ handoffs:
         required: false
         condition: "status is DEVIATED"
         description: "What the decomposition had to change from the requested scope or approved direction"
-      - name: components
+      - name: slice_manifest
         type: object[]
         required: true
-        description: "Ordered list of independently verifiable components"
-        min_items: 2
+        description: "Ordered list of smallest iterable slices. Layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits are invalid unless the slice itself produces a verified deliverable artifact."
+        min_items: 1
         object_fields:
-          - name: order
-            type: int
+          - name: slice_id
+            type: string
             required: true
+            description: "Stable slice identifier used by Plan, Build, Review, and Document"
           - name: name
             type: string
             required: true
-            description: "Short descriptive name (e.g., 'shared-contracts', 'api-endpoints', 'ui-binding')"
-          - name: description
+            description: "Short descriptive slice name"
+          - name: observable_increment
             type: string
             required: true
-            description: "1-2 sentence description of what this component delivers"
-          - name: files
+            description: "The user-visible, tool-visible, or artifact-visible increment this slice delivers"
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+            description: "The kind of deliverable produced by this slice"
+          - name: acceptance_criteria
             type: string[]
             required: true
-            description: "Files to create or modify"
+            description: "Binary pass/fail statements for the slice"
             min_items: 1
+          - name: files_to_create
+            type: string[]
+            required: true
+            description: "Exact files to create; empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files to modify; empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets for this slice; empty array only with a stated non-test verification path"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this slice so no unverified setup-only slice is needed"
           - name: depends_on
             type: string[]
             required: true
-            description: "Names of prerequisite components, or empty array if independent"
-          - name: verification_criteria
+            description: "Slice ids that must be VERIFIED first, or empty array if independent"
+          - name: verification_command
+            type: string
+            required: true
+            description: "Exact command or inspection method used to verify this slice"
+          - name: expected_success_signal
+            type: string
+            required: true
+            description: "Specific pass signal for verification"
+          - name: evidence_to_record
             type: string[]
             required: true
-            description: "Binary pass/fail statements — each must be observable via test, build, or inspection"
+            description: "Evidence fields or artifacts to record before marking the slice VERIFIED"
             min_items: 1
-      - name: decomposition_pattern
-        type: enum
+          - name: deviation_rollback_rule
+            type: string
+            required: true
+            description: "What to do if the implementation cannot follow this slice exactly"
+      - name: single_slice_rationale
+        type: string
+        required: conditional
+        condition: "required when slice_manifest has exactly one slice"
+        description: "Why one slice is the smallest correct iterable decomposition"
+      - name: broad_split_rejection
+        type: string
         required: true
-        enum_values: [by_layer, by_feature, by_module, contracts_first]
-        description: "Which decomposition strategy was applied"
-      - name: shared_contracts_needed
-        type: boolean
-        required: true
-        description: "Whether component #1 is a shared contracts component"
+        description: "Explicit proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless they are verified deliverable artifact slices"
       - name: risks
         type: object[]
         required: true
@@ -402,7 +436,7 @@ handoffs:
           - name: mitigation
             type: string
             required: true
-    on_missing_field: "Re-dispatch Architect requesting the missing decomposition field"
+    on_missing_field: "Re-dispatch Architect requesting the missing strict slice decomposition field"
 
   # ─────────────────────────────────────────────
   # Orchestrator → Architect (PLAN)
@@ -441,31 +475,58 @@ handoffs:
         required: false
         condition: "search_mode == candidate_search"
         description: "Goal tree summary, selected candidate, scoring rationale, archive location, and any plan_deviation status"
-      - name: component_manifest
+      - name: slice_manifest
         type: object[]
-        required: false
-        condition: "size in [medium, large, mega]"
-        description: "Component decomposition from DECOMPOSE phase — Architect aligns plan steps to components"
+        required: conditional
+        condition: "size in [medium, large, mega] or the approved plan will use executable task packets"
+        description: "Strict slice manifest from DECOMPOSE phase — Architect consumes these boundaries directly and must not rediscover or broaden them"
+        on_missing: re-dispatch
+        notes: "Block Architect dispatch; Orchestrator must supply the approved DECOMPOSE slice_manifest or re-run DECOMPOSE before Plan."
         object_fields:
-          - name: order
-            type: int
+          - name: slice_id
+            type: string
             required: true
-            description: "Build sequence — plan steps must respect this ordering"
+            description: "Build sequence key — plan packets must use this id"
           - name: name
             type: string
             required: true
-          - name: description
+          - name: observable_increment
             type: string
             required: true
-          - name: files
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: acceptance_criteria
+            type: string[]
+            required: true
+          - name: files_to_create
+            type: string[]
+            required: true
+          - name: files_to_modify
+            type: string[]
+            required: true
+          - name: files_to_test
+            type: string[]
+            required: true
+          - name: enabling_changes_included
             type: string[]
             required: true
           - name: depends_on
             type: string[]
             required: true
-            description: "Component names that must be built first"
-          - name: verification_criteria
+            description: "Slice ids that must be VERIFIED first"
+          - name: verification_command
+            type: string
+            required: true
+          - name: expected_success_signal
+            type: string
+            required: true
+          - name: evidence_to_record
             type: string[]
+            required: true
+          - name: deviation_rollback_rule
+            type: string
             required: true
     return_fields:
       - name: status
@@ -503,23 +564,44 @@ handoffs:
       - name: implementation_steps
         type: object[]
         required: true
-        description: "Ordered executable task packets with exact create/modify/test file lists, acceptance/test criteria, and verification commands. Legacy readers may also inspect files when present, but executable plans must use the exact files_to_* fields."
+        description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance/test criteria, and verification commands. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
         min_items: 1
         object_fields:
           - name: order
             type: int
             required: true
+          - name: slice_id
+            type: string
+            required: true
+            description: "The approved Decompose slice id this packet implements"
+          - name: slice_name
+            type: string
+            required: true
+            description: "The approved Decompose slice name this packet implements"
+          - name: name
+            type: string
+            required: true
+            description: "Human-readable task packet name passed directly as current_task_packet.name"
           - name: task_id
             type: string
             required: false
-            description: "Stable task packet id when using executable task packets"
+            description: "Optional provider-local packet id; slice_id remains the execution boundary for medium+ work"
           - name: description
             type: string
             required: true
+          - name: observable_increment
+            type: string
+            required: true
+            description: "The approved slice observable increment"
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+            description: "The approved slice deliverable type"
           - name: files
             type: string[]
             required: false
-            description: "Legacy-readable summary of file paths this step touches; do not use as the executable task packet contract"
+            description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
           - name: files_to_create
             type: string[]
             required: true
@@ -532,6 +614,18 @@ handoffs:
             type: string[]
             required: true
             description: "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this slice"
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Approved slice dependencies"
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether this task packet requires a BuilderTester RED step before CodeWriter implementation"
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -541,6 +635,10 @@ handoffs:
             required: true
             description: "What to test after this step"
             min_items: 1
+          - name: implementation_notes
+            type: string[]
+            required: true
+            description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
           - name: verification_command
             type: string
             required: true
@@ -549,15 +647,14 @@ handoffs:
             type: string
             required: true
             description: "Specific pass signal for the verification command"
+          - name: evidence_to_record
+            type: string[]
+            required: true
+            description: "Evidence that must be recorded before the slice is VERIFIED"
           - name: deviation_rollback_rule
             type: string
             required: true
             description: "What to do if the implementation cannot follow this step exactly"
-          - name: component_name
-            type: string
-            required: false
-            condition: "size in [medium, large, mega]"
-            description: "Which component from the DECOMPOSE manifest this step belongs to — enables per-component verification in BUILD"
       - name: files_to_create
         type: object[]
         required: false
@@ -603,7 +700,7 @@ handoffs:
         description: "What to test and how"
         min_items: 1
         object_fields:
-          - name: component
+          - name: slice_id
             type: string
             required: true
           - name: test_type
@@ -644,17 +741,29 @@ handoffs:
         description: "Which step(s) to implement"
       - name: current_task_packet
         type: object
-        required: false
-        condition: "plan uses executable task packets"
+        required: conditional
+        condition: "current build step executes a slice or the approved plan uses executable task packets"
         description: "Executable task packet for the current build step; overrides any ambiguous prose in the plan"
+        on_missing: fail
+        notes: "Block CodeWriter dispatch; Orchestrator must select the matching implementation_steps packet or re-dispatch Architect to produce executable task packets before Build."
         object_fields:
-          - name: task_id
+          - name: slice_id
+            type: string
+            required: true
+          - name: slice_name
             type: string
             required: true
           - name: name
             type: string
             required: true
-          - name: behavior_acceptance_criteria
+          - name: observable_increment
+            type: string
+            required: true
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: acceptance_criteria
             type: string[]
             required: true
           - name: files_to_create
@@ -664,6 +773,12 @@ handoffs:
             type: string[]
             required: true
           - name: files_to_test
+            type: string[]
+            required: true
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+          - name: depends_on
             type: string[]
             required: true
           - name: tdd_applies
@@ -711,6 +826,9 @@ handoffs:
             required: true
           - name: expected_success_signal
             type: string
+            required: true
+          - name: evidence_to_record
+            type: string[]
             required: true
           - name: deviation_rollback_rule
             type: string
@@ -839,20 +957,35 @@ handoffs:
         description: "Test projects or files to run"
       - name: current_task_packet
         type: object
-        required: false
-        condition: "plan uses executable task packets"
+        required: conditional
+        condition: "current verification step executes a slice or the approved plan uses executable task packets"
         description: "Executable task packet being verified, including command and success signal"
+        on_missing: fail
+        notes: "Block BuilderTester dispatch; Orchestrator must pass the slice task packet being verified or re-dispatch Architect to produce executable task packets before verification."
         object_fields:
-          - name: task_id
+          - name: slice_id
+            type: string
+            required: true
+          - name: slice_name
             type: string
             required: true
           - name: name
             type: string
             required: true
-          - name: behavior_acceptance_criteria
+          - name: observable_increment
+            type: string
+            required: true
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: acceptance_criteria
             type: string[]
             required: true
           - name: files_to_test
+            type: string[]
+            required: true
+          - name: evidence_to_record
             type: string[]
             required: true
           - name: verification_command
