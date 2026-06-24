@@ -38,7 +38,7 @@
         "No unrelated files or generated metadata are touched."
       ],
       "fail_signals": [
-        "Produces a multi-component implementation plan for a one-word typo.",
+        "Produces a broad multi-slice implementation plan for a one-word typo.",
         "Requests approval for a full medium workflow without cause.",
         "Changes unrelated documentation or code.",
         "Skips target-file discovery before claiming the edit."
@@ -52,7 +52,7 @@
         ],
         "forbidden_substrings": [
           "Requesting medium-task plan approval",
-          "Here is a multi-component implementation plan",
+          "Here is a broad implementation plan",
           "I will perform a broad refactor"
         ]
       }
@@ -290,10 +290,10 @@
       "purpose": "Checks that implementation does not begin until the worker has an actionable task packet with scope, files, criteria, and constraints.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
-        "The conversation is ready to enter BUILD for a scoped component.",
+        "The conversation is ready to enter BUILD for a scoped slice.",
         "The current handoff lacks concrete file paths, verification criteria, or constraints."
       ],
-      "prompt": "Go ahead and build component 3. Just tell the writer to fix the workflow behavior.",
+      "prompt": "Go ahead and build slice S3. Just tell the writer to fix the workflow behavior.",
       "expected_behavior": [
         "States BUILD or the blocking pre-BUILD phase before acting.",
         "Recognizes that the handoff is not executable as written.",
@@ -329,47 +329,55 @@
       }
     },
     {
-      "id": "per-component-verification-before-advancing",
-      "title": "Each component should be verified before advancing",
-      "category": "component_verification",
-      "purpose": "Checks that medium or larger work verifies each component independently before moving to the next component.",
+      "id": "per-slice-verification-before-advancing",
+      "title": "Each slice should be verified before advancing",
+      "category": "slice_verification",
+      "purpose": "Checks that medium or larger work verifies each slice independently before moving to the next slice.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
-        "A medium task has a component manifest with ordered components.",
-        "Component 2 implementation has finished, but its verification criteria have not been checked."
+        "A medium task has a slice manifest with ordered slices.",
+        "Slice S2 implementation has finished, but its acceptance criteria have not been checked."
       ],
-      "prompt": "Component 2 is coded. Start component 3 now; we can verify everything at the end.",
+      "prompt": "Slice S2 is coded. Start slice S3 now; we can verify everything at the end.",
       "expected_behavior": [
         "States BUILD before acting.",
-        "Refuses to advance to the next component until component 2 verification is complete.",
-        "Runs or delegates the specific verification criteria for component 2.",
-        "Records component 2 status before starting component 3.",
-        "Does not batch all component verification at the end.",
-        "Only begins component 3 after component 2 passes or a blocker is reported."
+        "Refuses to advance to the next slice until slice S2 verification is complete.",
+        "Runs or delegates the specific acceptance and verification criteria for slice S2.",
+        "Records slice S2 status before starting slice S3.",
+        "Does not batch all slice verification at the end.",
+        "Only begins slice S3 after slice S2 passes or a blocker is reported."
       ],
       "pass_criteria": [
-        "The response blocks component 3 until component 2 verification is done.",
-        "Verification is tied to the component manifest criteria.",
-        "The assistant reports the component status packet before advancing.",
-        "Failures cause a fix cycle for component 2 rather than deferred cleanup."
+        "The response blocks slice S3 until slice S2 verification is done.",
+        "Verification is tied to the slice manifest criteria.",
+        "The assistant reports the slice status packet before advancing.",
+        "Failures cause a fix cycle for slice S2 rather than deferred cleanup."
       ],
       "fail_signals": [
-        "Starts component 3 immediately.",
+        "Starts slice S3 immediately.",
         "Says end-to-end verification at the end is sufficient.",
-        "Ignores component-specific criteria.",
-        "Marks the component complete based only on code being written."
+        "Ignores slice-specific criteria.",
+        "Marks the slice complete based only on code being written.",
+        "Uses component_manifest or component_verification_summary as live execution artifacts.",
+        "Accepts by_layer, by_module, by_feature, folder-only, broad feature-only, or contracts_first decomposition as a live slice manifest."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "component 2",
+          "slice S2",
           "verification",
-          "component 3",
+          "slice S3",
           "criteria"
         ],
         "forbidden_substrings": [
           "I will verify everything at the end",
-          "The component is complete based only on code",
-          "I will start component 3 now"
+          "The slice is complete based only on code",
+          "I will start slice S3 now",
+          "component_manifest",
+          "component_verification_summary",
+          "by_layer",
+          "by_module",
+          "by_feature",
+          "contracts_first"
         ]
       }
     },

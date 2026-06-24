@@ -148,38 +148,38 @@ gates:
     exit_assertions:
 
       - id: DC1
-        check: "Component manifest exists with 2-7 components (medium) or 3-7 (large/mega)"
-        on_fail: "Dispatch Architect to decompose the problem into verifiable components"
+        check: "Slice manifest exists with one or more smallest iterable slices; if there is exactly one slice, the manifest includes a single-slice rationale"
+        on_fail: "Dispatch Architect to produce a strict slice manifest or add a single-slice rationale when one verified slice is the smallest correct decomposition"
 
       - id: DC2
-        check: "Each component has at least 1 verification criterion that is binary and observable"
-        on_fail: "Add verification criteria to components missing them — each must be pass/fail checkable"
+        check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, verification_command, expected_success_signal, evidence_to_record, and deviation_rollback_rule"
+        on_fail: "Rewrite the Decompose output into the strict slice schema before entering Plan"
 
       - id: DC3
-        check: "Components are ordered by dependency — independent components first"
-        on_fail: "Reorder components so prerequisites come before dependents"
+        check: "Slices are ordered by dependency — independent slices first and dependent slices after every depends_on prerequisite"
+        on_fail: "Reorder slices so prerequisites come before dependents"
 
       - id: DC4
-        check: "No circular dependencies exist between components"
-        on_fail: "Merge circularly dependent components into a single component"
+        check: "No circular dependencies exist between slices"
+        on_fail: "Merge circularly dependent work into the smallest single iterable slice that can be verified"
 
       - id: DC5
-        check: "If multiple components share interfaces/DTOs, a shared-contracts component exists as #1"
-        on_fail: "Extract shared contracts into component #1"
+        check: "No slice is layer-only, module-only, folder-only, feature-only, setup-only, contract-only, or broad component-style unless it produces a verified deliverable artifact with deliverable_type, acceptance criteria, verification command, and expected success signal"
+        on_fail: "Convert broad layer/module/folder/feature/component or setup-only work into a smallest observable deliverable slice, or merge it into the slice that uses it"
 
       - id: DC6
-        check: "Component decomposition was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent criteria and evidence"
+        check: "Slice decomposition was produced by Architect subagent when subagents are available/policy-allowed, or produced directly in fallback mode with equivalent criteria and evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Produce component decomposition using an available Architect subagent or direct fallback; record which path was used"
+        on_fail: "Produce slice decomposition using an available Architect subagent or direct fallback; record which path was used"
 
       - id: DC7
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
       - id: DC8
-        check: "For medium+ tasks: decomposition_plan_review exists and decision is proceed after checking scope understanding, component/subagent count sanity, step/cost budget, dependency order, output-plan match, and fallback path"
+        check: "For medium+ tasks: decomposition_plan_review exists and decision is proceed after checking broad_split_rejection proof, scope understanding, slice/subagent count sanity, step/cost budget, dependency order, output-plan match, and fallback path"
         condition: "size in [medium, large, mega]"
-        on_fail: "Load references/decomposition-plan-review.md, repair the component/subagent plan, and do not enter Plan until the review decision is proceed"
+        on_fail: "Load references/decomposition-plan-review.md, add explicit broad_split_rejection proof that broad layer/module/folder/feature/setup/contract/component splits were rejected unless they are verified deliverable artifact slices, repair the slice/subagent plan, and do not enter Plan until the review decision is proceed"
 
   # ─────────────────────────────────────────────
   # DECOMPOSE → PLAN (or PLAN directly for small)
@@ -198,16 +198,16 @@ gates:
         on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
 
       - id: P1
-        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan also includes the component manifest from Decompose"
-        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and include the component manifest for medium+ tasks"
+        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan consumes the approved slice manifest from Decompose without rediscovering boundaries"
+        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and carry the approved slice manifest forward for medium+ tasks"
 
       - id: P2
         check: "Each implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify"
         on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
 
       - id: P4
-        check: "For medium+ tasks, user explicitly said 'approved' or 'approved with changes' to the plan, including the component manifest. For small tasks, the inline plan was printed and either no-wait eligibility was recorded or approval was requested for risk/ambiguity."
-        on_fail: "For medium+ tasks, present the full plan including component manifest and wait for approval. For small tasks, record why the inline plan can proceed without waiting or request approval when risk/ambiguity requires it."
+        check: "For medium+ tasks, user explicitly said 'approved' or 'approved with changes' to the plan, including the slice manifest. For small tasks, the inline plan was printed and either no-wait eligibility was recorded or approval was requested for risk/ambiguity."
+        on_fail: "For medium+ tasks, present the full plan including slice manifest and wait for approval. For small tasks, record why the inline plan can proceed without waiting or request approval when risk/ambiguity requires it."
 
       - id: P5
         check: "Plan tier matches task size (inline for small, standard for medium, full for large/mega)"
@@ -233,9 +233,9 @@ gates:
         on_fail: "Search local repo for similar patterns and record Pattern Retrieval before implementation; placeholders such as [paths/queries] or N/A without rationale do not satisfy this gate"
 
       - id: P9
-        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md and aligned to Decompose components"
+        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md and aligned one-to-one with approved Decompose slices"
         condition: "size in [medium, large, mega]"
-        on_fail: "Rewrite vague implementation steps into executable task packets"
+        on_fail: "Rewrite vague implementation steps into executable task packets that consume slice_id and slice manifest fields directly"
 
       - id: P10
         check: "Each implementation step or task packet has a verification command and expected success signal"
@@ -246,7 +246,7 @@ gates:
         on_fail: "Add deviation/rollback handling before seeking plan approval"
 
       - id: CS1
-        check: "When search_mode == candidate_search: goal tree decomposes the existing acceptance criteria and component verification criteria"
+        check: "When search_mode == candidate_search: goal tree decomposes the existing acceptance criteria and slice acceptance/verification criteria"
         condition: "search_mode == candidate_search"
         on_fail: "Load references/candidate-search.md and rewrite the goal tree from approved criteria instead of creating a second source of truth"
 
@@ -337,14 +337,14 @@ gates:
         on_fail: "Update the configured task journal when available, or the carried-forward task state packet when local state artifacts are unavailable/disallowed"
 
       - id: B12
-        check: "For medium+ tasks: every component's verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward component ledger"
+        check: "For medium+ tasks: every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
         condition: "size in [medium, large, mega]"
-        on_fail: "Run verification criteria for each component, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
+        on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
       - id: B13
-        check: "For medium+ tasks: each component has a final status of VERIFIED, including self-check result, before the next component started"
+        check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
         condition: "size in [medium, large, mega]"
-        on_fail: "This is a process violation — components must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
+        on_fail: "This is a process violation — slices must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
 
     guidance_assertions:
 
@@ -370,9 +370,9 @@ gates:
 
       - id: B11
         severity: guidance
-        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per component; otherwise direct fallback processed components sequentially with equivalent evidence"
+        check: "For medium+ tasks with subagents available/policy-allowed: Code Writer and Builder/Tester were dispatched per slice; otherwise direct fallback processed slices sequentially with equivalent evidence"
         condition: "size in [medium, large, mega]"
-        on_fail: "Prefer component-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
+        on_fail: "Prefer slice-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
 
   # ─────────────────────────────────────────────
   # REVIEW → DOCUMENT

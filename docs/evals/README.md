@@ -15,7 +15,7 @@ under common operating conditions:
 - task-state recovery after context compaction
 - TDD RED-before-GREEN handoff behavior
 - executable task packet requirements before build
-- per-component verification before advancing
+- per-slice verification before advancing
 - separate spec review and quality review gates
 - structured worker status packets from subagents
 - Codex role constraints without SubagentStart reinforcement

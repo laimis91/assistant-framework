@@ -33,8 +33,8 @@ Every phase has a declared agent responsibility. Phases without subagent dispatc
 | **TRIAGE** | — (Orchestrator direct) | All sizes | Too lightweight for dispatch — single classification decision |
 | **DISCOVER** | Code Mapper | Medium+ | Produces context map for downstream agents |
 | **DISCOVER** | Explorer | Large+ | Traces execution paths and hidden dependencies |
-| **DECOMPOSE** | Architect | Medium+ | Analyzes problem boundaries and proposes component manifest |
-| **PLAN** | Architect | Large+ | Designs full implementation blueprint from component manifest |
+| **DECOMPOSE** | Architect | Medium+ | Analyzes problem boundaries and proposes strict slice manifest |
+| **PLAN** | Architect | Large+ | Designs full implementation blueprint from slice manifest |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
 | **BUILD** | Code Writer | All sizes | Implements code following the plan |
 | **BUILD** | Builder/Tester | All sizes | Builds, runs tests, returns concise results |
@@ -48,14 +48,14 @@ Every phase has a declared agent responsibility. Phases without subagent dispatc
 | Size | Agents used | Flow |
 |---|---|---|
 | **Small** | Code Writer → Builder/Tester → Reviewer | Sequential, minimal (no Decompose) |
-| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Reviewer | Mapper feeds Architect, components feed Writer |
-| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Reviewer | Full pipeline with component verification |
-| **Mega** | All roles, parallel Code Writers per sub-task | Mapper → Explorer → Architect → parallel Writers → Builder/Tester and Reviewer at integration |
+| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Reviewer | Mapper feeds Architect, slices feed Writer |
+| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Reviewer | Full pipeline with slice verification |
+| **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester and Reviewer at integration |
 
 ## Dispatch guidelines
 
 - **Every task gets at minimum**: Code Writer → Builder/Tester → Reviewer. No code ships without build + test + review.
-- **Every medium+ task gets Architect for decomposition**: The Architect proposes component boundaries — the Orchestrator doesn't decompose alone.
+- **Every medium+ task gets Architect for decomposition**: The Architect proposes smallest iterable slice boundaries — the Orchestrator doesn't decompose alone.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)
 - **Code Mapper runs first** on medium+ tasks — its output feeds into Architect and Code Writer
 - **Reviewer gets a fresh dispatch each round** during the quality review loop — stale context weakens reviews

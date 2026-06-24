@@ -17,7 +17,7 @@
       "id": "medium-task-plans-before-build",
       "title": "Medium task plans before build",
       "category": "phase_gate_approval",
-      "purpose": "Checks that a medium implementation request enters the workflow phases, records discovery, decomposes components, and waits for plan approval before building.",
+      "purpose": "Checks that a medium implementation request enters the workflow phases, records discovery, decomposes strict slices, and waits for plan approval before building.",
       "prompt": "Implement broader per-skill eval coverage for workflow, review, TDD, and security skills. Keep the runner local and update docs and P0/P4 tests.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
@@ -28,14 +28,14 @@
         "Prints visible workflow checkpoints beginning with TRIAGE and DISCOVER.",
         "Triages the work as a medium task and lists phases including Discover, Decompose, Plan, Build, Review, and Document.",
         "Restates requirements and records constraints before planning.",
-        "Produces a component decomposition with binary verification criteria.",
+        "Produces a strict slice manifest with binary acceptance and verification criteria.",
         "Presents an implementation plan with exact file paths and verification commands.",
         "Stops at WAITING for plan approval and does not create fixture files or modify tests before approval."
       ],
       "pass_criteria": [
         "The response includes workflow phase checkpoints.",
         "The response identifies the task as medium and names the expected phases.",
-        "The response includes component decomposition or task packets before Build.",
+        "The response includes slice decomposition or task packets before Build.",
         "The response asks for plan approval before implementation.",
         "The response does not claim files were already created."
       ],
@@ -65,45 +65,47 @@
       }
     },
     {
-      "id": "build-phase-verifies-each-component",
-      "title": "Build phase verifies each component",
-      "category": "component_verification",
-      "purpose": "Checks that Build executes approved components sequentially with tests, verification evidence, and no silent plan deviations.",
+      "id": "build-phase-verifies-each-slice",
+      "title": "Build phase verifies each slice",
+      "category": "slice_verification",
+      "purpose": "Checks that Build executes approved slices sequentially with tests, verification evidence, and no silent plan deviations.",
       "prompt": "Approved. Build the eval coverage plan now.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "A medium task decomposition and plan have already been approved.",
-        "The approved components include fixtures, contract tests, and docs."
+        "The approved slices include fixtures, contract tests, and docs."
       ],
       "expected_behavior": [
         "Prints PLAN COMPLETE and BUILD phase checkpoints.",
-        "Processes one component at a time instead of batching every file change without evidence.",
-        "Runs the relevant validation or test command for each component before advancing.",
-        "Records component verification evidence and updates task progress.",
+        "Processes one slice at a time instead of batching every file change without evidence.",
+        "Runs the relevant validation or test command for each slice before advancing.",
+        "Records slice verification evidence and updates task progress.",
         "Flags any plan deviation explicitly before continuing.",
         "Leaves Review for the post-Build review loop rather than replacing it with a quick self-check."
       ],
       "pass_criteria": [
         "The response enters BUILD only after plan approval.",
-        "The response names the current component and verification command.",
-        "The response records a pass/fail result before advancing to the next component.",
-        "The response includes tests or validation alongside the component work.",
+        "The response names the current slice and verification command.",
+        "The response records a pass/fail result before advancing to the next slice.",
+        "The response includes tests or validation alongside the slice work.",
         "The response preserves Review as a later phase."
       ],
       "fail_signals": [
-        "Changes all components at once with no per-component evidence.",
+        "Changes all slices at once with no per-slice evidence.",
         "Moves to Review before tests or validation pass.",
         "Silently changes files outside the plan.",
-        "Declares workflow complete immediately after Build."
+        "Declares workflow complete immediately after Build.",
+        "Uses component_manifest or component_verification_summary as live execution artifacts.",
+        "Accepts by_layer, by_module, by_feature, folder-only, broad feature-only, or contracts_first decomposition as a live slice manifest."
       ],
       "machine_expectations": {
         "required_substrings": [
           "--- PHASE: BUILD ---",
-          "Component 1",
+          "Slice 1",
           "verification command",
           "Expected success signal",
           "DONE",
-          "Component Verification Ledger",
+          "Slice Verification Ledger",
           "deviation",
           "tests"
         ],
@@ -111,7 +113,13 @@
           "No tests were run",
           "Skipping verification",
           "Workflow complete after build",
-          "Review is unnecessary"
+          "Review is unnecessary",
+          "component_manifest",
+          "component_verification_summary",
+          "by_layer",
+          "by_module",
+          "by_feature",
+          "contracts_first"
         ]
       }
     },
@@ -430,18 +438,18 @@
       "id": "decomposition-plan-review-gates-medium-work",
       "title": "Decomposition plan review gates medium work",
       "category": "decomposition_plan_review",
-      "purpose": "Checks that medium+ work reviews component/subagent decomposition before spending implementation effort.",
-      "prompt": "Prepare a medium assistant-workflow implementation plan with several components and possible subagent execution.",
+      "purpose": "Checks that medium+ work reviews slice/subagent decomposition before spending implementation effort.",
+      "prompt": "Prepare a medium assistant-workflow implementation plan with several slices and possible subagent execution.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
-        "The task is medium+ and has a component manifest with possible subagent dispatch.",
+        "The task is medium+ and has a slice manifest with possible subagent dispatch.",
         "The user did not explicitly ask for decomposition review.",
         "The initial split may over-delegate, has unclear step budget, and must prove the output plan matches the requested deliverable."
       ],
       "expected_behavior": [
         "Loads or applies references/decomposition-plan-review.md before leaving Decompose.",
         "Checks scope understanding against accepted goals and acceptance criteria.",
-        "Checks component/subagent count sanity for the task size and risk.",
+        "Checks slice/subagent count sanity for the task size and risk.",
         "Checks bounded step, round, time, or cost budget before dispatch.",
         "Checks dependency order and shared-contract sequencing.",
         "Checks output-plan match: artifacts, files, verification criteria, and expected success signals.",
@@ -451,13 +459,13 @@
       ],
       "pass_criteria": [
         "The response includes a Decomposition Plan Review packet.",
-        "The packet includes scope understanding, component/subagent count, step/cost budget, dependency order, output-plan match, fallback path, and decision.",
+        "The packet includes scope understanding, slice/subagent count, step/cost budget, dependency order, output-plan match, fallback path, broad-split rejection, and decision.",
         "The response revises decomposition or returns to Discover when the split is excessive, unbounded, or output-mismatched.",
         "The response carries the review packet into Plan for medium+ work.",
         "The plan template includes the Decomposition Plan Review packet before task packets for medium+/large work."
       ],
       "fail_signals": [
-        "Skips decomposition review because components already exist.",
+        "Skips decomposition review because slices already exist.",
         "Dispatches subagents before checking count sanity or budget.",
         "Accepts an unbounded step budget.",
         "Does not verify output artifacts or success signals match the requested deliverable.",
@@ -468,7 +476,7 @@
         "required_substrings": [
           "Decomposition Plan Review",
           "scope understanding",
-          "component/subagent count",
+          "slice/subagent count",
           "step/cost budget",
           "dependency order",
           "output-plan match",
@@ -480,7 +488,8 @@
           "expected success signal",
           "implementation plan",
           "user did not explicitly ask",
-          "before task packets"
+          "before task packets",
+          "broad-split rejection"
         ],
         "forbidden_substrings": [
           "skip decomposition review",
@@ -489,7 +498,12 @@
           "output plan does not matter",
           "fallback requires no evidence",
           "only if explicitly requested",
-          "no review needed for ordinary plan"
+          "no review needed for ordinary plan",
+          "component_manifest",
+          "by_layer",
+          "by_module",
+          "by_feature",
+          "contracts_first"
         ]
       }
     },

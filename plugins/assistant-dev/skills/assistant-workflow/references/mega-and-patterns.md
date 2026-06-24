@@ -2,12 +2,12 @@
 
 ## Mega Task Decomposition
 
-Read `references/sub-task-brief-template.md` for brief format.
+Use the strict slice packet fields from `slice_manifest` for every executable brief.
 
-- 3-7 sub-tasks
-- Sub-task #1: shared contracts (interfaces, DTOs, entities) -- build first
-- Each sub-task: Plan --> [Design] --> Build
-- Git: integration branch + per-sub-task branches
+- One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
+- Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
+- Each slice: Plan --> [Design] --> Build
+- Git: integration branch named `feature/<task>/integration` + per-slice branches named `feature/<task>/slice-<slice_id>`
 
 Automation scripts in `scripts/` (bash):
 - `decompose.sh` -- create branches, worktrees, briefs
@@ -38,7 +38,7 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 
 - **Guess:** Ask when ambiguous, state assumptions when clear
 - **Skip Discovery:** Even small tasks get quick validation
-- **Skip Decompose:** Medium+ tasks MUST decompose into components. "It's straightforward" is not an excuse — decomposition reveals hidden complexity.
+- **Skip Decompose:** Medium+ tasks MUST decompose into strict slices. "It's straightforward" is not an excuse — decomposition reveals hidden complexity.
 - **Mega-step:** One plan step at a time
 - **Silent drift:** Stop and flag plan deviations
 - **Tests after:** Write tests alongside each step

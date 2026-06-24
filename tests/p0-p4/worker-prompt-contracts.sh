@@ -127,12 +127,15 @@ test_start "Codex architect requires executable task packet fields"
 missing_codex_architect_packet_terms=()
 for term in \
     "executable task packets" \
-    "task id/name" \
+    "slice_id/slice_name" \
+    "observable increment" \
+    "deliverable type" \
     "exact files" \
     "acceptance criteria" \
     "test/TDD expectation" \
     "verification command" \
     "expected success signal" \
+    "evidence to record" \
     "deviation/rollback rule"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/codex/architect.toml"; then
         missing_codex_architect_packet_terms+=("$term")
@@ -148,12 +151,15 @@ test_start "Claude architect requires executable task packet fields"
 missing_claude_architect_packet_terms=()
 for term in \
     "executable task packets" \
-    "task id/name" \
+    "slice_id/slice_name" \
+    "observable increment" \
+    "deliverable type" \
     "exact files" \
     "acceptance criteria" \
     "test/TDD expectation" \
     "verification command" \
     "expected success signal" \
+    "evidence to record" \
     "deviation/rollback rule"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/claude/architect.md"; then
         missing_claude_architect_packet_terms+=("$term")

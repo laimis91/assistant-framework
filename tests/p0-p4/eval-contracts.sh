@@ -40,7 +40,7 @@ if jq -e '
       "ambiguous-risky-task-blocks-before-plan",
       "executable-task-packet-before-build",
       "medium-feature-plans-before-build",
-      "per-component-verification-before-advancing",
+      "per-slice-verification-before-advancing",
       "review-loop-continues-after-findings",
       "small-fix-stays-lightweight",
       "spec-review-not-replaced-by-quality-review",
@@ -60,7 +60,7 @@ if jq -e '
       any(.cases[]; .id == $id and .category == $category);
     case_category("tdd-red-before-green-handoff"; "tdd_handoff")
     and case_category("executable-task-packet-before-build"; "handoff_contracts")
-    and case_category("per-component-verification-before-advancing"; "component_verification")
+    and case_category("per-slice-verification-before-advancing"; "slice_verification")
     and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
     and case_category("worker-status-packet-required"; "subagent_handoffs")
     and case_category("codex-role-constraints-without-subagentstart"; "role_constraints")
@@ -104,7 +104,7 @@ missing_eval_readme_terms=()
 for term in \
     "TDD RED-before-GREEN handoff behavior" \
     "executable task packet requirements before build" \
-    "per-component verification before advancing" \
+    "per-slice verification before advancing" \
     "separate spec review and quality review gates" \
     "structured worker status packets from subagents" \
     "Codex role constraints without SubagentStart reinforcement"; do

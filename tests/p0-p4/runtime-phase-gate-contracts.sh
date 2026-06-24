@@ -56,7 +56,7 @@ else
 fi
 
 test_start "workflow instructions do not require separate Decompose approval"
-if rg -n "Component decomposition approval required|User explicitly approved the component decomposition|without approved component decomposition|DECOMPOSE COMPLETE \(approved\)" \
+if rg -n "Component decomposition approval required|Slice decomposition approval required|User explicitly approved the component decomposition|User explicitly approved the slice decomposition|without approved component decomposition|without approved slice decomposition|DECOMPOSE COMPLETE \(approved\)" \
     "$FRAMEWORK_DIR/skills/assistant-workflow" \
     "$FRAMEWORK_DIR/hooks" \
     "$FRAMEWORK_DIR/docs/evals" >/tmp/p0p4-stale-decompose-approval.out; then

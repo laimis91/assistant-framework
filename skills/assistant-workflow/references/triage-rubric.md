@@ -42,7 +42,7 @@ Use `search_mode` to decide how much pre-code option exploration is useful. Keep
 - `lightweight`: there are 1-3 obvious options worth comparing in the plan's Analysis section.
 - `candidate_search`: use Candidate Search when the request has explicit alternatives, open-ended architecture/design, optimization goals, high uncertainty, repeated failed attempts, unclear/flaky bugs, or a reviewer-requested pivot.
 
-When `candidate_search` is selected, load `references/candidate-search.md`. The goal tree must decompose existing acceptance criteria/component verification criteria; the archive is stored at `{agent_state_dir}/candidate-search.md` only when local state is configured and policy-allowed, otherwise inline in the plan/task packet.
+When `candidate_search` is selected, load `references/candidate-search.md`. The goal tree must decompose existing acceptance criteria and slice acceptance/verification criteria; the archive is stored at `{agent_state_dir}/candidate-search.md` only when local state is configured and policy-allowed, otherwise inline in the plan/task packet.
 
 ## Common Gates
 

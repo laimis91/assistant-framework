@@ -35,7 +35,7 @@ Decompose existing criteria; do not invent a second source of truth.
 Inputs:
 
 - accepted `acceptance_criteria`
-- Decompose component verification criteria
+- Decompose slice acceptance/verification criteria
 - `required_gates`
 - user constraints and non-goals
 - discovered project constraints
@@ -162,7 +162,7 @@ If the pivot is implementation-local and does not change approved scope/files/be
 
 Before Plan completes when `search_mode: candidate_search`:
 
-- Goal tree maps to existing criteria or component verification criteria.
+- Goal tree maps to existing criteria or slice acceptance/verification criteria.
 - Candidate archive exists locally when allowed, or is inline in the plan/task packet.
 - At least two candidates are considered unless a one-path justification is explicit.
 - Scores use objective fit, verifiability, feasibility, risk, and simplicity.

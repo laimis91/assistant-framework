@@ -198,8 +198,8 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 | Phase | When | Key Actions |
 |---|---|---|
 | **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: dispatch Code Mapper. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
-| **Decompose** | Medium+ | Break into 2-7 components with verification criteria. Feed the manifest into Plan. |
-| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, components, and build plan. |
+| **Decompose** | Medium+ | Produce one or more smallest iterable slices with strict acceptance and verification fields. Feed the slice manifest into Plan. |
+| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, slices, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
 | **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
 | **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
@@ -249,7 +249,7 @@ Review findings must cite evidence and concrete risk. Avoid generic style feedba
 - **On continuation**: read the active project task journal FIRST; it has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
-- Mega: each sub-task gets its own brief and context.
+- Mega: each slice gets its own strict slice brief and context.
 - Files >500 lines: search first, read sections as needed.
 - After 3+ build/fix iterations: summarize and drop stale context.
 

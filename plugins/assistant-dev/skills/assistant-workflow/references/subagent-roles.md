@@ -41,7 +41,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 |---|---|---|---|---|
 | `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
-| `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Component decomposition, implementation blueprints, design direction |
+| `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Strict slice decomposition, implementation blueprints, design direction |
 | `code-writer` | Strongest / deep reasoning | Write | Build | Implements code following a plan. No builds, no tests, no review |
 | `builder-tester` | Balanced / standard | Write | Build | Builds, writes tests, runs tests. Returns concise summaries, not logs |
 | `reviewer` | Strongest / deep reasoning | Read-only | Review | Finds bugs, security issues, architecture violations, structural problems |
@@ -51,9 +51,9 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | Size | Agents used | Flow |
 |---|---|---|
 | **Small** | Code Writer → Builder/Tester → Reviewer | Sequential, minimal (no Decompose) |
-| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Reviewer | Mapper feeds Architect, components feed Writer |
-| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Reviewer | Full pipeline with component verification |
-| **Mega** | All roles, parallel Code Writers per sub-task | Mapper → Explorer → Architect → parallel Writers → Builder/Tester and Reviewer at integration |
+| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Reviewer | Mapper feeds Architect, slices feed Writer |
+| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Reviewer | Full pipeline with slice verification |
+| **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester and Reviewer at integration |
 
 ## Reviewer dispatch (review rounds)
 

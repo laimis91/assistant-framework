@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# check-integration.sh — Validates integration readiness after all sub-tasks complete.
+# check-integration.sh — Validates integration readiness after all slices complete.
 #
-# Checks that all sub-task branches exist, have commits, can merge without
+# Checks that all slice branches exist, have commits, can merge without
 # conflicts, and that build + tests pass after merge.
 #
 # Usage:
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications --build-cmd "dotnet build" --test-cmd "dotnet test"
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications --dry-run
+#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration
+#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration --build-cmd "dotnet build" --test-cmd "dotnet test"
+#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration --dry-run
 #
 # Prerequisites: git, and optionally the build/test toolchain for the project
 
@@ -27,10 +27,10 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Validates that all sub-task branches are ready for integration.
+Validates that all slice branches are ready for integration.
 
 Options:
-  --integration-branch NAME    Integration branch (e.g. feature/add-notifications)
+  --integration-branch NAME    Integration branch (e.g. feature/add-notifications/integration)
   --build-cmd CMD              Build command (auto-detected if not set)
   --test-cmd CMD               Test command (auto-detected if not set)
   --skip-build                 Skip build and test checks (branch checks only)
@@ -39,14 +39,14 @@ Options:
 
 Checks performed:
   1. Integration branch exists
-  2. All sub-task branches exist and have commits beyond integration
+  2. All slice branches exist and have commits beyond integration
   3. No merge conflicts (dry-run merge of each branch)
   4. Build passes after merge
   5. Tests pass after merge
 
 Example:
-  $(basename "$0") --integration-branch feature/add-notifications
-  $(basename "$0") --integration-branch feature/add-notifications --build-cmd "npm run build" --test-cmd "npm test"
+  $(basename "$0") --integration-branch feature/add-notifications/integration
+  $(basename "$0") --integration-branch feature/add-notifications/integration --build-cmd "npm run build" --test-cmd "npm test"
 EOF
     exit 0
 }
@@ -74,6 +74,10 @@ check()     { echo "🔍 $1"; }
 command -v git >/dev/null 2>&1 || { log_error "git is required."; exit 1; }
 
 [[ -n "$INTEGRATION_BRANCH" ]] || { log_error "Missing --integration-branch."; exit 1; }
+if [[ "$INTEGRATION_BRANCH" != */integration ]]; then
+    log_error "Integration branch must use feature/<task>/integration so slice branches can use feature/<task>/slice-<slice_id> without git ref conflicts."
+    exit 1
+fi
 
 # ── Auto-detect build/test commands ───────────────────────────────────────────
 
@@ -131,40 +135,42 @@ else
     exit 1
 fi
 
-# ── Discover sub-task branches ────────────────────────────────────────────────
+# ── Discover slice branches ──────────────────────────────────────────────────
 
-# Sub-task branches are feature/<task>/<name> where <task> matches the integration branch
-BRANCH_PREFIX="${INTEGRATION_BRANCH}/"
+# Slice branches are feature/<task>/slice-<slice_id> for integration branch feature/<task>/integration.
+TASK_BRANCH_PREFIX="${INTEGRATION_BRANCH%/integration}"
+BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-"
 SUB_BRANCHES=()
 
 while IFS= read -r ref; do
     branch="${ref#refs/heads/}"
+    [[ "$branch" == "$INTEGRATION_BRANCH" ]] && continue
     SUB_BRANCHES+=("$branch")
-done < <(git for-each-ref --format='%(refname)' "refs/heads/${BRANCH_PREFIX}")
+done < <(git for-each-ref --format='%(refname)' "refs/heads/${BRANCH_PREFIX}*")
 
 if [[ ${#SUB_BRANCHES[@]} -eq 0 ]]; then
-    record_fail "No sub-task branches found matching ${BRANCH_PREFIX}*"
+    record_fail "No slice branches found matching ${BRANCH_PREFIX}*"
     echo ""
-    log_error "Expected branches like ${BRANCH_PREFIX}contracts, ${BRANCH_PREFIX}sub-task-2, etc."
+    log_error "Expected branches like ${BRANCH_PREFIX}<slice_id>."
     exit 1
 fi
 
-info "Found ${#SUB_BRANCHES[@]} sub-task branch(es):"
+info "Found ${#SUB_BRANCHES[@]} slice branch(es):"
 for b in "${SUB_BRANCHES[@]}"; do
     echo "  - $b"
 done
 echo ""
 
-# ── Check 2: Each sub-task branch has commits ────────────────────────────────
+# ── Check 2: Each slice branch has commits ──────────────────────────────────
 
-check "Sub-task branches have commits beyond integration branch..."
+check "Slice branches have commits beyond integration branch..."
 
 for branch in "${SUB_BRANCHES[@]}"; do
     COMMIT_COUNT=$(git rev-list --count "$INTEGRATION_BRANCH".."$branch" 2>/dev/null || echo "0")
     if [[ "$COMMIT_COUNT" -gt 0 ]]; then
         record_pass "$branch: $COMMIT_COUNT commit(s) ahead"
     else
-        record_warn "$branch: no commits ahead of integration branch (empty sub-task?)"
+        record_fail "$branch: no commits ahead of integration branch. Empty slice branches are not integration-ready; commit slice output or evidence before integration."
     fi
 done
 echo ""
@@ -191,7 +197,7 @@ trap cleanup_git EXIT
 TEMP_BRANCH="__integration-check-$(date +%s)"
 
 if $DRY_RUN; then
-    info "[dry-run] Would create temp branch $TEMP_BRANCH from $INTEGRATION_BRANCH and test-merge each sub-task branch."
+    info "[dry-run] Would create temp branch $TEMP_BRANCH from $INTEGRATION_BRANCH and test-merge each slice branch."
 else
     git checkout "$INTEGRATION_BRANCH" --quiet
     git checkout -b "$TEMP_BRANCH" --quiet
@@ -248,7 +254,7 @@ else
     TEMP_BRANCH="__integration-build-$(date +%s)"
     git checkout -b "$TEMP_BRANCH" --quiet
 
-    # Merge all sub-task branches
+    # Merge all slice branches
     ALL_MERGED=true
     for branch in "${SUB_BRANCHES[@]}"; do
         if ! git merge --no-ff "$branch" --quiet -m "Integration check: merge $branch" 2>/dev/null; then

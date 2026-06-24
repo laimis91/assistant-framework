@@ -121,7 +121,7 @@ fields:
     type: string
     required: false
     description: "Single objective used to decompose the goal tree when search_mode=candidate_search"
-    validation: "Derived from acceptance criteria and component verification criteria; must not create a second source of truth."
+    validation: "Derived from acceptance criteria and slice acceptance/verification criteria; must not create a second source of truth."
     default: null
     on_missing: skip
 

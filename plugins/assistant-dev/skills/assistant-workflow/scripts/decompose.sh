@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# decompose.sh — Automates the mechanical parts of mega task decomposition.
+# decompose.sh — Automates the mechanical parts of mega task slice decomposition.
 #
 # Takes a JSON decomposition file (produced by the AI during Plan phase),
 # creates git branches, worktrees for parallel work, and brief files.
@@ -15,34 +15,26 @@
 # {
 #   "task": "add-notifications",
 #   "description": "Add real-time notification system with email and push channels",
-#   "sub_tasks": [
+#   "single_slice_rationale": "Notification core is the smallest independently verifiable increment; splitting it further would separate the request contract from its validation behavior.",
+#   "slice_manifest": [
 #     {
-#       "name": "contracts",
-#       "description": "Shared interfaces, DTOs, and entities for notification system",
-#       "size": "small",
-#       "layer": "Domain / Application",
-#       "scope": ["src/Domain/Notifications/", "src/Application/Notifications/"],
+#       "slice_id": "notification-core",
+#       "name": "Notification core behavior",
+#       "observable_increment": "Notification requests can be represented and validated end to end",
+#       "deliverable_type": "behavior",
+#       "files_to_create": ["src/Application/Notifications/NotificationRequest.cs"],
+#       "files_to_modify": ["src/Application/Notifications/NotificationService.cs"],
+#       "files_to_test": ["tests/Application.Tests/Notifications/NotificationServiceTests.cs"],
+#       "enabling_changes_included": ["Request DTO needed by this behavior"],
 #       "depends_on": [],
-#       "has_ui": false,
 #       "acceptance_criteria": [
-#         "INotificationService interface defined",
-#         "NotificationDto and NotificationEntity created",
-#         "Unit tests for domain validation rules"
-#       ]
-#     },
-#     {
-#       "name": "email-channel",
-#       "description": "Email notification delivery via SMTP",
-#       "size": "medium",
-#       "layer": "Infrastructure",
-#       "scope": ["src/Infrastructure/Notifications/Email/"],
-#       "depends_on": ["contracts"],
-#       "has_ui": false,
-#       "acceptance_criteria": [
-#         "Implements INotificationChannel",
-#         "Sends email via configured SMTP",
-#         "Integration test with test SMTP server"
-#       ]
+#         "Invalid notification requests return validation errors",
+#         "Valid notification requests are accepted by the service"
+#       ],
+#       "verification_command": "dotnet test tests/Application.Tests/Application.Tests.csproj --filter NotificationServiceTests",
+#       "expected_success_signal": "NotificationServiceTests pass",
+#       "evidence_to_record": ["test command", "passing test count"],
+#       "deviation_rollback_rule": "Return DEVIATED and do not widen files beyond this slice without approval"
 #     }
 #   ]
 # }
@@ -64,12 +56,12 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Creates git branches, worktrees, and brief files for a mega task decomposition.
-Worktrees give each sub-task its own working directory so agents can run in parallel.
+Creates git branches, worktrees, and brief files for a mega task slice manifest.
+Worktrees give each slice its own working directory so agents can run in parallel.
 
 Options:
   --task NAME          Task name (used for branch naming, e.g. "add-notifications")
-  --input FILE         Path to JSON decomposition file
+  --input FILE         Path to JSON decomposition file with top-level slice_manifest
   --briefs DIR         Directory for brief files (default: briefs/)
   --base BRANCH        Base branch to branch from (default: main)
   --worktrees-dir DIR  Directory for git worktrees (default: .worktrees/)
@@ -110,9 +102,90 @@ command -v jq  >/dev/null 2>&1 || fail "jq is required but not installed. Instal
 [[ -n "$INPUT" ]] || fail "Missing --input. Provide path to decomposition JSON file."
 [[ -f "$INPUT" ]] || fail "Input file not found: $INPUT"
 
+format_lines_csv() {
+    awk 'NF { printf "%s%s", sep, $0; sep=", " } END { printf "\n" }'
+}
+
 # Validate JSON structure
-jq -e '.sub_tasks | length > 0' "$INPUT" >/dev/null 2>&1 \
-    || fail "Invalid JSON: must have a non-empty 'sub_tasks' array."
+jq -e '
+  def string_array(min): type == "array" and length >= min and all(.[]; type == "string" and length > 0);
+  (.slice_manifest | type == "array" and length > 0) and
+  ((.slice_manifest | length) != 1 or (.single_slice_rationale? | type == "string" and (gsub("\\s"; "") | length > 0))) and
+  all(.slice_manifest[];
+    (.slice_id | type == "string" and length > 0) and
+    (.name | type == "string" and length > 0) and
+    (.observable_increment | type == "string" and length > 0) and
+    (.deliverable_type as $type | ($type | type == "string") and (["behavior", "artifact", "contract", "docs", "eval", "config", "migration", "refactor"] | index($type) != null)) and
+    (.files_to_create | string_array(0)) and
+    (.files_to_modify | string_array(0)) and
+    (.files_to_test | string_array(0)) and
+    (.enabling_changes_included | string_array(0)) and
+    (.depends_on | string_array(0)) and
+    (.acceptance_criteria | string_array(1)) and
+    (.verification_command | type == "string" and length > 0) and
+    (.expected_success_signal | type == "string" and length > 0) and
+    (.evidence_to_record | string_array(1)) and
+    (.deviation_rollback_rule | type == "string" and length > 0)
+  )
+' "$INPUT" >/dev/null 2>&1 \
+    || fail "Invalid JSON: must have a non-empty 'slice_manifest' array with strict slice fields: slice_id, name, observable_increment, deliverable_type, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, acceptance_criteria, verification_command, expected_success_signal, evidence_to_record, deviation_rollback_rule. When slice_manifest has exactly one item, single_slice_rationale must be present and non-blank."
+
+SAFE_SLICE_ID_PATTERN='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+
+UNSAFE_SLICE_IDS=$(jq -r --arg pattern "$SAFE_SLICE_ID_PATTERN" '
+  .slice_manifest[].slice_id | select((test($pattern)) | not)
+' "$INPUT")
+if [[ -n "$UNSAFE_SLICE_IDS" ]]; then
+    fail "Invalid slice_id values: $(format_lines_csv <<< "$UNSAFE_SLICE_IDS"). slice_id must use lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes or whitespace."
+fi
+
+DUPLICATE_SLICE_IDS=$(jq -r '
+  .slice_manifest | map(.slice_id) | group_by(.)[] | select(length > 1) | .[0]
+' "$INPUT")
+if [[ -n "$DUPLICATE_SLICE_IDS" ]]; then
+    fail "Duplicate slice_id values: $(format_lines_csv <<< "$DUPLICATE_SLICE_IDS"). slice_id values must be unique within slice_manifest."
+fi
+
+UNKNOWN_DEPENDENCIES=$(jq -r '
+  [.slice_manifest[].slice_id] as $ids |
+  .slice_manifest[] as $slice |
+  ($slice.depends_on // [])[] as $dep |
+  select(($ids | index($dep)) == null) |
+  "\($slice.slice_id) -> \($dep)"
+' "$INPUT")
+if [[ -n "$UNKNOWN_DEPENDENCIES" ]]; then
+    fail "Unknown depends_on references: $(format_lines_csv <<< "$UNKNOWN_DEPENDENCIES"). depends_on entries must refer to declared slice_id values."
+fi
+
+SELF_DEPENDENCIES=$(jq -r '
+  .slice_manifest[] as $slice |
+  ($slice.depends_on // [])[] as $dep |
+  select($dep == $slice.slice_id) |
+  "\($slice.slice_id) -> \($dep)"
+' "$INPUT")
+if [[ -n "$SELF_DEPENDENCIES" ]]; then
+    fail "Self dependency detected in depends_on: $(format_lines_csv <<< "$SELF_DEPENDENCIES"). Remove the self dependency or merge the work into a single smallest iterable slice before decomposing."
+fi
+
+CIRCULAR_DEPENDENCIES=$(jq -r '
+  [.slice_manifest[] | {id: .slice_id, deps: (.depends_on // [])}] as $slices |
+  ($slices | map(.id)) as $ids |
+  def deps($id): ($slices[] | select(.id == $id) | .deps) // [];
+  def visit($start; $node; $path):
+    deps($node)[] as $dep |
+    if $dep == $start then
+      ($path + [$dep]) | join(" -> ")
+    elif ($path | index($dep)) then
+      empty
+    else
+      visit($start; $dep; $path + [$dep])
+    end;
+  $ids[] as $id |
+  visit($id; $id; [$id])
+' "$INPUT" | sort -u)
+if [[ -n "$CIRCULAR_DEPENDENCIES" ]]; then
+    fail "Circular dependency detected in depends_on: $(format_lines_csv <<< "$CIRCULAR_DEPENDENCIES"). Merge circularly dependent slices into one smallest iterable slice, or reorder dependencies so the graph is acyclic before decomposing."
+fi
 
 # Ensure repo has commits and working tree is clean
 if ! git rev-parse HEAD >/dev/null 2>&1; then
@@ -125,17 +198,36 @@ fi
 # ── Read decomposition ────────────────────────────────────────────────────────
 
 DESCRIPTION=$(jq -r '.description // "No description"' "$INPUT")
-SUB_TASK_COUNT=$(jq -r '.sub_tasks | length' "$INPUT")
-SUB_TASK_NAMES=$(jq -r '.sub_tasks[].name' "$INPUT")
+SLICE_COUNT=$(jq -r '.slice_manifest | length' "$INPUT")
+SINGLE_SLICE_RATIONALE=$(jq -r '.single_slice_rationale // ""' "$INPUT")
+SINGLE_SLICE_RATIONALE_NOTE=""
+if [[ -n "${SINGLE_SLICE_RATIONALE//[[:space:]]/}" ]]; then
+    SINGLE_SLICE_RATIONALE_NOTE="Single-slice rationale: ${SINGLE_SLICE_RATIONALE}"
+fi
+
+slice_array_csv() {
+    local index="$1"
+    local field="$2"
+    jq -r --argjson index "$index" --arg field "$field" '
+      (.slice_manifest[$index][$field] // []) as $items |
+      if ($items | length) == 0 then "none" else $items | join(", ") end
+    ' "$INPUT"
+}
 
 info "Task: $TASK"
 info "Description: $DESCRIPTION"
-info "Sub-tasks: $SUB_TASK_COUNT"
+info "Slices: $SLICE_COUNT"
 echo ""
 
 # ── Step 1: Create integration branch ────────────────────────────────────────
 
-INTEGRATION_BRANCH="feature/${TASK}"
+TASK_BRANCH_PREFIX="feature/${TASK}"
+INTEGRATION_BRANCH="${TASK_BRANCH_PREFIX}/integration"
+SLICE_BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-"
+
+if ! $DRY_RUN && git show-ref --verify --quiet "refs/heads/$TASK_BRANCH_PREFIX"; then
+    fail "Existing branch '$TASK_BRANCH_PREFIX' conflicts with grouped decomposition branches '$INTEGRATION_BRANCH' and '${SLICE_BRANCH_PREFIX}<slice_id>'. Rename or delete the old parent branch first."
+fi
 
 if $DRY_RUN; then
     dry "git checkout $BASE_BRANCH"
@@ -151,14 +243,24 @@ else
     fi
 fi
 
-# ── Step 2: Create sub-task branches ─────────────────────────────────────────
+# ── Step 2: Create dependency-free slice branches ────────────────────────────
 
 echo ""
-info "Creating sub-task branches..."
+info "Creating dependency-free slice branches..."
 
-for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
-    BRANCH="feature/${TASK}/${NAME}"
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
+    BRANCH="${SLICE_BRANCH_PREFIX}${SLICE_ID}"
+    DEPENDS_CSV=$(slice_array_csv "$i" "depends_on")
+
+    if [[ "$DEPENDS_CSV" != "none" ]]; then
+        if $DRY_RUN; then
+            dry "defer branch $BRANCH until launch after dependencies are VERIFIED (depends_on: $DEPENDS_CSV)"
+        else
+            info "Deferring branch '$BRANCH' until dependencies are VERIFIED: $DEPENDS_CSV"
+        fi
+        continue
+    fi
 
     if $DRY_RUN; then
         dry "git branch $BRANCH (from $INTEGRATION_BRANCH)"
@@ -172,10 +274,10 @@ for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
     fi
 done
 
-# ── Step 2b: Create worktrees for parallel work ──────────────────────────────
+# ── Step 2b: Create dependency-free worktrees for parallel work ──────────────
 
 echo ""
-info "Creating worktrees in $WORKTREES_DIR/ for parallel agents..."
+info "Creating dependency-free worktrees in $WORKTREES_DIR/ for parallel agents..."
 
 if $DRY_RUN; then
     dry "mkdir -p $WORKTREES_DIR"
@@ -183,10 +285,20 @@ else
     mkdir -p "$WORKTREES_DIR"
 fi
 
-for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
-    BRANCH="feature/${TASK}/${NAME}"
-    WORKTREE_PATH="${WORKTREES_DIR}/${NAME}"
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
+    BRANCH="${SLICE_BRANCH_PREFIX}${SLICE_ID}"
+    WORKTREE_PATH="${WORKTREES_DIR}/${SLICE_ID}"
+    DEPENDS_CSV=$(slice_array_csv "$i" "depends_on")
+
+    if [[ "$DEPENDS_CSV" != "none" ]]; then
+        if $DRY_RUN; then
+            dry "defer worktree $WORKTREE_PATH until launch after dependencies are VERIFIED (depends_on: $DEPENDS_CSV)"
+        else
+            info "Deferring worktree '$WORKTREE_PATH' until dependencies are VERIFIED: $DEPENDS_CSV"
+        fi
+        continue
+    fi
 
     if $DRY_RUN; then
         dry "git worktree add $WORKTREE_PATH $BRANCH"
@@ -211,92 +323,119 @@ else
     mkdir -p "$BRIEFS_DIR"
 fi
 
-# Collect all sub-task names for the "other sub-tasks" field
-ALL_NAMES=$(jq -r '[.sub_tasks[].name] | join(", ")' "$INPUT")
+slice_array_lines() {
+    local index="$1"
+    local field="$2"
+    local prefix="$3"
+    jq -r --argjson index "$index" --arg field "$field" --arg prefix "$prefix" '
+      (.slice_manifest[$index][$field] // []) as $items |
+      if ($items | length) == 0 then
+        $prefix + "none"
+      else
+        $items[] | $prefix + tostring
+      end
+    ' "$INPUT"
+}
 
-for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
-    DESC=$(jq -r ".sub_tasks[$i].description" "$INPUT")
-    SIZE=$(jq -r ".sub_tasks[$i].size // \"medium\"" "$INPUT")
-    LAYER=$(jq -r ".sub_tasks[$i].layer // \"TBD\"" "$INPUT")
-    HAS_UI=$(jq -r ".sub_tasks[$i].has_ui // false" "$INPUT")
-    BRANCH="feature/${TASK}/${NAME}"
-    WORKTREE_PATH="${WORKTREES_DIR}/${NAME}"
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
+    SLICE_NAME=$(jq -r ".slice_manifest[$i].name" "$INPUT")
+    OBSERVABLE_INCREMENT=$(jq -r ".slice_manifest[$i].observable_increment" "$INPUT")
+    DELIVERABLE_TYPE=$(jq -r ".slice_manifest[$i].deliverable_type" "$INPUT")
+    VERIFICATION_COMMAND=$(jq -r ".slice_manifest[$i].verification_command" "$INPUT")
+    EXPECTED_SUCCESS_SIGNAL=$(jq -r ".slice_manifest[$i].expected_success_signal" "$INPUT")
+    DEVIATION_ROLLBACK_RULE=$(jq -r ".slice_manifest[$i].deviation_rollback_rule" "$INPUT")
+    BRANCH="${SLICE_BRANCH_PREFIX}${SLICE_ID}"
+    WORKTREE_PATH="${WORKTREES_DIR}/${SLICE_ID}"
     NUM=$((i + 1))
 
-    # Build scope list
-    SCOPE=$(jq -r ".sub_tasks[$i].scope // [] | .[]" "$INPUT" | sed 's/^/- /')
-    [[ -z "$SCOPE" ]] && SCOPE="- TBD"
+    FILES_TO_CREATE=$(slice_array_lines "$i" "files_to_create" "  - ")
+    FILES_TO_MODIFY=$(slice_array_lines "$i" "files_to_modify" "  - ")
+    FILES_TO_TEST=$(slice_array_lines "$i" "files_to_test" "  - ")
+    ENABLING_CHANGES=$(slice_array_lines "$i" "enabling_changes_included" "  - ")
+    DEPENDS_LINES=$(slice_array_lines "$i" "depends_on" "  - ")
+    DEPENDS_CSV=$(slice_array_csv "$i" "depends_on")
+    CRITERIA=$(slice_array_lines "$i" "acceptance_criteria" "  - [ ] ")
+    EVIDENCE=$(slice_array_lines "$i" "evidence_to_record" "  - ")
 
-    # Build depends_on list
-    DEPENDS=$(jq -r ".sub_tasks[$i].depends_on // [] | join(\", \")" "$INPUT")
-    [[ -z "$DEPENDS" ]] && DEPENDS="none"
+    OTHERS=$(jq -r --arg slice_id "$SLICE_ID" '[.slice_manifest[] | select(.slice_id != $slice_id) | .slice_id] | if length == 0 then "none" else join(", ") end' "$INPUT")
 
-    # Build acceptance criteria
-    CRITERIA=$(jq -r ".sub_tasks[$i].acceptance_criteria // [] | .[]" "$INPUT" | sed 's/^/- [ ] /')
-    [[ -z "$CRITERIA" ]] && CRITERIA="- [ ] TBD"
-
-    # Other sub-tasks (excluding current)
-    OTHERS=$(jq -r --arg name "$NAME" '[.sub_tasks[] | select(.name != $name) | .name] | join(", ")' "$INPUT")
-    [[ -z "$OTHERS" ]] && OTHERS="none"
-
-    # Determine workflow line
-    if [[ "$HAS_UI" == "true" ]]; then
-        WORKFLOW="Run: Plan → Design → Build."
+    if [[ "$DEPENDS_CSV" != "none" ]]; then
+        ORDER_NOTE="Dependency order comes from depends_on: $DEPENDS_CSV must be VERIFIED before this slice starts."
+        BRANCH_WORKTREE_NOTE="This branch and worktree are created by run-agents.sh at launch time from the current integration branch after dependencies are VERIFIED."
+        WORKTREE_DISPLAY="${WORKTREE_PATH} (created at launch after dependencies are VERIFIED)"
     else
-        WORKFLOW="Run: Plan → Build."
+        ORDER_NOTE="No slice dependencies; this slice can run in parallel with other dependency-free slices."
+        BRANCH_WORKTREE_NOTE="This dependency-free branch and worktree may be created during decomposition."
+        WORKTREE_DISPLAY="${WORKTREE_PATH}"
     fi
 
-    # Build order note
-    if [[ "$i" -eq 0 ]]; then
-        ORDER_NOTE="⚠️  BUILD FIRST — other sub-tasks depend on this."
-    elif [[ "$DEPENDS" != "none" ]]; then
-        ORDER_NOTE="Depends on: $DEPENDS (must be merged into integration branch first)."
-    else
-        ORDER_NOTE="Can run in parallel after contracts are merged."
-    fi
-
-    BRIEF_FILE="$BRIEFS_DIR/sub-task-${NUM}-${NAME}.md"
+    BRIEF_FILE="$BRIEFS_DIR/slice-${NUM}-${SLICE_ID}.md"
 
     BRIEF_CONTENT=$(cat <<BRIEF
-## Sub-Task Brief: ${NAME}
+## Slice Brief: ${SLICE_ID}
 
-### Context
+### Strict slice packet (execution contract)
+- slice_id: ${SLICE_ID}
+- slice_name: ${SLICE_NAME}
+- observable_increment: ${OBSERVABLE_INCREMENT}
+- deliverable_type: ${DELIVERABLE_TYPE}
+- files_to_create:
+${FILES_TO_CREATE}
+- files_to_modify:
+${FILES_TO_MODIFY}
+- files_to_test:
+${FILES_TO_TEST}
+- enabling_changes_included:
+${ENABLING_CHANGES}
+- depends_on:
+${DEPENDS_LINES}
+- acceptance_criteria:
+${CRITERIA}
+- verification_command: ${VERIFICATION_COMMAND}
+- expected_success_signal: ${EXPECTED_SUCCESS_SIGNAL}
+- evidence_to_record:
+${EVIDENCE}
+- deviation_rollback_rule: ${DEVIATION_ROLLBACK_RULE}
+
+### Supporting context (not the execution contract)
+Supporting context may help orientation, but it cannot satisfy, replace, or override the strict slice packet above.
+
 Project: ${TASK}
 Parent task: ${DESCRIPTION}
-This is sub-task ${NUM} of ${SUB_TASK_COUNT}. Other sub-tasks are handling: ${OTHERS}.
+Slice order: ${NUM} of ${SLICE_COUNT}. Other slices are: ${OTHERS}.
+${SINGLE_SLICE_RATIONALE_NOTE}
 ${ORDER_NOTE}
-
-### Goal
-${DESC}
-
-### Scope
-- Files/modules to touch:
-${SCOPE}
-- Layer: ${LAYER}
-
-### Shared contracts (already defined)
-<!-- Paste interfaces, DTOs, schemas from sub-task #1 (contracts) here after it's complete. -->
-<!-- Include actual code signatures, not just names. -->
+${BRANCH_WORKTREE_NOTE}
 
 ### Constraints
-- Must not modify: files owned by other sub-tasks
-- Dependencies: ${DEPENDS}
+- Do not widen files beyond the strict slice packet unless the deviation_rollback_rule is applied.
+- Dependency order is controlled only by depends_on.
+- Standalone contract/setup work is valid only when this slice itself is the verified deliverable artifact.
 - Architecture: follow project conventions (see AGENTS.md or playbook)
 - Git branch: ${BRANCH}
-- Worktree: ${WORKTREE_PATH}
-
-### Acceptance criteria
-${CRITERIA}
-- [ ] Build passes: \`dotnet build\` (or project-appropriate command)
-- [ ] Tests pass: \`dotnet test\` (or project-appropriate command)
+- Worktree: ${WORKTREE_DISPLAY}
 
 ### What to do
-${WORKFLOW}
+Run: Plan -> Build, adding Design only when the slice requires UI decisions.
 Follow project conventions.
-Add code comments where intent isn't obvious.
+Add code comments where intent is not obvious.
 Do NOT update README, CHANGELOG, or architecture docs —
 that happens in the final Document phase after integration.
+
+### Completion status
+End with an explicit slice report. The runner marks the slice VERIFIED only when this report contains DONE, this slice_id, and result: pass.
+
+\`\`\`text
+## Slice Status: DONE
+
+### Slice evidence
+- slice_id: ${SLICE_ID}
+- verification_command: ${VERIFICATION_COMMAND}
+- expected_success_signal: ${EXPECTED_SUCCESS_SIGNAL}
+- result: pass
+- evidence_recorded: [evidence from evidence_to_record]
+\`\`\`
 BRIEF
 )
 
@@ -317,29 +456,39 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "Integration branch: $INTEGRATION_BRANCH"
 echo ""
-echo "Sub-tasks:"
-for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
-    SIZE=$(jq -r ".sub_tasks[$i].size // \"medium\"" "$INPUT")
-    echo "  feature/${TASK}/${NAME}  ($SIZE)"
-    echo "    └── worktree: ${WORKTREES_DIR}/${NAME}/"
+echo "Slices:"
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
+    TYPE=$(jq -r ".slice_manifest[$i].deliverable_type" "$INPUT")
+    DEPENDS=$(slice_array_csv "$i" "depends_on")
+    echo "  ${SLICE_BRANCH_PREFIX}${SLICE_ID}  ($TYPE, depends_on: $DEPENDS)"
+    if [[ "$DEPENDS" == "none" ]]; then
+        echo "    └── worktree: ${WORKTREES_DIR}/${SLICE_ID}/"
+    else
+        echo "    └── branch/worktree deferred until dependencies are VERIFIED; run-agents.sh creates them from integration at launch."
+    fi
 done
 echo ""
 echo "Brief files: $BRIEFS_DIR/"
-ls -1 "$BRIEFS_DIR"/sub-task-*.md 2>/dev/null | sed 's/^/  /'
+if $DRY_RUN; then
+    dry "Would list generated slice briefs under: $BRIEFS_DIR/"
+else
+    ls -1 "$BRIEFS_DIR"/slice-*.md 2>/dev/null | sed 's/^/  /'
+fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📌 Next steps"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "1. Build contracts first:"
-echo "   cd ${WORKTREES_DIR}/$(jq -r '.sub_tasks[0].name' "$INPUT")"
-echo "   # Complete sub-task #1, then merge into $INTEGRATION_BRANCH"
+echo "1. Follow slice dependency order:"
+echo "   Use each slice's depends_on field. A slice starts only after its dependencies are VERIFIED."
+echo "   Standalone contract/setup work is valid only as a verified deliverable artifact slice."
 echo ""
-echo "2. Run remaining sub-tasks (parallel):"
-echo "   ./scripts/run-agents.sh --briefs $BRIEFS_DIR --skip-first --parallel --worktrees-dir $WORKTREES_DIR"
+echo "2. Run slices (parallel where dependencies allow):"
+echo "   ./scripts/run-agents.sh --briefs $BRIEFS_DIR --parallel --worktrees-dir $WORKTREES_DIR"
+echo "   Use --skip-first only when slice #1 is already VERIFIED."
 echo ""
-echo "   Or manually per sub-task (each agent gets its own worktree):"
+echo "   Or manually per slice (each agent gets its own worktree):"
 # Use agent config if available, fallback to claude
 _CLI="claude"
 _PFLAG="-p"
@@ -351,19 +500,19 @@ if [[ -f "$_CONF" ]]; then
     _PFLAG="${AGENT_PROMPT_ARG:--p}"
     _CWDFLAG="${AGENT_CWD_FLAG:---cwd}"
 fi
-for i in $(seq 1 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
     NUM=$((i + 1))
-    echo "   $_CLI $_PFLAG \"\$(cat $BRIEFS_DIR/sub-task-${NUM}-${NAME}.md)\" $_CWDFLAG ${WORKTREES_DIR}/${NAME}"
+    echo "   $_CLI $_PFLAG \"\$(cat $BRIEFS_DIR/slice-${NUM}-${SLICE_ID}.md)\" $_CWDFLAG ${WORKTREES_DIR}/${SLICE_ID}"
 done
 echo ""
-echo "3. After all sub-tasks complete:"
+echo "3. After all slices complete:"
 echo "   ./scripts/check-integration.sh --integration-branch $INTEGRATION_BRANCH"
 echo ""
 echo "4. Clean up worktrees when done:"
 echo "   git worktree list"
-for i in $(seq 0 $((SUB_TASK_COUNT - 1))); do
-    NAME=$(jq -r ".sub_tasks[$i].name" "$INPUT")
-    echo "   git worktree remove ${WORKTREES_DIR}/${NAME}"
+for i in $(seq 0 $((SLICE_COUNT - 1))); do
+    SLICE_ID=$(jq -r ".slice_manifest[$i].slice_id" "$INPUT")
+    echo "   git worktree remove ${WORKTREES_DIR}/${SLICE_ID}"
 done
 echo "   rmdir $WORKTREES_DIR 2>/dev/null || true"
