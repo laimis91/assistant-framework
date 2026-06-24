@@ -359,6 +359,34 @@ else
     pass
 fi
 
+test_start "workflow check-integration accepts already merged slice branches"
+merged_slice_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-merged-slice.XXXXXX")"
+p0p4_register_cleanup "$merged_slice_repo"
+git -C "$merged_slice_repo" init -q
+git -C "$merged_slice_repo" config user.email "p0p4@example.invalid"
+git -C "$merged_slice_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$merged_slice_repo/README.md"
+git -C "$merged_slice_repo" add README.md
+git -C "$merged_slice_repo" commit -q -m init
+git -C "$merged_slice_repo" branch "feature/merged/integration"
+git -C "$merged_slice_repo" checkout -q -b "feature/merged/slice-alpha" "feature/merged/integration"
+printf 'alpha output\n' >"$merged_slice_repo/alpha.txt"
+git -C "$merged_slice_repo" add alpha.txt
+git -C "$merged_slice_repo" commit -q -m "alpha output"
+git -C "$merged_slice_repo" checkout -q "feature/merged/integration"
+git -C "$merged_slice_repo" merge --no-ff -q -m "merge alpha" "feature/merged/slice-alpha"
+merged_slice_out="$merged_slice_repo/check.out"
+merged_slice_err="$merged_slice_repo/check.err"
+if ! (cd "$merged_slice_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/merged/integration --dry-run --skip-build >"$merged_slice_out" 2>"$merged_slice_err"); then
+    fail "check-integration.sh rejected an already merged slice branch: $(tr '\n' ' ' <"$merged_slice_err")"
+elif ! grep -Fq -- "already merged into integration branch" "$merged_slice_out"; then
+    fail "merged slice branch success did not explain already-integrated status"
+elif grep -Fq -- "no commits ahead of integration branch" "$merged_slice_err"; then
+    fail "merged slice branch was still reported as empty"
+else
+    pass
+fi
+
 test_start "workflow decompose rejects unsafe duplicate unknown self and cyclic slice dependencies"
 decompose_validation_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-decompose-validation.XXXXXX")"
 p0p4_register_cleanup "$decompose_validation_repo"
@@ -1063,7 +1091,9 @@ for file in \
         "reported DONE/pass evidence" \
         "Created branch:" \
         "Merged verified slice" \
-        "Verify each slice branch has commits" \
+        "Deferred:" \
+        "Merge verified slice branches into feature/<task>/integration" \
+        "Rerun deferred dependent slices with --verified-slices after prerequisites are merged" \
         "feature/<task>/slice-<slice_id>" \
         "feature/<task>/integration"; do
         if ! grep -Fq -- "$term" "$file"; then
@@ -1098,7 +1128,7 @@ else
     fail "live decomposition scripts must use strict slice manifests and slice briefs: ${missing_live_slice_terms[*]}"
 fi
 
-test_start "workflow run-agents numerically orders slices and blocks parallel dependencies"
+test_start "workflow run-agents numerically orders slices and defers blocked parallel dependencies"
 runner_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runner-repo.XXXXXX")"
 p0p4_register_cleanup "$runner_repo"
 git -C "$runner_repo" init -q
@@ -1171,10 +1201,18 @@ else
     runner_order_actual="$(grep -E "Agent [0-9]+: slice-" "$runner_order_out" | sed -E 's/.*Agent [0-9]+: //')"
     if [[ "$runner_order_actual" != "$runner_order_expected" ]]; then
         fail "run-agents.sh did not use numeric slice order; got: $(printf '%s' "$runner_order_actual" | tr '\n' ' ')"
-    elif bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$runner_briefs" --repo "$runner_repo" --parallel --dry-run >"$runner_parallel_out" 2>"$runner_parallel_err"; then
-        fail "run-agents.sh parallel dry-run launched dependency-blocked slices"
-    elif ! grep -Fq "Parallel launch blocked: slice 'beta' depends on 'alpha'" "$runner_parallel_err"; then
-        fail "run-agents.sh parallel dependency failure was not actionable"
+    elif ! bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$runner_briefs" --repo "$runner_repo" --parallel --dry-run >"$runner_parallel_out" 2>"$runner_parallel_err"; then
+        fail "run-agents.sh parallel dry-run failed instead of launching the ready wave: $(tr '\n' ' ' <"$runner_parallel_err")"
+    elif ! grep -Fq "Agent 1: slice-1-alpha" "$runner_parallel_out"; then
+        fail "run-agents.sh parallel dry-run did not launch dependency-free alpha"
+    elif ! grep -Fq "Agent 3: slice-10-late" "$runner_parallel_out"; then
+        fail "run-agents.sh parallel dry-run did not launch independent late slice"
+    elif grep -Fq "Agent 2: slice-2-beta" "$runner_parallel_out"; then
+        fail "run-agents.sh parallel dry-run launched dependency-blocked beta"
+    elif ! grep -Fq "Deferring slice 'beta' in this parallel wave" "$runner_parallel_out"; then
+        fail "run-agents.sh parallel dry-run did not explain deferred beta"
+    elif ! grep -Fq "Deferred: 1" "$runner_parallel_out"; then
+        fail "run-agents.sh parallel summary did not count deferred slices"
     else
         pass
     fi

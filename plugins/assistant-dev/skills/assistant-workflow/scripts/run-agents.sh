@@ -355,7 +355,10 @@ validate_dependency_plan() {
             fi
 
             if $PARALLEL; then
-                fail "Parallel launch blocked: slice '$current_id' depends on '$dep', but '$dep' is not already VERIFIED. Run prerequisite slices first, then pass --verified-slices $dep."
+                if slice_index_by_id "$dep" >/dev/null; then
+                    continue
+                fi
+                fail "Parallel launch blocked: slice '$current_id' depends on '$dep', but no slice brief with that slice_id was found and it is not listed in --verified-slices."
             fi
 
             if dependency_appears_earlier_selected "$dep" "$i"; then
@@ -385,6 +388,33 @@ dependencies_verified_now() {
             fail "Slice '$current_id' cannot start because dependency '$dep' is not VERIFIED. Earlier selected prerequisites must complete successfully before dependent slices launch."
         fi
     done <<< "${SLICE_DEPENDS[$index]}"
+}
+
+parallel_unverified_dependencies() {
+    local index="$1"
+    local dep
+
+    while IFS= read -r dep; do
+        [[ -n "$dep" ]] || continue
+        if ! is_verified_slice "$dep"; then
+            printf '%s\n' "$dep"
+        fi
+    done <<< "${SLICE_DEPENDS[$index]}"
+}
+
+join_lines_csv() {
+    local joined=""
+    local line
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        if [[ -n "$joined" ]]; then
+            joined+=", "
+        fi
+        joined+="$line"
+    done
+
+    printf '%s\n' "$joined"
 }
 
 BRIEF_FILES=()
@@ -811,7 +841,7 @@ merge_verified_slice_into_integration() {
 
     if $DRY_RUN; then
         dry "git checkout $integration_branch"
-        dry "git merge --no-edit $branch"
+        dry "git merge --no-ff --no-edit $branch"
         return 0
     fi
 
@@ -840,7 +870,7 @@ merge_verified_slice_into_integration() {
         return 1
     fi
 
-    if git -C "$REPO" merge --no-edit "$branch" --quiet; then
+    if git -C "$REPO" merge --no-ff --no-edit "$branch" --quiet; then
         ok "Merged verified slice '$slice_id' into $integration_branch."
         return 0
     fi
@@ -1021,16 +1051,18 @@ resolve_agent_cwd() {
 
 # ── Launch agents ─────────────────────────────────────────────────────────────
 
-TOTAL=$((${#BRIEF_FILES[@]} - START_INDEX))
+SELECTED_TOTAL=$((${#BRIEF_FILES[@]} - START_INDEX))
+LAUNCHED=0
 MODE_STR="sequential (shared repo)"
 if $PARALLEL; then
     MODE_STR="parallel (separate worktrees)"
 fi
-info "Launching $TOTAL agent(s) ($AGENT, $MODE_STR)"
+info "Preparing $SELECTED_TOTAL selected slice(s) ($AGENT, $MODE_STR)"
 
 PIDS=()
 PID_BRIEFS=()
 FAILED=()
+DEFERRED=()
 
 # Snapshot existing worktrees before the loop so --cleanup only removes new ones
 PRE_EXISTING_WORKTREES=""
@@ -1048,11 +1080,19 @@ validate_baseline_tests
 for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
     brief="${BRIEF_FILES[$i]}"
     index=$((i + 1))
-    if ! $PARALLEL; then
+    if $PARALLEL; then
+        unresolved_deps=$(parallel_unverified_dependencies "$i" | join_lines_csv)
+        if [[ -n "$unresolved_deps" ]]; then
+            DEFERRED+=("$(basename "$brief" .md): waiting for VERIFIED prerequisite(s): $unresolved_deps")
+            warn "Deferring slice '${SLICE_IDS[$i]}' in this parallel wave: waiting for VERIFIED prerequisite(s): $unresolved_deps"
+            continue
+        fi
+    else
         dependencies_verified_now "$i"
     fi
 
     agent_cwd=$(resolve_agent_cwd "$brief" "${SLICE_IDS[$i]}" "${SLICE_DEPENDS[$i]}")
+    LAUNCHED=$((LAUNCHED + 1))
     # Track only NEW worktrees for cleanup (resolve_agent_cwd runs in subshell, can't update parent array)
     if [[ -d "$agent_cwd" && "$agent_cwd" != "$REPO" ]]; then
         if ! echo "$PRE_EXISTING_WORKTREES" | grep -qxF "$agent_cwd"; then
@@ -1081,6 +1121,10 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
         fi
     fi
 done
+
+if $PARALLEL && [[ "$LAUNCHED" -eq 0 && ${#DEFERRED[@]} -gt 0 ]]; then
+    fail "Parallel launch blocked: no selected slices are currently runnable. Merge/verify prerequisites, then rerun with --verified-slices for the deferred slice dependencies."
+fi
 
 # Wait for parallel jobs
 if $PARALLEL && [[ ${#PIDS[@]} -gt 0 ]]; then
@@ -1123,10 +1167,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📋 Agent run complete"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Agents run: $TOTAL"
+echo "Agents selected: $SELECTED_TOTAL"
+echo "Agents run: $LAUNCHED"
+echo "Deferred: ${#DEFERRED[@]}"
 echo "Failed: ${#FAILED[@]}"
 echo "Logs: $LOG_DIR/"
 echo ""
+
+if [[ ${#DEFERRED[@]} -gt 0 ]]; then
+    warn "Some dependent slices were deferred and not launched in this parallel wave."
+    for f in "${DEFERRED[@]}"; do
+        echo "  ⏭️  $f"
+    done
+    echo ""
+fi
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     warn "Some agents failed. Review logs before proceeding to integration."
@@ -1138,12 +1192,13 @@ fi
 
 echo "📌 Next steps:"
 echo "  1. Review agent logs in $LOG_DIR/"
-echo "  2. Verify each slice branch has commits: git log --oneline feature/<task>/slice-<slice_id>"
-echo "  3. Run integration check: ./scripts/check-integration.sh --integration-branch feature/<task>/integration"
+echo "  2. Merge verified slice branches into feature/<task>/integration"
+echo "  3. Rerun deferred dependent slices with --verified-slices after prerequisites are merged"
+echo "  4. Run integration check: ./scripts/check-integration.sh --integration-branch feature/<task>/integration"
 
 if $PARALLEL && ! $CLEANUP_WORKTREES; then
     echo ""
-    echo "  4. Clean up worktrees when done:"
+    echo "  5. Clean up worktrees when done:"
     echo "     git worktree list"
     echo "     git worktree prune"
     echo "     rm -rf $WORKTREES_DIR"

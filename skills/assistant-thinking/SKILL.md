@@ -46,6 +46,7 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 - Do not invoke deep reasoning for simple execution tasks.
 - Do not use this skill for broad brainstorming; route option generation to `assistant-ideate`.
 - Ask only when missing context would materially change the selected method or recommendation.
+- For `Perspectives` and high-stakes `Stress Test`, prefer independent subagents when available. If the active tool policy requires explicit user authorization before spawning subagents, ask once before falling back: `This reasoning method works best with independent perspective subagents. May I use subagents for this debate/stress test?`
 - Do not invent evidence. Mark unverified claims as assumptions and identify how to validate them.
 - Do not paste secrets, proprietary source, customer data, or sensitive logs into external tools as part of reasoning.
 

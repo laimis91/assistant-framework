@@ -166,9 +166,12 @@ echo ""
 check "Slice branches have commits beyond integration branch..."
 
 for branch in "${SUB_BRANCHES[@]}"; do
-    COMMIT_COUNT=$(git rev-list --count "$INTEGRATION_BRANCH".."$branch" 2>/dev/null || echo "0")
-    if [[ "$COMMIT_COUNT" -gt 0 ]]; then
-        record_pass "$branch: $COMMIT_COUNT commit(s) ahead"
+    COMMITS_AHEAD=$(git rev-list --count "$INTEGRATION_BRANCH".."$branch" 2>/dev/null || echo "0")
+    COMMITS_BEHIND=$(git rev-list --count "$branch".."$INTEGRATION_BRANCH" 2>/dev/null || echo "0")
+    if [[ "$COMMITS_AHEAD" -gt 0 ]]; then
+        record_pass "$branch: $COMMITS_AHEAD commit(s) ahead"
+    elif [[ "$COMMITS_BEHIND" -gt 0 ]] && git merge-base --is-ancestor "$branch" "$INTEGRATION_BRANCH"; then
+        record_pass "$branch: already merged into integration branch ($COMMITS_BEHIND commit(s) behind)"
     else
         record_fail "$branch: no commits ahead of integration branch. Empty slice branches are not integration-ready; commit slice output or evidence before integration."
     fi

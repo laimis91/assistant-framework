@@ -21,6 +21,11 @@ Choose 4 perspectives relevant to the decision. Defaults:
 
 Swap roles as needed (e.g., Security Expert, Performance Engineer, Domain Expert).
 
+### Delegation permission gate
+For medium/high-stakes debates, prefer one independent subagent per role when available. If the active tool policy requires explicit user authorization before spawning subagents, ask: `This reasoning method works best with independent perspective subagents. May I use subagents for this debate?`
+
+If approved, delegate each role with only the decision frame, constraints, and role brief. If denied or unavailable, run the roles sequentially in the main session and record that fallback in the synthesis.
+
 ### Round 1: Independent positions
 Each perspective gives their position on the decision in 3-5 sentences. No interaction yet.
 
