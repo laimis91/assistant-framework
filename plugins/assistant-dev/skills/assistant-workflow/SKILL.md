@@ -206,6 +206,7 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
 For subagent roles and dispatch rules, load `references/subagent-dispatch.md`.
+If the active tool policy permits subagents only after explicit user authorization, ask for that delegation permission before switching to direct fallback for code, test, or review work. A sufficient prompt is: `This workflow expects Code Writer, Builder/Tester, and Reviewer subagents. May I use subagents for this task?`
 For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
 

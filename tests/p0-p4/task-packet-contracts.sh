@@ -623,6 +623,7 @@ fi
 
 test_start "workflow assistant-workflow root and plugin branch surfaces stay synchronized"
 workflow_sync_pairs=(
+    "skills/assistant-workflow/SKILL.md|plugins/assistant-dev/skills/assistant-workflow/SKILL.md"
     "skills/assistant-workflow/scripts/decompose.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/decompose.sh"
     "skills/assistant-workflow/scripts/check-integration.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/check-integration.sh"
     "skills/assistant-workflow/scripts/run-agents.sh|plugins/assistant-dev/skills/assistant-workflow/scripts/run-agents.sh"
@@ -643,6 +644,27 @@ if [[ "${#workflow_unsynced_pairs[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-workflow root/plugin mirrors differ: ${workflow_unsynced_pairs[*]}"
+fi
+
+test_start "workflow subagent permission gate is explicit before fallback"
+missing_workflow_subagent_gate=()
+for file in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/SKILL.md"; do
+    for term in \
+        "For subagent roles and dispatch rules, load \`references/subagent-dispatch.md\`." \
+        "If the active tool policy permits subagents only after explicit user authorization" \
+        "ask for that delegation permission before switching to direct fallback" \
+        "This workflow expects Code Writer, Builder/Tester, and Reviewer subagents. May I use subagents for this task?"; do
+        if ! grep -Fq -- "$term" "$file"; then
+            missing_workflow_subagent_gate+=("${file#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+done
+if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-workflow must explicitly ask for subagent permission before direct fallback: ${missing_workflow_subagent_gate[*]}"
 fi
 
 test_start "workflow live output plan and decomposition review reject stale sub-task framing"
