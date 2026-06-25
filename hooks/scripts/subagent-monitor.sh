@@ -22,6 +22,8 @@ INPUT=$(cat)
 EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // ""' 2>/dev/null || true)
 AGENT_NAME=$(printf '%s' "$INPUT" | jq -r '.agent_name // .agent_type // ""' 2>/dev/null || true)
 AGENT_ID=$(printf '%s' "$INPUT" | jq -r '.agent_id // ""' 2>/dev/null || true)
+TURN_ID=$(printf '%s' "$INPUT" | jq -r '.turn_id // ""' 2>/dev/null || true)
+SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || true)
 TRANSCRIPT_PATH=$(printf '%s' "$INPUT" | jq -r '.agent_transcript_path // ""' 2>/dev/null || true)
 CWD_INPUT=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || true)
 
@@ -59,9 +61,11 @@ if $IS_CODEX; then
             --arg agent_type "$AGENT_NAME" \
             --arg agent_name "$AGENT_NAME" \
             --arg agent_id "$AGENT_ID" \
+            --arg turn_id "$TURN_ID" \
+            --arg session_id "$SESSION_ID" \
             --arg transcript_path "$TRANSCRIPT_PATH" \
             --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{event:$event,agent_type:$agent_type,agent_name:$agent_name,agent_id:$agent_id,transcript_path:$transcript_path,timestamp:$timestamp}' \
+            '{event:$event,agent_type:$agent_type,agent_name:$agent_name,agent_id:$agent_id,turn_id:$turn_id,session_id:$session_id,transcript_path:$transcript_path,timestamp:$timestamp}' \
             >> "$PROJECT_DIR/.codex/subagent-events.jsonl"
     fi
 
