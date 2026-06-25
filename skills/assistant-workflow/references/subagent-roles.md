@@ -1,6 +1,6 @@
 # Subagent Role Definitions
 
-Reference for dispatching subagents via the Agent tool. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), use agent names directly as `subagent_type` — each agent carries its own system prompt, tool restrictions, and provider-specific model settings when that runtime supports them.
+Reference for dispatching subagents through the active runtime's agent mechanism. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), dispatch by the configured agent name — each agent carries its own system prompt, tool restrictions, and provider-specific model settings when that runtime supports them. Do not assume every runtime exposes a Claude-style `Agent` tool or `subagent_type` parameter.
 
 ## Model selection guidance
 
@@ -22,7 +22,11 @@ If the runtime does not expose model overrides for subagents, keep the role sepa
 
 ## Installed agents
 
-When custom agents are installed, dispatch by name. The agent's own configuration handles everything:
+When custom agents are installed, dispatch by name. The agent's own configuration handles everything; the runtime syntax differs:
+
+### Claude Code
+
+Claude exposes the `Agent` tool with `subagent_type` values matching installed agent names:
 
 ```
 Agent(subagent_type="reviewer", prompt="Review the changes in {files}. This is round {N}...")
@@ -32,6 +36,21 @@ Agent(subagent_type="code-mapper", prompt="Map the structure around {area}...")
 Agent(subagent_type="code-writer", prompt="Implement the following plan: {plan}...")
 Agent(subagent_type="builder-tester", prompt="Build and test the project...")
 ```
+
+### Codex
+
+Current Codex CLI/app releases support native subagent workflows by default. Codex custom agents are standalone TOML files under `~/.codex/agents/` for personal agents or `.codex/agents/` for project-scoped agents. Ask Codex to spawn the configured agent by name; do not look for a visible Claude-style `Agent` tool or `subagent_type` parameter before deciding delegation is available:
+
+```
+Spawn the reviewer agent to review the changes in {files}. This is round {N}...
+Spawn the explorer agent to trace execution paths for {feature}...
+Spawn the architect agent to design implementation for {feature}...
+Spawn the code-mapper agent to map the structure around {area}...
+Spawn the code-writer agent to implement the following plan: {plan}...
+Spawn the builder-tester agent to build and test the project...
+```
+
+Codex global `[agents]` settings such as `max_threads` and `max_depth` are optional limits; absence of those settings is not proof that subagents are unavailable.
 
 The prompt you provide is the **task context** — what to do, not how to do it. The agent's built-in system prompt handles the "how."
 

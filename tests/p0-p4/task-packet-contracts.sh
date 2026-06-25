@@ -711,6 +711,10 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST NOT spawn subagents"
     "skills/assistant-workflow/references/subagent-dispatch.md|direct fallback evidence"
+    "skills/assistant-workflow/references/subagent-roles.md|Current Codex CLI/app releases support native subagent workflows by default"
+    "skills/assistant-workflow/references/subagent-roles.md|Spawn the code-writer agent"
+    "skills/assistant-workflow/references/subagent-roles.md|do not look for a visible Claude-style \`Agent\` tool"
+    "skills/assistant-workflow/references/subagent-roles.md|optional limits; absence of those settings is not proof that subagents are unavailable"
     "skills/assistant-workflow/references/subagent-dispatch.md|Strict evidence gate"
     "skills/assistant-workflow/references/task-journal-template.md|Agent Dispatch Log"
     "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
@@ -734,6 +738,26 @@ if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
+fi
+
+test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"
+missing_codex_subagent_doc_terms=()
+for term in \
+    "docs/v0.3.0-research-improvements.md|native subagent workflow" \
+    "docs/v0.3.0-research-improvements.md|Current Codex CLI/app releases enable native subagent workflows by default" \
+    "docs/v0.3.0-research-improvements.md|optional tuning knobs, not required enablers"; do
+    IFS='|' read -r surface expected <<< "$term"
+    if [[ ! -f "$FRAMEWORK_DIR/$surface" ]] || ! grep -Fq -- "$expected" "$FRAMEWORK_DIR/$surface"; then
+        missing_codex_subagent_doc_terms+=("$surface: $expected")
+    fi
+done
+if grep -Fq -- "features.multi_agent = true" "$FRAMEWORK_DIR/docs/v0.3.0-research-improvements.md"; then
+    missing_codex_subagent_doc_terms+=("docs/v0.3.0-research-improvements.md: stale features.multi_agent = true")
+fi
+if [[ "${#missing_codex_subagent_doc_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "Codex subagent docs should match current native subagent behavior: ${missing_codex_subagent_doc_terms[*]}"
 fi
 
 test_start "workflow live output plan and decomposition review reject stale sub-task framing"
