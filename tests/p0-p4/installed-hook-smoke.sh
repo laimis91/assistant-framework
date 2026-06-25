@@ -107,7 +107,7 @@ TASK
                 smoke_failed="installed Codex compaction hook emitted unsupported JSON shape: event=$event path=$installed_path stdout='$hook_stdout'"
                 break
             fi
-        done < <(jq -r '.hooks | to_entries[] | .key as $event | .value[]?.hooks[]? | .command? // empty | select(startswith("$HOME/.codex/hooks/assistant/")) | [$event, .] | @tsv' "$hooks_file")
+        done < <(jq -r --arg hooks_dir "$installed_hooks_dir" '.hooks | to_entries[] | .key as $event | .value[]?.hooks[]? | .command? // empty | select(startswith("$HOME/.codex/hooks/assistant/") or startswith($hooks_dir + "/")) | [$event, .] | @tsv' "$hooks_file")
     fi
 
     session_start="$installed_hooks_dir/session-start.sh"

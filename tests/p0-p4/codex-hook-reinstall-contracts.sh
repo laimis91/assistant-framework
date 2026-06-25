@@ -108,7 +108,7 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
 }
 JSON
 if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-hooks.out 2>/tmp/p0p4-install-codex-hooks.err; then
-    if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e --arg install_home "$INSTALL_HOME_FIVE" --arg framework_dir "$FRAMEWORK_DIR" '
+    if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e --arg install_home "$INSTALL_HOME_FIVE" --arg framework_dir "$FRAMEWORK_DIR" --arg command_dir "$INSTALL_HOME_FIVE/.codex/hooks/assistant" '
         def first_shell_token:
             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
         def current_framework_hook_names:
@@ -126,10 +126,9 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
             ];
         [.. | objects | .command? // empty] as $commands
         | [$commands[] | first_shell_token] as $tokens
-        | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ("$HOME/.codex/hooks/assistant/" + $hook_name)))] as $frameworkCommands
+        | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ($command_dir + "/" + $hook_name)))] as $frameworkCommands
         | {
             stale: ($tokens | any(. == ($install_home + "/.codex/hooks/assistant/session-end.sh")
-                or . == ($install_home + "/.codex/hooks/assistant/workflow-guard.sh")
                 or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
                 or . == ($framework_dir + "/hooks/scripts/task-completed.sh")
                 or . == ($framework_dir + "/hooks/scripts/task-journal-resolver.sh")
@@ -142,8 +141,8 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
             absoluteAssistantCustom: ($commands | any(. == ($install_home + "/.codex/hooks/assistant/custom-absolute.sh --keep"))),
             preToolCustom: ($commands | any(. == "/tmp/user-pretool-hook.sh")),
             uniqueFramework: (($frameworkCommands | length) == ($frameworkCommands | unique | length)),
-            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
-            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh"))
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh")))
         }
         | (.stale | not) and .custom and .postToolCustom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
     ' "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null; then
