@@ -802,6 +802,8 @@ Required agents:
 - Builder/Tester
 - Reviewer
 ## Agent Dispatch Log
+- Code Mapper dispatch: code-mapper context packet
+- Code Mapper result: context map returned
 - Code Writer dispatch: run-writer
 - Code Writer result: implementation returned
 - Builder/Tester dispatch: run-builder
@@ -836,6 +838,136 @@ TASK
         pass
     else
         fail "exit=$HOOK_EXIT, expected medium delegated per-slice evidence block"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated medium task missing Code Mapper discovery evidence → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Reviewer
+## Agent Dispatch Log
+- Reviewer dispatch: reviewer no-op validation
+- Reviewer result: PASS no blockers
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_code_mapper"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected missing Code Mapper discovery evidence block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated medium no-code review with Code Mapper and Reviewer evidence passes"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Reviewer
+## Agent Dispatch Log
+- Code Mapper dispatch: code-mapper no-code context map
+- Code Mapper result: context map returned; bug already fixed
+- Reviewer dispatch: reviewer no-code validation
+- Reviewer result: PASS no blockers
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow no-code delegated review with Code Mapper/Reviewer evidence and no per-slice implementation evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated review phase missing Reviewer evidence → blocks even without code changes"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_reviewer"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected missing Reviewer evidence block for delegated review; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi

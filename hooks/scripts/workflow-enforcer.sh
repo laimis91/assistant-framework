@@ -275,6 +275,7 @@ if grep -qE "^- Result: (CLEAN|ISSUES[_ ]FIXED|HAS[_ ]REMAINING[_ ]ITEMS)" "$TAS
     has_final_result="yes"
 fi
 review_gate_status="$(assistant_phase_review_missing_reason_key "$TASK_FILE")"
+subagent_gate_status="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE")"
 has_review_completion="no"
 if [[ "$review_gate_status" == "complete" ]]; then
     has_review_completion="yes"
@@ -299,6 +300,7 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Reviews completed: $review_count
 - Final result: $has_final_result
 - Review gate complete: $has_review_completion
+- Subagent evidence gate: $subagent_gate_status
 - Metrics today: $has_metrics_today
 
 PHASE RULES (non-negotiable):
@@ -313,6 +315,7 @@ context+="
 RUNTIME PHASE GATES:
 - Plan approved: $has_plan_approval
 - Review gate complete: $has_review_completion
+- Subagent evidence gate: $subagent_gate_status
 - Metrics today: $has_metrics_today"
 
 if [[ "$clarification_gate_active" == "yes" ]]; then
@@ -336,6 +339,11 @@ if [[ "$clarification_state_unsaved" == "yes" ]]; then
     context+="
 WARNING: Clarification state is missing or unknown in the saved task journal. Write Clarification status, Clarification defaults applied, and Unresolved clarification topics before continuing.
 REMINDER: Saved clarification state must be written to the task journal before continuing."
+fi
+
+if [[ "$subagent_gate_status" != "complete" ]]; then
+    context+="
+WARNING: Subagent evidence gate incomplete ($subagent_gate_status). If execution mode is delegated, dispatch and record every required workflow role before moving on; if using direct_fallback, record a valid fallback reason plus role-equivalent evidence. Do not silently complete Discovery or Review inline when delegated."
 fi
 
 if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then

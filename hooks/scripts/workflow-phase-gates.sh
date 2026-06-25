@@ -291,52 +291,85 @@ assistant_phase_has_per_slice_dispatch_evidence() {
     assistant_phase_has_labeled_evidence "$file" "Per-slice dispatch evidence"
 }
 
-assistant_phase_requires_subagent_roles() {
+assistant_phase_required_subagent_roles() {
     local file="$1"
-    awk '
-        BEGIN { in_required = 0; found = 0 }
+    local status mode
+    status="$(assistant_phase_status "$file" | tr '[:upper:]' '[:lower:]' || true)"
+    mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" '
+        function emit(role) {
+            if (!seen[role]) {
+                seen[role] = 1
+                print role
+            }
+        }
+        function scan(line, low) {
+            low = tolower(line)
+            if (low ~ /code mapper|code-mapper/) emit("Code Mapper")
+            if (low ~ /explorer/) emit("Explorer")
+            if (low ~ /architect/) emit("Architect")
+            if (low ~ /code writer|code-writer/) emit("Code Writer")
+            if (low ~ /builder\/tester|builder-tester/) emit("Builder/Tester")
+            if (low ~ /reviewer/) emit("Reviewer")
+        }
+        BEGIN {
+            # Medium+ discovery always requires a Code Mapper context map once
+            # subagent execution mode has been resolved. Add the role from task
+            # size even if the journal forgot to list it.
+            if (mode ~ /^(delegated|direct_fallback)$/ && is_medium_plus == "yes") emit("Code Mapper")
+            # Once a delegated/fallback task is in Review/Document, the review
+            # role is required even for no-op/no-code-change outcomes; otherwise
+            # "review phase" can be satisfied inline while claiming delegated mode.
+            if (mode ~ /^(delegated|direct_fallback)$/ && status ~ /(reviewing|documenting)/) emit("Reviewer")
+        }
         /^Required agents:[[:space:]]*$/ { in_required = 1; next }
         /^Required agents:[[:space:]]*(.+)$/ {
-            line = tolower($0)
-            if (line ~ /(code writer|code-writer|builder\/tester|builder-tester|reviewer)/) {
-                found = 1
-            }
+            scan($0)
             next
         }
         in_required && /^[[:space:]]*-[[:space:]]+/ {
-            line = tolower($0)
-            if (line ~ /(code writer|code-writer|builder\/tester|builder-tester|reviewer)/) {
-                found = 1
-            }
+            scan($0)
             next
         }
         in_required && /^[^[:space:]-]/ { in_required = 0 }
-        END { exit found ? 0 : 1 }
     ' "$file" 2>/dev/null
+}
+
+assistant_phase_requires_subagent_roles() {
+    [[ -n "$(assistant_phase_required_subagent_roles "$1")" ]]
+}
+
+assistant_phase_role_reason_slug() {
+    printf '%s' "$1" | tr '[:upper:]/ ' '[:lower:]__'
 }
 
 assistant_phase_subagent_evidence_missing_reason_key() {
     local file="$1"
-    local mode policy_state
+    local mode policy_state role roles
     mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
     policy_state="$(assistant_phase_subagent_policy_state "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    roles="$(assistant_phase_required_subagent_roles "$file")"
 
-    # Strict subagent evidence only applies when the active task declares source-changing
-    # workflow roles. Read-only/planning tasks can legitimately use not_applicable.
-    if ! assistant_phase_requires_subagent_roles "$file"; then
+    # Strict subagent evidence applies whenever workflow subagent roles are
+    # declared, not only when source code changed. Discovery/review-only work can
+    # legitimately skip Code Writer and Builder/Tester, but delegated Code Mapper,
+    # Explorer, Architect, or Reviewer responsibilities still need evidence.
+    if [[ -z "$roles" ]]; then
         printf 'complete\n'
         return 0
     fi
 
     case "$mode" in
         delegated)
-            for role in "Code Writer" "Builder/Tester" "Reviewer"; do
+            while IFS= read -r role; do
+                [[ -n "$role" ]] || continue
                 if ! assistant_phase_has_role_dispatch_result_evidence "$file" "$role"; then
-                    printf 'delegated_missing_%s\n' "$(printf '%s' "$role" | tr '[:upper:]/ ' '[:lower:]__')"
+                    printf 'delegated_missing_%s\n' "$(assistant_phase_role_reason_slug "$role")"
                     return 0
                 fi
-            done
-            if ! assistant_phase_has_per_slice_dispatch_evidence "$file"; then
+            done <<< "$roles"
+            if printf '%s\n' "$roles" | grep -Eq '^(Code Writer|Builder/Tester)$' \
+                && ! assistant_phase_has_per_slice_dispatch_evidence "$file"; then
                 printf 'delegated_missing_per_slice\n'
                 return 0
             fi
@@ -350,12 +383,13 @@ assistant_phase_subagent_evidence_missing_reason_key() {
                 printf 'direct_fallback_missing_reason\n'
                 return 0
             fi
-            for role in "Code Writer" "Builder/Tester" "Reviewer"; do
+            while IFS= read -r role; do
+                [[ -n "$role" ]] || continue
                 if ! assistant_phase_has_role_equivalent_evidence "$file" "$role"; then
-                    printf 'direct_fallback_missing_%s\n' "$(printf '%s' "$role" | tr '[:upper:]/ ' '[:lower:]__')"
+                    printf 'direct_fallback_missing_%s\n' "$(assistant_phase_role_reason_slug "$role")"
                     return 0
                 fi
-            done
+            done <<< "$roles"
             ;;
         not_applicable|"")
             printf 'not_applicable_with_required_roles\n'
