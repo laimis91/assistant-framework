@@ -232,6 +232,58 @@ with open(target_settings, "w", encoding="utf-8") as f:
 PY
 }
 
+rewrite_codex_hook_commands_for_target() {
+    local settings_file="$1"
+    local command_dir="$2"
+    [[ -f "$settings_file" ]] || return 0
+
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg command_dir "$command_dir" '
+            .hooks = ((.hooks // {}) | with_entries(
+                .value = ((.value | if type == "array" then . else [.] end) | map(
+                    .hooks = ((.hooks // []) | map(
+                        if ((.command // "") | test("^\\$HOME/\\.codex/hooks/assistant/")) then
+                            .command = ((.command // "") | sub("^\\$HOME/\\.codex/hooks/assistant"; $command_dir))
+                        else
+                            .
+                        end
+                    ))
+                ))
+            ))
+        ' "$settings_file" > "${settings_file}.tmp" && mv "${settings_file}.tmp" "$settings_file"
+        return 0
+    fi
+
+    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to rewrite Codex hook command paths"
+    python3 - "$settings_file" "$command_dir" <<'PY'
+import json
+import sys
+
+settings_file, command_dir = sys.argv[1:3]
+with open(settings_file, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+for groups in (settings.get("hooks") or {}).values():
+    if not isinstance(groups, list):
+        groups = [groups]
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        hooks = group.get("hooks") or []
+        if not isinstance(hooks, list):
+            hooks = [hooks]
+        for hook in hooks:
+            if not isinstance(hook, dict):
+                continue
+            command = str(hook.get("command") or "")
+            prefix = "$HOME/.codex/hooks/assistant"
+            if command.startswith(prefix):
+                hook["command"] = command_dir + command[len(prefix):]
+with open(settings_file, "w", encoding="utf-8") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+PY
+}
+
 merge_profiled_hooks_settings_python() {
     local existing_settings="$1"
     local profiled_settings="$2"
@@ -295,7 +347,9 @@ def is_assistant_hook(command):
     if output_kind == "codex":
         return any(
             token == f"$HOME/.codex/hooks/assistant/{name}"
+            or token == f"{hooks_target}/{name}"
             or token.endswith(f"/.codex/hooks/assistant/{name}")
+            or token.endswith(f"/hooks/assistant/{name}")
             or token.endswith(f"/hooks/scripts/{name}")
             for name in assistant_hook_names
         )
@@ -986,7 +1040,15 @@ if $TEST_HOOKS; then
 fi
 
 # Determine target base
-AGENT_HOME="$HOME/.${AGENT}"
+if [[ "$AGENT" == "codex" ]]; then
+    # Codex supports CODEX_HOME for its user-level config directory. Install to
+    # the same directory Codex will inspect, otherwise a CODEX_HOME-based setup
+    # keeps seeing old hooks from the active Codex home while the installer writes
+    # unused files under ~/.codex.
+    AGENT_HOME="${CODEX_HOME:-$HOME/.codex}"
+else
+    AGENT_HOME="$HOME/.${AGENT}"
+fi
 SKILLS_TARGET="$AGENT_HOME/skills"
 MEMORY_TARGET="$AGENT_HOME/memory"
 
@@ -1003,6 +1065,14 @@ fi
 
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 SETTINGS_FILE="$AGENT_HOME/settings.json"
+CODEX_HOOK_COMMAND_DIR=""
+if [[ "$AGENT" == "codex" ]]; then
+    if [[ -n "${CODEX_HOME:-}" ]]; then
+        CODEX_HOOK_COMMAND_DIR="$HOOKS_TARGET"
+    else
+        CODEX_HOOK_COMMAND_DIR='$HOME/.codex/hooks/assistant'
+    fi
+fi
 
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
@@ -1432,6 +1502,9 @@ if $INSTALL_HOOKS; then
     if [[ -n "$HOOKS_SETTINGS" && -f "$HOOKS_SETTINGS" ]]; then
         PROFILED_HOOKS_SETTINGS="$(mktemp)"
         write_profiled_hooks_settings "$HOOKS_SETTINGS" "$PROFILED_HOOKS_SETTINGS"
+        if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
+            rewrite_codex_hook_commands_for_target "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOK_COMMAND_DIR"
+        fi
         trap 'rm -f "$PROFILED_HOOKS_SETTINGS"' EXIT
         if $DRY_RUN; then
             dry "Hook profile: $HOOK_PROFILE"
@@ -1510,7 +1583,7 @@ if $INSTALL_HOOKS; then
                 if [[ -f "$CODEX_HOOKS_FILE" ]]; then
                     if command -v jq &>/dev/null; then
                         # Merge with existing hooks.json
-                        existing_hooks=$(jq '
+                        existing_hooks=$(jq --arg hooks_target "$HOOKS_TARGET" '
                         def assistant_framework_codex_hook_names:
                             [
                                 "session-start.sh",
@@ -1537,7 +1610,9 @@ if $INSTALL_HOOKS; then
                             | ($command | first_shell_token) as $token
                             | any(assistant_framework_codex_hook_names[]; . as $hook_name |
                                 $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
+                                or $token == ($hooks_target + "/" + $hook_name)
                                 or ($token | endswith("/.codex/hooks/assistant/" + $hook_name))
+                                or ($token | endswith("/hooks/assistant/" + $hook_name))
                                 or ($token | endswith("/hooks/scripts/" + $hook_name))
                             );
                         (.hooks // {})
@@ -1947,11 +2022,11 @@ if $INSTALL_HOOKS; then
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
         if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, PostCompact — 6 events, consolidated stop gate)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + compaction"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
+            echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
         else
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events, consolidated stop gate)"
-            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review"
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
+            echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
             echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
         fi
     fi

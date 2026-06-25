@@ -1071,6 +1071,48 @@ else
     fail "Gemini strict setup for downgrade failed; see /tmp/p0p4-install-gemini-downgrade-strict.err"
 fi
 
+test_start "Codex install respects CODEX_HOME and registers lifecycle hooks there"
+CODEX_CUSTOM_HOME_PARENT="$(mktemp -d)"
+CODEX_CUSTOM_ACTIVE_HOME="$CODEX_CUSTOM_HOME_PARENT/active-codex-home"
+CODEX_CUSTOM_UNUSED_HOME="$CODEX_CUSTOM_HOME_PARENT/unrelated-user-home"
+p0p4_register_cleanup "$CODEX_CUSTOM_HOME_PARENT"
+mkdir -p "$CODEX_CUSTOM_ACTIVE_HOME" "$CODEX_CUSTOM_UNUSED_HOME/.codex"
+cat > "$CODEX_CUSTOM_ACTIVE_HOME/hooks.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"matcher":"","hooks":[{"type":"command","command":"/tmp/user-codex-custom.sh"}]}
+    ],
+    "PreToolUse": [
+      {"matcher":"","hooks":[{"type":"command","command":"/old/custom/home/hooks/assistant/workflow-guard.sh"}]}
+    ]
+  }
+}
+JSON
+if HOME="$CODEX_CUSTOM_UNUSED_HOME" CODEX_HOME="$CODEX_CUSTOM_ACTIVE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-codehome.out 2>/tmp/p0p4-install-codex-codehome.err; then
+    if [[ ! -f "$CODEX_CUSTOM_UNUSED_HOME/.codex/hooks.json" ]] \
+        && [[ -x "$CODEX_CUSTOM_ACTIVE_HOME/hooks/assistant/subagent-monitor.sh" ]] \
+        && jq -e --arg command_dir "$CODEX_CUSTOM_ACTIVE_HOME/hooks/assistant" '
+            [.. | objects | .command? // empty] as $commands
+            | {
+                custom: ($commands | any(. == "/tmp/user-codex-custom.sh")),
+                sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+                workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+                subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+                subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+                noHomeCodexCommands: ($commands | all(startswith("$HOME/.codex/hooks/assistant/") | not)),
+                noOldFrameworkCommand: ($commands | all(. != "/old/custom/home/hooks/assistant/workflow-guard.sh"))
+            }
+            | .custom and .sessionStart and .workflowGuard and .subagentStart and .subagentStop and .noHomeCodexCommands and .noOldFrameworkCommand
+        ' "$CODEX_CUSTOM_ACTIVE_HOME/hooks.json" >/dev/null; then
+        pass
+    else
+        fail "Codex CODEX_HOME install should write active hooks.json with absolute command paths and prune old framework hooks"
+    fi
+else
+    fail "Codex CODEX_HOME install failed; see /tmp/p0p4-install-codex-codehome.err"
+fi
+
 test_start "Codex --no-hooks does not enable hooks feature flag or create hooks.json"
 CODEX_NO_HOOKS_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_NO_HOOKS_HOME"
