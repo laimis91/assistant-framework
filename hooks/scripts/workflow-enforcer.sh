@@ -70,6 +70,29 @@ STATE BOOTSTRAP (when no active task journal is present):
     }'
 }
 
+assistant_codex_prompt_has_subagent_decision() {
+    local prompt_lc
+    prompt_lc="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
+    [[ "$prompt_lc" == *"approve subagents"* \
+        || "$prompt_lc" == *"authorize subagents"* \
+        || "$prompt_lc" == *"use subagents"* \
+        || "$prompt_lc" == *"spawn subagents"* \
+        || "$prompt_lc" == *"deny subagents"* \
+        || "$prompt_lc" == *"no subagents"* \
+        || "$prompt_lc" == *"direct fallback"* ]]
+}
+
+assistant_codex_prompt_looks_like_dev_work() {
+    local prompt_lc
+    prompt_lc="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
+    [[ "$prompt_lc" =~ (implement|fix|bug|refactor|build|test|code|repo|repository|hook|contract|config|docs|documentation|install|installer|pr|pull[[:space:]]request|change|edit|patch) ]]
+}
+
+assistant_block_subagent_authorization() {
+    local reason="$1"
+    jq -cn --arg reason "$reason" '{decision: "block", reason: $reason}'
+}
+
 read_scalar_field() {
     local label="$1"
     awk -v label="$label" '
@@ -104,8 +127,13 @@ has_field_label() {
     grep -qE "^(#+[[:space:]]*)?${label}:" "$TASK_FILE" 2>/dev/null
 }
 
-# No task journal = lightweight reminder only (no phase tracking needed)
+# No task journal = block Codex development prompts until subagent authorization is explicit, then
+# fall back to lightweight reminder for non-development prompts or approved/denied follow-ups.
 if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
+    if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work && ! assistant_codex_prompt_has_subagent_decision; then
+        assistant_block_subagent_authorization "Assistant Framework requires explicit subagent authorization before Codex starts development workflow Discovery/Build/Review. Reply with 'approve subagents for this task' to authorize Codex to spawn code-mapper/architect/code-writer/builder-tester/reviewer agents, or 'deny subagents and use direct fallback' to proceed inline with direct-fallback evidence."
+        exit 0
+    fi
     # Even without a task journal, inject the behavioral rules reminder
     # This is the "always-on" enforcement layer
     emit_workflow_rules_context
@@ -291,6 +319,11 @@ fi
 has_metrics_today="no"
 if assistant_phase_has_metrics_today; then
     has_metrics_today="yes"
+fi
+
+if [[ "$STATE_DIR" == ".codex" && "$subagent_policy_state" == "authorization_required" ]] && ! assistant_codex_prompt_has_subagent_decision; then
+    assistant_block_subagent_authorization "Subagent authorization is unresolved for the active Assistant Framework task. Reply with 'approve subagents for this task' to allow delegated workflow agents, or 'deny subagents and use direct fallback' to proceed inline with explicit direct-fallback evidence. Codex must not continue Discovery/Build/Review inline while authorization_required is unresolved."
+    exit 0
 fi
 
 # Build phase-aware enforcement context

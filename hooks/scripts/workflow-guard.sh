@@ -25,6 +25,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/task-journal-resolver.sh"
+. "$SCRIPT_DIR/workflow-phase-gates.sh"
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
@@ -146,6 +147,32 @@ fi
 # Suppress the direct-edit warning for those artifacts only.
 if assistant_tool_targets_only_workflow_state_artifacts; then
     exit 0
+fi
+
+assistant_workflow_guard_block() {
+    local reason="$1"
+    jq -cn --arg reason "$reason" '{decision: "block", reason: $reason}'
+}
+
+subagent_missing_key="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE" || true)"
+subagent_policy_state="$(assistant_phase_subagent_policy_state "$TASK_FILE" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+subagent_execution_mode="$(assistant_phase_subagent_mode "$TASK_FILE" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+
+if assistant_phase_is_codex_task "$TASK_FILE" && [[ "$status" == *"BUILDING"* || "$status" == *"VERIFYING"* ]]; then
+    if [[ -z "$subagent_policy_state" || -z "$subagent_execution_mode" || "$subagent_policy_state" == "unknown" || "$subagent_execution_mode" == "unknown" ]]; then
+        assistant_workflow_guard_block "Workflow subagent policy is unresolved for an active Build/Verify edit. Resolve subagent_policy_state and subagent_execution_mode in the task journal before editing project files."
+        exit 0
+    fi
+    if [[ "$subagent_missing_key" == "authorization_required_unresolved" ]]; then
+        assistant_workflow_guard_block "Subagent authorization is unresolved. Ask once for the needed workflow delegation scope and wait before editing project files. Do not continue Build inline while authorization_required is unresolved."
+        exit 0
+    fi
+    if [[ "$subagent_execution_mode" == "delegated" ]] && assistant_phase_required_subagent_roles "$TASK_FILE" | grep -qx "Code Writer"; then
+        if ! assistant_phase_has_role_start_event_evidence "$TASK_FILE" "Code Writer"; then
+            assistant_workflow_guard_block "Delegated Codex Build requires real Code Writer SubagentStart lifecycle evidence before project file edits. Ask Codex to spawn the code-writer agent, or switch to a valid direct_fallback reason before editing. Task-journal text alone is not sufficient."
+            exit 0
+        fi
+    fi
 fi
 
 # Inject warning — NOT a block (sub-agents also trigger this hook)

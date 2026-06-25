@@ -41,6 +41,28 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/subagent-monitor.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/assistant/subagent-monitor.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "",

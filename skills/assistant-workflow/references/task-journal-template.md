@@ -46,6 +46,7 @@ Plan approval: [yes/no + date]
 [strict subagent evidence inspected by stop-review/phase gates]
 - Required roles: Code Writer, Builder/Tester, Reviewer [plus Code Mapper/Explorer/Architect when required by size/risk]
 - Execution mode: delegated | direct_fallback | not_applicable
+- Codex lifecycle evidence: delegated Codex roles must have matching `.codex/subagent-events.jsonl` `SubagentStart` + `SubagentStop` records; journal text alone is not proof.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
 - Code Mapper dispatch: [subagent/tool/run id, mapping packet, timestamp, or N/A only in direct_fallback/not required]
 - Code Mapper result: [context map summary/evidence, or N/A only in direct_fallback/not required]

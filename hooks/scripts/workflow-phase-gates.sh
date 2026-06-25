@@ -267,11 +267,77 @@ assistant_phase_has_labeled_evidence() {
     [[ ! "$value" =~ ^(\[.*\]|none|None|NONE|n/a|N/A|missing|todo|TODO|tbd|TBD)$ ]]
 }
 
+assistant_phase_is_codex_task() {
+    local file="$1"
+    [[ "$file" == */.codex/task.md || "$file" == .codex/task.md ]]
+}
+
+assistant_phase_subagent_events_file() {
+    local file="$1"
+    printf '%s/subagent-events.jsonl\n' "$(dirname "$file")"
+}
+
+assistant_phase_role_agent_pattern() {
+    case "$1" in
+        "Code Mapper") printf 'code-mapper|codemapper|Code Mapper' ;;
+        "Explorer") printf 'explorer|Explorer' ;;
+        "Architect") printf 'architect|Architect' ;;
+        "Code Writer") printf 'code-writer|codewriter|Code Writer' ;;
+        "Builder/Tester") printf 'builder-tester|builder/tester|Builder/Tester' ;;
+        "Reviewer") printf 'reviewer|Reviewer' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+assistant_phase_has_role_event_evidence() {
+    local file="$1"
+    local role="$2"
+    local event="$3"
+    local events_file pattern
+    events_file="$(assistant_phase_subagent_events_file "$file")"
+    [[ -f "$events_file" ]] || return 1
+    pattern="$(assistant_phase_role_agent_pattern "$role")"
+    awk -v event="$event" -v pattern="$pattern" '
+        BEGIN { n = split(pattern, names, /\|/) }
+        index($0, "\"event\":\"" event "\"") == 0 { next }
+        {
+            for (i = 1; i <= n; i++) {
+                if (index(tolower($0), tolower("\"agent_type\":\"" names[i] "\"")) || index(tolower($0), tolower("\"agent_name\":\"" names[i] "\""))) {
+                    found = 1
+                    exit
+                }
+            }
+        }
+        END { exit found ? 0 : 1 }
+    ' "$events_file" 2>/dev/null
+}
+
+assistant_phase_has_role_start_event_evidence() {
+    assistant_phase_has_role_event_evidence "$1" "$2" "SubagentStart"
+}
+
+assistant_phase_has_role_stop_event_evidence() {
+    assistant_phase_has_role_event_evidence "$1" "$2" "SubagentStop"
+}
+
 assistant_phase_has_role_dispatch_result_evidence() {
     local file="$1"
     local role="$2"
+
     assistant_phase_has_labeled_evidence "$file" "$role dispatch" \
-        && assistant_phase_has_labeled_evidence "$file" "$role result"
+        && assistant_phase_has_labeled_evidence "$file" "$role result" \
+        || return 1
+
+    # Codex task journals are not sufficient proof by themselves: Codex can write
+    # fake dispatch text after doing work inline. Require real lifecycle evidence
+    # captured by SubagentStart/SubagentStop hooks for delegated Codex roles.
+    if assistant_phase_is_codex_task "$file"; then
+        assistant_phase_has_role_start_event_evidence "$file" "$role" \
+            && assistant_phase_has_role_stop_event_evidence "$file" "$role"
+        return $?
+    fi
+
+    return 0
 }
 
 assistant_phase_direct_fallback_reason_valid() {
