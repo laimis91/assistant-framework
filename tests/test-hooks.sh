@@ -743,7 +743,319 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, DOCUMENTING review complete but no metrics → blocks"; then
+if test_start "stop-review: delegated source-changing task missing subagent evidence → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+## Agent Dispatch Log
+- Code Writer dispatch: run-1
+- Code Writer result: changed files returned
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence gate failed"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected subagent evidence gate block"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated medium task requires per-slice dispatch evidence"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+## Agent Dispatch Log
+- Code Writer dispatch: run-writer
+- Code Writer result: implementation returned
+- Builder/Tester dispatch: run-builder
+- Builder/Tester result: tests passed
+- Reviewer dispatch: run-reviewer
+- Reviewer result: clean
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_per_slice"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium delegated per-slice evidence block"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: direct fallback explicit reason and evidence passes subagent gate"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: subagents_unavailable
+Subagent execution mode: direct_fallback
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+## Agent Dispatch Log
+- Direct fallback reason: subagents_unavailable
+- Code Writer direct evidence: implemented plan step directly with changed files listed
+- Builder/Tester direct evidence: ran ./test.sh with PASS
+- Reviewer direct evidence: fresh spec and quality review recorded below
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should not block direct_fallback with explicit reason/evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated required agents missing dispatch evidence → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected missing subagent evidence block, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: delegated required agents with dispatch evidence → no subagent block"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+## Agent Dispatch Log
+- Code Writer dispatch: code-writer task packet S1
+- Code Writer result: DONE changed src/App.cs
+- Builder/Tester dispatch: builder-tester verification command
+- Builder/Tester result: DONE tests passed
+- Reviewer dispatch: reviewer changed files
+- Reviewer result: PASS no blockers
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow stop when delegated subagent evidence and review are complete; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: direct fallback required agents without explicit reason → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+Subagent policy state: delegation_authorized
+Subagent execution mode: direct_fallback
+## Agent Dispatch Log
+- Code Writer direct evidence: implemented directly
+- Builder/Tester direct evidence: ran tests directly
+- Reviewer direct evidence: fresh-context review directly
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected direct fallback evidence block, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: direct fallback with explicit reason and role evidence → no subagent block"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+Subagent policy state: subagents_unavailable
+Subagent execution mode: direct_fallback
+## Agent Dispatch Log
+- Direct fallback reason: subagents_unavailable
+- Code Writer direct evidence: implemented directly with plan/deviation evidence
+- Builder/Tester direct evidence: ran verification directly with command/result
+- Reviewer direct evidence: fresh-context review completed directly
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, should allow direct fallback with explicit reason/evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: DOCUMENTING review complete but no metrics → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task

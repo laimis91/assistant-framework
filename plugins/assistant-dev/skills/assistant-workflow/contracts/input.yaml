@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role"
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Reviewer responsibilities."
     default: []
     on_missing: skip
 
@@ -69,7 +69,7 @@ fields:
     validation: "delegated requires subagent_policy_state=delegation_authorized or not_required in an adapter that permits subagents; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable applies when no subagent role is required"
     default: not_applicable
     on_missing: infer
-    infer_from: "If required_agents is empty, use not_applicable. If subagent_policy_state is delegation_authorized, or not_required in an adapter that permits subagents, use delegated. If authorization is required but not granted, authorization is denied, subagents are unavailable, or policy disallows spawning, use direct_fallback."
+    infer_from: "If required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If the task will change project source, tests, docs, config, hooks, contracts, or generated project artifacts, not_applicable is invalid for Build; use delegated when subagent_policy_state is delegation_authorized or not_required in an adapter that permits subagents. If authorization is required but not granted, authorization is denied, subagents are unavailable, or policy disallows spawning, use direct_fallback with explicit fallback reason and equivalent evidence."
 
   - name: subagent_authorization_scope
     type: string[]

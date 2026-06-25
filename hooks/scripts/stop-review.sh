@@ -100,6 +100,18 @@ if [[ -n "${HARNESS_REASON:-}" ]]; then
     exit 0
 fi
 
+subagent_missing_key="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE")"
+if [[ "$subagent_missing_key" != "complete" ]]; then
+    SUBAGENT_REASON="Task journal subagent evidence gate failed ($subagent_missing_key). For delegated mode, record Agent Dispatch Log evidence with Code Writer, Builder/Tester, and Reviewer dispatch/result entries; medium+ tasks also need per-slice dispatch evidence. For direct_fallback, record an explicit reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus Code Writer, Builder/Tester, and Reviewer direct evidence. Silent fallback or not_applicable with required source-changing roles cannot complete."
+    if $IS_GEMINI; then
+        touch "${RETRY_FLAG}"
+        jq -n --arg reason "$SUBAGENT_REASON" '{decision: "retry", reason: $reason}'
+    else
+        jq -n --arg reason "$SUBAGENT_REASON" '{decision: "block", reason: $reason}'
+    fi
+    exit 0
+fi
+
 # Check if review cycle was completed:
 # 1. Review Log must have a latest structured Spec Review entry with Result: PASS
 #    and no unresolved required fixes

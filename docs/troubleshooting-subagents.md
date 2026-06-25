@@ -16,7 +16,7 @@
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Agent does everything itself, never dispatches | Subagent authorization was not granted, subagents are unavailable, policy disallows spawning, or the task was small enough for direct fallback | If you want delegation, explicitly say "use subagents for this task"; otherwise check that the response records direct fallback evidence |
+| Agent does everything itself, never dispatches | Subagent policy state was never resolved, strict evidence was not required by the active profile, subagents are unavailable, or the task entered direct fallback | In strict mode this is a workflow failure unless the task journal records `subagent_execution_mode=direct_fallback`, explicit `Direct fallback reason: authorization_denied | subagents_unavailable | policy_disallowed`, and Code Writer/Builder/Tester/Reviewer direct evidence. If you want delegation, explicitly say "use subagents for this task" and verify Agent Dispatch Log entries exist. |
 | Claude uses wrong subagent type | Skill file not loaded or outdated | Re-run `install.sh --agent claude`, verify `~/.claude/skills/assistant-workflow/SKILL.md` has the new 6-role table |
 | Codex says "unknown agent" | TOML files not installed | Check `ls ~/.codex/agents/*.toml` — should show 6 files |
 | Codex ignores agents entirely | Codex may not read `~/.codex/agents/` automatically | Check Codex docs for `agents_dir` config in `~/.codex/config.toml`, or verify with `codex --list-agents` |
@@ -51,4 +51,4 @@ First check whether subagent spawning is authorized and available for the active
 - "Dispatch a reviewer subagent for the quality review"
 - "Run Code Writer and Builder/Tester as separate agents, not inline"
 
-If this happens consistently after authorization, check that `subagent_policy_state=delegation_authorized` and `subagent_execution_mode=delegated` are recorded. If authorization is denied, unavailable, or policy-disallowed, the correct behavior is direct fallback with equivalent role, verification, and review evidence.
+If this happens consistently after authorization, check that `subagent_policy_state=delegation_authorized` and `subagent_execution_mode=delegated` are recorded. In delegated mode, completion also requires Agent Dispatch Log evidence: `Code Writer dispatch`/`Code Writer result`, `Builder/Tester dispatch`/`Builder/Tester result`, and `Reviewer dispatch`/`Reviewer result`; medium+ slice work also requires `Per-slice dispatch evidence`. If authorization is denied, unavailable, or policy-disallowed, the correct behavior is direct fallback with explicit `Direct fallback reason` plus equivalent Code Writer, Builder/Tester, and Reviewer evidence — not silent one-thread execution.

@@ -55,8 +55,8 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode"
-        on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs"
+        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode; source-changing development/code-work includes at minimum Code Writer, Builder/Tester, and Reviewer"
+        on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
 
       - id: T9
         check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents"
@@ -349,6 +349,15 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
+      - id: B_SUBAGENT_EVIDENCE
+        check: "For source-changing Build tasks: subagent_execution_mode is not not_applicable, required_agents includes Code Writer, Builder/Tester, and Reviewer, and the task journal Agent Dispatch Log records strict delegated dispatch/result evidence or explicit direct fallback role-equivalent evidence"
+        on_fail: "Update the Agent Dispatch Log before leaving Build. delegated mode requires Code Writer, Builder/Tester, and Reviewer dispatch/result evidence. direct_fallback requires reason authorization_denied, subagents_unavailable, or policy_disallowed plus Code Writer, Builder/Tester, and Reviewer direct evidence."
+
+      - id: B_SUBAGENT_SLICE_EVIDENCE
+        check: "For medium+ delegated tasks with slices: per-slice dispatch evidence is recorded before the slice is marked VERIFIED"
+        condition: "size in [medium, large, mega] and subagent_execution_mode == delegated"
+        on_fail: "Add per-slice Code Writer and Builder/Tester dispatch/result evidence to the Agent Dispatch Log or slice ledger before proceeding."
+
       - id: B13
         check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
         condition: "size in [medium, large, mega]"
@@ -367,17 +376,17 @@ gates:
         on_fail: "Load references/prompts/solid-principles.md when design risk is material; otherwise use code review to catch concrete violations"
 
       - id: B9
-        severity: guidance
+        severity: blocker
         check: "Implementation was performed by Code Writer subagent when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
-        on_fail: "Record whether implementation used a subagent or direct fallback when that affects review confidence"
+        on_fail: "Record Code Writer dispatch/result evidence or Code Writer direct fallback evidence before Review"
 
       - id: B10
-        severity: guidance
+        severity: blocker
         check: "Build/test/validation was performed by Builder/Tester subagent when subagent_execution_mode=delegated, or directly in fallback mode with equivalent command/result evidence"
-        on_fail: "Record validation owner only when delegation is relevant; command/result evidence remains the blocker"
+        on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review"
 
       - id: B11
-        severity: guidance
+        severity: blocker
         check: "For medium+ tasks with subagent_execution_mode=delegated: Code Writer and Builder/Tester were dispatched per slice; otherwise direct fallback processed slices sequentially with equivalent evidence"
         condition: "size in [medium, large, mega]"
         on_fail: "Prefer slice-level execution when it reduces risk; do not block direct sequential work with equivalent verification"

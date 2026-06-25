@@ -92,7 +92,7 @@ Skills are routed by the `skill-router.sh` hook, which pattern-matches user prom
 
 ### Agent configurations
 
-`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect) for multi-agent orchestration. Codex agents are markdown files (`agents/Codex/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
+`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
 
 ### Codex execution policy rules
 
