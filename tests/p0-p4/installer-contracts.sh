@@ -832,6 +832,157 @@ else
     fail "minimal install without jq failed; see /tmp/p0p4-install-minimal-no-jq.err"
 fi
 
+test_start "minimal hook profile without jq merges existing Claude settings and preserves custom hooks"
+NO_JQ_EXISTING_CLAUDE_HOME="$(mktemp -d)"
+NO_JQ_EXISTING_CLAUDE_BIN="$(mktemp -d)"
+p0p4_register_cleanup "$NO_JQ_EXISTING_CLAUDE_HOME" "$NO_JQ_EXISTING_CLAUDE_BIN"
+p0p4_path_without_jq "$NO_JQ_EXISTING_CLAUDE_BIN"
+mkdir -p "$NO_JQ_EXISTING_CLAUDE_HOME/.claude"
+cat > "$NO_JQ_EXISTING_CLAUDE_HOME/.claude/settings.json" <<'JSON'
+{
+  "theme": "dark",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"/tmp/user-claude-custom.sh"},
+          {"type":"command","command":"$HOME/.claude/hooks/assistant/workflow-enforcer.sh"}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"$HOME/.claude/hooks/assistant/workflow-guard.sh"}
+        ]
+      }
+    ]
+  }
+}
+JSON
+if HOME="$NO_JQ_EXISTING_CLAUDE_HOME" PATH="$NO_JQ_EXISTING_CLAUDE_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-minimal-no-jq-existing-claude.out 2>/tmp/p0p4-install-minimal-no-jq-existing-claude.err; then
+    if jq -e '
+        [.. | objects | .command? // empty] as $commands
+        | {
+            theme: (.theme == "dark"),
+            custom: ($commands | any(. == "/tmp/user-claude-custom.sh")),
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/skill-router.sh")),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/session-start.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh")),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"))
+        }
+        | .theme and .custom and .skillRouter and .sessionStart and (.workflowGuard | not) and (.workflowEnforcer | not)
+    ' "$NO_JQ_EXISTING_CLAUDE_HOME/.claude/settings.json" >/dev/null; then
+        pass
+    else
+        fail "minimal no-jq Claude reinstall should preserve custom settings/hooks and refresh minimal framework hooks"
+    fi
+else
+    fail "minimal no-jq Claude reinstall failed; see /tmp/p0p4-install-minimal-no-jq-existing-claude.err"
+fi
+
+test_start "minimal hook profile without jq merges existing Gemini settings and preserves custom hooks"
+NO_JQ_EXISTING_GEMINI_HOME="$(mktemp -d)"
+NO_JQ_EXISTING_GEMINI_BIN="$(mktemp -d)"
+p0p4_register_cleanup "$NO_JQ_EXISTING_GEMINI_HOME" "$NO_JQ_EXISTING_GEMINI_BIN"
+p0p4_path_without_jq "$NO_JQ_EXISTING_GEMINI_BIN"
+mkdir -p "$NO_JQ_EXISTING_GEMINI_HOME/.gemini"
+cat > "$NO_JQ_EXISTING_GEMINI_HOME/.gemini/settings.json" <<'JSON'
+{
+  "telemetry": false,
+  "hooks": {
+    "BeforeAgent": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"/tmp/user-gemini-custom.sh"},
+          {"type":"command","command":"$HOME/.gemini/hooks/assistant/workflow-enforcer.sh"}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"$HOME/.gemini/hooks/assistant/workflow-guard.sh"}
+        ]
+      }
+    ]
+  }
+}
+JSON
+if HOME="$NO_JQ_EXISTING_GEMINI_HOME" PATH="$NO_JQ_EXISTING_GEMINI_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-minimal-no-jq-existing-gemini.out 2>/tmp/p0p4-install-minimal-no-jq-existing-gemini.err; then
+    if jq -e '
+        [.. | objects | .command? // empty] as $commands
+        | {
+            telemetry: (.telemetry == false),
+            custom: ($commands | any(. == "/tmp/user-gemini-custom.sh")),
+            skillRouter: ([.hooks.BeforeAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/skill-router.sh")),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/session-start.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/workflow-guard.sh")),
+            workflowEnforcer: ([.hooks.BeforeAgent[]?.hooks[]?.command?] | any(. == "$HOME/.gemini/hooks/assistant/workflow-enforcer.sh"))
+        }
+        | .telemetry and .custom and .skillRouter and .sessionStart and (.workflowGuard | not) and (.workflowEnforcer | not)
+    ' "$NO_JQ_EXISTING_GEMINI_HOME/.gemini/settings.json" >/dev/null; then
+        pass
+    else
+        fail "minimal no-jq Gemini reinstall should preserve custom settings/hooks and refresh minimal framework hooks"
+    fi
+else
+    fail "minimal no-jq Gemini reinstall failed; see /tmp/p0p4-install-minimal-no-jq-existing-gemini.err"
+fi
+
+test_start "minimal hook profile without jq merges existing Codex hooks and preserves custom hooks"
+NO_JQ_EXISTING_CODEX_HOME="$(mktemp -d)"
+NO_JQ_EXISTING_CODEX_BIN="$(mktemp -d)"
+p0p4_register_cleanup "$NO_JQ_EXISTING_CODEX_HOME" "$NO_JQ_EXISTING_CODEX_BIN"
+p0p4_path_without_jq "$NO_JQ_EXISTING_CODEX_BIN"
+mkdir -p "$NO_JQ_EXISTING_CODEX_HOME/.codex"
+cat > "$NO_JQ_EXISTING_CODEX_HOME/.codex/hooks.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"/tmp/user-codex-custom.sh"},
+          {"type":"command","command":"$HOME/.codex/hooks/assistant/workflow-enforcer.sh"}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"$HOME/.codex/hooks/assistant/workflow-guard.sh"}
+        ]
+      }
+    ]
+  }
+}
+JSON
+if HOME="$NO_JQ_EXISTING_CODEX_HOME" PATH="$NO_JQ_EXISTING_CODEX_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-minimal-no-jq-existing-codex.out 2>/tmp/p0p4-install-minimal-no-jq-existing-codex.err; then
+    if jq -e '
+        [.. | objects | .command? // empty] as $commands
+        | {
+            custom: ($commands | any(. == "/tmp/user-codex-custom.sh")),
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/skill-router.sh")),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh")),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-enforcer.sh"))
+        }
+        | .custom and .skillRouter and .sessionStart and (.workflowGuard | not) and (.workflowEnforcer | not)
+    ' "$NO_JQ_EXISTING_CODEX_HOME/.codex/hooks.json" >/dev/null; then
+        pass
+    else
+        fail "minimal no-jq Codex reinstall should preserve custom hooks and refresh minimal framework hooks"
+    fi
+else
+    fail "minimal no-jq Codex reinstall failed; see /tmp/p0p4-install-minimal-no-jq-existing-codex.err"
+fi
+
 test_start "Claude strict hook profile installs enforcement hooks"
 CLAUDE_STRICT_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CLAUDE_STRICT_HOME"
