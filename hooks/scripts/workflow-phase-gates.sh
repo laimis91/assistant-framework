@@ -244,11 +244,10 @@ assistant_phase_subagent_policy_state() {
     assistant_phase_scalar_field "$1" "Subagent policy state"
 }
 
-assistant_phase_has_labeled_evidence() {
+assistant_phase_labeled_evidence_value() {
     local file="$1"
     local label="$2"
-    local value
-    value="$(awk -v label="$label" '
+    awk -v label="$label" '
         BEGIN { wanted = tolower(label) ":" }
         {
             line = $0
@@ -261,7 +260,14 @@ assistant_phase_has_labeled_evidence() {
                 exit
             }
         }
-    ' "$file" 2>/dev/null)"
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_has_labeled_evidence() {
+    local file="$1"
+    local label="$2"
+    local value
+    value="$(assistant_phase_labeled_evidence_value "$file" "$label")"
 
     [[ -n "$value" ]] || return 1
     [[ ! "$value" =~ ^(\[.*\]|none|None|NONE|n/a|N/A|missing|todo|TODO|tbd|TBD)$ ]]
@@ -289,35 +295,83 @@ assistant_phase_role_agent_pattern() {
     esac
 }
 
-assistant_phase_has_role_event_evidence() {
+assistant_phase_json_field_value() {
+    local json_line="$1"
+    local field="$2"
+    printf '%s\n' "$json_line" | sed -n 's/.*"'"$field"'":"\([^"]*\)".*/\1/p'
+}
+
+assistant_phase_event_role_matches() {
+    local json_line="$1"
+    local role="$2"
+    local pattern name agent_type agent_name
+    pattern="$(assistant_phase_role_agent_pattern "$role")"
+    agent_type="$(assistant_phase_json_field_value "$json_line" "agent_type" | tr '[:upper:]' '[:lower:]')"
+    agent_name="$(assistant_phase_json_field_value "$json_line" "agent_name" | tr '[:upper:]' '[:lower:]')"
+    IFS='|' read -r -a names <<< "$pattern"
+    for name in "${names[@]}"; do
+        name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+        [[ "$agent_type" == "$name" || "$agent_name" == "$name" ]] && return 0
+    done
+    return 1
+}
+
+assistant_phase_codex_role_event_ids() {
     local file="$1"
     local role="$2"
     local event="$3"
-    local events_file pattern
+    local events_file line id
     events_file="$(assistant_phase_subagent_events_file "$file")"
     [[ -f "$events_file" ]] || return 1
-    pattern="$(assistant_phase_role_agent_pattern "$role")"
-    awk -v event="$event" -v pattern="$pattern" '
-        BEGIN { n = split(pattern, names, /\|/) }
-        index($0, "\"event\":\"" event "\"") == 0 { next }
-        {
-            for (i = 1; i <= n; i++) {
-                if (index(tolower($0), tolower("\"agent_type\":\"" names[i] "\"")) || index(tolower($0), tolower("\"agent_name\":\"" names[i] "\""))) {
-                    found = 1
-                    exit
-                }
-            }
-        }
-        END { exit found ? 0 : 1 }
-    ' "$events_file" 2>/dev/null
+    while IFS= read -r line; do
+        [[ "$line" == *"\"event\":\"$event\""* ]] || continue
+        assistant_phase_event_role_matches "$line" "$role" || continue
+        id="$(assistant_phase_json_field_value "$line" "agent_id")"
+        [[ -n "$id" ]] || continue
+        printf '%s\n' "$id"
+    done < "$events_file"
+}
+
+assistant_phase_journal_mentions_agent_id() {
+    local file="$1"
+    local role="$2"
+    local agent_id="$3"
+    local dispatch result combined
+    [[ -n "$agent_id" ]] || return 1
+    dispatch="$(assistant_phase_labeled_evidence_value "$file" "$role dispatch")"
+    result="$(assistant_phase_labeled_evidence_value "$file" "$role result")"
+    combined="$dispatch
+$result"
+    printf '%s\n' "$combined" | grep -Fq -- "$agent_id"
+}
+
+assistant_phase_has_role_event_pair_evidence() {
+    local file="$1"
+    local role="$2"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" || continue
+        if assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStop" | grep -Fxq -- "$start_id"; then
+            return 0
+        fi
+    done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    return 1
 }
 
 assistant_phase_has_role_start_event_evidence() {
-    assistant_phase_has_role_event_evidence "$1" "$2" "SubagentStart"
+    local file="$1"
+    local role="$2"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" && return 0
+    done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    return 1
 }
 
 assistant_phase_has_role_stop_event_evidence() {
-    assistant_phase_has_role_event_evidence "$1" "$2" "SubagentStop"
+    assistant_phase_has_role_event_pair_evidence "$1" "$2"
 }
 
 assistant_phase_has_role_dispatch_result_evidence() {

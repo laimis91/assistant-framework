@@ -1030,6 +1030,64 @@ TASK
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
+if test_start "stop-review: Codex stale lifecycle events without referenced agent_id block"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Reviewer
+## Agent Dispatch Log
+- Code Mapper dispatch: claimed current mapper without id
+- Code Mapper result: claimed context map returned
+- Reviewer dispatch: claimed current reviewer without id
+- Reviewer result: claimed PASS
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
+{"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"old-cm"}
+{"event":"SubagentStop","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"old-cm"}
+{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-rv"}
+{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-rv"}
+JSONL
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
+
+    echo '{"stop_hook_active":false}' | HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/stop-review.sh" > /tmp/_stop_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_stop_out)
+    rm -f /tmp/_stop_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_code_mapper"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected stale lifecycle events without journal agent_id reference to block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
 if test_start "stop-review: Codex delegated lifecycle events plus journal evidence pass"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
@@ -2760,7 +2818,7 @@ echo "subagent-monitor.sh"
 if test_start "subagent-monitor: Codex SubagentStart records lifecycle event and context"; then
     rm -rf "$TEST_PROJECT/.codex"
     mkdir -p "$TEST_PROJECT/.codex"
-    echo "{\"hook_event_name\":\"SubagentStart\",\"agent_type\":\"code-writer\",\"agent_id\":\"cw-1\",\"cwd\":\"$TEST_PROJECT\"}" | \
+    echo "{\"hook_event_name\":\"SubagentStart\",\"agent_type\":\"code-writer\",\"agent_id\":\"cw-1\",\"turn_id\":\"turn-1\",\"session_id\":\"sess-1\",\"cwd\":\"$TEST_PROJECT\"}" | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/subagent-monitor.sh" \
         > /tmp/_subagent_out 2>/dev/null
     HOOK_EXIT=$?
@@ -2771,7 +2829,9 @@ if test_start "subagent-monitor: Codex SubagentStart records lifecycle event and
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SubagentStart"' >/dev/null 2>&1 \
         && [[ -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]] \
         && grep -q '"event":"SubagentStart"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
-        && grep -q '"agent_type":"code-writer"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
+        && grep -q '"agent_type":"code-writer"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
+        && grep -q '"turn_id":"turn-1"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
+        && grep -q '"session_id":"sess-1"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected Codex lifecycle event; stdout='$HOOK_STDOUT'; events='$(cat "$TEST_PROJECT/.codex/subagent-events.jsonl" 2>/dev/null || true)'"
