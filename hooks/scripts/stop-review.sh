@@ -102,7 +102,7 @@ fi
 
 subagent_missing_key="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE")"
 if [[ "$subagent_missing_key" != "complete" ]]; then
-    SUBAGENT_REASON="Task journal subagent evidence gate failed ($subagent_missing_key). For delegated mode, record Agent Dispatch Log evidence with Code Writer, Builder/Tester, and Reviewer dispatch/result entries; medium+ tasks also need per-slice dispatch evidence. For direct_fallback, record an explicit reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus Code Writer, Builder/Tester, and Reviewer direct evidence. Silent fallback or not_applicable with required source-changing roles cannot complete."
+    SUBAGENT_REASON="Task journal subagent evidence gate failed ($subagent_missing_key). For delegated mode, record Agent Dispatch Log evidence with dispatch/result entries for every required workflow role (Code Mapper/Explorer/Architect during discovery/decomposition/planning when required, Code Writer and Builder/Tester during Build when required, and Reviewer during Review). Medium+ tasks also need per-slice dispatch evidence when implementation slices exist. For direct_fallback, record an explicit reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus role-equivalent direct evidence for every required workflow role. Silent fallback, inline review in delegated mode, or not_applicable with required roles cannot complete."
     if $IS_GEMINI; then
         touch "${RETRY_FLAG}"
         jq -n --arg reason "$SUBAGENT_REASON" '{decision: "retry", reason: $reason}'

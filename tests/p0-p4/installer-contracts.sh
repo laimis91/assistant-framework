@@ -49,7 +49,8 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
-            && grep -Fq "File edits, code implementation, builds/tests, and independent review are owned by those specialized agents" "$agents_file" \
+            && grep -Fq "Discovery context maps are owned by code-mapper for medium+ work" "$agents_file" \
+            && grep -Fq "code-mapper, code-writer, builder-tester, reviewer" "$agents_file" \
             && grep -Fq "The orchestrator may create and update framework-owned state artifacts" "$agents_file" \
             && grep -Fq ".codex/context-map.md" "$agents_file" \
             && grep -Fq "it does not edit project source files directly" "$agents_file" \
