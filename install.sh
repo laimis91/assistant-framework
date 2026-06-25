@@ -1457,10 +1457,10 @@ if $INSTALL_HOOKS; then
                         post-tool-context.sh|tool-failure-advisor.sh) continue ;;
                     esac
                     # Codex hooks: SessionStart, UserPromptSubmit, Stop,
-                    # PreToolUse, PreCompact, and PostCompact.
+                    # SubagentStart/SubagentStop, PreToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
                             *) continue ;;  # skip unsupported hooks
                         esac
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
@@ -1469,8 +1469,8 @@ if $INSTALL_HOOKS; then
                             esac
                         fi
                     fi
-                    # subagent-monitor.sh is Claude-only; post-compact.sh has no Gemini event.
-                    if [[ "$AGENT" != "claude" ]]; then
+                    # subagent-monitor.sh is Claude/Codex-only; post-compact.sh has no Gemini event.
+                    if [[ "$AGENT" == "gemini" ]]; then
                         case "$hook_name" in
                             subagent-monitor.sh) continue ;;
                         esac

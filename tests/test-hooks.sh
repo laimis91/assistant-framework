@@ -978,6 +978,113 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: Codex delegated journal evidence without lifecycle events blocks"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Reviewer
+## Agent Dispatch Log
+- Code Mapper dispatch: claimed code-mapper run
+- Code Mapper result: claimed context map returned
+- Reviewer dispatch: claimed reviewer run
+- Reviewer result: claimed PASS
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
+
+    echo '{"stop_hook_active":false}' | HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/stop-review.sh" > /tmp/_stop_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_stop_out)
+    rm -f /tmp/_stop_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_code_mapper"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex fake journal evidence to block without lifecycle event; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "stop-review: Codex delegated lifecycle events plus journal evidence pass"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Reviewer
+## Agent Dispatch Log
+- Code Mapper dispatch: event cm-1
+- Code Mapper result: context map returned
+- Reviewer dispatch: event rv-1
+- Reviewer result: PASS no blockers
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
+{"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"cm-1"}
+{"event":"SubagentStop","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"cm-1"}
+{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"rv-1"}
+{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"rv-1"}
+JSONL
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
+
+    echo '{"stop_hook_active":false}' | HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/stop-review.sh" > /tmp/_stop_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_stop_out)
+    rm -f /tmp/_stop_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex lifecycle evidence to satisfy delegated subagent gate; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
 if test_start "stop-review: delegated review phase missing Reviewer evidence → blocks even without code changes"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -2646,6 +2753,52 @@ fi
 
 echo ""
 
+# ── subagent-monitor.sh tests ─────────────────────────────────────────────────
+
+echo "subagent-monitor.sh"
+
+if test_start "subagent-monitor: Codex SubagentStart records lifecycle event and context"; then
+    rm -rf "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo "{\"hook_event_name\":\"SubagentStart\",\"agent_type\":\"code-writer\",\"agent_id\":\"cw-1\",\"cwd\":\"$TEST_PROJECT\"}" | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/subagent-monitor.sh" \
+        > /tmp/_subagent_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_subagent_out)
+    rm -f /tmp/_subagent_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SubagentStart"' >/dev/null 2>&1 \
+        && [[ -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]] \
+        && grep -q '"event":"SubagentStart"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
+        && grep -q '"agent_type":"code-writer"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex lifecycle event; stdout='$HOOK_STDOUT'; events='$(cat "$TEST_PROJECT/.codex/subagent-events.jsonl" 2>/dev/null || true)'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "subagent-monitor: Codex SubagentStop records lifecycle event without plain-text output"; then
+    rm -rf "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo "{\"hook_event_name\":\"SubagentStop\",\"agent_type\":\"reviewer\",\"agent_id\":\"rv-1\",\"agent_transcript_path\":\"/tmp/rv.jsonl\",\"cwd\":\"$TEST_PROJECT\"}" | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/subagent-monitor.sh" \
+        > /tmp/_subagent_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_subagent_out)
+    rm -f /tmp/_subagent_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]] \
+        && [[ -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]] \
+        && grep -q '"event":"SubagentStop"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
+        && grep -q '"agent_type":"reviewer"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex stop event without stdout; stdout='$HOOK_STDOUT'; events='$(cat "$TEST_PROJECT/.codex/subagent-events.jsonl" 2>/dev/null || true)'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
 # ── workflow-guard.sh tests ──────────────────────────────────────────────────
 
 echo "workflow-guard.sh"
@@ -2729,7 +2882,7 @@ if test_start "workflow-guard: Write with VERIFYING status → outputs warning";
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
-if test_start "workflow-guard: Codex apply_patch with BUILDING status → outputs warning"; then
+if test_start "workflow-guard: Codex apply_patch with BUILDING status and unresolved policy → blocks"; then
     mkdir -p "$TEST_PROJECT/.codex"
     echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
     echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** End Patch"}}' | \
@@ -2738,10 +2891,11 @@ if test_start "workflow-guard: Codex apply_patch with BUILDING status → output
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wg_out)
     rm -f /tmp/_wg_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "subagent policy is unresolved"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected unresolved policy block; stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
@@ -2781,7 +2935,7 @@ if test_start "workflow-guard: Codex apply_patch only state artifacts → no out
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
 
-if test_start "workflow-guard: Codex apply_patch mixed source and state → outputs warning"; then
+if test_start "workflow-guard: Codex apply_patch mixed source and state with unresolved policy → blocks"; then
     mkdir -p "$TEST_PROJECT/.codex"
     echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
     jq -n --arg patch $'*** Begin Patch\n*** Update File: .codex/task.md\n@@\n-old\n+new\n*** Update File: src/App.cs\n@@\n-old\n+new\n*** End Patch' \
@@ -2791,12 +2945,70 @@ if test_start "workflow-guard: Codex apply_patch mixed source and state → outp
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wg_out)
     rm -f /tmp/_wg_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "subagent policy is unresolved"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected unresolved policy block; stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-guard: Codex delegated Build without Code Writer event → blocks"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+## Agent Dispatch Log
+- Code Writer dispatch: claimed event
+TASK
+    echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Update File: src/App.cs\n*** End Patch"}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "SubagentStart lifecycle evidence"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected missing Code Writer lifecycle block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-guard: Codex delegated Build with Code Writer start event → warning only"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+## Agent Dispatch Log
+- Code Writer dispatch: event cw-1
+TASK
+    echo '{"event":"SubagentStart","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}' > "$TEST_PROJECT/.codex/subagent-events.jsonl"
+    echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Update File: src/App.cs\n*** End Patch"}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.systemMessage' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected warning after Code Writer start evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
 fi
 
 if test_start "workflow-guard: dotnet build without --tl → adds --tl:on"; then
@@ -3354,6 +3566,39 @@ if test_start "workflow-enforcer: Claude, empty prompt → no output"; then
     fi
 fi
 
+if test_start "workflow-enforcer: Codex dev prompt without task blocks for subagent authorization"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    echo '{"prompt": "fix the login bug in this repo", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "requires explicit subagent authorization" \
+        && echo "$HOOK_STDOUT" | grep -q "approve subagents for this task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex authorization block; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Codex explicit subagent approval prompt is allowed"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    echo '{"prompt": "approve subagents for this task", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected approval prompt to pass with context; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
 if test_start "workflow-enforcer: Claude, with task journal → phase-aware context"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
@@ -3422,6 +3667,38 @@ EOF
         fail "exit=$HOOK_EXIT, expected subagent authorization gate; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-enforcer: Codex authorization_required blocks prompt until user answers"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Fix inline phases
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+- none
+Subagent policy state: authorization_required
+Subagent execution mode: not_applicable
+Subagent authorization scope:
+- none
+EOF
+    echo '{"prompt": "continue discovery", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "authorization is unresolved" \
+        && echo "$HOOK_STDOUT" | grep -q "must not continue Discovery/Build/Review inline"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex active authorization block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
 fi
 
 if test_start "workflow-enforcer: Codex, Status DONE task journal → lightweight rules reminder"; then

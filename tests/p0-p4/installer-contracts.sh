@@ -712,13 +712,16 @@ else
     fail "default install with Unity fixture coverage failed; see /tmp/p0p4-install-default-skills.err"
 fi
 
-test_start "Codex hook template is valid JSON with PreToolUse and no PostToolUse key"
+test_start "Codex hook template is valid JSON with PreToolUse/Subagent lifecycle and no PostToolUse key"
 if jq -e . "$FRAMEWORK_DIR/hooks/codex-settings.json" >/dev/null \
     && [[ "$(grep -o '"PreToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]] \
+    && [[ "$(grep -o '"SubagentStart"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]] \
+    && [[ "$(grep -o '"SubagentStop"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "1" ]] \
+    && grep -Fq 'subagent-monitor.sh' "$FRAMEWORK_DIR/hooks/codex-settings.json" \
     && [[ "$(grep -o '"PostToolUse"' "$FRAMEWORK_DIR/hooks/codex-settings.json" | wc -l | tr -d ' ')" == "0" ]]; then
     pass
 else
-    fail "hooks/codex-settings.json must parse, contain exactly one raw PreToolUse key, and contain no PostToolUse key"
+    fail "hooks/codex-settings.json must parse, contain PreToolUse plus SubagentStart/SubagentStop monitor hooks, and contain no PostToolUse key"
 fi
 
 test_start "Claude default hook profile is minimal and preserves custom hooks"

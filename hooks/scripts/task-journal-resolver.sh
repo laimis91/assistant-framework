@@ -41,7 +41,13 @@ assistant_canonical_file() {
 }
 
 assistant_task_state_dirs() {
-    printf '%s\n' ".claude" ".gemini" ".codex"
+    if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
+        printf '%s\n' ".codex" ".claude" ".gemini"
+    elif [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
+        printf '%s\n' ".gemini" ".claude" ".codex"
+    else
+        printf '%s\n' ".claude" ".gemini" ".codex"
+    fi
 }
 
 assistant_walk_for_task_journal() {
@@ -100,7 +106,7 @@ assistant_git_root() {
 }
 
 assistant_resolve_project_dir() {
-    local env_project="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-}}}"
+    local env_project="${CODEX_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-}}}"
     local start_dir="${1:-$(pwd)}"
     local task_file=""
     local git_root=""

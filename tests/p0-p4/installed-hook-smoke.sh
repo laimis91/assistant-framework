@@ -153,8 +153,14 @@ TASK
             >"$enforcer_out" 2>"$enforcer_err" <<< '{"prompt":"build a small feature","hook_event_name":"UserPromptSubmit"}' || enforcer_exit=$?
         enforcer_stdout="$(cat "$enforcer_out")"
         rm -f "$enforcer_out" "$enforcer_err"
-        if [[ "$enforcer_exit" -ne 0 || "$enforcer_stdout" != *"WORKFLOW RULES"* ]]; then
-            smoke_failed="installed workflow-enforcer.sh did not emit workflow reminder; exit=$enforcer_exit stdout='$enforcer_stdout'"
+        if [[ "$enforcer_exit" -ne 0 ]]; then
+            smoke_failed="installed workflow-enforcer.sh failed; exit=$enforcer_exit stdout='$enforcer_stdout'"
+        elif echo "$enforcer_stdout" | jq -e '.decision == "block"' >/dev/null 2>&1; then
+            if [[ "$enforcer_stdout" != *"requires explicit subagent authorization"* ]]; then
+                smoke_failed="installed workflow-enforcer.sh blocked with unexpected reason; stdout='$enforcer_stdout'"
+            fi
+        elif [[ "$enforcer_stdout" != *"WORKFLOW RULES"* ]]; then
+            smoke_failed="installed workflow-enforcer.sh did not emit workflow reminder or authorization block; exit=$enforcer_exit stdout='$enforcer_stdout'"
         elif [[ "$enforcer_stdout" == *"WORKFLOW STATE"* || "$enforcer_stdout" == *"stale completed smoke task"* || "$enforcer_stdout" == *"This completed task text must not be injected"* ]]; then
             smoke_failed="installed workflow-enforcer.sh injected completed task journal state"
         fi
