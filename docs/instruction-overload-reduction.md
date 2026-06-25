@@ -17,7 +17,7 @@ This document captures the source-grounded simplification strategy for Assistant
 
 1. **Progressive disclosure:** default prompts and hooks should expose only the next useful rule. Detailed contracts, rubrics, and examples should load on demand.
 2. **One rule owner:** each durable rule should live in one authoritative layer. Other layers should reference it instead of restating it.
-3. **Profile strictness:** strict workflow enforcement should be opt-in. The default installation should be low-friction.
+3. **Profile strictness:** strict workflow enforcement should be opt-in. The default installation should be low-friction except where an agent/runtime needs a narrower workflow profile to preserve an explicit user expectation.
 4. **Evidence over ceremony:** completion should depend on verification evidence, not on filling every possible metadata artifact.
 5. **Eval-backed expansion:** new standing instructions, gates, or hooks need a failing scenario and a targeted test/eval.
 
@@ -27,10 +27,16 @@ This document captures the source-grounded simplification strategy for Assistant
 
 `install.sh` now supports:
 
-- `--hook-profile minimal` — default. Installs skill routing plus session/compaction context hooks.
+- `--hook-profile minimal` — low-friction profile. Installs skill routing plus session/compaction context hooks.
+- `--hook-profile workflow` — Codex default. Installs the workflow/delegation prompt, guard, subagent monitor, stop-review, and context hooks needed for ask-once delegation behavior.
 - `--hook-profile strict` — full legacy enforcement hook stack.
 - `--hook-profile none` — no hooks.
 - `--no-hooks` — backward-compatible alias for `none`.
+
+Default profile by agent:
+
+- Codex: `workflow`
+- Claude/Gemini: `minimal`
 
 Minimal profile registers only:
 
@@ -38,6 +44,7 @@ Minimal profile registers only:
 - `session-start.sh`
 - `pre-compress.sh`
 - `post-compact.sh`
+- `task-journal-resolver.sh` as a copied helper dependency
 
 This removes the highest-friction default hooks from normal installs:
 
@@ -49,6 +56,8 @@ This removes the highest-friction default hooks from normal installs:
 - `task-completed.sh`
 - `subagent-monitor.sh`
 - `session-end.sh`
+
+Codex's `workflow` profile intentionally keeps the workflow/delegation hooks as the default because Codex subagent spawning depends on explicit user authorization and runtime lifecycle evidence. Users who want the lowest-friction Codex setup can still opt out with `./install.sh --agent codex --hook-profile minimal`.
 
 ### Codex hook feature flag
 

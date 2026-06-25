@@ -1074,23 +1074,70 @@ fi
 test_start "Codex default install registers absolute hook command paths"
 CODEX_DEFAULT_ABS_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_DEFAULT_ABS_HOME"
-if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-absolute-default.out 2>/tmp/p0p4-install-codex-absolute-default.err; then
-    if jq -e --arg command_dir "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant" '
+if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-absolute-default.out 2>/tmp/p0p4-install-codex-absolute-default.err; then
+    missing_codex_default_hook=""
+    for hook_name in session-start.sh skill-router.sh learning-signals.sh workflow-enforcer.sh workflow-guard.sh stop-review.sh subagent-monitor.sh task-journal-resolver.sh workflow-phase-gates.sh; do
+        if [[ ! -x "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant/$hook_name" ]]; then
+            missing_codex_default_hook="$hook_name"
+            break
+        fi
+    done
+    if [[ -n "$missing_codex_default_hook" ]]; then
+        fail "Codex default install should create executable workflow hook/helper $missing_codex_default_hook"
+    elif jq -e --arg command_dir "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant" '
         [.. | objects | .command? // empty] as $commands
         | {
             allAbsolute: ($commands | all(startswith($command_dir + "/") or startswith("/tmp/"))),
             noHomeLiteral: ($commands | all(startswith("$HOME/.codex/hooks/assistant/") | not)),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+            learningSignals: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/learning-signals.sh"))),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
             subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
             subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
         }
-        | .allAbsolute and .noHomeLiteral and .subagentStart and .subagentStop
+        | .allAbsolute and .noHomeLiteral and .sessionStart and .skillRouter and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
     ' "$CODEX_DEFAULT_ABS_HOME/.codex/hooks.json" >/dev/null; then
         pass
     else
-        fail "Codex default install should emit absolute executable hook command paths"
+        fail "Codex default install should emit absolute executable workflow/delegation hook command paths"
     fi
 else
     fail "Codex default absolute hook install failed; see /tmp/p0p4-install-codex-absolute-default.err"
+fi
+
+test_start "Codex default reinstall upgrades explicit minimal to workflow hooks"
+CODEX_DEFAULT_REINSTALL_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CODEX_DEFAULT_REINSTALL_HOME"
+if HOME="$CODEX_DEFAULT_REINSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-codex-default-reinstall-minimal.out 2>/tmp/p0p4-install-codex-default-reinstall-minimal.err; then
+    tmp_hooks="$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json.tmp"
+    jq '.hooks.UserPromptSubmit[0].hooks += [{"type":"command","command":"/tmp/user-codex-default-custom.sh"}]' "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json" > "$tmp_hooks" \
+        && mv "$tmp_hooks" "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json"
+    if HOME="$CODEX_DEFAULT_REINSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-default-reinstall-workflow.out 2>/tmp/p0p4-install-codex-default-reinstall-workflow.err; then
+        if jq -e --arg command_dir "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks/assistant" '
+            [.. | objects | .command? // empty] as $commands
+            | {
+                custom: ($commands | any(. == "/tmp/user-codex-default-custom.sh")),
+                skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+                workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
+                workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+                stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
+                subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+                subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
+            }
+            | .custom and .skillRouter and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
+        ' "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json" >/dev/null; then
+            pass
+        else
+            fail "Codex default reinstall should preserve custom hooks and install workflow/delegation hooks"
+        fi
+    else
+        fail "Codex default workflow reinstall failed; see /tmp/p0p4-install-codex-default-reinstall-workflow.err"
+    fi
+else
+    fail "Codex explicit minimal setup failed; see /tmp/p0p4-install-codex-default-reinstall-minimal.err"
 fi
 
 test_start "Codex install respects CODEX_HOME and registers lifecycle hooks there"

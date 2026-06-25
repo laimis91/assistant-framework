@@ -51,7 +51,7 @@ p0p4_installed_hook_payload() {
     esac
 }
 
-if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err" --hook-profile strict; then
+if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; then
     mkdir -p "$HOOK_SMOKE_PROJECT/.codex"
     cat > "$HOOK_SMOKE_PROJECT/.codex/task.md" <<'TASK'
 Task: stale completed smoke task
@@ -68,6 +68,19 @@ TASK
         smoke_failed="installed hooks.json is not valid JSON"
     elif jq -e --arg repo "$FRAMEWORK_DIR" '[.. | objects | .command? // empty] | any(contains($repo))' "$hooks_file" >/dev/null; then
         smoke_failed="installed hooks.json references repo source path"
+    elif ! jq -e --arg command_dir "$installed_hooks_dir" '
+        {
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
+            subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+            subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
+        }
+        | .sessionStart and .skillRouter and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
+    ' "$hooks_file" >/dev/null; then
+        smoke_failed="plain Codex install did not register the workflow/delegation hook set"
     else
         while IFS=$'\t' read -r event command; do
             if p0p4_hook_command_seen "$command"; then
@@ -114,6 +127,17 @@ TASK
     skill_router="$installed_hooks_dir/skill-router.sh"
     workflow_enforcer="$installed_hooks_dir/workflow-enforcer.sh"
     workflow_guard="$installed_hooks_dir/workflow-guard.sh"
+    stop_review="$installed_hooks_dir/stop-review.sh"
+    subagent_monitor="$installed_hooks_dir/subagent-monitor.sh"
+
+    if [[ -z "$smoke_failed" ]]; then
+        for required_path in "$session_start" "$skill_router" "$workflow_enforcer" "$workflow_guard" "$stop_review" "$subagent_monitor"; do
+            if [[ ! -x "$required_path" ]]; then
+                smoke_failed="required Codex workflow hook is not executable: $required_path"
+                break
+            fi
+        done
+    fi
 
     if [[ -z "$smoke_failed" ]]; then
         session_out="$(mktemp)"
@@ -156,11 +180,9 @@ TASK
         if [[ "$enforcer_exit" -ne 0 ]]; then
             smoke_failed="installed workflow-enforcer.sh failed; exit=$enforcer_exit stdout='$enforcer_stdout'"
         elif echo "$enforcer_stdout" | jq -e '.decision == "block"' >/dev/null 2>&1; then
-            if [[ "$enforcer_stdout" != *"requires explicit subagent authorization"* ]]; then
-                smoke_failed="installed workflow-enforcer.sh blocked with unexpected reason; stdout='$enforcer_stdout'"
-            fi
-        elif [[ "$enforcer_stdout" != *"WORKFLOW RULES"* ]]; then
-            smoke_failed="installed workflow-enforcer.sh did not emit workflow reminder or authorization block; exit=$enforcer_exit stdout='$enforcer_stdout'"
+            smoke_failed="installed workflow-enforcer.sh should ask once with additionalContext, not block; stdout='$enforcer_stdout'"
+        elif [[ "$enforcer_stdout" != *"WORKFLOW RULES"* || "$enforcer_stdout" != *"CODEX SUBAGENT AUTHORIZATION (ask-once)"* ]]; then
+            smoke_failed="installed workflow-enforcer.sh did not emit workflow reminder and ask-once context; exit=$enforcer_exit stdout='$enforcer_stdout'"
         elif [[ "$enforcer_stdout" == *"WORKFLOW STATE"* || "$enforcer_stdout" == *"stale completed smoke task"* || "$enforcer_stdout" == *"This completed task text must not be injected"* ]]; then
             smoke_failed="installed workflow-enforcer.sh injected completed task journal state"
         fi
