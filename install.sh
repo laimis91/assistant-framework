@@ -154,29 +154,82 @@ write_profiled_hooks_settings() {
         return 0
     fi
 
-    command -v jq >/dev/null 2>&1 || fail "jq is required for --hook-profile $HOOK_PROFILE"
-    jq --argjson allowed "$allowed_json" '
-        def first_shell_token:
-            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-        def command_basename:
-            (. // "") | first_shell_token | split("/") | last;
-        .hooks = (
-            (.hooks // {})
-            | with_entries(
-                .value = (
-                    (.value | if type == "array" then . else [.] end)
-                    | map(
-                        .hooks = (
-                            (.hooks // [])
-                            | map(select(((.command // "") | command_basename) as $name | ($allowed | index($name)) != null))
+    if command -v jq >/dev/null 2>&1; then
+        jq --argjson allowed "$allowed_json" '
+            def first_shell_token:
+                (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+            def command_basename:
+                (. // "") | first_shell_token | split("/") | last;
+            .hooks = (
+                (.hooks // {})
+                | with_entries(
+                    .value = (
+                        (.value | if type == "array" then . else [.] end)
+                        | map(
+                            .hooks = (
+                                (.hooks // [])
+                                | map(select(((.command // "") | command_basename) as $name | ($allowed | index($name)) != null))
+                            )
                         )
+                        | map(select((.hooks // []) | length > 0))
                     )
-                    | map(select((.hooks // []) | length > 0))
                 )
+                | with_entries(select((.value // []) | length > 0))
             )
-            | with_entries(select((.value // []) | length > 0))
-        )
-    ' "$source_settings" > "$target_settings"
+        ' "$source_settings" > "$target_settings"
+        return 0
+    fi
+
+    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required for --hook-profile $HOOK_PROFILE"
+    python3 - "$source_settings" "$target_settings" "$allowed_json" <<'PY'
+import json
+import os
+import re
+import sys
+
+source_settings, target_settings, allowed_json = sys.argv[1:4]
+allowed = set(json.loads(allowed_json))
+
+with open(source_settings, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+
+profiled_hooks = {}
+for event, groups in (settings.get("hooks") or {}).items():
+    if not isinstance(groups, list):
+        groups = [groups]
+
+    kept_groups = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+
+        hooks = group.get("hooks") or []
+        if not isinstance(hooks, list):
+            hooks = [hooks]
+
+        kept_hooks = []
+        for hook in hooks:
+            if not isinstance(hook, dict):
+                continue
+            command = str(hook.get("command") or "")
+            first_shell_token = re.sub(r"\s+", " ", command.strip()).split(" ")[0] if command.strip() else ""
+            hook_name = os.path.basename(first_shell_token)
+            if hook_name in allowed:
+                kept_hooks.append(hook)
+
+        if kept_hooks:
+            kept_group = dict(group)
+            kept_group["hooks"] = kept_hooks
+            kept_groups.append(kept_group)
+
+    if kept_groups:
+        profiled_hooks[event] = kept_groups
+
+settings["hooks"] = profiled_hooks
+with open(target_settings, "w", encoding="utf-8") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+PY
 }
 
 plugin_profile_line() {

@@ -18,6 +18,23 @@ p0p4_file_mode_octal() {
 legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
 stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
 
+p0p4_path_without_jq() {
+    local tmpbin="$1"
+    local d
+    local f
+    local name
+
+    mkdir -p "$tmpbin"
+    for d in /bin /usr/bin /usr/sbin /sbin; do
+        [[ -d "$d" ]] || continue
+        for f in "$d"/*; do
+            name="$(basename "$f")"
+            [[ "$name" == "jq" ]] && continue
+            [[ -e "$tmpbin/$name" ]] || ln -s "$f" "$tmpbin/$name" 2>/dev/null || true
+        done
+    done
+}
+
 test_start "Codex reinstall keeps one framework block, one memory protocol block, and current wording"
 INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME"
@@ -785,6 +802,34 @@ if HOME="$CLAUDE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent claude --sk
     fi
 else
     fail "Claude hook reinstall failed; see /tmp/p0p4-install-claude-hooks.err"
+fi
+
+test_start "minimal hook profile install works without jq when python3 is available"
+NO_JQ_HOME="$(mktemp -d)"
+NO_JQ_BIN="$(mktemp -d)"
+p0p4_register_cleanup "$NO_JQ_HOME" "$NO_JQ_BIN"
+p0p4_path_without_jq "$NO_JQ_BIN"
+if HOME="$NO_JQ_HOME" PATH="$NO_JQ_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-minimal-no-jq.out 2>/tmp/p0p4-install-minimal-no-jq.err; then
+    if [[ ! -f "$NO_JQ_HOME/.claude/settings.json" ]]; then
+        fail "minimal install without jq did not create settings.json"
+    elif jq -e '
+        {
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/skill-router.sh")),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/session-start.sh")),
+            preCompress: ([.hooks.PreCompact[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/pre-compress.sh")),
+            postCompact: ([.hooks.PostCompact[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/post-compact.sh")),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-guard.sh")),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/stop-review.sh")),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.claude/hooks/assistant/workflow-enforcer.sh"))
+        }
+        | .skillRouter and .sessionStart and .preCompress and .postCompact and (.workflowGuard | not) and (.stopReview | not) and (.workflowEnforcer | not)
+    ' "$NO_JQ_HOME/.claude/settings.json" >/dev/null; then
+        pass
+    else
+        fail "minimal install without jq should create minimal hook settings only"
+    fi
+else
+    fail "minimal install without jq failed; see /tmp/p0p4-install-minimal-no-jq.err"
 fi
 
 test_start "Claude strict hook profile installs enforcement hooks"
