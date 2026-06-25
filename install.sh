@@ -975,29 +975,45 @@ TOML
     fi
 }
 
-codex_cli_supports_compaction_hooks() {
-    local version_line version_parts major minor patch
+codex_cli_version_parts() {
+    local version_line
+    command -v codex >/dev/null 2>&1 || return 1
+    version_line=$(codex --version 2>/dev/null || true)
+    printf '%s\n' "$version_line" | sed -nE 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p' | head -1
+}
 
-    if ! command -v codex >/dev/null 2>&1; then
-        # If Codex is not on PATH during install, avoid stripping latest hook
-        # support from the framework template. The user's eventual CLI will
-        # validate the config when it runs.
+codex_cli_version_at_least() {
+    local required_minor="$1"
+    local version_parts major minor patch
+
+    version_parts="$(codex_cli_version_parts || true)"
+    if [[ -z "$version_parts" ]]; then
+        # If Codex is not on PATH or uses an unparseable version during install,
+        # avoid stripping latest hook support from the framework template. The
+        # user's eventual CLI will validate the config when it runs.
         return 0
     fi
-
-    version_line=$(codex --version 2>/dev/null || true)
-    version_parts=$(printf '%s\n' "$version_line" | sed -nE 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p' | head -1)
-    [[ -n "$version_parts" ]] || return 0
 
     read -r major minor patch <<< "$version_parts"
     if (( major > 0 )); then
         return 0
     fi
-    if (( minor >= 129 )); then
+    if (( minor >= required_minor )); then
         return 0
     fi
 
     return 1
+}
+
+codex_cli_supports_compaction_hooks() {
+    codex_cli_version_at_least 129
+}
+
+codex_cli_supports_subagent_hooks() {
+    # OpenAI Codex rust-v0.133.0 release notes added SubagentStart and
+    # SubagentStop lifecycle hook support. Older CLIs silently ignore those
+    # events in /hooks, which leaves only the legacy four registered hooks.
+    codex_cli_version_at_least 133
 }
 
 # ── Validate ──────────────────────────────────────────────────────────────────
@@ -1484,6 +1500,7 @@ if $INSTALL_HOOKS; then
     # Determine which settings template to use
     HOOKS_SETTINGS=""
     CODEX_SUPPORTS_COMPACTION_HOOKS=true
+    CODEX_SUPPORTS_SUBAGENT_HOOKS=true
     case "$AGENT" in
         claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
         gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
@@ -1495,6 +1512,9 @@ if $INSTALL_HOOKS; then
             if ! codex_cli_supports_compaction_hooks; then
                 CODEX_SUPPORTS_COMPACTION_HOOKS=false
             fi
+            if ! codex_cli_supports_subagent_hooks; then
+                CODEX_SUPPORTS_SUBAGENT_HOOKS=false
+            fi
             ;;
     esac
 
@@ -1503,6 +1523,22 @@ if $INSTALL_HOOKS; then
         write_profiled_hooks_settings "$HOOKS_SETTINGS" "$PROFILED_HOOKS_SETTINGS"
         if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
             rewrite_codex_hook_commands_for_target "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOK_COMMAND_DIR"
+            if [[ "$CODEX_SUPPORTS_SUBAGENT_HOOKS" != "true" ]]; then
+                if command -v jq >/dev/null 2>&1; then
+                    jq 'del(.hooks.SubagentStart, .hooks.SubagentStop)' "$PROFILED_HOOKS_SETTINGS" > "${PROFILED_HOOKS_SETTINGS}.tmp" \
+                        && mv "${PROFILED_HOOKS_SETTINGS}.tmp" "$PROFILED_HOOKS_SETTINGS"
+                else
+                    python3 - "$PROFILED_HOOKS_SETTINGS" <<'PY'
+import json, sys
+p=sys.argv[1]
+with open(p, encoding='utf-8') as f: d=json.load(f)
+for k in ('SubagentStart','SubagentStop'):
+    (d.get('hooks') or {}).pop(k, None)
+with open(p, 'w', encoding='utf-8') as f:
+    json.dump(d, f, indent=2); f.write('\n')
+PY
+                fi
+            fi
         fi
         trap 'rm -f "$PROFILED_HOOKS_SETTINGS"' EXIT
         if $DRY_RUN; then
@@ -1535,6 +1571,11 @@ if $INSTALL_HOOKS; then
                             session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
                             *) continue ;;  # skip unsupported hooks
                         esac
+                        if [[ "$CODEX_SUPPORTS_SUBAGENT_HOOKS" != "true" ]]; then
+                            case "$hook_name" in
+                                subagent-monitor.sh) continue ;;
+                            esac
+                        fi
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
                             case "$hook_name" in
                                 pre-compress.sh|post-compact.sh) continue ;;
@@ -1630,6 +1671,9 @@ if $INSTALL_HOOKS; then
                         | with_entries(select((.value // []) | length > 0))
                     ' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
                     new_hooks=$(jq '.hooks' "$PROFILED_HOOKS_SETTINGS")
+                    if [[ "${CODEX_HOOKS:-}" == "true" && "$CODEX_SUPPORTS_SUBAGENT_HOOKS" != "true" ]]; then
+                        info "NOTE: Codex CLI < 0.133.0 detected — skipping SubagentStart/SubagentStop registration. Update Codex CLI to enable deterministic subagent lifecycle evidence."
+                    fi
                     if [[ "${CODEX_HOOKS:-}" == "true" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
                         new_hooks=$(printf '%s\n' "$new_hooks" | jq 'del(.PreCompact, .PostCompact)')
                         info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
@@ -1677,6 +1721,9 @@ if $INSTALL_HOOKS; then
                     fi
                     else
                         merge_profiled_hooks_settings_python "$CODEX_HOOKS_FILE" "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE" "$AGENT" "$HOOKS_TARGET" "codex" "$CODEX_SUPPORTS_COMPACTION_HOOKS"
+                        if [[ "$CODEX_SUPPORTS_SUBAGENT_HOOKS" != "true" ]]; then
+                            info "NOTE: Codex CLI < 0.133.0 detected — skipping SubagentStart/SubagentStop registration. Update Codex CLI to enable deterministic subagent lifecycle evidence."
+                        fi
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
                             info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
                         fi
@@ -1698,6 +1745,9 @@ if $INSTALL_HOOKS; then
                         else
                             ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
                         fi
+                    fi
+                    if [[ "$CODEX_SUPPORTS_SUBAGENT_HOOKS" != "true" ]]; then
+                        info "NOTE: Codex CLI < 0.133.0 detected — SubagentStart/SubagentStop were not registered. Update Codex CLI to enable deterministic subagent lifecycle evidence."
                     fi
                 fi
                 info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
@@ -2020,12 +2070,21 @@ if $INSTALL_HOOKS; then
     echo ""
     echo "Hooks: $HOOKS_TARGET/"
     if [[ "$AGENT" == "codex" ]]; then
-        if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
+        if [[ "${CODEX_SUPPORTS_SUBAGENT_HOOKS:-true}" == "true" && "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
             echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
             echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
-        else
+        elif [[ "${CODEX_SUPPORTS_SUBAGENT_HOOKS:-true}" == "true" ]]; then
             echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
             echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
+            echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
+        elif [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse, PreCompact, PostCompact — 6 events; subagent lifecycle hooks unavailable)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review + compaction"
+            echo "  Subagent lifecycle evidence requires Codex CLI 0.133.0 or newer."
+        else
+            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, PreToolUse — 4 events; subagent lifecycle and compaction hooks unavailable)"
+            echo "  Enforcement: skill-router + workflow-enforcer + workflow-guard + stop-review"
+            echo "  Subagent lifecycle evidence requires Codex CLI 0.133.0 or newer."
             echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
         fi
     fi

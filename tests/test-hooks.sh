@@ -3408,7 +3408,7 @@ echo "codex install"
 
 if test_start "codex strict install: workflow-guard installs and legacy post-tool shims are no-op"; then
     INSTALL_TEST_HOME=$(mktemp -d)
-    CODEX_STUB_DIR=$(make_codex_version_stub "0.129.0")
+    CODEX_STUB_DIR=$(make_codex_version_stub "0.133.0")
     mkdir -p "$INSTALL_TEST_HOME/.codex/hooks/assistant"
     touch "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
         "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
@@ -3444,6 +3444,8 @@ if test_start "codex strict install: workflow-guard installs and legacy post-too
         and (.hooks.PreToolUse[0].hooks // [] | map(.command) | any(contains("workflow-guard.sh")))
         and (.hooks.PreCompact // [] | length) == 1
         and (.hooks.PostCompact // [] | length) == 1
+        and (.hooks.SubagentStart // [] | length) == 1
+        and (.hooks.SubagentStop // [] | length) == 1
     ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
         fail "Codex hook events not registered as expected in hooks.json"
     else
@@ -3524,6 +3526,41 @@ if test_start "codex install: installed compaction hooks detect Codex by script 
     rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
 fi
 
+if test_start "codex strict install: Codex 0.132 skips subagent hooks and prints upgrade guidance"; then
+    INSTALL_TEST_HOME=$(mktemp -d)
+    CODEX_STUB_DIR=$(make_codex_version_stub "0.132.0")
+    local_tmp_out=$(mktemp)
+    local_tmp_err=$(mktemp)
+    HOOK_EXIT=0
+
+    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --hook-profile strict \
+        > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
+
+    INSTALL_STDOUT=$(cat "$local_tmp_out")
+    INSTALL_STDERR=$(cat "$local_tmp_err")
+    rm -f "$local_tmp_out" "$local_tmp_err"
+
+    if [[ $HOOK_EXIT -ne 0 ]]; then
+        fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
+    elif [[ -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/subagent-monitor.sh" ]]; then
+        fail "Codex 0.132 install copied unsupported subagent lifecycle hook script"
+    elif ! jq -e '
+        (.hooks.SubagentStart? == null)
+        and (.hooks.SubagentStop? == null)
+        and (.hooks.PreToolUse // [] | length) == 1
+        and (.hooks.PreCompact // [] | length) == 1
+        and (.hooks.PostCompact // [] | length) == 1
+    ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
+        fail "Codex 0.132 hooks.json should drop subagent hooks while keeping supported hooks"
+    elif [[ "$INSTALL_STDOUT" != *"Subagent lifecycle evidence requires Codex CLI 0.133.0 or newer."* ]]; then
+        fail "Codex 0.132 install did not print subagent hook version guidance"
+    else
+        pass
+    fi
+
+    rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
+fi
+
 if test_start "codex strict install: Codex 0.128 skips compaction hooks and keeps workflow-guard"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.128.0")
@@ -3546,6 +3583,8 @@ if test_start "codex strict install: Codex 0.128 skips compaction hooks and keep
     elif [[ -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/pre-compress.sh" \
         || -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-compact.sh" ]]; then
         fail "Codex 0.128 install copied unsupported compaction hook scripts"
+    elif [[ -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/subagent-monitor.sh" ]]; then
+        fail "Codex 0.128 install copied unsupported subagent lifecycle hook script"
     elif [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
         || ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" ]]; then
         fail "Codex 0.128 install did not create executable legacy post-tool shims"
@@ -3555,8 +3594,12 @@ if test_start "codex strict install: Codex 0.128 skips compaction hooks and keep
         and (.hooks.PreToolUse[0].hooks // [] | map(.command) | any(contains("workflow-guard.sh")))
         and (.hooks.PreCompact? == null)
         and (.hooks.PostCompact? == null)
+        and (.hooks.SubagentStart? == null)
+        and (.hooks.SubagentStop? == null)
     ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
         fail "Codex 0.128 hooks.json did not keep workflow-guard while dropping post-tool and compaction hooks"
+    elif [[ "$INSTALL_STDOUT" != *"Subagent lifecycle evidence requires Codex CLI 0.133.0 or newer."* ]]; then
+        fail "Codex 0.128 install did not print subagent hook version guidance"
     elif [[ "$INSTALL_STDOUT" != *"Compaction hooks require Codex CLI 0.129.0 or newer."* ]]; then
         fail "Codex 0.128 install did not print compaction hook version guidance"
     else
