@@ -114,9 +114,22 @@ When creating or modifying skills, you **must** follow the contract design guide
 
 Use the field schema, phase gate schema, and handoff schema formats defined in the guide. Refer to existing skills' `contracts/` directories for examples.
 
+## Assistant Workflow front-door
+
+For any non-trivial development, bugfix, refactor, docs/config/hook/contract, or framework-behavior change in this repository, load and follow `skills/assistant-workflow/SKILL.md` before starting Discovery. Do not treat this repository's project `AGENTS.md` as a replacement for the workflow skill; it is only a repo map.
+
+Before Discovery, Decompose, Plan, Build, or Review responsibilities that require workflow subagents, Assistant Framework policy requires explicit user authorization to spawn subagents unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed scope and wait. Do not continue those responsibilities inline while authorization is unresolved.
+
+Codex-specific delegation rules:
+- Current Codex CLI/app releases support native subagent workflows by default; do not infer `subagents_unavailable` from the absence of a visible tool named `Task`, `delegate`, `subagent`, or Claude-style `Agent`.
+- Spawn configured Codex custom agents by name: `code-mapper`, `explorer`, `architect`, `code-writer`, `builder-tester`, and `reviewer`.
+- Medium+ Discovery uses `code-mapper`; Build code changes use `code-writer`; Build verification uses `builder-tester`; Review uses `reviewer` even for no-code/no-op outcomes.
+- Record dispatch/result evidence in `.codex/task.md` Agent Dispatch Log. Silent inline execution of delegated phases is a workflow failure.
+- Use `direct_fallback` only after authorization is denied, policy disallows spawning, or a real spawn attempt fails.
+
 ## Key conventions
 
-- **Skills are markdown, not code.** They are prompt engineering artifacts. Edit them as structured prose, not programs.
+- **Skills are markdown, not code.** Edit them as structured prose, not programs.
 - **Triggers drive routing.** Adding a new skill requires only a SKILL.md with `triggers:` frontmatter — no script changes needed.
 - **Hooks are bash scripts** that output plain text (Codex) or JSON (Gemini). They must exit 0 under normal conditions.
 - **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.

@@ -114,9 +114,21 @@ When creating or modifying skills, you **must** follow the contract design guide
 
 Use the field schema, phase gate schema, and handoff schema formats defined in the guide. Refer to existing skills' `contracts/` directories for examples.
 
+## Assistant Workflow front-door
+
+For any non-trivial development, bugfix, refactor, docs/config/hook/contract, or framework-behavior change in this repository, load and follow `skills/assistant-workflow/SKILL.md` before starting Discovery. Do not treat this repository's project `CLAUDE.md` as a replacement for the workflow skill; it is only a repo map.
+
+Before Discovery, Decompose, Plan, Build, or Review responsibilities that require workflow subagents, Assistant Framework policy requires explicit user authorization to spawn subagents unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed scope and wait. Do not continue those responsibilities inline while authorization is unresolved.
+
+Delegation rules:
+- Spawn configured workflow agents by role/name: `code-mapper`, `explorer`, `architect`, `code-writer`, `builder-tester`, and `reviewer`.
+- Medium+ Discovery uses Code Mapper; Build code changes use Code Writer; Build verification uses Builder/Tester; Review uses Reviewer even for no-code/no-op outcomes.
+- Record dispatch/result evidence in the task journal Agent Dispatch Log. Silent inline execution of delegated phases is a workflow failure.
+- Use `direct_fallback` only after authorization is denied, policy disallows spawning, or a real spawn attempt fails.
+
 ## Key conventions
 
-- **Skills are markdown, not code.** They are prompt engineering artifacts. Edit them as structured prose, not programs.
+- **Skills are markdown, not code.** Edit them as structured prose, not programs.
 - **Triggers drive routing.** Adding a new skill requires only a SKILL.md with `triggers:` frontmatter — no script changes needed.
 - **Hooks are bash scripts** that output plain text (Claude) or JSON (Gemini). They must exit 0 under normal conditions.
 - **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.

@@ -2698,7 +2698,11 @@ fi
 
 if test_start "workflow-guard: Edit with BUILDING status → outputs warning"; then
     mkdir -p "$TEST_PROJECT/.claude"
-    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.claude/task.md"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+Status: BUILDING [step 2/3]
+Subagent policy state: not_required
+Subagent execution mode: not_applicable
+TASK
     echo '{"tool_name": "Edit", "tool_input": {}}' | \
         HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
         > /tmp/_wg_out 2>/dev/null
@@ -2714,7 +2718,11 @@ fi
 
 if test_start "workflow-guard: Write with VERIFYING status → outputs warning"; then
     mkdir -p "$TEST_PROJECT/.claude"
-    echo -e "Status: VERIFYING" > "$TEST_PROJECT/.claude/task.md"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+Status: VERIFYING
+Subagent policy state: not_required
+Subagent execution mode: not_applicable
+TASK
     echo '{"tool_name": "Write", "tool_input": {}}' | \
         HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
         > /tmp/_wg_out 2>/dev/null
@@ -2731,7 +2739,11 @@ fi
 
 if test_start "workflow-guard: Codex apply_patch with BUILDING status → outputs warning"; then
     mkdir -p "$TEST_PROJECT/.codex"
-    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING [step 2/3]
+Subagent policy state: not_required
+Subagent execution mode: not_applicable
+TASK
     echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** End Patch"}}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
         > /tmp/_wg_out 2>/dev/null
@@ -2742,6 +2754,65 @@ if test_start "workflow-guard: Codex apply_patch with BUILDING status → output
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-guard: Codex Build edit with unresolved subagent authorization → blocks"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING [step 1/2]
+Subagent policy state: authorization_required
+Subagent execution mode: not_applicable
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+## Agent Dispatch Log
+- Direct fallback reason: N/A
+TASK
+    jq -n --arg patch $'*** Begin Patch\n*** Update File: src/App.cs\n@@\n-old\n+new\n*** End Patch' \
+        '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "authorization is unresolved"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected block for unresolved subagent auth; stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.codex/task.md"
+fi
+
+if test_start "workflow-guard: delegated Codex Build edit without Code Writer dispatch → blocks"; then
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING [step 1/2]
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+- Reviewer
+## Agent Dispatch Log
+- Code Mapper dispatch: run-map
+- Code Mapper result: map
+TASK
+    jq -n --arg patch $'*** Begin Patch\n*** Update File: src/App.cs\n@@\n-old\n+new\n*** End Patch' \
+        '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Code Writer dispatch"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected block for missing Code Writer dispatch; stdout='$HOOK_STDOUT'"
     fi
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
@@ -2783,7 +2854,11 @@ fi
 
 if test_start "workflow-guard: Codex apply_patch mixed source and state → outputs warning"; then
     mkdir -p "$TEST_PROJECT/.codex"
-    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Status: BUILDING [step 2/3]
+Subagent policy state: not_required
+Subagent execution mode: not_applicable
+TASK
     jq -n --arg patch $'*** Begin Patch\n*** Update File: .codex/task.md\n@@\n-old\n+new\n*** Update File: src/App.cs\n@@\n-old\n+new\n*** End Patch' \
         '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \

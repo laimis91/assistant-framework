@@ -747,6 +747,27 @@ else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
+test_start "project front-door AGENTS require assistant-workflow and subagent authorization"
+missing_frontdoor_terms=()
+for pair in \
+    "AGENTS.md|load and follow \`skills/assistant-workflow/SKILL.md\` before starting Discovery" \
+    "AGENTS.md|Ask once for the needed scope and wait" \
+    "AGENTS.md|Spawn configured Codex custom agents by name" \
+    "AGENTS.md|Silent inline execution of delegated phases is a workflow failure" \
+    "CLAUDE.md|load and follow \`skills/assistant-workflow/SKILL.md\` before starting Discovery" \
+    "CLAUDE.md|Ask once for the needed scope and wait" \
+    "CLAUDE.md|Silent inline execution of delegated phases is a workflow failure"; do
+    IFS='|' read -r surface expected <<< "$pair"
+    if [[ ! -f "$FRAMEWORK_DIR/$surface" ]] || ! grep -Fq -- "$expected" "$FRAMEWORK_DIR/$surface"; then
+        missing_frontdoor_terms+=("$surface: $expected")
+    fi
+done
+if [[ "${#missing_frontdoor_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "project front-door instructions must not bypass assistant-workflow delegation policy: ${missing_frontdoor_terms[*]}"
+fi
+
 test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"
 missing_codex_subagent_doc_terms=()
 for term in \
