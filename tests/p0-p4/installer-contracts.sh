@@ -55,6 +55,8 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq ".codex/context-map.md" "$agents_file" \
             && grep -Fq "it does not edit project source files directly" "$agents_file" \
             && grep -Fq "Current Codex CLI/app releases support native subagent workflows by default" "$agents_file" \
+            && grep -Fq "Assistant Framework policy requires explicit user authorization before spawning subagents" "$agents_file" \
+            && grep -Fq "wait before continuing phases that require subagents" "$agents_file" \
             && grep -Fq "Do not treat the absence of a visible tool named Task, delegate, or subagent as proof" "$agents_file" \
             && grep -Fq "after approval, use delegated mode" "$agents_file" \
             && ! grep -Fq "otherwise use direct fallback" "$agents_file" \

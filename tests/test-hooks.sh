@@ -743,6 +743,50 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: unresolved subagent authorization → blocks before inline work can complete"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: authorization_required
+Subagent execution mode: not_applicable
+Required agents:
+- Code Mapper
+- Reviewer
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: no code changes needed
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "authorization_required_unresolved"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected unresolved subagent authorization block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 if test_start "stop-review: delegated source-changing task missing subagent evidence → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -3286,6 +3330,8 @@ EOF
         && echo "$HOOK_STDOUT" | grep -q "resolve clarification readiness before PLAN" \
         && echo "$HOOK_STDOUT" | grep -q "ask bounded clarification questions and WAIT" \
         && echo "$HOOK_STDOUT" | grep -q "Do not enter PLAN by silently assuming answers" \
+        && echo "$HOOK_STDOUT" | grep -q "Assistant Framework policy requires asking once for subagent authorization" \
+        && echo "$HOOK_STDOUT" | grep -q "wait for approval/denial before continuing" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
@@ -3344,6 +3390,38 @@ EOF
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
+fi
+
+if test_start "workflow-enforcer: authorization_required blocks phase continuation until user answers"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Investigate no-op bug
+Status: DISCOVERING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+- none
+Subagent policy state: authorization_required
+Subagent execution mode: not_applicable
+Subagent authorization scope:
+- none
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "SUBAGENT AUTHORIZATION GATE" \
+        && echo "$HOOK_STDOUT" | grep -q "Ask once for the needed delegation scope and WAIT" \
+        && echo "$HOOK_STDOUT" | grep -q "authorization_required_unresolved"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected subagent authorization gate; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
 fi
 
 if test_start "workflow-enforcer: Codex, Status DONE task journal → lightweight rules reminder"; then

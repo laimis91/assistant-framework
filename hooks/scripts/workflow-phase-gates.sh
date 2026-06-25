@@ -350,6 +350,14 @@ assistant_phase_subagent_evidence_missing_reason_key() {
     policy_state="$(assistant_phase_subagent_policy_state "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
     roles="$(assistant_phase_required_subagent_roles "$file")"
 
+    # Authorization-required is a wait state, not an execution mode. If a task
+    # has reached an active workflow phase while authorization is unresolved,
+    # block before it can silently complete work inline.
+    if [[ "$policy_state" == "authorization_required" ]]; then
+        printf 'authorization_required_unresolved\n'
+        return 0
+    fi
+
     # Strict subagent evidence applies whenever workflow subagent roles are
     # declared, not only when source code changed. Discovery/review-only work can
     # legitimately skip Code Writer and Builder/Tester, but delegated Code Mapper,

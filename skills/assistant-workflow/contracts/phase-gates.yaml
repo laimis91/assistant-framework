@@ -59,8 +59,8 @@ gates:
         on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
 
       - id: T9
-        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents"
-        on_fail: "Resolve the active adapter/tool policy. If explicit authorization is required, set subagent_policy_state=authorization_required and ask before spawning; otherwise set delegated, direct_fallback, or not_applicable."
+        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents; development/code-work that needs workflow roles starts as authorization_required unless the current user prompt explicitly authorized subagents"
+        on_fail: "Set subagent_policy_state=authorization_required and ask once for the needed delegation scope before continuing phases that require subagents. Set delegation_authorized only after explicit user approval or explicit user-requested subagents. Use direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed."
 
     guidance_assertions:
 
@@ -125,8 +125,8 @@ gates:
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
       - id: D_SUBAGENT_AUTH
-        check: "If subagent_policy_state == authorization_required: explicit user authorization is obtained before spawning any subagent, or subagent_execution_mode is set to direct_fallback with authorization_denied, subagents_unavailable, or policy_disallowed evidence"
-        on_fail: "Ask once for the needed delegation scope before spawning subagents, or record direct fallback evidence and continue without pretending delegation happened"
+        check: "If subagent_policy_state == authorization_required: explicit user authorization is obtained before any phase that requires subagents continues; if the user denies, subagent_execution_mode is set to direct_fallback with authorization_denied evidence"
+        on_fail: "Ask once for the needed delegation scope and wait. Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require subagents until the user approves or denies. If denied, record direct fallback evidence and continue without pretending delegation happened."
 
       - id: D8
         check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"

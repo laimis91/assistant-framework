@@ -54,6 +54,7 @@ emit_workflow_rules_context() {
 
 STATE BOOTSTRAP (when no active task journal is present):
 - For any development/code-work request, create or refresh $STATE_DIR/task.md before planning or implementation.
+- Before running Discovery/Decompose/Plan/Build/Review responsibilities that require workflow subagents, Assistant Framework policy requires asking once for subagent authorization unless the current user prompt already explicitly authorized subagents for this task; wait for approval/denial before continuing those responsibilities.
 - For medium, large, or mega tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
 - During preparation/DISCOVER, resolve clarification readiness before PLAN: if any implementation-shaping unknown affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from local context; and has no safe default, ask bounded clarification questions and WAIT.
 - If no clarification is needed, explicitly record Clarification status: ready, Clarification defaults applied: false, Clarification questions asked: 0, and Unresolved clarification topics: none before planning.
@@ -125,6 +126,10 @@ clarification_question_cap="$(read_scalar_field "Clarification question cap")"
 clarification_admissibility="$(read_scalar_field "Clarification admissibility")"
 clarification_topics="$(read_list_field "Unresolved clarification topics")"
 
+subagent_policy_state="$(read_scalar_field "Subagent policy state")"
+subagent_execution_mode="$(read_scalar_field "Subagent execution mode")"
+subagent_authorization_scope="$(read_list_field "Subagent authorization scope")"
+
 status=${status:-UNKNOWN}
 task_name=${task_name:-unknown}
 size=${size:-unknown}
@@ -134,6 +139,9 @@ clarification_confidence=${clarification_confidence:-unknown}
 clarification_questions_asked=${clarification_questions_asked:-unknown}
 clarification_question_cap=${clarification_question_cap:-unknown}
 clarification_admissibility=${clarification_admissibility:-unknown}
+subagent_policy_state=${subagent_policy_state:-unknown}
+subagent_execution_mode=${subagent_execution_mode:-unknown}
+subagent_authorization_scope=${subagent_authorization_scope:-}
 
 has_clarification_status_field="no"
 has_clarification_defaults_field="no"
@@ -300,6 +308,9 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Reviews completed: $review_count
 - Final result: $has_final_result
 - Review gate complete: $has_review_completion
+- Subagent policy state: $subagent_policy_state
+- Subagent execution mode: $subagent_execution_mode
+- Subagent authorization scope: ${subagent_authorization_scope:-none}
 - Subagent evidence gate: $subagent_gate_status
 - Metrics today: $has_metrics_today
 
@@ -339,6 +350,15 @@ if [[ "$clarification_state_unsaved" == "yes" ]]; then
     context+="
 WARNING: Clarification state is missing or unknown in the saved task journal. Write Clarification status, Clarification defaults applied, and Unresolved clarification topics before continuing.
 REMINDER: Saved clarification state must be written to the task journal before continuing."
+fi
+
+if [[ "$subagent_policy_state" == "authorization_required" ]]; then
+    context+="
+SUBAGENT AUTHORIZATION GATE:
+- Assistant Framework policy requires explicit user authorization before spawning subagents for workflow roles.
+- Ask once for the needed delegation scope and WAIT for approval or denial.
+- Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer until authorization is resolved.
+- Do not switch to direct_fallback unless the user denies authorization, policy disallows spawning, or a real spawn attempt proves subagents unavailable."
 fi
 
 if [[ "$subagent_gate_status" != "complete" ]]; then
