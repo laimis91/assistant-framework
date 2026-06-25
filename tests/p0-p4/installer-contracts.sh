@@ -53,6 +53,10 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "The orchestrator may create and update framework-owned state artifacts" "$agents_file" \
             && grep -Fq ".codex/context-map.md" "$agents_file" \
             && grep -Fq "it does not edit project source files directly" "$agents_file" \
+            && grep -Fq "Current Codex CLI/app releases support native subagent workflows by default" "$agents_file" \
+            && grep -Fq "Do not treat the absence of a visible tool named Task, delegate, or subagent as proof" "$agents_file" \
+            && grep -Fq "after approval, use delegated mode" "$agents_file" \
+            && ! grep -Fq "otherwise use direct fallback" "$agents_file" \
             && grep -Fq "CONTEXT BUDGET: Keep generated guidance concise." "$agents_file" \
             && grep -Fq "preserve user custom sections below the installer block" "$agents_file"; then
             pass
