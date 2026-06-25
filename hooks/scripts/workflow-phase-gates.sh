@@ -235,3 +235,137 @@ assistant_phase_has_metrics_today() {
     [[ -f "$metrics_file" ]] || return 1
     grep -q "\"date\":\"$today\"" "$metrics_file" 2>/dev/null
 }
+
+assistant_phase_subagent_mode() {
+    assistant_phase_scalar_field "$1" "Subagent execution mode"
+}
+
+assistant_phase_subagent_policy_state() {
+    assistant_phase_scalar_field "$1" "Subagent policy state"
+}
+
+assistant_phase_has_labeled_evidence() {
+    local file="$1"
+    local label="$2"
+    local value
+    value="$(awk -v label="$label" '
+        BEGIN { wanted = tolower(label) ":" }
+        {
+            line = $0
+            sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", line)
+            low = tolower(line)
+            if (index(low, wanted) == 1) {
+                sub(/^[^:]*:[[:space:]]*/, "", line)
+                sub(/[[:space:]]*$/, "", line)
+                print line
+                exit
+            }
+        }
+    ' "$file" 2>/dev/null)"
+
+    [[ -n "$value" ]] || return 1
+    [[ ! "$value" =~ ^(\[.*\]|none|None|NONE|n/a|N/A|missing|todo|TODO|tbd|TBD)$ ]]
+}
+
+assistant_phase_has_role_dispatch_result_evidence() {
+    local file="$1"
+    local role="$2"
+    assistant_phase_has_labeled_evidence "$file" "$role dispatch" \
+        && assistant_phase_has_labeled_evidence "$file" "$role result"
+}
+
+assistant_phase_direct_fallback_reason_valid() {
+    local file="$1"
+    grep -qiE "^[[:space:]]*[-*]?[[:space:]]*Direct fallback reason:[[:space:]]*(authorization_denied|subagents_unavailable|policy_disallowed)([[:space:]]|$)" "$file" 2>/dev/null
+}
+
+assistant_phase_has_role_equivalent_evidence() {
+    local file="$1"
+    local role="$2"
+    assistant_phase_has_labeled_evidence "$file" "$role direct evidence"
+}
+
+assistant_phase_has_per_slice_dispatch_evidence() {
+    local file="$1"
+    ! assistant_phase_is_medium_plus "$file" && return 0
+    assistant_phase_has_labeled_evidence "$file" "Per-slice dispatch evidence"
+}
+
+assistant_phase_requires_subagent_roles() {
+    local file="$1"
+    awk '
+        BEGIN { in_required = 0; found = 0 }
+        /^Required agents:[[:space:]]*$/ { in_required = 1; next }
+        /^Required agents:[[:space:]]*(.+)$/ {
+            line = tolower($0)
+            if (line ~ /(code writer|code-writer|builder\/tester|builder-tester|reviewer)/) {
+                found = 1
+            }
+            next
+        }
+        in_required && /^[[:space:]]*-[[:space:]]+/ {
+            line = tolower($0)
+            if (line ~ /(code writer|code-writer|builder\/tester|builder-tester|reviewer)/) {
+                found = 1
+            }
+            next
+        }
+        in_required && /^[^[:space:]-]/ { in_required = 0 }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_subagent_evidence_missing_reason_key() {
+    local file="$1"
+    local mode policy_state
+    mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    policy_state="$(assistant_phase_subagent_policy_state "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+
+    # Strict subagent evidence only applies when the active task declares source-changing
+    # workflow roles. Read-only/planning tasks can legitimately use not_applicable.
+    if ! assistant_phase_requires_subagent_roles "$file"; then
+        printf 'complete\n'
+        return 0
+    fi
+
+    case "$mode" in
+        delegated)
+            for role in "Code Writer" "Builder/Tester" "Reviewer"; do
+                if ! assistant_phase_has_role_dispatch_result_evidence "$file" "$role"; then
+                    printf 'delegated_missing_%s\n' "$(printf '%s' "$role" | tr '[:upper:]/ ' '[:lower:]__')"
+                    return 0
+                fi
+            done
+            if ! assistant_phase_has_per_slice_dispatch_evidence "$file"; then
+                printf 'delegated_missing_per_slice\n'
+                return 0
+            fi
+            ;;
+        direct_fallback)
+            if [[ "$policy_state" != "authorization_denied" && "$policy_state" != "subagents_unavailable" && "$policy_state" != "policy_disallowed" ]]; then
+                printf 'direct_fallback_invalid_policy_state\n'
+                return 0
+            fi
+            if ! assistant_phase_direct_fallback_reason_valid "$file"; then
+                printf 'direct_fallback_missing_reason\n'
+                return 0
+            fi
+            for role in "Code Writer" "Builder/Tester" "Reviewer"; do
+                if ! assistant_phase_has_role_equivalent_evidence "$file" "$role"; then
+                    printf 'direct_fallback_missing_%s\n' "$(printf '%s' "$role" | tr '[:upper:]/ ' '[:lower:]__')"
+                    return 0
+                fi
+            done
+            ;;
+        not_applicable|"")
+            printf 'not_applicable_with_required_roles\n'
+            return 0
+            ;;
+        *)
+            printf 'unknown_execution_mode\n'
+            return 0
+            ;;
+    esac
+
+    printf 'complete\n'
+}

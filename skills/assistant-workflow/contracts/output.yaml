@@ -13,16 +13,16 @@ skill: assistant-workflow
 completion_tiers:
   small:
     required_artifacts: [changed_files, validation_results, manual_test_steps, user_approval]
-    conditional_artifacts: [triage_result, test_results, debugging_result, artifact_contract]
+    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract]
     review_gate: "self-review or explicit validation summary unless risk_tier in [high, critical]"
     checkpoint_policy: "inline plan/check summary is enough; phase_checkpoints are strict-profile only"
   medium:
-    required_artifacts: [triage_result, changed_files, validation_results, spec_review_result, review_result, manual_test_steps, plan_document, user_approval]
+    required_artifacts: [triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, manual_test_steps, plan_document, user_approval]
     conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result]
     review_gate: "spec review plus quality review, with evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions"
   large_critical:
-    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, spec_review_result, review_result, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
+    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
     conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, candidate_search_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
@@ -253,6 +253,42 @@ artifacts:
     condition: "user-runnable behavior changed or release handoff needs manual verification"
     validation: "At least 1 actionable step the user can follow to verify the change"
     on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
+
+  - name: subagent_evidence
+    type: object
+    required: conditional
+    condition: "development/code-work task changes project source, tests, docs, config, hooks, contracts, or generated project artifacts"
+    description: "Strict evidence that required subagent roles were dispatched or explicitly handled through direct fallback."
+    validation: "required_agents includes at minimum Code Writer, Builder/Tester, and Reviewer. delegated mode records dispatch and result evidence for each required role; medium+ delegated work records per-slice dispatch evidence when slices apply. direct_fallback records one explicit policy reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus equivalent role, phase, verification, and review evidence. not_applicable is invalid for source-changing Build tasks."
+    on_fail: "Update the task journal Agent Dispatch Log. If delegated, add Code Writer, Builder/Tester, and Reviewer dispatch/result evidence and medium+ per-slice dispatch evidence. If direct_fallback, add the explicit policy reason and role-equivalent evidence. Do not complete with silent fallback."
+    object_fields:
+      - name: execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, direct_fallback]
+      - name: required_roles
+        type: string[]
+        required: true
+        validation: "Includes Code Writer, Builder/Tester, and Reviewer for source-changing work."
+      - name: delegated_dispatch_results
+        type: object[]
+        required: conditional
+        condition: "execution_mode == delegated"
+        validation: "Each required role has dispatch evidence and result evidence."
+      - name: direct_fallback_reason
+        type: enum
+        required: conditional
+        condition: "execution_mode == direct_fallback"
+        enum_values: [authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: direct_fallback_role_evidence
+        type: object[]
+        required: conditional
+        condition: "execution_mode == direct_fallback"
+        validation: "Contains equivalent Code Writer, Builder/Tester, and Reviewer role/phase/verification/review evidence."
+      - name: per_slice_dispatch_evidence
+        type: object[]
+        required: conditional
+        condition: "size in [medium, large, mega] and execution_mode == delegated and slices apply"
 
   - name: task_journal
     type: file

@@ -42,6 +42,22 @@ Subagent authorization scope:
 - [roles/phases/actions covered by user authorization, or none]
 Plan approval: [yes/no + date]
 
+## Agent Dispatch Log
+[strict subagent evidence inspected by stop-review/phase gates]
+- Required roles: Code Writer, Builder/Tester, Reviewer [plus Code Mapper/Explorer/Architect when required by size/risk]
+- Execution mode: delegated | direct_fallback | not_applicable
+- Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
+- Code Writer dispatch: [subagent/tool/run id, prompt/packet, timestamp, or N/A only in direct_fallback]
+- Code Writer result: [returned files/summary/evidence, or N/A only in direct_fallback]
+- Code Writer direct evidence: [role-equivalent implementation evidence when direct_fallback, else N/A]
+- Builder/Tester dispatch: [subagent/tool/run id, verification packet, timestamp, or N/A only in direct_fallback]
+- Builder/Tester result: [commands/results/success signal returned, or N/A only in direct_fallback]
+- Builder/Tester direct evidence: [role-equivalent build/test/validation evidence when direct_fallback, else N/A]
+- Reviewer dispatch: [reviewer subagent/tool/run id or assistant-review dispatch, or N/A only in direct_fallback]
+- Reviewer result: [spec/quality review result evidence returned, or N/A only in direct_fallback]
+- Reviewer direct evidence: [fresh review/spec+quality evidence when direct_fallback, else N/A]
+- Per-slice dispatch evidence: [medium+ delegated only: slice_id -> Code Writer dispatch/result + Builder/Tester dispatch/result; direct_fallback records sequential role-equivalent slice evidence]
+
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
 - [technical constraints, e.g. "Must stay on .NET 8"]
