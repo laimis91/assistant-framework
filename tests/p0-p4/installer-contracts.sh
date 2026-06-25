@@ -974,14 +974,14 @@ cat > "$NO_JQ_EXISTING_CODEX_HOME/.codex/hooks.json" <<'JSON'
 }
 JSON
 if HOME="$NO_JQ_EXISTING_CODEX_HOME" PATH="$NO_JQ_EXISTING_CODEX_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-minimal-no-jq-existing-codex.out 2>/tmp/p0p4-install-minimal-no-jq-existing-codex.err; then
-    if jq -e '
+    if jq -e --arg command_dir "$NO_JQ_EXISTING_CODEX_HOME/.codex/hooks/assistant" '
         [.. | objects | .command? // empty] as $commands
         | {
             custom: ($commands | any(. == "/tmp/user-codex-custom.sh")),
-            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/skill-router.sh")),
-            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/session-start.sh")),
-            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-guard.sh")),
-            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == "$HOME/.codex/hooks/assistant/workflow-enforcer.sh"))
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh")))
         }
         | .custom and .skillRouter and .sessionStart and (.workflowGuard | not) and (.workflowEnforcer | not)
     ' "$NO_JQ_EXISTING_CODEX_HOME/.codex/hooks.json" >/dev/null; then
@@ -1069,6 +1069,28 @@ if HOME="$GEMINI_DOWNGRADE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent gemini
     fi
 else
     fail "Gemini strict setup for downgrade failed; see /tmp/p0p4-install-gemini-downgrade-strict.err"
+fi
+
+test_start "Codex default install registers absolute hook command paths"
+CODEX_DEFAULT_ABS_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CODEX_DEFAULT_ABS_HOME"
+if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-absolute-default.out 2>/tmp/p0p4-install-codex-absolute-default.err; then
+    if jq -e --arg command_dir "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant" '
+        [.. | objects | .command? // empty] as $commands
+        | {
+            allAbsolute: ($commands | all(startswith($command_dir + "/") or startswith("/tmp/"))),
+            noHomeLiteral: ($commands | all(startswith("$HOME/.codex/hooks/assistant/") | not)),
+            subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+            subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
+        }
+        | .allAbsolute and .noHomeLiteral and .subagentStart and .subagentStop
+    ' "$CODEX_DEFAULT_ABS_HOME/.codex/hooks.json" >/dev/null; then
+        pass
+    else
+        fail "Codex default install should emit absolute executable hook command paths"
+    fi
+else
+    fail "Codex default absolute hook install failed; see /tmp/p0p4-install-codex-absolute-default.err"
 fi
 
 test_start "Codex install respects CODEX_HOME and registers lifecycle hooks there"

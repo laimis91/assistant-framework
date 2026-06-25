@@ -1067,11 +1067,10 @@ HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 CODEX_HOOK_COMMAND_DIR=""
 if [[ "$AGENT" == "codex" ]]; then
-    if [[ -n "${CODEX_HOME:-}" ]]; then
-        CODEX_HOOK_COMMAND_DIR="$HOOKS_TARGET"
-    else
-        CODEX_HOOK_COMMAND_DIR='$HOME/.codex/hooks/assistant'
-    fi
+    # Codex hook command strings are displayed/reviewed by /hooks before they run.
+    # Use concrete script paths so registration/executable checks do not depend on
+    # whether the hook browser expands shell variables in command tokens.
+    CODEX_HOOK_COMMAND_DIR="$HOOKS_TARGET"
 fi
 
 echo "Installing Assistant Framework for: $AGENT"
