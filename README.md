@@ -55,11 +55,13 @@ Preview without making changes:
 
 Each skill auto-triggers independently based on what you're doing.
 
-Hook profiles control how much lifecycle automation is installed. The default is `minimal`: skill routing plus session/compaction context helpers. This follows the prompt-load reduction plan in `docs/instruction-overload-reduction.md`. Use `strict` only when you want the full enforcement stack (`workflow-enforcer`, guard, consolidated stop review, etc.), or `none`/`--no-hooks` for skills only:
+Hook profiles control how much lifecycle automation is installed. Plain Codex installs default to `workflow`: skill routing, workflow/delegation prompts, tool-use guard, subagent lifecycle monitor, consolidated stop review, and compaction helpers. Claude and Gemini default to `minimal`: skill routing plus session/compaction context helpers. Use explicit `minimal` for low-friction Codex installs, `strict` for every supported enforcement hook, or `none`/`--no-hooks` for skills only:
 
 ```bash
-./install.sh --agent claude --hook-profile minimal  # default, low-friction
-./install.sh --agent claude --hook-profile strict   # full enforcement hooks
+./install.sh --agent codex                          # default workflow/delegation hooks
+./install.sh --agent codex --hook-profile minimal   # explicit low-friction hooks
+./install.sh --agent claude --hook-profile minimal  # Claude/Gemini default
+./install.sh --agent claude --hook-profile strict   # all supported enforcement hooks
 ./install.sh --agent claude --hook-profile none     # skills/tools only
 ./install.sh --agent claude --no-hooks              # alias for none
 ```

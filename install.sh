@@ -19,7 +19,9 @@
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent codex --plugin assistant-research  # research profile only
 #   ./install.sh --agent codex --plugin assistant-dev       # development profile only
-#   ./install.sh --agent claude --hook-profile minimal      # default low-friction hooks
+#   ./install.sh --agent codex                             # workflow/delegation hooks by default
+#   ./install.sh --agent claude --hook-profile minimal      # default low-friction hooks for Claude/Gemini
+#   ./install.sh --agent codex --hook-profile minimal       # explicit low-friction hooks
 #   ./install.sh --agent claude --hook-profile strict       # full enforcement hooks
 #   ./install.sh --agent claude --no-hooks                  # alias for --hook-profile none
 #
@@ -36,6 +38,7 @@ SINGLE_SKILL=""
 PLUGIN_PROFILE=""
 INSTALL_HOOKS=true
 HOOK_PROFILE="minimal"
+HOOK_PROFILE_EXPLICIT=false
 TEST_HOOKS=false
 FRAMEWORK_DIR=""
 toml_files=()
@@ -55,7 +58,8 @@ Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
   --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
-  --hook-profile P  Hook profile: minimal (default), strict, or none
+  --hook-profile P  Hook profile: minimal, workflow, strict, or none
+                    Default: workflow for codex, minimal for claude/gemini
   --no-hooks         Alias for --hook-profile none
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
@@ -77,6 +81,8 @@ Examples:
   $(basename "$0") --agent claude
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
+  $(basename "$0") --agent codex --hook-profile minimal
+  $(basename "$0") --agent codex --hook-profile workflow
   $(basename "$0") --agent claude --hook-profile strict
   $(basename "$0") --agent claude --hook-profile none
   $(basename "$0") --agent codex --plugin assistant-core
@@ -91,8 +97,8 @@ while [[ $# -gt 0 ]]; do
         --agent)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; AGENT="$2"; shift 2 ;;
         --skill)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; SINGLE_SKILL="$2"; shift 2 ;;
         --plugin)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PLUGIN_PROFILE="$2"; shift 2 ;;
-        --hook-profile) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; HOOK_PROFILE="$2"; INSTALL_HOOKS=true; shift 2 ;;
-        --no-hooks)   INSTALL_HOOKS=false; HOOK_PROFILE="none"; shift ;;
+        --hook-profile) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; HOOK_PROFILE="$2"; HOOK_PROFILE_EXPLICIT=true; INSTALL_HOOKS=true; shift 2 ;;
+        --no-hooks)   INSTALL_HOOKS=false; HOOK_PROFILE="none"; HOOK_PROFILE_EXPLICIT=true; shift ;;
         --test-hooks) TEST_HOOKS=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         -h|--help)  usage ;;
@@ -100,9 +106,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$AGENT" == "codex" && "$INSTALL_HOOKS" == "true" && "$HOOK_PROFILE_EXPLICIT" == "false" ]]; then
+    HOOK_PROFILE="workflow"
+fi
+
 case "$HOOK_PROFILE" in
-    minimal|strict|none) ;;
-    *) echo "Unknown hook profile: $HOOK_PROFILE (expected minimal, strict, or none)" >&2; exit 1 ;;
+    minimal|workflow|strict|none) ;;
+    *) echo "Unknown hook profile: $HOOK_PROFILE (expected minimal, workflow, strict, or none)" >&2; exit 1 ;;
 esac
 if [[ "$HOOK_PROFILE" == "none" ]]; then
     INSTALL_HOOKS=false
@@ -120,6 +130,9 @@ hook_profile_allowed_json() {
         minimal)
             printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
             ;;
+        workflow)
+            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh"]'
+            ;;
         strict)
             printf '%s\n' 'null'
             ;;
@@ -136,6 +149,12 @@ hook_selected_for_profile() {
         minimal)
             case "$hook_name" in
                 skill-router.sh|session-start.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) return 0 ;;
+                *) return 1 ;;
+            esac
+            ;;
+        workflow)
+            case "$hook_name" in
+                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) return 0 ;;
                 *) return 1 ;;
             esac
             ;;
@@ -1523,8 +1542,8 @@ if $INSTALL_HOOKS; then
                         continue
                     fi
                     # Post-tool diagnostic hooks are intentionally no longer
-                    # installed by default; workflow-guard remains the
-                    # universal tool-use hook across agents.
+                    # copied. Profile selection decides whether workflow-guard
+                    # is part of the installed tool-use hooks.
                     case "$hook_name" in
                         post-tool-context.sh|tool-failure-advisor.sh) continue ;;
                     esac
@@ -2019,15 +2038,30 @@ fi
 if $INSTALL_HOOKS; then
     echo ""
     echo "Hooks: $HOOKS_TARGET/"
+    echo "  Profile: $HOOK_PROFILE"
     if [[ "$AGENT" == "codex" ]]; then
-        if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
-            echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
-        else
-            echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
-            echo "  Enforcement: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
-            echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
-        fi
+        case "$HOOK_PROFILE" in
+            minimal)
+                if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
+                    echo "  (Codex: SessionStart, UserPromptSubmit, PreCompact, PostCompact — low-friction context hooks)"
+                    echo "  Automation: skill-router + session-start + compaction context helpers"
+                else
+                    echo "  (Codex: SessionStart, UserPromptSubmit — low-friction context hooks)"
+                    echo "  Automation: skill-router + session-start"
+                    echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
+                fi
+                ;;
+            workflow|strict)
+                if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
+                    echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
+                    echo "  Workflow/delegation: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
+                else
+                    echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
+                    echo "  Workflow/delegation: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
+                    echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
+                fi
+                ;;
+        esac
     fi
 fi
 if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then

@@ -3479,7 +3479,7 @@ if test_start "codex strict install: workflow-guard installs and legacy post-too
     rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
 fi
 
-if test_start "codex install: installed compaction hooks detect Codex by script path"; then
+if test_start "codex default install: workflow hooks install and compaction hooks detect Codex by script path"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.129.0")
     local_tmp_out=$(mktemp)
@@ -3493,8 +3493,45 @@ if test_start "codex install: installed compaction hooks detect Codex by script 
     INSTALL_STDERR=$(cat "$local_tmp_err")
     rm -f "$local_tmp_out" "$local_tmp_err"
 
+    missing_default_hook=""
+    for required_hook in \
+        session-start.sh \
+        skill-router.sh \
+        learning-signals.sh \
+        workflow-enforcer.sh \
+        workflow-guard.sh \
+        stop-review.sh \
+        subagent-monitor.sh \
+        pre-compress.sh \
+        post-compact.sh \
+        task-journal-resolver.sh \
+        workflow-phase-gates.sh; do
+        if [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/$required_hook" ]]; then
+            missing_default_hook="$required_hook"
+            break
+        fi
+    done
+
     if [[ $HOOK_EXIT -ne 0 ]]; then
         fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
+    elif [[ -n "$missing_default_hook" ]]; then
+        fail "Codex default install did not create executable $missing_default_hook"
+    elif ! jq -e --arg command_dir "$INSTALL_TEST_HOME/.codex/hooks/assistant" '
+        {
+            sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+            learningSignals: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/learning-signals.sh"))),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
+            subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+            subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+            preCompact: ([.hooks.PreCompact[]?.hooks[]?.command?] | any(. == ($command_dir + "/pre-compress.sh"))),
+            postCompact: ([.hooks.PostCompact[]?.hooks[]?.command?] | any(. == ($command_dir + "/post-compact.sh")))
+        }
+        | .sessionStart and .skillRouter and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop and .preCompact and .postCompact
+    ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
+        fail "Codex default hooks.json did not register workflow/delegation hooks"
     else
         mkdir -p "$TEST_PROJECT/.codex" "$INSTALL_TEST_HOME/.codex"
         echo -e "# Task\nStatus: BUILDING\nStep: installed codex compaction" > "$TEST_PROJECT/.codex/task.md"
@@ -3603,7 +3640,7 @@ EOF
         && echo "$HOOK_STDOUT" | grep -q "ask bounded clarification questions and WAIT" \
         && echo "$HOOK_STDOUT" | grep -q "Do not enter PLAN by silently assuming answers" \
         && echo "$HOOK_STDOUT" | grep -q "Assistant Framework policy requires asking once for subagent authorization" \
-        && echo "$HOOK_STDOUT" | grep -q "wait for approval/denial before continuing" \
+        && echo "$HOOK_STDOUT" | grep -q "explicitly authorized or denied subagents/delegation" \
         && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW STATE" \
         && ! echo "$HOOK_STDOUT" | grep -q "Wrong cwd state"; then
         pass
@@ -3626,7 +3663,7 @@ if test_start "workflow-enforcer: Claude, empty prompt → no output"; then
     fi
 fi
 
-if test_start "workflow-enforcer: Codex dev prompt without task blocks for subagent authorization"; then
+if test_start "workflow-enforcer: Codex dev prompt without task asks once for delegation authorization"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
     echo '{"prompt": "fix the login bug in this repo", "hook_event_name": "UserPromptSubmit"}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
@@ -3634,13 +3671,40 @@ if test_start "workflow-enforcer: Codex dev prompt without task blocks for subag
     HOOK_EXIT=$?
     HOOK_STDOUT=$(cat /tmp/_wf_out)
     rm -f /tmp/_wf_out
-    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | grep -q "requires explicit subagent authorization" \
-        && echo "$HOOK_STDOUT" | grep -q "approve subagents for this task"; then
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
+        && echo "$HOOK_STDOUT" | grep -q "Ask once for the needed delegation scope and WAIT" \
+        && echo "$HOOK_STDOUT" | grep -q "Do not hard block this first prompt"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected Codex authorization block; stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected Codex ask-once authorization context; stdout='$HOOK_STDOUT'"
     fi
+fi
+
+if test_start "workflow-enforcer: Codex completed task dev prompt asks once for delegation authorization"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+Task: Completed codex task
+Status: DONE
+Triaged as: small
+EOF
+    echo '{"prompt": "build the next hook fix", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Task: Completed codex task"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected completed Codex task to bootstrap ask-once context; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
 fi
 
 if test_start "workflow-enforcer: Codex explicit subagent approval prompt is allowed"; then
@@ -3656,6 +3720,47 @@ if test_start "workflow-enforcer: Codex explicit subagent approval prompt is all
         pass
     else
         fail "exit=$HOOK_EXIT, expected approval prompt to pass with context; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Codex Use delegation dev prompt is allowed"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    echo '{"prompt": "Use delegation to fix the login bug", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Use delegation dev prompt to pass without ask-once block; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Codex delegation denial dev prompt is allowed"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    echo '{"prompt": "Do not use delegation to fix the login bug inline", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (denied)" \
+        && echo "$HOOK_STDOUT" | grep -q "authorization_denied" \
+        && echo "$HOOK_STDOUT" | grep -q "direct_fallback" \
+        && echo "$HOOK_STDOUT" | grep -q "Proceed inline" \
+        && echo "$HOOK_STDOUT" | grep -q "Do not re-ask" \
+        && ! echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Ask once for the needed delegation scope and WAIT" \
+        && ! echo "$HOOK_STDOUT" | grep -q "wait for approval or denial before continuing"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected delegation denial prompt to emit direct_fallback guidance without ask-once conflict; stdout='$HOOK_STDOUT'"
     fi
 fi
 

@@ -41,7 +41,19 @@ elif [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; the
     STATE_DIR=".codex"
 fi
 
+emit_additional_context() {
+    local context="$1"
+
+    jq -cn --arg ctx "$context" '{
+        hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: $ctx
+        }
+    }'
+}
+
 emit_workflow_rules_context() {
+    local extra_context="${1:-}"
     local context
 
     context="WORKFLOW RULES (active every prompt):
@@ -54,7 +66,7 @@ emit_workflow_rules_context() {
 
 STATE BOOTSTRAP (when no active task journal is present):
 - For any development/code-work request, create or refresh $STATE_DIR/task.md before planning or implementation.
-- Before running Discovery/Decompose/Plan/Build/Review responsibilities that require workflow subagents, Assistant Framework policy requires asking once for subagent authorization unless the current user prompt already explicitly authorized subagents for this task; wait for approval/denial before continuing those responsibilities.
+- Before running Discovery/Decompose/Plan/Build/Review responsibilities that require workflow subagents, Assistant Framework policy requires asking once for subagent authorization unless the current user prompt already explicitly authorized or denied subagents/delegation for this task; if denied, proceed inline in direct_fallback with authorization_denied evidence and do not re-ask.
 - For medium, large, or mega tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
 - During preparation/DISCOVER, resolve clarification readiness before PLAN: if any implementation-shaping unknown affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from local context; and has no safe default, ask bounded clarification questions and WAIT.
 - If no clarification is needed, explicitly record Clarification status: ready, Clarification defaults applied: false, Clarification questions asked: 0, and Unresolved clarification topics: none before planning.
@@ -62,24 +74,63 @@ STATE BOOTSTRAP (when no active task journal is present):
 - These are framework-owned state artifacts; writing them directly is allowed and expected.
 - A completed/deleted task journal does not mean state is optional for the next task."
 
-    jq -cn --arg ctx "$context" '{
-        hookSpecificOutput: {
-            hookEventName: "UserPromptSubmit",
-            additionalContext: $ctx
-        }
-    }'
+    if [[ -n "$extra_context" ]]; then
+        context+="
+
+$extra_context"
+    fi
+
+    emit_additional_context "$context"
 }
 
-assistant_codex_prompt_has_subagent_decision() {
+assistant_codex_prompt_subagent_decision() {
     local prompt_lc
     prompt_lc="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
-    [[ "$prompt_lc" == *"approve subagents"* \
+
+    if [[ "$prompt_lc" == *"deny subagents"* \
+        || "$prompt_lc" == *"deny delegation"* \
+        || "$prompt_lc" == *"decline subagents"* \
+        || "$prompt_lc" == *"decline delegation"* \
+        || "$prompt_lc" == *"no subagents"* \
+        || "$prompt_lc" == *"no delegation"* \
+        || "$prompt_lc" == *"without subagents"* \
+        || "$prompt_lc" == *"without delegation"* \
+        || "$prompt_lc" == *"don't delegate"* \
+        || "$prompt_lc" == *"dont delegate"* \
+        || "$prompt_lc" == *"do not delegate"* \
+        || "$prompt_lc" == *"don't use subagents"* \
+        || "$prompt_lc" == *"dont use subagents"* \
+        || "$prompt_lc" == *"do not use subagents"* \
+        || "$prompt_lc" == *"don't use delegation"* \
+        || "$prompt_lc" == *"dont use delegation"* \
+        || "$prompt_lc" == *"do not use delegation"* \
+        || "$prompt_lc" == *"no agents"* \
+        || "$prompt_lc" == *"don't use agents"* \
+        || "$prompt_lc" == *"dont use agents"* \
+        || "$prompt_lc" == *"do not use agents"* \
+        || "$prompt_lc" == *"direct fallback"* ]]; then
+        printf 'denied\n'
+        return
+    fi
+
+    if [[ "$prompt_lc" == *"approve subagents"* \
         || "$prompt_lc" == *"authorize subagents"* \
         || "$prompt_lc" == *"use subagents"* \
         || "$prompt_lc" == *"spawn subagents"* \
-        || "$prompt_lc" == *"deny subagents"* \
-        || "$prompt_lc" == *"no subagents"* \
-        || "$prompt_lc" == *"direct fallback"* ]]
+        || "$prompt_lc" == *"approve delegation"* \
+        || "$prompt_lc" == *"authorize delegation"* \
+        || "$prompt_lc" == *"use delegation"* \
+        || "$prompt_lc" == *"delegate work"* \
+        || "$prompt_lc" == *"delegate the work"* \
+        || "$prompt_lc" == *"please delegate"* \
+        || "$prompt_lc" == *"use agents"* \
+        || "$prompt_lc" == *"spawn agents"* \
+        || "$prompt_lc" == *"delegated agents"* ]]; then
+        printf 'approved\n'
+        return
+    fi
+
+    printf 'none\n'
 }
 
 assistant_codex_prompt_looks_like_dev_work() {
@@ -127,12 +178,32 @@ has_field_label() {
     grep -qE "^(#+[[:space:]]*)?${label}:" "$TASK_FILE" 2>/dev/null
 }
 
-# No task journal = block Codex development prompts until subagent authorization is explicit, then
-# fall back to lightweight reminder for non-development prompts or approved/denied follow-ups.
+codex_subagent_decision="none"
+if [[ "$STATE_DIR" == ".codex" ]]; then
+    codex_subagent_decision="$(assistant_codex_prompt_subagent_decision)"
+fi
+
+# No active task journal = bootstrap context. Codex development prompts without
+# an explicit delegation decision get ask-once guidance instead of a hard block;
+# active authorization_required task journals still block below as a backstop.
 if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
-    if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work && ! assistant_codex_prompt_has_subagent_decision; then
-        assistant_block_subagent_authorization "Assistant Framework requires explicit subagent authorization before Codex starts development workflow Discovery/Build/Review. Reply with 'approve subagents for this task' to authorize Codex to spawn code-mapper/architect/code-writer/builder-tester/reviewer agents, or 'deny subagents and use direct fallback' to proceed inline with direct-fallback evidence."
-        exit 0
+    if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work; then
+        if [[ "$codex_subagent_decision" == "none" ]]; then
+            emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (ask-once):
+- Ask once for the needed delegation scope and WAIT for approval or denial before continuing Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer.
+- Accept explicit authorization wording such as 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', or 'approve subagents for this task'.
+- Accept explicit denial wording such as 'no delegation', 'do not delegate', 'no agents', 'do not use agents', or 'deny subagents and use direct fallback'.
+- Do not hard block this first prompt. Ask the authorization question, then wait before workflow responsibilities that require delegated agents."
+            exit 0
+        elif [[ "$codex_subagent_decision" == "denied" ]]; then
+            emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (denied):
+- Current prompt explicitly denied subagents/delegation for this task.
+- Set Subagent policy state: authorization_denied.
+- Set Subagent execution mode: direct_fallback.
+- Proceed inline with Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, and Reviewer role-equivalent evidence where those responsibilities are required.
+- Do not re-ask for subagent authorization unless the user later explicitly changes this decision."
+            exit 0
+        fi
     fi
     # Even without a task journal, inject the behavioral rules reminder
     # This is the "always-on" enforcement layer
@@ -321,7 +392,7 @@ if assistant_phase_has_metrics_today; then
     has_metrics_today="yes"
 fi
 
-if [[ "$STATE_DIR" == ".codex" && "$subagent_policy_state" == "authorization_required" ]] && ! assistant_codex_prompt_has_subagent_decision; then
+if [[ "$STATE_DIR" == ".codex" && "$subagent_policy_state" == "authorization_required" && "$codex_subagent_decision" == "none" ]]; then
     assistant_block_subagent_authorization "Subagent authorization is unresolved for the active Assistant Framework task. Reply with 'approve subagents for this task' to allow delegated workflow agents, or 'deny subagents and use direct fallback' to proceed inline with explicit direct-fallback evidence. Codex must not continue Discovery/Build/Review inline while authorization_required is unresolved."
     exit 0
 fi
@@ -385,7 +456,20 @@ WARNING: Clarification state is missing or unknown in the saved task journal. Wr
 REMINDER: Saved clarification state must be written to the task journal before continuing."
 fi
 
-if [[ "$subagent_policy_state" == "authorization_required" ]]; then
+if [[ "$subagent_policy_state" == "authorization_required" && "$STATE_DIR" == ".codex" && "$codex_subagent_decision" == "denied" ]]; then
+    context+="
+SUBAGENT AUTHORIZATION DECISION:
+- Current prompt explicitly denied subagents/delegation.
+- Update the task journal to Subagent policy state: authorization_denied and Subagent execution mode: direct_fallback.
+- Record Direct fallback reason: authorization_denied plus role-equivalent evidence for required workflow responsibilities.
+- Proceed inline and do not re-ask unless the user later explicitly authorizes delegation."
+elif [[ "$subagent_policy_state" == "authorization_required" && "$STATE_DIR" == ".codex" && "$codex_subagent_decision" == "approved" ]]; then
+    context+="
+SUBAGENT AUTHORIZATION DECISION:
+- Current prompt explicitly authorized subagents/delegation.
+- Update the task journal to Subagent policy state: delegation_authorized and Subagent execution mode: delegated.
+- Record the authorized scope before spawning required workflow role agents."
+elif [[ "$subagent_policy_state" == "authorization_required" ]]; then
     context+="
 SUBAGENT AUTHORIZATION GATE:
 - Assistant Framework policy requires explicit user authorization before spawning subagents for workflow roles.

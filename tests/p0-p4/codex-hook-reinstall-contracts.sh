@@ -107,7 +107,7 @@ cat > "$INSTALL_HOME_FIVE/.codex/hooks.json" <<JSON
   }
 }
 JSON
-if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-hooks.out 2>/tmp/p0p4-install-codex-hooks.err; then
+if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-hooks.out 2>/tmp/p0p4-install-codex-hooks.err; then
     if jq -e . "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null && jq -e --arg install_home "$INSTALL_HOME_FIVE" --arg framework_dir "$FRAMEWORK_DIR" --arg command_dir "$INSTALL_HOME_FIVE/.codex/hooks/assistant" '
         def first_shell_token:
             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
@@ -119,14 +119,21 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
                 "workflow-enforcer.sh",
                 "workflow-guard.sh",
                 "stop-review.sh",
-                "harness-gate.sh",
+                "subagent-monitor.sh",
                 "workflow-phase-gates.sh",
                 "pre-compress.sh",
                 "post-compact.sh"
             ];
         [.. | objects | .command? // empty] as $commands
         | [$commands[] | first_shell_token] as $tokens
-        | [$commands[] | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ($command_dir + "/" + $hook_name)))] as $frameworkCommands
+        | [
+            .hooks
+            | to_entries[]
+            | .key as $event
+            | .value[]?.hooks[]?.command?
+            | select(. as $command | any(current_framework_hook_names[]; . as $hook_name | $command == ($command_dir + "/" + $hook_name)))
+            | {event: $event, command: .}
+        ] as $frameworkCommands
         | {
             stale: ($tokens | any(. == ($install_home + "/.codex/hooks/assistant/session-end.sh")
                 or . == "$HOME/.codex/hooks/assistant/tool-failure-advisor.sh"
@@ -142,13 +149,18 @@ if HOME="$INSTALL_HOME_FIVE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
             preToolCustom: ($commands | any(. == "/tmp/user-pretool-hook.sh")),
             uniqueFramework: (($frameworkCommands | length) == ($frameworkCommands | unique | length)),
             sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
-            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh")))
+            skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
+            workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
+            workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
+            stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
+            subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
+            subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
         }
-        | (.stale | not) and .custom and .postToolCustom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .workflowGuard
+        | (.stale | not) and .custom and .postToolCustom and .homeAssistantCustom and .absoluteAssistantCustom and .preToolCustom and .uniqueFramework and .sessionStart and .skillRouter and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
     ' "$INSTALL_HOME_FIVE/.codex/hooks.json" >/dev/null; then
         pass
     else
-        fail "Codex hook reinstall did not remove stale framework hooks, preserve custom hooks, or dedupe framework commands"
+        fail "Codex default hook reinstall did not remove stale framework hooks, preserve custom hooks, dedupe framework commands, or register workflow/delegation hooks"
     fi
 else
     fail "codex hook reinstall failed; see /tmp/p0p4-install-codex-hooks.err"
