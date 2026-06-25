@@ -232,6 +232,163 @@ with open(target_settings, "w", encoding="utf-8") as f:
 PY
 }
 
+merge_profiled_hooks_settings_python() {
+    local existing_settings="$1"
+    local profiled_settings="$2"
+    local target_settings="$3"
+    local agent="$4"
+    local hooks_target="$5"
+    local output_kind="$6"
+    local codex_supports_compaction_hooks="${7:-true}"
+
+    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to merge hook settings"
+    python3 - "$existing_settings" "$profiled_settings" "$target_settings" "$agent" "$hooks_target" "$output_kind" "$codex_supports_compaction_hooks" <<'PY'
+import json
+import os
+import re
+import sys
+
+existing_path, profiled_path, target_path, agent, hooks_target, output_kind, codex_supports_compaction = sys.argv[1:8]
+assistant_hook_names = {
+    "session-start.sh",
+    "skill-router.sh",
+    "learning-signals.sh",
+    "workflow-enforcer.sh",
+    "workflow-guard.sh",
+    "stop-review.sh",
+    "harness-gate.sh",
+    "subagent-monitor.sh",
+    "post-compact.sh",
+    "pre-compress.sh",
+    "session-end.sh",
+    "post-tool-context.sh",
+    "tool-failure-advisor.sh",
+    "task-completed.sh",
+    "task-journal-resolver.sh",
+    "workflow-phase-gates.sh",
+}
+
+def load_json(path, default):
+    if not path or not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def as_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+def first_shell_token(command):
+    command = str(command or "").strip()
+    if not command:
+        return ""
+    return re.sub(r"\s+", " ", command).split(" ")[0]
+
+def is_assistant_hook(command):
+    token = first_shell_token(command)
+    if not token:
+        return False
+    if output_kind == "codex":
+        return any(
+            token == f"$HOME/.codex/hooks/assistant/{name}"
+            or token.endswith(f"/.codex/hooks/assistant/{name}")
+            or token.endswith(f"/hooks/scripts/{name}")
+            for name in assistant_hook_names
+        )
+    return any(
+        token == f"$HOME/.{agent}/hooks/assistant/{name}"
+        or token == f"{hooks_target}/{name}"
+        or token.endswith(f"/.{agent}/hooks/assistant/{name}")
+        or token.endswith(f"/hooks/scripts/{name}")
+        for name in assistant_hook_names
+    )
+
+def remove_assistant_hooks(hooks_obj):
+    cleaned = {}
+    for event, groups in (hooks_obj or {}).items():
+        kept_groups = []
+        for group in as_list(groups):
+            if not isinstance(group, dict):
+                continue
+            kept_hooks = []
+            for hook in as_list(group.get("hooks")):
+                if isinstance(hook, dict) and not is_assistant_hook(hook.get("command")):
+                    kept_hooks.append(hook)
+            if kept_hooks:
+                kept_group = dict(group)
+                kept_group["hooks"] = kept_hooks
+                kept_groups.append(kept_group)
+        if kept_groups:
+            cleaned[event] = kept_groups
+    return cleaned
+
+def unique_commands(hooks):
+    seen = set()
+    out = []
+    for hook in hooks:
+        if not isinstance(hook, dict):
+            continue
+        command = hook.get("command") or ""
+        if not command:
+            out.append(hook)
+        elif command not in seen:
+            seen.add(command)
+            out.append(hook)
+    return out
+
+def merge_matcher_groups(groups):
+    matcher_indexes = {}
+    out = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        normalized = dict(group)
+        normalized["hooks"] = unique_commands(as_list(normalized.get("hooks")))
+        if not normalized["hooks"]:
+            continue
+        matcher = normalized.get("matcher") or ""
+        if matcher not in matcher_indexes:
+            matcher_indexes[matcher] = len(out)
+            out.append(normalized)
+        else:
+            idx = matcher_indexes[matcher]
+            out[idx]["hooks"] = unique_commands(out[idx].get("hooks", []) + normalized["hooks"])
+    return out
+
+def merge_hooks(existing_hooks, new_hooks):
+    merged = {}
+    for key in sorted(set((existing_hooks or {}).keys()) | set((new_hooks or {}).keys())):
+        groups = as_list((existing_hooks or {}).get(key)) + as_list((new_hooks or {}).get(key))
+        merged_groups = merge_matcher_groups(groups)
+        if merged_groups:
+            merged[key] = merged_groups
+    return merged
+
+existing = load_json(existing_path, {})
+profiled = load_json(profiled_path, {})
+existing_hooks = remove_assistant_hooks((existing or {}).get("hooks") or {})
+new_hooks = (profiled or {}).get("hooks") or {}
+if output_kind == "codex" and codex_supports_compaction != "true":
+    new_hooks = {k: v for k, v in new_hooks.items() if k not in {"PreCompact", "PostCompact"}}
+merged_hooks = merge_hooks(existing_hooks, new_hooks)
+
+if output_kind == "codex":
+    output = {"hooks": merged_hooks}
+else:
+    output = dict(existing or {})
+    output["hooks"] = merged_hooks
+
+with open(f"{target_path}.tmp", "w", encoding="utf-8") as f:
+    json.dump(output, f, indent=2)
+    f.write("\n")
+os.replace(f"{target_path}.tmp", target_path)
+PY
+}
+
 plugin_profile_line() {
     local plugin_name="$1"
     local plugin_doc="$FRAMEWORK_DIR/docs/plugin-architecture.md"
@@ -1350,9 +1507,10 @@ if $INSTALL_HOOKS; then
             # Codex: write hooks.json (separate file, not settings.json)
             if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
                 CODEX_HOOKS_FILE="$AGENT_HOME/hooks.json"
-                if [[ -f "$CODEX_HOOKS_FILE" ]] && command -v jq &>/dev/null; then
-                    # Merge with existing hooks.json
-                    existing_hooks=$(jq '
+                if [[ -f "$CODEX_HOOKS_FILE" ]]; then
+                    if command -v jq &>/dev/null; then
+                        # Merge with existing hooks.json
+                        existing_hooks=$(jq '
                         def assistant_framework_codex_hook_names:
                             [
                                 "session-start.sh",
@@ -1443,13 +1601,29 @@ if $INSTALL_HOOKS; then
                         rm -f "${CODEX_HOOKS_FILE}.tmp"
                         info "WARNING: Failed to merge hooks into $CODEX_HOOKS_FILE"
                     fi
-                else
-                    if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]] && command -v jq &>/dev/null; then
-                        jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$PROFILED_HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
-                        ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
                     else
-                        cp "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
-                        ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
+                        merge_profiled_hooks_settings_python "$CODEX_HOOKS_FILE" "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE" "$AGENT" "$HOOKS_TARGET" "codex" "$CODEX_SUPPORTS_COMPACTION_HOOKS"
+                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                            info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
+                        fi
+                        ok "Hooks merged into $CODEX_HOOKS_FILE"
+                    fi
+                else
+                    if command -v jq &>/dev/null; then
+                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                            jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$PROFILED_HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
+                            ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
+                        else
+                            cp "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
+                            ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
+                        fi
+                    else
+                        merge_profiled_hooks_settings_python "" "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE" "$AGENT" "$HOOKS_TARGET" "codex" "$CODEX_SUPPORTS_COMPACTION_HOOKS"
+                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                            ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
+                        else
+                            ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
+                        fi
                     fi
                 fi
                 info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
@@ -1554,8 +1728,8 @@ if $INSTALL_HOOKS; then
                         info "WARNING: Failed to merge hooks into $SETTINGS_FILE"
                     fi
                 else
-                    info "WARNING: jq not found. Hook scripts installed but settings.json not updated."
-                    info "Manually merge $PROFILED_HOOKS_SETTINGS into $SETTINGS_FILE"
+                    merge_profiled_hooks_settings_python "$SETTINGS_FILE" "$PROFILED_HOOKS_SETTINGS" "$SETTINGS_FILE" "$AGENT" "$HOOKS_TARGET" "settings"
+                    ok "Hooks merged into existing $SETTINGS_FILE"
                 fi
             else
                 # No settings — copy hook settings as new file
