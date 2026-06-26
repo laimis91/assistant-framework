@@ -9,6 +9,9 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 reduction_doc="$FRAMEWORK_DIR/docs/instruction-overload-reduction.md"
+benchmark_script="$FRAMEWORK_DIR/tools/hooks/benchmark-hook-output.sh"
+benchmark_doc="$FRAMEWORK_DIR/docs/hook-output-benchmarks.md"
+benchmark_columns="hook_name scenario stdout_bytes stdout_words stderr_bytes exit_code first_blocker_or_action"
 
 count_framework_hooks_in_event() {
     local settings_file="$1"
@@ -63,6 +66,33 @@ if [[ "${#settings_failures[@]}" -eq 0 ]] \
     pass
 else
     fail "strict hook templates should register only stop-review.sh as the stop gate: ${settings_failures[*]:-missing stop-review consolidation marker}"
+fi
+
+test_start "hook output benchmark baseline records required metric columns"
+benchmark_failures=()
+if [[ ! -f "$benchmark_script" ]]; then
+    benchmark_failures+=("missing tools/hooks/benchmark-hook-output.sh")
+fi
+if [[ ! -f "$benchmark_doc" ]]; then
+    benchmark_failures+=("missing docs/hook-output-benchmarks.md")
+fi
+if [[ -f "$benchmark_script" ]] && ! grep -Fq "METRIC_COLUMNS=($benchmark_columns)" "$benchmark_script"; then
+    benchmark_failures+=("benchmark script metric columns changed")
+fi
+if [[ -f "$benchmark_doc" ]] && ! grep -Fq "| hook_name | scenario | stdout_bytes | stdout_words | stderr_bytes | exit_code | first_blocker_or_action |" "$benchmark_doc"; then
+    benchmark_failures+=("benchmark doc missing exact metric table header")
+fi
+if [[ -f "$benchmark_doc" ]]; then
+    for hook in session-start workflow-enforcer post-compact skill-router stop-review subagent-monitor; do
+        if ! grep -Fq "| $hook |" "$benchmark_doc"; then
+            benchmark_failures+=("benchmark doc missing $hook row")
+        fi
+    done
+fi
+if [[ "${#benchmark_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "hook output benchmark guard failed: ${benchmark_failures[*]}"
 fi
 
 test_start "plugin-local skills are generated mirrors with a sync check"

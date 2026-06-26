@@ -57,22 +57,21 @@ emit_workflow_rules_context() {
     local context
 
     context="WORKFLOW RULES (active every prompt):
-- Before ANY code change, state which phase you are in
+- State the current phase before code or workflow action.
 - Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
-- You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
-- Tests are part of BUILD and accompany features in the SAME step, not later.
-- REVIEW is the post-build verification loop (not one-shot — loop until clean).
-- State your current phase before your next action.
+- Do not skip phases; small tasks still use lightweight phases.
+- BUILD includes same-step tests for features.
+- REVIEW loops until clean.
 
 STATE BOOTSTRAP (when no active task journal is present):
-- For any development/code-work request, create or refresh $STATE_DIR/task.md before planning or implementation.
-- Before running Discovery/Decompose/Plan/Build/Review responsibilities that require workflow subagents, Assistant Framework policy requires asking once for subagent authorization unless the current user prompt already explicitly authorized or denied subagents/delegation for this task; if denied, proceed inline in direct_fallback with authorization_denied evidence and do not re-ask.
-- For medium, large, or mega tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
+- For development/code-work, create or refresh $STATE_DIR/task.md before planning or implementation.
+- Assistant Framework policy requires asking once for subagent authorization before workflow subagent responsibilities unless the prompt explicitly authorized or denied subagents/delegation; if denied, use direct_fallback with authorization_denied evidence and do not re-ask.
+- For medium+ tasks, create or refresh $STATE_DIR/context-map.md during DISCOVER before PLAN/BUILD.
 - During preparation/DISCOVER, resolve clarification readiness before PLAN: if any implementation-shaping unknown affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from local context; and has no safe default, ask bounded clarification questions and WAIT.
-- If no clarification is needed, explicitly record Clarification status: ready, Clarification defaults applied: false, Clarification questions asked: 0, and Unresolved clarification topics: none before planning.
+- If clear, record Clarification status: ready, Clarification defaults applied: false, Clarification questions asked: 0, and Unresolved clarification topics: none before planning.
 - Do not enter PLAN by silently assuming answers to unresolved implementation-shaping unknowns; either ask, apply explicit safe defaults, or state why code/context makes the path clear.
-- These are framework-owned state artifacts; writing them directly is allowed and expected.
-- A completed/deleted task journal does not mean state is optional for the next task."
+- $STATE_DIR artifacts are framework-owned; direct writes are allowed.
+- Completed/deleted journals do not make state optional for the next task."
 
     if [[ -n "$extra_context" ]]; then
         context+="
@@ -190,18 +189,17 @@ if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
     if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work; then
         if [[ "$codex_subagent_decision" == "none" ]]; then
             emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (ask-once):
-- Ask once for the needed delegation scope and WAIT for approval or denial before continuing Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer.
-- Accept explicit authorization wording such as 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', or 'approve subagents for this task'.
-- Accept explicit denial wording such as 'no delegation', 'do not delegate', 'no agents', 'do not use agents', or 'deny subagents and use direct fallback'.
-- Do not hard block this first prompt. Ask the authorization question, then wait before workflow responsibilities that require delegated agents."
+- Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer.
+- Authorization examples: 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', 'approve subagents for this task'.
+- Denial examples: 'no delegation', 'do not delegate', 'no agents', 'do not use agents', 'deny subagents and use direct fallback'.
+- Do not hard block this first prompt. Ask, then wait before delegated responsibilities."
             exit 0
         elif [[ "$codex_subagent_decision" == "denied" ]]; then
             emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (denied):
-- Current prompt explicitly denied subagents/delegation for this task.
-- Set Subagent policy state: authorization_denied.
-- Set Subagent execution mode: direct_fallback.
-- Proceed inline with Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, and Reviewer role-equivalent evidence where those responsibilities are required.
-- Do not re-ask for subagent authorization unless the user later explicitly changes this decision."
+- Current prompt denied subagents/delegation for this task.
+- Set Subagent policy state: authorization_denied; Subagent execution mode: direct_fallback.
+- Proceed inline with role-equivalent evidence for required workflow responsibilities.
+- Do not re-ask unless the user explicitly changes this decision."
             exit 0
         fi
     fi
@@ -418,12 +416,11 @@ context="WORKFLOW STATE (auto-injected every prompt):
 - Subagent evidence gate: $subagent_gate_status
 - Metrics today: $has_metrics_today
 
-PHASE RULES (non-negotiable):
-1. Current phase is $status — stay in this phase until its exit criteria are met.
-2. Do NOT jump ahead. PLAN requires approval before BUILD. BUILD includes tests alongside code. REVIEW requires the review loop (not one-shot).
-3. State your current phase before your next action.
-4. If you are in BUILD: every new component MUST have tests in the same step.
-5. If you are in REVIEW: run the review-fix loop (review -> fix -> re-review) until clean or max 5 rounds. A single review pass is NOT a review."
+PHASE RULES:
+- Current phase is $status — stay until exit criteria pass.
+- PLAN approval before BUILD; BUILD includes same-step tests for new components.
+- REVIEW loops review -> fix -> re-review until clean or max 5 rounds.
+- State the current phase before the next action."
 
 context+="
 
@@ -511,7 +508,7 @@ fi
 if [[ "$status" == *"BUILDING"* || "$status" == *"REVIEWING"* || "$status" == *"DOCUMENTING"* ]]; then
     if [[ "$review_count" == "0" ]]; then
         context+="
-REMINDER: No reviews recorded yet. You MUST complete the review cycle before finishing."
+REMINDER: No reviews recorded yet. Complete the review cycle before finishing."
     fi
 fi
 

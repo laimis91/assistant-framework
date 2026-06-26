@@ -133,9 +133,63 @@ artifacts:
         required: true
         description: "The smallest thing you could build to validate this idea"
 
+  - name: decision_point
+    type: object
+    required: true
+    description: "DECIDE-phase artifact that frames the choice without selecting for the user"
+    validation: "Names the decision the user needs to make and does not imply a user choice has already been made"
+    on_fail: "Re-run DECIDE phase to present a clear user choice prompt"
+    object_fields:
+      - name: prompt
+        type: string
+        required: true
+        description: "The question the user should answer to choose a direction"
+
+      - name: context
+        type: string
+        required: true
+        description: "Short explanation of what the refined candidates are deciding between"
+
+      - name: status
+        type: enum
+        required: true
+        description: "Current state of the decision"
+        enum_values: [awaiting_user_choice, needs_more_ideation, blocked_by_constraints]
+
+  - name: decision_options
+    type: object[]
+    required: true
+    description: "Choices offered to the user during DECIDE"
+    validation: "At least four options are present, covering selection, combination, rejection, and more ideation"
+    on_fail: "Re-run DECIDE phase to provide selected, combined, rejected, and more_ideas options"
+    min_items: 4
+    object_fields:
+      - name: option_type
+        type: enum
+        required: true
+        description: "Kind of decision the user can make"
+        enum_values: [selected, combined, rejected, more_ideas]
+
+      - name: label
+        type: string
+        required: true
+        description: "Short user-facing choice label"
+
+      - name: description
+        type: string
+        required: true
+        description: "What happens if the user chooses this option"
+
+      - name: next_action
+        type: string
+        required: true
+        description: "Immediate next step after this option is chosen"
+
   - name: user_decision
     type: enum
-    required: true
+    required: conditional
+    condition: "when the user has provided a follow-up choice after DECIDE, or the current prompt explicitly contains an actual selection"
     description: "What the user chose after seeing refined candidates"
+    validation: "Captured only from an explicit user choice; never inferred from rankings, recommendations, or the assistant's preference"
     enum_values: [selected, combined, rejected, more_ideas]
-    on_fail: "Re-run DECIDE phase to capture the user's decision"
+    on_fail: "If no explicit user choice exists, omit user_decision and return decision_point with decision_options; if a follow-up choice exists, capture it as selected, combined, rejected, or more_ideas"

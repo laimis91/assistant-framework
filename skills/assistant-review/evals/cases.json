@@ -219,6 +219,7 @@
       ],
       "expected_behavior": [
         "Infers change_kind as skill_or_workflow and semantic_contract_review_required as true.",
+        "Loads and applies references/review-checklists.md before declaring the semantic contract review clean.",
         "Checks that method-specific templates satisfy inherited base output artifacts or explicitly condition the base contract.",
         "Checks SKILL.md/templates/contracts/phase gates/handoffs/references for artifact and field alignment.",
         "Checks eval machine expectations for both new behavior and inherited base contract artifacts.",
@@ -231,6 +232,7 @@
       ],
       "pass_criteria": [
         "The response includes semantic contract review.",
+        "The response applies the Semantic Contract Review Checklist from references/review-checklists.md.",
         "The response mentions inherited contract obligations and template-contract alignment.",
         "The response checks eval inheritance coverage and external-method signature fidelity.",
         "The response checks high-stakes recommendation guards and mirror-surface sync.",
@@ -245,6 +247,7 @@
         "Approves a named-method adaptation without identifying the defining loop.",
         "Ignores high-stakes do/wait/avoid recommendations.",
         "Ignores plugin-local copy drift.",
+        "Does not load or apply the review-checklists reference.",
         "Only lists checklist category names without evidence.",
         "Does not cite any reviewed file or contract surface.",
         "Does not include Evidence, Impact, Recommendation, and Confidence for findings.",
@@ -252,6 +255,8 @@
       ],
       "machine_expectations": {
         "required_substrings": [
+          "references/review-checklists.md",
+          "Semantic Contract Review Checklist",
           "semantic contract review",
           "inherited contract",
           "template-contract alignment",
@@ -278,6 +283,7 @@
           "no need to check evals",
           "method signature is irrelevant",
           "plugin copies can drift",
+          "no need to load review-checklists",
           "checklist names are enough",
           "no file evidence needed",
           "machine expectations do not need inherited artifacts"
@@ -297,6 +303,7 @@
       ],
       "expected_behavior": [
         "Infers change_kind as code or mixed and behavioral_contract_review_required as true.",
+        "Loads and applies references/review-checklists.md before declaring the behavioral contract review clean.",
         "Checks existing behavior, invariants, compatibility assumptions, and edge cases that must be preserved.",
         "Checks whether any special-case path bypasses shared validation, authorization, transaction, idempotency, logging, or cleanup behavior.",
         "Checks public API, DTO/schema/docs/config/generated-client alignment against implementation behavior.",
@@ -312,6 +319,7 @@
       ],
       "pass_criteria": [
         "The response includes behavioral contract review.",
+        "The response applies the Behavioral Contract Review Checklist from references/review-checklists.md.",
         "The response mentions existing invariants and interface-implementation alignment.",
         "The response checks test inheritance coverage and fake/incomplete implementation risk.",
         "The response checks protocol/algorithm/business-rule fidelity when applicable.",
@@ -329,6 +337,7 @@
         "Accepts tests without checking inherited behavior assertions.",
         "Ignores money/auth/data high-impact guards.",
         "Does not cite concrete reviewed files or surfaces.",
+        "Does not load or apply the review-checklists reference.",
         "Only lists behavioral checklist categories without mentioning the order endpoint or refund path.",
         "Does not analyze whether the refund special-case path bypasses shared behavior.",
         "Does not mention config defaults or public API/schema/client/docs alignment.",
@@ -337,6 +346,8 @@
       ],
       "machine_expectations": {
         "required_substrings": [
+          "references/review-checklists.md",
+          "Behavioral Contract Review Checklist",
           "behavioral contract review",
           "existing invariants",
           "interface-implementation alignment",
@@ -368,6 +379,7 @@
           "existing behavior does not matter",
           "no need to check inherited tests",
           "high-impact guards are unnecessary",
+          "no need to load review-checklists",
           "checklist categories are enough",
           "no need to mention the refund path",
           "config defaults are irrelevant",
@@ -467,6 +479,7 @@
       ],
       "expected_behavior": [
         "Infers agentic_loop_safety_review_required as true.",
+        "Loads and applies references/review-checklists.md before declaring the agentic loop safety review clean.",
         "Checks bounded execution such as max steps, max rounds, timeout, or cost/token budget.",
         "Checks for explicit success, budget, blocker, and escalation stop conditions.",
         "Checks capped retry behavior and empty-result fallback for web search/retrieval.",
@@ -477,6 +490,7 @@
       ],
       "pass_criteria": [
         "The response includes agentic loop safety review.",
+        "The response applies the Agentic Loop Safety Checklist from references/review-checklists.md.",
         "The response flags missing max steps/time/cost budget or explains why present.",
         "The response checks stop condition, retry cap, empty-result handling, and tool-error handling.",
         "The response checks progress/stagnation detection and cost/token guardrails.",
@@ -489,10 +503,13 @@
         "Ignores empty search results.",
         "Ignores tool errors or API failures.",
         "Ignores repeated LLM/subagent cost or token usage.",
+        "Does not load or apply the review-checklists reference.",
         "Ignores low-confidence escalation for uncertain loop outcomes."
       ],
       "machine_expectations": {
         "required_substrings": [
+          "references/review-checklists.md",
+          "Agentic Loop Safety Checklist",
           "agentic loop safety review",
           "max steps",
           "stop condition",
@@ -518,9 +535,83 @@
           "empty results can be ignored",
           "tool errors can be ignored",
           "cost does not matter",
+          "no need to load review-checklists",
           "confidence does not matter",
           "no need to escalate uncertainty",
           "uncertain outcomes can continue"
+        ]
+      }
+    },
+    {
+      "id": "review-checklists-reference-is-mandatory",
+      "title": "Review checklists reference is mandatory",
+      "category": "checklist_reference_loading",
+      "purpose": "Checks that assistant-review loads and applies the extracted checklist reference when agentic loop safety, behavioral contract, or semantic contract review modes are applicable.",
+      "prompt": "Review a mixed framework/API change. It edits an agent workflow loop, a public billing endpoint, skill contracts, evals, and plugin-local copies. Before declaring it clean, show which mandatory review checklists you applied and give evidence-bearing checks.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material touches an autonomous agent loop, behavior-bearing billing code, skill/workflow contracts, evals, and plugin-local mirrors.",
+        "The diff includes plausible risks around runaway retries, bypassed billing authorization, eval fake-passes, and mirror drift."
+      ],
+      "expected_behavior": [
+        "Loads and applies references/review-checklists.md before declaring the review clean.",
+        "Applies the Agentic Loop Safety Checklist, Behavioral Contract Review Checklist, and Semantic Contract Review Checklist when the mixed scope triggers all three modes.",
+        "Checks representative loop-safety terms: bounded execution, stop condition, retry/empty-result handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation.",
+        "Checks representative behavioral terms: existing invariants, interface-implementation alignment, test inheritance coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.",
+        "Checks representative semantic terms: inherited contract obligations, template-contract alignment, eval inheritance coverage, external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.",
+        "Reports concrete findings or explicit no-concrete-risk checks with Evidence, Impact, Recommendation, and Confidence instead of accepting checklist headings alone."
+      ],
+      "pass_criteria": [
+        "The response names references/review-checklists.md and says it was loaded and applied.",
+        "The response names all three checklists.",
+        "The response includes representative terms from agentic loop safety, behavioral contract, and semantic contract review.",
+        "The response ties checklist areas to concrete reviewed surfaces and evidence.",
+        "The response treats checklist headings alone as insufficient."
+      ],
+      "fail_signals": [
+        "Omits references/review-checklists.md.",
+        "Applies only one or two of the three applicable checklists.",
+        "Lists checklist names without representative terms.",
+        "Treats checklist headings as enough evidence.",
+        "Ignores plugin-local mirror drift or eval fake-pass risk."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "references/review-checklists.md",
+          "loaded and applied",
+          "Agentic Loop Safety Checklist",
+          "Behavioral Contract Review Checklist",
+          "Semantic Contract Review Checklist",
+          "bounded execution",
+          "stop condition",
+          "retry/empty-result",
+          "tool-error",
+          "progress/stagnation",
+          "cost/token",
+          "low-confidence escalation",
+          "existing invariants",
+          "interface-implementation alignment",
+          "test inheritance",
+          "protocol/algorithm fidelity",
+          "high-impact operation guards",
+          "runtime-surface sync",
+          "inherited contract obligations",
+          "template-contract alignment",
+          "eval inheritance",
+          "external-method signature fidelity",
+          "high-stakes recommendation guards",
+          "mirror-surface sync",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:"
+        ],
+        "forbidden_substrings": [
+          "no need to load review-checklists",
+          "checklist headings are enough",
+          "representative terms are optional",
+          "plugin mirrors can drift",
+          "eval fake-passes are acceptable"
         ]
       }
     },

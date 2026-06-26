@@ -78,10 +78,8 @@ if [[ -f "$TELOS_FILE" ]]; then
 fi
 
 if $IS_CODEX; then
-    context_parts+=("MEMORY: Rules, preferences, lessons, and recent insights are retrieved through the memory-graph MCP tools.")
-    context_parts+=("Call memory_context first with the current project path/name to retrieve persisted project context, rules, preferences, and recent insights.")
-    context_parts+=("Use memory_search for targeted retrieval of specific rules, lessons, decisions, or prior implementation context.")
-    context_parts+=("Codex SessionStart intentionally avoids injecting memory rule bodies directly; use MCP retrieval instead.")
+    context_parts+=("MEMORY: Use memory-graph MCP tools; call memory_context with the current project path/name, then memory_search for targeted rules, lessons, decisions, or prior context.")
+    context_parts+=("SessionStart does not inject memory rule bodies directly.")
     context_parts+=("---")
 fi
 
@@ -90,35 +88,23 @@ if $IS_CODEX; then
     context_parts+=("ROLE: Follow AGENTS.md for role, workflow phase gates, delegation rules, and review-loop requirements.")
     context_parts+=("---")
 else
-    context_parts+=("ROLE: You are an orchestrator. You delegate project source edits, code implementation, and phase execution to specialized agents (code-writer, builder-tester, architect, explorer, reviewer) when delegation is authorized and available. If explicit user authorization is required before spawning subagents, ask once for the needed scope; if authorization is denied, subagents are unavailable, or policy disallows spawning, use direct fallback with equivalent evidence. You may create and update framework-owned state artifacts such as $STATE_DIR/task.md, $STATE_DIR/context-map.md, $STATE_DIR/session.md, and $STATE_DIR/working-buffer.md directly; do not edit project source files directly in delegated mode. Your responsibilities: decompose tasks, dispatch agents or record direct fallback, persist workflow state, monitor progress, communicate with the user, and enforce phase gates. You MUST follow all skill instructions, phase gates, and review loops exactly as defined — no bypassing, no shortcuts, no skipping steps. When a skill matches your task, invoke it; do not manually replicate what it does.")
+    context_parts+=("ROLE: You are an orchestrator. Delegate source edits, implementation, builds/tests, and review to specialized agents when authorized and available; otherwise record direct fallback with equivalent evidence. You may update framework-owned $STATE_DIR/task.md, $STATE_DIR/context-map.md, $STATE_DIR/session.md, and $STATE_DIR/working-buffer.md. Follow matching skills, phase gates, and review loops exactly.")
     context_parts+=("---")
 fi
 
 # 5. Instruction to load project context via memory-graph MCP
 if $IS_CODEX; then
     context_parts+=("SESSION START — Codex Protocol:")
-    context_parts+=("1. Read active task journal context above first when present.")
-    context_parts+=("2. Call memory_context with the current project path/name before planning or implementation.")
-    context_parts+=("3. Use memory_search for targeted rules, lessons, decisions, and prior implementation context.")
-    context_parts+=("4. Consult AGENTS.md for the full role, workflow, memory, and review protocol.")
+    context_parts+=("1. Read active task journal above first when present.")
+    context_parts+=("2. Run memory_context before planning/implementation; use memory_search as needed.")
+    context_parts+=("3. Consult AGENTS.md for the full role, workflow, memory, and review protocol.")
     context_parts+=("---")
 else
     context_parts+=("SESSION START — Memory Protocol:")
-    context_parts+=("1. Call memory_context with the current project name/path to load project context (dependencies, technologies, patterns, conventions, rules, preferences, recent insights)")
+    context_parts+=("1. Call memory_context with the current project name/path to load project context, rules, preferences, and recent insights.")
     context_parts+=("2. If $STATE_DIR/session.md exists, read it to resume previous session state")
     context_parts+=("3. If $STATE_DIR/working-buffer.md exists, read it then clear its contents")
-    context_parts+=("4. Rules and preferences are retrieved via memory-graph MCP tools; hooks do not inject rule bodies directly.")
-    context_parts+=("Use memory_search for targeted queries during the session. Use memory_add_insight to record learnings.")
-    context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
-    context_parts+=("")
-    context_parts+=("REFLEXION SYSTEM (v2):")
-    context_parts+=("- memory_reflect: Record post-task reflexions (what worked, what didn't, lessons)")
-    context_parts+=("- memory_decide: Record architectural/design decisions with rationale")
-    context_parts+=("- memory_pattern: Record/reinforce recurring patterns per project type")
-    context_parts+=("- memory_stats: Check memory system health and calibration accuracy")
-    context_parts+=("- memory_consolidate: Decay stale lessons and archive low-confidence ones")
-    context_parts+=("- During DISCOVER phase: check past lessons for this project type — relevant lessons should inform the plan")
-    context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
+    context_parts+=("4. Use memory_search for targeted queries; use memory_add_insight/memory_reflect for durable learnings when appropriate.")
     context_parts+=("---")
 fi
 

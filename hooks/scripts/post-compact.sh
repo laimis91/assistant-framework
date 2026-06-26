@@ -115,18 +115,9 @@ fi
 
 # Instruction to restore full context via memory-graph
 context_parts+=("CONTEXT RESTORED — Memory Protocol:")
-context_parts+=("Call memory_context with the current project name/path to reload project context (dependencies, technologies, patterns, conventions, rules, preferences, recent insights).")
-context_parts+=("Use memory_search for targeted queries. Use memory_add_insight to record new learnings.")
-context_parts+=("Use memory_trend to surface calibration trends and learning signals before planning.")
-context_parts+=("Preserve response phase separation after compaction: progress/commentary updates are not final answers; final answers must use restored task journal state, verification evidence, blockers, and next steps.")
-context_parts+=("")
-context_parts+=("REFLEXION SYSTEM (v2):")
-context_parts+=("- memory_reflect: Record post-task reflexions (what worked, what didn't, lessons)")
-context_parts+=("- memory_decide: Record architectural/design decisions with rationale")
-context_parts+=("- memory_pattern: Record/reinforce recurring patterns per project type")
-context_parts+=("- memory_stats: Check memory system health and calibration accuracy")
-context_parts+=("- memory_consolidate: Decay stale lessons and archive low-confidence ones")
-context_parts+=("- At TASK COMPLETION: record a reflexion capturing what you learned")
+context_parts+=("Call memory_context with the current project name/path to reload project context; use memory_search for targeted rules, lessons, and decisions.")
+context_parts+=("Use memory_add_insight or memory_reflect only for durable task learnings.")
+context_parts+=("Preserve response phase separation after compaction: progress/commentary updates are not final answers; final answers use restored task state, verification evidence, blockers, and next steps.")
 context_parts+=("---")
 
 if [[ ${#context_parts[@]} -gt 0 ]]; then
