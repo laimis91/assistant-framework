@@ -83,6 +83,7 @@ for term in \
     "Subagent policy state" \
     "Subagent execution mode" \
     "Subagent authorization scope" \
+    "Candidate scope scan" \
     "Bugfix" \
     "Feature" \
     "Refactor / Migration / Rewrite" \
@@ -114,10 +115,12 @@ done
 for term in \
     "T4" \
     "T9" \
+    "T10" \
     "risk_tier is set" \
     "required_gates includes common gates" \
     "required_agents or fallback execution roles are populated" \
-    "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized"; do
+    "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized" \
+    "candidate_scope_scan is populated from a quick read-only scan"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_triage_terms+=("phase-gates.yaml: $term")
     fi
@@ -129,7 +132,8 @@ for term in \
     "Required agents:" \
     "Subagent policy state:" \
     "Subagent execution mode:" \
-    "Subagent authorization scope:"; do
+    "Subagent authorization scope:" \
+    "Candidate scope scan:"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
         missing_triage_terms+=("task-journal-template.md: $term")
     fi
@@ -138,6 +142,37 @@ if [[ "${#missing_triage_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
+fi
+
+test_start "workflow discovery maps behaviorally relevant references"
+missing_reference_mapping_terms=()
+for term in \
+    "references_checked" \
+    "caller, consumer, test, docs, contract, config, mirror, hook, runtime" \
+    "candidate_scope_scan"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
+        missing_reference_mapping_terms+=("handoffs.yaml: $term")
+    fi
+done
+for term in \
+    "D8A" \
+    "context map includes references_checked" \
+    "behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, hooks, and runtime surfaces"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        missing_reference_mapping_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "References Checked" \
+    "\"All references\" means behaviorally relevant references inside the accepted task scope"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md"; then
+        missing_reference_mapping_terms+=("context-map-template.md: $term")
+    fi
+done
+if [[ "${#missing_reference_mapping_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow reference mapping guard missing terms: ${missing_reference_mapping_terms[*]}"
 fi
 
 test_start "workflow candidate-search phase 1 contracts are present and company-safe"

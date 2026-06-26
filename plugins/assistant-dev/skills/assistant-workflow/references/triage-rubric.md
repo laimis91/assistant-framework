@@ -15,6 +15,7 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 - `Subagent authorization scope`: roles/phases/actions explicitly authorized by the user, or empty when none
 - `Required gates`: the common gates plus every applicable task-category gate pack
 - `Search mode`: `none`, `lightweight`, or `candidate_search`
+- `Candidate scope scan`: likely touched paths or modules, symbols/search terms checked, adjacent tests/docs/contracts/config/mirrors to inspect, confidence, and unknowns
 
 ## Size Rules
 
@@ -26,6 +27,19 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 | `mega` | Rewrite, migration, port, legacy-to-new-structure work, 10+ files across layers, or behavior parity across subsystems. |
 
 Escalate size when risk exceeds file count. Auth, PII, payments, destructive data changes, public API changes, or behavior-preserving legacy migration are at least `large` unless discovery proves they are isolated and fully covered.
+
+## Candidate Scope Scan
+
+Before finalizing Triage, run a quick read-only scan to avoid classifying from the prompt alone. Keep it bounded: named files from the prompt, likely modules/directories, obvious symbols/search terms, nearby tests, docs, contracts, config, generated mirrors, and runtime surfaces that can change the risk tier.
+
+Record:
+- `likely_touched_paths`: exact paths when known, otherwise directories/modules.
+- `symbols_or_terms_searched`: names, commands, or search terms checked.
+- `adjacent_surfaces`: tests, docs, contracts, config, generated mirrors, hooks, or APIs that may need Discover coverage.
+- `confidence`: `low`, `medium`, or `high`.
+- `unknowns`: remaining scope/risk questions for Discover.
+
+This scan is not the Code Mapper context map. It is a shallow risk and size check. If the scan exposes broader references, weak tests, public contracts, or unclear ownership, escalate size/risk or required gates before Discover.
 
 ## Risk Tier Rules
 

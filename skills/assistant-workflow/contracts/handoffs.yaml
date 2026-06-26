@@ -74,6 +74,27 @@ handoffs:
         type: string
         required: false
         description: "Specific module/directory to focus on, if known"
+      - name: candidate_scope_scan
+        type: object
+        required: true
+        description: "Triage's quick scope scan; focuses mapping but does not replace CodeMapper discovery"
+        object_fields:
+          - name: likely_touched_paths
+            type: string[]
+            required: true
+          - name: symbols_or_terms_searched
+            type: string[]
+            required: true
+          - name: adjacent_surfaces
+            type: string[]
+            required: true
+          - name: confidence
+            type: enum
+            required: true
+            enum_values: [low, medium, high]
+          - name: unknowns
+            type: string[]
+            required: true
       - name: constraints
         type: string[]
         required: false
@@ -175,6 +196,24 @@ handoffs:
             type: enum
             required: true
             enum_values: [unit, integration, e2e]
+      - name: references_checked
+        type: object[]
+        required: true
+        description: "Behaviorally relevant references checked for the likely modified areas"
+        min_items: 1
+        object_fields:
+          - name: path_or_query
+            type: string
+            required: true
+            description: "File path, directory, symbol search, or explicit not-applicable surface"
+          - name: relationship
+            type: enum
+            required: true
+            enum_values: [caller, consumer, test, docs, contract, config, mirror, hook, runtime, not_applicable, deferred]
+          - name: outcome
+            type: string
+            required: true
+            description: "What was found, why it matters, or why it is not applicable/deferred"
       - name: context_map_markdown
         type: string
         required: true
