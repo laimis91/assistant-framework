@@ -32,8 +32,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or hook_profile == strict or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, required_gates, required_agents, subagent policy state, execution mode, authorization scope, and search_mode selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, and search_mode"
+    validation: "Contains task_type, risk_tier, size, required_gates, required_agents, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -74,6 +74,32 @@ artifacts:
         required: true
         enum_values: [none, lightweight, candidate_search]
         validation: "Selected during Triage from uncertainty, alternatives, optimization pressure, repeated failures, unclear bugs, and reviewer-requested pivots"
+      - name: candidate_scope_scan
+        type: object
+        required: true
+        description: "Quick read-only scan used during Triage to avoid prompt-only size/risk classification"
+        validation: "Summarizes likely touched paths, symbols/search terms checked, adjacent verification/reference surfaces, confidence, and unknowns"
+        object_fields:
+          - name: likely_touched_paths
+            type: string[]
+            required: true
+            validation: "Exact paths when known; otherwise directories/modules or unknown with reason"
+          - name: symbols_or_terms_searched
+            type: string[]
+            required: true
+            validation: "Search terms, symbols, or commands checked; use an explicit none-with-reason entry only when no local scan is useful"
+          - name: adjacent_surfaces
+            type: string[]
+            required: true
+            validation: "Tests, docs, contracts, config, generated mirrors, hooks, APIs, or runtime surfaces that Discover should inspect or mark not applicable"
+          - name: confidence
+            type: enum
+            required: true
+            enum_values: [low, medium, high]
+          - name: unknowns
+            type: string[]
+            required: true
+            validation: "Remaining scope/risk unknowns for Discover, or empty when confidence is high"
 
   - name: phase_checkpoints
     type: string[]

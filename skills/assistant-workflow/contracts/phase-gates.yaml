@@ -62,6 +62,10 @@ gates:
         check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents; development/code-work that needs workflow roles starts as authorization_required unless the current user prompt explicitly authorized subagents"
         on_fail: "Set subagent_policy_state=authorization_required and ask once for the needed delegation scope before continuing phases that require subagents. Set delegation_authorized only after explicit user approval or explicit user-requested subagents. Use direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed."
 
+      - id: T10
+        check: "candidate_scope_scan is populated from a quick read-only scan before finalizing Triage, with likely touched paths, symbols/search terms checked, adjacent surfaces, confidence, and unknowns"
+        on_fail: "Search the locally available target files, likely modules, symbols, nearby tests, docs, contracts, config, generated mirrors, hooks, or runtime surfaces; record candidate_scope_scan before entering Discover or explicitly mark not applicable with reason for tiny prompt-only tasks."
+
     guidance_assertions:
 
       - id: T3
@@ -132,6 +136,11 @@ gates:
         check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"
         condition: "size in [medium, large, mega]"
         on_fail: "Produce a context map using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
+
+      - id: D8A
+        check: "For medium+ tasks: context map includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, hooks, and runtime surfaces, or explicit not-applicable/deferred reasons"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Re-dispatch Code Mapper or complete direct-fallback mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
 
       - id: D9
         check: "For large+ tasks: execution paths were traced by Explorer subagent when subagent_execution_mode=delegated, or traced directly in fallback mode with equivalent evidence"

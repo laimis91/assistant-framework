@@ -27,6 +27,8 @@
       "expected_behavior": [
         "Prints visible workflow checkpoints beginning with TRIAGE and DISCOVER.",
         "Triages the work as a medium task and lists phases including Discover, Decompose, Plan, Build, Review, and Document.",
+        "Records a candidate scope scan before finalizing Triage.",
+        "Records references checked in the Discover context map.",
         "Restates requirements and records constraints before planning.",
         "Produces a strict slice manifest with binary acceptance and verification criteria.",
         "Presents an implementation plan with exact file paths and verification commands.",
@@ -50,6 +52,8 @@
           "--- PHASE: TRIAGE ---",
           "--- PHASE: DISCOVER ---",
           "Triaged as: medium",
+          "Candidate scope scan",
+          "References Checked",
           "--- PHASE: DECOMPOSE ---",
           "--- PHASE: PLAN ---",
           "WAITING: Plan approval required",

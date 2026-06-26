@@ -41,6 +41,11 @@ Generated: [date] | Task: [1-sentence description]
 |------|-----------|------|
 | [module/feature] | [path] | Unit / Integration / E2E |
 
+## References Checked
+| Path or query | Relationship | Outcome |
+|---------------|--------------|---------|
+| [path or search] | Caller / Consumer / Test / Docs / Contract / Config / Mirror / Hook / Runtime | [covered, not applicable, or deferred with reason] |
+
 ## Conventions Observed
 - [naming pattern, e.g. "Services end in *Service, registered as scoped"]
 - [architecture pattern, e.g. "CQRS with MediatR handlers"]
@@ -52,5 +57,6 @@ Generated: [date] | Task: [1-sentence description]
 - Only map what's relevant to the current task, not the entire codebase
 - File paths must be relative to project root
 - If the codebase is too large, focus on the modules the task touches
+- "All references" means behaviorally relevant references inside the accepted task scope, not every textual match in the repository. Check callers, consumers, tests, docs, contracts, config, generated mirrors, hooks, and runtime surfaces when they can affect or describe the change; record not-applicable or deferred surfaces instead of leaving them implicit.
 - Add the configured context-map path (for example `{agent_state_dir}/context-map.md`) to `.gitignore` when local state artifacts are used — this is ephemeral, per-session only
 - If a context-map artifact was accidentally tracked, remove it from the git index while preserving the local file

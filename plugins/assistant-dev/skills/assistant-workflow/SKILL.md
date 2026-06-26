@@ -161,7 +161,7 @@ When a task includes incidental or scope-expanding refactor work:
 
 Print: `--- PHASE: TRIAGE ---`
 
-Load `references/triage-rubric.md`. Assess task type, risk tier, size, required gates, required agents, and `search_mode`. Size determines which phases run, but risk and task type determine the gate packs.
+Load `references/triage-rubric.md`. Perform a quick read-only candidate scope scan, then assess task type, risk tier, size, required gates, required agents, and `search_mode`. Size determines which phases run, but risk and task type determine the gate packs.
 
 | Size | Phases |
 |---|---|
@@ -173,7 +173,7 @@ Load `references/triage-rubric.md`. Assess task type, risk tier, size, required 
 [Design] = include if task has UI work, skip for backend-only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
-Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count] | search=[search_mode]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 

@@ -40,6 +40,12 @@ Subagent policy state: [not_required | authorization_required | delegation_autho
 Subagent execution mode: [delegated | direct_fallback | not_applicable]
 Subagent authorization scope:
 - [roles/phases/actions covered by user authorization, or none]
+Candidate scope scan:
+- Likely touched paths: [exact paths, directories, modules, or unknown]
+- Symbols or terms searched: [search terms, commands, or none with reason]
+- Adjacent surfaces: [tests/docs/contracts/config/mirrors/hooks/runtime surfaces to inspect]
+- Confidence: [low | medium | high]
+- Unknowns: [none, or one short scope/risk unknown per line]
 Plan approval: [yes/no + date]
 
 ## Agent Dispatch Log
