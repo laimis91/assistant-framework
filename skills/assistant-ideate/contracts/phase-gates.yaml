@@ -61,8 +61,12 @@ gates:
         check: "Multiple options are presented to the user (never a single option)"
         on_fail: "Ensure at least 2 refined candidates are shown with clear choice prompts"
       - id: DE2
-        check: "User decision is captured as one of: selected, combined, rejected, more_ideas"
+        check: "decision_point and decision_options are present, including selected, combined, rejected, and more_ideas choices"
         on_fail: "Ask the user to choose: go with one, combine, reject all, or request more ideas"
+      - id: DE3
+        check: "User decision is captured as one of: selected, combined, rejected, more_ideas only when an explicit follow-up choice exists"
+        condition: "when the user has already replied with a choice or the current prompt includes an explicit selection"
+        on_fail: "Capture the explicit follow-up choice, or omit user_decision and stop at the decision_point with decision_options"
 
 invariants:
   - id: INV1
@@ -77,3 +81,7 @@ invariants:
     check: "Constraints from input are respected throughout all phases"
     scope: all_phases
     on_fail: "Review ideas against stated constraints and flag or remove violations"
+  - id: INV4
+    check: "user_decision is never fabricated before the user chooses"
+    scope: all_phases
+    on_fail: "Remove the fabricated user_decision and return decision_point with decision_options instead"

@@ -98,93 +98,13 @@ Severity mapping:
 - Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
 - If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
 
-## Agentic Loop Safety Checklist
+## Mandatory Review Checklists
 
-Use this checklist when reviewing changes that add or modify autonomous loops: agent loops, review/fix loops, research/search loops, retry loops, tool-calling loops, multi-agent orchestration, background jobs, or any workflow that repeatedly calls models, tools, APIs, or subagents.
+Load and apply `references/review-checklists.md` before declaring clean whenever a corresponding review mode is applicable. Checklist headings alone are not evidence; each applicable area must produce concrete findings or an explicit "no concrete risk found" check.
 
-1. **Bounded execution**
-   - Require an explicit max step/round count, timeout, or budget.
-   - The bound must be low enough to prevent runaway cost/time while still allowing expected completion.
-
-2. **Stop condition**
-   - Require a concrete success/exit condition, not only “until done”.
-   - The loop should stop on clean success, max budget, unrecoverable blocker, or explicit escalation.
-
-3. **Retry and empty-result handling**
-   - Retries must be capped and scoped to transient failures.
-   - Empty search/retrieval/tool results must have a defined fallback: broaden query once, report no evidence, ask/escalate, or exit — never infinite retry.
-
-4. **Tool-error handling**
-   - Tool/API failures must be observed and routed to retry, fallback, blocker, or degraded result.
-   - Silent failures must not produce confident final answers.
-
-5. **Progress and stagnation detection**
-   - Repeated iterations should show new evidence, fewer findings, better score, or another progress signal.
-   - If progress stalls, reset context/evaluator, pivot, or escalate instead of continuing.
-
-6. **Cost/token guardrails**
-   - Loops that call paid APIs, large models, web search, subagents, or large-context prompts need cost/time/token awareness.
-   - Prefer summaries, batching, narrowed scope, or early exit when budget risk grows.
-
-Report loop-safety findings with normal severity, evidence, impact, smallest fix, and confidence. Treat missing stop conditions, unbounded retries, ignored empty results, silent tool failures, or paid-API loops without budgets as must-fix/should-fix depending on risk.
-
-## Behavioral Contract Review Checklist
-
-Use this checklist when reviewing code changes that affect public APIs, domain/business logic, persistence/migrations, auth/permissions, money/payments/trading, config/feature flags, external protocols/SDKs, algorithms, infrastructure/deployment, generated schemas/clients, or other behavior-bearing surfaces.
-
-1. **Existing behavior and invariants**
-   - Identify the existing behavior, invariants, compatibility assumptions, and edge cases that the code must preserve.
-   - Check whether a new specialized path bypasses shared validation, authorization, transactions, rate limits, logging, error handling, cancellation, idempotency, or cleanup.
-
-2. **Interface ↔ implementation alignment**
-   - Verify public methods, DTOs, API schemas/OpenAPI, CLI help, config names/defaults, docs/examples, generated clients, and implementation behavior agree.
-   - If one surface changed, check every consumer-visible mirror surface that can still describe or drive the old behavior.
-
-3. **Test inheritance coverage**
-   - Tests must cover inherited behavior plus new behavior, not only the happy path of the new feature.
-   - Ask whether a fake or incomplete implementation could still pass the tests; if yes, report the missing assertion or fixture.
-
-4. **External protocol / algorithm fidelity**
-   - When implementing or adapting a known protocol, SDK flow, RFC, algorithm, or business rule, identify its defining semantic steps before approving.
-   - Examples: OAuth state/redirect validation, retry backoff + max attempts + idempotency, cache invalidation, payment authorization/capture/refund semantics, migration rollback/safety steps.
-
-5. **High-impact operation guards**
-   - For code that can affect money, auth, permissions, personal data, deletion, production deploys, safety, or irreversible actions, require appropriate guardrails: validation, explicit approval, dry-run, limits, audit logs, rollback/compensation, and failure-mode handling.
-
-6. **Runtime surface sync**
-   - Check code, tests, docs, config, migrations, generated clients, examples, CLI help, API schemas, deployment manifests, feature flags, telemetry, and runbooks when they can affect or describe runtime behavior.
-
-Report behavioral contract findings with normal severity, file evidence, impact, smallest fix, and confidence. Treat bypassed invariants, public-contract drift, weak inherited tests, protocol safety-step omissions, and missing high-impact guards as must-fix/should-fix depending on release risk.
-
-## Semantic Contract Review Checklist
-
-Use this checklist when reviewing changes to skills, workflow docs, contracts, evals, prompts, generated instructions, agent frameworks, or named-method adaptations. This is a semantic review, not just a YAML/Markdown syntax check.
-
-1. **Inherited contract obligations**
-   - If a specialized method/template is added inside an existing skill, confirm it still satisfies every base input/output artifact required by that skill.
-   - If the method intentionally does not satisfy a base artifact, the base contract must be explicitly made conditional and evals must cover both paths.
-
-2. **Template ↔ contract alignment**
-   - Check that method templates, `SKILL.md`, `contracts/output.yaml`, `contracts/input.yaml`, phase gates, handoffs, and references name the same artifacts and fields.
-   - Required artifacts must include recovery guidance (`on_fail` or equivalent) where the contract design guide expects it.
-
-3. **Eval coverage inheritance**
-   - Evals for a new method must require both the new behavior and inherited base artifacts.
-   - Machine expectations should fail on plausible incomplete responses, not only confirm the new section headings.
-
-4. **External-method signature fidelity**
-   - When adapting a named paper/tool/framework method, identify its defining loop before approving. Do not preserve only the visible surface shape.
-   - Require a testable artifact proving the defining loop happened. Example: STORM requires perspective-guided questions, source-grounded answers, follow-up questions, then synthesis — not just fixed perspectives.
-
-5. **High-stakes recommendation guard**
-   - If the workflow can emit `do`, `wait`, `avoid`, approval, trade, legal, medical, security, safety, or other high-impact recommendations, require domain guardrails.
-   - Guardrails should include educational/due-diligence framing where appropriate, risk/user-context caveats, verification requirements, and conservative defaults such as `investigate_further` unless stronger action is justified.
-
-6. **Mirror surfaces**
-   - Root skill and plugin-local copies must be synced.
-   - Generated installer/global instruction templates, hooks, docs, references, and eval contract tests must be updated when they can drive the old behavior.
-
-Report semantic contract findings as normal findings with file evidence, impact, smallest fix, and confidence. Treat missing inherited artifacts, evals that pass incomplete outputs, or high-stakes recommendation drift as must-fix/should-fix depending on release risk.
+- **Agentic loop safety review**: apply the Agentic Loop Safety Checklist for agent/workflow/tool loops and return `agentic_loop_safety_checks` covering bounded execution, stop condition, retry/empty-result handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation.
+- **Behavioral contract review**: apply the Behavioral Contract Review Checklist for behavior-bearing code and return `behavioral_contract_checks` covering existing invariants, interface-implementation alignment, test inheritance coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
+- **Semantic contract review**: apply the Semantic Contract Review Checklist for skill/workflow/framework changes and return `semantic_contract_checks` covering inherited contract obligations, template-contract alignment, eval inheritance coverage, external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.
 
 ## Refactor-Related Findings
 
@@ -228,6 +148,7 @@ while round <= 5:
      - Then run Regression/Test/Maintainability modes as applicable
      - If security-sensitive surfaces are present, hand off to `assistant-security`
      - Load and apply references/review-principles.md as the clean-code lens
+     - Load and apply references/review-checklists.md when agentic loop safety, behavioral contract, or semantic contract review is applicable
      - For skill/workflow/framework changes: apply the Semantic Contract Review Checklist before declaring clean
      - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
      - Reviewer prompt must include:
@@ -243,6 +164,8 @@ while round <= 5:
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
+       Load and apply references/review-checklists.md before declaring clean
+       when any checklist mode below is applicable.
        For agent/workflow/tool loop changes, apply the Agentic Loop Safety Checklist:
        max steps/time budget, stop condition, retry/empty-result handling,
        tool-error handling, progress/stagnation detection, and cost/token guardrails.

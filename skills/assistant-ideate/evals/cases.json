@@ -31,14 +31,16 @@
         "Scores all ideas by impact, feasibility, alignment, novelty, and risk.",
         "Calculates weighted_score for ranked ideas.",
         "Advances at least the top 3 ideas to REFINE.",
-        "Ends with DECIDE and asks the user to choose, combine, reject, or request more ideas."
+        "Ends with DECIDE and asks the user to choose, combine, reject, or request more ideas.",
+        "Produces decision_point and decision_options without fabricating user_decision before the user chooses."
       ],
       "pass_criteria": [
         "The response names all ideation phases in order.",
         "The response includes at least 8 ideas before ranking.",
         "The response scores ideas on all five criteria.",
         "The response refines multiple candidates.",
-        "The response asks for a decision instead of presenting one option."
+        "The response asks for a decision instead of presenting one option.",
+        "The response includes decision_point and decision_options for the initial choice."
       ],
       "fail_signals": [
         "Presents only one idea.",
@@ -59,13 +61,16 @@
           "alignment",
           "novelty",
           "risk",
-          "weighted_score"
+          "weighted_score",
+          "decision_point",
+          "decision_options"
         ],
         "forbidden_substrings": [
           "single option",
           "skip scoring",
           "only one idea",
-          "provider dependency is fine"
+          "provider dependency is fine",
+          "user_decision:"
         ]
       }
     },
@@ -86,13 +91,15 @@
         "Generates multiple ideas across at least two approaches.",
         "Ranks ideas using the full scoring criteria.",
         "Provides refined_candidates with elevator_pitch, how_it_works, technical_needs, risks, and first_step.",
-        "Presents a decision point with multiple choices."
+        "Presents a decision point with multiple choices.",
+        "Produces decision_point and decision_options without fabricating user_decision before the user chooses."
       ],
       "pass_criteria": [
         "The response acknowledges prior_attempts.",
         "The response avoids reusing the rejected approach unchanged.",
         "The response includes refined_candidates with first_step and risks.",
-        "The response presents a user decision point."
+        "The response presents a user decision point.",
+        "The response includes decision_point and decision_options for the initial choice."
       ],
       "fail_signals": [
         "Recommends another static README list as the only answer.",
@@ -110,13 +117,16 @@
           "technical_needs",
           "risks",
           "first_step",
-          "Decision point"
+          "Decision point",
+          "decision_point",
+          "decision_options"
         ],
         "forbidden_substrings": [
           "static README list is enough",
           "ignore prior attempts",
           "No risks",
-          "I selected the only option"
+          "I selected the only option",
+          "user_decision:"
         ]
       }
     }

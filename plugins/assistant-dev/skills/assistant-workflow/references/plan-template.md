@@ -62,6 +62,32 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Evidence: [files changed, test result, review note, or "pending"]
 ```
 
+## Slice Manifest
+
+For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
+
+```markdown
+## Slice manifest from Decompose
+
+[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
+
+- slice_id:
+- name:
+- observable_increment:
+- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
+- acceptance_criteria:
+- files_to_create:
+- files_to_modify:
+- files_to_test:
+- enabling_changes_included:
+- depends_on:
+- verification_command:
+- expected_success_signal:
+- evidence_to_record:
+- deviation_rollback_rule:
+- single_slice_rationale: [required only when exactly one slice exists]
+```
+
 ## Medium Tasks — Standard Plan
 
 Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
@@ -147,58 +173,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 
 ## Slice manifest from Decompose
 
-[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
-
-- slice_id:
-- name:
-- observable_increment:
-- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
-- acceptance_criteria:
-- files_to_create:
-- files_to_modify:
-- files_to_test:
-- enabling_changes_included:
-- depends_on:
-- verification_command:
-- expected_success_signal:
-- evidence_to_record:
-- deviation_rollback_rule:
-- single_slice_rationale: [required only when exactly one slice exists]
+Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
 
 ## Task packets
-Use the Executable Task Packet structure for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
-
-### Task [ID]: [short name]
-- name: [task packet name; must populate current_task_packet.name]
-- Slice: [slice_id] [slice_name]
-- Observable increment: [what becomes visible/verifiable after this slice]
-- Deliverable type: behavior | artifact | contract | docs | eval | config | migration | refactor
-- Behavior / acceptance criteria:
-  - [binary observable behavior]
-- Files:
-  - Create: [exact paths or "none"]
-  - Modify: [exact paths or "none"]
-  - Test: [exact test paths or "none"]
-- Enabling changes included:
-  - [setup, contracts, wiring, or "none"]
-- Depends on: [slice ids or "none"]
-- TDD / RED step:
-  - tdd_applies: [true/false]
-  - RED command: [command or "N/A"]
-  - Expected failure: [specific failing test/assertion or "N/A"]
-- Implementation notes / constraints:
-  - implementation_notes:
-    - [existing pattern to follow, dependency rule, non-goal, or boundary]
-- Verification:
-  - Command: [exact command]
-  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
-- Evidence to record:
-  - [test result, eval fixture, changed file, review note, or artifact proof]
-- Deviation / rollback rule:
-  - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
-- Worker status / evidence:
-  - Status: pending
-  - Evidence: pending
+Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
 
 ## Tests to run
 - [command]: [what it validates]
@@ -296,58 +274,10 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 
 ## Slice manifest from Decompose
 
-[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
-
-- slice_id:
-- name:
-- observable_increment:
-- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
-- acceptance_criteria:
-- files_to_create:
-- files_to_modify:
-- files_to_test:
-- enabling_changes_included:
-- depends_on:
-- verification_command:
-- expected_success_signal:
-- evidence_to_record:
-- deviation_rollback_rule:
-- single_slice_rationale: [required only when exactly one slice exists]
+Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
 
 ## Task packets
-Use the Executable Task Packet structure for each approved slice. Order packets by dependency, consume the Decompose slice manifest directly, and keep each slice independently verifiable before the next slice starts.
-
-### Task [ID]: [short name]
-- name: [task packet name; must populate current_task_packet.name]
-- Slice: [slice_id] [slice_name]
-- Observable increment: [what becomes visible/verifiable after this slice]
-- Deliverable type: behavior | artifact | contract | docs | eval | config | migration | refactor
-- Behavior / acceptance criteria:
-  - [binary observable behavior]
-- Files:
-  - Create: [exact paths or "none"]
-  - Modify: [exact paths or "none"]
-  - Test: [exact test paths or "none"]
-- Enabling changes included:
-  - [setup, contracts, wiring, or "none"]
-- Depends on: [slice ids or "none"]
-- TDD / RED step:
-  - tdd_applies: [true/false]
-  - RED command: [command or "N/A"]
-  - Expected failure: [specific failing test/assertion or "N/A"]
-- Implementation notes / constraints:
-  - implementation_notes:
-    - [existing pattern to follow, dependency rule, non-goal, or boundary]
-- Verification:
-  - Command: [exact command]
-  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
-- Evidence to record:
-  - [test result, eval fixture, changed file, review note, or artifact proof]
-- Deviation / rollback rule:
-  - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
-- Worker status / evidence:
-  - Status: pending
-  - Evidence: pending
+Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the Decompose slice manifest directly, and keep each slice independently verifiable before the next slice starts.
 
 ## Tests to run
 - [command]: [what it validates]

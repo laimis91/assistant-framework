@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-Assistant Framework v0.3.0 — a personal AI assistant framework providing 12+ composable skills, lifecycle hooks, and tools for Codex, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.Codex/`, `~/.codex/`, `~/.gemini/`).
+Assistant Framework v0.3.0 — a personal AI assistant framework providing 12+ composable skills, lifecycle hooks, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
 
 ## Build and Test Commands
 
@@ -40,11 +40,11 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 ### Installation
 
 ```bash
-./install.sh --agent Codex              # Install all skills + hooks + memory seed
-./install.sh --agent Codex --skill assistant-workflow  # Single skill
-./install.sh --agent Codex --no-hooks   # Skills only
-./install.sh --agent Codex --dry-run    # Preview
-./install.sh --agent Codex --test-hooks # Validate hooks
+./install.sh --agent codex              # Install all skills + hooks + memory seed
+./install.sh --agent codex --skill assistant-workflow  # Single skill
+./install.sh --agent codex --no-hooks   # Skills only
+./install.sh --agent codex --dry-run    # Preview
+./install.sh --agent codex --test-hooks # Validate hooks
 ```
 
 ## Architecture
@@ -53,7 +53,7 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 
 1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with YAML frontmatter (name, description, triggers). Sub-files load on demand (progressive loading). Skills are agent-agnostic.
 
-2. **Hooks** (`hooks/`) — Shell scripts that fire on agent lifecycle events (SessionStart, UserPromptSubmit, Stop, PreCompact, PostCompact, etc.). Agent-specific settings files (`Codex-settings.json`, `gemini-settings.json`, `codex-settings.json`) map events to scripts. Hooks enforce behaviors like skill routing, review gating, and memory injection.
+2. **Hooks** (`hooks/`) — Shell scripts that fire on agent lifecycle events (SessionStart, UserPromptSubmit, Stop, PreCompact, PostCompact, etc.). Agent-specific settings files (`claude-settings.json`, `gemini-settings.json`, `codex-settings.json`) map events to scripts. Hooks enforce behaviors like skill routing, review gating, and memory injection.
 
 3. **Tools** (`tools/`) — Compiled utilities exposed as MCP servers or CLI tools.
    - `memory-graph/` — C# MCP server (stdio, JSON-RPC) with 14 tools. In-memory knowledge graph + SQLite/FTS5 for reflexions/decisions. Source in `src/MemoryGraph/` with subdirs: `Graph/`, `Storage/`, `Tools/`, `Server/`.
