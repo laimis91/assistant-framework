@@ -15,6 +15,7 @@ Write to `{agent_state_dir}/task.md` in the project root when a local agent stat
 - After each review cycle pass (append to Review Log — never overwrite)
 - At verification summary (all steps done)
 - During user review feedback
+- During Document, after review/build/user-correction evidence has been checked for durable lessons
 
 ## Template
 
@@ -149,7 +150,7 @@ Plan approval: [yes/no + date]
 - Required fixes: [none, or ordered fix list]
 
 ### Quality Review #1
-- Round: 1 of 5
+- Round: 1 of 10
 - Previously fixed: 0 items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
@@ -165,7 +166,7 @@ Plan approval: [yes/no + date]
 - Re-test: PASS
 
 ### Quality Review #2 (autonomous re-review)
-- Round: 2 of 5
+- Round: 2 of 10
 - Previously fixed: [count] items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
@@ -192,6 +193,22 @@ Plan approval: [yes/no + date]
 - Should-fix deferred: [list any remaining]
 - Nits noted: [count, not fixed]
 
+## Document Log
+
+### Learning Controller
+- Memory trend checked: [checked | backend_unavailable | policy_disallowed | not_configured]
+- Learning evidence reviewed:
+  - [review_finding | build_test_failure | user_correction | memory_trend | none]: [source reference] — [summary, or none-with-reason]
+- Review findings considered:
+  - [finding summary and lesson decision, or none-with-reason]
+- Build/test failures considered:
+  - [failure summary and lesson decision, or none-with-reason]
+- User corrections considered:
+  - [correction summary and lesson decision, or none-with-reason]
+- Durable lesson decision: [durable_saved | durable_updated | skipped_not_durable | backend_unavailable | policy_disallowed | refused_sensitive]
+- Persistence evidence: [memory_reflect/memory_add_insight/backend evidence when saved or updated, else N/A]
+- No-save rationale: [required when no durable write occurred; do not use ad hoc markdown as cross-session memory when backend is available]
+
 ## Review Notes
 [filled during user review / handoff]
 - [ ] [issue or change request]
@@ -207,10 +224,10 @@ Plan approval: [yes/no + date]
 5. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the slice manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.
 6. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Slice Verification Ledger after each slice and do not start the next slice until the current one is `VERIFIED`. Check off Milestones when reached.
 7. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
-8. **Document** after review cycle passes — fill Verification Summary, Status: DOCUMENTING
+8. **Document** after review cycle passes — fill Verification Summary, add the Learning Controller block, Status: DOCUMENTING
 9. **Handoff** to user — they test manually and add Review Notes
 10. **Review fixes** — fix issues, re-test, re-review, update Progress
-11. **Done** — Status: DONE, promote durable insights to approved local memory if available, and leave the ignored state file in place unless the user asks for cleanup
+11. **Done** — Status: DONE, promote only evidence-backed durable lessons to approved local memory if available, record backend_unavailable/policy_disallowed/no-save rationale when not saved, and leave the ignored state file in place unless the user asks for cleanup
 
 ## Rules
 

@@ -12,6 +12,8 @@ else
     for term in \
         "assistant_phase_has_plan_approval" \
         "assistant_phase_review_missing_reason_key" \
+        "assistant_phase_review_controller_missing_reason_key" \
+        "assistant_phase_learning_missing_reason_key" \
         "assistant_phase_has_metrics_today"; do
         if ! grep -Fq "$term" "$helper_file"; then
             missing_runtime_helper_terms+=("$term")
@@ -24,6 +26,30 @@ for hook_file in \
     "$FRAMEWORK_DIR/hooks/scripts/harness-gate.sh"; do
     if ! grep -Fq '. "$SCRIPT_DIR/workflow-phase-gates.sh"' "$hook_file"; then
         missing_runtime_helper_terms+=("$(basename "$hook_file") sources workflow-phase-gates.sh")
+    fi
+done
+if ! grep -Fq "assistant_phase_review_missing_reason_key" "$FRAMEWORK_DIR/hooks/scripts/harness-gate.sh"; then
+    missing_runtime_helper_terms+=("harness-gate.sh uses shared review controller")
+fi
+if grep -Fq 'grep -m1 -E "^- Rubric:"' "$FRAMEWORK_DIR/hooks/scripts/harness-gate.sh" \
+    || grep -Fq 'grep -m1 -E "^- Weighted:"' "$FRAMEWORK_DIR/hooks/scripts/harness-gate.sh"; then
+    missing_runtime_helper_terms+=("harness-gate.sh avoids whole-file rubric/weighted scans")
+fi
+for term in \
+    "assistant_phase_learning_missing_reason_key" \
+    "no_learning_controller" \
+    "missing_memory_trend_checked" \
+    "missing_rubric_scores" \
+    "missing_remaining_rationale" \
+    "missing_learning_evidence_reviewed" \
+    "missing_review_findings_considered" \
+    "missing_build_test_failures_considered" \
+    "missing_user_corrections_considered" \
+    "missing_durable_lesson_decision" \
+    "missing_persistence_evidence" \
+    "missing_no_save_rationale"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
+        missing_runtime_helper_terms+=("stop-review.sh handles $term")
     fi
 done
 if [[ "${#missing_runtime_helper_terms[@]}" -eq 0 ]]; then

@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "This skill runs an autonomous code review loop: review, fix, re-review until clean (max 5 rounds). Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review dispatch."
+description: "This skill runs an autonomous code review loop: review, fix, re-review until clean (max 10 rounds). Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review dispatch."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
@@ -83,7 +83,7 @@ Finding format:
 - Evidence: file:line or diff hunk plus observed behavior
 - Impact: what can break, leak, regress, or become hard to maintain
 - Recommendation: smallest useful fix
-- Confidence: percentage matching the active review-round threshold
+- Confidence: evidence-calibrated percentage; speculative concerns belong in Observations and do not block completion
 ```
 
 Severity mapping:
@@ -135,7 +135,7 @@ round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 5:
+while round <= 10:
 
   1. REVIEW
      - Dispatch a fresh Reviewer subagent when `subagent_execution_mode=delegated`
@@ -157,10 +157,10 @@ while round <= 5:
        {previously_fixed}
        If the current review material shows a residual or related risk, report it
        only as a distinct new finding with new evidence; do not re-report the fixed item.
-       Confidence threshold:
-       - Round 1-2: 80%+
-       - Round 3-4: 85%+
-       - Round 5: 90%+
+       Finding filter policy:
+       - Report only evidence-backed findings with file/line evidence, concrete impact, and the smallest useful fix.
+       - Put speculative or low-evidence concerns in Observations; they do not block completion.
+       - In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers; round 10 is terminal and exits with remaining items instead of starting round 11.
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
@@ -181,17 +181,15 @@ while round <= 5:
      a. Check rubric score (medium+ scope):
         - PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN
         - PIVOT (weighted < threshold for round) -> escalate to orchestrator
-        - REFINE with findings -> continue to step 3
-        - REFINE with zero findings -> EXIT CLEAN with advisory:
-          "Rubric score {score} is below target, but no concrete
-          actionable risk was found in scope. Low-scoring dimensions
-          are noted as watch areas for future work."
-          Include rubric scores and low-dimension details in final report.
+        - REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3
+          using lowest-scoring rubric dimensions as the improvement targets
+        - Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0 and zero
+          must-fix/should-fix findings
      b. No rubric (small scope): use findings-based exit:
         - No must-fix AND no should-fix -> EXIT CLEAN
         - Only nits -> EXIT CLEAN (note nits in final report)
-     c. round == 5 with remaining must-fix -> EXIT WITH REMAINING ITEMS
-     d. round == 5 with issues fixed and now clean -> EXIT ISSUES FIXED
+     c. round == 10 with remaining must-fix or should-fix -> EXIT WITH REMAINING ITEMS
+     d. round == 10 with issues fixed and now clean -> EXIT ISSUES FIXED
      e. Otherwise -> continue to step 3
 
      Record in score_history: { round, weighted_score, finding_count, drift_status }
@@ -252,7 +250,7 @@ After the loop completes, present ONE summary to the user:
 - **Autonomous continuation**: advance to the next round while exit criteria are unmet.
 - **Fresh Reviewer each round** on medium+ scope: stale context weakens reviews.
 - **Previously-fixed list prevents re-reporting**: each round should find fewer issues.
-- **Higher confidence each round**: early rounds catch obvious issues, later rounds require higher certainty.
+- **Evidence-backed filtering**: findings need file/line evidence, concrete impact, and the smallest useful fix; late rounds only stay open before the hard max for must-fix or high-confidence should-fix findings, and round 10 is terminal.
 - If scope is trivial (single small file, obvious change) -> one clean round can exit. If findings exist, continue looping.
 
 ## Output

@@ -19,6 +19,7 @@ HOOKS_DIR="$FRAMEWORK_DIR/hooks/scripts"
 
 VERBOSE=false
 FILTER=""
+FILTER_NORMALIZED=""
 PASS=0
 FAIL=0
 SKIP=0
@@ -33,15 +34,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+normalize_filter_text() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr '_-' '  ' | tr -s '[:space:]' ' '
+}
+
+if [[ -n "$FILTER" ]]; then
+    FILTER_NORMALIZED="$(normalize_filter_text "$FILTER")"
+fi
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _test_name=""
 
 test_start() {
     _test_name="$1"
-    if [[ -n "$FILTER" && "$_test_name" != *"$FILTER"* ]]; then
-        SKIP=$((SKIP + 1))
-        return 1
+    if [[ -n "$FILTER" ]]; then
+        local normalized_test_name
+        normalized_test_name="$(normalize_filter_text "$_test_name")"
+        if [[ "$_test_name" != *"$FILTER"* && "$normalized_test_name" != *"$FILTER_NORMALIZED"* ]]; then
+            SKIP=$((SKIP + 1))
+            return 1
+        fi
     fi
     return 0
 }
@@ -102,6 +115,25 @@ clear_workflow_cache() {
         "$TEST_AGENT_HOME/.codex/cache/workflow-state" \
         "$TEST_AGENT_HOME/.claude/cache/workflow-state" \
         "$TEST_AGENT_HOME/.gemini/cache/workflow-state"
+}
+
+review_controller_reason() {
+    local task_file="$1"
+    bash -c '
+        . "$1"
+        task_file="$2"
+        spec_line="$(assistant_phase_latest_spec_review_pass_line "$task_file" || true)"
+        quality_line="$(assistant_phase_quality_review_after_line "$task_file" "$spec_line" || true)"
+        assistant_phase_review_controller_missing_reason_key "$task_file" "$quality_line"
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
+}
+
+learning_controller_reason() {
+    local task_file="$1"
+    bash -c '
+        . "$1"
+        assistant_phase_learning_missing_reason_key "$2"
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
 }
 
 make_codex_version_stub() {
@@ -165,9 +197,13 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     _today=$(date +%Y-%m-%d)
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
@@ -765,11 +801,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
     _today=$(date +%Y-%m-%d)
@@ -864,11 +902,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
     _today=$(date +%Y-%m-%d)
@@ -910,11 +950,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
     _today=$(date +%Y-%m-%d)
@@ -959,11 +1001,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
     _today=$(date +%Y-%m-%d)
@@ -1006,11 +1050,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     _today=$(date +%Y-%m-%d)
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
@@ -1058,11 +1104,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
 {"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"old-cm"}
@@ -1116,11 +1164,13 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
     cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
 {"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"cm-1"}
@@ -2271,6 +2321,38 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: Claude, DOCUMENTING small without Learning Controller → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: small
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Found: 0 must-fix, 0 should-fix
+### Final result
+- Result: CLEAN
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"small\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, small DOCUMENTING task should not require Learning Controller; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
 if test_start "stop-review: Claude, DOCUMENTING medium no plan → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -2311,7 +2393,7 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, DOCUMENTING medium missing rubric → blocks"; then
+if test_start "stop-review: Claude, DOCUMENTING medium missing review round → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -2336,15 +2418,15 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing rubric scores"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing_review_round"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected medium task to block without rubric scores"
+        fail "exit=$HOOK_EXIT, expected medium task to block without review round"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, DOCUMENTING medium low weighted score → blocks"; then
+if test_start "stop-review: Claude, DOCUMENTING medium missing_rubric_scores despite stale previous Rubric → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -2361,26 +2443,34 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
-- Rubric: correctness 2.5, code_quality 2.5, architecture 2.5, security 2.5, test_coverage 2.5
-- Weighted: 2.50
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
 ### Final result
 - Result: CLEAN
+- Score progression: 3.80->4.00
 TASK
     run_hook stop-review.sh claude
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "below minimum threshold"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing_rubric_scores"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected medium task to block on low weighted score"
+        fail "exit=$HOOK_EXIT, expected stop-review to surface missing_rubric_scores; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, DOCUMENTING medium valid completion → allows stop"; then
-    mkdir -p "$TEST_PROJECT/.claude"
+if test_start "stop-review: Claude, DOCUMENTING medium missing Learning Controller → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
 Status: DOCUMENTING
@@ -2396,13 +2486,252 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 TASK
-    mkdir -p "$TEST_AGENT_HOME/.claude/memory/metrics"
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no_learning_controller"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium DOCUMENTING task to block without Learning Controller; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium missing Learning Controller trend → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+### Learning Controller
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: No durable lesson was identified.
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing_memory_trend_checked"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium DOCUMENTING task to block without memory trend; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium saved Learning Controller without persistence evidence → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - memory_trend: local memory search - similar review-loop gaps were seen before.
+- Review findings considered:
+  - none: quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: durable_saved
+- Persistence evidence: N/A
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing_persistence_evidence"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected saved Learning Controller decision to require persistence evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium weighted 3.50 CLEAN → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
+- Weighted: 3.50
+### Final result
+- Result: CLEAN
+- Score progression: 3.50
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "weighted_score_below_pass"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block on weighted_score_below_pass"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium inflated weighted score → blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 1.0, code_quality 1.0, architecture 1.0, security 1.0, test_coverage 1.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "mismatched weighted score"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected medium task to block on mismatched weighted score; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium valid score progression → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
     _today=$(date +%Y-%m-%d)
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
 
@@ -2410,7 +2739,1713 @@ TASK
     if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, should allow DOCUMENTING medium task when consolidated stop gates are satisfied"
+        fail "exit=$HOOK_EXIT, should allow DOCUMENTING medium task with valid score progression; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium ignores later non-review Weighted text"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final Result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+### Notes
+- Weighted: 3.00
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, later non-review Weighted text should not block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium skipped Learning Controller with no-save rationale → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, medium DOCUMENTING task should allow valid skipped Learning Controller; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium stale Learning Controller before current Final Result blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no_learning_controller"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stale Learning Controller before current Final Result should block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium Final Result heading with valid Learning Controller allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final Result
+- Result: CLEAN
+- Score progression: 4.00
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, medium DOCUMENTING task should allow uppercase Final Result heading; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller empty review_finding blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - review_finding:
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: No durable lesson was identified.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_learning_evidence_reviewed" ]]; then
+        pass
+    else
+        fail "expected missing_learning_evidence_reviewed, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller placeholder review_finding blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - review_finding: TBD
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: No durable lesson was identified.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_learning_evidence_reviewed" ]]; then
+        pass
+    else
+        fail "expected missing_learning_evidence_reviewed, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller bracket placeholder review_finding value blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - review_finding: [source reference] - [summary]
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: No durable lesson was identified.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_learning_evidence_reviewed" ]]; then
+        pass
+    else
+        fail "expected missing_learning_evidence_reviewed, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller lesson evidence label blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - lesson: Quality Review #2 finding was considered for a durable lesson.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: No durable lesson was identified.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_learning_evidence_reviewed" ]]; then
+        pass
+    else
+        fail "expected missing_learning_evidence_reviewed, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller free-form considered item allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - review_finding: Quality Review #2 finding was assessed for durability.
+- Review findings considered:
+  - Quality Review #2 finding considered for durable lesson and skipped as task-local
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller durable_saved concrete persistence allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - memory_trend: local memory search found a reusable review-controller lesson.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: durable_saved
+- Persistence evidence: memory_add_insight stored review-controller lesson under local memory graph.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller durable_saved bracket persistence blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - memory_trend: local memory search found a reusable review-controller lesson.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: durable_saved
+- Persistence evidence: [memory_reflect/memory_add_insight/backend evidence when saved or updated, else N/A]
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_persistence_evidence" ]]; then
+        pass
+    else
+        fail "expected missing_persistence_evidence, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller bracket no-save rationale blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - none: no durable evidence surfaced during this task.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: [required when no durable write occurred; do not use ad hoc markdown as cross-session memory when backend is available]
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_no_save_rationale" ]]; then
+        pass
+    else
+        fail "expected missing_no_save_rationale, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller bracket review considered blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - review_finding: Quality Review #2 finding was assessed for durability.
+- Review findings considered:
+  - [finding summary and lesson decision, or none-with-reason]
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_review_findings_considered" ]]; then
+        pass
+    else
+        fail "expected missing_review_findings_considered, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller bracket build failure considered blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - build_test_failure: Focused hook test failed before parser fix.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - [failure summary and lesson decision, or none-with-reason]
+- User corrections considered:
+  - none: no user corrections were received.
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_build_test_failures_considered" ]]; then
+        pass
+    else
+        fail "expected missing_build_test_failures_considered, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Learning Controller bracket user correction considered blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+### Learning Controller
+- Memory trend checked: checked
+- Learning evidence reviewed:
+  - user_correction: User corrected the review controller behavior.
+- Review findings considered:
+  - none: latest quality review was clean.
+- Build/test failures considered:
+  - none: no build or test failures were reported.
+- User corrections considered:
+  - [correction summary and lesson decision, or none-with-reason]
+- Durable lesson decision: skipped_not_durable
+- Persistence evidence: N/A
+- No-save rationale: Reviewed evidence was task-local and not durable.
+TASK
+    helper_reason=$(learning_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_user_corrections_considered" ]]; then
+        pass
+    else
+        fail "expected missing_user_corrections_considered, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium weighted 999.00 blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 999.00
+### Final result
+- Result: CLEAN
+- Score progression: 999.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_weighted_score" ]]; then
+        pass
+    else
+        fail "expected missing_weighted_score, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium inflated weighted score blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 1.0, code_quality 1.0, architecture 1.0, security 1.0, test_coverage 1.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_weighted_score" ]]; then
+        pass
+    else
+        fail "expected missing_weighted_score, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium final weighted 3.50 with CLEAN blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
+- Weighted: 3.50
+### Final result
+- Result: CLEAN
+- Score progression: 3.50
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "weighted_score_below_pass" ]]; then
+        pass
+    else
+        fail "expected weighted_score_below_pass, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium latest round without Rubric blocks despite stale previous Rubric"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_rubric_scores" ]]; then
+        pass
+    else
+        fail "expected missing_rubric_scores, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium CLEAN after latest round with 1 must-fix blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
+- Weighted: 4.10
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: -0.10
+- Drift check: REGRESSION
+### Final result
+- Result: CLEAN
+- Score progression: 4.10->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "unresolved_findings" ]]; then
+        pass
+    else
+        fail "expected unresolved_findings, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium missing Score progression blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium placeholder Score progression blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: N/A
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium banana Score progression blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: banana
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 single Score progression blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium Score progression final mismatch blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->3.90
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium Score progression out-of-range score blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 6.00->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 without actual prior Quality Review blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_delta_from_previous" ]]; then
+        pass
+    else
+        fail "expected missing_delta_from_previous, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium Score progression observed sequence mismatch blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 1.00->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_score_progression" ]]; then
+        pass
+    else
+        fail "expected missing_score_progression, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 missing Drift check blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+### Final result
+- Result: CLEAN
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_drift_check" ]]; then
+        pass
+    else
+        fail "expected missing_drift_check, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 bananas Delta from previous blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: bananas
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_delta_from_previous" ]]; then
+        pass
+    else
+        fail "expected missing_delta_from_previous, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 contradictory Delta from previous blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.5, code_quality 4.5, architecture 4.5, security 4.5, test_coverage 4.5
+- Weighted: 4.50
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: REGRESSION
+### Final result
+- Result: CLEAN
+- Score progression: 4.50->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_delta_from_previous" ]]; then
+        pass
+    else
+        fail "expected missing_delta_from_previous, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 placeholder Drift check blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: TBD
+### Final result
+- Result: CLEAN
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_drift_check" ]]; then
+        pass
+    else
+        fail "expected missing_drift_check, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 improved Drift check blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: improved
+### Final result
+- Result: CLEAN
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_drift_check" ]]; then
+        pass
+    else
+        fail "expected missing_drift_check, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 same findings with GENUINE drift blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.80->4.00
+- Remaining items: one must-fix remains for a follow-up slice.
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_drift_check" ]]; then
+        pass
+    else
+        fail "expected missing_drift_check, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: medium round 2 suspicious jump with GENUINE drift blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 2.8, code_quality 2.8, architecture 2.8, security 2.8, test_coverage 2.8
+- Weighted: 2.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
+- Weighted: 4.10
+- Delta from previous: +1.30
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 2.80->4.10
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_drift_check" ]]; then
+        pass
+    else
+        fail "expected missing_drift_check, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS at round 2 without rationale blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
+- Weighted: 3.90
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_remaining_rationale" ]]; then
+        pass
+    else
+        fail "expected missing_remaining_rationale, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS with bracket Remaining items blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
+- Weighted: 3.90
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.90->4.00
+- Remaining items: [specific remaining items and owner]
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_remaining_rationale" ]]; then
+        pass
+    else
+        fail "expected missing_remaining_rationale, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS with bracket Blocker blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
+- Weighted: 3.90
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.90->4.00
+- Blocker: [blocker evidence and owner]
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_remaining_rationale" ]]; then
+        pass
+    else
+        fail "expected missing_remaining_rationale, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS with concrete rationale allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
+- Weighted: 3.90
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.90->4.00
+- Blocker: Reviewer found remaining test coverage work assigned to the next slice.
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS at round 10 without rationale blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.1, code_quality 3.1, architecture 3.1, security 3.1, test_coverage 3.1
+- Weighted: 3.10
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.2, code_quality 3.2, architecture 3.2, security 3.2, test_coverage 3.2
+- Weighted: 3.20
+### Quality Review #3
+- Round: 3 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.3, code_quality 3.3, architecture 3.3, security 3.3, test_coverage 3.3
+- Weighted: 3.30
+### Quality Review #4
+- Round: 4 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.4, code_quality 3.4, architecture 3.4, security 3.4, test_coverage 3.4
+- Weighted: 3.40
+### Quality Review #5
+- Round: 5 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
+- Weighted: 3.50
+### Quality Review #6
+- Round: 6 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.6, code_quality 3.6, architecture 3.6, security 3.6, test_coverage 3.6
+- Weighted: 3.60
+### Quality Review #7
+- Round: 7 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.7, code_quality 3.7, architecture 3.7, security 3.7, test_coverage 3.7
+- Weighted: 3.70
+### Quality Review #8
+- Round: 8 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #9
+- Round: 9 of 10
+- Found this round: 2 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
+- Weighted: 3.90
+### Quality Review #10
+- Round: 10 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: HAS_REMAINING_ITEMS
+- Score progression: 3.10->3.20->3.30->3.40->3.50->3.60->3.70->3.80->3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "missing_remaining_rationale" ]]; then
+        pass
+    else
+        fail "expected missing_remaining_rationale, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: round 11 of 10 blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #11
+- Round: 11 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.10
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.90->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "round_overflow" ]]; then
+        pass
+    else
+        fail "expected round_overflow, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Quality Review heading and round mismatch blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #2
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "round_overflow" ]]; then
+        pass
+    else
+        fail "expected round_overflow, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: valid medium completion with round 2 of 10, drift check, score progression, weighted 4.00 allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE (findings decreased 1->0)
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: valid rounded weighted formula with aliases allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness: 4.1; quality 4.2, architecture=4.3; security: 4.4; coverage 4.5
+- Weighted: 4.27
+### Final result
+- Result: CLEAN
+- Score progression: 4.27
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: valid medium completion with unicode Score progression allows"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 1 should-fix, 0 nits
+- Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
+- Weighted: 3.50
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.85, code_quality 3.85, architecture 3.85, security 3.85, test_coverage 3.85
+- Weighted: 3.85
+- Delta from previous: +0.35
+- Drift check: GENUINE
+### Quality Review #3
+- Round: 3 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
+- Weighted: 4.10
+- Delta from previous: +0.25
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.50→3.85→4.10
+TASK
+    helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -2468,6 +4503,49 @@ TASK
         pass
     else
         fail "exit=$HOOK_EXIT, should allow DOCUMENTING medium task when harness gates are satisfied"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "harness-gate: Claude, latest Quality Review missing Rubric blocks despite stale previous Rubric"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
+- Weighted: 3.80
+### Quality Review #2
+- Round: 2 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Weighted: 4.00
+- Delta from previous: +0.20
+- Drift check: GENUINE
+### Final result
+- Result: CLEAN
+- Score progression: 3.80->4.00
+TASK
+    run_hook harness-gate.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing rubric scores"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected latest Quality Review without rubric to block; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -4539,9 +6617,13 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
 ### Final result
 - Result: CLEAN
+- Score progression: 4.00
 EOF
     rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
     echo '{"prompt": "document results", "hook_event_name": "UserPromptSubmit"}' | \

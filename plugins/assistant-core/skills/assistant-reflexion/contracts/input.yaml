@@ -32,3 +32,92 @@ fields:
     description: "Type of task (e.g., feature, bugfix, refactor)"
     validation: "Non-empty string when provided"
     on_missing: infer
+
+  - name: task_size
+    type: enum
+    required: false
+    description: "Workflow size for deciding whether the Learning Controller evidence is required"
+    validation: "Must be a supported workflow size when provided"
+    on_missing: infer
+    enum_values: [small, medium, large, mega]
+
+  - name: memory_trend_status
+    type: enum
+    required: false
+    condition: "When action is reflect"
+    description: "Whether memory trend evidence was checked before reflection"
+    validation: "Use checked only when the configured trend/backend query actually ran"
+    on_missing: infer
+    enum_values: [checked, backend_unavailable, policy_disallowed, not_configured, not_applicable]
+
+  - name: review_findings
+    type: object[]
+    required: false
+    condition: "When action is reflect and review evidence exists; medium+ workflow callers pass an empty list when none exist"
+    description: "Review findings considered as possible durable lessons"
+    validation: "Each entry identifies the source review entry and a concrete lesson-bearing finding, not generic review completion"
+    on_missing: skip
+    object_fields:
+      - name: source_reference
+        type: string
+        required: true
+        description: "Review Log heading, reviewer result, file/line, or equivalent source reference"
+        on_missing: fail
+      - name: summary
+        type: string
+        required: true
+        description: "Concrete finding summary"
+        on_missing: fail
+      - name: lesson_candidate
+        type: string
+        required: true
+        description: "Potential reusable lesson or explicit none"
+        on_missing: fail
+
+  - name: build_test_failures
+    type: object[]
+    required: false
+    condition: "When action is reflect and build/test failures occurred; medium+ workflow callers pass an empty list when none exist"
+    description: "Build or test failures considered as possible durable lessons"
+    validation: "Each entry identifies a failure and what it teaches; routine passing test output is not a lesson"
+    on_missing: skip
+    object_fields:
+      - name: source_reference
+        type: string
+        required: true
+        description: "Builder/Tester result, command, failure log reference, or equivalent source"
+        on_missing: fail
+      - name: summary
+        type: string
+        required: true
+        description: "Failure summary"
+        on_missing: fail
+      - name: lesson_candidate
+        type: string
+        required: true
+        description: "Potential reusable lesson or explicit none"
+        on_missing: fail
+
+  - name: user_corrections
+    type: object[]
+    required: false
+    condition: "When action is reflect and the user corrected behavior, scope, wording, or process; medium+ workflow callers pass an empty list when none exist"
+    description: "User corrections considered as high-priority durable lessons"
+    validation: "Each entry summarizes the correction without storing secrets or sensitive personal data"
+    on_missing: skip
+    object_fields:
+      - name: source_reference
+        type: string
+        required: true
+        description: "User message, review note, or correction reference"
+        on_missing: fail
+      - name: summary
+        type: string
+        required: true
+        description: "Correction summary safe for memory consideration"
+        on_missing: fail
+      - name: lesson_candidate
+        type: string
+        required: true
+        description: "Potential durable rule/preference/insight or explicit none"
+        on_missing: fail

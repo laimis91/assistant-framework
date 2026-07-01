@@ -119,17 +119,17 @@ Small tasks get lightweight treatment. Large tasks get full ceremony. The framew
 **Not one pass. An autonomous loop.**
 
 ```
-Round 1: Dispatch fresh Reviewer → finds 4 issues (80%+ confidence)
+Round 1: Dispatch fresh Reviewer → finds 4 evidence-backed issues
          Fix all must-fix and should-fix
          Run tests → pass
 
 Round 2: Dispatch NEW Reviewer (fresh context)
          Previously-fixed list provided → no re-reports
-         Finds 1 more issue (85%+ confidence)
+         Finds 1 more high-confidence should-fix
          Fix → test → pass
 
 Round 3: Dispatch NEW Reviewer
-         Clean. No findings above nit level.
+         Clean. Speculative concerns stay in Observations.
 
 Result: CLEAN after 3 rounds.
 ```
@@ -402,7 +402,7 @@ Separation of concerns at the agent level.
 |---|---|
 | Skills as suggestions | Skills as **mandatory enforcement** |
 | Memory as chat history | Memory as **queryable knowledge graph + FTS5** |
-| One-shot review | **Autonomous review loop** (max 5 rounds) |
+| One-shot review | **Autonomous review loop** (max 10 rounds) |
 | Generic patterns | **Your project's patterns**, learned over time |
 | Reactive only | **Self-improving** — reflexion after every task |
 | Single agent | **Multi-agent orchestration** with role separation |

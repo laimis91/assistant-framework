@@ -15,12 +15,13 @@ triggers:
 
 | File | Purpose |
 |---|---|
-| [`contracts/input.yaml`](contracts/input.yaml) | action (reflect/recall/stats/consolidate), task_description, project_type, task_type |
-| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, lessons[], insights_file, recalled_lessons[] |
+| [`contracts/input.yaml`](contracts/input.yaml) | action (reflect/recall/stats/consolidate), task_description, project_type, task_type, review/build/user-correction evidence |
+| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, lessons[], evidence reviewed, persistence/no-save decision, recalled_lessons[] |
 
 - `task_description` is required for reflect; `project_type` and `task_type` are inferred when absent
-- `lessons` entries include lesson, confidence (high/medium/low), and applies_to
+- `lessons` entries include lesson, confidence (high/medium/low), applies_to, and evidence source
 - `recalled_lessons` entries include lesson, confidence, date, and project
+- Reflection outputs include persistence evidence when memory was written, or no-save rationale when storage was skipped, unavailable, disallowed, or refused
 
 Cross-task learning system where insights from task N improve performance on task N+1.
 
@@ -74,6 +75,8 @@ Gather:
 
 If `memory_trend` MCP tool is available, call it with the current project name to surface mid-task signals (corrections, approvals, frustrations, pivots) captured during this session. Incorporate these into the self-assessment — they are objective evidence of what worked and what didn't.
 
+For medium+ workflow completion, consume the `### Learning Controller` fields from the task journal or equivalent workflow output. Treat Review Log findings, build/test failures, and user corrections as the highest-value lesson sources. Use routine progress and completed checklist items only as context, never as the lesson itself.
+
 ### Step 2: Self-Assess
 
 Ask yourself honestly:
@@ -89,6 +92,8 @@ Ask yourself honestly:
 - Wasted effort (wrong approach, unnecessary code, late discoveries)
 - Things that required user correction
 - Plans that didn't survive contact with reality
+- Review findings that exposed a repeated or preventable mistake
+- Build/test failures that exposed a missing check, bad assumption, or fragile workflow
 
 **What was surprising or non-obvious?**
 - Gotchas specific to this project/technology
@@ -108,6 +113,9 @@ Convert observations into actionable rules:
 - "Things went well" (too vague)
 - "I should have done better" (not actionable)
 - "The code was complex" (not a lesson)
+- "Completed slice 3" (task progress, not durable learning)
+
+For lessons from review findings, build/test failures, or user corrections, include the source evidence in the lesson entry. If no evidence-backed durable lesson exists, return `skipped_not_durable` with a no-save rationale instead of forcing a memory write.
 
 ### Step 4: Record
 
@@ -138,7 +146,9 @@ Store the reflection using memory system:
 - First approach worked: [yes/no]
 ```
 
-Use `memory_reflect` MCP tool to record the reflexion in the knowledge graph.
+Use `memory_reflect` MCP tool to record the reflexion in the knowledge graph when the configured local memory backend is available and policy-approved.
+
+If the backend is unavailable or policy-disallowed, do not write ad hoc markdown as cross-session memory. Return the reflection with `persistence_decision: backend_unavailable` or `policy_disallowed` and a `no_save_rationale`. If the only candidates are routine task progress, obvious repo facts, or stale temporary state, return `persistence_decision: skipped_not_durable`.
 
 ### Step 5: Update Strategy Profile
 
@@ -247,9 +257,11 @@ Lesson created (confidence: 0.5)
 
 Return:
 - **Action taken** - reflected, recalled lessons, updated strategy, reported stats, or consolidated.
-- **Lessons** - actionable lessons with confidence and where they apply.
-- **Evidence** - task context, review findings, user corrections, or memory signals behind each lesson.
-- **Artifacts** - memory/reflexion/strategy entries written, or "none" if read-only.
+- **Memory trend status** - checked, backend_unavailable, policy_disallowed, not_configured, or not_applicable.
+- **Lessons** - actionable lessons with confidence, where they apply, and source evidence.
+- **Evidence reviewed** - task context, review findings, build/test failures, user corrections, and memory signals considered.
+- **Persistence decision** - durable_saved, durable_updated, skipped_not_durable, backend_unavailable, policy_disallowed, or refused_sensitive.
+- **Artifacts** - memory/reflexion/strategy entries written, or "none" with no-save rationale.
 - **Next use** - how the lessons should influence future discovery, planning, build, or review work.
 - **Status** - reflected, recalled, consolidated, or blocked by missing context.
 
@@ -257,7 +269,8 @@ Return:
 
 - Stop before recording memory when a lesson is not actionable or evidence-backed.
 - Stop and refuse to store secrets, credentials, or sensitive personal data.
-- If memory tools are unavailable, report the reflection result but mark persistence as blocked.
+- If memory tools are unavailable or policy-disallowed, report the reflection result but mark persistence as backend_unavailable or policy_disallowed with no-save rationale.
+- Stop before treating ad hoc markdown as durable persistence when a configured backend is available.
 
 ## Visibility
 
@@ -275,3 +288,4 @@ Following the "invisible workflow" principle:
 - **Actionable over observational** — "X was slow" is observation; "next time do Y instead of X" is actionable
 - **Don't over-capture** — 2-3 good lessons per task beats 10 vague ones
 - **Corrections are highest priority** — when the user corrects you, that's a guaranteed high-confidence lesson
+- **Mistakes beat progress** — prefer lessons from review findings, build/test failures, and user corrections over routine task completion notes

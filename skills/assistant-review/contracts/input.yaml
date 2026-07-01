@@ -162,6 +162,7 @@ fields:
       - name: fixed_in_round
         type: int
         required: true
+        validation: ">= 1 and <= 10"
 
 # Validation behavior:
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required before entering the loop

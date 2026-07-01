@@ -49,7 +49,49 @@ artifacts:
     required: true
     description: "Whether the content qualified for durable memory"
     enum_values: [durable_saved, durable_updated, durable_deleted, durable_found, skipped_not_durable, refused_sensitive, backend_unavailable, policy_disallowed]
+    validation: "Review-derived lessons use durable_saved/durable_updated only when evidence-backed and useful across sessions; routine progress uses skipped_not_durable"
     on_fail: "Classify the save/search result against the memory durability and sensitivity rules"
+
+  - name: lesson_decision
+    type: object
+    required: conditional
+    condition: "When the memory action evaluates a lesson from review findings, build/test failures, user corrections, or workflow Learning Controller evidence"
+    description: "Evidence-backed durable-save or noise-skip decision for a candidate lesson"
+    validation: "Must connect the candidate lesson to source evidence, state the save/skip decision, and explain cross-session value or why it is noise"
+    on_fail: "Record evidence_source, source_reference, lesson_candidate, decision, rationale, and cross_session_value before returning a review-derived memory result"
+    object_fields:
+      - name: evidence_source
+        type: enum
+        required: true
+        description: "Where the candidate lesson came from"
+        enum_values: [review_finding, build_test_failure, user_correction, memory_trend, other]
+        on_missing: fail
+      - name: source_reference
+        type: string
+        required: true
+        description: "Review Log entry, Builder/Tester result, user correction, memory trend, or equivalent reference"
+        on_missing: fail
+      - name: lesson_candidate
+        type: string
+        required: true
+        description: "Candidate lesson being saved or skipped"
+        on_missing: fail
+      - name: decision
+        type: enum
+        required: true
+        description: "Durability decision for this candidate"
+        enum_values: [durable_saved, durable_updated, skipped_not_durable, backend_unavailable, policy_disallowed, refused_sensitive]
+        on_missing: fail
+      - name: rationale
+        type: string
+        required: true
+        description: "Why the candidate was saved, updated, skipped, blocked, or refused"
+        on_missing: fail
+      - name: cross_session_value
+        type: string
+        required: true
+        description: "How this lesson will change future behavior, or why it has no durable value"
+        on_missing: fail
 
   - name: confirmation
     type: string

@@ -114,6 +114,114 @@
           "secret was stored"
         ]
       }
+    },
+    {
+      "id": "save-review-derived-lesson-with-evidence",
+      "title": "Save review-derived lesson with evidence",
+      "category": "memory_review_learning_contract",
+      "purpose": "Checks that a durable lesson from a review finding is saved only with source evidence, backend evidence, and cross-session value.",
+      "prompt": "Save this review-derived lesson: during Assistant Framework contract work, a reviewer found I forgot to update the task journal template after changing the workflow output contract. Future workflow contract edits should update the task journal template in the same slice.",
+      "setup_context": [
+        "The assistant-memory skill instructions are active.",
+        "The content comes from a workflow Learning Controller review finding.",
+        "A configured local memory backend is available and policy-approved.",
+        "The content contains no secrets or sensitive data."
+      ],
+      "expected_behavior": [
+        "Resolves action as save and selects an appropriate durable entity type.",
+        "Identifies evidence_source as review_finding and records the source_reference.",
+        "Uses the configured local memory backend instead of ad hoc markdown.",
+        "Sets durability_decision to durable_saved or durable_updated.",
+        "Returns lesson_decision with lesson_candidate, rationale, and cross_session_value.",
+        "Includes confirmation and backend/tool evidence."
+      ],
+      "pass_criteria": [
+        "The response identifies action as save.",
+        "The response includes lesson_decision.",
+        "The response records evidence_source review_finding.",
+        "The response includes durability_decision durable_saved or durable_updated.",
+        "The response explains cross_session_value.",
+        "The response does not save only to markdown."
+      ],
+      "fail_signals": [
+        "Saves the lesson without source evidence.",
+        "Writes only to markdown despite an available backend.",
+        "Treats the review finding as routine task progress.",
+        "Omits storage backend or confirmation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action_taken",
+          "save",
+          "lesson_decision",
+          "evidence_source",
+          "review_finding",
+          "source_reference",
+          "durability_decision",
+          "durable_saved",
+          "cross_session_value",
+          "storage_backend",
+          "confirmation"
+        ],
+        "forbidden_substrings": [
+          "Saved only to markdown",
+          "No source evidence",
+          "routine task progress",
+          "No memory evidence"
+        ]
+      }
+    },
+    {
+      "id": "skip-routine-progress-from-learning-controller",
+      "title": "Skip routine progress from Learning Controller",
+      "category": "memory_review_learning_contract",
+      "purpose": "Checks that routine workflow progress is explicitly skipped instead of saved as durable memory.",
+      "prompt": "The Learning Controller candidate is: slice s3 completed and tests passed. Save it if useful.",
+      "setup_context": [
+        "The assistant-memory skill instructions are active.",
+        "The candidate comes from workflow completion notes rather than a review finding, build/test failure, or user correction.",
+        "A configured local memory backend is available and policy-approved."
+      ],
+      "expected_behavior": [
+        "Classifies the candidate as routine task progress with no durable cross-session value.",
+        "Does not call durable save tools for the candidate.",
+        "Sets action_taken to no_op or blocked only if required by adapter constraints.",
+        "Sets durability_decision to skipped_not_durable.",
+        "Returns lesson_decision with rationale and cross_session_value explaining why the candidate is noise.",
+        "Does not write an ad hoc markdown memory."
+      ],
+      "pass_criteria": [
+        "The response identifies action as no_op or explicitly skipped.",
+        "The response includes durability_decision skipped_not_durable.",
+        "The response includes lesson_decision rationale.",
+        "The response explains that routine progress should not be saved.",
+        "The response includes confirmation."
+      ],
+      "fail_signals": [
+        "Saves slice completion as durable memory.",
+        "Uses markdown-only persistence.",
+        "Omits the skip rationale.",
+        "Treats passing tests as a durable lesson by itself."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action_taken",
+          "no_op",
+          "durability_decision",
+          "skipped_not_durable",
+          "lesson_decision",
+          "rationale",
+          "cross_session_value",
+          "routine progress",
+          "confirmation"
+        ],
+        "forbidden_substrings": [
+          "durable_saved",
+          "Saved only to markdown",
+          "slice completion saved",
+          "passing tests are durable"
+        ]
+      }
     }
   ]
 }

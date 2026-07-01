@@ -131,7 +131,7 @@ round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 5:
+while round <= 10:
   REVIEW   → dispatch fresh read-only reviewer with diff + previously_fixed
   EVALUATE → check rubric score + findings → PASS/REFINE/PIVOT
   FIX      → orchestrator fixes all must-fix and should-fix items
@@ -139,15 +139,15 @@ while round <= 5:
   round += 1
 ```
 
-### Confidence threshold progression
+### Finding filter policy
 
-Early rounds cast a wide net; later rounds demand higher certainty:
+Each round reports only findings with file/line evidence, concrete impact, and the smallest useful fix. Speculative or low-evidence concerns go into Observations and do not block completion.
 
-| Rounds | Threshold | Rationale |
+| Rounds | Blocking bar | Rationale |
 |---|---|---|
-| 1–2 | 80%+ | Catch obvious issues |
-| 3–4 | 85%+ | Only report high-confidence findings |
-| 5 | 90%+ | Only report issues you're virtually certain about |
+| 1-7 | Evidence-backed must-fix or should-fix findings | Catch actionable issues without letting speculation drive the loop |
+| 8-9 | Must-fix or high-confidence should-fix findings | Reduce late-round noise while preserving real blockers |
+| 10 | Terminal round; report remaining blockers as remaining items | Preserve the hard max-round cap and avoid round 11 |
 
 This prevents late-round noise from prolonging the loop unnecessarily.
 
@@ -210,7 +210,7 @@ The framework uses one consolidated Stop hook in strict profiles:
 
 1. **Plan gate:** Task journal has `Plan approval: yes` or `PHASE: PLAN COMPLETE (approved)` → blocks if missing
 2. **Rubric gate:** Task journal has `Rubric:` and `Weighted:` lines in review entries → blocks if missing (medium+ only)
-3. **Score gate:** Latest weighted score ≥ 3.0 → blocks if below
+3. **Score gate:** Latest weighted score ≥ 4.0 → blocks if below
 
 ### Size-aware enforcement
 

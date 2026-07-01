@@ -140,11 +140,13 @@ assistant_phase_quality_review_after_line() {
             spec_pass_line += 0
         }
         spec_pass_line > 0 && NR > spec_pass_line && /^### Quality Review #[0-9]+/ {
-            print NR
+            latest = NR
             found = 1
-            exit
         }
         END {
+            if (found) {
+                print latest
+            }
             exit found ? 0 : 1
         }
     ' "$file" 2>/dev/null
@@ -168,18 +170,973 @@ assistant_phase_final_result_after_line() {
     ' "$file" 2>/dev/null
 }
 
-assistant_phase_review_complete() {
+assistant_phase_review_block_after_line() {
     local file="$1"
-    local spec_pass_line
-    local quality_review_line
+    local start_line="$2"
+    [[ -n "$start_line" ]] || return 1
+    awk -v start_line="$start_line" '
+        BEGIN { start_line += 0 }
+        NR == start_line { in_block = 1; next }
+        in_block && /^### / { exit }
+        in_block { print }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_final_result_block_after_line() {
+    local file="$1"
+    local quality_review_line="$2"
+    [[ -n "$quality_review_line" ]] || return 1
+    awk -v quality_review_line="$quality_review_line" '
+        BEGIN { quality_review_line += 0 }
+        NR <= quality_review_line { next }
+        tolower($0) ~ /^### final result/ { in_final = 1; next }
+        in_final && /^### / { exit }
+        in_final { print }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_final_result_heading_line_after_line() {
+    local file="$1"
+    local quality_review_line="$2"
+    [[ -n "$quality_review_line" ]] || return 1
+    awk -v quality_review_line="$quality_review_line" '
+        BEGIN { quality_review_line += 0 }
+        NR <= quality_review_line { next }
+        tolower($0) ~ /^### final result/ {
+            print NR
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_quality_review_heading_round() {
+    local file="$1"
+    local quality_review_line="$2"
+    [[ -n "$quality_review_line" ]] || return 1
+    awk -v quality_review_line="$quality_review_line" '
+        BEGIN { quality_review_line += 0 }
+        NR == quality_review_line && /^### Quality Review #[0-9]+/ {
+            sub(/^### Quality Review #/, "", $0)
+            print $0 + 0
+            found = 1
+        }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_previous_quality_review_line_before_line() {
+    local file="$1"
+    local quality_review_line="$2"
+    local minimum_line="${3:-0}"
+    [[ -n "$quality_review_line" ]] || return 1
+    awk -v quality_review_line="$quality_review_line" -v minimum_line="$minimum_line" '
+        BEGIN {
+            quality_review_line += 0
+            minimum_line += 0
+        }
+        NR > minimum_line && NR < quality_review_line && /^### Quality Review #[0-9]+/ {
+            latest = NR
+            found = 1
+        }
+        END {
+            if (found) {
+                print latest
+            }
+            exit found ? 0 : 1
+        }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_quality_review_lines_after_line_until_line() {
+    local file="$1"
+    local minimum_line="$2"
+    local maximum_line="$3"
+    [[ -n "$minimum_line" && -n "$maximum_line" ]] || return 1
+    awk -v minimum_line="$minimum_line" -v maximum_line="$maximum_line" '
+        BEGIN {
+            minimum_line += 0
+            maximum_line += 0
+        }
+        NR > minimum_line && NR <= maximum_line && /^### Quality Review #[0-9]+/ {
+            print NR
+            found = 1
+        }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_quality_review_observed_weighted_sequence() {
+    local file="$1"
+    local minimum_line="$2"
+    local maximum_line="$3"
+    local expected_round_count="$4"
+    local review_line heading_round block weighted findings
+    local expected_round=1
+    local found=0
+    local sequence=""
+
+    while IFS= read -r review_line; do
+        [[ -n "$review_line" ]] || continue
+        found=1
+
+        heading_round="$(assistant_phase_quality_review_heading_round "$file" "$review_line" || true)"
+        if [[ -z "$heading_round" || "$heading_round" -ne "$expected_round" ]]; then
+            return 1
+        fi
+
+        block="$(assistant_phase_review_block_after_line "$file" "$review_line" || true)"
+        weighted="$(assistant_phase_review_weighted_from_block "$block" || true)"
+        findings="$(assistant_phase_review_findings_count_from_block "$block" || true)"
+        if [[ -z "$weighted" || -z "$findings" ]]; then
+            return 1
+        fi
+
+        if [[ -z "$sequence" ]]; then
+            sequence="$weighted"
+        else
+            sequence="${sequence}->${weighted}"
+        fi
+        expected_round=$((expected_round + 1))
+    done < <(assistant_phase_quality_review_lines_after_line_until_line "$file" "$minimum_line" "$maximum_line" || true)
+
+    [[ "$found" -eq 1 ]] || return 1
+    [[ $((expected_round - 1)) -eq "$expected_round_count" ]] || return 1
+    printf '%s\n' "$sequence"
+}
+
+assistant_phase_value_is_noneish() {
+    local value="$1"
+    value="$(printf '%s' "$value" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [[ -z "$value" ]] && return 0
+    [[ "$value" =~ ^(\[\]|\.\.\.|placeholder|PLACEHOLDER|none|None|NONE|n/a|N/A|not_applicable|not[[:space:]]applicable|missing|todo|TODO|tbd|TBD)([[:space:]]|$) ]]
+}
+
+assistant_phase_value_is_bracket_placeholder() {
+    local value="$1"
+    value="$(assistant_phase_trim_value "$value")"
+    [[ -n "$value" ]] || return 1
+    awk -v value="$value" '
+        BEGIN {
+            offset = 1
+            while (match(substr(value, offset), /\[[^][]+\]/)) {
+                close_index = offset + RSTART + RLENGTH - 2
+                after = substr(value, close_index + 1, 1)
+                if (after != "(") {
+                    exit 0
+                }
+                offset = close_index + 2
+            }
+            exit 1
+        }
+    '
+}
+
+assistant_phase_trim_value() {
+    printf '%s' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+assistant_phase_value_after_colon() {
+    local line="$1"
+    line="${line#*:}"
+    assistant_phase_trim_value "$line"
+}
+
+assistant_phase_unsigned_decimal_is_valid() {
+    local value="$1"
+    value="$(assistant_phase_trim_value "$value")"
+    [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]
+}
+
+assistant_phase_signed_decimal_is_valid() {
+    local value="$1"
+    value="$(assistant_phase_trim_value "$value")"
+    [[ "$value" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]]
+}
+
+assistant_phase_decimal_in_range() {
+    local value="$1"
+    local minimum="$2"
+    local maximum="$3"
+
+    assistant_phase_unsigned_decimal_is_valid "$value" || return 1
+    awk -v value="$value" -v minimum="$minimum" -v maximum="$maximum" '
+        BEGIN { exit (value >= minimum && value <= maximum ? 0 : 1) }
+    '
+}
+
+assistant_phase_rubric_score_values() {
+    local line="$1"
+    local rubric
+
+    rubric="$(assistant_phase_value_after_colon "$line")"
+    [[ -n "$rubric" ]] || return 1
+
+    awk -v rubric="$rubric" '
+        function trim(s) {
+            sub(/^[[:space:]]+/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            gsub(/^[,;]+/, "", s)
+            gsub(/[,;]+$/, "", s)
+            return s
+        }
+        function score_is_valid(score) {
+            score = trim(score)
+            return score ~ /^[0-9]+([.][0-9]+)?$/ && score >= 0 && score <= 5
+        }
+        function mark_dimension(key, score) {
+            key = tolower(trim(key))
+            if (!score_is_valid(score)) {
+                return
+            }
+            score = trim(score)
+            if (key == "correctness") {
+                correctness_score = score
+                correctness = 1
+            } else if (key == "code_quality" || key == "quality") {
+                quality_score = score
+                quality = 1
+            } else if (key == "architecture") {
+                architecture_score = score
+                architecture = 1
+            } else if (key == "security") {
+                security_score = score
+                security = 1
+            } else if (key == "test_coverage" || key == "coverage") {
+                coverage_score = score
+                coverage = 1
+            }
+        }
+        BEGIN {
+            gsub(/[,;]/, " ", rubric)
+            count = split(rubric, tokens, /[[:space:]]+/)
+            for (i = 1; i <= count; i++) {
+                token = trim(tokens[i])
+                if (token == "" || token == "=" || token == ":") {
+                    continue
+                }
+
+                if (token ~ /^[[:alpha:]_][[:alnum:]_]*[=:][0-9]+([.][0-9]+)?$/) {
+                    split(token, pair, /[=:]/)
+                    mark_dimension(pair[1], pair[2])
+                    continue
+                }
+
+                if (token ~ /^[[:alpha:]_][[:alnum:]_]*[=:]$/) {
+                    key = substr(token, 1, length(token) - 1)
+                    if (i < count) {
+                        i++
+                        mark_dimension(key, tokens[i])
+                    }
+                    continue
+                }
+
+                if (token ~ /^[[:alpha:]_][[:alnum:]_]*$/) {
+                    next_index = i + 1
+                    if (next_index <= count && (tokens[next_index] == "=" || tokens[next_index] == ":")) {
+                        next_index++
+                    }
+                    if (next_index <= count) {
+                        mark_dimension(token, tokens[next_index])
+                        i = next_index
+                    }
+                }
+            }
+
+            if (correctness && quality && architecture && security && coverage) {
+                printf "%s\t%s\t%s\t%s\t%s\n", correctness_score, quality_score, architecture_score, security_score, coverage_score
+                exit 0
+            }
+            exit 1
+        }
+    '
+}
+
+assistant_phase_rubric_scores_are_valid() {
+    assistant_phase_rubric_score_values "$1" >/dev/null
+}
+
+assistant_phase_rubric_weighted_score_matches() {
+    local rubric_line="$1"
+    local weighted="$2"
+    local scores
+
+    scores="$(assistant_phase_rubric_score_values "$rubric_line")" || return 1
+    assistant_phase_decimal_in_range "$weighted" "0" "5" || return 1
+
+    awk -v scores="$scores" -v weighted="$weighted" '
+        BEGIN {
+            count = split(scores, parts, /\t/)
+            if (count != 5) {
+                exit 1
+            }
+            expected = (parts[1] * 0.30) + (parts[2] * 0.20) + (parts[3] * 0.20) + (parts[4] * 0.15) + (parts[5] * 0.15)
+            diff = weighted - expected
+            if (diff < 0) {
+                diff = -diff
+            }
+            exit (diff <= 0.0051 ? 0 : 1)
+        }
+    '
+}
+
+assistant_phase_review_weighted_from_block() {
+    local block="$1"
+    local weighted_line weighted
+
+    weighted_line="$(printf '%s\n' "$block" | grep -E "^[[:space:]]*-[[:space:]]Weighted:" | tail -1 || true)"
+    weighted="$(assistant_phase_value_after_colon "$weighted_line")"
+    if [[ -n "$weighted_line" ]] && assistant_phase_decimal_in_range "$weighted" "0" "5"; then
+        printf '%s\n' "$weighted"
+        return 0
+    fi
+
+    return 1
+}
+
+assistant_phase_review_findings_count_from_block() {
+    local block="$1"
+    local findings_line must_fix should_fix
+
+    findings_line="$(printf '%s\n' "$block" | grep -m1 -Ei "^[[:space:]]*-[[:space:]]Found([[:space:]]this[[:space:]]round)?:" || true)"
+    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+must-fix ]]; then
+        must_fix="${BASH_REMATCH[1]}"
+    else
+        return 1
+    fi
+    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+should-fix ]]; then
+        should_fix="${BASH_REMATCH[1]}"
+    else
+        return 1
+    fi
+
+    printf '%d\n' "$((must_fix + should_fix))"
+}
+
+assistant_phase_score_progression_is_valid() {
+    local value="$1"
+    local latest_weighted="${2:-}"
+    local round="${3:-1}"
+
+    value="$(assistant_phase_trim_value "$value")"
+    latest_weighted="$(assistant_phase_trim_value "$latest_weighted")"
+    value="${value//→/->}"
+
+    awk -v value="$value" -v latest_weighted="$latest_weighted" -v round="$round" '
+        function trim(s) {
+            sub(/^[[:space:]]+/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            return s
+        }
+        function decimal_is_valid(s) {
+            return s ~ /^[0-9]+([.][0-9]+)?$/
+        }
+        BEGIN {
+            value = trim(value)
+            latest_weighted = trim(latest_weighted)
+            round += 0
+            if (value == "" || round < 1 || !decimal_is_valid(latest_weighted) || latest_weighted < 0 || latest_weighted > 5) {
+                exit 1
+            }
+
+            count = split(value, scores, /[[:space:]]*->[[:space:]]*/)
+            if (count < 1 || (round > 1 && count < round)) {
+                exit 1
+            }
+
+            for (i = 1; i <= count; i++) {
+                score = trim(scores[i])
+                if (!decimal_is_valid(score) || score < 0 || score > 5) {
+                    exit 1
+                }
+                final_score = score
+            }
+
+            exit ((final_score + 0) == (latest_weighted + 0) ? 0 : 1)
+        }
+    '
+}
+
+assistant_phase_score_progression_previous_score() {
+    local value="$1"
+
+    value="$(assistant_phase_trim_value "$value")"
+    value="${value//→/->}"
+
+    awk -v value="$value" '
+        function trim(s) {
+            sub(/^[[:space:]]+/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            return s
+        }
+        function decimal_is_valid(s) {
+            return s ~ /^[0-9]+([.][0-9]+)?$/
+        }
+        BEGIN {
+            count = split(value, scores, /[[:space:]]*->[[:space:]]*/)
+            if (count < 2) {
+                exit 1
+            }
+            previous = trim(scores[count - 1])
+            if (!decimal_is_valid(previous) || previous < 0 || previous > 5) {
+                exit 1
+            }
+            print previous
+        }
+    '
+}
+
+assistant_phase_score_progression_matches_observed_sequence() {
+    local value="$1"
+    local observed_sequence="$2"
+
+    value="$(assistant_phase_trim_value "$value")"
+    value="${value//→/->}"
+    observed_sequence="$(assistant_phase_trim_value "$observed_sequence")"
+    observed_sequence="${observed_sequence//→/->}"
+
+    awk -v value="$value" -v observed_sequence="$observed_sequence" '
+        function trim(s) {
+            sub(/^[[:space:]]+/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            return s
+        }
+        function decimal_is_valid(s) {
+            return s ~ /^[0-9]+([.][0-9]+)?$/
+        }
+        BEGIN {
+            value = trim(value)
+            observed_sequence = trim(observed_sequence)
+            if (value == "" || observed_sequence == "") {
+                exit 1
+            }
+
+            progression_count = split(value, progression, /[[:space:]]*->[[:space:]]*/)
+            observed_count = split(observed_sequence, observed, /[[:space:]]*->[[:space:]]*/)
+            if (progression_count != observed_count) {
+                exit 1
+            }
+
+            for (i = 1; i <= observed_count; i++) {
+                score = trim(progression[i])
+                expected = trim(observed[i])
+                if (!decimal_is_valid(score) || !decimal_is_valid(expected) || score + 0 != expected + 0) {
+                    exit 1
+                }
+            }
+
+            exit 0
+        }
+    '
+}
+
+assistant_phase_delta_matches_scores() {
+    local declared_delta="$1"
+    local previous_score="$2"
+    local latest_score="$3"
+
+    assistant_phase_signed_decimal_is_valid "$declared_delta" || return 1
+    assistant_phase_decimal_in_range "$previous_score" "0" "5" || return 1
+    assistant_phase_decimal_in_range "$latest_score" "0" "5" || return 1
+
+    awk -v declared_delta="$declared_delta" -v previous_score="$previous_score" -v latest_score="$latest_score" '
+        BEGIN {
+            expected = latest_score - previous_score
+            diff = declared_delta - expected
+            if (diff < 0) {
+                diff = -diff
+            }
+            exit (diff < 0.005 ? 0 : 1)
+        }
+    '
+}
+
+assistant_phase_drift_check_is_valid() {
+    local value="$1"
+
+    value="$(assistant_phase_trim_value "$value")"
+    if assistant_phase_value_is_noneish "$value"; then
+        return 1
+    fi
+
+    [[ "$value" =~ ^(GENUINE|SUSPICIOUS|DRIFT|REGRESSION|STAGNATION|NEUTRAL)([[:space:]]+.*)?$ ]]
+}
+
+assistant_phase_drift_check_matches_movement() {
+    local value="$1"
+    local delta="$2"
+    local previous_findings="$3"
+    local current_findings="$4"
+    local drift
+
+    value="$(assistant_phase_trim_value "$value")"
+    drift="${value%% *}"
+    assistant_phase_drift_check_is_valid "$value" || return 1
+
+    awk -v drift="$drift" -v delta="$delta" -v previous_findings="$previous_findings" -v current_findings="$current_findings" '
+        BEGIN {
+            d = delta + 0
+            current = current_findings + 0
+            previous_known = previous_findings ~ /^[0-9]+$/
+            epsilon = 0.005
+
+            if (d < -epsilon) {
+                exit (drift == "REGRESSION" ? 0 : 1)
+            }
+            if (d > 1.0) {
+                exit (drift == "SUSPICIOUS" ? 0 : 1)
+            }
+            if (d > epsilon) {
+                if (!previous_known) {
+                    exit 0
+                }
+                if (current < (previous_findings + 0)) {
+                    exit (drift == "GENUINE" ? 0 : 1)
+                }
+                exit (drift == "DRIFT" ? 0 : 1)
+            }
+            if (d >= -epsilon && d <= epsilon) {
+                if (current > 0) {
+                    exit ((drift == "NEUTRAL" || drift == "STAGNATION") ? 0 : 1)
+                }
+                exit 0
+            }
+
+            exit 0
+        }
+    '
+}
+
+assistant_phase_final_result_has_remaining_rationale() {
+    local final_block="$1"
+    local line value
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*-[[:space:]](Remaining[[:space:]]items|Blocker):[[:space:]]*(.*)$ ]]; then
+            value="${BASH_REMATCH[2]}"
+            if ! assistant_phase_value_is_noneish "$value" && ! assistant_phase_value_is_bracket_placeholder "$value"; then
+                return 0
+            fi
+        fi
+    done <<< "$final_block"
+
+    return 1
+}
+
+assistant_phase_review_controller_missing_reason_key() {
+    local file="$1"
+    local quality_review_line="$2"
+    local minimum_review_line="${3:-0}"
+    local quality_block final_block round_line findings_line rubric_line weighted_line delta_line drift_line score_progression_line
+    local round max_round heading_round must_fix should_fix current_findings weighted delta drift_value score_progression final_result_line final_result score_x100
+    local previous_quality_review_line previous_quality_block previous_weighted previous_findings previous_score observed_weighted_sequence
+
+    quality_block="$(assistant_phase_review_block_after_line "$file" "$quality_review_line" || true)"
+    final_block="$(assistant_phase_final_result_block_after_line "$file" "$quality_review_line" || true)"
+
+    round_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Round:" || true)"
+    if [[ ! "$round_line" =~ Round:[[:space:]]*([0-9]+)[[:space:]]+of[[:space:]]+([0-9]+) ]]; then
+        printf 'missing_review_round\n'
+        return 0
+    fi
+    round="${BASH_REMATCH[1]}"
+    max_round="${BASH_REMATCH[2]}"
+    if [[ "$max_round" -ne 10 || "$round" -lt 1 || "$round" -gt 10 ]]; then
+        printf 'round_overflow\n'
+        return 0
+    fi
+    heading_round="$(assistant_phase_quality_review_heading_round "$file" "$quality_review_line" || true)"
+    if [[ -z "$heading_round" || "$heading_round" -ne "$round" ]]; then
+        printf 'round_overflow\n'
+        return 0
+    fi
+
+    findings_line="$(printf '%s\n' "$quality_block" | grep -m1 -Ei "^[[:space:]]*-[[:space:]]Found([[:space:]]this[[:space:]]round)?:" || true)"
+    if [[ -z "$findings_line" ]]; then
+        printf 'missing_findings_summary\n'
+        return 0
+    fi
+    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+must-fix ]]; then
+        must_fix="${BASH_REMATCH[1]}"
+    else
+        printf 'missing_findings_summary\n'
+        return 0
+    fi
+    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+should-fix ]]; then
+        should_fix="${BASH_REMATCH[1]}"
+    else
+        printf 'missing_findings_summary\n'
+        return 0
+    fi
+    current_findings="$((must_fix + should_fix))"
+
+    rubric_line="$(printf '%s\n' "$quality_block" | grep -E "^[[:space:]]*-[[:space:]]Rubric:" | tail -1 || true)"
+    if [[ -z "$rubric_line" ]] || ! assistant_phase_rubric_scores_are_valid "$rubric_line"; then
+        printf 'missing_rubric_scores\n'
+        return 0
+    fi
+
+    weighted_line="$(printf '%s\n' "$quality_block" | grep -E "^[[:space:]]*-[[:space:]]Weighted:" | tail -1 || true)"
+    weighted="$(assistant_phase_value_after_colon "$weighted_line")"
+    if [[ -z "$weighted_line" ]] || ! assistant_phase_decimal_in_range "$weighted" "0" "5" \
+        || ! assistant_phase_rubric_weighted_score_matches "$rubric_line" "$weighted"; then
+        printf 'missing_weighted_score\n'
+        return 0
+    fi
+
+    if [[ "$round" -gt 1 ]]; then
+        delta_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Delta from previous:" || true)"
+        delta="$(assistant_phase_value_after_colon "$delta_line")"
+        if [[ -z "$delta_line" ]] || ! assistant_phase_signed_decimal_is_valid "$delta"; then
+            printf 'missing_delta_from_previous\n'
+            return 0
+        fi
+        drift_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Drift check:" || true)"
+        drift_value="$(assistant_phase_value_after_colon "$drift_line")"
+        if [[ -z "$drift_line" ]] || ! assistant_phase_drift_check_is_valid "$drift_value"; then
+            printf 'missing_drift_check\n'
+            return 0
+        fi
+    fi
+
+    final_result_line="$(printf '%s\n' "$final_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Result:[[:space:]]*(CLEAN|ISSUES_FIXED|HAS_REMAINING_ITEMS)[[:space:]]*$" || true)"
+    if [[ ! "$final_result_line" =~ Result:[[:space:]]*(CLEAN|ISSUES_FIXED|HAS_REMAINING_ITEMS)[[:space:]]*$ ]]; then
+        printf 'no_final_result\n'
+        return 0
+    fi
+    final_result="${BASH_REMATCH[1]}"
+
+    score_progression_line="$(printf '%s\n' "$final_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Score progression:" || true)"
+    score_progression="$(assistant_phase_value_after_colon "$score_progression_line")"
+    if [[ -z "$score_progression_line" ]] || ! assistant_phase_score_progression_is_valid "$score_progression" "$weighted" "$round"; then
+        printf 'missing_score_progression\n'
+        return 0
+    fi
+
+    if ! observed_weighted_sequence="$(assistant_phase_quality_review_observed_weighted_sequence "$file" "$minimum_review_line" "$quality_review_line" "$round")"; then
+        if [[ "$round" -gt 1 ]]; then
+            printf 'missing_delta_from_previous\n'
+        else
+            printf 'missing_score_progression\n'
+        fi
+        return 0
+    fi
+
+    if ! assistant_phase_score_progression_matches_observed_sequence "$score_progression" "$observed_weighted_sequence"; then
+        printf 'missing_score_progression\n'
+        return 0
+    fi
+
+    if [[ "$round" -gt 1 ]]; then
+        previous_quality_review_line="$(assistant_phase_previous_quality_review_line_before_line "$file" "$quality_review_line" "$minimum_review_line" || true)"
+        if [[ -z "$previous_quality_review_line" ]]; then
+            printf 'missing_delta_from_previous\n'
+            return 0
+        fi
+        previous_quality_block="$(assistant_phase_review_block_after_line "$file" "$previous_quality_review_line" || true)"
+        previous_weighted="$(assistant_phase_review_weighted_from_block "$previous_quality_block" || true)"
+        previous_findings="$(assistant_phase_review_findings_count_from_block "$previous_quality_block" || true)"
+        if [[ -z "$previous_weighted" || -z "$previous_findings" ]]; then
+            printf 'missing_delta_from_previous\n'
+            return 0
+        fi
+        previous_score="$previous_weighted"
+        if [[ -z "$previous_score" ]] || ! assistant_phase_delta_matches_scores "$delta" "$previous_score" "$weighted"; then
+            printf 'missing_delta_from_previous\n'
+            return 0
+        fi
+        if ! assistant_phase_drift_check_matches_movement "$drift_value" "$delta" "$previous_findings" "$current_findings"; then
+            printf 'missing_drift_check\n'
+            return 0
+        fi
+    fi
+
+    if [[ "$final_result" == "CLEAN" || "$final_result" == "ISSUES_FIXED" ]]; then
+        score_x100="$(awk -v score="$weighted" 'BEGIN { printf "%d", score * 100 }')"
+        if [[ "$score_x100" -lt 400 ]]; then
+            printf 'weighted_score_below_pass\n'
+            return 0
+        fi
+        if [[ "$must_fix" -ne 0 || "$should_fix" -ne 0 ]]; then
+            printf 'unresolved_findings\n'
+            return 0
+        fi
+    elif [[ "$final_result" == "HAS_REMAINING_ITEMS" ]]; then
+        if ! assistant_phase_final_result_has_remaining_rationale "$final_block"; then
+            printf 'missing_remaining_rationale\n'
+            return 0
+        fi
+    fi
+
+    printf 'complete\n'
+}
+
+assistant_phase_has_learning_controller() {
+    local file="$1"
+    grep -qE "^### Learning Controller[[:space:]]*$" "$file" 2>/dev/null
+}
+
+assistant_phase_learning_controller_block() {
+    local file="$1"
+    awk '
+        /^### Learning Controller[[:space:]]*$/ {
+            found = 1
+            in_block = 1
+            next
+        }
+        in_block && /^### / { exit }
+        in_block { print }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_has_learning_controller_after_line() {
+    local file="$1"
+    local minimum_line="$2"
+    [[ -n "$minimum_line" ]] || return 1
+    awk -v minimum_line="$minimum_line" '
+        BEGIN { minimum_line += 0 }
+        NR <= minimum_line { next }
+        /^### Learning Controller[[:space:]]*$/ {
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_learning_controller_block_after_line() {
+    local file="$1"
+    local minimum_line="$2"
+    [[ -n "$minimum_line" ]] || return 1
+    awk -v minimum_line="$minimum_line" '
+        BEGIN { minimum_line += 0 }
+        NR <= minimum_line { next }
+        /^### Learning Controller[[:space:]]*$/ {
+            found = 1
+            in_block = 1
+            next
+        }
+        in_block && /^### / { exit }
+        in_block { print }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_learning_field_value() {
+    local block="$1"
+    local label="$2"
+    printf '%s\n' "$block" | awk -v label="$label" '
+        BEGIN { wanted = tolower(label) ":" }
+        {
+            line = $0
+            sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", line)
+            low = tolower(line)
+            if (index(low, wanted) == 1) {
+                sub(/^[^:]*:[[:space:]]*/, "", line)
+                sub(/[[:space:]]*$/, "", line)
+                print line
+                exit
+            }
+        }
+    '
+}
+
+assistant_phase_learning_evidence_item_is_valid() {
+    local value="$1"
+    local label item_value
+
+    value="$(assistant_phase_trim_value "$value")"
+    if [[ ! "$value" =~ ^([^:]+):[[:space:]]*(.*)$ ]]; then
+        return 1
+    fi
+
+    label="$(assistant_phase_trim_value "${BASH_REMATCH[1]}")"
+    label="$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]-]+/_/g')"
+    case "$label" in
+        none|review_finding|build_test_failure|user_correction|memory_trend) ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    item_value="$(assistant_phase_trim_value "${BASH_REMATCH[2]}")"
+    ! assistant_phase_value_is_noneish "$item_value" && ! assistant_phase_value_is_bracket_placeholder "$item_value"
+}
+
+assistant_phase_learning_considered_item_is_valid() {
+    local value="$1"
+    local item_value
+
+    value="$(assistant_phase_trim_value "$value")"
+    if assistant_phase_value_is_noneish "$value" || assistant_phase_value_is_bracket_placeholder "$value"; then
+        return 1
+    fi
+
+    if [[ "$value" =~ ^[^:]+:[[:space:]]*(.*)$ ]]; then
+        item_value="$(assistant_phase_trim_value "${BASH_REMATCH[1]}")"
+        ! assistant_phase_value_is_noneish "$item_value" && ! assistant_phase_value_is_bracket_placeholder "$item_value"
+        return $?
+    fi
+
+    return 0
+}
+
+assistant_phase_learning_section_has_item() {
+    local block="$1"
+    local label="$2"
+    local validator="${3:-learning_evidence}"
+    local item
+    local found=0
+    local invalid=0
+
+    while IFS= read -r item; do
+        found=1
+        case "$validator" in
+            learning_evidence)
+                assistant_phase_learning_evidence_item_is_valid "$item" || invalid=1
+                ;;
+            considered)
+                assistant_phase_learning_considered_item_is_valid "$item" || invalid=1
+                ;;
+        esac
+    done < <(
+        printf '%s\n' "$block" | awk -v label="$label" '
+            function is_learning_field(line, clean) {
+                clean = line
+                sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", clean)
+                return clean ~ /^(Memory trend checked|Learning evidence reviewed|Review findings considered|Build\/test failures considered|User corrections considered|Durable lesson decision|Persistence evidence|No-save rationale):/
+            }
+            BEGIN { wanted = tolower(label) ":" }
+            {
+                line = $0
+                clean = line
+                sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", clean)
+                if (index(tolower(clean), wanted) == 1) {
+                    in_section = 1
+                    next
+                }
+                if (in_section && is_learning_field($0)) {
+                    exit
+                }
+                if (in_section && $0 ~ /^[[:space:]]+[-*][[:space:]]+/) {
+                    item = $0
+                    sub(/^[[:space:]]*[-*][[:space:]]+/, "", item)
+                    sub(/[[:space:]]*$/, "", item)
+                    print item
+                }
+            }
+        '
+    )
+
+    [[ "$found" -eq 1 && "$invalid" -eq 0 ]]
+}
+
+assistant_phase_learning_missing_reason_key() {
+    local file="$1"
+    local status block trend decision persistence no_save_rationale
+    local spec_pass_line quality_review_line final_result_line
+
+    if ! assistant_phase_is_medium_plus "$file"; then
+        printf 'complete\n'
+        return 0
+    fi
+
+    status="$(assistant_phase_status "$file" || true)"
+    if [[ "$status" != *"DOCUMENTING"* ]]; then
+        printf 'complete\n'
+        return 0
+    fi
 
     spec_pass_line="$(assistant_phase_latest_spec_review_pass_line "$file" || true)"
-    [[ -n "$spec_pass_line" ]] || return 1
+    if [[ -n "$spec_pass_line" ]]; then
+        quality_review_line="$(assistant_phase_quality_review_after_line "$file" "$spec_pass_line" || true)"
+        if [[ -n "$quality_review_line" ]]; then
+            final_result_line="$(assistant_phase_final_result_heading_line_after_line "$file" "$quality_review_line" || true)"
+        fi
+    fi
 
-    quality_review_line="$(assistant_phase_quality_review_after_line "$file" "$spec_pass_line" || true)"
-    [[ -n "$quality_review_line" ]] || return 1
+    if [[ -n "$final_result_line" ]]; then
+        if ! assistant_phase_has_learning_controller_after_line "$file" "$final_result_line"; then
+            printf 'no_learning_controller\n'
+            return 0
+        fi
+        block="$(assistant_phase_learning_controller_block_after_line "$file" "$final_result_line" || true)"
+    else
+        if ! assistant_phase_has_learning_controller "$file"; then
+            printf 'no_learning_controller\n'
+            return 0
+        fi
+        block="$(assistant_phase_learning_controller_block "$file" || true)"
+    fi
 
-    assistant_phase_final_result_after_line "$file" "$quality_review_line" >/dev/null
+    trend="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Memory trend checked")")"
+    case "$trend" in
+        checked|backend_unavailable|policy_disallowed|not_configured) ;;
+        *)
+            printf 'missing_memory_trend_checked\n'
+            return 0
+            ;;
+    esac
+
+    if ! assistant_phase_learning_section_has_item "$block" "Learning evidence reviewed" "learning_evidence"; then
+        printf 'missing_learning_evidence_reviewed\n'
+        return 0
+    fi
+
+    if ! assistant_phase_learning_section_has_item "$block" "Review findings considered" "considered"; then
+        printf 'missing_review_findings_considered\n'
+        return 0
+    fi
+
+    if ! assistant_phase_learning_section_has_item "$block" "Build/test failures considered" "considered"; then
+        printf 'missing_build_test_failures_considered\n'
+        return 0
+    fi
+
+    if ! assistant_phase_learning_section_has_item "$block" "User corrections considered" "considered"; then
+        printf 'missing_user_corrections_considered\n'
+        return 0
+    fi
+
+    decision="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Durable lesson decision")")"
+    case "$decision" in
+        durable_saved|durable_updated|skipped_not_durable|backend_unavailable|policy_disallowed|refused_sensitive) ;;
+        *)
+            printf 'missing_durable_lesson_decision\n'
+            return 0
+            ;;
+    esac
+
+    persistence="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Persistence evidence")")"
+    if [[ -z "$persistence" ]]; then
+        printf 'missing_persistence_evidence\n'
+        return 0
+    fi
+
+    case "$decision" in
+        durable_saved|durable_updated)
+            if assistant_phase_value_is_noneish "$persistence" || assistant_phase_value_is_bracket_placeholder "$persistence"; then
+                printf 'missing_persistence_evidence\n'
+                return 0
+            fi
+            ;;
+        skipped_not_durable|backend_unavailable|policy_disallowed|refused_sensitive)
+            no_save_rationale="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "No-save rationale")")"
+            if assistant_phase_value_is_noneish "$no_save_rationale" || assistant_phase_value_is_bracket_placeholder "$no_save_rationale"; then
+                printf 'missing_no_save_rationale\n'
+                return 0
+            fi
+            ;;
+    esac
+
+    printf 'complete\n'
+}
+
+assistant_phase_review_complete() {
+    local file="$1"
+    [[ "$(assistant_phase_review_missing_reason_key "$file")" == "complete" ]]
 }
 
 assistant_phase_review_missing_reason_key() {
@@ -201,6 +1158,11 @@ assistant_phase_review_missing_reason_key() {
     quality_review_line="$(assistant_phase_quality_review_after_line "$file" "$spec_pass_line" || true)"
     if [[ -z "$quality_review_line" ]]; then
         printf 'no_quality_review\n'
+        return 0
+    fi
+
+    if assistant_phase_is_medium_plus "$file"; then
+        assistant_phase_review_controller_missing_reason_key "$file" "$quality_review_line" "$spec_pass_line"
         return 0
     fi
 

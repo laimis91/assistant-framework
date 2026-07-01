@@ -96,31 +96,17 @@ fi
 
 # Gate 2: Rubric scores check (only if no earlier gate failed)
 if [[ -z "$GATE_REASON" ]]; then
-    # Check for rubric scores in the review log
-    has_rubric=$(grep -m1 -E "^- Rubric:" "$TASK_FILE" 2>/dev/null || echo "")
-    has_weighted=$(grep -m1 -E "^- Weighted:" "$TASK_FILE" 2>/dev/null || echo "")
-
-    if [[ -z "$has_rubric" || -z "$has_weighted" ]]; then
-        # Only enforce if review was attempted (don't block pre-review)
-        has_review_entry=$(grep -m1 -E "^### (Quality Review|Review) #[0-9]+" "$TASK_FILE" 2>/dev/null || echo "")
-        if [[ -n "$has_review_entry" ]]; then
-            GATE_REASON="Harness gate: Quality review exists but missing rubric scores. Medium+ tasks require structured rubric scoring (5 dimensions per references/review-rubric.md). Re-run the review with rubric_required=true."
-        fi
-    fi
-fi
-
-# Gate 3: Score threshold check (only if rubric exists)
-if [[ -z "$GATE_REASON" ]]; then
-    # Extract the latest weighted score
-    latest_weighted=$(grep -E "^- Weighted:" "$TASK_FILE" 2>/dev/null | tail -1 | grep -oE "[0-9]+\.[0-9]+" || echo "")
-
-    if [[ -n "$latest_weighted" ]]; then
-        # Check if score is below minimum pass threshold (3.0)
-        # bash doesn't do float comparison well, so multiply by 100
-        score_x100=$(echo "$latest_weighted" | awk '{printf "%d", $1 * 100}')
-        if [[ "$score_x100" -lt 300 ]]; then
-            GATE_REASON="Harness gate: Rubric weighted score ($latest_weighted) is below minimum threshold (3.0). The code needs significant improvement before completion. Review the lowest-scoring dimensions and iterate. If the approach is fundamentally flawed, consider a PIVOT."
-        fi
+    review_missing_key="$(assistant_phase_review_missing_reason_key "$TASK_FILE")"
+    if [[ "$review_missing_key" == "missing_rubric_scores" ]]; then
+        GATE_REASON="Harness gate: Quality review exists but missing rubric scores. Medium+ tasks require structured rubric scoring (5 dimensions per references/review-rubric.md). Re-run the review with rubric_required=true."
+    elif [[ "$review_missing_key" == "missing_weighted_score" ]]; then
+        GATE_REASON="Harness gate: Quality review exists but missing weighted score. Medium+ tasks require '- Weighted: N.NN' in the latest Quality Review entry."
+    elif [[ "$review_missing_key" == "weighted_score_below_pass" ]]; then
+        spec_pass_line="$(assistant_phase_latest_spec_review_pass_line "$TASK_FILE" || true)"
+        quality_review_line="$(assistant_phase_quality_review_after_line "$TASK_FILE" "$spec_pass_line" || true)"
+        quality_block="$(assistant_phase_review_block_after_line "$TASK_FILE" "$quality_review_line" || true)"
+        latest_weighted="$(assistant_phase_review_weighted_from_block "$quality_block" || true)"
+        GATE_REASON="Harness gate: Rubric weighted score (${latest_weighted:-unknown}) is below minimum threshold (4.0). The code needs significant improvement before completion. Review the lowest-scoring dimensions and iterate. If the approach is fundamentally flawed, consider a PIVOT."
     fi
 fi
 

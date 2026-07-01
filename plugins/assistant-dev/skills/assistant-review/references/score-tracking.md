@@ -101,7 +101,7 @@ Record scores in each Quality Review entry:
 
 ```markdown
 ### Quality Review #N
-- Round: N of 5
+- Round: N of 10
 - Previously fixed: M items from prior rounds
 - Found this round: X must-fix, Y should-fix, Z nits
 - Rubric: correctness=4.0 quality=3.5 architecture=4.0 security=5.0 coverage=3.0

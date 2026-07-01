@@ -15,7 +15,7 @@ triggers:
 | File | Purpose |
 |---|---|
 | [`contracts/input.yaml`](contracts/input.yaml) | action (save/recall/update/forget/search), content, entity_type, query |
-| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, storage_backend, entity_name, results[], durability_decision, confirmation |
+| [`contracts/output.yaml`](contracts/output.yaml) | action_taken, storage_backend, entity_name, results[], durability_decision, lesson_decision, confirmation |
 
 - `content` is required for save/update; `query` is required for recall/search
 - `entity_type` is required for save — determines the memory entity type (Rule, Preference, Insight, etc.)
@@ -85,12 +85,23 @@ Save only if the fact is durable and useful across sessions:
 - User preference or correction that should affect future behavior.
 - Stable project convention, architecture pattern, or local workflow rule.
 - Non-obvious gotcha likely to prevent future mistakes.
+- Evidence-backed lesson from a review finding, build/test failure, or user correction that would change future discovery, planning, build, or review behavior.
 
 Skip or refuse:
 - Secrets, credentials, tokens, private endpoints, customer/user data.
 - Task progress, PR/issue numbers, commit SHAs, "fixed X", "phase done", temporary TODOs.
 - Facts easily rediscovered from the repo or likely stale within a week.
 - Broad instructions that should be a skill/procedure instead of memory.
+
+### Review-derived lessons
+
+When a memory request comes from the workflow Learning Controller or assistant-reflexion:
+
+1. Identify the evidence source: review finding, build/test failure, user correction, memory trend, or other task context.
+2. Save only lessons tied to a preventable mistake, stable user preference, recurring review finding, missing check, or non-obvious project gotcha.
+3. Skip routine progress, "slice completed", "tests passed", PR numbers, issue status, and obvious repo-visible facts with `durability_decision: skipped_not_durable`.
+4. If a configured local backend is available and policy-approved, use it. Do not use ad hoc markdown files as cross-session memory.
+5. If the backend is unavailable or policy-disallowed, return `backend_unavailable` or `policy_disallowed` with the lesson text and no-save rationale instead of pretending persistence happened.
 
 ## Querying Memory
 
@@ -104,6 +115,7 @@ Return:
 - **Action taken** - save, recall, update, forget, search, no-op, or blocked.
 - **Result** - entity name, memory type, matched memories, or reason nothing was saved.
 - **Evidence** - backend/tool used and relevant project/query context, or explicit note that no approved backend was available.
+- **Lesson decision** - for review/build/user-correction lessons, the evidence source, save/skip rationale, and cross-session value.
 - **Confirmation** - concise user-facing confirmation of what changed, what was found, or why memory was skipped.
 - **Gaps** - missing content, ambiguous entity identity, privacy concern, unavailable backend, or blockers preventing the memory operation.
 
