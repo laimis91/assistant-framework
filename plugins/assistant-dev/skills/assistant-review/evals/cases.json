@@ -30,7 +30,7 @@
         "Runs review rounds with confidence thresholds and previously_fixed tracking.",
         "Fixes all must-fix and should-fix findings before validation.",
         "Runs build or test verification before the next round.",
-        "Continues review, fix, validate, and re-review until clean or max 5 rounds."
+        "Continues review, fix, validate, and re-review until clean or max 10 rounds."
       ],
       "pass_criteria": [
         "The response identifies review scope and mode.",
@@ -78,7 +78,7 @@
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
         "Applies a weighted score threshold action such as PASS, REFINE, or PIVOT.",
-        "Uses increasing confidence thresholds across rounds.",
+        "Uses evidence-backed finding filtering across rounds 1-10 and treats round 10 as the hard cap.",
         "Buffers intermediate round details and presents one final summary after loop exit.",
         "Includes score progression when multiple rounds occur.",
         "Does not ask the user between rounds unless blocked."
@@ -86,7 +86,7 @@
       "pass_criteria": [
         "The response includes rubric dimensions and weighted score.",
         "The response applies the threshold action to decide exit or refinement.",
-        "The response mentions confidence thresholds or round progression.",
+        "The response mentions evidence-backed filtering or round progression.",
         "The response produces a single final summary.",
         "The response does not pause between rounds for approval."
       ],

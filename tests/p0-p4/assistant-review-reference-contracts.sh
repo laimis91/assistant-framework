@@ -18,6 +18,8 @@ p0p4_reference_section_has_term() {
 
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
 review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md"
+review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
 
 test_start "assistant-review applies mandatory review checklists from reference"
@@ -90,6 +92,39 @@ if [[ "${#review_checklist_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
+fi
+
+test_start "assistant-review blocks medium rubric clean exits below pass threshold"
+review_threshold_failures=()
+
+for file_and_forbidden in \
+    "$review_skill::REFINE with zero findings -> EXIT CLEAN" \
+    "$review_skill::Rubric score {score} is below target" \
+    "$review_rubric::| 4-5 |"; do
+    file="${file_and_forbidden%%::*}"
+    forbidden="${file_and_forbidden#*::}"
+    if [[ -f "$file" ]] && grep -Fq "$forbidden" "$file"; then
+        review_threshold_failures+=("${file#$FRAMEWORK_DIR/}: still contains $forbidden")
+    fi
+done
+
+for file_and_term in \
+    "$review_skill::PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN" \
+    "$review_skill::REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3" \
+    "$review_skill::Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0" \
+    "$review_phase_gates::EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0" \
+    "$review_rubric::| 4-10 | 4.0+ | 3.25"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        review_threshold_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#review_threshold_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review medium rubric clean-exit threshold contract drifted: ${review_threshold_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

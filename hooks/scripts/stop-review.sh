@@ -127,6 +127,28 @@ elif [[ "$review_missing_key" == "no_quality_review" ]]; then
     REVIEW_REASON="Task journal has Spec Review PASS but no Quality Review. You MUST run Stage 2 separately: load assistant-review SKILL.md and contracts, run the autonomous quality review loop, and append a Quality Review entry. Quality review cannot substitute for Spec Review, and Spec Review cannot substitute for quality review."
 elif [[ "$review_missing_key" == "no_final_result" ]]; then
     REVIEW_REASON="Task journal has review entries but the review cycle is not complete — no Final Result found. You must finish the review cycle: fix remaining must-fix issues, re-test, re-review, and write the Final Result summary in the Review Log section of the task journal."
+elif [[ "$review_missing_key" == "missing_review_round" ]]; then
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_review_round). Add '- Round: N of 10' to the latest Quality Review entry after the latest Spec Review PASS."
+elif [[ "$review_missing_key" == "round_overflow" ]]; then
+    REVIEW_REASON="Medium+ Quality Review has invalid controller evidence (round_overflow). Use '- Round: N of 10' with N between 1 and 10, then rerun or repair the review loop."
+elif [[ "$review_missing_key" == "missing_findings_summary" ]]; then
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_findings_summary). Add a findings summary such as '- Found this round: 0 must-fix, 0 should-fix, 0 nits' to the latest Quality Review."
+elif [[ "$review_missing_key" == "missing_rubric_scores" ]]; then
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_rubric_scores). Add '- Rubric:' to the latest Quality Review with numeric 0..5 scores for correctness, code_quality or quality, architecture, security, and test_coverage or coverage."
+elif [[ "$review_missing_key" == "missing_weighted_score" ]]; then
+    REVIEW_REASON="Medium+ Quality Review has a missing, invalid, or mismatched weighted score (missing_weighted_score). Add the latest '- Weighted: N.NN' score to the Quality Review entry and ensure it matches the rubric formula from references/review-rubric.md."
+elif [[ "$review_missing_key" == "missing_delta_from_previous" ]]; then
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_delta_from_previous). For review rounds after round 1, record the actual previous Quality Review block after the latest Spec Review PASS with valid '- Found this round:' and '- Weighted:' lines, then add '- Delta from previous: ...' to the latest round."
+elif [[ "$review_missing_key" == "missing_drift_check" ]]; then
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_drift_check). For review rounds after round 1, add '- Drift check: GENUINE' or an explicit regression/drift classification."
+elif [[ "$review_missing_key" == "missing_score_progression" ]]; then
+    REVIEW_REASON="Medium+ Final Result is missing controller evidence (missing_score_progression). Add '- Score progression: ...' after the final review result so score movement is explicit."
+elif [[ "$review_missing_key" == "weighted_score_below_pass" ]]; then
+    REVIEW_REASON="Medium+ review cannot finish as CLEAN or ISSUES_FIXED because the latest weighted score is below the 4.00 pass threshold (weighted_score_below_pass). Improve the lowest-scoring dimensions and rerun Quality Review."
+elif [[ "$review_missing_key" == "unresolved_findings" ]]; then
+    REVIEW_REASON="Medium+ review cannot finish as CLEAN or ISSUES_FIXED while the latest Quality Review still lists must-fix or should-fix findings (unresolved_findings). Fix or explicitly carry remaining items through the review loop."
+elif [[ "$review_missing_key" == "missing_remaining_rationale" ]]; then
+    REVIEW_REASON="Medium+ Final Result reports HAS_REMAINING_ITEMS without a concrete remaining-item or blocker rationale (missing_remaining_rationale). Add '- Remaining items:' or '- Blocker:' with specific unresolved work, evidence, and owner."
 fi
 
 if [[ "$review_missing_key" != "complete" ]]; then
@@ -148,33 +170,6 @@ if [[ "$review_missing_key" != "complete" ]]; then
     exit 0
 fi
 
-if assistant_phase_is_medium_plus "$TASK_FILE"; then
-    has_rubric=$(grep -m1 -E "^- Rubric:" "$TASK_FILE" 2>/dev/null || true)
-    has_weighted=$(grep -m1 -E "^- Weighted:" "$TASK_FILE" 2>/dev/null || true)
-
-    if [[ -z "$has_rubric" || -z "$has_weighted" ]]; then
-        HARNESS_REASON="Quality review is complete but missing rubric scores. Medium+ strict workflows require '- Rubric:' and '- Weighted:' lines per references/review-rubric.md."
-    else
-        latest_weighted=$(grep -E "^- Weighted:" "$TASK_FILE" 2>/dev/null | tail -1 | grep -oE "[0-9]+\.[0-9]+" || true)
-        if [[ -n "$latest_weighted" ]]; then
-            score_x100=$(awk -v score="$latest_weighted" 'BEGIN { printf "%d", score * 100 }')
-            if [[ "$score_x100" -lt 300 ]]; then
-                HARNESS_REASON="Rubric weighted score ($latest_weighted) is below minimum threshold (3.0). Improve the lowest-scoring dimensions and rerun the review before stopping."
-            fi
-        fi
-    fi
-fi
-
-if [[ -n "${HARNESS_REASON:-}" ]]; then
-    if $IS_GEMINI; then
-        touch "${RETRY_FLAG}"
-        jq -n --arg reason "$HARNESS_REASON" '{decision: "retry", reason: $reason}'
-    else
-        jq -n --arg reason "$HARNESS_REASON" '{decision: "block", reason: $reason}'
-    fi
-    exit 0
-fi
-
 # Check if metrics were recorded (all task sizes require metrics)
 METRICS_FILE="$(assistant_phase_metrics_file)"
 TODAY=$(date +%Y-%m-%d)
@@ -189,6 +184,40 @@ if [[ -n "${METRICS_REASON:-}" ]]; then
         jq -n --arg reason "$METRICS_REASON" '{decision: "retry", reason: $reason}'
     else
         jq -n --arg reason "$METRICS_REASON" '{decision: "block", reason: $reason}'
+    fi
+    exit 0
+fi
+
+learning_missing_key="$(assistant_phase_learning_missing_reason_key "$TASK_FILE")"
+
+if [[ "$learning_missing_key" == "no_learning_controller" ]]; then
+    LEARNING_REASON="Medium+ DOCUMENTING task is missing the canonical Learning Controller block (no_learning_controller). Add '### Learning Controller' with Memory trend checked, Learning evidence reviewed, Review findings considered, Build/test failures considered, User corrections considered, Durable lesson decision, Persistence evidence, and No-save rationale when no durable write occurred."
+elif [[ "$learning_missing_key" == "missing_memory_trend_checked" ]]; then
+    LEARNING_REASON="Learning Controller is missing valid memory trend evidence (missing_memory_trend_checked). Add '- Memory trend checked: checked', 'backend_unavailable', 'policy_disallowed', or 'not_configured'."
+elif [[ "$learning_missing_key" == "missing_learning_evidence_reviewed" ]]; then
+    LEARNING_REASON="Learning Controller is missing reviewed evidence (missing_learning_evidence_reviewed). Under '- Learning evidence reviewed:', add at least one evidence item such as review_finding, build_test_failure, user_correction, memory_trend, or none with a reason."
+elif [[ "$learning_missing_key" == "missing_review_findings_considered" ]]; then
+    LEARNING_REASON="Learning Controller is missing review finding consideration (missing_review_findings_considered). Under '- Review findings considered:', add the finding lesson decision or an explicit none-with-reason item."
+elif [[ "$learning_missing_key" == "missing_build_test_failures_considered" ]]; then
+    LEARNING_REASON="Learning Controller is missing build/test failure consideration (missing_build_test_failures_considered). Under '- Build/test failures considered:', add the failure lesson decision or an explicit none-with-reason item."
+elif [[ "$learning_missing_key" == "missing_user_corrections_considered" ]]; then
+    LEARNING_REASON="Learning Controller is missing user correction consideration (missing_user_corrections_considered). Under '- User corrections considered:', add the correction lesson decision or an explicit none-with-reason item."
+elif [[ "$learning_missing_key" == "missing_durable_lesson_decision" ]]; then
+    LEARNING_REASON="Learning Controller is missing a valid durable lesson decision (missing_durable_lesson_decision). Add '- Durable lesson decision: durable_saved', 'durable_updated', 'skipped_not_durable', 'backend_unavailable', 'policy_disallowed', or 'refused_sensitive'."
+elif [[ "$learning_missing_key" == "missing_persistence_evidence" ]]; then
+    LEARNING_REASON="Learning Controller is missing persistence evidence (missing_persistence_evidence). For durable_saved or durable_updated, add non-empty memory_reflect, memory_add_insight, or backend evidence; N/A, none, and TBD do not satisfy saved/updated decisions."
+elif [[ "$learning_missing_key" == "missing_no_save_rationale" ]]; then
+    LEARNING_REASON="Learning Controller is missing a no-save rationale (missing_no_save_rationale). When no durable write occurred, add '- No-save rationale:' with a concrete reason; N/A, none, and TBD do not satisfy this gate."
+else
+    LEARNING_REASON="Learning Controller gate failed ($learning_missing_key). Complete the canonical ### Learning Controller block before stopping."
+fi
+
+if [[ "$learning_missing_key" != "complete" ]]; then
+    if $IS_GEMINI; then
+        touch "${RETRY_FLAG}"
+        jq -n --arg reason "$LEARNING_REASON" '{decision: "retry", reason: $reason}'
+    else
+        jq -n --arg reason "$LEARNING_REASON" '{decision: "block", reason: $reason}'
     fi
     exit 0
 fi

@@ -357,7 +357,7 @@ Print: `>> Spec Review: [PASS / FAIL — found N required fixes]`
 
 Print: `>> Stage 2: Quality Review — loading assistant-review SKILL.md`
 
-**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 5 rounds) with visible progress. Add Reviewer to `Required agents` before Stage 2. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Reviewer subagent and record `Reviewer dispatch`/`Reviewer result` evidence. In direct fallback, preserve fresh-review evidence and record `Reviewer direct evidence`.
+**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 10 rounds) with visible progress. Add Reviewer to `Required agents` before Stage 2. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Reviewer subagent and record `Reviewer dispatch`/`Reviewer result` evidence. In direct fallback, preserve fresh-review evidence and record `Reviewer direct evidence`.
 
 The `assistant-review` skill will:
 - Dispatch Reviewer subagents in delegated mode, or preserve fresh-review evidence in direct fallback mode
@@ -431,9 +431,18 @@ Then print completion markers and exit.
 2. Code comments where "why" isn't obvious
 3. Complete `references/release-readiness-checklist.md`
 4. If user-facing changes: generate release notes using `references/prompts/release-notes.md`
-5. If local memory tools are approved and available, capture durable learnings in the configured local memory store; otherwise skip memory updates and report durable insights in the final response
-6. **Task completion metrics**: Append a JSONL entry when local metrics are configured and policy allows it (see format below)
-7. **Post-task reflection**: If `assistant-reflexion` is available, load and follow it to capture what worked, what didn't, and extract lessons for future tasks. This is where the compounding happens.
+5. **Learning Controller**: Add a canonical `### Learning Controller` block to the task journal or equivalent workflow output before completion. Inspect only lesson-bearing evidence: Review Log findings, Builder/Tester build or test failures, user corrections, and memory trend signals. Do not save routine task progress, completed checklist items, PR numbers, issue status, or facts easily rediscovered from the repo.
+   - `Memory trend checked`: `checked`, `backend_unavailable`, `policy_disallowed`, or `not_configured`
+   - `Learning evidence reviewed`: concrete review/build/user-correction/trend evidence, or explicit none-with-reason
+   - `Review findings considered`: findings assessed for durable lessons, or none-with-reason
+   - `Build/test failures considered`: failures assessed for durable lessons, or none-with-reason
+   - `User corrections considered`: corrections assessed for durable lessons, or none-with-reason
+   - `Durable lesson decision`: `durable_saved`, `durable_updated`, `skipped_not_durable`, `backend_unavailable`, `policy_disallowed`, or `refused_sensitive`
+   - `Persistence evidence`: configured memory/reflexion backend evidence when saved or updated
+   - `No-save rationale`: required when no durable write occurred
+6. **Post-task reflection**: Load and follow `assistant-reflexion` when available. Pass the Learning Controller evidence into reflexion so lessons are backed by review/build/user-correction evidence and persistence/no-save status is explicit.
+7. If local memory tools are approved and available, persist only durable, evidence-backed lessons through the configured local memory backend. If tools are unavailable or policy-disallowed, record that outcome in `Durable lesson decision` and `No-save rationale` instead of writing ad hoc markdown as cross-session memory.
+8. **Task completion metrics**: Append a JSONL entry when local metrics are configured and policy allows it (see format below)
 
 ### Metrics entry format (all sizes)
 

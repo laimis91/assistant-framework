@@ -17,12 +17,12 @@ completion_tiers:
     review_gate: "self-review or explicit validation summary unless risk_tier in [high, critical]"
     checkpoint_policy: "inline plan/check summary is enough; phase_checkpoints are strict-profile only"
   medium:
-    required_artifacts: [triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, manual_test_steps, plan_document, user_approval]
+    required_artifacts: [triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, plan_document, user_approval]
     conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result]
     review_gate: "spec review plus quality review, with evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions"
   large_critical:
-    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
+    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
     conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, candidate_search_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
@@ -226,7 +226,7 @@ artifacts:
       - name: review_rounds
         type: int
         required: true
-        validation: ">= 1"
+        validation: ">= 1 and <= 10"
       - name: must_fix_resolved
         type: int
         required: true
@@ -272,6 +272,76 @@ artifacts:
         type: string[]
         required: true
         validation: "Must be empty or explicitly resolved before workflow completion"
+
+  - name: learning_controller
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Document-phase learning decision that reviews review/build/user-correction evidence and either persists durable lessons or records why nothing was saved"
+    validation: "Task journal or equivalent workflow output contains a canonical '### Learning Controller' block with memory trend status, evidence reviewed, review findings considered, build/test failures considered, user corrections considered, durable lesson decision, and persistence evidence or no-save rationale"
+    on_fail: "During Document, add the Learning Controller block by checking memory trends when available, reviewing Review Log findings, build/test failures, and user corrections, then recording a durable-save/no-save decision. Do not save random task progress as a lesson."
+    object_fields:
+      - name: memory_trend_checked
+        type: enum
+        required: true
+        enum_values: [checked, backend_unavailable, policy_disallowed, not_configured]
+        validation: "checked only when a configured local memory trend/backend check actually ran; otherwise use the explicit unavailable or policy outcome"
+        on_missing: fail
+      - name: learning_evidence_reviewed
+        type: object[]
+        required: true
+        validation: "At least one entry summarizing the review/build/user-correction evidence considered, or one none entry explaining that no lesson-bearing evidence existed"
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: evidence_type
+            type: enum
+            required: true
+            enum_values: [review_finding, build_test_failure, user_correction, memory_trend, none]
+            on_missing: fail
+          - name: source_reference
+            type: string
+            required: true
+            validation: "Review Log heading, Builder/Tester result, user correction text reference, memory tool evidence, or explicit none-with-reason"
+            on_missing: fail
+          - name: summary
+            type: string
+            required: true
+            validation: "Concrete evidence summary; routine task progress alone is invalid"
+            on_missing: fail
+      - name: review_findings_considered
+        type: string[]
+        required: true
+        validation: "Review findings assessed for durable lessons, or a single explicit none-with-reason entry"
+        on_missing: fail
+      - name: build_test_failures_considered
+        type: string[]
+        required: true
+        validation: "Build/test failures assessed for durable lessons, or a single explicit none-with-reason entry"
+        on_missing: fail
+      - name: user_corrections_considered
+        type: string[]
+        required: true
+        validation: "User corrections assessed for durable lessons, or a single explicit none-with-reason entry"
+        on_missing: fail
+      - name: durable_lesson_decision
+        type: enum
+        required: true
+        enum_values: [durable_saved, durable_updated, skipped_not_durable, backend_unavailable, policy_disallowed, refused_sensitive]
+        validation: "durable_saved/durable_updated require backend persistence evidence; skip outcomes require a concrete no-save rationale"
+        on_missing: fail
+      - name: persistence_evidence
+        type: string
+        required: conditional
+        condition: "durable_lesson_decision in [durable_saved, durable_updated]"
+        validation: "Names the configured memory/reflexion backend or tool call evidence used to persist the lesson"
+        on_missing: fail
+      - name: no_save_rationale
+        type: string
+        required: conditional
+        condition: "durable_lesson_decision in [skipped_not_durable, backend_unavailable, policy_disallowed, refused_sensitive]"
+        validation: "Explains why no durable memory write occurred, including backend unavailable or policy-disallowed outcomes when applicable"
+        on_missing: fail
 
   - name: manual_test_steps
     type: string[]

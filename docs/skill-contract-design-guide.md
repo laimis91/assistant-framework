@@ -137,14 +137,14 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 **Key patterns:**
 - Output guardrails perform filtering and relevancy checks for domain drift
 - Format validation ensures structured outputs via schema enforcement
-- Confidence thresholds block low-certainty responses
+- Evidence and confidence filters keep low-certainty responses from blocking completion
 - Prompt construction guardrails inject structured metadata (roles, permissions) into system prompts
 - Automated policy trees compiled into lightweight classifiers audit agent behavior at runtime
 
 **Enforcement for skills:**
 - Phase gate assertions prevent drift — the agent must prove it's on track before continuing
 - Cross-phase invariants catch slow drift (e.g., constraints list only grows, never shrinks)
-- Confidence thresholds in review contracts increase with each round (80% → 85% → 90%)
+- Evidence-backed review filters keep speculative concerns non-blocking, and review contracts preserve the hard max-round cap
 
 ---
 

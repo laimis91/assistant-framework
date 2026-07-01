@@ -70,8 +70,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current review round number (1-5)"
-        validation: ">= 1 and <= 5"
+        description: "Current review round number (1-10)"
+        validation: ">= 1 and <= 10"
 
       - name: previously_fixed
         type: object[]
@@ -84,13 +84,14 @@ handoffs:
           - name: fixed_in_round
             type: int
             required: true
+            validation: ">= 1 and <= 10"
 
-      - name: confidence_threshold
-        type: int
+      - name: finding_filter_policy
+        type: string
         required: true
-        description: "Minimum confidence percentage for reporting findings this round"
-        validation: "Must be one of: 80, 85, 90"
-        notes: "Round 1-2: 80. Round 3-4: 85. Round 5: 90."
+        description: "Evidence-backed finding filter for this round"
+        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 10 remains terminal."
+        notes: "In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 11."
 
       - name: project_type
         type: string
@@ -153,11 +154,12 @@ handoffs:
         type: int
         required: true
         description: "Echo back the round number for tracking"
+        validation: ">= 1 and <= 10"
 
       - name: findings
         type: object[]
         required: true
-        description: "All findings above the confidence threshold for this round"
+        description: "All evidence-backed findings that satisfy the finding_filter_policy for this round"
         object_fields:
           - name: severity
             type: enum
@@ -178,11 +180,26 @@ handoffs:
           - name: confidence_pct
             type: int
             required: true
-            validation: "Must be >= confidence_threshold for this round"
+            validation: "Evidence-calibrated confidence value; used for explanation and late-round should-fix blocking, not numeric threshold gating"
           - name: suggestion
             type: string
             required: false
             description: "Concrete fix suggestion when applicable"
+
+      - name: observations
+        type: object[]
+        required: false
+        description: "Speculative or low-evidence concerns that do not block completion"
+        object_fields:
+          - name: description
+            type: string
+            required: true
+          - name: evidence_gap
+            type: string
+            required: true
+          - name: follow_up
+            type: string
+            required: false
 
       - name: summary
         type: string
@@ -409,12 +426,13 @@ handoffs:
 # ─────────────────────────────────────────────
 # Validation behavior:
 # 1. Before delegated dispatch or direct-fallback review: verify all required context_fields are populated
-# 2. Compute confidence_threshold from round number (not hardcoded in prompt)
+# 2. Build finding_filter_policy from round number and hard-cap rules; do not compute numeric confidence tiers
 # 3. After return: verify status, findings[], summary, evidence, and verdict are all present
-# 4. Filter any findings with confidence_pct < confidence_threshold
+# 4. Move speculative or low-evidence items to observations; findings require file/line evidence, concrete impact, and a smallest useful fix
 # 5. Filter any findings that match previously_fixed descriptions
 # 6. If rubric_required: verify rubric_scores is present with all dimensions
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
-# 9. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
+# 9. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
+# 10. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
 # ─────────────────────────────────────────────

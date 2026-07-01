@@ -74,12 +74,12 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds, result, fixed_items, remaining_items when applicable, and nits before presenting review results"
+    validation: "Must include rounds (1-10), result, fixed_items, remaining_items when applicable, and nits before presenting review results"
     object_fields:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1"
+        validation: ">= 1 and <= 10"
       - name: result
         type: enum
         required: true
@@ -102,6 +102,7 @@ artifacts:
           - name: fixed_in_round
             type: int
             required: true
+            validation: ">= 1 and <= 10"
       - name: remaining_items
         type: object[]
         required: false
@@ -169,11 +170,12 @@ artifacts:
       - name: score_progression
         type: object[]
         required: true
-        description: "Weighted score per round — used for drift detection"
+        description: "Weighted score per round — used for drift detection and capped at the 10-round review limit"
         object_fields:
           - name: round
             type: int
             required: true
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true

@@ -448,9 +448,9 @@ gates:
 
       - id: R7
         severity: strict_only
-        check: "For medium+ tasks: final rubric weighted score >= 3.0 (minimum completion threshold)"
+        check: "For medium+ tasks: final rubric weighted score >= 4.0 (PASS completion threshold)"
         condition: "size in [medium, large, mega]"
-        on_fail: "Weighted score below 3.0 — the code needs significant improvement. Fix lowest-scoring dimensions and re-review. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
+        on_fail: "Weighted score below 4.0 — the review result is REFINE or PIVOT, not PASS. Fix lowest-scoring dimensions and re-review. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
 
   # ─────────────────────────────────────────────
   # DOCUMENT → COMPLETE
@@ -468,6 +468,11 @@ gates:
       - id: DOC2
         check: "Metrics JSONL entry was appended when local metrics are configured and policy-allowed; otherwise metrics_unavailable_or_disallowed is recorded in the output/final response"
         on_fail: "Append metrics when configured and allowed, or explicitly record why metrics were skipped"
+
+      - id: DOC_LEARNING_CONTROLLER
+        check: "For medium+ tasks: task journal or equivalent workflow output contains a canonical '### Learning Controller' block with Memory trend checked, Learning evidence reviewed, Review findings considered, Build/test failures considered, User corrections considered, Durable lesson decision, and Persistence evidence or No-save rationale"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Load assistant-reflexion and assistant-memory contracts, inspect Review Log findings, build/test failures, and user corrections for durable lessons, check memory trend/backend availability when allowed, then write the Learning Controller block. Use backend_unavailable or policy_disallowed when appropriate; do not require a memory write when tools are unavailable, and do not persist routine progress as a lesson."
 
       - id: DOC_SKILL_DISTILLATION
         check: "If work produced a repeatable workflow, recurring lesson, user-requested reusable procedure, or skill/constraint candidate: verified_skill_distillation exists and verifier_result is approved before promotion, or promotion_decision is skip with rationale"

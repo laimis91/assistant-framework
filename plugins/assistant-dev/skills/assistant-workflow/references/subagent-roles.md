@@ -90,7 +90,7 @@ Use the reviewer agent. This is review round {N}.
 The following {count} items were already found and fixed — do NOT re-report them:
 {previously_fixed list}
 Focus ONLY on NEW high-confidence findings.
-Confidence threshold: Round 1-2: 80%+ | Round 3-4: 85%+ | Round 5: 90%+
+Confidence threshold: Round 1-3: 80%+ | Round 4-7: 85%+ | Round 8-10: 90%+
 ```
 
 ## Fallback: agents not installed

@@ -1108,6 +1108,25 @@ else
     fail "Codex default absolute hook install failed; see /tmp/p0p4-install-codex-absolute-default.err"
 fi
 
+test_start "Codex workflow reinstall removes stale profile-excluded hook scripts"
+CODEX_STALE_HOOK_HOME="$(mktemp -d)"
+p0p4_register_cleanup "$CODEX_STALE_HOOK_HOME"
+mkdir -p "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant"
+printf '%s\n' '#!/usr/bin/env bash' 'echo stale harness gate' > "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh"
+chmod +x "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh"
+if HOME="$CODEX_STALE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-stale-hook.out 2>/tmp/p0p4-install-codex-stale-hook.err; then
+    if [[ -e "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh" ]]; then
+        fail "Codex workflow reinstall should remove stale profile-excluded harness-gate.sh"
+    elif [[ ! -x "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/stop-review.sh" ]] \
+        || [[ ! -x "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/workflow-phase-gates.sh" ]]; then
+        fail "Codex workflow reinstall should keep selected workflow hooks executable"
+    else
+        pass
+    fi
+else
+    fail "Codex stale hook cleanup install failed; see /tmp/p0p4-install-codex-stale-hook.err"
+fi
+
 test_start "Codex default reinstall upgrades explicit minimal to workflow hooks"
 CODEX_DEFAULT_REINSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_DEFAULT_REINSTALL_HOME"

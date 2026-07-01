@@ -10,12 +10,70 @@ artifacts:
     description: "The reflexion operation that was performed"
     validation: "Must be one of: reflect, recall, stats, consolidate"
 
+  - name: memory_trend_status
+    type: enum
+    required: conditional
+    condition: "When action is reflect"
+    description: "Whether trend evidence was checked before extracting lessons"
+    validation: "checked only when memory_trend or equivalent configured backend trend lookup ran; otherwise record the explicit unavailable/disallowed/not-configured outcome"
+    enum_values: [checked, backend_unavailable, policy_disallowed, not_configured, not_applicable]
+    on_fail: "Record memory trend status before returning reflection output"
+
   - name: lessons
     type: object[]
     required: false
     condition: "When action is reflect"
     description: "Lessons extracted from the completed task"
-    validation: "Each entry must include lesson (string), confidence (high, medium, or low), and applies_to (string)"
+    validation: "Each entry must include lesson, confidence, applies_to, and evidence_source; lessons must come from concrete task/review/build/user-correction evidence rather than routine progress"
+    object_fields:
+      - name: lesson
+        type: string
+        required: true
+        description: "Actionable future-facing rule or insight"
+        on_missing: fail
+      - name: confidence
+        type: enum
+        required: true
+        description: "Confidence in the lesson"
+        enum_values: [high, medium, low]
+        on_missing: fail
+      - name: applies_to
+        type: string
+        required: true
+        description: "Project, task type, technology, or workflow context where the lesson applies"
+        on_missing: fail
+      - name: evidence_source
+        type: enum
+        required: true
+        description: "Source evidence that justified the lesson"
+        enum_values: [review_finding, build_test_failure, user_correction, memory_trend, task_context]
+        on_missing: fail
+
+  - name: learning_evidence_reviewed
+    type: object[]
+    required: conditional
+    condition: "When action is reflect"
+    description: "Evidence streams inspected before extracting or skipping durable lessons"
+    validation: "Includes review findings, build/test failures, user corrections, memory trend evidence, or explicit none-with-reason entries"
+    on_fail: "Inspect the Learning Controller, Review Log, build/test results, user corrections, and memory trend status; then record evidence reviewed before completing reflection"
+    object_fields:
+      - name: evidence_type
+        type: enum
+        required: true
+        description: "Evidence category considered"
+        enum_values: [review_finding, build_test_failure, user_correction, memory_trend, none]
+        on_missing: fail
+      - name: source_reference
+        type: string
+        required: true
+        description: "Review/build/user/memory source reference or none-with-reason"
+        on_missing: fail
+      - name: considered_result
+        type: enum
+        required: true
+        description: "How the evidence affected the durable lesson decision"
+        enum_values: [lesson_extracted, skipped_not_durable, refused_sensitive]
+        on_missing: fail
 
   - name: insights_file
     type: string
@@ -23,6 +81,31 @@ artifacts:
     condition: "When a reflexion insight was recorded"
     description: "Confirmation that reflexion was recorded via memory_reflect MCP tool"
     validation: "Non-empty string confirming the reflexion was stored in the knowledge graph"
+
+  - name: persistence_decision
+    type: enum
+    required: conditional
+    condition: "When action is reflect"
+    description: "Whether the reflection produced a durable memory write or was explicitly skipped/refused/blocked"
+    validation: "Saved decisions require persistence_evidence; skipped or blocked decisions require no_save_rationale"
+    enum_values: [durable_saved, durable_updated, skipped_not_durable, backend_unavailable, policy_disallowed, refused_sensitive]
+    on_fail: "Classify the reflection outcome as saved, skipped, unavailable, disallowed, or refused before returning"
+
+  - name: persistence_evidence
+    type: string
+    required: conditional
+    condition: "When persistence_decision is durable_saved or durable_updated"
+    description: "Configured memory/reflexion backend or tool-call evidence used for durable persistence"
+    validation: "Non-empty when a durable memory write occurred; ad hoc markdown-only persistence is invalid when a backend is available"
+    on_fail: "Record configured backend/tool evidence such as memory_reflect when persistence_decision is durable_saved or durable_updated"
+
+  - name: no_save_rationale
+    type: string
+    required: conditional
+    condition: "When persistence_decision is skipped_not_durable, backend_unavailable, policy_disallowed, or refused_sensitive"
+    description: "Reason no durable memory write occurred"
+    validation: "Explains whether there was no durable evidence-backed lesson, memory backend was unavailable, policy disallowed storage, or content was sensitive"
+    on_fail: "Provide a concrete no-save rationale when no durable write occurred"
 
   - name: recalled_lessons
     type: object[]

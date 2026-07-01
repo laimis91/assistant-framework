@@ -146,7 +146,7 @@ add_accent_line(slide, 1, 2.2, 3)
 # Skill cards - row 1
 cards_r1 = [
     ("Workflow", "Structured dev\npipeline with\napproval gates"),
-    ("Review", "Autonomous loop\nmax 5 rounds\nfresh reviewer"),
+    ("Review", "Autonomous loop\nmax 10 rounds\nfresh reviewer"),
     ("Security", "STRIDE + OWASP\nCVE audit\nattack surface"),
     ("TDD", "Red-Green-Refactor\nstrict gates\nno code before test"),
 ]
@@ -220,9 +220,9 @@ add_text_box(slide, 1, 1.1, 11, 0.7, "Not one pass. An autonomous fix-and-review
 add_accent_line(slide, 1, 1.9, 3)
 
 rounds = [
-    ("Round 1", "80%+ confidence", "Fresh Reviewer finds 4 issues → Fix all → Tests pass", ORANGE),
-    ("Round 2", "85%+ confidence", "NEW Reviewer finds 1 more → Fix → Tests pass", ORANGE),
-    ("Round 3", "90%+ confidence", "NEW Reviewer → Clean. No findings above nit.", GREEN),
+    ("Round 1", "Evidence-backed", "Fresh Reviewer finds 4 issues → Fix all → Tests pass", ORANGE),
+    ("Round 2", "Fresh context", "NEW Reviewer finds 1 high-confidence issue → Fix → Tests pass", ORANGE),
+    ("Round 3", "Clean exit", "NEW Reviewer → Clean. Speculative concerns stay in Observations.", GREEN),
 ]
 
 for i, (rnd, conf, desc, clr) in enumerate(rounds):
@@ -434,7 +434,7 @@ add_accent_line(slide, 1, 1.9, 3)
 comparisons = [
     ("Others: Skills as suggestions", "Ours: Skills as mandatory enforcement"),
     ("Others: Memory as chat history", "Ours: Queryable knowledge graph + FTS5"),
-    ("Others: One-shot review", "Ours: Autonomous loop, max 5 rounds"),
+    ("Others: One-shot review", "Ours: Autonomous loop, max 10 rounds"),
     ("Others: Generic patterns", "Ours: YOUR project's patterns, learned over time"),
     ("Others: Reactive only", "Ours: Self-improving via reflexion"),
     ("Others: Single platform", "Ours: Claude + Codex + Gemini"),

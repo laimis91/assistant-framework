@@ -728,7 +728,7 @@ codex_skill_table_description() {
         assistant-onboard) printf '%s\n' "Systematic project orientation" ;;
         assistant-reflexion) printf '%s\n' "Post-task learning and calibration" ;;
         assistant-research) printf '%s\n' "Tiered research with source verification" ;;
-        assistant-review) printf '%s\n' "Autonomous review-fix loop (max 5 rounds)" ;;
+        assistant-review) printf '%s\n' "Autonomous review-fix loop (max 10 rounds)" ;;
         assistant-security) printf '%s\n' "STRIDE, OWASP, CVE analysis" ;;
         assistant-skill-creator) printf '%s\n' "Create V1 framework skills" ;;
         assistant-tdd) printf '%s\n' "Red-Green-Refactor with verification gates" ;;
@@ -1590,6 +1590,22 @@ if $INSTALL_HOOKS; then
                         'exit 0' > "$HOOKS_TARGET/$legacy_hook"
                     chmod +x "$HOOKS_TARGET/$legacy_hook"
                 done
+                for installed_hook in "$HOOKS_TARGET/"*.sh; do
+                    [[ -e "$installed_hook" ]] || continue
+                    installed_hook_name="$(basename "$installed_hook")"
+                    case "$installed_hook_name" in
+                        post-tool-context.sh|tool-failure-advisor.sh) continue ;;
+                    esac
+                    if ! hook_selected_for_profile "$installed_hook_name"; then
+                        rm -f "$installed_hook"
+                        continue
+                    fi
+                    if [[ "$AGENT" == "codex" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
+                        case "$installed_hook_name" in
+                            pre-compress.sh|post-compact.sh) rm -f "$installed_hook" ;;
+                        esac
+                    fi
+                done
                 ok "Hook scripts -> $HOOKS_TARGET/ ($HOOK_PROFILE profile)"
             else
                 info "No hook scripts found in $HOOKS_SOURCE/scripts/"
@@ -1873,7 +1889,7 @@ These rules define the operating contract for every response.
 
 6. TESTS WITH FEATURES: Every new component or feature MUST have tests in the SAME step. Include the test with the implementation work.
 
-7. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 5 rounds). Continue until the review is clean or the max round is reached.
+7. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 10 rounds). Continue until the review is clean or the max round is reached.
 
 8. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
 

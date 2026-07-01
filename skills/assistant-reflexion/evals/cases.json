@@ -22,27 +22,34 @@
       "setup_context": [
         "The assistant-reflexion skill instructions are active.",
         "A task just completed and produced reusable implementation lessons.",
+        "The task journal contains a Learning Controller block with review findings, build/test failures, and user corrections considered.",
         "Memory MCP tools are available."
       ],
       "expected_behavior": [
         "Resolves action as reflect and includes the task_description.",
         "Captures project_type, task_type, and size when available or infers them.",
+        "Checks memory_trend or records the explicit trend/backend status.",
+        "Reviews Learning Controller evidence from review findings, build/test failures, and user corrections.",
         "Summarizes wentWell and wentWrong evidence from the completed task.",
-        "Extracts lessons with confidence and applies_to fields.",
+        "Extracts lessons with confidence, applies_to, and evidence_source fields.",
         "Uses memory_reflect to record the reflexion in the knowledge graph.",
-        "Returns action_taken, lessons, insights_file or equivalent storage evidence, and status."
+        "Returns action_taken, lessons, learning_evidence_reviewed, insights_file or equivalent persistence_evidence, persistence_decision, and status."
       ],
       "pass_criteria": [
         "The response identifies action as reflect.",
-        "The response includes actionable lessons with confidence and applies_to.",
+        "The response includes actionable lessons with confidence, applies_to, and source evidence.",
+        "The response shows review findings, build/test failures, and user corrections were considered.",
         "The response names memory_reflect as the storage mechanism.",
         "The response includes evidence for what went well and wrong.",
+        "The response includes persistence_decision plus persistence_evidence when memory is available.",
         "The response does not store secrets or vague non-lessons."
       ],
       "fail_signals": [
         "Only says the task went well with no lessons.",
-        "Records reflection in an ad hoc markdown file instead of memory_reflect.",
+        "Records reflection in an ad hoc markdown file instead of memory_reflect when memory tools are available.",
         "Omits confidence or applies_to.",
+        "Omits persistence decision or storage/no-save evidence.",
+        "Saves routine task progress as a lesson.",
         "Invents task evidence not present in the session."
       ],
       "machine_expectations": {
@@ -50,16 +57,26 @@
           "action_taken",
           "reflect",
           "task_description",
+          "memory_trend_status",
+          "learning_evidence_reviewed",
+          "review_findings",
+          "build_test_failures",
+          "user_corrections",
           "memory_reflect",
           "lessons",
           "confidence",
           "applies_to",
+          "evidence_source",
+          "persistence_decision",
+          "persistence_evidence",
           "insights_file"
         ],
         "forbidden_substrings": [
           "No lessons",
           "Saved only to markdown",
+          "ad hoc markdown only",
           "confidence not needed",
+          "Saved random task progress",
           "invented evidence"
         ]
       }
@@ -110,6 +127,57 @@
           "invented lesson",
           "confidence omitted",
           "all old lessons are mandatory"
+        ]
+      }
+    },
+    {
+      "id": "post-task-reflection-records-no-save-rationale",
+      "title": "Post-task reflection records no-save rationale",
+      "category": "reflection_storage_contract",
+      "purpose": "Checks that reflection still records evidence and an explicit no-save rationale when the local memory backend is unavailable.",
+      "prompt": "Reflect on this medium Assistant Framework review slice. A reviewer found a repeated missing-contract mistake worth preserving, and the memory backend is unavailable.",
+      "setup_context": [
+        "The assistant-reflexion skill instructions are active.",
+        "The task is medium sized and has a Learning Controller block.",
+        "Memory MCP tools are unavailable.",
+        "There is one evidence-backed durable lesson candidate from the review finding."
+      ],
+      "expected_behavior": [
+        "Resolves action as reflect.",
+        "Reviews Learning Controller evidence instead of inventing lessons.",
+        "Sets memory_trend_status or persistence_decision to backend_unavailable where appropriate.",
+        "Returns learning_evidence_reviewed with the review finding source evidence.",
+        "Returns no_save_rationale instead of pretending memory_reflect succeeded.",
+        "Does not write ad hoc markdown as cross-session memory."
+      ],
+      "pass_criteria": [
+        "The response identifies action as reflect.",
+        "The response includes learning_evidence_reviewed.",
+        "The response includes persistence_decision backend_unavailable.",
+        "The response includes no_save_rationale.",
+        "The response preserves the durable lesson candidate without claiming persistence."
+      ],
+      "fail_signals": [
+        "Claims memory_reflect succeeded despite unavailable memory tools.",
+        "Writes the reflection only to markdown as durable memory.",
+        "Invents evidence not present in the task.",
+        "Omits no-save rationale."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "action_taken",
+          "reflect",
+          "learning_evidence_reviewed",
+          "review_findings",
+          "persistence_decision",
+          "backend_unavailable",
+          "no_save_rationale"
+        ],
+        "forbidden_substrings": [
+          "memory_reflect succeeded",
+          "Saved only to markdown",
+          "ad hoc markdown only",
+          "routine progress is durable"
         ]
       }
     }
