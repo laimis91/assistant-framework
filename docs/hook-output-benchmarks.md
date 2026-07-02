@@ -12,9 +12,9 @@ Current rows: 7
 
 | hook_name | scenario | stdout_bytes | stdout_words | stderr_bytes | exit_code | first_blocker_or_action |
 |---|---|---:|---:|---:|---:|---|
-| session-start | codex active task journal | 1766 | 183 | 0 | 0 | ACTIVE TASK JOURNAL (read this first — it has full task state): |
-| workflow-enforcer | codex building phase gates | 1625 | 184 | 0 | 0 | WORKFLOW STATE (auto-injected every prompt): |
-| post-compact | codex restored active task | 1526 | 154 | 0 | 0 | RESTORED AFTER COMPACTION — Task journal: |
+| session-start | codex active task journal | 980 | 102 | 0 | 0 | ACTIVE TASK JOURNAL AVAILABLE |
+| workflow-enforcer | codex building phase gates | 1626 | 184 | 0 | 0 | WORKFLOW STATE (auto-injected every prompt): |
+| post-compact | codex restored active task | 749 | 75 | 0 | 0 | RESTORED AFTER COMPACTION — Active task journal available |
 | skill-router | codex assistant-workflow route | 498 | 47 | 0 | 0 | SKILL MATCH (1/1): This request matches assistant-workflow. You MUST load and follow this SKILL.md and its contracts before acting. At minimum: triage the task size, then build with tests included in the Build phase. Skipping workflow for speed is explicitly prohibited. Required inputs for this skill: [task_description,task_type,clarification_status,unresolved_clarification_topics,clarification_defaults_applied] |
 | stop-review | codex missing spec review blocker | 371 | 54 | 0 | 0 | Task journal shows an active workflow but no Spec Review was run. You MUST run Stage 1 first: load references/prompts/spec-review.md, compare each approved plan step/task packet/component against actual changes, append a structured Spec Review entry with Result: PASS or FAIL, fix any FAIL items, then continue to quality review. |
 | subagent-monitor | codex code-writer start | 200 | 20 | 0 | 0 | SUBAGENT CONSTRAINT: You are a code writer. Write code only. Do NOT run builds or tests — builder-tester handles that. |

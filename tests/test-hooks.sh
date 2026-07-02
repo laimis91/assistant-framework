@@ -899,14 +899,18 @@ if test_start "session-start: Claude, no task journal, no memory → no output";
     fi
 fi
 
-if test_start "session-start: Claude, with task journal → outputs journal"; then
+if test_start "session-start: Claude, with task journal → compact reminder only"; then
     mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
-    echo -e "# Task\nStatus: BUILDING\nStep: implement auth" > "$TEST_PROJECT/.claude/task.md"
+    echo -e "# Task\nStatus: BUILDING\nStep: unique claude session body" > "$TEST_PROJECT/.claude/task.md"
     HOME="$TEST_AGENT_HOME" run_hook session-start.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"ACTIVE TASK JOURNAL"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"ACTIVE TASK JOURNAL AVAILABLE"* \
+        && "$HOOK_STDOUT" == *"Task journal path:"* \
+        && "$HOOK_STDOUT" == *".claude/task.md"* \
+        && "$HOOK_STDOUT" != *"unique claude session body"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout missing ACTIVE TASK JOURNAL"
+        fail "exit=$HOOK_EXIT, expected compact active journal reminder without body"
     fi
     rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
@@ -1036,9 +1040,9 @@ if test_start "session-start: Codex, with task journal → hookSpecificOutput JS
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
-if test_start "session-start: Codex, with graph rules → compact MCP retrieval instruction and journal"; then
+if test_start "session-start: Codex, with graph rules → compact MCP retrieval instruction and journal reminder"; then
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory"
-    echo -e "# Task\nStatus: BUILDING\nStep: keep task visible" > "$TEST_PROJECT/.codex/task.md"
+    echo -e "# Task\nStatus: BUILDING\nStep: unique codex session body" > "$TEST_PROJECT/.codex/task.md"
     echo '{"kind":"entity","name":"always-use-tabs","type":"rule","observations":["Always use tabs for indentation"],"sourceFile":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}' > "$TEST_AGENT_HOME/.codex/memory/graph.jsonl"
 
     local_tmp_out=$(mktemp)
@@ -1054,8 +1058,10 @@ if test_start "session-start: Codex, with graph rules → compact MCP retrieval 
         && [[ "$additional_context" == *"memory_context"* ]] \
         && [[ "$additional_context" == *"memory_search"* ]] \
         && [[ "$additional_context" == *"MCP"* ]] \
-        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
-        && [[ "$additional_context" == *"keep task visible"* ]] \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"unique codex session body"* ]] \
         && [[ "$additional_context" != *"always-use-tabs"* ]] \
         && [[ "$additional_context" != *"Always use tabs for indentation"* ]] \
         && [[ "$additional_context" != *"graph.jsonl"* ]]; then
@@ -1066,10 +1072,10 @@ if test_start "session-start: Codex, with graph rules → compact MCP retrieval 
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
-if test_start "session-start: Codex, Status DONE task journal → no active task journal"; then
+if test_start "session-start: Codex, canonical Status DONE task journal → no active task journal"; then
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
-# Task
+## Task: completed session journal
 Status: DONE
 Step: old completed work
 EOF
@@ -1145,17 +1151,14 @@ EOF
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
-if test_start "session-start: Codex, completed state dir with active state dir → active journal wins"; then
-    mkdir -p "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
-    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
-# Task
-Status: DONE
-Step: old completed work
-EOF
+if test_start "session-start: Codex, Slice Status DONE with root BUILDING → active task journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
 # Task
 Status: BUILDING
-Step: active codex work
+Step: unique root building body
+
+## Slice Status: DONE
 EOF
 
     local_tmp_out=$(mktemp)
@@ -1167,8 +1170,73 @@ EOF
 
     additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
     if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
-        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
-        && [[ "$additional_context" == *"active codex work"* ]] \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"unique root building body"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, Slice Status DONE completed a root BUILDING journal"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, nested bare Status DONE without root status → active task journal"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Task: unique nested status body
+
+## Slice
+Status: DONE
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"unique nested status body"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, nested bare Status DONE completed a journal without root status"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "session-start: Codex, completed state dir with active state dir → active journal wins"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+# Task
+Status: DONE
+Step: old completed work
+EOF
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+# Task
+Status: BUILDING
+Step: active codex unique body
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/session-start.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"session_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"active codex unique body"* ]] \
         && [[ "$additional_context" != *"old completed work"* ]]; then
         pass
     else
@@ -1182,7 +1250,7 @@ if test_start "session-start: Codex, Status NOT DONE task journal → active tas
     cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
 # Task
 Status: NOT DONE
-Step: still active work
+Step: unique not done session body
 EOF
 
     local_tmp_out=$(mktemp)
@@ -1194,8 +1262,10 @@ EOF
 
     additional_context=$(echo "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)
     if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" \
-        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL"* ]] \
-        && [[ "$additional_context" == *"still active work"* ]]; then
+        && [[ "$additional_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"unique not done session body"* ]]; then
         pass
     else
         fail "exit=$HOOK_EXIT, Status: NOT DONE was treated as completed"
@@ -1279,14 +1349,18 @@ if test_start "post-compact: Claude, no task journal → memory protocol reminde
     rm -rf "$TEST_AGENT_HOME/.claude"
 fi
 
-if test_start "post-compact: Claude, with task journal → re-injects content"; then
+if test_start "post-compact: Claude, with task journal → compact reminder only"; then
     mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
-    echo -e "# Task\nStatus: BUILDING" > "$TEST_PROJECT/.claude/task.md"
+    echo -e "# Task\nStatus: BUILDING\nStep: unique claude compact body" > "$TEST_PROJECT/.claude/task.md"
     HOME="$TEST_AGENT_HOME" run_hook post-compact.sh claude
-    if [[ $HOOK_EXIT -eq 0 && "$HOOK_STDOUT" == *"RESTORED AFTER COMPACTION"* ]]; then
+    if [[ $HOOK_EXIT -eq 0 \
+        && "$HOOK_STDOUT" == *"RESTORED AFTER COMPACTION — Active task journal available"* \
+        && "$HOOK_STDOUT" == *"Task journal path:"* \
+        && "$HOOK_STDOUT" == *".claude/task.md"* \
+        && "$HOOK_STDOUT" != *"unique claude compact body"* ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, stdout missing RESTORED AFTER COMPACTION"
+        fail "exit=$HOOK_EXIT, expected compact PostCompact reminder without body"
     fi
     rm -rf "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude"
 fi
@@ -1311,7 +1385,7 @@ fi
 
 if test_start "post-compact: Codex, with task journal → universal PostCompact JSON"; then
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
-    echo -e "# Task\nStatus: BUILDING\nStep: codex post compact" > "$TEST_PROJECT/.codex/task.md"
+    echo -e "# Task\nStatus: BUILDING\nStep: unique codex compact body" > "$TEST_PROJECT/.codex/task.md"
 
     local_tmp_out=$(mktemp)
     HOOK_EXIT=0
@@ -1324,14 +1398,46 @@ if test_start "post-compact: Codex, with task journal → universal PostCompact 
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
-        && [[ "$additional_context" == *"RESTORED AFTER COMPACTION"* ]] \
-        && [[ "$additional_context" == *"codex post compact"* ]] \
+        && [[ "$additional_context" == *"RESTORED AFTER COMPACTION — Active task journal available"* ]] \
+        && [[ "$additional_context" == *"Task journal path:"* ]] \
+        && [[ "$additional_context" == *".codex/task.md"* ]] \
+        && [[ "$additional_context" != *"unique codex compact body"* ]] \
         && [[ "$additional_context" == *"memory_context"* ]] \
         && [[ "$additional_context" == *"Preserve response phase separation after compaction"* ]] \
         && [[ "$additional_context" == *"progress/commentary updates are not final answers"* ]]; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected Codex PostCompact universal JSON, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+fi
+
+if test_start "post-compact: Codex, canonical Status DONE task journal → no active task journal reminder"; then
+    mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+## Task: completed compact journal
+Status: DONE
+Step: unique completed compact body
+EOF
+
+    local_tmp_out=$(mktemp)
+    HOOK_EXIT=0
+    env HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/post-compact.sh" \
+        > "$local_tmp_out" 2>/dev/null <<< '{"hook_event_name":"PostCompact","turn_id":"test"}' || HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat "$local_tmp_out")
+    rm -f "$local_tmp_out"
+
+    additional_context=$(echo "$HOOK_STDOUT" | jq -r '.systemMessage // empty' 2>/dev/null || true)
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
+        && [[ "$additional_context" != *"RESTORED AFTER COMPACTION — Active task journal available"* ]] \
+        && [[ "$additional_context" != *"ACTIVE TASK JOURNAL AVAILABLE"* ]] \
+        && [[ "$additional_context" != *"unique completed compact body"* ]] \
+        && [[ "$additional_context" == *"memory_context"* ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, completed Codex PostCompact journal was injected"
     fi
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
@@ -5725,6 +5831,32 @@ if test_start "workflow-guard: Edit with DONE status → no output"; then
     fi
 fi
 
+if test_start "workflow-guard: Codex nested slice BUILDING without root status → no active Build block"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+## Task: no root status journal
+
+## Slice
+Status: BUILDING
+TASK
+    echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Update File: src/App.cs\n*** End Patch"}}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    elif [[ $HOOK_EXIT -eq 0 ]] && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | grep -q "active Build/Verify"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, nested slice status triggered active Build/Verify block; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
 if test_start "workflow-guard: Edit with BUILDING status → outputs warning"; then
     mkdir -p "$TEST_PROJECT/.claude"
     echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.claude/task.md"
@@ -6118,6 +6250,80 @@ echo ""
 
 echo "task-journal-resolver.sh"
 
+if test_start "task-journal-resolver: canonical task status tokens complete journal"; then
+    RESOLVER_TEST_PROJECT=$(mktemp -d)
+    mkdir -p "$RESOLVER_TEST_PROJECT/.codex"
+    resolver_failed_status=""
+
+    for resolver_status in DONE COMPLETE COMPLETED; do
+        cat > "$RESOLVER_TEST_PROJECT/.codex/task.md" <<EOF
+## Task: canonical $resolver_status journal
+Status: $resolver_status
+EOF
+        if ! bash -c '
+            set -euo pipefail
+            . "$1"
+            assistant_task_journal_completed "$2"
+        ' bash "$HOOKS_DIR/task-journal-resolver.sh" "$RESOLVER_TEST_PROJECT/.codex/task.md"; then
+            resolver_failed_status="$resolver_status"
+            break
+        fi
+    done
+
+    if [[ -z "$resolver_failed_status" ]]; then
+        pass
+    else
+        fail "canonical Status: $resolver_failed_status was not treated as completed"
+    fi
+
+    rm -rf "$RESOLVER_TEST_PROJECT"
+fi
+
+if test_start "task-journal-resolver: nested slice statuses do not complete root task"; then
+    RESOLVER_TEST_PROJECT=$(mktemp -d)
+    mkdir -p "$RESOLVER_TEST_PROJECT/.codex"
+    resolver_nested_ok=true
+    resolver_failed_case=""
+
+    cat > "$RESOLVER_TEST_PROJECT/.codex/task.md" <<'EOF'
+## Task: active root journal
+Status: BUILDING
+
+## Slice Status: DONE
+EOF
+    if bash -c '
+        set -euo pipefail
+        . "$1"
+        assistant_task_journal_completed "$2"
+    ' bash "$HOOKS_DIR/task-journal-resolver.sh" "$RESOLVER_TEST_PROJECT/.codex/task.md"; then
+        resolver_nested_ok=false
+        resolver_failed_case="root BUILDING plus slice status"
+    fi
+
+    cat > "$RESOLVER_TEST_PROJECT/.codex/task.md" <<'EOF'
+## Task: no root status journal
+
+## Slice
+Status: DONE
+EOF
+    if $resolver_nested_ok && bash -c '
+        set -euo pipefail
+        . "$1"
+        assistant_task_journal_completed "$2"
+    ' bash "$HOOKS_DIR/task-journal-resolver.sh" "$RESOLVER_TEST_PROJECT/.codex/task.md"; then
+        resolver_nested_ok=false
+        resolver_failed_case="nested bare slice status without root status"
+    fi
+
+    if $resolver_nested_ok; then
+        pass
+    else
+        fail "$resolver_failed_case was treated as completed"
+    fi
+
+    rm -rf "$RESOLVER_TEST_PROJECT"
+fi
+
 if test_start "task-journal-resolver: cache writes stay silent on permission failure"; then
     RESOLVER_TEST_HOME=$(mktemp -d)
     RESOLVER_TEST_PROJECT=$(mktemp -d)
@@ -6350,7 +6556,7 @@ if test_start "codex default install: workflow hooks install and compaction hook
         fail "Codex default hooks.json did not register workflow/delegation hooks"
     else
         mkdir -p "$TEST_PROJECT/.codex" "$INSTALL_TEST_HOME/.codex"
-        echo -e "# Task\nStatus: BUILDING\nStep: installed codex compaction" > "$TEST_PROJECT/.codex/task.md"
+        echo -e "# Task\nStatus: BUILDING\nStep: unique installed codex compaction body" > "$TEST_PROJECT/.codex/task.md"
 
         local_tmp_out=$(mktemp)
         HOOK_EXIT=0
@@ -6366,8 +6572,11 @@ if test_start "codex default install: workflow hooks install and compaction hook
         additional_context=$(echo "$HOOK_STDOUT" | jq -r '.systemMessage // empty' 2>/dev/null || true)
         if [[ $HOOK_EXIT -eq 0 ]] \
             && is_valid_json "$HOOK_STDOUT" \
-            && echo "$HOOK_STDOUT" | jq -e 'has("hookSpecificOutput") | not' >/dev/null 2>&1 \
-            && [[ "$additional_context" == *"installed codex compaction"* ]]; then
+            && echo "$HOOK_STDOUT" | jq -e 'has("systemMessage") and (has("hookSpecificOutput") | not)' >/dev/null 2>&1 \
+            && [[ "$additional_context" == *"RESTORED AFTER COMPACTION — Active task journal available"* ]] \
+            && [[ "$additional_context" == *"Task journal path:"* ]] \
+            && [[ "$additional_context" == *".codex/task.md"* ]] \
+            && [[ "$additional_context" != *"unique installed codex compaction body"* ]]; then
             pass
         else
             fail "installed Codex post-compact hook did not emit universal JSON, stdout='$HOOK_STDOUT', install_stdout='$INSTALL_STDOUT'"
@@ -6829,6 +7038,35 @@ EOF
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-enforcer: Codex, nested Status DONE without root status → UNKNOWN phase"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'EOF'
+## Task: nested status phase regression
+Triaged as: small
+Plan approval: yes
+
+## Slice
+Status: DONE
+EOF
+    echo '{"prompt": "continue", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Task: nested status phase regression" \
+        && echo "$HOOK_STDOUT" | grep -q "Phase: UNKNOWN" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Phase: DONE" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WORKFLOW RULES"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, nested slice Status DONE became task phase; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.codex"
 fi

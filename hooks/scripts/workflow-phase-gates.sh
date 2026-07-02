@@ -19,7 +19,23 @@ assistant_phase_scalar_field() {
 }
 
 assistant_phase_status() {
-    assistant_phase_scalar_field "$1" "Status"
+    local file="$1"
+    awk '
+        function is_task_heading(line) {
+            return line ~ /^##+[[:space:]]*Task([[:space:]]*:|[[:space:]]*$)/
+        }
+        function is_nested_section(line) {
+            return line ~ /^##+[[:space:]]+/ && !is_task_heading(line)
+        }
+        is_nested_section($0) {
+            exit
+        }
+        $0 ~ "^(#[[:space:]]*)?Status:" {
+            sub("^(#[[:space:]]*)?Status:[[:space:]]*", "", $0)
+            print
+            exit
+        }
+    ' "$file" 2>/dev/null
 }
 
 assistant_phase_is_medium_plus() {

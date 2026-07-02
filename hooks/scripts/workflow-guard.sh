@@ -138,7 +138,7 @@ TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
 
 # Check if we're in an active build phase
-status=$(grep -m1 "^Status:" "$TASK_FILE" 2>/dev/null || echo "")
+status="$(assistant_phase_status "$TASK_FILE" || true)"
 if [[ "$status" != *"BUILDING"* && "$status" != *"VERIFYING"* && "$status" != *"REVIEWING"* ]]; then
     exit 0
 fi

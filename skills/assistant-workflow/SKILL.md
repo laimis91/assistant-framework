@@ -251,7 +251,7 @@ Review findings must cite evidence and concrete risk. Avoid generic style feedba
 
 ## Context Management
 
-- **On continuation**: read the active project task journal FIRST; it has the full task state
+- **On continuation**: use compact pointers first; read the active project task journal when recovery details are needed. The journal has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
 - Mega: each slice gets its own strict slice brief and context.
