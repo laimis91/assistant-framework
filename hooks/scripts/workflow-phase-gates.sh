@@ -1139,10 +1139,122 @@ assistant_phase_review_complete() {
     [[ "$(assistant_phase_review_missing_reason_key "$file")" == "complete" ]]
 }
 
+assistant_phase_latest_qa_final_result() {
+    local file="$1"
+    local minimum_line="${2:-0}"
+    awk -v minimum_line="$minimum_line" '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+        function template_placeholder(value, low) {
+            low = tolower(trim(value))
+            gsub(/`/, "", low)
+            return low ~ /^\[[^]]*\]$/ || low ~ /\|/
+        }
+        function normalize_result(value, low) {
+            if (template_placeholder(value)) return ""
+            low = tolower(trim(value))
+            gsub(/`/, "", low)
+            if (low ~ /(^|[^[:alnum:]_])not[ _-]?accepted([^[:alnum:]_]|$)/) return "not_accepted"
+            if (low ~ /(^|[^[:alnum:]_])accepted[ _-]?with[ _-]?concerns([^[:alnum:]_]|$)/) return "accepted_with_concerns"
+            if (low ~ /(^|[^[:alnum:]_])accepted([^[:alnum:]_]|$)/) return "accepted"
+            if (low ~ /(^|[^[:alnum:]_])rejected([^[:alnum:]_]|$)/) return "rejected"
+            if (low ~ /(^|[^[:alnum:]_])blocked([^[:alnum:]_]|$)/) return "blocked"
+            if (low ~ /(^|[^[:alnum:]_])not[ _-]?required([^[:alnum:]_]|$)/) return "not_required"
+            return ""
+        }
+        function record_result(value) {
+            latest = normalize_result(value)
+        }
+        function compact_final_marker(value, low) {
+            low = tolower(value)
+            return low ~ /(final[ _-]?verdict|qa[ _-]?result)/
+        }
+        BEGIN {
+            minimum_line += 0
+        }
+        NR <= minimum_line {
+            next
+        }
+        /^### QA Evaluation #[0-9]+/ {
+            latest = ""
+            next
+        }
+        {
+            line = $0
+            sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", line)
+            low = tolower(line)
+            if (low ~ /^final verdict[[:space:]]*:/) {
+                value = line
+                sub(/^[^:]*:[[:space:]]*/, "", value)
+                record_result(value)
+                next
+            }
+            if (low ~ /^qa result[[:space:]]*:/) {
+                value = line
+                sub(/^[^:]*:[[:space:]]*/, "", value)
+                record_result(value)
+                next
+            }
+            if (low ~ /^qa evaluator result[[:space:]]*:/) {
+                value = line
+                sub(/^[^:]*:[[:space:]]*/, "", value)
+                if (compact_final_marker(value) || normalize_result(value) != "") {
+                    record_result(value)
+                }
+            }
+        }
+        END {
+            if (latest != "") {
+                print latest
+                exit 0
+            }
+            exit 1
+        }
+    ' "$file" 2>/dev/null
+}
+
+assistant_phase_qa_final_result_missing_reason_key() {
+    local file="$1"
+    local minimum_line="${2:-0}"
+    local qa_result
+
+    if ! assistant_phase_requires_qa_evaluator "$file"; then
+        printf 'complete\n'
+        return 0
+    fi
+
+    qa_result="$(assistant_phase_latest_qa_final_result "$file" "$minimum_line" || true)"
+    case "$qa_result" in
+        accepted|accepted_with_concerns)
+            printf 'complete\n'
+            ;;
+        rejected)
+            printf 'qa_rejected\n'
+            ;;
+        blocked)
+            printf 'qa_blocked\n'
+            ;;
+        "")
+            printf 'qa_final_result_missing\n'
+            ;;
+        not_accepted)
+            printf 'qa_not_accepted\n'
+            ;;
+        *)
+            printf 'qa_not_accepted\n'
+            ;;
+    esac
+}
+
 assistant_phase_review_missing_reason_key() {
     local file="$1"
     local spec_pass_line
     local quality_review_line
+    local review_controller_reason
+    local qa_reason
 
     if ! assistant_phase_has_spec_review_entry "$file"; then
         printf 'no_spec_review\n'
@@ -1162,12 +1274,23 @@ assistant_phase_review_missing_reason_key() {
     fi
 
     if assistant_phase_is_medium_plus "$file"; then
-        assistant_phase_review_controller_missing_reason_key "$file" "$quality_review_line" "$spec_pass_line"
+        review_controller_reason="$(assistant_phase_review_controller_missing_reason_key "$file" "$quality_review_line" "$spec_pass_line")"
+        if [[ "$review_controller_reason" != "complete" ]]; then
+            printf '%s\n' "$review_controller_reason"
+            return 0
+        fi
+        assistant_phase_qa_final_result_missing_reason_key "$file" "$quality_review_line"
         return 0
     fi
 
     if ! assistant_phase_final_result_after_line "$file" "$quality_review_line" >/dev/null; then
         printf 'no_final_result\n'
+        return 0
+    fi
+
+    qa_reason="$(assistant_phase_qa_final_result_missing_reason_key "$file" "$quality_review_line")"
+    if [[ "$qa_reason" != "complete" ]]; then
+        printf '%s\n' "$qa_reason"
         return 0
     fi
 
@@ -1232,7 +1355,25 @@ assistant_phase_has_labeled_evidence() {
     value="$(assistant_phase_labeled_evidence_value "$file" "$label")"
 
     [[ -n "$value" ]] || return 1
-    [[ ! "$value" =~ ^(\[.*\]|none|None|NONE|n/a|N/A|missing|todo|TODO|tbd|TBD)$ ]]
+    ! assistant_phase_labeled_evidence_value_is_placeholder "$value"
+}
+
+assistant_phase_labeled_evidence_value_is_placeholder() {
+    local value="$1"
+    local low
+
+    value="$(assistant_phase_trim_value "$value")"
+    [[ -n "$value" ]] || return 0
+    assistant_phase_value_is_noneish "$value" && return 0
+    [[ "$value" =~ ^\[.*\]$ ]] && return 0
+
+    low="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+    [[ "$low" =~ ^(pending|waiting|missing|todo|tbd|none)([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^n[/.]?a([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^in[[:space:]_-]?progress([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^not[[:space:]_-]?yet([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^not[[:space:]_-]?(required|applicable)([[:space:][:punct:]]|$) ]] && return 0
+    return 1
 }
 
 assistant_phase_is_codex_task() {
@@ -1252,7 +1393,9 @@ assistant_phase_role_agent_pattern() {
         "Architect") printf 'architect|Architect' ;;
         "Code Writer") printf 'code-writer|codewriter|Code Writer' ;;
         "Builder/Tester") printf 'builder-tester|builder/tester|Builder/Tester' ;;
-        "Reviewer") printf 'reviewer|Reviewer' ;;
+        "Code Reviewer") printf 'code-reviewer|codereviewer|Code Reviewer|reviewer|Reviewer' ;;
+        "QA Evaluator") printf 'qa-evaluator|qaevaluator|QA Evaluator' ;;
+        "Reviewer") printf 'reviewer|Reviewer|code-reviewer|codereviewer|Code Reviewer' ;;
         *) printf '%s' "$1" ;;
     esac
 }
@@ -1304,7 +1447,80 @@ assistant_phase_journal_mentions_agent_id() {
     result="$(assistant_phase_labeled_evidence_value "$file" "$role result")"
     combined="$dispatch
 $result"
-    printf '%s\n' "$combined" | grep -Fq -- "$agent_id"
+    printf '%s\n' "$combined" | assistant_phase_text_mentions_agent_id_token "$agent_id"
+}
+
+assistant_phase_text_mentions_agent_id_token() {
+    local agent_id="$1"
+    [[ -n "$agent_id" ]] || return 1
+    awk -v needle="$agent_id" '
+        function is_token_char(ch) {
+            return ch ~ /^[[:alnum:]_-]$/
+        }
+        {
+            start = 1
+            while ((relative = index(substr($0, start), needle)) > 0) {
+                absolute = start + relative - 1
+                before = absolute > 1 ? substr($0, absolute - 1, 1) : ""
+                after_pos = absolute + length(needle)
+                after = after_pos <= length($0) ? substr($0, after_pos, 1) : ""
+                if (!is_token_char(before) && !is_token_char(after)) {
+                    found = 1
+                    exit
+                }
+                start = absolute + length(needle)
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
+
+assistant_phase_event_is_reviewer_compat() {
+    local json_line="$1"
+    local agent_type agent_name
+    agent_type="$(assistant_phase_json_field_value "$json_line" "agent_type" | tr '[:upper:]' '[:lower:]')"
+    agent_name="$(assistant_phase_json_field_value "$json_line" "agent_name" | tr '[:upper:]' '[:lower:]')"
+    [[ "$agent_type" == "reviewer" || "$agent_name" == "reviewer" ]]
+}
+
+assistant_phase_codex_reviewer_event_ids() {
+    local file="$1"
+    local event="$2"
+    local events_file line id
+    events_file="$(assistant_phase_subagent_events_file "$file")"
+    [[ -f "$events_file" ]] || return 1
+    while IFS= read -r line; do
+        [[ "$line" == *"\"event\":\"$event\""* ]] || continue
+        assistant_phase_event_is_reviewer_compat "$line" || continue
+        id="$(assistant_phase_json_field_value "$line" "agent_id")"
+        [[ -n "$id" ]] || continue
+        printf '%s\n' "$id"
+    done < "$events_file"
+}
+
+assistant_phase_has_qa_reviewer_compat_event_pair_evidence() {
+    local file="$1"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "QA Evaluator" "$start_id" || continue
+        if assistant_phase_codex_reviewer_event_ids "$file" "SubagentStop" | grep -Fxq -- "$start_id"; then
+            return 0
+        fi
+    done < <(assistant_phase_codex_reviewer_event_ids "$file" "SubagentStart" || true)
+    return 1
+}
+
+assistant_phase_has_qa_reviewer_compat_start_event_evidence() {
+    local file="$1"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "QA Evaluator" "$start_id" && return 0
+    done < <(assistant_phase_codex_reviewer_event_ids "$file" "SubagentStart" || true)
+    return 1
 }
 
 assistant_phase_has_role_event_pair_evidence() {
@@ -1318,6 +1534,9 @@ assistant_phase_has_role_event_pair_evidence() {
             return 0
         fi
     done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    if [[ "$role" == "QA Evaluator" ]]; then
+        assistant_phase_has_qa_reviewer_compat_event_pair_evidence "$file" && return 0
+    fi
     return 1
 }
 
@@ -1329,6 +1548,9 @@ assistant_phase_has_role_start_event_evidence() {
         [[ -n "$start_id" ]] || continue
         assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" && return 0
     done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    if [[ "$role" == "QA Evaluator" ]]; then
+        assistant_phase_has_qa_reviewer_compat_start_event_evidence "$file" && return 0
+    fi
     return 1
 }
 
@@ -1336,7 +1558,21 @@ assistant_phase_has_role_stop_event_evidence() {
     assistant_phase_has_role_event_pair_evidence "$1" "$2"
 }
 
-assistant_phase_has_role_dispatch_result_evidence() {
+assistant_phase_role_evidence_labels() {
+    case "$1" in
+        "Code Reviewer")
+            printf 'Code Reviewer\nReviewer\n'
+            ;;
+        "Reviewer")
+            printf 'Code Reviewer\nReviewer\n'
+            ;;
+        *)
+            printf '%s\n' "$1"
+            ;;
+    esac
+}
+
+assistant_phase_has_single_role_dispatch_result_evidence() {
     local file="$1"
     local role="$2"
 
@@ -1356,15 +1592,41 @@ assistant_phase_has_role_dispatch_result_evidence() {
     return 0
 }
 
+assistant_phase_has_role_dispatch_result_evidence() {
+    local file="$1"
+    local role="$2"
+    local evidence_role
+
+    while IFS= read -r evidence_role; do
+        [[ -n "$evidence_role" ]] || continue
+        assistant_phase_has_single_role_dispatch_result_evidence "$file" "$evidence_role" && return 0
+    done < <(assistant_phase_role_evidence_labels "$role")
+
+    return 1
+}
+
 assistant_phase_direct_fallback_reason_valid() {
     local file="$1"
     grep -qiE "^[[:space:]]*[-*]?[[:space:]]*Direct fallback reason:[[:space:]]*(authorization_denied|subagents_unavailable|policy_disallowed)([[:space:]]|$)" "$file" 2>/dev/null
 }
 
-assistant_phase_has_role_equivalent_evidence() {
+assistant_phase_has_single_role_equivalent_evidence() {
     local file="$1"
     local role="$2"
     assistant_phase_has_labeled_evidence "$file" "$role direct evidence"
+}
+
+assistant_phase_has_role_equivalent_evidence() {
+    local file="$1"
+    local role="$2"
+    local evidence_role
+
+    while IFS= read -r evidence_role; do
+        [[ -n "$evidence_role" ]] || continue
+        assistant_phase_has_single_role_equivalent_evidence "$file" "$evidence_role" && return 0
+    done < <(assistant_phase_role_evidence_labels "$role")
+
+    return 1
 }
 
 assistant_phase_has_per_slice_dispatch_evidence() {
@@ -1373,12 +1635,113 @@ assistant_phase_has_per_slice_dispatch_evidence() {
     assistant_phase_has_labeled_evidence "$file" "Per-slice dispatch evidence"
 }
 
+assistant_phase_requires_qa_evaluator() {
+    local file="$1"
+    awk '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+        function explicit_not_required(value, low) {
+            low = tolower(trim(value))
+            return low ~ /^(n\/a|na|not_required|not required|not-required|not-applicable|not_applicable|not applicable)([[:space:][:punct:]]|$)/
+        }
+        function bracket_placeholder(value) {
+            value = trim(value)
+            return value ~ /^\[[^]]*\]$/
+        }
+        function qa_mode_required_line(line, low) {
+            low = tolower(trim(line))
+            sub(/^[[:space:]]*[-*][[:space:]]*/, "", low)
+            return low ~ /^(qa_evaluation_mode|qa[ _-]?evaluation[ _-]?mode)[[:space:]]*[:=][[:space:]]*required([[:space:][:punct:]]|$)/ ||
+                low ~ /^(qa_evaluation_mode|qa[ _-]?evaluation[ _-]?mode)[[:space:]]+required([[:space:][:punct:]]|$)/
+        }
+        function qa_mode_not_required_line(line, low) {
+            low = tolower(trim(line))
+            sub(/^[[:space:]]*[-*][[:space:]]*/, "", low)
+            return low ~ /^(qa_evaluation_mode|qa[ _-]?evaluation[ _-]?mode)[[:space:]]*[:=][[:space:]]*(n\/a|na|not_required|not required|not-required|not_applicable|not applicable|not-applicable)([[:space:][:punct:]]|$)/ ||
+                low ~ /^(qa_evaluation_mode|qa[ _-]?evaluation[ _-]?mode)[[:space:]]+(n\/a|na|not_required|not required|not-required|not_applicable|not applicable|not-applicable)([[:space:][:punct:]]|$)/
+        }
+        function line_marks_not_required(line, low) {
+            low = tolower(line)
+            return low ~ /(^|[[:space:][:punct:]])(n\/a|not_required|not required|not-required|not-applicable|not_applicable|not applicable)([[:space:][:punct:]]|$)/
+        }
+        function qa_marker(line, low) {
+            low = tolower(line)
+            return low ~ /(qa[ _-]?evaluator|qaevaluator|qa[ _-]?evaluation|qa_evaluation_mode|qa[ _-]?loop)/
+        }
+        function scan_required_line(line) {
+            if (qa_marker(line) && !line_marks_not_required(line)) {
+                found = 1
+            }
+        }
+        function scan_qa_label(line, value, low) {
+            sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", line)
+            low = tolower(line)
+            if (low ~ /^(qa evaluator dispatch|qa evaluator result|qa evaluator direct evidence):/) {
+                value = line
+                sub(/^[^:]*:[[:space:]]*/, "", value)
+                if (!bracket_placeholder(value) && !explicit_not_required(value)) {
+                    found = 1
+                }
+            }
+        }
+        {
+            line = $0
+            low = tolower(line)
+            if (qa_mode_required_line(line)) {
+                required_mode = 1
+                found = 1
+                next
+            }
+            if (qa_mode_not_required_line(line)) {
+                not_required_mode = 1
+                next
+            }
+
+            scan_qa_label(line)
+
+            if (low ~ /^required agents:[[:space:]]*$/) {
+                in_required_agents = 1
+                in_required_gates = 0
+                next
+            }
+            if (low ~ /^required gates:[[:space:]]*$/) {
+                in_required_gates = 1
+                in_required_agents = 0
+                next
+            }
+            if (low ~ /^required agents:[[:space:]]*.+$/ ||
+                low ~ /^required gates:[[:space:]]*.+$/) {
+                scan_required_line(line)
+                next
+            }
+            if ((in_required_agents || in_required_gates) && line ~ /^[[:space:]]*-[[:space:]]+/) {
+                scan_required_line(line)
+                next
+            }
+            if ((in_required_agents || in_required_gates) && line ~ /^[^[:space:]-]/) {
+                in_required_agents = 0
+                in_required_gates = 0
+            }
+        }
+        END {
+            if (not_required_mode && !required_mode) {
+                exit 1
+            }
+            exit found ? 0 : 1
+        }
+    ' "$file" 2>/dev/null
+}
+
 assistant_phase_required_subagent_roles() {
     local file="$1"
-    local status mode
+    local status mode qa_required
     status="$(assistant_phase_status "$file" | tr '[:upper:]' '[:lower:]' || true)"
     mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
-    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" '
+    qa_required="$(assistant_phase_requires_qa_evaluator "$file" && printf yes || printf no)"
+    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" -v qa_required="$qa_required" '
         function emit(role) {
             if (!seen[role]) {
                 seen[role] = 1
@@ -1392,7 +1755,12 @@ assistant_phase_required_subagent_roles() {
             if (low ~ /architect/) emit("Architect")
             if (low ~ /code writer|code-writer/) emit("Code Writer")
             if (low ~ /builder\/tester|builder-tester/) emit("Builder/Tester")
-            if (low ~ /reviewer/) emit("Reviewer")
+            if (low ~ /qa[ _-]?evaluator|qaevaluator/) emit("QA Evaluator")
+            if (low ~ /code[ _-]?reviewer|codereviewer/) {
+                emit("Code Reviewer")
+            } else if (low ~ /(^|[^[:alnum:]_-])reviewer([^[:alnum:]_-]|$)/) {
+                emit("Code Reviewer")
+            }
         }
         BEGIN {
             # Medium+ discovery always requires a Code Mapper context map once
@@ -1402,7 +1770,8 @@ assistant_phase_required_subagent_roles() {
             # Once a delegated/fallback task is in Review/Document, the review
             # role is required even for no-op/no-code-change outcomes; otherwise
             # "review phase" can be satisfied inline while claiming delegated mode.
-            if (mode ~ /^(delegated|direct_fallback)$/ && status ~ /(reviewing|documenting)/) emit("Reviewer")
+            if (mode ~ /^(delegated|direct_fallback)$/ && status ~ /(reviewing|documenting)/) emit("Code Reviewer")
+            if (qa_required == "yes") emit("QA Evaluator")
         }
         /^Required agents:[[:space:]]*$/ { in_required = 1; next }
         /^Required agents:[[:space:]]*(.+)$/ {
@@ -1443,7 +1812,7 @@ assistant_phase_subagent_evidence_missing_reason_key() {
     # Strict subagent evidence applies whenever workflow subagent roles are
     # declared, not only when source code changed. Discovery/review-only work can
     # legitimately skip Code Writer and Builder/Tester, but delegated Code Mapper,
-    # Explorer, Architect, or Reviewer responsibilities still need evidence.
+    # Explorer, Architect, or Code Reviewer responsibilities still need evidence.
     if [[ -z "$roles" ]]; then
         printf 'complete\n'
         return 0

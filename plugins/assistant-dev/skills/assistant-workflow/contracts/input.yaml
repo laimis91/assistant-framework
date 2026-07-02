@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Reviewer responsibilities."
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs when explicitly recorded."
     default: []
     on_missing: skip
 
@@ -134,6 +134,20 @@ fields:
     default: []
     on_missing: skip
     notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
+
+  - name: qa_evaluation_mode
+    type: enum
+    required: false
+    enum_values: [not_required, optional, required]
+    description: "Whether Review phase should run the independent QA Evaluator acceptance loop after build/test and code-review evidence"
+    validation: "required for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work; not_required must be justified when a medium+ harness task skips QA"
+    default: not_required
+    on_missing: infer
+    infer_from: >
+      Use required when the task is medium+ harness-capable, has a Done Contract, is domain-scored,
+      affects UI/visual/product/UX/docs/DX quality, or explicitly requests QA/acceptance evaluation.
+      Use optional when acceptance material exists but QA is not required.
+      Use not_required for trivial/small code-review-only work with no separate acceptance evidence need.
 
   - name: search_mode
     type: enum

@@ -40,6 +40,86 @@ else
     fail "workflow handoffs missing worker status protocol terms: ${missing_worker_status_terms[*]}"
 fi
 
+test_start "workflow handoffs define typed artifact references for worker packets"
+workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+output_contract="$workflow_dir/contracts/output.yaml"
+plan_template="$workflow_dir/references/plan-template.md"
+task_journal_template="$workflow_dir/references/task-journal-template.md"
+phases_ref="$workflow_dir/references/phases.md"
+harness_ref="$workflow_dir/references/harness-controller.md"
+missing_typed_artifact_terms=()
+for term in \
+    "artifact_reference_protocol:" \
+    "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
+    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]" \
+    "location_ref is the typed location/ref pointer" \
+    "Producer responsibility: create or update the artifact" \
+    "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
+    "CodeWriter and BuilderTester task packets receive artifact_refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
+    "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable." \
+    "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation." \
+    "- name: artifact_refs" \
+    "schema_or_contract" \
+    "validation_status"; do
+    if ! grep -Fq -- "$term" "$handoffs_file"; then
+        missing_typed_artifact_terms+=("handoffs.yaml: $term")
+    fi
+done
+for term in \
+    "- name: artifact_reference_ledger" \
+    "artifact_id" \
+    "artifact_type" \
+    "producer" \
+    "consumer" \
+    "location_ref" \
+    "schema_or_contract" \
+    "validation_status" \
+    "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
+    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]" \
+    "- name: pivot_restart_decision"; do
+    if ! grep -Fq -- "$term" "$output_contract"; then
+        missing_typed_artifact_terms+=("output.yaml: $term")
+    fi
+done
+for term in \
+    "## Artifact Reference Ledger" \
+    "Typed artifact refs:" \
+    "Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary"; do
+    if ! grep -Fq -- "$term" "$plan_template"; then
+        missing_typed_artifact_terms+=("plan-template.md: $term")
+    fi
+done
+for term in \
+    "## Artifact Reference Ledger" \
+    "Producer roles update Artifact Reference Ledger entries" \
+    'Consumer roles validate `schema_or_contract` and update `validation_status`'; do
+    if ! grep -Fq -- "$term" "$task_journal_template"; then
+        missing_typed_artifact_terms+=("task-journal-template.md: $term")
+    fi
+done
+for term in \
+    "Artifact Reference Ledger before task packets" \
+    'typed `artifact_refs`' \
+    "changed_files, verification_evidence, pivot_restart_decision, and plan_deviation refs"; do
+    if ! grep -Fq -- "$term" "$phases_ref"; then
+        missing_typed_artifact_terms+=("phases.md: $term")
+    fi
+done
+for term in \
+    "## Typed Artifact References" \
+    "Producer responsibility: create or update the artifact" \
+    'Consumer responsibility: validate `schema_or_contract` and' \
+    "Done Contract, Harness Recipe, Harness Run State, Trace"; do
+    if ! grep -Fq -- "$term" "$harness_ref"; then
+        missing_typed_artifact_terms+=("harness-controller.md: $term")
+    fi
+done
+if [[ "${#missing_typed_artifact_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow typed artifact reference terms missing: ${missing_typed_artifact_terms[*]}"
+fi
+
 test_start "CodeMapper and Explorer return schemas require status evidence"
 missing_discovery_schema_terms=()
 for handoff in orchestrator_to_code_mapper orchestrator_to_explorer; do
@@ -117,8 +197,8 @@ if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED
 fi
 for term in \
     "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED" \
-    "For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, and files_changed with real implementation evidence" \
-    "for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file entries"; do
+    "For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, files_changed, and typed artifact_refs when the task packet carried artifact_refs or harness_capable == true" \
+    "for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries"; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_code_writer_status_terms+=("$term")
     fi

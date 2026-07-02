@@ -51,6 +51,39 @@ else
     fail "Claude/Codex prompts missing worker status packet terms: ${missing_prompt_packet_terms[*]}"
 fi
 
+test_start "Code Reviewer prompts are canonical read-only code review role"
+missing_code_reviewer_terms=()
+for file in \
+    agents/codex/code-reviewer.toml \
+    agents/claude/code-reviewer.md; do
+    for term in \
+        "canonical code reviewer" \
+        "code defects, security, architecture, test coverage, and structural code issues" \
+        "Start with a status packet:" \
+        '`status`: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`' \
+        '`evidence`: review material, files, searches, or checks supporting the verdict' \
+        "Do NOT edit any files" \
+        "Stay in the code-review lane"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            missing_code_reviewer_terms+=("$file: $term")
+        fi
+    done
+done
+if ! grep -Fq 'sandbox_mode = "read-only"' "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml"; then
+    missing_code_reviewer_terms+=("agents/codex/code-reviewer.toml: read-only sandbox")
+fi
+if ! grep -Fq 'tools: Read, Grep, Glob, LS' "$FRAMEWORK_DIR/agents/claude/code-reviewer.md"; then
+    missing_code_reviewer_terms+=("agents/claude/code-reviewer.md: read-only tools")
+fi
+if grep -Eq '^tools: .*Edit|^tools: .*Write|^tools: .*Bash' "$FRAMEWORK_DIR/agents/claude/code-reviewer.md"; then
+    missing_code_reviewer_terms+=("agents/claude/code-reviewer.md: unexpected write/shell tools")
+fi
+if [[ "${#missing_code_reviewer_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "Code Reviewer prompts missing canonical read-only role terms: ${missing_code_reviewer_terms[*]}"
+fi
+
 test_start "Codex mapper explorer architect prompts include status packet guidance"
 missing_codex_discovery_status_terms=()
 for file in \

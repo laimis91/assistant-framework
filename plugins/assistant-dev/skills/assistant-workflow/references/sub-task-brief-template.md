@@ -36,8 +36,8 @@ Workflow:
 ## Slice Brief: [name]
 
 ### Agent
-Agent: [code-writer | architect | reviewer | explorer | builder-tester | code-mapper]
-Role: [Implementer | Architect | Reviewer | Explorer]
+Agent: [code-writer | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
+Role: [Implementer | Architect | Code Reviewer | QA Evaluator | Reviewer compatibility | Explorer]
 
 ### Context
 Project: [name]
@@ -104,8 +104,15 @@ When the slice is complete, report status using one of these values:
 | `DONE` | All acceptance criteria met, tests pass, no concerns | Proceed to integration |
 | `DONE_WITH_CONCERNS` | Criteria met but there are trade-offs or risks worth noting | Orchestrator reviews concerns before integration |
 | `NEEDS_CONTEXT` | Blocked by missing information not in the brief | Orchestrator provides context or adjusts the brief |
-| `BLOCKED` | Cannot proceed — dependency issue, tooling failure, or design conflict | Orchestrator investigates and unblocks |
-| `DEVIATED` | Work cannot follow the strict slice packet exactly | Orchestrator applies the deviation rollback rule before continuing |
+| `BLOCKED` | Cannot proceed — dependency issue, tooling failure, legacy blocker, or design conflict | Orchestrator classifies recovery and unblocks |
+| `DEVIATED` | Work cannot follow the strict slice packet exactly | Orchestrator applies the deviation rollback rule and reapproval when scope/files/behavior/risk changes |
+
+Unexpected blockers must be classified. Use `blocker_type` values:
+`legacy_code_bug`, `broken_baseline`, `hidden_dependency`, `missing_contract`,
+`stale_plan`, `scope_conflict`, `tool_environment`, `permission_policy`,
+`tdd_red_missing`, or `other`. Do not widen scope, patch around legacy blockers
+blindly, or invent a new plan. Return evidence so the orchestrator can route to
+debugging, explorer, architect, candidate search, replan, or restart.
 
 **Report format:**
 ```text
@@ -118,6 +125,8 @@ When the slice is complete, report status using one of these values:
 - [trade-off or risk worth noting]
 
 ### Blocker (if NEEDS_CONTEXT or BLOCKED)
+- blocker_type: [legacy_code_bug | broken_baseline | hidden_dependency | missing_contract | stale_plan | scope_conflict | tool_environment | permission_policy | tdd_red_missing | other]
+- blocker_evidence: [file paths, missing fields, baseline failure, tool/environment symptom, or scope conflict]
 - What's needed: [specific missing information or resolution]
 
 ### Changes made

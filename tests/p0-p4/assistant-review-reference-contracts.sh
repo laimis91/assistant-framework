@@ -127,4 +127,31 @@ else
     fail "assistant-review medium rubric clean-exit threshold contract drifted: ${review_threshold_failures[*]}"
 fi
 
+test_start "assistant-review phase-gate IDs are unique"
+phase_gate_id_failures=()
+for phase_gate_file in \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/phase-gates.yaml"; do
+    if [[ ! -f "$phase_gate_file" ]]; then
+        phase_gate_id_failures+=("${phase_gate_file#$FRAMEWORK_DIR/}: missing")
+        continue
+    fi
+
+    duplicate_phase_gate_ids="$(
+        awk '/^[[:space:]]+- id: / { count[$3]++ } END { for (id in count) if (count[id] > 1) print id }' "$phase_gate_file" \
+            | sort
+    )"
+
+    if [[ -n "$duplicate_phase_gate_ids" ]]; then
+        duplicate_phase_gate_ids="${duplicate_phase_gate_ids//$'\n'/ }"
+        phase_gate_id_failures+=("${phase_gate_file#$FRAMEWORK_DIR/}: duplicate ids $duplicate_phase_gate_ids")
+    fi
+done
+
+if [[ "${#phase_gate_id_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review phase-gate IDs must be unique: ${phase_gate_id_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

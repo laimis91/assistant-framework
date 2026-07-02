@@ -41,6 +41,8 @@ fi
 
 role_constraint=""
 case "$AGENT_NAME" in
+    code-reviewer) role_constraint="SUBAGENT CONSTRAINT: You are a code reviewer. Read-only code/security/architecture/test-coverage review. Do NOT edit any files. Report findings only." ;;
+    qa-evaluator) role_constraint="SUBAGENT CONSTRAINT: You are a QA evaluator. Read-only acceptance, Done Contract, verification evidence, domain quality, score progression, and final result evaluation. Do NOT edit any files. Do NOT replace code-reviewer." ;;
     reviewer) role_constraint="SUBAGENT CONSTRAINT: You are a reviewer. Do NOT edit any files. Report findings only." ;;
     architect) role_constraint="SUBAGENT CONSTRAINT: You are an architect. Do NOT write implementation code. Design only." ;;
     explorer) role_constraint="SUBAGENT CONSTRAINT: You are an explorer. Read-only analysis. Do NOT modify any files." ;;
@@ -93,7 +95,8 @@ fi
 
 role_name=""
 case "$AGENT_NAME" in
-    reviewer) role_name="Reviewer" ;;
+    code-reviewer|reviewer) role_name="Reviewer" ;;
+    qa-evaluator) role_name="QAEvaluator" ;;
     architect) role_name="Architect" ;;
     explorer) role_name="Explorer" ;;
     code-mapper) role_name="CodeMapper" ;;

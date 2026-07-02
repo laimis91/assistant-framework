@@ -102,7 +102,7 @@ fi
 
 subagent_missing_key="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE")"
 if [[ "$subagent_missing_key" != "complete" ]]; then
-    SUBAGENT_REASON="Task journal subagent evidence gate failed ($subagent_missing_key). If authorization is required, ask once for the needed subagent delegation scope and wait before continuing phases that require subagents. For delegated mode, record Agent Dispatch Log evidence with dispatch/result entries for every required workflow role (Code Mapper/Explorer/Architect during discovery/decomposition/planning when required, Code Writer and Builder/Tester during Build when required, and Reviewer during Review). Medium+ implementation work also needs per-slice dispatch evidence when implementation slices exist. For direct_fallback, record an explicit reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus role-equivalent direct evidence for every required workflow role. Silent fallback, unresolved authorization, inline review in delegated mode, or not_applicable with required roles cannot complete."
+    SUBAGENT_REASON="Task journal subagent evidence gate failed ($subagent_missing_key). If authorization is required, ask once for the needed subagent delegation scope and wait before continuing phases that require subagents. For delegated mode, record Agent Dispatch Log evidence with dispatch/result entries for every required workflow role (Code Mapper/Explorer/Architect during discovery/decomposition/planning when required, Code Writer and Builder/Tester during Build when required, and Code Reviewer during Review; legacy Reviewer labels are compatibility routing only). Medium+ implementation work also needs per-slice dispatch evidence when implementation slices exist. For direct_fallback, record an explicit reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus role-equivalent direct evidence for every required workflow role, including Code Reviewer direct evidence during Review. Silent fallback, unresolved authorization, inline review in delegated mode, or not_applicable with required roles cannot complete."
     if $IS_GEMINI; then
         touch "${RETRY_FLAG}"
         jq -n --arg reason "$SUBAGENT_REASON" '{decision: "retry", reason: $reason}'
@@ -127,6 +127,14 @@ elif [[ "$review_missing_key" == "no_quality_review" ]]; then
     REVIEW_REASON="Task journal has Spec Review PASS but no Quality Review. You MUST run Stage 2 separately: load assistant-review SKILL.md and contracts, run the autonomous quality review loop, and append a Quality Review entry. Quality review cannot substitute for Spec Review, and Spec Review cannot substitute for quality review."
 elif [[ "$review_missing_key" == "no_final_result" ]]; then
     REVIEW_REASON="Task journal has review entries but the review cycle is not complete — no Final Result found. You must finish the review cycle: fix remaining must-fix issues, re-test, re-review, and write the Final Result summary in the Review Log section of the task journal."
+elif [[ "$review_missing_key" == "qa_rejected" ]]; then
+    REVIEW_REASON="QA required and the latest QA Evaluation was rejected (qa_rejected). Fix the QA findings, rerun QA, and record QA Evaluation evidence; the QA final verdict/result must be accepted or accepted_with_concerns before stopping."
+elif [[ "$review_missing_key" == "qa_blocked" ]]; then
+    REVIEW_REASON="QA required and the latest QA Evaluation is blocked (qa_blocked). Resolve the QA blocker, rerun QA, and record QA Evaluation evidence; the QA final verdict/result must be accepted or accepted_with_concerns before stopping."
+elif [[ "$review_missing_key" == "qa_final_result_missing" ]]; then
+    REVIEW_REASON="QA required but the QA final verdict/result is missing (qa_final_result_missing). Run or rerun QA and record QA Evaluation evidence; the QA final verdict/result must be accepted or accepted_with_concerns before stopping."
+elif [[ "$review_missing_key" == "qa_not_accepted" ]]; then
+    REVIEW_REASON="QA required but the QA final verdict/result is not accepted (qa_not_accepted). Fix or rerun QA and record QA Evaluation evidence; the QA final verdict/result must be accepted or accepted_with_concerns before stopping."
 elif [[ "$review_missing_key" == "missing_review_round" ]]; then
     REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_review_round). Add '- Round: N of 10' to the latest Quality Review entry after the latest Spec Review PASS."
 elif [[ "$review_missing_key" == "round_overflow" ]]; then

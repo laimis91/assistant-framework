@@ -691,7 +691,8 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
     "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
     "skills/assistant-workflow/contracts/input.yaml|not_applicable is invalid for Build"
-    "skills/assistant-workflow/contracts/input.yaml|Code Writer, Builder/Tester, and Reviewer"
+    "skills/assistant-workflow/contracts/input.yaml|Code Writer, Builder/Tester, and Code Reviewer"
+    "skills/assistant-workflow/contracts/input.yaml|Reviewer may satisfy only compatibility routing"
     "skills/assistant-workflow/contracts/input.yaml|subagent_authorization_scope"
     "skills/assistant-workflow/contracts/output.yaml|subagent_policy_state"
     "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
@@ -727,7 +728,8 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
     "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
     "skills/assistant-workflow/references/phases.md|add Code Mapper to \`Required agents\`"
-    "skills/assistant-workflow/references/phases.md|Add Reviewer to \`Required agents\` before Stage 2"
+    "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
+    "skills/assistant-workflow/references/phases.md|\`Reviewer\` only as compatibility routing"
     "skills/assistant-workflow/references/phases.md|subagent_execution_mode=delegated"
     "skills/assistant-workflow/references/phases.md|Direct fallback mode"
     "skills/assistant-workflow/references/phases.md|Silent fallback cannot complete"
@@ -741,6 +743,12 @@ for pair in "${workflow_subagent_gate_terms[@]}"; do
         fi
     done
 done
+if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    missing_workflow_subagent_gate+=("skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
+fi
+if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/phases.md"; then
+    missing_workflow_subagent_gate+=("plugins/assistant-dev/skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
+fi
 if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
     pass
 else
@@ -2033,6 +2041,114 @@ if rg -n "component_manifest|component_verification_summary|component_name|compo
     fail "found stale component execution artifacts; see $stale_component_artifacts_file"
 else
     pass
+fi
+
+test_start "workflow pivot restart controller records decision packets and recovery refs"
+missing_pivot_restart_terms=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::- name: pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::trigger" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::affected_slice_or_round" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::options_considered" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::selected_action" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::reapproval_required" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::next_agent" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::recovery_pointer" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::exact_next_action" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::pivot_restart_decision_ref" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::B_CODE_WRITER_BLOCKER_ROUTING" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::R_PIVOT_RESTART_DECISION" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::INV_PIVOT_RESTART_REAPPROVAL" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::## Pivot/Restart Controller" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::Round 10 remains terminal" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Code Writer unexpected blockers" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::## Pivot/Restart Log" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::pivot_restart_decision"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        missing_pivot_restart_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#missing_pivot_restart_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow pivot/restart controller missing decision packet terms: ${missing_pivot_restart_terms[*]}"
+fi
+
+test_start "workflow CodeWriter unexpected blockers classify and route recovery"
+missing_codewriter_blocker_terms=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::blocker_type" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::blocker_evidence" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::legacy_code_bug" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::broken_baseline" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::hidden_dependency" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::missing_contract" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::stale_plan" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::scope_conflict" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::tool_environment" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::tdd_red_missing" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::debugging, explorer, architect, candidate_search, replan, restart" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md::Unexpected blockers must be classified" \
+    "$FRAMEWORK_DIR/agents/codex/code-writer.toml::Unexpected blocker protocol" \
+    "$FRAMEWORK_DIR/agents/codex/code-writer.toml::Do not widen scope" \
+    "$FRAMEWORK_DIR/agents/claude/code-writer.md::Unexpected blocker protocol" \
+    "$FRAMEWORK_DIR/agents/claude/code-writer.md::Do not widen scope"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        missing_codewriter_blocker_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#missing_codewriter_blocker_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "CodeWriter blocker classification and orchestrator routing terms missing: ${missing_codewriter_blocker_terms[*]}"
+fi
+
+test_start "assistant-review stagnation and QA pivot escalate to pivot restart decision"
+missing_review_pivot_terms=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::pivot_restart_signal" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::orchestrator records pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::pivot_restart_signal" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::- name: pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::ESCALATE_PIVOT_RESTART" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::QA STAGNATION, repeated DRIFT, repeated REGRESSION, or scoped domain action pivot" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::Pivot/Restart Decision Packet" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::repeated DRIFT triggers pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::Pivot/Restart Escalation" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::QA does not silently continue"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        missing_review_pivot_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#missing_review_pivot_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review pivot/restart stagnation escalation terms missing: ${missing_review_pivot_terms[*]}"
+fi
+
+test_start "assistant-review removes stale loose stagnation and drift exits"
+stale_pivot_restart_terms=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::May need to PIVOT or accept current state with documented limitations" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::On 3+ DRIFT occurrences: stop the loop and present findings for manual review"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ -f "$file" ]] && grep -Fq -- "$term" "$file"; then
+        stale_pivot_restart_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#stale_pivot_restart_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "stale loose stagnation/drift exits remain: ${stale_pivot_restart_terms[*]}"
 fi
 
 test_start "workflow decompose surfaces reject broad layer module folder strategies"

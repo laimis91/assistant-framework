@@ -16,6 +16,7 @@ skill: assistant-workflow
 # ─────────────────────────────────────────────
 worker_status_protocol:
   description: "CodeMapper, Explorer, Architect, CodeWriter, BuilderTester, and Reviewer returns include a compact status packet so the orchestrator can route results deterministically."
+  qa_evaluator_description: "QAEvaluator returns include a compact status packet for acceptance, Done Contract, verification evidence, score progression, and final QA result; it does not replace Reviewer/code-reviewer."
   statuses:
     - value: DONE
       meaning: "No known concerns; requested work completed within scope."
@@ -34,6 +35,7 @@ worker_status_protocol:
     - "evidence is required for CodeMapper, Explorer, Architect, CodeWriter, and Reviewer returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION."
     - "verification.evidence is required for BuilderTester returns."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+    - "blocker_type and blocker_evidence are required for CodeWriter returns with NEEDS_CONTEXT, BLOCKED, or DEVIATED when implementation hits an unexpected blocker."
     - "deviation_details is required for Architect and CodeWriter returns with DEVIATED."
     - "CodeMapper, Explorer, and Reviewer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED."
     - "Architect and CodeWriter status values also include DEVIATED."
@@ -41,6 +43,24 @@ worker_status_protocol:
     - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur."
     - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."
     - "findings is required for Reviewer returns."
+    - "acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_entry are required for QAEvaluator returns; selected_domain_rubrics and domain_quality_scores are required only when scoped domain rubrics are selected."
+
+# ─────────────────────────────────────────────
+# Typed Artifact Reference Protocol
+# ─────────────────────────────────────────────
+artifact_reference_protocol:
+  description: "Typed Artifact Reference entries are the compact producer/consumer ledger for harness task packets and worker returns; use them instead of ad hoc string refs when passing artifacts between agents."
+  required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]
+  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+  validation_statuses: [pending, valid, invalid, stale, not_applicable]
+  packet_rules:
+    - "Artifact Reference entries must include artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary."
+    - "location_ref is the typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable external artifact ref."
+    - "Producer responsibility: create or update the artifact, assign artifact_id, set artifact_type, location_ref, schema_or_contract, validation_status, and summary."
+    - "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref; stale, invalid, or missing refs block phase advancement or trigger re-dispatch."
+    - "CodeWriter and BuilderTester task packets receive artifact_refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
+    - "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable."
+    - "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation."
 
 # ─────────────────────────────────────────────
 # Orchestrator → CodeMapper
@@ -669,6 +689,50 @@ handoffs:
             type: string[]
             required: true
             description: "Observable behavior this task packet must deliver"
+          - name: done_contract_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the accepted Done Contract containing done_when, not_done_when, verification, owner_consumer, acceptance_criteria, and debate_record"
+          - name: harness_recipe_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the selected Harness Recipe based on task/model/risk/context profile"
+          - name: artifact_refs
+            type: object[]
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            min_items: 5
+            description: "Typed Artifact Reference entries that the task packet passes to CodeWriter and BuilderTester; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            object_fields:
+              - name: artifact_id
+                type: string
+                required: true
+              - name: artifact_type
+                type: enum
+                required: true
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: location_ref
+                type: string
+                required: true
+                description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+              - name: schema_or_contract
+                type: string
+                required: true
+              - name: validation_status
+                type: enum
+                required: true
+                enum_values: [pending, valid, invalid, stale, not_applicable]
+              - name: summary
+                type: string
+                required: true
           - name: test_criteria
             type: string[]
             required: true
@@ -805,6 +869,50 @@ handoffs:
           - name: acceptance_criteria
             type: string[]
             required: true
+          - name: done_contract_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the accepted Done Contract containing done_when, not_done_when, verification, owner_consumer, acceptance_criteria, and debate_record"
+          - name: harness_recipe_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the selected Harness Recipe based on task/model/risk/context profile"
+          - name: artifact_refs
+            type: object[]
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            min_items: 5
+            description: "Typed Artifact Reference entries CodeWriter receives before implementation; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            object_fields:
+              - name: artifact_id
+                type: string
+                required: true
+              - name: artifact_type
+                type: enum
+                required: true
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: location_ref
+                type: string
+                required: true
+                description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+              - name: schema_or_contract
+                type: string
+                required: true
+              - name: validation_status
+                type: enum
+                required: true
+                enum_values: [pending, valid, invalid, stale, not_applicable]
+              - name: summary
+                type: string
+                required: true
           - name: files_to_create
             type: string[]
             required: true
@@ -930,6 +1038,34 @@ handoffs:
         required: false
         condition: "status in [NEEDS_CONTEXT, BLOCKED]"
         description: "Questions or blocker details the orchestrator must resolve before implementation can continue"
+      - name: blocker_type
+        type: enum
+        required: conditional
+        condition: "status in [NEEDS_CONTEXT, BLOCKED, DEVIATED] because implementation hit an unexpected blocker, missing contract, stale plan, scope conflict, or required RED evidence gap"
+        enum_values: [legacy_code_bug, broken_baseline, hidden_dependency, missing_contract, stale_plan, scope_conflict, tool_environment, permission_policy, tdd_red_missing, other]
+        description: "Classifies the implementation blocker so the orchestrator can route recovery instead of asking CodeWriter to improvise through it."
+        validation: "Use the most specific blocker type. DEVIATED is required when continuing would change approved scope, files, behavior, risk, or verification expectations."
+        on_missing: fail
+      - name: blocker_evidence
+        type: object[]
+        required: conditional
+        condition: "blocker_type is present"
+        min_items: 1
+        description: "Evidence for the blocker: file paths, baseline failures, missing contract fields, stale task-packet assumptions, tool/environment errors, or scope conflict details."
+        on_missing: fail
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: recovery_hint
+        type: enum
+        required: false
+        condition: "blocker_type is present"
+        enum_values: [debugging, explorer, architect, candidate_search, replan, restart, user_clarification, environment_fix, permission_request]
+        description: "Optional non-binding recovery hint; the orchestrator owns the final pivot_restart_decision."
       - name: files_changed
         type: object[]
         required: false
@@ -945,6 +1081,40 @@ handoffs:
             required: true
             enum_values: [created, modified, deleted]
           - name: description
+            type: string
+            required: true
+      - name: artifact_refs
+        type: object[]
+        required: false
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED] and current_task_packet.artifact_refs is present or harness_capable == true; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        min_items: 0
+        description: "Typed Artifact Reference entries produced or updated by CodeWriter; include changed_files refs for modified files and plan_deviation refs when implementation departs from the approved task packet."
+        object_fields:
+          - name: artifact_id
+            type: string
+            required: true
+          - name: artifact_type
+            type: enum
+            required: true
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+          - name: producer
+            type: string
+            required: true
+          - name: consumer
+            type: string
+            required: true
+          - name: location_ref
+            type: string
+            required: true
+            description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+          - name: schema_or_contract
+            type: string
+            required: true
+          - name: validation_status
+            type: enum
+            required: true
+            enum_values: [pending, valid, invalid, stale, not_applicable]
+          - name: summary
             type: string
             required: true
       - name: tests_written
@@ -968,7 +1138,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected at minimum. For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, and files_changed with real implementation evidence; for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file entries."
+    on_missing_field: "CodeWriter must always return status and deviation_detected at minimum. For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, files_changed, and typed artifact_refs when the task packet carried artifact_refs or harness_capable == true; for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
@@ -1021,6 +1191,50 @@ handoffs:
           - name: acceptance_criteria
             type: string[]
             required: true
+          - name: done_contract_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the accepted Done Contract containing done_when, not_done_when, verification, owner_consumer, acceptance_criteria, and debate_record"
+          - name: harness_recipe_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the selected Harness Recipe based on task/model/risk/context profile"
+          - name: artifact_refs
+            type: object[]
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            min_items: 5
+            description: "Typed Artifact Reference entries BuilderTester receives before verification; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            object_fields:
+              - name: artifact_id
+                type: string
+                required: true
+              - name: artifact_type
+                type: enum
+                required: true
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: location_ref
+                type: string
+                required: true
+                description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+              - name: schema_or_contract
+                type: string
+                required: true
+              - name: validation_status
+                type: enum
+                required: true
+                enum_values: [pending, valid, invalid, stale, not_applicable]
+              - name: summary
+                type: string
+                required: true
           - name: files_to_test
             type: string[]
             required: true
@@ -1060,6 +1274,40 @@ handoffs:
             type: string[]
             required: true
             description: "Concise success signals or failure messages, not raw logs"
+      - name: artifact_refs
+        type: object[]
+        required: false
+        condition: "required with min_items: 1 when current_task_packet.artifact_refs is present or harness_capable == true; optional and may be empty or omitted when verification.result is not_run for NEEDS_CONTEXT or BLOCKED"
+        min_items: 0
+        description: "Typed Artifact Reference entries validated or produced by BuilderTester; include verification_evidence refs and validation_status updates for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, and plan deviation refs."
+        object_fields:
+          - name: artifact_id
+            type: string
+            required: true
+          - name: artifact_type
+            type: enum
+            required: true
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+          - name: producer
+            type: string
+            required: true
+          - name: consumer
+            type: string
+            required: true
+          - name: location_ref
+            type: string
+            required: true
+            description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+          - name: schema_or_contract
+            type: string
+            required: true
+          - name: validation_status
+            type: enum
+            required: true
+            enum_values: [pending, valid, invalid, stale, not_applicable]
+          - name: summary
+            type: string
+            required: true
       - name: open_questions
         type: string[]
         required: false
@@ -1100,7 +1348,7 @@ handoffs:
             type: string
             required: true
             description: "Concise error — assertion message + expected/actual, not stack trace"
-    on_missing_field: "Re-dispatch BuilderTester. status, verification, build_result, and test_summary are never optional."
+    on_missing_field: "Re-dispatch BuilderTester. status, verification, build_result, and test_summary are never optional; typed artifact_refs are required when the task packet carried artifact_refs or harness_capable == true."
 
   # ─────────────────────────────────────────────
   # Orchestrator → Reviewer
@@ -1215,6 +1463,257 @@ handoffs:
         description: "Questions or blocker details the orchestrator must resolve"
     on_missing_field: "Re-dispatch Reviewer. status, findings, evidence, and verdict are never optional."
 
+  # ─────────────────────────────────────────────
+  # Orchestrator → QAEvaluator
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_qa_evaluator
+    from: Orchestrator
+    to: QAEvaluator
+    phase: REVIEW
+    notes: "Independent QA acceptance evaluation after BuilderTester verification and Code Reviewer or Reviewer compatibility result. Does not replace code-reviewer."
+    context_fields:
+      - name: done_contract
+        type: object
+        required: conditional
+        condition: "task has an accepted Done Contract"
+        description: "Accepted Done Contract for the work under QA evaluation"
+        validation: "Includes done_when, not_done_when, verification, owner_consumer, acceptance_criteria, debate_record with at least two perspectives, and accepted_by when present"
+        object_fields:
+          - name: done_when
+            type: string[]
+            required: true
+          - name: not_done_when
+            type: string[]
+            required: true
+          - name: verification
+            type: string[]
+            required: true
+          - name: owner_consumer
+            type: string
+            required: true
+          - name: acceptance_criteria
+            type: string[]
+            required: true
+          - name: debate_record
+            type: object[]
+            required: true
+            min_items: 2
+            description: "pre-build debate/subagent-perspective evidence considered before accepting the Done Contract"
+            validation: "At least two perspectives; delegated mode uses subagent perspectives when available"
+            object_fields:
+              - name: perspective
+                type: string
+                required: true
+              - name: concern_or_support
+                type: string
+                required: true
+              - name: resolution
+                type: string
+                required: true
+          - name: accepted_by
+            type: string
+            required: true
+      - name: acceptance_criteria
+        type: string[]
+        required: true
+        description: "Binary acceptance criteria from user request, approved plan, slice manifest, or Done Contract"
+        min_items: 1
+      - name: verification_evidence
+        type: object[]
+        required: true
+        description: "BuilderTester, manual, inspection, or review evidence that should prove acceptance"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: result
+            type: string
+            required: true
+          - name: proves
+            type: string
+            required: true
+      - name: code_review_result
+        type: object
+        required: true
+        description: "Final Code Reviewer or Reviewer compatibility result that QA must not replace"
+        object_fields:
+          - name: role
+            type: enum
+            required: true
+            enum_values: [CodeReviewer, Reviewer]
+          - name: result
+            type: string
+            required: true
+          - name: rounds
+            type: int
+            required: true
+            validation: ">= 1 and <= 10"
+      - name: domain_context
+        type: object
+        required: false
+        description: "Scoped product, UX, UI/visual, docs, DX, or domain context; enables conditional use of assistant-review references/domain-rubrics.md"
+        object_fields:
+          - name: summary
+            type: string
+            required: true
+          - name: in_scope_surfaces
+            type: string[]
+            required: true
+      - name: rubric_refs
+        type: string[]
+        required: false
+        default: []
+        description: "Explicit product/UX/docs/DX/UI/domain rubric family references from assistant-review references/domain-rubrics.md"
+      - name: round
+        type: int
+        required: true
+        description: "Current QA evaluation round number (1-10)"
+        validation: ">= 1 and <= 10"
+      - name: previously_failed_acceptance_items
+        type: object[]
+        required: true
+        description: "Failed acceptance items from prior QA rounds"
+        object_fields:
+          - name: criterion
+            type: string
+            required: true
+          - name: failed_in_round
+            type: int
+            required: true
+            validation: ">= 1 and <= 10"
+          - name: evidence_gap
+            type: string
+            required: true
+      - name: qa_filter_policy
+        type: string
+        required: true
+        description: "Acceptance findings require evidence and direct acceptance impact; speculative concerns are non-blocking; round 10 is terminal"
+    return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result; DONE requires final_verdict=accepted"
+      - name: round
+        type: int
+        required: true
+        validation: ">= 1 and <= 10"
+      - name: acceptance_findings
+        type: object[]
+        required: true
+        description: "Acceptance, Done Contract, verification, or scoped domain findings"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [blocker, concern, observation]
+          - name: criterion
+            type: string
+            required: true
+          - name: evidence
+            type: string
+            required: true
+          - name: impact
+            type: string
+            required: true
+      - name: qa_scorecard
+        type: object
+        required: true
+        description: "Compact QA scorecard; domain_quality is backed by selected_domain_rubrics/domain_quality_scores only when scoped domain rubrics were used"
+        object_fields:
+          - name: acceptance_coverage
+            type: float
+            required: true
+          - name: evidence_strength
+            type: float
+            required: true
+          - name: domain_quality
+            type: float
+            required: true
+          - name: final_readiness
+            type: float
+            required: true
+          - name: weighted_score
+            type: float
+            required: true
+      - name: selected_domain_rubrics
+        type: string[]
+        required: false
+        condition: "domain_context or rubric_refs is present, or acceptance criteria / Done Contract require subjective/product/UX/docs/DX/UI/domain craft evaluation"
+        description: "Rubric families selected from assistant-review references/domain-rubrics.md; empty or omitted when no scoped domain rubric applies"
+      - name: domain_quality_scores
+        type: object[]
+        required: false
+        condition: "selected_domain_rubrics is non-empty"
+        description: "Per-family domain rubric scores with evidence"
+        object_fields:
+          - name: rubric_ref
+            type: string
+            required: true
+          - name: dimension
+            type: string
+            required: true
+          - name: score
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments. For action=not_applicable, use 5.0 and state the unscoped rationale in evidence."
+          - name: action
+            type: enum
+            required: true
+            enum_values: [accepted, accepted_with_concerns, refine, rejected, pivot, not_applicable]
+          - name: evidence
+            type: string
+            required: true
+      - name: final_verdict
+        type: enum
+        required: true
+        enum_values: [accepted, accepted_with_concerns, rejected, blocked]
+      - name: result
+        type: enum
+        required: true
+        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, BLOCKED]
+      - name: evidence
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: score_entry
+        type: object
+        required: true
+        description: "QA score progression entry for this round"
+        object_fields:
+          - name: round
+            type: int
+            required: true
+            validation: ">= 1 and <= 10"
+          - name: weighted_score
+            type: float
+            required: true
+          - name: failed_acceptance_count
+            type: int
+            required: true
+          - name: drift_status
+            type: enum
+            required: true
+            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+      - name: score_progression
+        type: object[]
+        required: false
+        description: "Full QA score progression when prior round history is available"
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED] or final_verdict == blocked"
+        description: "Questions or blocker details the orchestrator must resolve"
+    on_missing_field: "Re-dispatch QAEvaluator. status, acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_entry are never optional. When scoped domain rubrics are selected, selected_domain_rubrics and domain_quality_scores are also required; when not scoped, do not fabricate them."
+
 # ─────────────────────────────────────────────
 # Validation behavior for all handoffs:
 #
@@ -1222,5 +1721,6 @@ handoffs:
 # 2. After return: verify all required return_fields are present, including the worker status packet
 # 3. If on_missing_field action is "re-dispatch": retry once with explicit request
 # 4. If second dispatch also misses required fields: log the gap and route to direct fallback, BLOCKED, or a degraded result with explicit evidence; do not fabricate required fields
-# 5. Never silently proceed with missing required fields — always log what was missing and how the missing evidence was resolved, deferred, or blocked
+# 5. When CodeWriter returns blocker_type, the orchestrator records the blocker evidence and routes to debugging, explorer, architect, candidate_search, replan, restart, user clarification, environment fix, or permission request. Do not ask CodeWriter to widen scope or patch blindly through a legacy blocker.
+# 6. Never silently proceed with missing required fields — always log what was missing and how the missing evidence was resolved, deferred, or blocked
 # ─────────────────────────────────────────────

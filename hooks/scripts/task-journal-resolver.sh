@@ -178,9 +178,11 @@ assistant_task_journal_completed() {
         ' "$task_file" 2>/dev/null
     )
 
-    if [[ "$status_token" == "DONE" ]]; then
-        return 0
-    fi
+    case "$status_token" in
+        DONE|COMPLETE|COMPLETED)
+            return 0
+            ;;
+    esac
 
     if grep -qF 'WORKFLOW COMPLETE' "$task_file" 2>/dev/null; then
         return 0

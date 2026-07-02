@@ -189,7 +189,7 @@ if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
     if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work; then
         if [[ "$codex_subagent_decision" == "none" ]]; then
             emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (ask-once):
-- Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer.
+- Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, Code Reviewer, or QA Evaluator (legacy Reviewer labels are compatibility routing only).
 - Authorization examples: 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', 'approve subagents for this task'.
 - Denial examples: 'no delegation', 'do not delegate', 'no agents', 'do not use agents', 'deny subagents and use direct fallback'.
 - Do not hard block this first prompt. Ask, then wait before delegated responsibilities."
@@ -471,7 +471,7 @@ elif [[ "$subagent_policy_state" == "authorization_required" ]]; then
 SUBAGENT AUTHORIZATION GATE:
 - Assistant Framework policy requires explicit user authorization before spawning subagents for workflow roles.
 - Ask once for the needed delegation scope and WAIT for approval or denial.
-- Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer until authorization is resolved.
+- Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, Code Reviewer, or QA Evaluator (legacy Reviewer labels are compatibility routing only) until authorization is resolved.
 - Do not switch to direct_fallback unless the user denies authorization, policy disallows spawning, or a real spawn attempt proves subagents unavailable."
 fi
 
