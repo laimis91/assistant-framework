@@ -226,7 +226,7 @@ artifacts:
       - name: review_rounds
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: must_fix_resolved
         type: int
         required: true
@@ -243,7 +243,7 @@ artifacts:
     type: object
     required: conditional
     condition: "qa_evaluation_mode == required or size in [medium, large, mega] and harness_capable == true and work is domain-scored/UI/visual/product/UX/docs/DX-facing"
-    validation: "Independent QA evaluation result exists after build/test evidence and Code Reviewer result. Must include final_verdict, result, rounds (1-20), acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence."
+    validation: "Independent QA evaluation result exists after build/test evidence and Code Reviewer result. Must include final_verdict, result, rounds (1-10), acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence."
     on_fail: "Run the QAEvaluator loop from assistant-review references/qa-evaluation-loop.md, or record NEEDS_CONTEXT/BLOCKED with open_questions. Do not substitute Code Reviewer findings for QA evaluation."
     object_fields:
       - name: final_verdict
@@ -257,7 +257,7 @@ artifacts:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: acceptance_findings
         type: object[]
         required: true
@@ -329,7 +329,7 @@ artifacts:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true
@@ -1023,7 +1023,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [reset_context, return_to_build, dispatch_debugging, dispatch_explorer, dispatch_architect, run_candidate_search, replan, restart_slice, restart_phase, block_for_user, accept_with_limitations]
-        validation: "Concrete recovery action selected by the orchestrator; it must not imply starting round 21 after a terminal round 20"
+        validation: "Concrete recovery action selected by the orchestrator; it must not imply starting round 11 after a terminal round 10"
         on_missing: fail
       - name: reapproval_required
         type: boolean

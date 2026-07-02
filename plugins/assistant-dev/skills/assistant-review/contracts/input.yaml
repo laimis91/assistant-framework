@@ -206,7 +206,7 @@ fields:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "Evidence filter QAEvaluator must apply to acceptance findings"
-    validation: "States that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 20 is terminal"
+    validation: "States that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 10 is terminal"
     on_missing: infer
     infer_from: "Use the standard QA filter policy from references/qa-evaluation-loop.md."
 
@@ -279,7 +279,7 @@ fields:
       - name: fixed_in_round
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
 
 # Validation behavior:
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required before entering the loop

@@ -49,13 +49,13 @@ require_terms "harness design guide" "$harness_doc" \
     "Pivot/Restart Controller" \
     "legacy_code_bug" \
     "assistant-debugging" \
-    "max 20 rounds" \
-    "Round 20 is terminal"
+    "max 10 rounds" \
+    "Round 10 is terminal"
 
-test_start "harness design guide avoids stale three-agent and 10-round wording"
+test_start "harness design guide avoids stale three-agent and 20-round wording"
 stale_harness_output="$(mktemp)"
 p0p4_register_cleanup "$stale_harness_output"
-if rg -n -e 'three-agent' -e '3-agent' -e 'max 10' -e 'round <= 10' "$harness_doc" >"$stale_harness_output"; then
+if rg -n -e 'three-agent' -e '3-agent' -e 'max 20' -e 'round <= 20' "$harness_doc" >"$stale_harness_output"; then
     fail "harness design guide contains stale harness wording; see $stale_harness_output"
 else
     pass
@@ -68,7 +68,7 @@ require_terms "docs eval README" "$eval_readme" \
     "separate Code Reviewer and QA Evaluator evidence" \
     "QA loop behavior with conditional domain rubrics" \
     "pivot/restart decisions for stagnation and Code Writer blockers" \
-    "terminal max 20 review/QA round behavior"
+    "terminal max 10 review/QA round behavior"
 
 test_start "skill contract guide describes process harness controller contracts"
 require_terms "skill contract guide" "$contract_guide" \
@@ -78,7 +78,7 @@ require_terms "skill contract guide" "$contract_guide" \
     "artifacts when the controller requires them" \
     "Code Reviewer and QA Evaluator" \
     "handoffs stay separate" \
-    "max 20" \
+    "max 10" \
     "pivot_restart_decision"
 
 test_start "skill-creator harness patterns cover controller artifacts and loop safety"
@@ -91,7 +91,7 @@ require_terms "skill creator harness patterns" "$skill_creator_patterns" \
     "Code Review And QA Separation" \
     "Conditional Domain Rubrics" \
     "Bounded Review / QA Loops" \
-    "max 20 rounds" \
+    "max 10 rounds" \
     "Pivot / Restart Decisions" \
     "legacy_code_bug" \
     "Agentic Loop Safety"
@@ -103,12 +103,12 @@ if jq -e '
     case_category("harness-done-contract-recipe-before-build"; "harness_controller")
     and case_category("code-reviewer-and-qa-evaluator-evidence-split"; "review_qa_split")
     and case_category("pivot-restart-on-stagnation-or-code-writer-blocker"; "pivot_restart")
-    and case_category("review-and-qa-terminal-cap-20"; "review_loop_cap")
+    and case_category("review-and-qa-terminal-cap-10"; "review_loop_cap")
     and all(.cases[] | select(.id as $id | [
       "harness-done-contract-recipe-before-build",
       "code-reviewer-and-qa-evaluator-evidence-split",
       "pivot-restart-on-stagnation-or-code-writer-blocker",
-      "review-and-qa-terminal-cap-20"
+      "review-and-qa-terminal-cap-10"
     ] | index($id));
       (.machine_expectations.required_substrings | type == "array" and length > 0)
       and (.machine_expectations.forbidden_substrings | type == "array" and length > 0)
@@ -130,8 +130,8 @@ for case_and_term in \
     "code-reviewer-and-qa-evaluator-evidence-split::rubric_refs" \
     "pivot-restart-on-stagnation-or-code-writer-blocker::pivot_restart_decision" \
     "pivot-restart-on-stagnation-or-code-writer-blocker::legacy_code_bug" \
-    "review-and-qa-terminal-cap-20::max 20" \
-    "review-and-qa-terminal-cap-20::round 21"; do
+    "review-and-qa-terminal-cap-10::max 10" \
+    "review-and-qa-terminal-cap-10::round 11"; do
     case_id="${case_and_term%%::*}"
     term="${case_and_term#*::}"
     if ! jq -e --arg case_id "$case_id" --arg term "$term" '
@@ -160,7 +160,7 @@ if jq -e '
         "Code Reviewer",
         "QA Evaluator",
         "pivot_restart_decision",
-        "max 20"
+        "max 10"
       ]))
       and (.machine_expectations.forbidden_substrings | length > 0)
     )

@@ -57,7 +57,7 @@ for file_and_term in \
     "$review_dir/references/qa-evaluation-loop.md::domain_quality_scores" \
     "$review_dir/references/qa-evaluation-loop.md::Do not invent domain rubrics" \
     "$review_dir/SKILL.md::references/domain-rubrics.md\` only when" \
-    "$review_dir/SKILL.md::selected_domain_rubrics/domain_quality_scores when used" \
+    "$review_dir/SKILL.md::selected_domain_rubrics/domain_quality_scores when scoped" \
     "$review_dir/SKILL.md::Code Reviewer still owns code defects"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"

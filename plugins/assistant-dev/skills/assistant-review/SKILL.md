@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "This skill runs an autonomous code review loop and optional independent QA evaluation loop: review, fix, re-review until clean (max 20 rounds), then evaluate acceptance when QA is required. Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review or QA evaluation dispatch."
+description: "This skill runs an autonomous code review loop and optional independent QA evaluation loop: review, fix, re-review until clean (max 10 rounds), then evaluate acceptance when QA is required. Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review or QA evaluation dispatch."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
@@ -140,7 +140,7 @@ round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 20:
+while round <= 10:
 
   1. REVIEW
      - Dispatch a fresh Reviewer subagent when `subagent_execution_mode=delegated`
@@ -165,7 +165,7 @@ while round <= 20:
        Finding filter policy:
        - Report only evidence-backed findings with file/line evidence, concrete impact, and the smallest useful fix.
        - Put speculative or low-evidence concerns in Observations; they do not block completion.
-       - In rounds 16-20, only must-fix or high-confidence should-fix findings count as blockers; round 20 is terminal and exits with remaining items instead of starting round 21.
+       - In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers; round 10 is terminal and exits with remaining items instead of starting round 11.
        Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
        references/review-principles.md. Report principle issues only when tied
        to concrete evidence, concrete risk, and the smallest durable fix.
@@ -193,8 +193,8 @@ while round <= 20:
      b. No rubric (small scope): use findings-based exit:
         - No must-fix AND no should-fix -> EXIT CLEAN
         - Only nits -> EXIT CLEAN (note nits in final report)
-     c. round == 20 with remaining must-fix or should-fix -> EXIT WITH REMAINING ITEMS
-     d. round == 20 with issues fixed and now clean -> EXIT ISSUES FIXED
+     c. round == 10 with remaining must-fix or should-fix -> EXIT WITH REMAINING ITEMS
+     d. round == 10 with issues fixed and now clean -> EXIT ISSUES FIXED
      e. Otherwise -> continue to step 3
 
      Record in score_history: { round, weighted_score, finding_count, drift_status }
@@ -206,7 +206,7 @@ while round <= 20:
      selected_action, reapproval_required, next_agent, recovery_pointer, and
      exact_next_action before another fix/review dispatch. If the selected action
      changes scope, files, behavior, risk, verification, or acceptance criteria,
-     reapproval is required. Round 20 remains terminal and never starts round 21.
+     reapproval is required. Round 10 remains terminal and never starts round 11.
 
   3. FIX
      - Fix ALL must-fix and should-fix items (not just must-fix)
@@ -223,23 +223,9 @@ while round <= 20:
 
 ## The QA Evaluation Loop
 
-Run this loop only when `qa_evaluation_mode=required` or the workflow Review phase requests QA evidence. Load `references/qa-evaluation-loop.md` before dispatching QAEvaluator.
+Run QA only when `qa_evaluation_mode=required` or the workflow Review phase requests QA evidence. Load `references/qa-evaluation-loop.md` before dispatching QAEvaluator; that reference owns the detailed algorithm, score progression, domain-rubric routing, pivot/restart behavior, and terminal round-10 cap.
 
-QA evaluation runs after code-review/build evidence. It is not an alternate path around the Code Reviewer loop.
-
-QA runs after build/test evidence and the Code Reviewer loop result exist. It must receive the Done Contract, acceptance criteria, verification evidence, domain_context/rubric_refs when applicable, round number, previously_failed_acceptance_items, and qa_filter_policy. It conditionally loads `references/domain-rubrics.md` only for scoped subjective/UI/visual/product/UX/docs/DX/domain acceptance. It returns status, round, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when used, final_verdict/result, evidence, score_progression or score_entry, and open_questions when blocked.
-
-The QA loop supports rounds 1-20. In rounds 16-20, only unresolved acceptance blockers or high-confidence acceptance risks keep the loop open. Round 20 is terminal: return the final verdict and remaining failed acceptance items instead of starting round 21.
-
-QA findings do not replace code-review findings. Do not use QAEvaluator to review general bugs, security, architecture, or test coverage unless that issue directly blocks an acceptance criterion or Done Contract item.
-
-If QA score progression reports STAGNATION, repeated DRIFT, repeated REGRESSION,
-or a scoped domain rubric returns action `pivot`, pause QA and return a
-pivot_restart_signal to the orchestrator. The orchestrator records
-pivot_restart_decision before another QA/build dispatch, updates trace/replay/run
-state when the workflow is harness-capable, and obtains reapproval when the
-selected restart or pivot changes scope, files, behavior, risk, verification, or
-acceptance criteria.
+At this level, keep only the routing boundary: QA runs after build/test evidence and Code Reviewer or Reviewer compatibility evidence exist, and it evaluates acceptance criteria, Done Contract evidence, verification evidence, scoped domain quality, score progression, and final readiness. QA does not replace code review or report general code defects unless they directly block acceptance.
 
 ## Exit: Present Final Result
 
@@ -283,7 +269,7 @@ After the loop completes, present ONE summary to the user:
 - **Autonomous continuation**: advance to the next round while exit criteria are unmet.
 - **Fresh Reviewer each round** on medium+ scope: stale context weakens reviews.
 - **Previously-fixed list prevents re-reporting**: each round should find fewer issues.
-- **Evidence-backed filtering**: findings need file/line evidence, concrete impact, and the smallest useful fix; late rounds only stay open before the hard max for must-fix or high-confidence should-fix findings, and round 20 is terminal.
+- **Evidence-backed filtering**: findings need file/line evidence, concrete impact, and the smallest useful fix; late rounds only stay open before the hard max for must-fix or high-confidence should-fix findings, and round 10 is terminal.
 - If scope is trivial (single small file, obvious change) -> one clean round can exit. If findings exist, continue looping.
 
 ## Output
@@ -324,7 +310,7 @@ On DRIFT, the next Reviewer dispatch MUST include this addition to its prompt:
 On repeated DRIFT after the reset, stop the current review dispatch path and
 return pivot_restart_signal. The orchestrator owns the pivot_restart_decision and
 selects reset, candidate search, replan, restart, or a blocked/user path without
-creating round 21 behavior.
+creating round 11 behavior.
 
 
 ## Review Finding Rule Distillation

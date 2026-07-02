@@ -239,7 +239,7 @@
         "Keeps Code Reviewer and QA Evaluator handoffs and outputs separate.",
         "Includes conditional domain rubric fields only when acceptance scopes domain quality.",
         "Adds pivot/restart decision fields for stagnation, drift, regression, rubric pivot, and Code Writer blockers.",
-        "Bounds review and QA loops with max 20 rounds and terminal round 20 behavior."
+        "Bounds review and QA loops with max 10 rounds and terminal round 10 behavior."
       ],
       "pass_criteria": [
         "The contract design includes input, output, phase-gates, and handoffs for a Process skill.",
@@ -250,7 +250,7 @@
       "fail_signals": [
         "Creates files before presenting the Process contract design.",
         "Uses only a generic generator/evaluator loop.",
-        "Sets a max 10 round cap for the review or QA loop.",
+        "Sets a max 20 round cap for the review or QA loop.",
         "Omits pivot/restart handling for stagnation or Code Writer blockers."
       ],
       "machine_expectations": {
@@ -263,11 +263,11 @@
           "Code Reviewer",
           "QA Evaluator",
           "pivot_restart_decision",
-          "max 20"
+          "max 10"
         ],
         "forbidden_substrings": [
           "generic generator/evaluator loop is enough",
-          "max 10",
+          "max 20",
           "QA replaces code review"
         ]
       }

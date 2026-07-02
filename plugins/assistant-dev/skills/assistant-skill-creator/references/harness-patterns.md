@@ -172,24 +172,24 @@ Contract placement:
 ## Pattern 7: Bounded Review / QA Loops
 
 Any autonomous review, QA, refinement, or fix-verify loop needs a hard cap. The
-current framework cap is **max 20 rounds**.
+current framework cap is **max 10 rounds**.
 
 ```text
 round = 1
-while round <= 20:
+while round <= 10:
   evaluate
   decide PASS / REFINE / PIVOT
   fix or exit
   round += 1
 ```
 
-Round 20 is terminal. Return remaining blockers, findings, or failed acceptance
-items instead of starting round 21.
+Round 10 is terminal. Return remaining blockers, findings, or failed acceptance
+items instead of starting round 11.
 
 Include these fields where applicable:
 
-- `round`: current round number, validation `>= 1 and <= 20`.
-- `max_rounds`: default `20`.
+- `round`: current round number, validation `>= 1 and <= 10`.
+- `max_rounds`: default `10`.
 - `previously_fixed` or `previously_failed_acceptance_items`.
 - `score_progression` or `score_entry`.
 - `loop_exit_reason`.
@@ -296,7 +296,7 @@ For a loop-based Process skill, require the matching patterns:
 | Do artifacts cross role boundaries? | Typed Artifact References |
 | Are code quality and acceptance both evaluated? | Code Reviewer / QA Evaluator split |
 | Is subjective/domain quality part of acceptance? | Conditional Domain Rubrics |
-| Does a loop run multiple rounds? | Max 20 loop cap, scoring, drift detection |
+| Does a loop run multiple rounds? | Max 10 loop cap, scoring, drift detection |
 | Can the approach go stale or hit legacy blockers? | Pivot/Restart Decision |
 
 Most loop-based Process skills use all of these. Simple retry-only skills still

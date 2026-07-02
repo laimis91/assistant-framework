@@ -1380,8 +1380,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current review round number (1-20)"
-        validation: ">= 1 and <= 20"
+        description: "Current review round number (1-10)"
+        validation: ">= 1 and <= 10"
       - name: previously_fixed
         type: object[]
         required: true
@@ -1393,13 +1393,13 @@ handoffs:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
       - name: confidence_threshold
         type: int
         required: true
         description: "Minimum confidence percentage for reporting findings"
         validation: "Must be one of: 80, 85, 90"
-        notes: "Round 1-3: 80, Round 4-15: 85, Round 16-20: 90"
+        notes: "Round 1-3: 80, Round 4-7: 85, Round 8-10: 90"
     return_fields:
       - name: status
         type: enum
@@ -1409,7 +1409,7 @@ handoffs:
       - name: round
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: findings
         type: object[]
         required: true
@@ -1548,7 +1548,7 @@ handoffs:
           - name: rounds
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
       - name: domain_context
         type: object
         required: false
@@ -1568,8 +1568,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current QA evaluation round number (1-20)"
-        validation: ">= 1 and <= 20"
+        description: "Current QA evaluation round number (1-10)"
+        validation: ">= 1 and <= 10"
       - name: previously_failed_acceptance_items
         type: object[]
         required: true
@@ -1581,14 +1581,14 @@ handoffs:
           - name: failed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: evidence_gap
             type: string
             required: true
       - name: qa_filter_policy
         type: string
         required: true
-        description: "Acceptance findings require evidence and direct acceptance impact; speculative concerns are non-blocking; round 20 is terminal"
+        description: "Acceptance findings require evidence and direct acceptance impact; speculative concerns are non-blocking; round 10 is terminal"
     return_fields:
       - name: status
         type: enum
@@ -1598,7 +1598,7 @@ handoffs:
       - name: round
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: acceptance_findings
         type: object[]
         required: true
@@ -1692,7 +1692,7 @@ handoffs:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true

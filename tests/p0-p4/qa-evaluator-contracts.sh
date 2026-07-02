@@ -102,16 +102,16 @@ else
     fail "Codex install failed; see /tmp/p0p4-install-qa-evaluator.err"
 fi
 
-test_start "assistant-review declares independent QA evaluation loop and 20-round cap"
+test_start "assistant-review routes independent QA evaluation to reference with 10-round cap"
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
 missing_review_terms=()
 for file_and_term in \
     "$review_dir/SKILL.md::optional independent QA evaluation loop" \
     "$review_dir/SKILL.md::QA evaluation runs after code-review/build evidence" \
-    "$review_dir/SKILL.md::The QA loop supports rounds 1-20" \
-    "$review_dir/SKILL.md::Round 20 is terminal" \
-    "$review_dir/references/qa-evaluation-loop.md::while round <= 20" \
-    "$review_dir/references/qa-evaluation-loop.md::Round 20 is terminal" \
+    "$review_dir/SKILL.md::Load \`references/qa-evaluation-loop.md\` before dispatching QAEvaluator" \
+    "$review_dir/SKILL.md::that reference owns the detailed algorithm" \
+    "$review_dir/references/qa-evaluation-loop.md::while round <= 10" \
+    "$review_dir/references/qa-evaluation-loop.md::Round 10 is terminal" \
     "$review_dir/references/qa-evaluation-loop.md::does not replace code-reviewer" \
     "$review_dir/contracts/handoffs.yaml::to: QAEvaluator" \
     "$review_dir/contracts/handoffs.yaml::- name: debate_record" \
@@ -121,7 +121,7 @@ for file_and_term in \
     "$review_dir/contracts/handoffs.yaml::debate_record when Done Contract exists" \
     "$review_dir/contracts/handoffs.yaml::qa_scorecard" \
     "$review_dir/contracts/handoffs.yaml::score_entry" \
-    "$review_dir/contracts/handoffs.yaml::The loop never starts round 21." \
+    "$review_dir/contracts/handoffs.yaml::The loop never starts round 11." \
     "$review_dir/contracts/input.yaml::- name: qa_evaluation_mode" \
     "$review_dir/contracts/input.yaml::- name: debate_record" \
     "$review_dir/contracts/input.yaml::pre-build debate/subagent-perspective evidence" \
@@ -135,7 +135,7 @@ for file_and_term in \
     "$review_dir/contracts/phase-gates.yaml::QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available" \
     "$review_dir/contracts/phase-gates.yaml::INV_QA4" \
     "$review_dir/contracts/phase-gates.yaml::QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists" \
-    "$review_dir/contracts/phase-gates.yaml::round 20 is terminal"; do
+    "$review_dir/contracts/phase-gates.yaml::round 10 is terminal"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
@@ -238,8 +238,8 @@ for file_and_term in \
     "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml::Stay in the QA lane" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::Code Reviewer" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::QA Evaluator" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Code Reviewer continues to own code defects, security, architecture, and test-coverage review" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::QA findings do not replace code-review findings"; do
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Keep QA evaluation separate from code review" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Code Reviewer continues to own code defects, security, architecture, and test-coverage review"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then

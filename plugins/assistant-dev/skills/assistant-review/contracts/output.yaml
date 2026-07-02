@@ -156,12 +156,12 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds (1-20), result, fixed_items, remaining_items when applicable, and nits before presenting review results"
+    validation: "Must include rounds (1-10), result, fixed_items, remaining_items when applicable, and nits before presenting review results"
     object_fields:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: result
         type: enum
         required: true
@@ -184,7 +184,7 @@ artifacts:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
       - name: remaining_items
         type: object[]
         required: false
@@ -221,13 +221,13 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "Independent QA evaluation final result after build/test and code-review evidence"
-    validation: "Must include rounds (1-20), final_verdict, result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, evidence, and open_questions when blocked"
+    validation: "Must include rounds (1-10), final_verdict, result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, evidence, and open_questions when blocked"
     on_fail: "Run the QA evaluation loop from references/qa-evaluation-loop.md or record why QA is blocked before presenting final review results"
     object_fields:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
       - name: final_verdict
         type: enum
         required: true
@@ -310,7 +310,7 @@ artifacts:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true
@@ -374,12 +374,12 @@ artifacts:
       - name: score_progression
         type: object[]
         required: true
-        description: "Weighted score per round — used for drift detection and capped at the 20-round review limit"
+        description: "Weighted score per round — used for drift detection and capped at the 10-round review limit"
         object_fields:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true

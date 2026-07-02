@@ -142,14 +142,14 @@ inventing subjective bars.
 
 ## Review And QA Loops
 
-The code-review loop and QA loop are bounded at **max 20 rounds**.
+The code-review loop and QA loop are bounded at **max 10 rounds**.
 
 ```text
 round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 20:
+while round <= 10:
   REVIEW   -> fresh Code Reviewer with diff, acceptance context, and prior fixes
   DECIDE   -> PASS, REFINE, or PIVOT from rubric score and findings
   FIX      -> Code Writer fixes actionable findings when REFINE
@@ -164,7 +164,7 @@ round = 1
 previously_failed_acceptance_items = []
 score_progression = []
 
-while round <= 20:
+while round <= 10:
   EVALUATE -> QA Evaluator checks Done Contract, criteria, evidence, domain scope
   SCORE    -> qa_scorecard and score_entry
   DECIDE   -> accepted, accepted_with_concerns, rejected, or blocked
@@ -172,8 +172,8 @@ while round <= 20:
   round += 1
 ```
 
-Round 20 is terminal. The controller reports remaining blockers or failed
-acceptance items instead of starting round 21.
+Round 10 is terminal. The controller reports remaining blockers or failed
+acceptance items instead of starting round 11.
 
 ### Finding Filter
 
@@ -181,9 +181,9 @@ Review and QA findings must have concrete evidence and direct impact:
 
 | Rounds | Blocking bar |
 |---|---|
-| 1-15 | Evidence-backed must-fix or should-fix findings |
-| 16-19 | Must-fix or high-confidence should-fix findings |
-| 20 | Terminal report of remaining blockers or acceptance items |
+| 1-7 | Evidence-backed must-fix or should-fix findings |
+| 8-9 | Must-fix or high-confidence should-fix findings |
+| 10 | Terminal report of remaining blockers or acceptance items |
 
 Speculative concerns stay non-blocking unless evidence connects them to
 correctness, security, architecture, test reliability, or acceptance criteria.

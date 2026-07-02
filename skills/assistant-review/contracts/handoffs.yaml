@@ -73,8 +73,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current review round number (1-20)"
-        validation: ">= 1 and <= 20"
+        description: "Current review round number (1-10)"
+        validation: ">= 1 and <= 10"
 
       - name: previously_fixed
         type: object[]
@@ -87,14 +87,14 @@ handoffs:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
 
       - name: finding_filter_policy
         type: string
         required: true
         description: "Evidence-backed finding filter for this round"
-        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 20 remains terminal."
-        notes: "In rounds 16-20, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 21."
+        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 10 remains terminal."
+        notes: "In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 11."
 
       - name: project_type
         type: string
@@ -157,7 +157,7 @@ handoffs:
         type: int
         required: true
         description: "Echo back the round number for tracking"
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
 
       - name: findings
         type: object[]
@@ -448,7 +448,7 @@ handoffs:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: recommended_recovery_focus
             type: string
             required: true
@@ -548,7 +548,7 @@ handoffs:
           - name: rounds
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: remaining_risks
             type: string[]
             required: true
@@ -577,8 +577,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current QA evaluation round number (1-20)"
-        validation: ">= 1 and <= 20"
+        description: "Current QA evaluation round number (1-10)"
+        validation: ">= 1 and <= 10"
 
       - name: previously_failed_acceptance_items
         type: object[]
@@ -591,7 +591,7 @@ handoffs:
           - name: failed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: evidence_gap
             type: string
             required: true
@@ -600,7 +600,7 @@ handoffs:
         type: string
         required: true
         description: "Evidence-backed QA finding filter for this round"
-        validation: "Must state that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 20 is terminal."
+        validation: "Must state that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 10 is terminal."
 
     return_fields:
       - name: status
@@ -613,7 +613,7 @@ handoffs:
         type: int
         required: true
         description: "Echo back the QA round number"
-        validation: ">= 1 and <= 20"
+        validation: ">= 1 and <= 10"
 
       - name: acceptance_findings
         type: object[]
@@ -747,7 +747,7 @@ handoffs:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true
@@ -770,7 +770,7 @@ handoffs:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: weighted_score
             type: float
             required: true
@@ -812,7 +812,7 @@ handoffs:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 20"
+            validation: ">= 1 and <= 10"
           - name: recommended_recovery_focus
             type: string
             required: true
@@ -831,10 +831,10 @@ handoffs:
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
 # 9. If pivot_restart_signal is present, stop the current loop path until the orchestrator records pivot_restart_decision; do not silently continue.
-# 10. If round == 20, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 21
+# 10. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
 # 11. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
 # 12. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
-# 13. If QA round == 20, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 21.
+# 13. If QA round == 10, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 11.
 # 14. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.
 # 15. If no scoped domain rubric applies: verify QAEvaluator did not invent rubrics or penalize domain_quality for missing unscoped evidence.
 # ─────────────────────────────────────────────

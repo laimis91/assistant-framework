@@ -136,9 +136,9 @@ elif [[ "$review_missing_key" == "qa_final_result_missing" ]]; then
 elif [[ "$review_missing_key" == "qa_not_accepted" ]]; then
     REVIEW_REASON="QA required but the QA final verdict/result is not accepted (qa_not_accepted). Fix or rerun QA and record QA Evaluation evidence; the QA final verdict/result must be accepted or accepted_with_concerns before stopping."
 elif [[ "$review_missing_key" == "missing_review_round" ]]; then
-    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_review_round). Add '- Round: N of 20' to the latest Quality Review entry after the latest Spec Review PASS."
+    REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_review_round). Add '- Round: N of 10' to the latest Quality Review entry after the latest Spec Review PASS."
 elif [[ "$review_missing_key" == "round_overflow" ]]; then
-    REVIEW_REASON="Medium+ Quality Review has invalid controller evidence (round_overflow). Use '- Round: N of 20' with N between 1 and 20, then rerun or repair the review loop."
+    REVIEW_REASON="Medium+ Quality Review has invalid controller evidence (round_overflow). Use '- Round: N of 10' with N between 1 and 10, then rerun or repair the review loop."
 elif [[ "$review_missing_key" == "missing_findings_summary" ]]; then
     REVIEW_REASON="Medium+ Quality Review is missing controller evidence (missing_findings_summary). Add a findings summary such as '- Found this round: 0 must-fix, 0 should-fix, 0 nits' to the latest Quality Review."
 elif [[ "$review_missing_key" == "missing_rubric_scores" ]]; then

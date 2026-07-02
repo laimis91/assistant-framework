@@ -419,7 +419,7 @@ context="WORKFLOW STATE (auto-injected every prompt):
 PHASE RULES:
 - Current phase is $status — stay until exit criteria pass.
 - PLAN approval before BUILD; BUILD includes same-step tests for new components.
-- REVIEW loops review -> fix -> re-review until clean or max 20 rounds.
+- REVIEW loops review -> fix -> re-review until clean or max 10 rounds.
 - State the current phase before the next action."
 
 context+="

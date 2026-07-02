@@ -107,9 +107,9 @@ As the loop progresses, the bar rises — like a tightening ratchet:
 | 1 | 4.0+ | 2.5–3.9 | < 2.5 |
 | 2 | 4.0+ | 2.75–3.9 | < 2.75 |
 | 3 | 4.0+ | 3.0–3.9 | < 3.0 |
-| 4-20 | 4.0+ | 3.25–3.9 | < 3.25 |
+| 4-10 | 4.0+ | 3.25–3.9 | < 3.25 |
 
-Rationale: If the code hasn't reached 3.25 by round 4, the approach likely needs rethinking, not more polish. Rounds 4-20 keep that pivot threshold stable while confidence requirements continue to rise.
+Rationale: If the code hasn't reached 3.25 by round 4, the approach likely needs rethinking, not more polish. Rounds 4-10 keep that pivot threshold stable while confidence requirements continue to rise.
 
 ## Reviewer Scoring Instructions
 

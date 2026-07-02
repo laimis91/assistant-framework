@@ -159,7 +159,7 @@ Required decision fields:
 
 When a decision is created, update Harness Run State, append a `pivot_restart`
 Trace Ledger entry, refresh Replay Packet so `exact_next_action` matches the
-decision, and add or update the Pivot/Restart Decision artifact ref. Round 20 remains terminal; the controller never creates round 21 behavior.
+decision, and add or update the Pivot/Restart Decision artifact ref. Round 10 remains terminal; the controller never creates round 11 behavior.
 
 Routing rules:
 

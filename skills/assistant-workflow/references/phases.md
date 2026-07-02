@@ -408,7 +408,7 @@ Print: `>> Spec Review: [PASS / FAIL — found N required fixes]`
 
 Print: `>> Stage 2: Code Quality Review — loading assistant-review SKILL.md`
 
-**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 20 rounds) with visible progress. Add Code Reviewer to `Required agents` before Stage 2; use `Reviewer` only as compatibility routing for existing/legacy handoffs. Dispatch the `code-reviewer` agent for code defects, security, architecture, test coverage, and structural code issues. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Code Reviewer subagent and record `Code Reviewer dispatch`/`Code Reviewer result` evidence, or record `Reviewer dispatch`/`Reviewer result` only when using compatibility routing. In direct fallback, preserve fresh-review evidence and record `Code Reviewer direct evidence`; `Reviewer direct evidence` is compatibility evidence only.
+**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 10 rounds) with visible progress. Add Code Reviewer to `Required agents` before Stage 2; use `Reviewer` only as compatibility routing for existing/legacy handoffs. Dispatch the `code-reviewer` agent for code defects, security, architecture, test coverage, and structural code issues. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Code Reviewer subagent and record `Code Reviewer dispatch`/`Code Reviewer result` evidence, or record `Reviewer dispatch`/`Reviewer result` only when using compatibility routing. In direct fallback, preserve fresh-review evidence and record `Code Reviewer direct evidence`; `Reviewer direct evidence` is compatibility evidence only.
 
 The `assistant-review` skill will:
 - Dispatch Code Reviewer subagents in delegated mode, using Reviewer compatibility only for existing handoffs, or preserve fresh-review evidence in direct fallback mode
@@ -426,15 +426,15 @@ Print: `>> Stage 3: QA Evaluation — loading assistant-review references/qa-eva
 
 Run QA Evaluation for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work. QA runs after build/test evidence and Code Reviewer or Reviewer compatibility result are available. Dispatch `qa-evaluator` in delegated mode, or record direct-fallback QA evidence when delegation is denied, unavailable after a real spawn failure, or policy-disallowed.
 
-The QA Evaluator receives Done Contract when present, acceptance criteria, verification evidence, code review result, domain_context/rubric_refs when applicable, round 1-20, previously_failed_acceptance_items, and qa_filter_policy. It loads assistant-review `references/domain-rubrics.md` only when acceptance criteria, Done Contract, domain_context, or explicit rubric_refs require subjective/product/UX/docs/DX/UI/domain scoring. It returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped, score_progression or score_entry, evidence, and open_questions when blocked.
+The QA Evaluator receives Done Contract when present, acceptance criteria, verification evidence, code review result, domain_context/rubric_refs when applicable, round 1-10, previously_failed_acceptance_items, and qa_filter_policy. It loads assistant-review `references/domain-rubrics.md` only when acceptance criteria, Done Contract, domain_context, or explicit rubric_refs require subjective/product/UX/docs/DX/UI/domain scoring. It returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped, score_progression or score_entry, evidence, and open_questions when blocked.
 
 QA Evaluation focuses on acceptance and final result. It does not replace Code Reviewer, and it must not report general code defects, security issues, architecture concerns, or test coverage gaps unless they directly block an acceptance criterion or Done Contract item.
 
 If QA score progression reports STAGNATION, repeated DRIFT, repeated REGRESSION,
 or any scoped domain rubric returns action `pivot`, pause the QA loop and create
 an orchestrator-owned `pivot_restart_decision` before another QA/build dispatch.
-Round 20 remains terminal: return the final QA verdict and remaining failed
-acceptance items instead of starting round 21.
+Round 10 remains terminal: return the final QA verdict and remaining failed
+acceptance items instead of starting round 11.
 
 ### Status gate
 

@@ -463,7 +463,7 @@ gates:
         on_fail: "Load assistant-review references/qa-evaluation-loop.md, dispatch QAEvaluator or record direct-fallback QA evidence, and do not complete Review until QA result is present or blocked with open_questions. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists, require selected_domain_rubrics and domain_quality_scores; otherwise reject invented rubric scoring."
 
       - id: R_PIVOT_RESTART_DECISION
-        check: "Review or QA STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric/domain action pivot records an orchestrator-owned pivot_restart_decision before another fix, review, QA, or build dispatch; round 20 remains terminal and never creates round 21 behavior"
+        check: "Review or QA STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric/domain action pivot records an orchestrator-owned pivot_restart_decision before another fix, review, QA, or build dispatch; round 10 remains terminal and never creates round 11 behavior"
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3

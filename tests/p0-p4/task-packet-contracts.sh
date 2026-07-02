@@ -2061,7 +2061,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::R_PIVOT_RESTART_DECISION" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::INV_PIVOT_RESTART_REAPPROVAL" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::## Pivot/Restart Controller" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::Round 20 remains terminal" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::Round 10 remains terminal" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Code Writer unexpected blockers" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::## Pivot/Restart Log" \

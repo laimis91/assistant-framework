@@ -254,7 +254,7 @@ Plan approval: [yes/no + date]
 - Required fixes: [none, or ordered fix list]
 
 ### Quality Review #1
-- Round: 1 of 20
+- Round: 1 of 10
 - Previously fixed: 0 items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
@@ -271,7 +271,7 @@ Plan approval: [yes/no + date]
 - Re-test: PASS
 
 ### Quality Review #2 (autonomous re-review)
-- Round: 2 of 20
+- Round: 2 of 10
 - Previously fixed: [count] items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
@@ -289,7 +289,7 @@ Plan approval: [yes/no + date]
 [Note: On test failure, skip this entry — write only "- Result: HAS_REMAINING_ITEMS" to Final result]
 
 ### QA Evaluation #1
-- Round: 1 of 20
+- Round: 1 of 10
 - Mode: required | optional | not_required
 - Done Contract: [ref or N/A with reason]
 - Acceptance criteria checked: [count]
@@ -306,7 +306,7 @@ Plan approval: [yes/no + date]
 - Acceptance findings:
   - [blocker|concern|observation] [criterion] — [evidence] → [fix/defer/open question]
 
-[...repeat QA Evaluation until accepted, accepted_with_concerns, blocked, or max round 20 reached...]
+[...repeat QA Evaluation until accepted, accepted_with_concerns, blocked, or max round 10 reached...]
 
 ### Final result
 - Result: CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS

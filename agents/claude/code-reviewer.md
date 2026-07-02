@@ -47,8 +47,8 @@ When told this is round N with a previously-fixed list:
 - Apply evidence-backed filtering:
   - Report only findings with file/line evidence, concrete impact, and the smallest useful fix
   - Put speculative or low-evidence concerns in Observations; they do not block completion
-  - In rounds 16-20, only must-fix or high-confidence should-fix findings count as blockers
-  - Round 20 is terminal; report remaining blockers instead of requesting or implying round 21
+  - In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers
+  - Round 10 is terminal; report remaining blockers instead of requesting or implying round 11
 
 ## Rubric scoring (medium+ scope)
 

@@ -742,7 +742,7 @@ assistant_phase_review_controller_missing_reason_key() {
     fi
     round="${BASH_REMATCH[1]}"
     max_round="${BASH_REMATCH[2]}"
-    if [[ "$max_round" -ne 20 || "$round" -lt 1 || "$round" -gt 20 ]]; then
+    if [[ "$max_round" -ne 10 || "$round" -lt 1 || "$round" -gt 10 ]]; then
         printf 'round_overflow\n'
         return 0
     fi
@@ -1447,7 +1447,80 @@ assistant_phase_journal_mentions_agent_id() {
     result="$(assistant_phase_labeled_evidence_value "$file" "$role result")"
     combined="$dispatch
 $result"
-    printf '%s\n' "$combined" | grep -Fq -- "$agent_id"
+    printf '%s\n' "$combined" | assistant_phase_text_mentions_agent_id_token "$agent_id"
+}
+
+assistant_phase_text_mentions_agent_id_token() {
+    local agent_id="$1"
+    [[ -n "$agent_id" ]] || return 1
+    awk -v needle="$agent_id" '
+        function is_token_char(ch) {
+            return ch ~ /^[[:alnum:]_-]$/
+        }
+        {
+            start = 1
+            while ((relative = index(substr($0, start), needle)) > 0) {
+                absolute = start + relative - 1
+                before = absolute > 1 ? substr($0, absolute - 1, 1) : ""
+                after_pos = absolute + length(needle)
+                after = after_pos <= length($0) ? substr($0, after_pos, 1) : ""
+                if (!is_token_char(before) && !is_token_char(after)) {
+                    found = 1
+                    exit
+                }
+                start = absolute + length(needle)
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
+
+assistant_phase_event_is_reviewer_compat() {
+    local json_line="$1"
+    local agent_type agent_name
+    agent_type="$(assistant_phase_json_field_value "$json_line" "agent_type" | tr '[:upper:]' '[:lower:]')"
+    agent_name="$(assistant_phase_json_field_value "$json_line" "agent_name" | tr '[:upper:]' '[:lower:]')"
+    [[ "$agent_type" == "reviewer" || "$agent_name" == "reviewer" ]]
+}
+
+assistant_phase_codex_reviewer_event_ids() {
+    local file="$1"
+    local event="$2"
+    local events_file line id
+    events_file="$(assistant_phase_subagent_events_file "$file")"
+    [[ -f "$events_file" ]] || return 1
+    while IFS= read -r line; do
+        [[ "$line" == *"\"event\":\"$event\""* ]] || continue
+        assistant_phase_event_is_reviewer_compat "$line" || continue
+        id="$(assistant_phase_json_field_value "$line" "agent_id")"
+        [[ -n "$id" ]] || continue
+        printf '%s\n' "$id"
+    done < "$events_file"
+}
+
+assistant_phase_has_qa_reviewer_compat_event_pair_evidence() {
+    local file="$1"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "QA Evaluator" "$start_id" || continue
+        if assistant_phase_codex_reviewer_event_ids "$file" "SubagentStop" | grep -Fxq -- "$start_id"; then
+            return 0
+        fi
+    done < <(assistant_phase_codex_reviewer_event_ids "$file" "SubagentStart" || true)
+    return 1
+}
+
+assistant_phase_has_qa_reviewer_compat_start_event_evidence() {
+    local file="$1"
+    local start_id
+    while IFS= read -r start_id; do
+        [[ -n "$start_id" ]] || continue
+        assistant_phase_journal_mentions_agent_id "$file" "QA Evaluator" "$start_id" && return 0
+    done < <(assistant_phase_codex_reviewer_event_ids "$file" "SubagentStart" || true)
+    return 1
 }
 
 assistant_phase_has_role_event_pair_evidence() {
@@ -1461,6 +1534,9 @@ assistant_phase_has_role_event_pair_evidence() {
             return 0
         fi
     done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    if [[ "$role" == "QA Evaluator" ]]; then
+        assistant_phase_has_qa_reviewer_compat_event_pair_evidence "$file" && return 0
+    fi
     return 1
 }
 
@@ -1472,6 +1548,9 @@ assistant_phase_has_role_start_event_evidence() {
         [[ -n "$start_id" ]] || continue
         assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" && return 0
     done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
+    if [[ "$role" == "QA Evaluator" ]]; then
+        assistant_phase_has_qa_reviewer_compat_start_event_evidence "$file" && return 0
+    fi
     return 1
 }
 

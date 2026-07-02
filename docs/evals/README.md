@@ -25,7 +25,7 @@ under common operating conditions:
 - separate Code Reviewer and QA Evaluator evidence
 - QA loop behavior with conditional domain rubrics
 - pivot/restart decisions for stagnation and Code Writer blockers
-- terminal max 20 review/QA round behavior
+- terminal max 10 review/QA round behavior
 
 ## Framework Instruction Fixtures
 

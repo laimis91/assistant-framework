@@ -21,7 +21,7 @@ The orchestrator provides:
 - `code_review_result`: final Code Reviewer or Reviewer compatibility result.
 - `domain_context`: scoped UI/visual, product, UX, docs, DX, or domain notes when applicable.
 - `rubric_refs`: explicit references to scoped domain rubric families from `references/domain-rubrics.md` when applicable.
-- `round`: QA round number from 1 to 20.
+- `round`: QA round number from 1 to 10.
 - `previously_failed_acceptance_items`: failed acceptance items from earlier QA rounds.
 - `qa_filter_policy`: acceptance findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns stay non-blocking.
 
@@ -47,7 +47,7 @@ round = 1
 previously_failed_acceptance_items = []
 score_progression = []
 
-while round <= 20:
+while round <= 10:
   1. EVALUATE ACCEPTANCE
      Dispatch qa-evaluator in delegated mode, or use direct fallback with fresh QA context.
      Check every acceptance criterion, Done Contract item, and Done Contract debate_record independently when a Done Contract exists.
@@ -70,10 +70,10 @@ while round <= 20:
      blocked: required acceptance material or verification evidence is missing.
 
   4. FIX OR EXIT
-     If rejected before round 20, return failed acceptance items to Build for fixes, then re-run QA.
+     If rejected before round 10, return failed acceptance items to Build for fixes, then re-run QA.
      If blocked, return NEEDS_CONTEXT or BLOCKED with open_questions.
      If accepted or accepted_with_concerns, exit with final result.
-     Round 20 is terminal; return remaining failed acceptance items instead of starting round 21.
+     Round 10 is terminal; return remaining failed acceptance items instead of starting round 11.
      If pivot_restart_signal was returned, pause QA until the orchestrator
      records pivot_restart_decision with exact_next_action.
 ```
@@ -92,7 +92,7 @@ Do not report generic code defects, architecture concerns, security issues, or t
 ## Final Result
 
 The QA loop returns one final result:
-- `rounds`: 1-20.
+- `rounds`: 1-10.
 - `final_verdict`: accepted, accepted_with_concerns, rejected, or blocked.
 - `result`: CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, or BLOCKED.
 - `acceptance_findings`: remaining or resolved acceptance findings with evidence.

@@ -113,7 +113,7 @@ for file_and_term in \
     "$review_skill::REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3" \
     "$review_skill::Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0" \
     "$review_phase_gates::EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0" \
-    "$review_rubric::| 4-20 | 4.0+ | 3.25"; do
+    "$review_rubric::| 4-10 | 4.0+ | 3.25"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then

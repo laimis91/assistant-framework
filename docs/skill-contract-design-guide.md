@@ -237,7 +237,7 @@ artifacts when the controller requires them. Code Reviewer and QA Evaluator
 handoffs stay separate: Code Reviewer owns code defects, security,
 architecture, test coverage, and structural code risk; QA Evaluator owns Done
 Contract, acceptance criteria, verification evidence, final readiness, and
-scoped domain quality. Review/QA loops must be bounded, currently with a max 20
+scoped domain quality. Review/QA loops must be bounded, currently with a max 10
 round terminal cap, and stagnation, repeated drift/regression, rubric pivots, or
 Code Writer unexpected blockers must route through an explicit
 `pivot_restart_decision` rather than silently continuing.
@@ -335,5 +335,5 @@ Local response grading is deterministic and heuristic: missing files, empty resp
     non-discoverable missing data with no safe default
 13. **Loop controllers are explicit and bounded** — use Done Contract, Harness
     Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
-    decisions, and the max 20 terminal cap when the Process skill has
+    decisions, and the max 10 terminal cap when the Process skill has
     long-running review, QA, or fix-verify loops

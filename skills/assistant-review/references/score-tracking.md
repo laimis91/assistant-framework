@@ -106,7 +106,7 @@ Record scores in each Quality Review entry:
 
 ```markdown
 ### Quality Review #N
-- Round: N of 20
+- Round: N of 10
 - Previously fixed: M items from prior rounds
 - Found this round: X must-fix, Y should-fix, Z nits
 - Rubric: correctness=4.0 quality=3.5 architecture=4.0 security=5.0 coverage=3.0
@@ -156,5 +156,5 @@ fires, the review loop does not silently continue. It returns
 
 If the selected action changes approved scope, files, behavior, risk,
 verification, or acceptance criteria, `reapproval_required` is true and the
-workflow waits for approval before Build or Review continues. Round 20 remains
-terminal; do not start round 21.
+workflow waits for approval before Build or Review continues. Round 10 remains
+terminal; do not start round 11.

@@ -96,7 +96,7 @@ Use the code-reviewer agent. This is review round {N}.
 The following {count} items were already found and fixed — do NOT re-report them:
 {previously_fixed list}
 Focus ONLY on NEW high-confidence findings.
-Confidence threshold: Round 1-3: 80%+ | Round 4-15: 85%+ | Round 16-20: 90%+
+Confidence threshold: Round 1-3: 80%+ | Round 4-7: 85%+ | Round 8-10: 90%+
 ```
 
 ## QA Evaluator dispatch (QA rounds)
@@ -117,12 +117,12 @@ Do not replace Code Reviewer. Report only acceptance findings backed by evidence
 
 **QA Round N > 1:**
 ```
-Use the qa-evaluator agent. This is QA round {N} of 20.
+Use the qa-evaluator agent. This is QA round {N} of 10.
 Previously failed acceptance items:
 {previously_failed_acceptance_items}
-Do not re-report resolved items. In rounds 16-20, only unresolved acceptance
+Do not re-report resolved items. In rounds 8-10, only unresolved acceptance
 blockers or high-confidence acceptance risks keep the QA loop open.
-Round 20 is terminal; return the final verdict instead of implying round 21.
+Round 10 is terminal; return the final verdict instead of implying round 11.
 ```
 
 ## Fallback: agents not installed
