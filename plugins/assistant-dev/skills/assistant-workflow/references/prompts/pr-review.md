@@ -1,10 +1,10 @@
-# Quality Review Checklist (Stage 2)
+# Code Quality Review Checklist (Stage 2)
 
-Load this during Stage 2 of the review cycle. This is the quality gate — it runs after the Spec Review confirms the implementation matches the plan.
+Load this during Stage 2 of the review cycle. This is the code quality gate — it runs after the Spec Review confirms the implementation matches the plan. It does not replace Stage 3 QA Evaluation, which checks acceptance, Done Contract, verification evidence, scoped domain quality, score progression, and final result when QA is required.
 
 ## When to use
 
-Run this review as part of the autonomous review-fix loop: after all build steps complete and tests pass. The loop runs up to 10 rounds, fixing must-fix and should-fix items each round until clean. You do NOT need to wait for user input between rounds.
+Run this review as part of the autonomous review-fix loop: after all build steps complete and tests pass. The loop runs up to 20 rounds, fixing must-fix and should-fix items each round until clean. You do NOT need to wait for user input between rounds.
 
 For small tasks, do a quick pass through the "must-check" items only. For medium+ tasks, work through the full checklist.
 
@@ -13,7 +13,7 @@ For small tasks, do a quick pass through the "must-check" items only. For medium
 When dispatching the Reviewer subagent for round N > 1, prepend this context to the prompt:
 
 ```
-## Previously Fixed (Round N of 10)
+## Previously Fixed (Round N of 20)
 
 This is review round [N]. The following [count] items were already found
 and fixed in prior rounds — do NOT re-report them:
@@ -23,8 +23,8 @@ and fixed in prior rounds — do NOT re-report them:
 Focus ONLY on NEW high-confidence findings not in the above list.
 Raise your confidence threshold each round:
 - Round 1-3: report findings at 80%+ confidence
-- Round 4-7: report findings at 85%+ confidence
-- Round 8-10: report findings at 90%+ confidence
+- Round 4-15: report findings at 85%+ confidence
+- Round 16-20: report findings at 90%+ confidence
 
 If you find no new issues above your confidence threshold, say "No new findings."
 ```

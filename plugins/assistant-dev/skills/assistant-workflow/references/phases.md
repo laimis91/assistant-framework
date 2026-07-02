@@ -173,7 +173,7 @@ Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_m
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
 
-Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Then read `references/plan-template.md` and use the correct tier:
+Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. For medium+ harness-capable work, load `references/harness-controller.md` and add the Done Contract, Harness Recipe, Harness Run State ref, Trace Ledger ref, Replay Packet ref, and Artifact Reference Ledger before task packets. Then read `references/plan-template.md` and use the correct tier:
 - Small: inline plan (goal, files, risks, tests). Do not wait for approval unless risk, ambiguity, user instruction, or a scope-changing decision makes approval necessary.
 - Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
 - Large/Mega: full plan (all sections including Security and Operability)
@@ -183,12 +183,13 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 3. Analyze 1-3 options with tradeoffs, pick one
 4. Identify risks and edge cases
 5. Put the Artifact Contract before task packets and map every medium+ task packet to at least one required artifact or acceptance criterion
-6. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
-6. Write ordered implementation steps with file paths
-7. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-8. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
-9. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/slice criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
-10. Load prompt packs only when applicable:
+6. For medium+ harness-capable work, put the Done Contract, Harness Recipe, run-state/trace/replay artifact refs, and Artifact Reference Ledger before Build. The Done Contract must include done_when, not_done_when, verification, owner/consumer, acceptance criteria, and at least two debate perspectives; the Harness Recipe must be selected from task/model/risk/context profile. The ledger must type each artifact with artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary.
+7. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
+8. Write ordered implementation steps with file paths
+9. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
+10. Carry `Task type`, `Risk tier`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+11. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/slice criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
+12. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
    - New code: `references/prompts/test-strategy.md`
@@ -238,18 +239,27 @@ For medium+ tasks, create a task journal using `references/task-journal-template
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
+For medium+ harness-capable work, confirm the task journal or carried-forward plan has an accepted Done Contract, selected Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger before dispatching Code Writer or Builder/Tester. If any are missing, stop Build and return to Plan or repair state for the corrective action in `references/harness-controller.md`.
+
+Keep the runtime artifacts current as execution progresses:
+- Update Harness Run State after each slice/step, blocker, verification result, phase transition, or next-action change.
+- Append Trace Ledger entries for agent events, decisions, verification commands/results, plan deviations, pivot/restart decisions, and artifact refs.
+- Refresh the Replay Packet before context compaction, failure handoff, phase handoff, or end-of-turn with pinned context, artifact refs, validation state, and the exact next action.
+- Update the Artifact Reference Ledger when producers create or move artifacts, and require consumers to validate `schema_or_contract` plus `validation_status` before relying on `location_ref`.
+
 ### Orchestrator delegation rule
 
 **Delegated mode (`subagent_execution_mode=delegated`):** the orchestrator does not edit project source files or write implementation/test code directly. Framework-owned state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and `{agent_state_dir}/working-buffer.md`) are the exception only when configured and policy-allowed, and may be updated directly. If local state files are unavailable, carry equivalent state in the plan/response packet. Project source changes go through sub-agents, and the Agent Dispatch Log must record dispatch and result evidence for every required role before completion:
 - **Code Writer** (`code-writer`): implements code following the plan
 - **Builder/Tester** (`builder-tester`): builds, writes tests, runs tests
-- **Reviewer** (`reviewer` or assistant-review delegated review): independent review evidence for Review
+- **Code Reviewer** (`code-reviewer`, or `reviewer` compatibility through assistant-review delegated review): independent code/security/architecture/test coverage review evidence for Review
+- **QA Evaluator** (`qa-evaluator`): independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation when QA is required
 
-Any source-changing Build task must infer `required_agents` with at least Code Writer, Builder/Tester, and Reviewer. `not_applicable` is invalid once project source, tests, docs, config, hooks, contracts, or generated project artifacts will change. For medium+ delegated work, also record per-slice dispatch evidence before a slice is marked `VERIFIED`.
+Any source-changing Build task must infer `required_agents` with at least Code Writer, Builder/Tester, and Code Reviewer; `reviewer` remains compatibility routing for existing/legacy handoffs. Medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work also adds QA Evaluator. `not_applicable` is invalid once project source, tests, docs, config, hooks, contracts, or generated project artifacts will change. For medium+ delegated work, also record per-slice dispatch evidence before a slice is marked `VERIFIED`.
 
 **Direct fallback mode (`subagent_execution_mode=direct_fallback`):** when authorization is denied, subagents are unavailable, or policy disallows spawning, the active agent may implement, test, and review directly, but must preserve the same phases, contracts, evidence requirements, and review/security gates. Do not pretend delegation happened; record `subagent_policy_state`, `subagent_execution_mode`, the explicit `Direct fallback reason: authorization_denied | subagents_unavailable | policy_disallowed`, and the direct-execution evidence.
 
-**Strict subagent evidence gate:** any development/code-work task that changes project source, tests, docs, config, hooks, contracts, or generated artifacts must keep Code Writer, Builder/Tester, and Reviewer in `Required agents`; `subagent_execution_mode=not_applicable` is invalid for Build. Before leaving Build/Review, the task journal Agent Dispatch Log (or equivalent carried-forward state) must record `Code Writer dispatch` + `Code Writer result`, `Builder/Tester dispatch` + `Builder/Tester result`, and `Reviewer dispatch` + `Reviewer result` in delegated mode. Direct fallback must instead record `Code Writer direct evidence`, `Builder/Tester direct evidence`, and `Reviewer direct evidence` plus the explicit fallback reason. Silent fallback is invalid; Silent fallback cannot complete.
+**Strict subagent evidence gate:** any development/code-work task that changes project source, tests, docs, config, hooks, contracts, or generated artifacts must keep Code Writer, Builder/Tester, and Code Reviewer in `Required agents`; `reviewer` remains compatibility routing for existing/legacy handoffs and task journals. `subagent_execution_mode=not_applicable` is invalid for Build. Before leaving Build/Review, the task journal Agent Dispatch Log (or equivalent carried-forward state) must record `Code Writer dispatch` + `Code Writer result`, `Builder/Tester dispatch` + `Builder/Tester result`, and `Code Reviewer dispatch` + `Code Reviewer result` or `Reviewer dispatch` + `Reviewer result` only when using compatibility routing in delegated mode. When QA is required, it must also record `QA Evaluator dispatch` + `QA Evaluator result` in delegated mode. Direct fallback must instead record `Code Writer direct evidence`, `Builder/Tester direct evidence`, and `Code Reviewer direct evidence`; `Reviewer direct evidence` may satisfy only compatibility routing for existing/legacy handoffs. Add `QA Evaluator direct evidence` when QA is required, with the explicit fallback reason. Silent fallback is invalid; Silent fallback cannot complete.
 
 For each non-TDD step: dispatch Code Writer with the plan step + context map only in delegated mode, or execute directly in fallback mode and record Code Writer direct evidence → verify via Builder/Tester only in delegated mode, or run verification directly in fallback mode and record Builder/Tester direct evidence → check results → proceed or fix. For TDD-active steps, use the TDD sandwich in the Build loop.
 
@@ -264,8 +274,9 @@ Print: `>> Slice [S]/[total]: [slice_id] [name]`
 Before starting each medium+ slice:
 
 1. Load the approved task packet for the slice, including slice_id, observable increment, deliverable type, files, acceptance criteria, verification command, expected success signal, evidence to record, and deviation/rollback rule
-2. Confirm prior slice status is `VERIFIED` before advancing; do not start the next slice while the current slice is unverified
-3. Check constraints from the task journal against the slice files and criteria
+2. When harness-capable, confirm the task packet carries `done_contract_ref`, `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`, `replay_packet_ref`, and typed `artifact_refs`
+3. Confirm prior slice status is `VERIFIED` before advancing; do not start the next slice while the current slice is unverified
+4. Check constraints from the task journal against the slice files and criteria
 
 For the current slice task packet:
 
@@ -286,6 +297,42 @@ Print: `>> Direct fallback Builder/Tester responsibility → RED evidence` (TDD 
    - Code Writer GREEN: implement minimal production code only after RED evidence is present.
    - Builder/Tester VERIFY/REFACTOR-SAFETY: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures.
 
+### Code Writer unexpected blockers
+
+If Code Writer returns `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED` because of a
+legacy code bug, broken baseline, hidden dependency, missing contract, stale
+plan, scope conflict, tool/environment issue, permission/policy issue, missing
+RED evidence, or another unexpected blocker, do not ask Code Writer to
+improvise through it blindly.
+
+Require the return to include:
+
+- `blocker_type`: `legacy_code_bug`, `broken_baseline`, `hidden_dependency`,
+  `missing_contract`, `stale_plan`, `scope_conflict`, `tool_environment`,
+  `permission_policy`, `tdd_red_missing`, or `other`
+- `blocker_evidence`: file paths, missing contract fields, baseline failures,
+  tool output summaries, scope conflict details, or task-packet mismatches
+
+Orchestrator recovery routing:
+
+- `legacy_code_bug` or `broken_baseline` -> dispatch debugging before another
+  implementation attempt
+- `hidden_dependency` -> dispatch Explorer or refresh Code Mapper context
+- `missing_contract` or `stale_plan` -> dispatch Architect or return to Plan
+- `scope_conflict` -> record a plan deviation and seek reapproval when scope,
+  files, behavior, risk, verification, or acceptance criteria change
+- `tool_environment` -> route to Builder/Tester or environment recovery
+- `permission_policy` -> request permission or return BLOCKED
+- `tdd_red_missing` -> return to Builder/Tester RED evidence
+- `other` -> create a conservative recovery route with evidence
+
+When recovery requires pivot, replan, candidate search, or restart, create the
+orchestrator-owned `pivot_restart_decision`, update Harness Run State, append a
+`pivot_restart` Trace Ledger entry, refresh Replay Packet with the exact next
+action, and update Artifact Reference Ledger before continuing.
+
+Recovery route labels are: debugging, explorer, architect, candidate_search, replan, restart, user_clarification, environment_fix, and permission_request.
+
 Print: `>> Step [N]/[total]: DONE` (after each step passes build + test)
 
 ### Per-slice verification (medium+ tasks)
@@ -297,9 +344,10 @@ After implementation for a slice is done, verify the slice against its criteria 
 1. Dispatch Builder/Tester in delegated mode, or perform the Builder/Tester responsibility directly in fallback mode, to run the slice's verification command and any relevant build/test checks from the task packet
 2. Check each acceptance criterion from the slice manifest independently — mark pass/fail with the command/result or inspection evidence used
 3. Record verification evidence in the task journal slice verification ledger, including RED status when TDD was active, implementation status, command/result, criteria checked, and final status
-4. Run a small self-check/local sanity check: compare changed files and behavior against the task packet, constraints, and deviation rule; record the result in the ledger
-5. If any criterion, command, or self-check fails: fix before moving to the next slice
-6. Mark the slice `VERIFIED` only after all criteria pass and evidence is recorded
+4. Update Harness Run State, append Trace Ledger verification/artifact refs, refresh Replay Packet validation_state plus exact_next_action, and update Artifact Reference Ledger entries for changed_files, verification_evidence, pivot_restart_decision, and plan_deviation refs when applicable
+5. Run a small self-check/local sanity check: compare changed files and behavior against the task packet, constraints, and deviation rule; record the result in the ledger
+6. If any criterion, command, runtime artifact, or self-check fails: fix before moving to the next slice
+7. Mark the slice `VERIFIED` only after all criteria pass and evidence is recorded
 
 Print: `>> Slice [S]/[total]: [slice_id] [name] — VERIFIED ([X]/[Y] criteria passed)`
 
@@ -316,7 +364,10 @@ Plan assumed: [X]. Reality: [Y].
 Options: a) Adjust step [N]  b) Rethink approach
 ```
 
-Never silently deviate from the plan.
+Never silently deviate from the plan. If the selected recovery action changes
+approved scope, files, behavior, risk, verification, or acceptance criteria,
+record `pivot_restart_decision.reapproval_required=true` and wait for approval
+before continuing the changed path.
 
 Print: `>> Build complete — all [N] steps implemented`
 Print: `>> Running final build + tests`
@@ -334,7 +385,7 @@ Print: `>> Stage 1: Spec Review`
 
 Load and follow `references/prompts/spec-review.md`. Compare implementation against the approved plan, approved task packets, and approved slices and produce a structured spec compliance result before Stage 2. For bugfixes, include the `assistant-debugging` reproduction/root-cause evidence in the review material and check that the regression test or validation path actually covers the isolated failure mechanism.
 
-Quality review cannot satisfy spec review. Spec review checks scope and acceptance compliance; quality review checks correctness, maintainability, architecture, security, and coverage after spec compliance is clear.
+Quality review cannot satisfy spec review. Spec review checks scope and acceptance compliance; code quality review checks correctness, maintainability, architecture, security, and coverage after spec compliance is clear. QA Evaluation is a separate acceptance/result lane when required and cannot substitute for either Spec Review or Code Quality Review.
 
 1. Walk through each approved plan step, task packet, or slice against `git diff`.
 2. Check for missing acceptance criteria: any required behavior not reflected in code or evidence.
@@ -355,18 +406,35 @@ Print: `>> Spec Review: [PASS / FAIL — found N required fixes]`
 
 ### Stage 2 — Quality Review
 
-Print: `>> Stage 2: Quality Review — loading assistant-review SKILL.md`
+Print: `>> Stage 2: Code Quality Review — loading assistant-review SKILL.md`
 
-**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 10 rounds) with visible progress. Add Reviewer to `Required agents` before Stage 2. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Reviewer subagent and record `Reviewer dispatch`/`Reviewer result` evidence. In direct fallback, preserve fresh-review evidence and record `Reviewer direct evidence`.
+**Load and follow `assistant-review` SKILL.md and its contracts.** This runs the autonomous review-fix loop (max 20 rounds) with visible progress. Add Code Reviewer to `Required agents` before Stage 2; use `Reviewer` only as compatibility routing for existing/legacy handoffs. Dispatch the `code-reviewer` agent for code defects, security, architecture, test coverage, and structural code issues. Do NOT implement the review loop inline when `subagent_execution_mode=delegated` and a delegated review agent is authorized — dispatch the Code Reviewer subagent and record `Code Reviewer dispatch`/`Code Reviewer result` evidence, or record `Reviewer dispatch`/`Reviewer result` only when using compatibility routing. In direct fallback, preserve fresh-review evidence and record `Code Reviewer direct evidence`; `Reviewer direct evidence` is compatibility evidence only.
 
 The `assistant-review` skill will:
-- Dispatch Reviewer subagents in delegated mode, or preserve fresh-review evidence in direct fallback mode
+- Dispatch Code Reviewer subagents in delegated mode, using Reviewer compatibility only for existing handoffs, or preserve fresh-review evidence in direct fallback mode
 - Fix must-fix and should-fix items
 - Re-review automatically
+- Escalate STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT into an orchestrator-owned `pivot_restart_decision` before another fix/review dispatch
 - Return a final clean/remaining summary
 
 For small tasks: quick spec check + single review round is acceptable if clean.
-For medium+ tasks: full two-stage review with autonomous quality loop via `assistant-review`.
+For medium+ tasks: full spec review plus autonomous code quality loop via `assistant-review`.
+
+### Stage 3 — QA Evaluation
+
+Print: `>> Stage 3: QA Evaluation — loading assistant-review references/qa-evaluation-loop.md` when QA is required.
+
+Run QA Evaluation for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work. QA runs after build/test evidence and Code Reviewer or Reviewer compatibility result are available. Dispatch `qa-evaluator` in delegated mode, or record direct-fallback QA evidence when delegation is denied, unavailable after a real spawn failure, or policy-disallowed.
+
+The QA Evaluator receives Done Contract when present, acceptance criteria, verification evidence, code review result, domain_context/rubric_refs when applicable, round 1-20, previously_failed_acceptance_items, and qa_filter_policy. It loads assistant-review `references/domain-rubrics.md` only when acceptance criteria, Done Contract, domain_context, or explicit rubric_refs require subjective/product/UX/docs/DX/UI/domain scoring. It returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped, score_progression or score_entry, evidence, and open_questions when blocked.
+
+QA Evaluation focuses on acceptance and final result. It does not replace Code Reviewer, and it must not report general code defects, security issues, architecture concerns, or test coverage gaps unless they directly block an acceptance criterion or Done Contract item.
+
+If QA score progression reports STAGNATION, repeated DRIFT, repeated REGRESSION,
+or any scoped domain rubric returns action `pivot`, pause the QA loop and create
+an orchestrator-owned `pivot_restart_decision` before another QA/build dispatch.
+Round 20 remains terminal: return the final QA verdict and remaining failed
+acceptance items instead of starting round 21.
 
 ### Status gate
 
@@ -374,6 +442,8 @@ When local hooks are configured and policy-allowed, use them to enforce the revi
 
 When hooks are unavailable, enforce the same gate manually before presenting results:
 - Review Log or equivalent review result must exist.
+- QA Evaluation result must exist when qa_evaluation_mode=required.
+- Pivot/Restart Decision must exist when Review or QA reported STAGNATION, repeated DRIFT, repeated REGRESSION, or pivot action.
 - Final Result must be recorded.
 - The agent must complete the full review cycle before presenting results to the user.
 - Do not claim the hook ran unless it actually exists and executed.
@@ -385,7 +455,8 @@ Print: `--- PHASE: REVIEW COMPLETE ---`
 After final review passes, write the Verification Summary in the task journal:
 - What changed (files + why)
 - What's tested (unit/integration/E2E coverage)
-- Review result (clean / issues fixed / remaining should-fix items)
+- Code Review result (clean / issues fixed / remaining should-fix items)
+- QA Evaluation result when required (accepted / accepted with concerns / rejected / blocked)
 - Manual test instructions (step-by-step for the user)
 - Known limitations
 
@@ -442,7 +513,8 @@ Then print completion markers and exit.
    - `No-save rationale`: required when no durable write occurred
 6. **Post-task reflection**: Load and follow `assistant-reflexion` when available. Pass the Learning Controller evidence into reflexion so lessons are backed by review/build/user-correction evidence and persistence/no-save status is explicit.
 7. If local memory tools are approved and available, persist only durable, evidence-backed lessons through the configured local memory backend. If tools are unavailable or policy-disallowed, record that outcome in `Durable lesson decision` and `No-save rationale` instead of writing ad hoc markdown as cross-session memory.
-8. **Task completion metrics**: Append a JSONL entry when local metrics are configured and policy allows it (see format below)
+8. For medium+ harness-capable work, refresh Harness Run State, append final Trace Ledger entries for review/document decisions, include Pivot/Restart Decision refs when triggered, and update Replay Packet validation_state plus exact_next_action before completion or handoff.
+9. **Task completion metrics**: Append a JSONL entry when local metrics are configured and policy allows it (see format below)
 
 ### Metrics entry format (all sizes)
 

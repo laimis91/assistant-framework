@@ -229,6 +229,19 @@ handoffs:
 - Handoff schemas ensure subagents get proper context and return structured data
 - Example: assistant-workflow, assistant-review
 
+For loop-based Process skills, model the harness controller explicitly instead
+of hiding it in prose. Medium+ harness-capable work should define a Done
+Contract and Harness Recipe before Build, carry typed Artifact References across
+handoffs, and record run-state, trace, replay, review, QA, and pivot/restart
+artifacts when the controller requires them. Code Reviewer and QA Evaluator
+handoffs stay separate: Code Reviewer owns code defects, security,
+architecture, test coverage, and structural code risk; QA Evaluator owns Done
+Contract, acceptance criteria, verification evidence, final readiness, and
+scoped domain quality. Review/QA loops must be bounded, currently with a max 20
+round terminal cap, and stagnation, repeated drift/regression, rubric pivots, or
+Code Writer unexpected blockers must route through an explicit
+`pivot_restart_decision` rather than silently continuing.
+
 ### Analysis skills (3 files)
 - Multi-step pipeline (e.g., diverge → converge → refine)
 - Phase gates enforce pipeline ordering
@@ -316,3 +329,11 @@ Local response grading is deterministic and heuristic: missing files, empty resp
 8. **Conditional fields use `condition:`** — don't make everything required; scope to when it matters
 9. **Examples clarify ambiguous fields** — when `description` alone isn't enough, add `examples:`
 10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates
+11. **Root SKILL.md stays compact and outcome-shaped** — detailed controller
+    patterns live in references loaded only when the active task needs them
+12. **Clarification prompts are admissible** — ask only for material,
+    non-discoverable missing data with no safe default
+13. **Loop controllers are explicit and bounded** — use Done Contract, Harness
+    Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
+    decisions, and the max 20 terminal cap when the Process skill has
+    long-running review, QA, or fix-verify loops

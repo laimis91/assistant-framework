@@ -50,13 +50,15 @@ Score went up BUT finding count didn't decrease. The evaluator is scoring higher
 score_delta > 0 AND finding_count_delta >= 0 → DRIFT
 ```
 
-Action: **Reset evaluator context.** Dispatch a fresh reviewer agent with an explicitly stricter prompt:
+Action: **Reset evaluator context once.** Dispatch a fresh reviewer agent with an explicitly stricter prompt:
 
 > "Previous rounds showed score inflation without corresponding quality improvement.
 > Apply maximum skepticism. Score conservatively — when uncertain, round DOWN.
 > Do not give benefit of the doubt on any dimension."
 
 Also add to the final summary: "Drift detected in round N — evaluator was reset."
+Repeated DRIFT after the reset triggers `pivot_restart_signal` and requires an
+orchestrator-owned `pivot_restart_decision` before another review dispatch.
 
 ### Rule 4: REGRESSION
 
@@ -66,7 +68,7 @@ Score went down. Fixes may have introduced new problems, or the evaluator is cat
 score_delta < 0 → REGRESSION
 ```
 
-Action: This is not necessarily bad — a fresh evaluator may legitimately find more issues. Log it but don't escalate unless regression persists for 2+ consecutive rounds.
+Action: This is not necessarily bad — a fresh evaluator may legitimately find more issues. Log it, but 2+ consecutive REGRESSION entries trigger `pivot_restart_signal` and require an orchestrator-owned `pivot_restart_decision` before another fix/review dispatch.
 
 ### Rule 5: STAGNATION
 
@@ -76,10 +78,13 @@ Score unchanged for 2+ consecutive rounds with findings still present.
 score_delta == 0 for 2 consecutive rounds AND finding_count > 0 → STAGNATION
 ```
 
-Action: Flag to orchestrator. The loop is churning without progress. Consider:
+Action: Return `pivot_restart_signal` to the orchestrator. The loop is churning
+without progress. The orchestrator must record `pivot_restart_decision` before
+another fix/review dispatch and consider:
 - Fixes are introducing new issues at the same rate as resolving old ones
 - The remaining issues may be architectural (can't fix without broader changes)
-- May need to PIVOT or accept current state with documented limitations
+- The selected recovery may need reset, candidate search, replan, restart, or a
+  blocked/user path
 
 ## Decision Matrix
 
@@ -87,9 +92,9 @@ Action: Flag to orchestrator. The loop is churning without progress. Consider:
 |---|---|---|---|
 | +, magnitude ≤ 1.0 | count decreased | **GENUINE** | Continue normally |
 | +, magnitude > 1.0 | count decreased | **SUSPICIOUS** | Log warning, continue |
-| +, any | count same or increased | **DRIFT** | Reset evaluator, stricter prompt |
-| − | any | **REGRESSION** | Log, investigate if 2+ rounds |
-| 0 | any, findings > 0 remain, 2+ consecutive rounds | **STAGNATION** | Escalate to orchestrator |
+| +, any | count same or increased | **DRIFT** | Reset evaluator once; repeated DRIFT triggers pivot_restart_decision |
+| − | any | **REGRESSION** | Log; 2+ consecutive regressions trigger pivot_restart_decision |
+| 0 | any, findings > 0 remain, 2+ consecutive rounds | **STAGNATION** | Return pivot_restart_signal and require pivot_restart_decision |
 | 0 | any, findings > 0 remain, 1 round only | **NEUTRAL** | Log, no action yet |
 | 0 | findings == 0 | *(exit as CLEAN)* | Should not reach drift check |
 
@@ -101,7 +106,7 @@ Record scores in each Quality Review entry:
 
 ```markdown
 ### Quality Review #N
-- Round: N of 10
+- Round: N of 20
 - Previously fixed: M items from prior rounds
 - Found this round: X must-fix, Y should-fix, Z nits
 - Rubric: correctness=4.0 quality=3.5 architecture=4.0 security=5.0 coverage=3.0
@@ -128,7 +133,28 @@ Include in the review exit summary:
 | Drift Count | Response |
 |---|---|
 | 1 occurrence | Reset evaluator, stricter prompt |
-| 2 occurrences | Flag to orchestrator, consider different model for evaluation |
-| 3+ occurrences | Stop loop, present findings to user for manual review |
+| 2 occurrences | Return pivot_restart_signal; orchestrator records pivot_restart_decision |
+| 3+ occurrences | Stop current review path until pivot_restart_decision selects reset, candidate search, replan, restart, or blocked/user path |
 
 The goal is not to prevent the loop from exiting — it's to ensure that when it exits, the code genuinely earned its passing score.
+
+## Pivot/Restart Decision Packet
+
+When STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT
+fires, the review loop does not silently continue. It returns
+`pivot_restart_signal`; the orchestrator records `pivot_restart_decision` with:
+
+- `trigger`
+- `evidence`
+- `affected_slice_or_round`
+- `options_considered`
+- `selected_action`
+- `reapproval_required`
+- `next_agent`
+- `recovery_pointer`
+- `exact_next_action`
+
+If the selected action changes approved scope, files, behavior, risk,
+verification, or acceptance criteria, `reapproval_required` is true and the
+workflow waits for approval before Build or Review continues. Round 20 remains
+terminal; do not start round 21.

@@ -24,6 +24,9 @@ worker_status_protocol:
     - "findings, summary, and verdict remain required and are not replaced by status."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+    - "status is required on every QAEvaluator return."
+    - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_progression or score_entry; selected_domain_rubrics and domain_quality_scores are required only when scoped domain rubrics are selected. QA evaluation does not replace Reviewer/code-reviewer findings."
+    - "Reviewer and QAEvaluator may return pivot_restart_signal for PIVOT, STAGNATION, repeated DRIFT, or repeated REGRESSION; the orchestrator owns the final pivot_restart_decision."
 
 handoffs:
 
@@ -70,8 +73,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current review round number (1-10)"
-        validation: ">= 1 and <= 10"
+        description: "Current review round number (1-20)"
+        validation: ">= 1 and <= 20"
 
       - name: previously_fixed
         type: object[]
@@ -84,14 +87,14 @@ handoffs:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: ">= 1 and <= 20"
 
       - name: finding_filter_policy
         type: string
         required: true
         description: "Evidence-backed finding filter for this round"
-        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 10 remains terminal."
-        notes: "In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 11."
+        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 20 remains terminal."
+        notes: "In rounds 16-20, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 21."
 
       - name: project_type
         type: string
@@ -154,7 +157,7 @@ handoffs:
         type: int
         required: true
         description: "Echo back the round number for tracking"
-        validation: ">= 1 and <= 10"
+        validation: ">= 1 and <= 20"
 
       - name: findings
         type: object[]
@@ -421,7 +424,401 @@ handoffs:
             required: false
             description: "If a critical finding caps the score, describe it here"
 
+      - name: pivot_restart_signal
+        type: object
+        required: false
+        condition: "rubric_scores.action == PIVOT or score tracking detects STAGNATION, repeated DRIFT, or repeated REGRESSION"
+        description: "Signal that the review loop needs orchestrator-owned pivot/restart handling before another fix/review dispatch."
+        object_fields:
+          - name: trigger
+            type: enum
+            required: true
+            enum_values: [STAGNATION, repeated_DRIFT, repeated_REGRESSION, pivot]
+          - name: evidence
+            type: object[]
+            required: true
+            min_items: 1
+            object_fields:
+              - name: source
+                type: string
+                required: true
+              - name: detail
+                type: string
+                required: true
+          - name: affected_round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: recommended_recovery_focus
+            type: string
+            required: true
+            description: "Lowest-scoring dimensions, stale-context concern, or blocker evidence the orchestrator should consider"
+
     on_missing_field: "In delegated mode, re-dispatch Reviewer. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+
+  # ─────────────────────────────────────────────
+  # Orchestrator → QAEvaluator (per QA round)
+  # ─────────────────────────────────────────────
+  - name: orchestrator_to_qa_evaluator
+    from: Orchestrator
+    to: QAEvaluator
+    phase: QA_EVALUATION_STEP
+    notes: "Runs after build/test evidence and Code Reviewer or Reviewer compatibility evidence. QA evaluation is an acceptance lane and does not replace code-reviewer."
+
+    context_fields:
+      - name: done_contract
+        type: object
+        required: conditional
+        condition: "task has an accepted Done Contract"
+        description: "Accepted Done Contract for the work under QA evaluation"
+        validation: "Includes done_when, not_done_when, verification, owner_consumer, acceptance_criteria, debate_record with at least two perspectives, and accepted_by when present"
+        object_fields:
+          - name: done_when
+            type: string[]
+            required: true
+          - name: not_done_when
+            type: string[]
+            required: true
+          - name: verification
+            type: string[]
+            required: true
+          - name: owner_consumer
+            type: string
+            required: true
+          - name: acceptance_criteria
+            type: string[]
+            required: true
+          - name: debate_record
+            type: object[]
+            required: true
+            min_items: 2
+            description: "pre-build debate/subagent-perspective evidence considered before accepting the Done Contract"
+            validation: "At least two perspectives; delegated mode uses subagent perspectives when available"
+            object_fields:
+              - name: perspective
+                type: string
+                required: true
+              - name: concern_or_support
+                type: string
+                required: true
+              - name: resolution
+                type: string
+                required: true
+          - name: accepted_by
+            type: string
+            required: true
+
+      - name: acceptance_criteria
+        type: string[]
+        required: true
+        description: "Binary acceptance criteria from the user request, approved plan, slice manifest, or Done Contract"
+        validation: "At least one independently evaluable criterion is present"
+        min_items: 1
+
+      - name: verification_evidence
+        type: object[]
+        required: true
+        description: "Build, test, manual, review, or inspection evidence used to prove acceptance"
+        validation: "At least one evidence entry exists; each entry states source, result, and what it proves"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: result
+            type: string
+            required: true
+          - name: proves
+            type: string
+            required: true
+
+      - name: code_review_result
+        type: object
+        required: true
+        description: "Final Code Reviewer or Reviewer compatibility result that QA must not replace"
+        validation: "Names the review role used, final result, review rounds, and remaining code-review risks if any"
+        object_fields:
+          - name: role
+            type: enum
+            required: true
+            enum_values: [CodeReviewer, Reviewer]
+          - name: result
+            type: string
+            required: true
+          - name: rounds
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: remaining_risks
+            type: string[]
+            required: true
+
+      - name: domain_context
+        type: object
+        required: false
+        default: null
+        description: "Scoped product, UX, docs, DX, or domain notes for QA evaluation"
+        notes: "When present, QAEvaluator may load references/domain-rubrics.md and select only matching rubric families."
+        object_fields:
+          - name: summary
+            type: string
+            required: true
+          - name: in_scope_surfaces
+            type: string[]
+            required: true
+
+      - name: rubric_refs
+        type: string[]
+        required: false
+        default: []
+        description: "Explicit rubric family references for product, UX, UI/visual, docs, DX, or domain quality"
+        notes: "Valid families are defined in references/domain-rubrics.md. QAEvaluator must not invent rubrics when rubric_refs are empty and no acceptance/Done Contract/domain_context scope requires them."
+
+      - name: round
+        type: int
+        required: true
+        description: "Current QA evaluation round number (1-20)"
+        validation: ">= 1 and <= 20"
+
+      - name: previously_failed_acceptance_items
+        type: object[]
+        required: true
+        description: "Acceptance items failed in previous QA rounds; QAEvaluator should not re-report resolved items"
+        object_fields:
+          - name: criterion
+            type: string
+            required: true
+          - name: failed_in_round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: evidence_gap
+            type: string
+            required: true
+
+      - name: qa_filter_policy
+        type: string
+        required: true
+        description: "Evidence-backed QA finding filter for this round"
+        validation: "Must state that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 20 is terminal."
+
+    return_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+        description: "Worker status packet result; DONE requires final_verdict=accepted"
+
+      - name: round
+        type: int
+        required: true
+        description: "Echo back the QA round number"
+        validation: ">= 1 and <= 20"
+
+      - name: acceptance_findings
+        type: object[]
+        required: true
+        description: "Acceptance, Done Contract, verification, or scoped domain findings for this QA round"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [blocker, concern, observation]
+          - name: criterion
+            type: string
+            required: true
+          - name: evidence
+            type: string
+            required: true
+          - name: impact
+            type: string
+            required: true
+          - name: recommendation
+            type: string
+            required: false
+
+      - name: qa_scorecard
+        type: object
+        required: true
+        description: "Compact QA scores; domain_quality is backed by selected_domain_rubrics/domain_quality_scores only when domain rubrics are scoped"
+        object_fields:
+          - name: acceptance_coverage
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: evidence_strength
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: domain_quality
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments; use 5.0 when no scoped domain quality surface applies and state not_applicable in rationale"
+          - name: final_readiness
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
+          - name: weighted_score
+            type: float
+            required: true
+            validation: "Calculated from the compact QA scorecard dimensions"
+          - name: rationale
+            type: object
+            required: true
+            object_fields:
+              - name: acceptance_coverage
+                type: string
+                required: true
+              - name: evidence_strength
+                type: string
+                required: true
+              - name: domain_quality
+                type: string
+                required: true
+              - name: final_readiness
+                type: string
+                required: true
+
+      - name: selected_domain_rubrics
+        type: string[]
+        required: false
+        condition: "domain_context or rubric_refs is present, or acceptance criteria / Done Contract require subjective/product/UX/docs/DX/UI/domain craft evaluation"
+        description: "Rubric families selected from references/domain-rubrics.md for this QA round"
+        validation: "Every selected family is tied to acceptance criteria, Done Contract, domain_context, or explicit rubric_refs. Empty or omitted when no scoped domain rubric applies."
+
+      - name: domain_quality_scores
+        type: object[]
+        required: false
+        condition: "selected_domain_rubrics is non-empty"
+        description: "Per-family domain rubric scores from references/domain-rubrics.md"
+        validation: "Each score cites scoped evidence and uses pass/refine/pivot or accepted/rejected guidance; unscoped dimensions are not_applicable, not invented."
+        object_fields:
+          - name: rubric_ref
+            type: string
+            required: true
+            description: "Selected rubric family, such as ui_visual_design, ux_product_acceptance, documentation_quality, developer_experience, or domain_specific_craft"
+          - name: dimension
+            type: string
+            required: true
+            description: "Selected dimension within the rubric family"
+          - name: score
+            type: float
+            required: true
+            validation: "1.0 to 5.0 in 0.5 increments. For action=not_applicable, use 5.0 and state the unscoped rationale in evidence."
+          - name: action
+            type: enum
+            required: true
+            enum_values: [accepted, accepted_with_concerns, refine, rejected, pivot, not_applicable]
+          - name: evidence
+            type: string
+            required: true
+            validation: "Cites acceptance criteria, Done Contract, domain_context, rubric_refs, verification artifacts, screenshots, docs, or concrete files"
+
+      - name: final_verdict
+        type: enum
+        required: true
+        enum_values: [accepted, accepted_with_concerns, rejected, blocked]
+        description: "Final QA acceptance verdict for this round"
+
+      - name: result
+        type: enum
+        required: true
+        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, BLOCKED]
+        description: "Loop-compatible result summary"
+
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Acceptance material, files, review results, verification evidence, or checks supporting the QA verdict"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+
+      - name: score_entry
+        type: object
+        required: true
+        description: "Score progression entry for this QA round"
+        object_fields:
+          - name: round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: weighted_score
+            type: float
+            required: true
+          - name: failed_acceptance_count
+            type: int
+            required: true
+          - name: delta
+            type: string
+            required: true
+          - name: drift_status
+            type: enum
+            required: true
+            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+
+      - name: score_progression
+        type: object[]
+        required: false
+        description: "Full QA score progression when the evaluator has prior round history"
+        object_fields:
+          - name: round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: weighted_score
+            type: float
+            required: true
+          - name: failed_acceptance_count
+            type: int
+            required: true
+          - name: drift_status
+            type: enum
+            required: true
+            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED] or final_verdict == blocked"
+        description: "Questions or blocker details the orchestrator must resolve"
+
+      - name: pivot_restart_signal
+        type: object
+        required: false
+        condition: "score_entry.drift_status == STAGNATION, repeated QA DRIFT/REGRESSION is detected, or any scoped domain_quality_scores action == pivot"
+        description: "Signal that the QA loop needs orchestrator-owned pivot/restart handling before another QA/build dispatch."
+        object_fields:
+          - name: trigger
+            type: enum
+            required: true
+            enum_values: [STAGNATION, repeated_DRIFT, repeated_REGRESSION, pivot]
+          - name: evidence
+            type: object[]
+            required: true
+            min_items: 1
+            object_fields:
+              - name: source
+                type: string
+                required: true
+              - name: detail
+                type: string
+                required: true
+          - name: affected_round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: recommended_recovery_focus
+            type: string
+            required: true
+            description: "Acceptance gap, evidence gap, domain pivot evidence, or stale QA context the orchestrator should consider"
+
+    on_missing_field: "In delegated mode, re-dispatch QAEvaluator. In direct fallback mode, complete the local QA evidence before continuing. status, acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_entry are never optional. When scoped domain rubrics are selected, selected_domain_rubrics and domain_quality_scores are also required; when not scoped, do not fabricate them."
 
 # ─────────────────────────────────────────────
 # Validation behavior:
@@ -433,6 +830,11 @@ handoffs:
 # 6. If rubric_required: verify rubric_scores is present with all dimensions
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
-# 9. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
-# 10. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
+# 9. If pivot_restart_signal is present, stop the current loop path until the orchestrator records pivot_restart_decision; do not silently continue.
+# 10. If round == 20, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 21
+# 11. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
+# 12. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
+# 13. If QA round == 20, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 21.
+# 14. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.
+# 15. If no scoped domain rubric applies: verify QAEvaluator did not invent rubrics or penalize domain_quality for missing unscoped evidence.
 # ─────────────────────────────────────────────

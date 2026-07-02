@@ -30,6 +30,88 @@ artifacts:
         required: true
         validation: "Names the fresh Reviewer dispatch, or the direct-fallback context reset used to reduce stale review risk"
 
+  - name: qa_evaluation_delegation_path
+    type: object
+    required: conditional
+    condition: "qa_evaluation_mode == required"
+    description: "How QAEvaluator responsibility was executed"
+    validation: "States subagent policy state, execution mode, authorization scope, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context"
+    on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when they were not authorized or available"
+    object_fields:
+      - name: subagent_policy_state
+        type: enum
+        required: true
+        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: subagent_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, direct_fallback, not_applicable]
+      - name: subagent_authorization_scope
+        type: string[]
+        required: true
+      - name: fresh_context_evidence
+        type: string
+        required: true
+        validation: "Names the fresh QAEvaluator dispatch, or the direct-fallback context reset used to reduce stale QA risk"
+
+  - name: pivot_restart_decision
+    type: object
+    required: conditional
+    condition: "review or QA loop observes STAGNATION, repeated DRIFT, repeated REGRESSION, rubric action PIVOT, or scoped domain action pivot"
+    description: "Orchestrator-owned decision packet created before another review/fix/QA/build dispatch after stagnant or pivot-triggered quality loops."
+    validation: "Must include trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Reapproval is required when scope, files, behavior, risk, verification, or acceptance criteria change."
+    on_fail: "Pause the loop and create the pivot_restart_decision before continuing; do not silently continue after stagnation or pivot."
+    object_fields:
+      - name: trigger
+        type: enum
+        required: true
+        enum_values: [STAGNATION, repeated_DRIFT, repeated_REGRESSION, pivot]
+      - name: evidence
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: affected_slice_or_round
+        type: string
+        required: true
+      - name: options_considered
+        type: object[]
+        required: true
+        min_items: 2
+        object_fields:
+          - name: option
+            type: string
+            required: true
+          - name: tradeoff
+            type: string
+            required: true
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [selected, rejected, deferred]
+      - name: selected_action
+        type: enum
+        required: true
+        enum_values: [reset_context, return_to_build, dispatch_debugging, dispatch_explorer, dispatch_architect, run_candidate_search, replan, restart_slice, restart_phase, block_for_user, accept_with_limitations]
+      - name: reapproval_required
+        type: boolean
+        required: true
+      - name: next_agent
+        type: string
+        required: true
+      - name: recovery_pointer
+        type: string
+        required: true
+      - name: exact_next_action
+        type: string
+        required: true
+
   - name: review_finding_rule_distillation
     type: object[]
     required: conditional
@@ -74,12 +156,12 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds (1-10), result, fixed_items, remaining_items when applicable, and nits before presenting review results"
+    validation: "Must include rounds (1-20), result, fixed_items, remaining_items when applicable, and nits before presenting review results"
     object_fields:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 10"
+        validation: ">= 1 and <= 20"
       - name: result
         type: enum
         required: true
@@ -102,7 +184,7 @@ artifacts:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: ">= 1 and <= 20"
       - name: remaining_items
         type: object[]
         required: false
@@ -133,6 +215,128 @@ artifacts:
           - name: description
             type: string
             required: true
+
+  - name: qa_evaluation_result
+    type: object
+    required: conditional
+    condition: "qa_evaluation_mode == required"
+    description: "Independent QA evaluation final result after build/test and code-review evidence"
+    validation: "Must include rounds (1-20), final_verdict, result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, evidence, and open_questions when blocked"
+    on_fail: "Run the QA evaluation loop from references/qa-evaluation-loop.md or record why QA is blocked before presenting final review results"
+    object_fields:
+      - name: rounds
+        type: int
+        required: true
+        validation: ">= 1 and <= 20"
+      - name: final_verdict
+        type: enum
+        required: true
+        enum_values: [accepted, accepted_with_concerns, rejected, blocked]
+      - name: result
+        type: enum
+        required: true
+        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, BLOCKED]
+      - name: acceptance_findings
+        type: object[]
+        required: true
+        description: "Remaining or resolved acceptance findings from the final QA round"
+        object_fields:
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [blocker, concern, observation]
+          - name: criterion
+            type: string
+            required: true
+          - name: evidence
+            type: string
+            required: true
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [resolved, remaining, not_applicable]
+      - name: qa_scorecard
+        type: object
+        required: true
+        description: "Compact QA scorecard; domain_quality is backed by selected_domain_rubrics/domain_quality_scores only when scoped domain rubrics were used"
+        object_fields:
+          - name: acceptance_coverage
+            type: float
+            required: true
+          - name: evidence_strength
+            type: float
+            required: true
+          - name: domain_quality
+            type: float
+            required: true
+          - name: final_readiness
+            type: float
+            required: true
+          - name: weighted_score
+            type: float
+            required: true
+      - name: selected_domain_rubrics
+        type: string[]
+        required: false
+        condition: "domain_context or rubric_refs was provided, or acceptance criteria / Done Contract required subjective/product/UX/docs/DX/UI/domain craft evaluation"
+        description: "Rubric families selected from references/domain-rubrics.md; empty or omitted when domain rubrics were not scoped"
+      - name: domain_quality_scores
+        type: object[]
+        required: false
+        condition: "selected_domain_rubrics is non-empty"
+        description: "Evidence-backed domain rubric scores from the final QA round"
+        object_fields:
+          - name: rubric_ref
+            type: string
+            required: true
+          - name: dimension
+            type: string
+            required: true
+          - name: score
+            type: float
+            required: true
+          - name: action
+            type: enum
+            required: true
+            enum_values: [accepted, accepted_with_concerns, refine, rejected, pivot, not_applicable]
+          - name: evidence
+            type: string
+            required: true
+      - name: score_progression
+        type: object[]
+        required: true
+        description: "QA score progression across rounds"
+        object_fields:
+          - name: round
+            type: int
+            required: true
+            validation: ">= 1 and <= 20"
+          - name: weighted_score
+            type: float
+            required: true
+          - name: failed_acceptance_count
+            type: int
+            required: true
+          - name: drift_status
+            type: enum
+            required: true
+            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+      - name: evidence
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "final_verdict == blocked or result == BLOCKED"
+        description: "Questions or blocker details the orchestrator must resolve"
 
   - name: rubric_summary
     type: object
@@ -170,12 +374,12 @@ artifacts:
       - name: score_progression
         type: object[]
         required: true
-        description: "Weighted score per round — used for drift detection and capped at the 10-round review limit"
+        description: "Weighted score per round — used for drift detection and capped at the 20-round review limit"
         object_fields:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: ">= 1 and <= 20"
           - name: weighted_score
             type: float
             required: true
@@ -379,3 +583,6 @@ artifacts:
 # 5. If semantic_contract_review_required=true: semantic_contract_review is populated and semantic findings are included in final_summary/audit_report
 # 6. If behavioral_contract_review_required=true: behavioral_contract_review is populated and behavioral findings are included in final_summary/audit_report
 # 7. If agentic_loop_safety_review_required=true: agentic_loop_safety_review is populated and loop-safety findings are included in final_summary/audit_report
+# 8. If qa_evaluation_mode=required: qa_evaluation_delegation_path and qa_evaluation_result are populated after build/test and code-review evidence; QA result does not replace final_summary or code-review artifacts
+# 9. If scoped domain rubrics were used: qa_evaluation_result includes selected_domain_rubrics and domain_quality_scores; if not scoped, no invented domain rubric output is required or accepted
+# 10. If review or QA triggered STAGNATION, repeated DRIFT, repeated REGRESSION, or pivot action: pivot_restart_decision is populated before any additional review/fix/QA/build dispatch

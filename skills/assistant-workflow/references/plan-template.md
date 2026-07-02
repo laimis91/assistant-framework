@@ -55,6 +55,21 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
+- Harness refs:
+  - done_contract_ref: [Done Contract section/ref, or N/A]
+  - harness_recipe_ref: [Harness Recipe section/ref, or N/A]
+  - harness_run_state_ref: [Harness Run State section/ref, or N/A]
+  - trace_ledger_ref: [Trace Ledger section/ref, or N/A]
+  - replay_packet_ref: [Replay Packet section/ref, or N/A]
+- Typed artifact refs:
+  - artifact_id: [stable task-local id]
+    artifact_type: [done_contract | harness_recipe | harness_run_state | trace_ledger | replay_packet | changed_files | verification_evidence | plan_deviation | task_packet | context_map | test_result | review_result | qa_evaluation_result]
+    producer: [role/subagent/hook/task packet]
+    consumer: [role/subagent/hook/phase]
+    location_ref: [typed location/ref pointer]
+    schema_or_contract: [contract/template/required fields]
+    validation_status: [pending | valid | invalid | stale | not_applicable]
+    summary: [concise state]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -171,6 +186,62 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
+## Done Contract
+
+Required for medium+ harness-capable work before Build; omit with a brief N/A
+rationale for non-harness work.
+
+- done_when:
+  - [binary outcome that proves done]
+- not_done_when:
+  - [failure state that blocks done]
+- verification:
+  - [command, inspection, review, or manual check]
+- owner_consumer: [owner and downstream consumer]
+- acceptance_criteria:
+  - [explicit binary criterion]
+- debate_record:
+  - perspective: [role/subagent/direct perspective 1]
+    concern_or_support: [concise point]
+    resolution: [accepted, rejected, or changed]
+  - perspective: [role/subagent/direct perspective 2]
+    concern_or_support: [concise point]
+    resolution: [accepted, rejected, or changed]
+- accepted_by: [user/orchestrator/approved plan reference]
+
+## Harness Recipe
+
+Required for medium+ harness-capable work before Build; selected from
+task/model/risk/context profile per `references/harness-controller.md`.
+
+- task_profile: [task type, size, slice count, TDD/debugging applicability]
+- model_profile: [agent/model constraints, delegation mode, tool limits]
+- risk_profile: [risk tier, safety gates, review depth, rollback needs]
+- context_profile: [exact/summarized/omitted context and trace/replay needs]
+- selected_recipe: [concise recipe label]
+- recipe_rationale: [why this profile selects the recipe]
+- required_artifacts: [Done Contract, task packet, verification, trace/handoff artifacts]
+- corrective_action: [what to do if missing or stale]
+
+## Runtime Harness Artifacts
+
+Required for medium+ harness-capable work; omit with a brief N/A rationale for
+non-harness work.
+
+- harness_run_state_ref: [where task_id/task_name/phase/slice/status/blockers/last_verification/next_action/recovery_pointer will be maintained]
+- trace_ledger_ref: [where ordered agent events, decisions, verification results, plan deviations, and artifact refs will be appended]
+- replay_packet_ref: [where pinned context, artifact refs, validation state, and exact next action will be refreshed]
+- corrective_action: [what to do if run-state/trace/replay evidence is missing or stale]
+
+## Artifact Reference Ledger
+
+Required for medium+ harness-capable work when artifacts pass between agents.
+Each row is a typed producer/consumer record, not an ad hoc string reference.
+
+| Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
+|-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
+| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role] | [role/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
+
 ## Slice manifest from Decompose
 
 Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
@@ -271,6 +342,15 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
 - Fallback path: [subagent path or direct equivalent]
 - Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
 - Decision: proceed | revise_decomposition | return_to_discover
+
+## Artifact Reference Ledger
+
+Required for medium+ harness-capable work when artifacts pass between agents.
+Each row is a typed producer/consumer record, not an ad hoc string reference.
+
+| Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
+|-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
+| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role] | [role/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
 
 ## Slice manifest from Decompose
 

@@ -136,6 +136,62 @@ learning_controller_reason() {
     ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
 }
 
+review_gate_reason() {
+    local task_file="$1"
+    bash -c '
+        . "$1"
+        assistant_phase_review_missing_reason_key "$2"
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
+}
+
+subagent_evidence_reason() {
+    local task_file="$1"
+    bash -c '
+        . "$1"
+        assistant_phase_subagent_evidence_missing_reason_key "$2"
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
+}
+
+write_required_qa_review_task() {
+    local task_file="$1"
+    local qa_evidence="$2"
+    mkdir -p "$(dirname "$task_file")"
+    cat > "$task_file" <<TASK
+# Task
+Status: REVIEWING
+Triaged as: small
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: multi_agent id=qa-1
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 20
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+$qa_evidence
+TASK
+}
+
 make_codex_version_stub() {
     local version="$1"
     local stub_dir
@@ -197,7 +253,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -236,6 +292,494 @@ TASK
         pass
     else
         fail "expected no_spec_review, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Code Reviewer and QA Evaluator evidence passes"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: DONE_WITH_CONCERNS review completed with recorded follow-up risk
+- QA Evaluator dispatch: multi_agent id=qa-1
+- QA Evaluator result: PASS clean final_verdict accepted with score_progression 4.00
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA accepted compact final verdict allows review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" \
+        "- QA Evaluator result: PASS clean final_verdict accepted with score_progression 4.00"
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA accepted_with_concerns final verdict allows review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed with concerns; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: accepted_with_concerns\n- QA result: accepted_with_concerns'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA final verdict option list blocks review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: accepted | accepted_with_concerns | rejected | blocked'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_final_result_missing" ]]; then
+        pass
+    else
+        fail "expected qa_final_result_missing, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA result bracket option list blocks review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed; see final result\n- QA result: [accepted | accepted_with_concerns | rejected | blocked | not_required]'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_final_result_missing" ]]; then
+        pass
+    else
+        fail "expected qa_final_result_missing, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: QA not_required mode with template labels allows review"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required gates:
+- separate QA Evaluator loop
+Required agents:
+- Code Reviewer
+qa_evaluation_mode: not_required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: [multi_agent id=... or N/A only when qa_evaluation_mode=not_required]
+- QA Evaluator result: [accepted or N/A only when qa_evaluation_mode=not_required]
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 20
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+    review_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    subagent_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$review_reason" == "complete" && "$subagent_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete review/subagent reasons, got review='$review_reason' subagent='$subagent_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA rejected final verdict blocks review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: rejected; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: rejected\n- QA result: rejected'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_rejected" ]]; then
+        pass
+    else
+        fail "expected qa_rejected, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA not accepted variants block review"; then
+    for qa_evidence in \
+        $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: not accepted' \
+        $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- QA result: not_accepted' \
+        $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- QA result: not-accepted'; do
+        write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" "$qa_evidence"
+        helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+        if [[ "$helper_reason" != "qa_not_accepted" ]]; then
+            fail "expected qa_not_accepted, got '$helper_reason' for evidence '$qa_evidence'"
+            break
+        fi
+    done
+    if [[ "$helper_reason" == "qa_not_accepted" ]]; then
+        pass
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA blocked result blocks review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: blocked; see QA Evaluation #1\n### QA Evaluation #1\n- QA result: blocked'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_blocked" ]]; then
+        pass
+    else
+        fail "expected qa_blocked, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: required QA missing final verdict blocks review"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- Scope checked: runtime review gate'
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_final_result_missing" ]]; then
+        pass
+    else
+        fail "expected qa_final_result_missing, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: stale accepted QA before current review cycle blocks review"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: multi_agent id=qa-1
+- QA Evaluator result: PASS clean final_verdict accepted with score_progression 4.00
+### QA Evaluation #1
+- Final verdict: accepted
+- QA result: accepted
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 20
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+- QA Evaluator result: completed; see QA Evaluation #2
+### QA Evaluation #2
+- Scope checked: runtime review gate
+TASK
+    helper_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "qa_final_result_missing" ]]; then
+        pass
+    else
+        fail "expected qa_final_result_missing, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: pending Code Reviewer dispatch blocks delegated_missing_code_reviewer"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: pending code-review evidence
+- Code Reviewer result: PASS clean
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_reviewer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_reviewer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: not_required Code Reviewer dispatch blocks delegated_missing_code_reviewer"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: not_required
+- Code Reviewer result: PASS clean
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_reviewer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_reviewer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: pending Code Reviewer result blocks delegated_missing_code_reviewer"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: not yet available
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_reviewer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_reviewer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: not required Code Reviewer result blocks delegated_missing_code_reviewer"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: not required
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_reviewer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_reviewer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: pending QA Evaluator dispatch blocks delegated_missing_qa_evaluator"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: waiting for QA evaluator
+- QA Evaluator result: PASS final_verdict accepted with score_progression 4.00
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: not_required QA Evaluator dispatch blocks delegated_missing_qa_evaluator when required"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: not_required
+- QA Evaluator result: PASS final_verdict accepted with score_progression 4.00
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: pending QA Evaluator result blocks delegated_missing_qa_evaluator"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: multi_agent id=qa-1
+- QA Evaluator result: in_progress
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: not required QA Evaluator result blocks delegated_missing_qa_evaluator when required"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+- QA Evaluator dispatch: multi_agent id=qa-1
+- QA Evaluator result: not required
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: default review phase missing Code Reviewer evidence blocks"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+## Agent Dispatch Log
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_reviewer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_reviewer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: missing QA Evaluator evidence blocks when required"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required gates:
+- separate qa-evaluator loop
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: code-reviewer round 1
+- Code Reviewer result: PASS clean
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: legacy Reviewer evidence passes as Code Reviewer compatibility"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Reviewer
+## Agent Dispatch Log
+- Reviewer dispatch: compatibility reviewer round 1
+- Reviewer result: PASS clean
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -744,6 +1288,70 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: Claude, required QA rejected final verdict → blocks with JSON"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: rejected; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: rejected\n- QA result: rejected'
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "qa_rejected" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "QA Evaluation evidence" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "accepted or accepted_with_concerns"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected QA rejected block JSON; stdout='$HOOK_STDOUT'; stderr='$HOOK_STDERR'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, required QA blocked result → blocks with JSON"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: blocked; see QA Evaluation #1\n### QA Evaluation #1\n- QA result: blocked'
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "qa_blocked" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "QA Evaluation evidence" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "accepted or accepted_with_concerns"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected QA blocked block JSON; stdout='$HOOK_STDOUT'; stderr='$HOOK_STDERR'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, required QA missing final result → blocks with JSON"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- Scope checked: runtime review gate'
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "qa_final_result_missing" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "QA Evaluation evidence" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "accepted or accepted_with_concerns"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected QA missing final result block JSON; stdout='$HOOK_STDOUT'; stderr='$HOOK_STDERR'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, required QA not accepted final result → blocks with JSON"; then
+    write_required_qa_review_task "$TEST_PROJECT/.claude/task.md" $'- QA Evaluator result: completed; see QA Evaluation #1\n### QA Evaluation #1\n- Final verdict: not accepted\n- QA result: not accepted'
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "qa_not_accepted" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "QA Evaluation evidence" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "accepted or accepted_with_concerns"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected QA not accepted block JSON; stdout='$HOOK_STDOUT'; stderr='$HOOK_STDERR'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 if test_start "stop-review: Claude, BUILDING with complete two-stage review → no output"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -801,7 +1409,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -902,7 +1510,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -950,7 +1558,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -1001,7 +1609,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -1050,7 +1658,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -1104,7 +1712,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -1164,7 +1772,7 @@ Required agents:
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00
@@ -1193,7 +1801,7 @@ JSONL
     rm -rf "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex"
 fi
 
-if test_start "stop-review: delegated review phase missing Reviewer evidence → blocks even without code changes"; then
+if test_start "stop-review: delegated review phase missing Code Reviewer evidence → blocks even without code changes"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -1223,10 +1831,12 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_reviewer"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_code_reviewer" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Code Reviewer during Review" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "legacy Reviewer labels are compatibility routing only"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected missing Reviewer evidence block for delegated review; stdout='$HOOK_STDOUT'"
+        fail "exit=$HOOK_EXIT, expected missing Code Reviewer evidence block for delegated review; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -2443,12 +3053,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Weighted: 4.00
 - Delta from previous: +0.20
@@ -2486,7 +3096,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2526,7 +3136,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2578,7 +3188,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2630,7 +3240,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
 - Weighted: 3.50
@@ -2667,7 +3277,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 1.0, code_quality 1.0, architecture 1.0, security 1.0, test_coverage 1.0
 - Weighted: 4.00
@@ -2704,12 +3314,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2761,12 +3371,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2820,7 +3430,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2883,7 +3493,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -2923,7 +3533,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3290,7 +3900,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 999.00
@@ -3324,7 +3934,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 1.0, code_quality 1.0, architecture 1.0, security 1.0, test_coverage 1.0
 - Weighted: 4.00
@@ -3358,7 +3968,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
 - Weighted: 3.50
@@ -3392,12 +4002,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Weighted: 4.00
 - Delta from previous: +0.20
@@ -3432,12 +4042,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
 - Weighted: 4.10
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3473,7 +4083,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3506,7 +4116,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3540,7 +4150,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3574,7 +4184,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3610,7 +4220,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3646,7 +4256,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3682,7 +4292,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3718,12 +4328,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3759,7 +4369,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3794,7 +4404,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3830,12 +4440,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.5, code_quality 4.5, architecture 4.5, security 4.5, test_coverage 4.5
 - Weighted: 4.50
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3871,7 +4481,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3907,7 +4517,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3943,12 +4553,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -3985,12 +4595,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 2.8, code_quality 2.8, architecture 2.8, security 2.8, test_coverage 2.8
 - Weighted: 2.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
 - Weighted: 4.10
@@ -4026,12 +4636,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
 - Weighted: 3.90
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4067,12 +4677,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
 - Weighted: 3.90
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4109,12 +4719,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
 - Weighted: 3.90
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4151,12 +4761,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
 - Weighted: 3.90
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4176,7 +4786,7 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS at round 10 without rationale blocks"; then
+if test_start "workflow-phase-gates: HAS_REMAINING_ITEMS at round 20 without rationale blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -4193,60 +4803,112 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.1, code_quality 3.1, architecture 3.1, security 3.1, test_coverage 3.1
 - Weighted: 3.10
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.2, code_quality 3.2, architecture 3.2, security 3.2, test_coverage 3.2
 - Weighted: 3.20
 ### Quality Review #3
-- Round: 3 of 10
+- Round: 3 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.3, code_quality 3.3, architecture 3.3, security 3.3, test_coverage 3.3
 - Weighted: 3.30
 ### Quality Review #4
-- Round: 4 of 10
+- Round: 4 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.4, code_quality 3.4, architecture 3.4, security 3.4, test_coverage 3.4
 - Weighted: 3.40
 ### Quality Review #5
-- Round: 5 of 10
+- Round: 5 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
 - Weighted: 3.50
 ### Quality Review #6
-- Round: 6 of 10
+- Round: 6 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.6, code_quality 3.6, architecture 3.6, security 3.6, test_coverage 3.6
 - Weighted: 3.60
 ### Quality Review #7
-- Round: 7 of 10
+- Round: 7 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.7, code_quality 3.7, architecture 3.7, security 3.7, test_coverage 3.7
 - Weighted: 3.70
 ### Quality Review #8
-- Round: 8 of 10
+- Round: 8 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #9
-- Round: 9 of 10
+- Round: 9 of 20
 - Found this round: 2 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.9, code_quality 3.9, architecture 3.9, security 3.9, test_coverage 3.9
 - Weighted: 3.90
 ### Quality Review #10
-- Round: 10 of 10
+- Round: 10 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
 - Delta from previous: +0.10
 - Drift check: GENUINE
+### Quality Review #11
+- Round: 11 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #12
+- Round: 12 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #13
+- Round: 13 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #14
+- Round: 14 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #15
+- Round: 15 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #16
+- Round: 16 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #17
+- Round: 17 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #18
+- Round: 18 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #19
+- Round: 19 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Quality Review #20
+- Round: 20 of 20
+- Found this round: 1 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+- Delta from previous: +0.00
+- Drift check: NEUTRAL
 ### Final result
 - Result: HAS_REMAINING_ITEMS
-- Score progression: 3.10->3.20->3.30->3.40->3.50->3.60->3.70->3.80->3.90->4.00
+- Score progression: 3.10->3.20->3.30->3.40->3.50->3.60->3.70->3.80->3.90->4.00->4.00->4.00->4.00->4.00->4.00->4.00->4.00->4.00->4.00->4.00
 TASK
     helper_reason=$(review_controller_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "missing_remaining_rationale" ]]; then
@@ -4257,7 +4919,7 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "workflow-phase-gates: round 11 of 10 blocks"; then
+if test_start "workflow-phase-gates: round 21 of 20 blocks"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -4273,8 +4935,8 @@ Plan approval: yes
 - Changed files mismatch: none
 - Verification evidence mismatch: none
 - Required fixes: none
-### Quality Review #11
-- Round: 11 of 10
+### Quality Review #21
+- Round: 21 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4310,7 +4972,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #2
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4327,7 +4989,7 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "workflow-phase-gates: valid medium completion with round 2 of 10, drift check, score progression, weighted 4.00 allows"; then
+if test_start "workflow-phase-gates: valid medium completion with round 2 of 20, drift check, score progression, weighted 4.00 allows"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -4344,12 +5006,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
 - Weighted: 4.00
@@ -4385,7 +5047,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness: 4.1; quality 4.2, architecture=4.3; security: 4.4; coverage 4.5
 - Weighted: 4.27
@@ -4419,19 +5081,19 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 1 should-fix, 0 nits
 - Rubric: correctness 3.5, code_quality 3.5, architecture 3.5, security 3.5, test_coverage 3.5
 - Weighted: 3.50
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.85, code_quality 3.85, architecture 3.85, security 3.85, test_coverage 3.85
 - Weighted: 3.85
 - Delta from previous: +0.35
 - Drift check: GENUINE
 ### Quality Review #3
-- Round: 3 of 10
+- Round: 3 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 4.1, code_quality 4.1, architecture 4.1, security 4.1, test_coverage 4.1
 - Weighted: 4.10
@@ -4524,12 +5186,12 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 1 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness 3.8, code_quality 3.8, architecture 3.8, security 3.8, test_coverage 3.8
 - Weighted: 3.80
 ### Quality Review #2
-- Round: 2 of 10
+- Round: 2 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Weighted: 4.00
 - Delta from previous: +0.20
@@ -5753,6 +6415,10 @@ if test_start "workflow-enforcer: Codex dev prompt without task asks once for de
         && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
         && echo "$HOOK_STDOUT" | grep -q "Ask once for the needed delegation scope and WAIT" \
+        && echo "$HOOK_STDOUT" | grep -q "Code Reviewer" \
+        && echo "$HOOK_STDOUT" | grep -q "QA Evaluator" \
+        && echo "$HOOK_STDOUT" | grep -q "legacy Reviewer labels are compatibility routing only" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Builder/Tester, or Reviewer" \
         && echo "$HOOK_STDOUT" | grep -q "Do not hard block this first prompt"; then
         pass
     else
@@ -5904,6 +6570,10 @@ EOF
     if [[ $HOOK_EXIT -eq 0 ]] && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "SUBAGENT AUTHORIZATION GATE" \
         && echo "$HOOK_STDOUT" | grep -q "Ask once for the needed delegation scope and WAIT" \
+        && echo "$HOOK_STDOUT" | grep -q "Code Reviewer" \
+        && echo "$HOOK_STDOUT" | grep -q "QA Evaluator" \
+        && echo "$HOOK_STDOUT" | grep -q "legacy Reviewer labels are compatibility routing only" \
+        && ! echo "$HOOK_STDOUT" | grep -q "Builder/Tester, or Reviewer" \
         && echo "$HOOK_STDOUT" | grep -q "authorization_required_unresolved"; then
         pass
     else
@@ -6617,7 +7287,7 @@ Plan approval: yes
 - Verification evidence mismatch: none
 - Required fixes: none
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1 of 20
 - Found this round: 0 must-fix, 0 should-fix, 0 nits
 - Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
 - Weighted: 4.00

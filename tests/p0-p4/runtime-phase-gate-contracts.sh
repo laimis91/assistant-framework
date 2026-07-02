@@ -81,6 +81,97 @@ else
     fail "workflow-enforcer.sh missing runtime gate terms: ${missing_workflow_gate_terms[*]}"
 fi
 
+test_start "workflow declares run-state trace replay harness artifacts"
+missing_runtime_artifact_terms=()
+workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+skill_file="$workflow_dir/SKILL.md"
+output_contract="$workflow_dir/contracts/output.yaml"
+phase_gates="$workflow_dir/contracts/phase-gates.yaml"
+harness_ref="$workflow_dir/references/harness-controller.md"
+phases_ref="$workflow_dir/references/phases.md"
+task_journal_template="$workflow_dir/references/task-journal-template.md"
+plan_template="$workflow_dir/references/plan-template.md"
+for term in \
+    "- name: harness_run_state" \
+    "task_id" \
+    "task_name" \
+    "phase" \
+    "slice" \
+    "status" \
+    "blockers" \
+    "last_verification" \
+    "next_action" \
+    "recovery_pointer" \
+    "- name: trace_ledger" \
+    "timestamped/ordered agent events" \
+    "verification commands/results" \
+    "plan deviations" \
+    "artifact refs" \
+    "- name: replay_packet" \
+    "pinned_context" \
+    "validation_state" \
+    "exact_next_action"; do
+    if ! grep -Fq -- "$term" "$output_contract"; then
+        missing_runtime_artifact_terms+=("output.yaml: $term")
+    fi
+done
+if ! grep -Fq -- "Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts." "$skill_file"; then
+    missing_runtime_artifact_terms+=("SKILL.md: Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts.")
+fi
+for term in \
+    "- id: P_HARNESS_RUNTIME_ARTIFACTS" \
+    "- id: B_HARNESS_RUN_STATE_TRACE_REPLAY" \
+    "- id: DOC_HARNESS_REPLAY_PACKET" \
+    "record the corrective action for missing run-state/trace/replay evidence"; do
+    if ! grep -Fq -- "$term" "$phase_gates"; then
+        missing_runtime_artifact_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "## Harness Run State" \
+    "## Trace Ledger" \
+    "## Replay Packet" \
+    "Missing run-state/trace/replay evidence"; do
+    if ! grep -Fq -- "$term" "$harness_ref"; then
+        missing_runtime_artifact_terms+=("harness-controller.md: $term")
+    fi
+done
+for term in \
+    "## Harness Run State" \
+    "## Trace Ledger" \
+    "## Replay Packet" \
+    "task_id" \
+    "task_name" \
+    "last_verification" \
+    "exact_next_action"; do
+    if ! grep -Fq -- "$term" "$task_journal_template"; then
+        missing_runtime_artifact_terms+=("task-journal-template.md: $term")
+    fi
+done
+for term in \
+    "harness_run_state_ref" \
+    "trace_ledger_ref" \
+    "replay_packet_ref" \
+    "Runtime Harness Artifacts"; do
+    if ! grep -Fq -- "$term" "$plan_template"; then
+        missing_runtime_artifact_terms+=("plan-template.md: $term")
+    fi
+done
+for term in \
+    "Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger" \
+    "Update Harness Run State after each slice/step" \
+    "Append Trace Ledger entries" \
+    "Refresh the Replay Packet"; do
+    if ! grep -Fq -- "$term" "$phases_ref"; then
+        missing_runtime_artifact_terms+=("phases.md: $term")
+    fi
+done
+if [[ "${#missing_runtime_artifact_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "runtime harness artifact terms missing: ${missing_runtime_artifact_terms[*]}"
+fi
+
 test_start "workflow instructions do not require separate Decompose approval"
 if rg -n "Component decomposition approval required|Slice decomposition approval required|User explicitly approved the component decomposition|User explicitly approved the slice decomposition|without approved component decomposition|without approved slice decomposition|DECOMPOSE COMPLETE \(approved\)" \
     "$FRAMEWORK_DIR/skills/assistant-workflow" \

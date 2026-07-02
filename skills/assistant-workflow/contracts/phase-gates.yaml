@@ -55,8 +55,12 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode; source-changing development/code-work includes at minimum Code Writer, Builder/Tester, and Reviewer"
+        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode; source-changing development/code-work includes at minimum Code Writer, Builder/Tester, and Code Reviewer, with Reviewer compatibility allowed only for existing/legacy handoffs"
         on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
+
+      - id: T_QA_EVALUATOR
+        check: "For medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility"
+        on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable."
 
       - id: T9
         check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents; development/code-work that needs workflow roles starts as authorization_required unless the current user prompt explicitly authorized subagents"
@@ -210,6 +214,21 @@ gates:
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
 
+      - id: P_DONE_CONTRACT
+        check: "For medium+ harness-capable work: accepted Done Contract exists before Build with done_when, not_done_when, verification, owner/consumer, acceptance_criteria, and debate_record with at least two perspectives; delegated mode uses subagent perspectives when available"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Block Build, load references/harness-controller.md, return to Plan, write the Done Contract, collect at least two debate perspectives using subagents when subagent_execution_mode=delegated and available, and seek re-approval when scope or acceptance changes"
+
+      - id: P_HARNESS_RECIPE
+        check: "For medium+ harness-capable work: Harness Recipe is selected before Build from task/model/risk/context profile and records selected_recipe, recipe_rationale, required_artifacts, and corrective_action"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Block Build, load references/harness-controller.md, return to Plan, classify task_profile, model_profile, risk_profile, and context_profile, select the Harness Recipe, and record the missing-recipe corrective action"
+
+      - id: P_HARNESS_RUNTIME_ARTIFACTS
+        check: "For medium+ harness-capable work: plan/task packets name Harness Run State, Trace Ledger, and Replay Packet artifact refs before Build"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Return to Plan, add harness_run_state_ref, trace_ledger_ref, and replay_packet_ref to the task packet or plan, and record the corrective action for missing run-state/trace/replay evidence"
+
       - id: P_VERIFIED_DISTILLATION
         check: "When promoting a workflow or review lesson into durable skill/constraint/eval knowledge: verified_skill_distillation exists and verifier_result is approved before durable files are written"
         on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
@@ -327,6 +346,20 @@ gates:
         check: "Every plan step has a corresponding '>> Step N/total: DONE' message"
         on_fail: "Complete remaining plan steps before entering Review"
 
+      - id: B_DONE_CONTRACT
+        check: "For medium+ harness-capable work: Build started only after the approved plan recorded Done Contract and Harness Recipe evidence"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Stop Build, return to Plan, add or repair the Done Contract and Harness Recipe from references/harness-controller.md, then resume only after the corrective action is recorded"
+
+      - id: B_HARNESS_RUN_STATE_TRACE_REPLAY
+        check: "For medium+ harness-capable work: Harness Run State, Trace Ledger, and Replay Packet are updated as execution progresses with task id/name, phase, slice, status, blockers, last verification, next action, recovery pointer, ordered events, decisions, verification results, plan deviations, artifact refs, pinned context, validation state, and exact next action"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Pause Build, update the task journal or carried-forward state with missing Harness Run State, Trace Ledger, and Replay Packet evidence, append a corrective trace entry, and resume only from the recorded exact next action"
+
+      - id: B_CODE_WRITER_BLOCKER_ROUTING
+        check: "When Code Writer returns NEEDS_CONTEXT, BLOCKED, or DEVIATED because of an unexpected blocker: blocker_type and blocker_evidence are recorded, the orchestrator routes recovery to debugging, explorer, architect, candidate_search, replan, restart, user clarification, environment fix, or permission request, and Code Writer is not asked to improvise through legacy blockers blindly"
+        on_fail: "Pause Build, classify the blocker, update Harness Run State/Trace Ledger/Replay Packet when harness-capable, create pivot_restart_decision when restart/pivot/replan is selected, and obtain reapproval before continuing if scope, files, behavior, risk, verification, or acceptance criteria change"
+
       - id: B2
         check: "Build command succeeded (exit code 0 or equivalent success)"
         on_fail: "Fix build errors. Do not enter Review with a broken build."
@@ -359,8 +392,8 @@ gates:
         on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing Build tasks: subagent_execution_mode is not not_applicable, required_agents includes Code Writer, Builder/Tester, and Reviewer, and the task journal Agent Dispatch Log records strict delegated dispatch/result evidence or explicit direct fallback role-equivalent evidence"
-        on_fail: "Update the Agent Dispatch Log before leaving Build. delegated mode requires Code Writer, Builder/Tester, and Reviewer dispatch/result evidence. direct_fallback requires reason authorization_denied, subagents_unavailable, or policy_disallowed plus Code Writer, Builder/Tester, and Reviewer direct evidence."
+        check: "For source-changing Build tasks: subagent_execution_mode is not not_applicable, required_agents includes Code Writer, Builder/Tester, and Code Reviewer, and the task journal Agent Dispatch Log records strict delegated dispatch/result evidence or explicit direct fallback role-equivalent evidence; Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded"
+        on_fail: "Update the Agent Dispatch Log before leaving Build. delegated mode requires Code Writer, Builder/Tester, and Code Reviewer dispatch/result evidence, or Reviewer compatibility dispatch/result evidence for existing/legacy handoffs. direct_fallback requires reason authorization_denied, subagents_unavailable, or policy_disallowed plus Code Writer, Builder/Tester, and Code Reviewer direct evidence; Reviewer direct evidence is compatibility evidence only."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "For medium+ delegated tasks with slices: per-slice dispatch evidence is recorded before the slice is marked VERIFIED"
@@ -420,6 +453,19 @@ gates:
         check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts (not manual review)"
         on_fail: "Load and follow assistant-review SKILL.md and contracts. Do not manually dispatch reviewers."
 
+      - id: R2A_CODE_REVIEWER_DISTINCT
+        check: "Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence"
+        on_fail: "Update the Review Log, output contract, or carried-forward review state with distinct Code Reviewer/Reviewer and QA Evaluator entries. Do not collapse QA evaluation into code review."
+
+      - id: R_QA_EVALUATION
+        check: "When qa_evaluation_mode is required: QAEvaluator runs after build/test evidence and Code Reviewer or Reviewer compatibility result, returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence"
+        condition: "qa_evaluation_mode == required"
+        on_fail: "Load assistant-review references/qa-evaluation-loop.md, dispatch QAEvaluator or record direct-fallback QA evidence, and do not complete Review until QA result is present or blocked with open_questions. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists, require selected_domain_rubrics and domain_quality_scores; otherwise reject invented rubric scoring."
+
+      - id: R_PIVOT_RESTART_DECISION
+        check: "Review or QA STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric/domain action pivot records an orchestrator-owned pivot_restart_decision before another fix, review, QA, or build dispatch; round 20 remains terminal and never creates round 21 behavior"
+        on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
+
       - id: R3
         check: "Verification summary is written with: changed files, test/validation coverage, review result, manual validation steps when applicable, known limitations"
         on_fail: "Write verification summary in the configured task journal, output contract, or equivalent carried-forward state"
@@ -474,6 +520,11 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Load assistant-reflexion and assistant-memory contracts, inspect Review Log findings, build/test failures, and user corrections for durable lessons, check memory trend/backend availability when allowed, then write the Learning Controller block. Use backend_unavailable or policy_disallowed when appropriate; do not require a memory write when tools are unavailable, and do not persist routine progress as a lesson."
 
+      - id: DOC_HARNESS_REPLAY_PACKET
+        check: "For medium+ harness-capable work: final Harness Run State, Trace Ledger, and Replay Packet evidence is current before completion or handoff"
+        condition: "size in [medium, large, mega] and harness_capable == true"
+        on_fail: "Before Document completes, update Harness Run State to the current phase/status, append final trace entries for verification/review/document decisions, refresh Replay Packet validation_state and exact_next_action, and record any remaining blocker"
+
       - id: DOC_SKILL_DISTILLATION
         check: "If work produced a repeatable workflow, recurring lesson, user-requested reusable procedure, or skill/constraint candidate: verified_skill_distillation exists and verifier_result is approved before promotion, or promotion_decision is skip with rationale"
         on_fail: "Load references/verified-skill-distillation.md, create the distillation packet, and send it to an independent verifier before saving any reusable skill or constraint"
@@ -510,3 +561,8 @@ invariants:
     check: "If scope grows beyond initial triage during any phase, stop and re-triage"
     scope: all_phases
     on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"
+
+  - id: INV_PIVOT_RESTART_REAPPROVAL
+    check: "Any pivot_restart_decision that changes approved scope, files, behavior, risk, verification, or acceptance criteria has reapproval_required=true and records approval before Build or Review continues"
+    scope: all_phases
+    on_fail: "Pause the workflow, mark reapproval_required=true, update the plan/task journal, and wait for user approval before continuing the changed path"

@@ -1,311 +1,307 @@
-# Harness Patterns for Loop-Based Skills
+# Harness Patterns for Loop-Based Process Skills
 
-Reference pack for the skill creator. Load this when designing a **Process** skill that includes an evaluation loop, multi-round refinement, or autonomous fix-verify cycles.
+Reference pack for `assistant-skill-creator`. Load this when designing a
+**Process** skill that includes a long-running controller, subagent dispatch,
+multi-round review, QA/acceptance evaluation, retry loops, or autonomous
+fix-verify cycles.
 
-**When to load:** The skill being created has any of these characteristics:
-- Multi-round loop (review, refinement, optimization)
-- Separate generator and evaluator roles
-- Quality scoring against criteria
-- Autonomous fix → re-check cycles
-
-**When to skip:** Single-pass skills, analysis pipelines without loops, utility skills.
+Skip this reference for single-pass Utility skills or Analysis skills without
+delegation or loop control.
 
 ---
 
-## Pattern 1: Rubric Scoring
+## Pattern 1: Done Contract
 
-Replace open-ended evaluation ("is this good?") with weighted dimensions scored 1-5.
+Use a Done Contract when "finished" needs to be known before Build or generation
+starts.
 
-### How to apply
+Required fields:
 
-1. **Identify 3-6 evaluation dimensions** specific to the skill's domain
-2. **Assign weights** that sum to 1.0 — weight subjective dimensions higher to push beyond generic output
-3. **Write anchor examples** for each dimension at scores 1, 3, and 5
-4. **Define threshold actions** that map score ranges to loop decisions
+- `done_when`: observable pass/fail outcomes.
+- `not_done_when`: explicit failure states that block completion.
+- `verification`: commands, inspections, reviews, QA, or manual checks.
+- `owner_consumer`: artifact owner and downstream consumer.
+- `acceptance_criteria`: binary criteria from user, plan, or slice scope.
+- `debate_record`: at least two perspectives considered before acceptance.
+- `accepted_by`: user, orchestrator, or approved plan reference.
 
-### Template
+Design rule: when `subagent_execution_mode=delegated`, use subagent perspectives
+for the debate when relevant. Direct fallback must record why subagents were not
+used and which role-equivalent perspectives were considered. The debate may
+clarify acceptance; it must not add unapproved scope.
 
-```yaml
-# In the skill's references/rubric.md or inline in SKILL.md
+Contract placement:
 
-dimensions:
-  - name: [dimension_name]
-    weight: [0.10-0.40]
-    measures: "[what this dimension evaluates]"
-    anchors:
-      5: "[concrete description of excellent]"
-      3: "[concrete description of acceptable]"
-      1: "[concrete description of poor]"
-
-thresholds:
-  pass: 4.0      # Exit loop — quality sufficient
-  refine: 3.0    # Continue loop — specific improvements needed
-  pivot: 2.5     # Escalate — approach may be fundamentally wrong
-```
-
-### Scoring rules to include in the evaluator's prompt
-
-- Score each dimension independently (no halo effect)
-- Cite specific evidence for each score
-- When uncertain, round down
-- Critical findings can cap the total score (define what's critical for your domain)
-
-### Contract integration
-
-Add to the evaluator's **return_fields** in `handoffs.yaml`:
-
-```yaml
-- name: rubric_scores
-  type: object
-  required: true
-  condition: "scope warrants scoring"
-  object_fields:
-    - name: [dimension_name]
-      type: float
-      required: true
-      validation: "1.0 to 5.0 in 0.5 increments"
-    # ... one per dimension
-    - name: weighted_score
-      type: float
-      required: true
-    - name: action
-      type: enum
-      required: true
-      enum_values: [PASS, REFINE, PIVOT]
-```
-
-### Example: applying to a content generation skill
-
-```yaml
-dimensions:
-  - name: accuracy
-    weight: 0.35
-    measures: "Factual correctness, no hallucination, citations where needed"
-  - name: clarity
-    weight: 0.25
-    measures: "Clear structure, audience-appropriate language, logical flow"
-  - name: completeness
-    weight: 0.20
-    measures: "All requested topics covered, no significant gaps"
-  - name: tone
-    weight: 0.20
-    measures: "Matches requested style, consistent voice throughout"
-```
-
-**Reference implementation:** `skills/assistant-review/references/review-rubric.md`
+- `output.yaml`: `done_contract` artifact for medium+ harness-capable work.
+- `phase-gates.yaml`: a pre-Build assertion that the accepted Done Contract
+  exists and includes debate evidence.
+- `handoffs.yaml`: `done_contract_ref` for workers, reviewers, and QA.
 
 ---
 
-## Pattern 2: Drift Detection
+## Pattern 2: Harness Recipe
 
-Track evaluator scores across loop rounds to ensure genuine improvement, not evaluator fatigue.
+Use a Harness Recipe to choose the controller shape from task/model/risk/context
+profiles.
 
-### How to apply
+Required profile fields:
 
-1. **Record score + finding count per round** in a score history
-2. **Compare round N to round N-1** using score delta and finding count
-3. **Classify the change** and take appropriate action
+- `task_profile`: task type, size, slice count, TDD/debugging needs.
+- `model_profile`: model/agent constraints, delegation mode, tool limits.
+- `risk_profile`: risk tier, safety gates, review depth, rollback needs.
+- `context_profile`: exact, summarized, omitted/deferred context and
+  trace/replay need.
 
-### Drift classification
+Required recipe fields:
 
-| Score Delta | Finding Condition | Status | Action |
-|---|---|---|---|
-| +, ≤ 1.0 | count decreased | **GENUINE** | Continue |
-| +, > 1.0 | count decreased | **SUSPICIOUS** | Log warning |
-| +, any | count same or increased | **DRIFT** | Reset evaluator |
-| − | any | **REGRESSION** | Investigate |
-| 0 | findings remain, 2+ rounds | **STAGNATION** | Escalate |
-| 0 | findings remain, 1 round | **NEUTRAL** | Log only |
+- `selected_recipe`
+- `recipe_rationale`
+- `required_artifacts`
+- `corrective_action`
 
-### On DRIFT: evaluator reset
+Typical recipes:
 
-Dispatch a fresh evaluator with an explicitly stricter prompt:
+- `lightweight_guarded`: medium single-slice, moderate risk, compact context.
+- `slice_sequential`: independent slice verification before the next slice.
+- `review_intensive`: high/critical risk, weak tests, public contracts, or
+  subjective acceptance.
+- `trace_replay_ready`: long-running, large-context, recovery-prone work.
 
-> "Previous rounds showed score inflation without quality improvement. Apply maximum skepticism. When uncertain, score DOWN."
+Contract placement:
 
-### Contract integration
-
-Add to **phase-gates.yaml** as loop invariants:
-
-```yaml
-invariants:
-  - id: INV_DRIFT
-    check: "Rubric score increases correlate with finding count decreases"
-    scope: all_rounds
-    condition: "round >= 2"
-    on_fail: "Drift detected. Reset evaluator with stricter prompt."
-
-  - id: INV_STAGNATION
-    check: "Score does not stagnate (unchanged 2+ rounds with findings present)"
-    scope: all_rounds
-    condition: "round >= 3"
-    on_fail: "Escalate to orchestrator — loop churning without progress."
-```
-
-Add to **output.yaml** as score progression:
-
-```yaml
-- name: score_progression
-  type: object[]
-  required: true
-  condition: "loop ran 2+ rounds"
-  object_fields:
-    - name: round
-      type: int
-    - name: weighted_score
-      type: float
-    - name: finding_count
-      type: int
-    - name: drift_status
-      type: enum
-      enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL]
-```
-
-**Reference implementation:** `skills/assistant-review/references/score-tracking.md`
+- `output.yaml`: `harness_recipe` artifact.
+- `phase-gates.yaml`: pre-Build recipe selection assertion.
+- `handoffs.yaml`: `harness_recipe_ref` for downstream workers.
 
 ---
 
-## Pattern 3: Harness Gates
+## Pattern 3: Runtime State, Trace, And Replay
 
-Structural enforcement that blocks loop completion without required artifacts.
+Long-running Process skills need first-class recovery artifacts.
 
-### How to apply
-
-1. **Identify the artifacts** that must exist before the loop can exit (rubric scores, passing threshold, all items addressed)
-2. **Add phase-gate assertions** that check for these artifacts
-3. **Optionally add a Stop hook** for hard enforcement (shell script that parses the task journal)
-
-### Phase-gate assertions for loop exit
-
-```yaml
-- id: EXIT_SCORE
-  check: "Rubric weighted score meets pass threshold"
-  on_fail: "Score below threshold — continue loop or escalate"
-
-- id: EXIT_FINDINGS
-  check: "No must-fix or should-fix findings remain"
-  on_fail: "Findings remain — fix all before exiting"
-
-- id: EXIT_VERIFICATION
-  check: "Build and tests pass after all fixes"
-  on_fail: "Verification failed — fix before exiting"
-```
-
-### Stop hook pattern (optional, for hard enforcement)
-
-If the skill runs within the workflow (task journal exists), you can add a Stop hook that:
-1. Reads the task journal
-2. Checks for required artifacts (rubric lines, score threshold, final result)
-3. Blocks stop if missing
-
-Follow the pattern in `hooks/scripts/harness-gate.sh`:
-- Use `set -euo pipefail`
-- Check `stop_hook_active` to prevent infinite loops
-- Use `jq` for JSON output
-- Exit 0 (allow) or output `{"decision": "block", "reason": "..."}` (block)
-
-**Reference implementation:** `hooks/scripts/harness-gate.sh`
-
----
-
-## Pattern 4: Separation of Generation and Evaluation
-
-The evaluator must never review its own fixes.
-
-### How to apply
-
-1. **Evaluator is read-only** — tools limited to Read, Grep, Glob, LS (no Edit, Write, Bash)
-2. **Fresh evaluator per round** — no context contamination from previous evaluations
-3. **Previously-fixed list** — each round receives what was already fixed, must not re-report
-4. **Fixer is a separate agent** — the orchestrator or a dedicated implementer applies fixes
-
-### Handoff contract for evaluator
-
-```yaml
-handoffs:
-  - name: orchestrator_to_evaluator
-    from: Orchestrator
-    to: Evaluator
-    context_fields:
-      - name: content_to_evaluate
-        type: string
-        required: true
-      - name: round
-        type: int
-        required: true
-      - name: previously_fixed
-        type: object[]
-        required: true
-        description: "Items fixed in prior rounds — do NOT re-report"
-      - name: confidence_threshold
-        type: int
-        required: true
-        description: "Minimum confidence for this round (increases per round)"
-    return_fields:
-      - name: findings
-        type: object[]
-        required: true
-      - name: rubric_scores
-        type: object
-        required: true
-      - name: verdict
-        type: enum
-        required: true
-```
-
-### Confidence progression
-
-| Rounds | Threshold | Rationale |
+| Artifact | Required When | Fields |
 |---|---|---|
-| 1–2 | 80% | Cast wide net |
-| 3–4 | 85% | Higher certainty required |
-| 5 | 90% | Only near-certain findings |
+| Harness Run State | Medium+ harness-capable or delegated loops | task id/name, phase, slice, status, blockers, last verification, next action, recovery pointer |
+| Trace Ledger | Any trace/replay-ready loop | agent events, decisions, verification results, deviations, blockers, artifact refs |
+| Replay Packet | Compaction, restart, handoff, or failure recovery is likely | pinned context, artifact refs, validation state, exact next action, run-state/trace refs |
 
-**Reference implementation:** `skills/assistant-review/contracts/handoffs.yaml`
+Contract placement:
+
+- `output.yaml`: required artifacts or conditional artifacts for trace/replay
+  workflows.
+- `phase-gates.yaml`: assertions that state/trace/replay are current before
+  phase advancement.
+- `handoffs.yaml`: refs carried into worker packets when a role relies on them.
+
+---
+
+## Pattern 4: Typed Artifact References
+
+When artifacts cross an agent boundary, pass typed refs instead of free-form
+strings.
+
+Each Artifact Reference entry includes:
+
+- `artifact_id`
+- `artifact_type`
+- `producer`
+- `consumer`
+- `location_ref`
+- `schema_or_contract`
+- `validation_status`
+- `summary`
+
+Use refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger,
+Replay Packet, Pivot/Restart Decision, task packets, changed files,
+verification evidence, review result, QA result, and plan deviations.
+
+Producer responsibility: create/update the artifact, assign a stable id and
+location/ref, name the schema or contract, and summarize current state.
+Consumer responsibility: validate `schema_or_contract` and
+`validation_status` before relying on `location_ref`; invalid or stale refs block
+phase advancement or trigger re-dispatch.
+
+---
+
+## Pattern 5: Code Review And QA Separation
+
+Do not let one evaluator do every job.
+
+| Role | Owns | Does Not Own |
+|---|---|---|
+| Code Reviewer | code defects, security, architecture, test coverage, structural code risk | final acceptance or subjective domain quality unless directly tied to a code defect |
+| QA Evaluator | Done Contract, acceptance criteria, verification evidence, final readiness, scoped domain quality | generic code review, security architecture, or test coverage review |
+
+`reviewer` can remain a compatibility route, but new skills should name the
+canonical `code-reviewer` and optional `qa-evaluator` roles separately.
+
+Contract placement:
+
+- `handoffs.yaml`: distinct handoffs to Code Reviewer and QAEvaluator.
+- `output.yaml`: separate `review_result` and `qa_evaluation_result`.
+- `phase-gates.yaml`: QA starts only after build/test evidence and Code
+  Reviewer or compatibility review evidence exist.
+
+---
+
+## Pattern 6: Conditional Domain Rubrics
+
+Use domain rubrics only when acceptance scopes them. Load or model rubric fields
+when the Done Contract, acceptance criteria, `domain_context`, or explicit
+`rubric_refs` require UI/visual, product, UX, docs, DX, or domain craft quality.
+
+When scoped, QA returns:
+
+- `selected_domain_rubrics`
+- `domain_quality_scores`
+- evidence tied to acceptance criteria, Done Contract, `domain_context`,
+  `rubric_refs`, verification artifacts, screenshots, docs, or changed files
+
+When not scoped, QA records domain quality as `not_applicable` and must not
+invent subjective rubrics.
+
+Contract placement:
+
+- `input.yaml`: optional `domain_context` / `rubric_refs`.
+- `handoffs.yaml`: conditional `selected_domain_rubrics` and
+  `domain_quality_scores`.
+- `phase-gates.yaml`: invariant rejecting invented domain rubrics.
+
+---
+
+## Pattern 7: Bounded Review / QA Loops
+
+Any autonomous review, QA, refinement, or fix-verify loop needs a hard cap. The
+current framework cap is **max 20 rounds**.
+
+```text
+round = 1
+while round <= 20:
+  evaluate
+  decide PASS / REFINE / PIVOT
+  fix or exit
+  round += 1
+```
+
+Round 20 is terminal. Return remaining blockers, findings, or failed acceptance
+items instead of starting round 21.
+
+Include these fields where applicable:
+
+- `round`: current round number, validation `>= 1 and <= 20`.
+- `max_rounds`: default `20`.
+- `previously_fixed` or `previously_failed_acceptance_items`.
+- `score_progression` or `score_entry`.
+- `loop_exit_reason`.
+
+---
+
+## Pattern 8: Rubric Scoring And Drift Detection
+
+Use scored rubrics when quality is subjective or multi-dimensional.
+
+Scoring fields:
+
+- 3-6 domain-relevant dimensions, weights summing to 1.0.
+- Anchors for 1, 3, and 5.
+- `weighted_score`.
+- action enum such as `PASS`, `REFINE`, `PIVOT`.
+- evidence for each score.
+
+Drift classification:
+
+| Signal | Condition | Action |
+|---|---|---|
+| GENUINE | score improves and findings decrease | continue |
+| SUSPICIOUS | score jumps sharply while findings decrease | log warning |
+| DRIFT | score improves while findings stay flat or rise | reset evaluator |
+| REGRESSION | score drops | investigate |
+| STAGNATION | findings remain across repeated unchanged scores | pivot/restart |
+
+Add cross-phase invariants for drift and stagnation. Repeated `DRIFT`, repeated
+`REGRESSION`, `STAGNATION`, or rubric action `PIVOT` must return a
+`pivot_restart_signal`; the orchestrator records the actual
+`pivot_restart_decision`.
+
+---
+
+## Pattern 9: Pivot / Restart Decisions
+
+Use Pivot/Restart when the active loop or handoff no longer makes safe progress.
+
+Triggers:
+
+- review or QA `STAGNATION`
+- repeated `DRIFT`
+- repeated `REGRESSION`
+- rubric/domain action `PIVOT`
+- Code Writer blocker types such as `legacy_code_bug`, `broken_baseline`,
+  `hidden_dependency`, `missing_contract`, `stale_plan`, `scope_conflict`,
+  `tool_environment`, `permission_policy`, `tdd_red_missing`, or `other`
+- verification blockers, plan deviations, or scope changes that stale the packet
+
+Decision fields:
+
+- `trigger`
+- `evidence`
+- `affected_slice_or_round`
+- `options_considered`
+- `selected_action`
+- `reapproval_required`
+- `next_agent`
+- `recovery_pointer`
+- `exact_next_action`
+
+Routing examples:
+
+- Legacy code bug or broken baseline -> debugging before another implementation
+  attempt.
+- Hidden dependency -> Explorer or Code Mapper refresh.
+- Missing contract or stale plan -> Architect or Plan repair.
+- Scope conflict or candidate pivot -> replan and reapproval when scope changes.
+- Tool/environment/policy blocker -> environment fix, permission request, or
+  BLOCKED with evidence.
+
+---
+
+## Pattern 10: Agentic Loop Safety
+
+Apply this pattern to every repeated agent/tool/model loop.
+
+Required design fields:
+
+- bounded execution: max rounds, steps, timeout, or budget
+- stop condition: success, clean exit, max-budget exit, blocker exit
+- retry policy: capped retries for transient failures only
+- empty-result handling: broaden once, fallback, report no evidence, ask, or exit
+- tool-error routing: retry, fallback, blocker, or degraded result
+- progress signal: new evidence, fewer findings, better score, or explicit state
+- cost/token guard: paid model, subagent, and large-context loops need budget
+  awareness
+
+A loop without bounds, stop conditions, empty-result handling, tool-error
+routing, and a progress signal is incomplete even when the happy path works.
 
 ---
 
 ## Decision Checklist
 
-When creating a Process skill with a loop, check which patterns apply:
+For a loop-based Process skill, require the matching patterns:
 
-| Question | If Yes → Apply |
+| Question | Apply |
 |---|---|
-| Does the loop evaluate quality? | Pattern 1 (Rubric) |
-| Does the loop run 2+ rounds? | Pattern 2 (Drift Detection) |
-| Must the loop complete before the task finishes? | Pattern 3 (Harness Gates) |
-| Does one agent create and another evaluate? | Pattern 4 (Separation) |
+| Does Build need a definition of done? | Done Contract |
+| Does controller shape vary by task/risk/context? | Harness Recipe |
+| Could context compaction, restart, or handoff happen? | Run State, Trace, Replay |
+| Do artifacts cross role boundaries? | Typed Artifact References |
+| Are code quality and acceptance both evaluated? | Code Reviewer / QA Evaluator split |
+| Is subjective/domain quality part of acceptance? | Conditional Domain Rubrics |
+| Does a loop run multiple rounds? | Max 20 loop cap, scoring, drift detection |
+| Can the approach go stale or hit legacy blockers? | Pivot/Restart Decision |
 
-Most loop-based skills will use all four. Simple refinement loops (e.g., "retry until build passes") may only need Pattern 3.
+Most loop-based Process skills use all of these. Simple retry-only skills still
+need bounded execution, stop conditions, error routing, and progress signals.
 
----
-
-## Full reference
-
-See `docs/harness-design-guide.md` for the complete design guide with architecture rationale, research references, and evolution principles.
-
-
----
-
-## Pattern 5: Agentic Loop Safety
-
-Apply this pattern whenever a Process skill includes autonomous or repeated execution: agent loops, retry loops, search/retrieval loops, multi-round subagent dispatch, model/tool call loops, or background jobs.
-
-Required design fields:
-
-- **Bounded execution:** max steps/rounds, timeout, or budget.
-- **Stop condition:** explicit success, clean exit, max-budget exit, blocker exit, and escalation path.
-- **Retry policy:** capped retries scoped to transient failures only.
-- **Empty-result handling:** fallback, broaden-once, report no evidence, ask/escalate, or exit.
-- **Tool-error handling:** failures route to retry, fallback, blocker, or degraded result; never silent continuation.
-- **Progress signal:** each iteration must produce new evidence, fewer findings, better score, or another measurable improvement.
-- **Cost/token guard:** paid API/model/subagent/large-context loops need cost/time/token awareness.
-
-Contract placement:
-
-- Put the loop bounds and retry policy in `contracts/input.yaml` or phase-gate configuration when user/config controlled.
-- Put step-level assertions in `contracts/phase-gates.yaml`.
-- Put final budget/loop outcome reporting in `contracts/output.yaml`.
-- Put worker/subagent loop fields in `contracts/handoffs.yaml` when a subagent participates.
-
-A loop without bounds, stop conditions, empty-result handling, and tool-error routing is incomplete even if it works in a happy-path demo.
+Full rationale and implementation references live in
+`docs/harness-design-guide.md` and
+`skills/assistant-workflow/references/harness-controller.md`.

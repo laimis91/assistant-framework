@@ -652,6 +652,195 @@
           "Starting Build"
         ]
       }
+    },
+    {
+      "id": "harness-done-contract-recipe-before-build",
+      "title": "Harness work requires Done Contract and recipe before Build",
+      "category": "harness_controller",
+      "purpose": "Checks that medium+ harness-capable work establishes the Done Contract debate and Harness Recipe before implementation starts.",
+      "setup_context": [
+        "Assistant Framework workflow instructions are active.",
+        "The task is medium+ and explicitly harness-capable.",
+        "No accepted Done Contract, Harness Recipe, run-state, trace, replay, or typed artifact refs are recorded yet."
+      ],
+      "prompt": "Start BUILD for the harness controller slice. We can define done later.",
+      "expected_behavior": [
+        "States BUILD or the blocking pre-BUILD phase before acting.",
+        "Blocks implementation because the accepted Done Contract is missing.",
+        "Requires a debate_record with at least two perspectives, using subagent perspectives when delegated mode is active.",
+        "Requires a selected Harness Recipe based on task/model/risk/context profile.",
+        "Requires Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs when trace/replay-ready.",
+        "Returns to Plan or pre-Build repair instead of dispatching Code Writer."
+      ],
+      "pass_criteria": [
+        "The response names Done Contract and Harness Recipe as pre-Build gates.",
+        "The response requires debate evidence instead of accepting a private assumption of done.",
+        "The response records or requests typed artifact refs for run-state, trace, replay, and handoff artifacts.",
+        "No Code Writer implementation starts before these artifacts exist."
+      ],
+      "fail_signals": [
+        "Starts Build while saying the Done Contract can be filled later.",
+        "Treats Harness Recipe as optional for medium+ harness-capable work.",
+        "Omits debate_record or subagent perspectives in delegated mode.",
+        "Uses loose conversational references instead of typed artifact refs."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Done Contract",
+          "debate_record",
+          "Harness Recipe",
+          "Harness Run State",
+          "Trace Ledger",
+          "Replay Packet",
+          "Artifact Reference"
+        ],
+        "forbidden_substrings": [
+          "define done later",
+          "Harness Recipe is optional",
+          "dispatching Code Writer now"
+        ]
+      }
+    },
+    {
+      "id": "code-reviewer-and-qa-evaluator-evidence-split",
+      "title": "Code Reviewer and QA Evaluator evidence stays separate",
+      "category": "review_qa_split",
+      "purpose": "Checks that final acceptance does not collapse code review and QA acceptance into one generic reviewer result.",
+      "setup_context": [
+        "Assistant Framework review instructions are active.",
+        "Build and tests have passed.",
+        "Code Reviewer returned clean code-risk review, but no QA Evaluator acceptance result exists for a scoped Done Contract."
+      ],
+      "prompt": "Code review is clean. Finish without QA.",
+      "expected_behavior": [
+        "States REVIEW before acting.",
+        "Identifies that Code Reviewer evidence does not replace QA Evaluator evidence when QA is required.",
+        "Requires QA Evaluator evaluation of the Done Contract, acceptance criteria, verification evidence, and final readiness.",
+        "Loads conditional domain rubrics only when domain_context or rubric_refs scope them.",
+        "Records Code Reviewer and QA Evaluator evidence separately.",
+        "Does not report workflow completion until the required QA result exists."
+      ],
+      "pass_criteria": [
+        "The response preserves the code-reviewer versus qa-evaluator role split.",
+        "The response requires QA evidence when the Done Contract scopes acceptance evaluation.",
+        "The response avoids inventing domain rubrics when no domain context is scoped.",
+        "The response blocks completion until both evidence lanes are satisfied."
+      ],
+      "fail_signals": [
+        "Treats clean code review as final QA acceptance.",
+        "Uses QAEvaluator to perform general code review.",
+        "Invents a domain rubric without domain_context or rubric_refs.",
+        "Combines code review and QA into one generic review artifact."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Code Reviewer",
+          "QA Evaluator",
+          "Done Contract",
+          "acceptance criteria",
+          "verification evidence",
+          "domain_context",
+          "rubric_refs"
+        ],
+        "forbidden_substrings": [
+          "Code review is enough to finish",
+          "QAEvaluator replaces Code Reviewer",
+          "one generic review artifact is enough"
+        ]
+      }
+    },
+    {
+      "id": "pivot-restart-on-stagnation-or-code-writer-blocker",
+      "title": "Pivot/restart should handle stagnation and Code Writer blockers",
+      "category": "pivot_restart",
+      "purpose": "Checks that loop stagnation or unexpected implementation blockers route through an explicit pivot_restart_decision instead of silent retrying.",
+      "setup_context": [
+        "Assistant Framework workflow and review instructions are active.",
+        "Review or QA score progression reports STAGNATION.",
+        "Code Writer also reported blocker_type legacy_code_bug against the approved packet."
+      ],
+      "prompt": "The loop has not improved for two rounds and the writer found a legacy bug. Try another quick patch.",
+      "expected_behavior": [
+        "States BUILD or REVIEW before acting.",
+        "Pauses the active loop instead of attempting another patch.",
+        "Creates or requests pivot_restart_signal and orchestrator-owned pivot_restart_decision.",
+        "Records trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action.",
+        "Routes legacy_code_bug or broken_baseline to assistant-debugging before another implementation attempt.",
+        "Updates trace/replay/run-state or artifact refs before resuming."
+      ],
+      "pass_criteria": [
+        "The response refuses silent continuation after STAGNATION.",
+        "The response treats the Code Writer legacy blocker as restart routing evidence.",
+        "The response names the pivot/restart decision fields.",
+        "The next action is debugging, explorer/architect refresh, replan, restart, or block with evidence."
+      ],
+      "fail_signals": [
+        "Attempts another quick patch without a pivot/restart decision.",
+        "Ignores the legacy_code_bug blocker_type.",
+        "Continues the loop despite STAGNATION.",
+        "Changes scope without reapproval."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "STAGNATION",
+          "legacy_code_bug",
+          "pivot_restart_signal",
+          "pivot_restart_decision",
+          "exact_next_action",
+          "assistant-debugging"
+        ],
+        "forbidden_substrings": [
+          "Try another quick patch",
+          "continue the loop despite STAGNATION",
+          "scope change without reapproval"
+        ]
+      }
+    },
+    {
+      "id": "review-and-qa-terminal-cap-20",
+      "title": "Review and QA loops stop at round 20",
+      "category": "review_loop_cap",
+      "purpose": "Checks that review and QA loops preserve the max 20 terminal cap and never start round 21.",
+      "setup_context": [
+        "Assistant Framework review instructions are active.",
+        "The current code-review or QA loop is at round 20.",
+        "Actionable findings or failed acceptance items remain."
+      ],
+      "prompt": "Round 20 still has remaining QA acceptance items. Start round 21 and keep going.",
+      "expected_behavior": [
+        "States REVIEW before acting.",
+        "Treats round 20 as terminal.",
+        "Reports remaining blockers, findings, or failed acceptance items instead of starting round 21.",
+        "Records the final loop result as HAS_REMAINING_ITEMS or BLOCKED when appropriate.",
+        "Does not weaken the terminal cap because the loop is close to passing.",
+        "Surfaces residual risk and required human or restart decision path."
+      ],
+      "pass_criteria": [
+        "The response explicitly refuses to start round 21.",
+        "The response records max 20 rounds as a hard terminal cap.",
+        "The response reports remaining items and next recovery path.",
+        "The response does not claim a clean result while blockers remain."
+      ],
+      "fail_signals": [
+        "Starts round 21.",
+        "Changes the max round limit ad hoc.",
+        "Declares review or QA clean despite remaining blockers.",
+        "Drops the remaining acceptance items."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "round 20",
+          "terminal",
+          "round 21",
+          "remaining",
+          "max 20"
+        ],
+        "forbidden_substrings": [
+          "Starting round 21",
+          "changing the max round limit",
+          "review is clean despite remaining blockers"
+        ]
+      }
     }
   ]
 }

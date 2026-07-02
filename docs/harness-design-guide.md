@@ -1,310 +1,250 @@
 # Harness Design Guide
 
-Design principles, architecture patterns, and implementation guidelines for building long-running AI agent harnesses. Based on Anthropic's harness research, the Assistant Framework's review system, and lessons from 4 rounds of self-referential review.
+Design guide for the Assistant Framework harness controller: the planning,
+artifact, review, QA, trace/replay, and recovery layer used for long-running
+agent workflows.
 
-**Reference:** [Anthropic Engineering — Harness Design for Long-Running Apps](https://www.anthropic.com/engineering/harness-design-long-running-apps)
+**Reference:** [Anthropic Engineering - Harness Design for Long-Running Apps](https://www.anthropic.com/engineering/harness-design-long-running-apps)
 
 ---
 
 ## Core Concept
 
-A harness is to an AI agent what a pit crew is to a race car. Instead of one agent doing everything (driving, mechanics, strategy), a harness orchestrates **specialized agents** with distinct roles — enabling multi-hour autonomous tasks that far exceed what a single agent can do.
+A harness lets one orchestration session coordinate specialized roles without
+letting any role quietly absorb every responsibility. The current framework is a
+controller, not a fixed role recipe:
 
-The three pillars:
-1. **Separation of generation and evaluation** — the builder never judges the building
-2. **Structured scoring over open-ended review** — "is this good?" becomes measurable dimensions
-3. **Drift detection** — ensuring the evaluator stays honest over multiple rounds
+1. **Define done before Build** with an accepted Done Contract.
+2. **Select the controller shape** with a Harness Recipe.
+3. **Carry state as artifacts** through run-state, trace, replay, and typed refs.
+4. **Separate implementation, code review, and QA acceptance** into distinct
+   responsibilities.
+5. **Detect drift and stagnation** and route pivots/restarts through an explicit
+   decision artifact.
+
+The smallest useful harness still keeps these concerns distinct. Small tasks can
+take a lightweight path, but medium+ harness-capable work must not enter Build
+without the controller artifacts that make recovery and review possible.
 
 ---
 
-## Architecture: The Three-Agent Pattern
+## Pre-Build Controller
 
-| Agent | Role | Access | Analogy |
-|---|---|---|---|
-| **Planner** | Converts brief prompts into detailed specs | Read-only | The architect drawing blueprints |
-| **Generator** | Implements the spec iteratively | Read + Write | The builder on-site |
-| **Evaluator** | Tests and scores against criteria | Read-only | The building inspector |
+### Done Contract
 
-### Why separation matters
+The Done Contract defines what "finished" means before implementation starts.
+It is required for medium+ harness-capable work and contains:
 
-When asked to evaluate their own output, models exhibit **systematic leniency** — confidently praising work that, to a human observer, is mediocre. This is like grading your own exam. A standalone evaluator is far more tractable to tune toward healthy skepticism.
+- `done_when`: observable outcomes that prove completion
+- `not_done_when`: states that must block completion
+- `verification`: commands, inspections, review, QA, or manual evidence needed
+- `owner_consumer`: owner and downstream consumer of the artifact or behavior
+- `acceptance_criteria`: binary criteria from the user, plan, or slice scope
+- `debate_record`: at least two perspectives considered before acceptance
+- `accepted_by`: user, orchestrator, or approved plan reference
 
-**Framework implementation:**
-- Reviewer agent (`agents/claude/reviewer.md`) has **no Edit or Write access** — structurally cannot modify what it reviews
-- Fresh reviewer dispatched each round — no context contamination from previous reviews
-- Orchestrator (main session) applies fixes, never the reviewer
+When `subagent_execution_mode=delegated`, the debate should use relevant
+subagent perspectives such as Architect, Builder/Tester, Code Reviewer, QA
+Evaluator, Security, Docs, or Product. Direct fallback must record why subagents
+were unavailable or unauthorized and which role-equivalent perspectives were
+used. The debate cannot add scope; scope changes return to Plan.
 
-### Guaranteeing 3-agent separation
+### Harness Recipe
 
-Convention alone is insufficient — agents under pressure collapse roles. Use **structural enforcement**:
+The Harness Recipe selects the controller shape from the current
+task/model/risk/context profile. It is short routing metadata, not another plan.
 
-| Enforcement Level | Mechanism | Strength |
+Required profile fields:
+
+- `task_profile`: task type, size, slice count, TDD/debugging needs
+- `model_profile`: agent/model constraints, delegation mode, tool limits
+- `risk_profile`: risk tier, safety gates, review depth, rollback needs
+- `context_profile`: exact context, summarized context, omitted/deferred
+  context, and trace/replay need
+
+Required recipe fields:
+
+- `selected_recipe`
+- `recipe_rationale`
+- `required_artifacts`
+- `corrective_action`
+
+Recipes normally fall into lightweight guarded, slice-sequential,
+review-intensive, or trace/replay-ready variants. If the recipe stops matching
+the task during Build, record `>> PLAN DEVIATION DETECTED`, repair the recipe,
+and seek re-approval when files, behavior, scope, risk, verification, or
+acceptance criteria change.
+
+---
+
+## Runtime Artifacts
+
+Harness artifacts live in the task journal or equivalent carried-forward state.
+They are recovery artifacts, not ceremony.
+
+| Artifact | Purpose |
+|---|---|
+| Harness Run State | Current phase, slice, status, blockers, last verification, next action, recovery pointer |
+| Trace Ledger | Ordered agent events, decisions, verification results, deviations, blockers, and artifact refs |
+| Replay Packet | Minimum continuation packet after compaction, handoff, failure, or restart |
+| Artifact Reference Ledger | Typed refs that let producers and consumers validate artifact location, schema, and freshness |
+| Pivot/Restart Decision | Orchestrator-owned recovery decision when the active loop or handoff stops making safe progress |
+
+### Typed Artifact References
+
+When an artifact crosses an agent boundary, pass it as a typed Artifact
+Reference instead of a loose string:
+
+- `artifact_id`
+- `artifact_type`
+- `producer`
+- `consumer`
+- `location_ref`
+- `schema_or_contract`
+- `validation_status`
+- `summary`
+
+Use typed refs for Done Contract, Harness Recipe, Harness Run State, Trace
+Ledger, Replay Packet, Pivot/Restart Decision, task packets, changed files,
+verification evidence, review results, QA results, and plan deviations.
+Producers create or update refs; consumers validate `schema_or_contract` and
+`validation_status` before relying on them.
+
+---
+
+## Role Separation
+
+The controller separates implementation, verification, code review, and QA
+responsibilities:
+
+| Role | Responsibility | Writes Source? |
 |---|---|---|
-| Convention | Skills/prompts say "spawn 3 agents" | Weak — easily skipped |
-| File gates | Phase artifacts must exist before transition | Medium |
-| Hook enforcement | Shell scripts block completion without artifacts | Strong |
-| Tool-level access control | Reviewer literally can't edit | Strongest |
+| Code Writer | Implements the approved task packet and reports blockers without broadening scope | Yes |
+| Builder/Tester | Runs builds, tests, and verification; requests Code Writer fixes for production failures | Tests/fixtures as assigned, not production code |
+| Code Reviewer | Reviews code defects, security, architecture, test coverage, and structural code risk | No |
+| QA Evaluator | Evaluates Done Contract, acceptance criteria, verification evidence, final readiness, and scoped domain quality | No |
 
-The framework uses all four levels:
-- **Convention:** `assistant-workflow` SKILL.md defines the three-agent flow
-- **File gates:** Task journal must have plan approval before build, review entries before completion
-- **Hook enforcement:** `stop-review.sh` is the consolidated strict stop gate for review, plan approval, rubric scores, and metrics
-- **Tool-level:** Reviewer agent tools = `Read, Grep, Glob, LS` (no Edit, Write, or Bash)
+`reviewer` remains a compatibility route for older handoffs, but new code review
+dispatches should use `code-reviewer`. QA Evaluator does not replace Code
+Reviewer; QA findings are about acceptance and evidence, not general code
+quality. Both delegated mode and direct fallback must record Code Reviewer
+evidence separately from QA Evaluator evidence.
 
----
+### Conditional Domain Rubrics
 
-## Evaluator Calibration
-
-### The problem
-
-An uncalibrated evaluator is a building inspector who either rubber-stamps everything or fails buildings for paint color. You need the Goldilocks zone.
-
-### Solution: Weighted Rubric with Anchored Examples
-
-Replace open-ended "find issues" with structured scoring against concrete dimensions:
-
-| Dimension | Weight | What It Measures |
-|---|---|---|
-| Correctness | 0.30 | Bugs, logic errors, edge cases, acceptance criteria |
-| Code Quality | 0.20 | Readability, naming, maintainability, right-sized SOLID/KISS/DRY/YAGNI |
-| Architecture | 0.20 | Layer boundaries, dependency direction, patterns |
-| Security | 0.15 | Injection, auth, data exposure, OWASP top 10 |
-| Test Coverage | 0.15 | New behavior tested, edge cases, test quality |
-
-**Key calibration techniques:**
-
-1. **Anchored score examples** — Each dimension has a 1-5 scale with concrete descriptions of what each score looks like. See `skills/assistant-review/references/review-rubric.md` for the full anchor table.
-
-2. **Evidence-backed scoring** — Every score must cite specific code. "Architecture: 4.0" is not enough; "Architecture: 4.0 — clean layer separation, repository pattern matches existing conventions" is.
-
-3. **Critical finding overrides** — Certain findings cap the weighted score regardless of other dimensions:
-   - Active security vulnerability → capped at 2.0
-   - Data loss risk → capped at 2.0
-   - Build-breaking change → capped at 1.0
-
-4. **Threshold actions** — Scores map to concrete decisions:
-
-   | Weighted Score | Action | What Happens |
-   |---|---|---|
-   | 4.0+ | **PASS** | Exit clean. Ship it. |
-   | 3.0–3.9 | **REFINE** | Continue loop. Fix lowest-scoring dimensions. |
-   | < 3.0 | **PIVOT** | Current approach has fundamental issues. Escalate. |
-
-5. **Rising bar per round** — The pivot threshold tightens as rounds progress (2.5 → 2.75 → 3.0 → 3.25). If the code hasn't reached 3.25 by round 4, the approach likely needs rethinking, not more polish.
-
-### Calibration set approach (for future work)
-
-Build 5-10 pre-scored examples where you've manually assigned scores. Run the evaluator against them and compare. Adjust the evaluator prompt with few-shot corrections where its judgment diverges from human preferences.
-
-**Framework implementation:** `skills/assistant-review/references/review-rubric.md`
+QA loads `skills/assistant-review/references/domain-rubrics.md` only when the
+Done Contract, acceptance criteria, `domain_context`, or explicit `rubric_refs`
+scope UI/visual, product, UX, docs, DX, or domain craft quality. When no domain
+rubric is scoped, QA records domain quality as not applicable instead of
+inventing subjective bars.
 
 ---
 
-## The Review Loop
+## Review And QA Loops
 
-### Ensuring the reviewer never reviews its own fixes
+The code-review loop and QA loop are bounded at **max 20 rounds**.
 
-This is the most critical architectural constraint. Three mechanisms work together:
-
-**1. Read-only reviewer (structural)**
-```
-Reviewer: tools = [Read, Grep, Glob, LS]     ← cannot edit
-Fixer:    tools = [Read, Edit, Write, Bash]   ← separate agent
-```
-
-**2. Fresh agent each round (context isolation)**
-```
-Round 1: Reviewer₁ (fresh) → finds issues → report
-         Fixer (orchestrator) → applies fixes → tests
-Round 2: Reviewer₂ (NEW fresh agent) → reviews with "previously fixed" list
-         → finds new issues or passes clean
-Round N: Repeat until clean or max rounds
-```
-
-**3. Previously-fixed list (anti-re-reporting)**
-Each round receives a list of already-fixed items. The reviewer must not re-report them. This prevents the loop from churning on the same issues while still allowing the reviewer to find genuinely new problems.
-
-### Loop structure
-
-```
+```text
 round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 10:
-  REVIEW   → dispatch fresh read-only reviewer with diff + previously_fixed
-  EVALUATE → check rubric score + findings → PASS/REFINE/PIVOT
-  FIX      → orchestrator fixes all must-fix and should-fix items
-  VERIFY   → build + tests must pass
+while round <= 20:
+  REVIEW   -> fresh Code Reviewer with diff, acceptance context, and prior fixes
+  DECIDE   -> PASS, REFINE, or PIVOT from rubric score and findings
+  FIX      -> Code Writer fixes actionable findings when REFINE
+  VERIFY   -> Builder/Tester records build/test evidence
   round += 1
 ```
 
-### Finding filter policy
+QA runs after build/test evidence and Code Reviewer evidence exist:
 
-Each round reports only findings with file/line evidence, concrete impact, and the smallest useful fix. Speculative or low-evidence concerns go into Observations and do not block completion.
+```text
+round = 1
+previously_failed_acceptance_items = []
+score_progression = []
 
-| Rounds | Blocking bar | Rationale |
-|---|---|---|
-| 1-7 | Evidence-backed must-fix or should-fix findings | Catch actionable issues without letting speculation drive the loop |
-| 8-9 | Must-fix or high-confidence should-fix findings | Reduce late-round noise while preserving real blockers |
-| 10 | Terminal round; report remaining blockers as remaining items | Preserve the hard max-round cap and avoid round 11 |
+while round <= 20:
+  EVALUATE -> QA Evaluator checks Done Contract, criteria, evidence, domain scope
+  SCORE    -> qa_scorecard and score_entry
+  DECIDE   -> accepted, accepted_with_concerns, rejected, or blocked
+  FIX/EXIT -> return failed acceptance items to Build, or exit with final result
+  round += 1
+```
 
-This prevents late-round noise from prolonging the loop unnecessarily.
+Round 20 is terminal. The controller reports remaining blockers or failed
+acceptance items instead of starting round 21.
 
-**Framework implementation:** `skills/assistant-review/SKILL.md` (the loop), `contracts/phase-gates.yaml` (assertions per step)
+### Finding Filter
 
----
+Review and QA findings must have concrete evidence and direct impact:
 
-## Drift Detection
-
-### The problem
-
-Over multiple rounds, evaluators can exhibit **score inflation** — getting "tired" and passing things they shouldn't. The score goes up, but the code didn't actually improve. This is like a building inspector who starts approving more after a long day.
-
-### Solution: Score tracking with drift classification
-
-After each round, compare the rubric score to the previous round using two signals: **score delta** and **finding count delta**.
-
-| Score Delta | Finding Condition | Status | Action |
-|---|---|---|---|
-| +, ≤ 1.0 | count decreased | **GENUINE** | Continue normally |
-| +, > 1.0 | count decreased | **SUSPICIOUS** | Log warning, continue |
-| +, any | count same or increased | **DRIFT** | Reset evaluator (stricter prompt) |
-| − | any | **REGRESSION** | Investigate, escalate if 2+ rounds |
-| 0 | findings > 0, 2+ rounds | **STAGNATION** | Escalate to orchestrator |
-| 0 | findings > 0, 1 round | **NEUTRAL** | Log, no action yet |
-
-### Drift response: evaluator reset
-
-On DRIFT detection, the next reviewer dispatch includes an explicitly stricter prompt:
-
-> "Previous rounds showed score inflation without corresponding quality improvement. Apply maximum skepticism. Score conservatively — when uncertain, round DOWN."
-
-### Escalation ladder
-
-| Drift Count | Response |
+| Rounds | Blocking bar |
 |---|---|
-| 1 occurrence | Reset evaluator context, stricter prompt |
-| 2 occurrences | Flag to orchestrator, consider different model |
-| 3+ occurrences | Stop loop, present findings for manual review |
+| 1-15 | Evidence-backed must-fix or should-fix findings |
+| 16-19 | Must-fix or high-confidence should-fix findings |
+| 20 | Terminal report of remaining blockers or acceptance items |
 
-**Framework implementation:** `skills/assistant-review/references/score-tracking.md`
+Speculative concerns stay non-blocking unless evidence connects them to
+correctness, security, architecture, test reliability, or acceptance criteria.
 
 ---
 
-## Harness Gate Hooks
+## Drift, Stagnation, And Pivot/Restart
 
-### The problem
+The controller tracks score progression and finding counts so rising scores do
+not mask stale or worsening output.
 
-Without structural enforcement, agents under time pressure will collapse the harness — skipping the plan, self-reviewing, or accepting low scores. Convention-based rules are like speed limit signs with no police.
-
-### Solution: One shell stop hook that blocks completion
-
-The framework uses one consolidated Stop hook in strict profiles:
-
-| Hook | What It Checks | When It Blocks |
+| Signal | Meaning | Controller Response |
 |---|---|---|
-| `stop-review.sh` | Full strict stop lifecycle | Task in BUILDING/VERIFYING/REVIEWING/DOCUMENTING without required plan approval, review entries, final result, medium+ rubric score, or today's metrics |
+| GENUINE | Score improves and finding count decreases | Continue normally |
+| SUSPICIOUS | Score jumps sharply while findings drop | Log and continue skeptically |
+| DRIFT | Score improves while findings stay flat or rise | Reset evaluator with stricter context |
+| REGRESSION | Score drops | Investigate; repeated regression triggers pivot/restart |
+| STAGNATION | Findings remain across repeated unchanged scores | Create pivot/restart signal |
 
-### Consolidated stop-review.sh strict checks (in order)
+The orchestrator owns `pivot_restart_decision`. It records the trigger, evidence,
+affected slice or round, options considered, selected action, reapproval need,
+next agent, recovery pointer, and exact next action. After the decision, update
+Harness Run State, append a trace entry, refresh Replay Packet, and update the
+Artifact Reference Ledger.
 
-1. **Plan gate:** Task journal has `Plan approval: yes` or `PHASE: PLAN COMPLETE (approved)` → blocks if missing
-2. **Rubric gate:** Task journal has `Rubric:` and `Weighted:` lines in review entries → blocks if missing (medium+ only)
-3. **Score gate:** Latest weighted score ≥ 4.0 → blocks if below
+### Code Writer Blocker Routing
 
-### Size-aware enforcement
+Code Writer must report unexpected blockers instead of patching around them.
+Controller routing:
 
-| Task Size | Enforcement |
-|---|---|
-| Small/trivial | `stop-review.sh` checks review, final result, and metrics when strict workflow state is active |
-| Medium+ | `stop-review.sh` checks the full harness lifecycle: plan, review, rubric, score, and metrics |
+- `legacy_code_bug` or `broken_baseline` -> assistant-debugging before another
+  implementation attempt
+- `hidden_dependency` -> Explorer or Code Mapper refresh
+- `missing_contract` or `stale_plan` -> Architect or Plan repair
+- `scope_conflict` -> replan and reapproval when scope changes
+- `tool_environment` or `permission_policy` -> environment fix, permission
+  request, or BLOCKED with evidence
+- `tdd_red_missing` -> return to TDD RED evidence before production code is
+  accepted
 
-The hook detects task size by looking for `Triaged as: medium|large|mega` in the task journal — this is an explicit field in the journal template, not inferred from content.
-
-### Loop prevention
-
-The stop hook includes loop guards to prevent infinite blocking:
-- **Claude:** `stop_hook_active` flag in input JSON — if true, the hook already fired once, allow stop
-- **Gemini:** Temp file flag (`/tmp/.assistant-stop-review-retry-{hash}`) — set on first retry, cleared on second invocation
-
-Prompt-time runtime gate warnings are injected by `hooks/scripts/workflow-enforcer.sh`, with shared task-journal checks in `hooks/scripts/workflow-phase-gates.sh`. Stop-time blocking is consolidated in `hooks/scripts/stop-review.sh`, registered as the single strict stop gate in all three settings files (Claude, Gemini, Codex). `hooks/scripts/harness-gate.sh` remains only as a legacy compatibility script and reference implementation.
-
----
-
-## File-Based Communication
-
-Agents exchange state through structured files, not pure conversation. This makes state durable, inspectable, and auditable.
-
-### Key artifacts
-
-| Artifact | Location | Purpose | Written By |
-|---|---|---|---|
-| Task journal | `.claude/task.md` | Single source of truth during task | Orchestrator |
-| Context map | `.claude/context-map.md` | Codebase structure for downstream agents | Code Mapper |
-| Plan | In task journal `## Plan` section | Approved implementation steps | Architect / Orchestrator |
-| Review entries | In task journal `## Review Log` section | Per-round findings, scores, drift status | Orchestrator (from reviewer output) |
-| Rubric scores | In review entries `- Rubric:` line | Dimension scores per round | Reviewer → Orchestrator |
-| Score progression | In final result | Round-over-round score tracking | Orchestrator |
-
-### Task journal as gate artifact
-
-The task journal is not just documentation — it's the enforcement mechanism. Hooks parse the journal to verify:
-- Plan exists and is approved (plan gate)
-- Review entries exist with rubric scores (rubric gate)
-- Weighted score meets threshold (score gate)
-- Final result is written (review gate)
-
-If the journal doesn't contain these artifacts, the agent cannot complete the task.
+Review/QA stagnation, repeated drift/regression, domain action `pivot`,
+verification blockers, and stale task packets all route through the same
+Pivot/Restart Controller. Do not silently continue the loop after these signals.
 
 ---
 
-## Context Management
+## Gate Enforcement
 
-### Resets vs. Compaction
+The current enforcement path is:
 
-Models exhibit **"context anxiety"** — rushing to wrap up as the context window fills. Two strategies:
-
-| Strategy | How It Works | Pros | Cons |
-|---|---|---|---|
-| **Compaction** | Summarize earlier conversation in place | Preserves continuity | No clean slate, artifacts of old context |
-| **Context reset** | Clear everything, hand off state via files | Clean working memory | Complexity, latency, token overhead |
-
-The framework uses compaction by default (`pre-compress.sh` / `post-compact.sh` hooks) with file-based state preservation (task journal survives compression). Full context resets are available via fresh agent dispatch.
-
-### Progressive loading
-
-Skills load context on demand, not all at once:
-- SKILL.md is always loaded (entry point)
-- `contracts/` loaded when entering a gated phase
-- `references/` loaded when a specific technique is needed (e.g., rubric loaded during review, not during planning)
-
-This keeps the context window lean and focused.
-
----
-
-## Design Principles Summary
-
-| Principle | Implementation | Anti-Pattern |
-|---|---|---|
-| Separate generation from evaluation | Read-only reviewer, fresh per round | Same agent reviews its own fixes |
-| Convert subjective to gradable | 5-dimension weighted rubric with anchors | "Is this good?" open-ended review |
-| Enforce structurally, not just conventionally | Hook-based gates that parse artifacts | "Please remember to review" in the prompt |
-| Detect drift over time | Score tracking with finding correlation | Trusting round N score without comparing to round N-1 |
-| Manage context through resets | Task journal survives compression | Relying on conversation history alone |
-| Right-size, don't skip | Small = lightweight, medium = standard, never zero | Skipping the harness for speed |
-
----
-
-## When to Evolve the Harness
-
-Each harness component **encodes assumptions about model limitations**. As models improve, stress-test whether each piece is still earning its keep:
-
-- **Sprint decomposition** was valuable with earlier models but became unnecessary with improved long-context planning (Opus 4.6 finding from Anthropic's research)
-- **Rubric scoring** persists in value — tasks at the frontier of model capability still benefit from structured evaluation
-- **Drift detection** becomes more important as loops get longer — the longer the session, the higher the drift risk
-- **Harness gates** remain valuable as a safety net — even when models are capable, structural enforcement prevents regressions under edge conditions
-
-The interesting work evolves not toward simpler harnesses, but toward discovering novel agent combinations enabling previously impossible tasks.
+- `assistant-workflow` loads `references/harness-controller.md` only for
+  medium+ harness-capable work.
+- Workflow contracts require Done Contract and Harness Recipe before Build.
+- Task journal templates carry Harness Run State, Trace Ledger, Replay Packet,
+  Pivot/Restart Decision, and Artifact Reference Ledger sections.
+- `workflow-enforcer.sh` and `workflow-phase-gates.sh` surface
+  `Prompt-time runtime gate warnings` for
+  `BUILDING/VERIFYING/REVIEWING/DOCUMENTING`.
+- `stop-review.sh` is the consolidated strict stop gate for plan approval,
+  review, rubric/score, metrics, and final-result completion.
+- `harness-gate.sh` remains only a legacy compatibility/reference script.
 
 ---
 
@@ -312,14 +252,15 @@ The interesting work evolves not toward simpler harnesses, but toward discoverin
 
 | Component | Key Files |
 |---|---|
-| Rubric definition | `skills/assistant-review/references/review-rubric.md` |
-| Score tracking | `skills/assistant-review/references/score-tracking.md` |
-| Review loop | `skills/assistant-review/SKILL.md` |
-| Review contracts | `skills/assistant-review/contracts/{input,output,phase-gates,handoffs}.yaml` |
-| Reviewer agent | `agents/claude/reviewer.md` |
-| Harness gate hook | `hooks/scripts/harness-gate.sh` |
-| Review gate hook | `hooks/scripts/stop-review.sh` |
-| Hook registration | `hooks/{claude,gemini,codex}-settings.json` |
+| Harness controller reference | `skills/assistant-workflow/references/harness-controller.md` |
+| Workflow phase execution | `skills/assistant-workflow/references/phases.md` |
 | Task journal template | `skills/assistant-workflow/references/task-journal-template.md` |
-| Workflow phase gates | `skills/assistant-workflow/contracts/phase-gates.yaml` |
+| Workflow contracts | `skills/assistant-workflow/contracts/{input,output,phase-gates,handoffs}.yaml` |
+| Code review loop | `skills/assistant-review/SKILL.md` |
+| QA loop | `skills/assistant-review/references/qa-evaluation-loop.md` |
+| Domain rubrics | `skills/assistant-review/references/domain-rubrics.md` |
+| Review rubric and score tracking | `skills/assistant-review/references/{review-rubric,score-tracking}.md` |
+| Code Reviewer agents | `agents/{claude,codex}/code-reviewer.*` |
+| QA Evaluator agents | `agents/{claude,codex}/qa-evaluator.*` |
+| Runtime hooks | `hooks/scripts/{workflow-enforcer,workflow-phase-gates,stop-review}.sh` |
 | Contract design guide | `docs/skill-contract-design-guide.md` |
