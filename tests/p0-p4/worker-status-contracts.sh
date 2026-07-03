@@ -44,7 +44,9 @@ test_start "workflow handoffs define typed artifact references for worker packet
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 output_contract="$workflow_dir/contracts/output.yaml"
 plan_template="$workflow_dir/references/plan-template.md"
+plan_harness_appendix="$workflow_dir/references/plan-harness-appendix.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
+task_journal_harness_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
 phases_ref="$workflow_dir/references/phases.md"
 harness_ref="$workflow_dir/references/harness-controller.md"
 missing_typed_artifact_terms=()
@@ -82,23 +84,38 @@ for term in \
     fi
 done
 for term in \
-    "## Artifact Reference Ledger" \
-    "Typed artifact refs:" \
-    "Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary"; do
+    "## Harness Appendix Routing" \
+    "references/plan-harness-appendix.md" \
+    "artifact_reference_ledger_ref"; do
     if ! grep -Fq -- "$term" "$plan_template"; then
         missing_typed_artifact_terms+=("plan-template.md: $term")
     fi
 done
 for term in \
     "## Artifact Reference Ledger" \
-    "Producer roles update Artifact Reference Ledger entries" \
-    'Consumer roles validate `schema_or_contract` and update `validation_status`'; do
+    "Typed artifact refs:" \
+    "Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary"; do
+    if [[ ! -f "$plan_harness_appendix" ]] || ! grep -Fq -- "$term" "$plan_harness_appendix"; then
+        missing_typed_artifact_terms+=("plan-harness-appendix.md: $term")
+    fi
+done
+for term in \
+    "## Harness Appendix Routing" \
+    "references/task-journal-harness-appendix.md"; do
     if ! grep -Fq -- "$term" "$task_journal_template"; then
         missing_typed_artifact_terms+=("task-journal-template.md: $term")
     fi
 done
 for term in \
-    "Artifact Reference Ledger before task packets" \
+    "## Artifact Reference Ledger" \
+    "Producer roles update Artifact Reference Ledger entries" \
+    'Consumer roles validate `schema_or_contract` and update `validation_status`'; do
+    if [[ ! -f "$task_journal_harness_appendix" ]] || ! grep -Fq -- "$term" "$task_journal_harness_appendix" "$task_journal_template"; then
+        missing_typed_artifact_terms+=("task-journal-harness-appendix.md/task-journal-template.md: $term")
+    fi
+done
+for term in \
+    "Artifact Reference Ledger refs before task packets" \
     'typed `artifact_refs`' \
     "changed_files, verification_evidence, pivot_restart_decision, and plan_deviation refs"; do
     if ! grep -Fq -- "$term" "$phases_ref"; then

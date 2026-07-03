@@ -59,7 +59,8 @@ gates:
         on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
 
       - id: T_QA_EVALUATOR
-        check: "For medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility"
+        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility"
+        condition: "qa_evaluation_mode == required"
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable."
 
       - id: T9

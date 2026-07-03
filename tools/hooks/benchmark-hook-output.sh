@@ -36,6 +36,10 @@ ANCHOR_FAILURES=0
 CURRENT_ROOT=""
 PROJECT_DIR=""
 AGENT_HOME=""
+WORKFLOW_ENFORCER_PHASE_TRIM_BYTES=""
+WORKFLOW_ENFORCER_PHASE_TRIM_WORDS=""
+STOP_REVIEW_PHASE_TRIM_BYTES=""
+STOP_REVIEW_PHASE_TRIM_WORDS=""
 
 markdown_escape() {
     local value="$1"
@@ -104,6 +108,14 @@ run_hook_scenario() {
     stdout_words="$(wc -w < "$stdout_file" | tr -d ' ')"
     stderr_bytes="$(wc -c < "$stderr_file" | tr -d ' ')"
     first_action="$(extract_first_action "$stdout_file" "$fallback_action")"
+
+    if [[ "$hook_name" == "workflow-enforcer" && "$scenario" == "codex building phase gates" ]]; then
+        WORKFLOW_ENFORCER_PHASE_TRIM_BYTES="$stdout_bytes"
+        WORKFLOW_ENFORCER_PHASE_TRIM_WORDS="$stdout_words"
+    elif [[ "$hook_name" == "stop-review" && "$scenario" == "codex missing spec review blocker" ]]; then
+        STOP_REVIEW_PHASE_TRIM_BYTES="$stdout_bytes"
+        STOP_REVIEW_PHASE_TRIM_WORDS="$stdout_words"
+    fi
 
     cat "$stdout_file" "$stderr_file" > "$combined_file"
     if [[ -n "$extra_anchor_file" && -f "$extra_anchor_file" ]]; then
@@ -298,6 +310,12 @@ The C slice trimmed repeated explanatory prose from `session-start`, `workflow-e
 | c-hook-output-trim | session-start | 2122 | 225 | 1766 | 183 |
 | c-hook-output-trim | workflow-enforcer | 1892 | 232 | 1625 | 184 |
 | c-hook-output-trim | post-compact | 2131 | 218 | 1526 | 154 |
+EOF
+    cat <<EOF
+| runtime-gate-output-trim | workflow-enforcer | 1626 | 184 | ${WORKFLOW_ENFORCER_PHASE_TRIM_BYTES:-pending} | ${WORKFLOW_ENFORCER_PHASE_TRIM_WORDS:-pending} |
+| runtime-gate-output-trim | stop-review | 371 | 54 | ${STOP_REVIEW_PHASE_TRIM_BYTES:-pending} | ${STOP_REVIEW_PHASE_TRIM_WORDS:-pending} |
+EOF
+    cat <<'EOF'
 
 ## Signal Anchors Checked
 

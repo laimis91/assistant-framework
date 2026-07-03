@@ -93,19 +93,35 @@ fields:
     default: []
     on_missing: skip
 
+  - name: harness_capable
+    type: boolean
+    required: false
+    description: "Whether the reviewed task is scoped into the workflow harness controller; ordinary medium+ review scopes default to false."
+    validation: "False by default. True only for explicitly requested harness/QA acceptance work, long-running work, trace/replay-ready multi-slice work, high-risk harness work, domain-scored work, UI/visual/product/UX/docs/DX-facing work, or accepted Done Contract/Harness Recipe presence."
+    default: false
+    on_missing: infer
+    infer_from: >
+      Default false. Set true only when the review material, task packet, or user request explicitly
+      scopes harness work; when an accepted Done Contract or Harness Recipe exists; or when the work is
+      long-running, trace/replay-ready multi-slice, high-risk harness, domain-scored, or
+      UI/visual/product/UX/docs/DX-facing. Do not infer true from scope_size=medium/large,
+      Reviewer delegation, or ordinary source-changing review scope.
+
   - name: qa_evaluation_mode
     type: enum
     required: false
     enum_values: [not_required, optional, required]
     description: "Whether the independent QA evaluation loop should run after code-review/build evidence"
-    validation: "required for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work; not_required must have a reason in final output when skipped for medium+ harness work"
+    validation: "required only for explicit QA/acceptance evaluation, harness_capable == true with acceptance evaluation in scope, Done Contract presence, domain-scored work, or UI/visual/product/UX/docs/DX-facing scope; not_required must have a reason when scoped acceptance QA is skipped"
     default: not_required
     on_missing: infer
     infer_from: >
-      Use required when the task is medium+ harness-capable, has a Done Contract, is domain-scored,
-      affects UI/visual/product/UX/docs/DX quality, or the user explicitly requests QA/acceptance evaluation.
+      Use required when the user explicitly requests QA/acceptance evaluation, an accepted Done Contract
+      exists, harness_capable == true and acceptance evaluation is in scope, the task is domain-scored,
+      or it affects UI/visual/product/UX/docs/DX quality.
       Use optional when acceptance material exists but the orchestrator has not marked QA as required.
-      Use not_required for trivial/small code-review-only work with no separate acceptance evidence need.
+      Use not_required for ordinary medium+ code-review-only/source-changing work with no separate
+      acceptance evidence need.
 
   - name: done_contract
     type: object

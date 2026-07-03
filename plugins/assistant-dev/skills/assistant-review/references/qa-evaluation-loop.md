@@ -5,11 +5,13 @@ Use this reference after build/test evidence and the Code Reviewer loop exist. Q
 ## When QA Runs
 
 Run QA evaluation when any of these are true:
-- Medium+ harness-capable work has a Done Contract.
-- The task is subjective, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly asks for QA.
+- The user explicitly asks for QA or acceptance evaluation.
+- The task has an accepted Done Contract.
+- The task is harness-capable and acceptance evaluation is in scope.
+- The task is subjective, domain-scored, or UI/visual/product/UX/docs/DX-facing.
 - Workflow Review needs a final acceptance verdict beyond code/security/architecture/test-coverage review.
 
-Skip QA evaluation only when the task is trivial/small, has no acceptance material beyond a direct code fix, and the workflow output records `qa_evaluation_mode=not_required` with a reason.
+Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope, and the workflow output records `qa_evaluation_mode=not_required` with a reason.
 
 ## Inputs
 

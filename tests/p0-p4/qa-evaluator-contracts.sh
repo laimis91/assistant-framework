@@ -43,7 +43,9 @@ if [[ -f "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml" ]]; then
         "score progression" \
         "final acceptance result" \
         "Do NOT replace code-reviewer" \
-        "Do NOT edit any files"; do
+        "Do NOT edit any files" \
+        "final_verdict=rejected and result=HAS_REMAINING_ITEMS" \
+        "failed acceptance items should return to Build before round 10"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"; then
             missing_agent_terms+=("agents/codex/qa-evaluator.toml: $term")
         fi
@@ -58,7 +60,9 @@ if [[ -f "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md" ]]; then
         "score progression" \
         "final acceptance result" \
         "Do NOT replace code-reviewer" \
-        "Do NOT edit any files"; do
+        "Do NOT edit any files" \
+        "final_verdict=rejected and result=HAS_REMAINING_ITEMS" \
+        "failed acceptance items should return to Build before round 10"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"; then
             missing_agent_terms+=("agents/claude/qa-evaluator.md: $term")
         fi
@@ -186,13 +190,14 @@ for file_and_term in \
     "$workflow_dir/contracts/output.yaml::qa_evaluator_evidence" \
     "$workflow_dir/contracts/phase-gates.yaml::R_QA_EVALUATION" \
     "$workflow_dir/contracts/phase-gates.yaml::Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence" \
+    "$workflow_dir/contracts/phase-gates.yaml::When qa_evaluation_mode == required: required_agents includes QA Evaluator" \
     "$workflow_dir/references/phases.md::Stage 3: QA Evaluation" \
     "$workflow_dir/references/phases.md::QA Evaluation result must exist when qa_evaluation_mode=required." \
     "$workflow_dir/references/subagent-dispatch.md::QA Evaluator" \
     "$workflow_dir/references/subagent-dispatch.md::QA evidence gate" \
     "$workflow_dir/references/subagent-roles.md::QA Evaluator dispatch" \
     "$workflow_dir/references/task-journal-template.md::QA Evaluator dispatch" \
-    "$workflow_dir/references/task-journal-template.md::### QA Evaluation #1" \
+    "$workflow_dir/references/task-journal-harness-appendix.md::### QA Evaluation #1" \
     "$workflow_dir/references/sub-task-brief-template.md::qa-evaluator"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
@@ -205,6 +210,35 @@ if [[ "${#missing_workflow_terms[@]}" -eq 0 ]]; then
 else
     fail "workflow QA evaluator evidence surfaces missing: ${missing_workflow_terms[*]}"
 fi
+
+test_start "QA evaluation required mode is explicitly scoped"
+review_dir="$FRAMEWORK_DIR/skills/assistant-review"
+require_terms "workflow QA mode" "$workflow_dir/contracts/input.yaml" \
+    "- name: harness_capable" \
+    "default: false" \
+    "Use required when the user explicitly requests QA/acceptance evaluation" \
+    "accepted Done Contract" \
+    "harness_capable == true and acceptance evaluation is in scope" \
+    "domain-scored" \
+    "UI/visual/product/UX/docs/DX" \
+    "Use not_required for ordinary medium+ code-review-only/source-changing work"
+require_terms "review QA mode" "$review_dir/contracts/input.yaml" \
+    "- name: harness_capable" \
+    "default: false" \
+    "Use required when the user explicitly requests QA/acceptance evaluation" \
+    "accepted Done Contract" \
+    "harness_capable == true and acceptance evaluation is in scope" \
+    "domain-scored" \
+    "UI/visual/product/UX/docs/DX" \
+    "Use not_required for ordinary medium+ code-review-only/source-changing work"
+require_terms "QA loop routing" "$review_dir/references/qa-evaluation-loop.md" \
+    "The user explicitly asks for QA or acceptance evaluation." \
+    "The task has an accepted Done Contract." \
+    "The task is harness-capable and acceptance evaluation is in scope." \
+    "Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope"
+require_terms "workflow QA output mode" "$workflow_dir/contracts/output.yaml" \
+    'condition: "qa_evaluation_mode == required"' \
+    "QA evaluation does not replace review_result"
 
 test_start "workflow QA Done Contract debate_record contract is mirrored"
 workflow_debate_failures=()

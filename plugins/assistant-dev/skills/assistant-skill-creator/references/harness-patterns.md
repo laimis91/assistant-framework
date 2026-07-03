@@ -81,7 +81,7 @@ Long-running Process skills need first-class recovery artifacts.
 
 | Artifact | Required When | Fields |
 |---|---|---|
-| Harness Run State | Medium+ harness-capable or delegated loops | task id/name, phase, slice, status, blockers, last verification, next action, recovery pointer |
+| Harness Run State | Medium+ harness-capable loops; delegated loops only when separately harness-capable | task id/name, phase, slice, status, blockers, last verification, next action, recovery pointer |
 | Trace Ledger | Any trace/replay-ready loop | agent events, decisions, verification results, deviations, blockers, artifact refs |
 | Replay Packet | Compaction, restart, handoff, or failure recovery is likely | pinned context, artifact refs, validation state, exact next action, run-state/trace refs |
 

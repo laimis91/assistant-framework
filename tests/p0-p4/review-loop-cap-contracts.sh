@@ -96,8 +96,9 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::up to 10 rounds" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::Round N of 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md::Round 8-10: 90%+" \
-    "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh::Round: N of 10" \
-    "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh::N between 1 and 10" \
+    "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh::compact_stop_reason()" \
+    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::review_gate:missing_review_round) printf '%s\n' '- Round: N of 10'" \
+    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::review_gate:round_overflow) printf '%s\n' '- Round: N of 10 with N between 1 and 10'" \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh::max 10 rounds" \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::max_round\" -ne 10" \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::round\" -gt 10" \

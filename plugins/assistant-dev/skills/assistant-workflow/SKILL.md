@@ -25,7 +25,8 @@ This skill is intentionally agent-agnostic: it must work in restricted company e
 - Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
 - Medium+ harness-capable work has an accepted Done Contract and Harness Recipe before Build.
 - Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts.
-- Medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work records independent QA Evaluator evidence after build/test and code-review evidence.
+- Ordinary medium+ workflow tasks default to `harness_capable=false` and do not inherit Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless explicit harness/QA criteria apply.
+- Harness-capable acceptance, Done Contract, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work records independent QA Evaluator evidence after build/test and code-review evidence.
 - Behavior changes have tests or explicit validation attached to the implementation step they protect.
 - Final output reports changed files, verification evidence, residual risks, and next steps.
 - Candidate Search is used for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots — not as default ceremony.
@@ -211,7 +212,7 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed delegation scope and wait before continuing phases that require subagents. A sufficient prompt is: `This workflow expects Code Mapper, Architect, Code Writer, Builder/Tester, Code Reviewer, and QA Evaluator when QA is required for [scope]. May I use subagents for this task?` After authorization, use `delegated` mode and spawn the configured role agents. Use `direct_fallback` only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
 For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
-Load `references/harness-controller.md` only when medium+ work is harness-capable: long-running, multi-slice, delegated, high-risk, subjective/domain-scored, trace/replay-ready, or explicitly requested as harness work.
+Load `references/harness-controller.md` only when medium+ work is harness-capable: long-running, trace/replay-ready multi-slice, high-risk harness, subjective/domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested as harness work.
 
 ## Planning Checklist
 
@@ -244,7 +245,7 @@ Before final output for medium+ or high-risk work:
 - Review the diff against the acceptance criteria.
 - For bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or a clear reason it was not applicable.
 - Use `assistant-review` for code quality/spec review when the change is non-trivial.
-- Use QA Evaluator through `assistant-review` for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested acceptance QA after build/test and code-review evidence.
+- Use QA Evaluator through `assistant-review` when `qa_evaluation_mode=required`: explicit QA/acceptance evaluation, harness-capable acceptance scope, Done Contract presence, domain-scored work, or UI/visual/product/UX/docs/DX-facing work after build/test and code-review evidence.
 - Use `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
 
 Review findings must cite evidence and concrete risk. Avoid generic style feedback unless it affects correctness, security, maintainability, or test reliability.

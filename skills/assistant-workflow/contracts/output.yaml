@@ -242,7 +242,7 @@ artifacts:
   - name: qa_evaluation_result
     type: object
     required: conditional
-    condition: "qa_evaluation_mode == required or size in [medium, large, mega] and harness_capable == true and work is domain-scored/UI/visual/product/UX/docs/DX-facing"
+    condition: "qa_evaluation_mode == required"
     validation: "Independent QA evaluation result exists after build/test evidence and Code Reviewer result. Must include final_verdict, result, rounds (1-10), acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence."
     on_fail: "Run the QAEvaluator loop from assistant-review references/qa-evaluation-loop.md, or record NEEDS_CONTEXT/BLOCKED with open_questions. Do not substitute Code Reviewer findings for QA evaluation."
     object_fields:

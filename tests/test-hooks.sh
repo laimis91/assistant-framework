@@ -192,6 +192,32 @@ $qa_evidence
 TASK
 }
 
+append_required_qa_review_complete_log() {
+    local task_file="$1"
+    cat >> "$task_file" <<'TASK'
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+### QA Evaluation #1
+- Final verdict: accepted
+- QA result: accepted
+TASK
+}
+
 make_codex_version_stub() {
     local version="$1"
     local stub_dir
@@ -609,6 +635,45 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "workflow-phase-gates: incomplete review gate suppresses missing QA Evaluator evidence"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Mapper dispatch: multi_agent id=cm-1
+- Code Mapper result: context map returned
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+TASK
+    review_reason=$(review_gate_reason "$TEST_PROJECT/.claude/task.md")
+    subagent_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$review_reason" == "no_quality_review" && "$subagent_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected review no_quality_review and complete subagent gate, got review='$review_reason' subagent='$subagent_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 if test_start "workflow-phase-gates: pending QA Evaluator dispatch blocks delegated_missing_qa_evaluator"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -627,6 +692,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: waiting for QA evaluator
 - QA Evaluator result: PASS final_verdict accepted with score_progression 4.00
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.claude/task.md"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -654,6 +720,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: not_required
 - QA Evaluator result: PASS final_verdict accepted with score_progression 4.00
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.claude/task.md"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -681,6 +748,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: multi_agent id=qa-1
 - QA Evaluator result: in_progress
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.claude/task.md"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -708,6 +776,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: multi_agent id=qa-1
 - QA Evaluator result: not required
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.claude/task.md"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -717,7 +786,179 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "workflow-phase-gates: Codex reviewer lifecycle with matching QA-labeled agent_id satisfies QA Evaluator"; then
+if test_start "workflow-phase-gates: QA Evaluation Mode required makes QA Evaluator required"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+## Agent Dispatch Log
+- Code Reviewer dispatch: multi_agent id=cr-1
+- Code Reviewer result: PASS clean
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness=4 quality=4 architecture=4 security=4 coverage=4
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+### QA Evaluation #1
+- Mode: required
+- Final verdict: accepted
+- QA result: accepted
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: compact template Code Writer and Builder Tester evidence satisfies delegated roles"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch/result/direct evidence: dispatch cw-1; result DONE changed src/App.cs
+- Builder/Tester dispatch/result/direct evidence: dispatch bt-1; result DONE tests passed
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Codex compact template role evidence matches lifecycle events"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch/result/direct evidence: dispatch cw-1; result DONE changed src/App.cs
+- Builder/Tester dispatch/result/direct evidence: dispatch bt-1; result DONE tests passed
+TASK
+    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
+{"event":"SubagentStart","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}
+{"event":"SubagentStop","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}
+{"event":"SubagentStart","agent_type":"builder-tester","agent_name":"builder-tester","agent_id":"bt-1"}
+{"event":"SubagentStop","agent_type":"builder-tester","agent_name":"builder-tester","agent_id":"bt-1"}
+JSONL
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+    if [[ "$helper_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-phase-gates: compact template Code Writer placeholder evidence does not satisfy role"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch/result/direct evidence: [dispatch + result refs when delegated; role-equivalent direct evidence when direct_fallback; N/A only when role not required]
+- Builder/Tester dispatch/result/direct evidence: dispatch bt-1; result DONE tests passed
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_writer" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_code_writer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: compact template Builder Tester placeholder evidence does not satisfy role"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch/result/direct evidence: dispatch cw-1; result DONE changed src/App.cs
+- Builder/Tester dispatch/result/direct evidence: [dispatch + result refs when delegated; role-equivalent direct evidence when direct_fallback; N/A only when role not required]
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "delegated_missing_builder_tester" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_builder_tester, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: compact direct fallback N/A does not satisfy required role"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: subagents_unavailable
+Subagent execution mode: direct_fallback
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Direct fallback reason: subagents_unavailable
+- Code Writer dispatch/result/direct evidence: N/A: direct_fallback
+- Builder/Tester direct evidence: ran focused verification directly
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "direct_fallback_missing_code_writer" ]]; then
+        pass
+    else
+        fail "expected direct_fallback_missing_code_writer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: Codex reviewer lifecycle with matching QA-labeled agent_id does not satisfy QA Evaluator"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
@@ -736,11 +977,47 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: reviewer compatibility id=qa-reviewer-1
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
     cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
 {"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
 {"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
 {"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer-1"}
 {"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer-1"}
+JSONL
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+    if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
+        pass
+    else
+        fail "expected delegated_missing_qa_evaluator, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-phase-gates: Codex qa-evaluator lifecycle with matching QA-labeled agent_id satisfies QA Evaluator"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Reviewer dispatch: event cr-1
+- Code Reviewer result: PASS event cr-1
+- QA Evaluator dispatch: qa-evaluator id=qa-1
+- QA Evaluator result: accepted final_verdict accepted score_progression 4.00 id=qa-1
+TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
+    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
+{"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
+{"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
+{"event":"SubagentStart","agent_type":"qa-evaluator","agent_name":"QAEvaluator","agent_id":"qa-1"}
+{"event":"SubagentStop","agent_type":"qa-evaluator","agent_name":"QAEvaluator","agent_id":"qa-1"}
 JSONL
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "complete" ]]; then
@@ -770,6 +1047,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: reviewer compatibility id=qa-reviewer-1
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
     cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
 {"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
 {"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
@@ -804,6 +1082,7 @@ qa_evaluation_mode: required
 - QA Evaluator dispatch: reviewer compatibility id=qa-reviewer-1
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
     cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
 {"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
 {"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
@@ -854,6 +1133,7 @@ Required agents:
 - Code Reviewer dispatch: code-reviewer round 1
 - Code Reviewer result: PASS clean
 TASK
+    append_required_qa_review_complete_log "$TEST_PROJECT/.claude/task.md"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -1488,7 +1768,9 @@ if test_start "stop-review: Claude, DOCUMENTING no review → blocks with JSON";
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no Spec Review"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "review_gate:no_spec_review" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing=no Spec Review" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "action="; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected DOCUMENTING to block without review"
@@ -1704,7 +1986,9 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence gate failed"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent_evidence_gate:" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "missing=" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "action="; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected subagent evidence gate block"
@@ -2075,6 +2359,51 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
+if test_start "stop-review: QA-required review missing Quality Review blocks review gate before QA evidence"; then
+    mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: REVIEWING
+Triaged as: medium
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Code Reviewer
+- QA Evaluator
+qa_evaluation_mode: required
+## Agent Dispatch Log
+- Code Mapper dispatch: mapper-1
+- Code Mapper result: context map returned
+- Code Reviewer dispatch: code-reviewer round 1
+- Code Reviewer result: PASS clean
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+TASK
+    _today=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.claude/memory/metrics/workflow-metrics.jsonl"
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "review_gate:no_quality_review" \
+        && ! echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "delegated_missing_qa_evaluator"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected review_gate:no_quality_review before QA evidence; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
 if test_start "stop-review: direct fallback explicit reason and evidence passes subagent gate"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
@@ -2152,7 +2481,7 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent_evidence_gate:"; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected missing subagent evidence block, stdout='$HOOK_STDOUT'"
@@ -2240,7 +2569,7 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent evidence"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "subagent_evidence_gate:"; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected direct fallback evidence block, stdout='$HOOK_STDOUT'"
@@ -3208,7 +3537,9 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "No plan found"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "plan_gate:no_plan" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "No plan found" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "action="; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected medium task to block without plan"
@@ -3229,7 +3560,9 @@ TASK
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Plan exists but is not approved"; then
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "plan_gate:plan_not_approved" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "Plan exists but is not approved" \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "action="; then
         pass
     else
         fail "exit=$HOOK_EXIT, expected medium task to block without plan approval"
@@ -7579,6 +7912,116 @@ EOF
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
     fi
+fi
+
+if test_start "workflow-enforcer: BUILDING medium missing current subagent evidence → includes subagent warning"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime current subagent gate
+Status: BUILDING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Code Writer
+## Agent Dispatch Log
+- Code Mapper dispatch: mapper-1
+- Code Mapper result: context map returned
+EOF
+    echo '{"prompt": "continue build", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Subagent evidence gate: delegated_missing_code_writer" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Subagent evidence gate incomplete (delegated_missing_code_writer)" \
+        && echo "$HOOK_STDOUT" | grep -q "missing=Code Writer dispatch/result evidence" \
+        && echo "$HOOK_STDOUT" | grep -q "action="; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: BUILDING missing mapper and writer warns for current Code Writer"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime current subagent gate
+Status: BUILDING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- Code Writer
+## Agent Dispatch Log
+EOF
+    echo '{"prompt": "continue build", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Subagent evidence gate: delegated_missing_code_mapper" \
+        && echo "$HOOK_STDOUT" | grep -q "WARNING: Subagent evidence gate incomplete (delegated_missing_code_writer)" \
+        && echo "$HOOK_STDOUT" | grep -q "missing=Code Writer dispatch/result evidence" \
+        && echo "$HOOK_STDOUT" | grep -q "action=record Code Writer"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
+fi
+
+if test_start "workflow-enforcer: BUILDING medium missing future QA evidence → state only"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
+Task: Runtime future QA gate
+Status: BUILDING
+Triaged as: medium
+Clarification status: ready
+Clarification defaults applied: false
+Unresolved clarification topics:
+Plan approval: yes
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Mapper
+- QA Evaluator
+## Agent Dispatch Log
+- Code Mapper dispatch: mapper-1
+- Code Mapper result: context map returned
+EOF
+    echo '{"prompt": "continue build", "hook_event_name": "UserPromptSubmit"}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+        > /tmp/_wf_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wf_out)
+    rm -f /tmp/_wf_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | grep -q "Subagent evidence gate: complete" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WARNING: Subagent evidence gate incomplete"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+    rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
 if test_start "workflow-enforcer: REVIEWING with incomplete review → includes review gate warning"; then

@@ -2,6 +2,11 @@
 
 Three tiers — match ceremony to task size (don't get fancy when N is small).
 
+Harness details are optional appendices. For medium+ harness-capable work, keep
+compact refs in the base plan and load `references/plan-harness-appendix.md`
+for the full schema. For non-harness work, record `N/A: [reason]` instead of
+copying harness sections into the base plan.
+
 ## Small Tasks — Inline Plan
 
 No separate plan document needed. Include directly in your response:
@@ -55,21 +60,15 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
-- Harness refs:
-  - done_contract_ref: [Done Contract section/ref, or N/A]
-  - harness_recipe_ref: [Harness Recipe section/ref, or N/A]
-  - harness_run_state_ref: [Harness Run State section/ref, or N/A]
-  - trace_ledger_ref: [Trace Ledger section/ref, or N/A]
-  - replay_packet_ref: [Replay Packet section/ref, or N/A]
-- Typed artifact refs:
-  - artifact_id: [stable task-local id]
-    artifact_type: [done_contract | harness_recipe | harness_run_state | trace_ledger | replay_packet | changed_files | verification_evidence | plan_deviation | task_packet | context_map | test_result | review_result | qa_evaluation_result]
-    producer: [role/subagent/hook/task packet]
-    consumer: [role/subagent/hook/phase]
-    location_ref: [typed location/ref pointer]
-    schema_or_contract: [contract/template/required fields]
-    validation_status: [pending | valid | invalid | stale | not_applicable]
-    summary: [concise state]
+- Harness routing:
+  - applies: [required for medium+ harness-capable work; otherwise N/A: reason]
+  - appendix: [references/plan-harness-appendix.md, or N/A: reason]
+  - done_contract_ref: [section/ref, or N/A: reason]
+  - harness_recipe_ref: [section/ref, or N/A: reason]
+  - harness_run_state_ref: [section/ref, or N/A: reason]
+  - trace_ledger_ref: [section/ref, or N/A: reason]
+  - replay_packet_ref: [section/ref, or N/A: reason]
+  - artifact_reference_ledger_ref: [section/ref, or N/A: reason]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -186,61 +185,21 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
-## Done Contract
+## Harness Appendix Routing
 
-Required for medium+ harness-capable work before Build; omit with a brief N/A
-rationale for non-harness work.
+Required only for medium+ harness-capable work; otherwise keep every field as
+`N/A: [reason]`. Load `references/plan-harness-appendix.md` for the full Done
+Contract, Harness Recipe, runtime artifact, typed artifact ref, and QA routing
+schemas.
 
-- done_when:
-  - [binary outcome that proves done]
-- not_done_when:
-  - [failure state that blocks done]
-- verification:
-  - [command, inspection, review, or manual check]
-- owner_consumer: [owner and downstream consumer]
-- acceptance_criteria:
-  - [explicit binary criterion]
-- debate_record:
-  - perspective: [role/subagent/direct perspective 1]
-    concern_or_support: [concise point]
-    resolution: [accepted, rejected, or changed]
-  - perspective: [role/subagent/direct perspective 2]
-    concern_or_support: [concise point]
-    resolution: [accepted, rejected, or changed]
-- accepted_by: [user/orchestrator/approved plan reference]
-
-## Harness Recipe
-
-Required for medium+ harness-capable work before Build; selected from
-task/model/risk/context profile per `references/harness-controller.md`.
-
-- task_profile: [task type, size, slice count, TDD/debugging applicability]
-- model_profile: [agent/model constraints, delegation mode, tool limits]
-- risk_profile: [risk tier, safety gates, review depth, rollback needs]
-- context_profile: [exact/summarized/omitted context and trace/replay needs]
-- selected_recipe: [concise recipe label]
-- recipe_rationale: [why this profile selects the recipe]
-- required_artifacts: [Done Contract, task packet, verification, trace/handoff artifacts]
-- corrective_action: [what to do if missing or stale]
-
-## Runtime Harness Artifacts
-
-Required for medium+ harness-capable work; omit with a brief N/A rationale for
-non-harness work.
-
-- harness_run_state_ref: [where task_id/task_name/phase/slice/status/blockers/last_verification/next_action/recovery_pointer will be maintained]
-- trace_ledger_ref: [where ordered agent events, decisions, verification results, plan deviations, and artifact refs will be appended]
-- replay_packet_ref: [where pinned context, artifact refs, validation state, and exact next action will be refreshed]
-- corrective_action: [what to do if run-state/trace/replay evidence is missing or stale]
-
-## Artifact Reference Ledger
-
-Required for medium+ harness-capable work when artifacts pass between agents.
-Each row is a typed producer/consumer record, not an ad hoc string reference.
-
-| Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
-|-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
-| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role] | [role/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
+- appendix_status: [required | N/A: reason]
+- done_contract_ref: [section/ref, or N/A: reason]
+- harness_recipe_ref: [section/ref, or N/A: reason]
+- harness_run_state_ref: [section/ref, or N/A: reason]
+- trace_ledger_ref: [section/ref, or N/A: reason]
+- replay_packet_ref: [section/ref, or N/A: reason]
+- artifact_reference_ledger_ref: [section/ref, or N/A: reason]
+- qa_evaluation_mode: [required | optional | not_required + reason]
 
 ## Slice manifest from Decompose
 
@@ -258,45 +217,7 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 Everything from Medium, plus Security and Operability sections. Use when the task touches auth, external inputs, infrastructure, or multi-module boundaries.
 
 ```markdown
-## Goal
-- [1-3 sentence restated requirement from Discovery]
-
-## Triage result
-- Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
-- Risk tier: [low | moderate | high | critical]
-- Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
-- Required agents: [roles/skills selected from size, task type, and risk]
-- Search mode: [none | lightweight | candidate_search]
-
-## Constraints & decisions (from Discovery)
-- [Q&A question]: [chosen option and why]
-- [Q&A question]: [chosen option and why]
-- Assumed (not explicitly asked): [assumption and reasoning]
-- Non-goals: [what's explicitly out of scope]
-
-## Research (current state)
-- Modules/subprojects: ...
-- Key files/paths: ...
-- Entrypoints: ...
-- Configs/flags: ...
-- Data models: ...
-- Existing patterns: ...
-
-## Architecture
-- Current architecture: [identified or "new project"]
-- Architecture for this change: [Clean/MVVM/Hexagonal/etc.]
-- Layer rules:
-  - [e.g., Domain has no external dependencies]
-  - [e.g., ViewModels don't reference Views]
-- Dependency direction: [A → B → C]
-- New files placement:
-  - [file → layer/folder rationale]
-- SOLID design notes:
-  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
-  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
-  - LSP: [any inheritance hierarchies? Do subtypes preserve base type contracts?]
-  - ISP: [any interfaces? Are they minimal or do implementers need to stub methods?]
-  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
+Start with the Medium template, then add the sections below.
 
 ## Security considerations
 - Data classification: [does this touch PII, auth, payments, external inputs?]
@@ -316,41 +237,26 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
   - Revert commit sufficient: [yes/no]
 - Runbook updates: [new on-call procedures needed?]
 
-## Analysis
-### Candidate search summary
-- Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
-- Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
-- Goal tree source: [acceptance criteria/slice criteria used]
+## Large/Mega addenda
+- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent authorization scope`, and `Search mode` as in Medium.
+- Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
+- Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
+- Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.
 
-### Options
-1. [approach] — [tradeoff]
-2. [approach] — [tradeoff]
+## Harness Appendix Routing
 
-### Decision
-- Chosen: [#] because [reason]
+Required only for medium+ harness-capable work; otherwise record
+`N/A: [reason]`. Load `references/plan-harness-appendix.md` for full harness,
+typed artifact reference, pivot/restart, and QA routing schemas.
 
-### Risks / edge cases
-- [risk]: [mitigation]
-
-## Decomposition Plan Review
-
-- Scope understanding: [pass/fix needed + evidence]
-- Slice/subagent count: [count + sanity rationale]
-- Step/cost budget: [budget or direct-fallback rationale]
-- Dependency order: [summary]
-- Output-plan match: [artifact/verification alignment]
-- Fallback path: [subagent path or direct equivalent]
-- Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
-- Decision: proceed | revise_decomposition | return_to_discover
-
-## Artifact Reference Ledger
-
-Required for medium+ harness-capable work when artifacts pass between agents.
-Each row is a typed producer/consumer record, not an ad hoc string reference.
-
-| Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
-|-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
-| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role] | [role/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
+- appendix_status: [required | N/A: reason]
+- done_contract_ref: [section/ref, or N/A: reason]
+- harness_recipe_ref: [section/ref, or N/A: reason]
+- harness_run_state_ref: [section/ref, or N/A: reason]
+- trace_ledger_ref: [section/ref, or N/A: reason]
+- replay_packet_ref: [section/ref, or N/A: reason]
+- artifact_reference_ledger_ref: [section/ref, or N/A: reason]
+- qa_evaluation_mode: [required | optional | not_required + reason]
 
 ## Slice manifest from Decompose
 

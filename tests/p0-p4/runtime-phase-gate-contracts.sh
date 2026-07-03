@@ -11,10 +11,15 @@ if [[ ! -f "$helper_file" ]]; then
 else
     for term in \
         "assistant_phase_has_plan_approval" \
+        "assistant_phase_plan_missing_reason_key" \
         "assistant_phase_review_missing_reason_key" \
         "assistant_phase_review_controller_missing_reason_key" \
         "assistant_phase_learning_missing_reason_key" \
-        "assistant_phase_has_metrics_today"; do
+        "assistant_phase_has_metrics_today" \
+        "assistant_phase_reason_missing_field" \
+        "assistant_phase_reason_action" \
+        "assistant_phase_subagent_warning_reason_key" \
+        "assistant_phase_subagent_warning_action"; do
         if ! grep -Fq "$term" "$helper_file"; then
             missing_runtime_helper_terms+=("$term")
         fi
@@ -48,8 +53,18 @@ for term in \
     "missing_durable_lesson_decision" \
     "missing_persistence_evidence" \
     "missing_no_save_rationale"; do
+    if ! grep -Fq "$term" "$helper_file"; then
+        missing_runtime_helper_terms+=("workflow-phase-gates.sh owns $term")
+    fi
+done
+for term in \
+    "compact_stop_reason" \
+    "subagent_evidence_gate" \
+    "review_gate" \
+    "learning_gate" \
+    "metrics_gate"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
-        missing_runtime_helper_terms+=("stop-review.sh handles $term")
+        missing_runtime_helper_terms+=("stop-review.sh formats $term")
     fi
 done
 if [[ "${#missing_runtime_helper_terms[@]}" -eq 0 ]]; then
@@ -69,6 +84,9 @@ for term in \
     "cap is maximum, not quota" \
     "Question admissibility" \
     "WARNING: You are BUILDING without an approved plan" \
+    "WARNING: Subagent evidence gate incomplete" \
+    "assistant_phase_subagent_warning_reason_key" \
+    "assistant_phase_subagent_warning_action" \
     "WARNING: Review gate incomplete" \
     "WARNING: Metrics gate incomplete"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"; then
@@ -90,7 +108,9 @@ phase_gates="$workflow_dir/contracts/phase-gates.yaml"
 harness_ref="$workflow_dir/references/harness-controller.md"
 phases_ref="$workflow_dir/references/phases.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
+task_journal_harness_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
 plan_template="$workflow_dir/references/plan-template.md"
+plan_harness_appendix="$workflow_dir/references/plan-harness-appendix.md"
 for term in \
     "- name: harness_run_state" \
     "task_id" \
@@ -144,19 +164,22 @@ for term in \
     "task_name" \
     "last_verification" \
     "exact_next_action"; do
-    if ! grep -Fq -- "$term" "$task_journal_template"; then
-        missing_runtime_artifact_terms+=("task-journal-template.md: $term")
+    if [[ ! -f "$task_journal_harness_appendix" ]] || ! grep -Fq -- "$term" "$task_journal_harness_appendix"; then
+        missing_runtime_artifact_terms+=("task-journal-harness-appendix.md: $term")
     fi
 done
 for term in \
     "harness_run_state_ref" \
     "trace_ledger_ref" \
     "replay_packet_ref" \
-    "Runtime Harness Artifacts"; do
+    "references/plan-harness-appendix.md"; do
     if ! grep -Fq -- "$term" "$plan_template"; then
         missing_runtime_artifact_terms+=("plan-template.md: $term")
     fi
 done
+if [[ ! -f "$plan_harness_appendix" ]] || ! grep -Fq -- "Runtime Harness Artifacts" "$plan_harness_appendix"; then
+    missing_runtime_artifact_terms+=("plan-harness-appendix.md: Runtime Harness Artifacts")
+fi
 for term in \
     "Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger" \
     "Update Harness Run State after each slice/step" \

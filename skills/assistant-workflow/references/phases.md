@@ -173,7 +173,7 @@ Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_m
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
 
-Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. For medium+ harness-capable work, load `references/harness-controller.md` and add the Done Contract, Harness Recipe, Harness Run State ref, Trace Ledger ref, Replay Packet ref, and Artifact Reference Ledger before task packets. Then read `references/plan-template.md` and use the correct tier:
+Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Treat `harness_capable` as false unless the task is long-running, trace/replay-ready multi-slice, high-risk harness, domain-scored, UI/visual/product/UX/docs/DX-facing, explicitly requested as harness/QA work, or already has an accepted Done Contract/Harness Recipe. For medium+ harness-capable work, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
 - Small: inline plan (goal, files, risks, tests). Do not wait for approval unless risk, ambiguity, user instruction, or a scope-changing decision makes approval necessary.
 - Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
 - Large/Mega: full plan (all sections including Security and Operability)
@@ -183,7 +183,7 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 3. Analyze 1-3 options with tradeoffs, pick one
 4. Identify risks and edge cases
 5. Put the Artifact Contract before task packets and map every medium+ task packet to at least one required artifact or acceptance criterion
-6. For medium+ harness-capable work, put the Done Contract, Harness Recipe, run-state/trace/replay artifact refs, and Artifact Reference Ledger before Build. The Done Contract must include done_when, not_done_when, verification, owner/consumer, acceptance criteria, and at least two debate perspectives; the Harness Recipe must be selected from task/model/risk/context profile. The ledger must type each artifact with artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary.
+6. For medium+ harness-capable work, put compact refs for Done Contract, Harness Recipe, run-state/trace/replay artifacts, and Artifact Reference Ledger before Build; load `references/plan-harness-appendix.md` for the full schemas. The base plan keeps `N/A: [reason]` for non-harness work.
 7. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
 8. Write ordered implementation steps with file paths
 9. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
@@ -239,7 +239,7 @@ For medium+ tasks, create a task journal using `references/task-journal-template
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
-For medium+ harness-capable work, confirm the task journal or carried-forward plan has an accepted Done Contract, selected Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger before dispatching Code Writer or Builder/Tester. If any are missing, stop Build and return to Plan or repair state for the corrective action in `references/harness-controller.md`.
+For medium+ harness-capable work, confirm the task journal or carried-forward plan has compact refs for an accepted Done Contract, selected Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger before dispatching Code Writer or Builder/Tester. Load `references/task-journal-harness-appendix.md` for the full schema. If any required ref is missing, stop Build and return to Plan or repair state for the corrective action in `references/harness-controller.md`.
 
 Keep the runtime artifacts current as execution progresses:
 - Update Harness Run State after each slice/step, blocker, verification result, phase transition, or next-action change.
@@ -253,9 +253,9 @@ Keep the runtime artifacts current as execution progresses:
 - **Code Writer** (`code-writer`): implements code following the plan
 - **Builder/Tester** (`builder-tester`): builds, writes tests, runs tests
 - **Code Reviewer** (`code-reviewer`, or `reviewer` compatibility through assistant-review delegated review): independent code/security/architecture/test coverage review evidence for Review
-- **QA Evaluator** (`qa-evaluator`): independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation when QA is required
+- **QA Evaluator** (`qa-evaluator`): independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation when `qa_evaluation_mode=required`
 
-Any source-changing Build task must infer `required_agents` with at least Code Writer, Builder/Tester, and Code Reviewer; `reviewer` remains compatibility routing for existing/legacy handoffs. Medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work also adds QA Evaluator. `not_applicable` is invalid once project source, tests, docs, config, hooks, contracts, or generated project artifacts will change. For medium+ delegated work, also record per-slice dispatch evidence before a slice is marked `VERIFIED`.
+Any source-changing Build task must infer `required_agents` with at least Code Writer, Builder/Tester, and Code Reviewer; `reviewer` remains compatibility routing for existing/legacy handoffs. Add QA Evaluator only when `qa_evaluation_mode=required`: explicit QA/acceptance evaluation, harness-capable acceptance scope, Done Contract presence, domain-scored work, or UI/visual/product/UX/docs/DX-facing work. `not_applicable` is invalid once project source, tests, docs, config, hooks, contracts, or generated project artifacts will change. For medium+ delegated work, also record per-slice dispatch evidence before a slice is marked `VERIFIED`.
 
 **Direct fallback mode (`subagent_execution_mode=direct_fallback`):** when authorization is denied, subagents are unavailable, or policy disallows spawning, the active agent may implement, test, and review directly, but must preserve the same phases, contracts, evidence requirements, and review/security gates. Do not pretend delegation happened; record `subagent_policy_state`, `subagent_execution_mode`, the explicit `Direct fallback reason: authorization_denied | subagents_unavailable | policy_disallowed`, and the direct-execution evidence.
 
@@ -424,7 +424,7 @@ For medium+ tasks: full spec review plus autonomous code quality loop via `assis
 
 Print: `>> Stage 3: QA Evaluation — loading assistant-review references/qa-evaluation-loop.md` when QA is required.
 
-Run QA Evaluation for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work. QA runs after build/test evidence and Code Reviewer or Reviewer compatibility result are available. Dispatch `qa-evaluator` in delegated mode, or record direct-fallback QA evidence when delegation is denied, unavailable after a real spawn failure, or policy-disallowed.
+Run QA Evaluation only when `qa_evaluation_mode=required`: explicit QA/acceptance evaluation, harness-capable acceptance scope, Done Contract presence, domain-scored work, or UI/visual/product/UX/docs/DX-facing work. QA runs after build/test evidence and Code Reviewer or Reviewer compatibility result are available. Dispatch `qa-evaluator` in delegated mode, or record direct-fallback QA evidence when delegation is denied, unavailable after a real spawn failure, or policy-disallowed.
 
 The QA Evaluator receives Done Contract when present, acceptance criteria, verification evidence, code review result, domain_context/rubric_refs when applicable, round 1-10, previously_failed_acceptance_items, and qa_filter_policy. It loads assistant-review `references/domain-rubrics.md` only when acceptance criteria, Done Contract, domain_context, or explicit rubric_refs require subjective/product/UX/docs/DX/UI/domain scoring. It returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped, score_progression or score_entry, evidence, and open_questions when blocked.
 

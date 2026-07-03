@@ -38,7 +38,7 @@ Then return:
 
 ## Status meanings
 - `DONE`: QA evaluation complete and final_verdict is accepted
-- `DONE_WITH_CONCERNS`: QA evaluation complete with accepted_with_concerns or non-blocking risks
+- `DONE_WITH_CONCERNS`: QA evaluation complete with accepted_with_concerns, non-blocking risks, or final_verdict=rejected and result=HAS_REMAINING_ITEMS when failed acceptance items should return to Build before round 10 or be reported at terminal round 10
 - `NEEDS_CONTEXT`: missing Done Contract, acceptance criteria, verification evidence, or domain/rubric context prevents evaluation
 - `BLOCKED`: environment, permission, or unavailable evidence prevents evaluation
 

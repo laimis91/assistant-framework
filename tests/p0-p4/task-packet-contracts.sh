@@ -724,7 +724,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/task-journal-template.md|Reviewer dispatch"
     "skills/assistant-workflow/references/task-journal-template.md|not required"
     "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
-    "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester result"
+    "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester dispatch/result/direct evidence"
     "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
     "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
     "skills/assistant-workflow/references/phases.md|add Code Mapper to \`Required agents\`"
@@ -2064,8 +2064,8 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::Round 10 remains terminal" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Code Writer unexpected blockers" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::## Pivot/Restart Log" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::pivot_restart_decision"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::## Pivot/Restart Log" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::pivot_restart_decision"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then

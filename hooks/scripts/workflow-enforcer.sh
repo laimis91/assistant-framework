@@ -475,24 +475,33 @@ SUBAGENT AUTHORIZATION GATE:
 - Do not switch to direct_fallback unless the user denies authorization, policy disallows spawning, or a real spawn attempt proves subagents unavailable."
 fi
 
-if [[ "$subagent_gate_status" != "complete" ]]; then
+if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
+    plan_missing_key="$(assistant_phase_plan_missing_reason_key "$TASK_FILE")"
+    plan_missing_field="$(assistant_phase_reason_missing_field "plan_gate" "$plan_missing_key")"
+    plan_action="$(assistant_phase_reason_action "plan_gate" "$plan_missing_key")"
     context+="
-WARNING: Subagent evidence gate incomplete ($subagent_gate_status). If execution mode is delegated, dispatch and record every required workflow role before moving on; if using direct_fallback, record a valid fallback reason plus role-equivalent evidence. Do not silently complete Discovery or Review inline when delegated."
+WARNING: You are BUILDING without an approved plan ($plan_missing_key). missing=$plan_missing_field action=$plan_action"
 fi
 
-if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
+subagent_warning_key="$(assistant_phase_subagent_warning_reason_key "$TASK_FILE" "$subagent_gate_status" "$status" || true)"
+subagent_warning_action="$(assistant_phase_subagent_warning_action "$subagent_warning_key" "$status" || true)"
+if [[ -n "$subagent_warning_action" ]]; then
     context+="
-WARNING: You are BUILDING without an approved plan. Medium+ tasks require plan approval first. STOP and get plan approved."
+WARNING: Subagent evidence gate incomplete ($subagent_warning_key). $subagent_warning_action"
 fi
 
 if [[ ( "$is_reviewing" == "yes" || "$is_documenting" == "yes" ) && "$has_review_completion" == "no" ]]; then
+    review_missing_field="$(assistant_phase_reason_missing_field "review_gate" "$review_gate_status")"
+    review_action="$(assistant_phase_reason_action "review_gate" "$review_gate_status")"
     context+="
-WARNING: Review gate incomplete ($review_gate_status). Complete structured Spec Review PASS, Quality Review, and Final Result before leaving REVIEW/DOCUMENT."
+WARNING: Review gate incomplete ($review_gate_status). missing=$review_missing_field action=$review_action"
 fi
 
 if [[ "$is_documenting" == "yes" && "$has_metrics_today" == "no" ]]; then
+    metrics_missing_field="$(assistant_phase_reason_missing_field "metrics_gate" "missing_metrics_today")"
+    metrics_action="$(assistant_phase_reason_action "metrics_gate" "missing_metrics_today")"
     context+="
-WARNING: Metrics gate incomplete. Record today's workflow metrics before finishing DOCUMENT."
+WARNING: Metrics gate incomplete. missing=$metrics_missing_field action=$metrics_action"
 fi
 
 if [[ "$clarification_gate_active" == "yes" && "$requires_saved_clarification_state" == "yes" ]]; then

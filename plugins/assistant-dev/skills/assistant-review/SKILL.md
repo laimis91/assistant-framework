@@ -78,7 +78,7 @@ Use the smallest mode that answers the request; combine modes when reviewing imp
 - **Semantic contract review**: for skill/workflow/framework changes, check contract inheritance, method-template alignment, eval coverage, method-signature fidelity, and high-stakes recommendation guards before judging the change clean.
 - **Maintainability review**: apply SOLID/KISS/DRY/YAGNI/readability only when a concrete risk exists.
 - **Security handoff**: invoke `assistant-security` when the reviewed surface touches auth, permissions, secrets, input handling, persistence, shell commands, dependency/config changes, network calls, or external integrations.
-- **QA evaluation**: after code-review/build evidence exists, dispatch QAEvaluator when `qa_evaluation_mode=required` for medium+ harness-capable, domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly requested QA work. Load `references/qa-evaluation-loop.md`.
+- **QA evaluation**: after code-review/build evidence exists, dispatch QAEvaluator when `qa_evaluation_mode=required` for explicit QA/acceptance evaluation, harness-capable acceptance scope, Done Contract presence, domain-scored work, or UI/visual/product/UX/docs/DX-facing work. Load `references/qa-evaluation-loop.md`.
 - **Domain rubric QA**: within QA evaluation, load `references/domain-rubrics.md` only when scoped by acceptance criteria, Done Contract, `domain_context`, or explicit `rubric_refs`. QAEvaluator selects rubric families and returns domain-quality scores; Code Reviewer still owns code defects, security, architecture, and test coverage.
 
 Finding format:

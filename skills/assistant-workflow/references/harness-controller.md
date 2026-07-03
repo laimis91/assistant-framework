@@ -1,12 +1,24 @@
 # Harness Controller
 
-Use this reference only for medium+ work that is harness-capable: long-running,
-multi-slice, delegated, high-risk, subjective/domain-scored, trace/replay-ready,
-or explicitly requested as harness work. Do not load it for small local fixes.
+Use this reference only for medium+ work that is explicitly harness-capable:
+long-running, trace/replay-ready multi-slice, high-risk harness,
+subjective/domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly
+requested as harness work. Do not load it for small local fixes, ordinary
+medium+ source changes, or delegation alone.
+
+`harness_capable` defaults to false. Set it to true only when one of the
+explicit criteria above is present in the request, approved plan, task packet,
+or accepted Done Contract/Harness Recipe evidence.
+
+Base plan and task-journal templates keep compact refs and `N/A: [reason]`
+fields. Load `references/plan-harness-appendix.md` and
+`references/task-journal-harness-appendix.md` only when the full harness,
+typed artifact, pivot/restart, or QA schemas are needed.
 
 ## Pre-Build Gate
 
-Before Build starts, the approved plan must contain both:
+When `harness_capable=true`, before Build starts the approved plan must contain
+both:
 
 - an accepted Done Contract
 - a selected Harness Recipe
