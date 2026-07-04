@@ -110,11 +110,128 @@ is_valid_json() {
     echo "$1" | jq empty 2>/dev/null
 }
 
+assert_claude_pretooluse_deny_contains() {
+    local expected="$1"
+    [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e --arg expected "$expected" '
+            .hookSpecificOutput.hookEventName == "PreToolUse"
+            and .hookSpecificOutput.permissionDecision == "deny"
+            and (.hookSpecificOutput.permissionDecisionReason | contains($expected))
+        ' >/dev/null 2>&1
+}
+
+assert_top_level_block_contains() {
+    local expected="$1"
+    [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e --arg expected "$expected" '
+            .decision == "block"
+            and (.reason | contains($expected))
+        ' >/dev/null 2>&1
+}
+
+assert_top_level_retry_contains() {
+    local expected="$1"
+    [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e --arg expected "$expected" '
+            .decision == "retry"
+            and (.reason | contains($expected))
+        ' >/dev/null 2>&1
+}
+
+run_workflow_guard_builder_tester_bash() {
+    local command="$1"
+
+    jq -n --arg command "$command" \
+        '{tool_name: "Bash", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+}
+
 clear_workflow_cache() {
     rm -rf \
         "$TEST_AGENT_HOME/.codex/cache/workflow-state" \
         "$TEST_AGENT_HOME/.claude/cache/workflow-state" \
         "$TEST_AGENT_HOME/.gemini/cache/workflow-state"
+}
+
+run_hook_without_jq() {
+    local script="$1"
+    local input="${2:-{}}"
+    local agent="${3:-codex}"
+    local no_jq_path dirname_path tmp_out tmp_err
+    local env_args=()
+
+    dirname_path="$(command -v dirname)"
+    no_jq_path="$(mktemp -d)"
+    ln -s "$dirname_path" "$no_jq_path/dirname"
+    tmp_out=$(mktemp)
+    tmp_err=$(mktemp)
+
+    case "$agent" in
+        claude) env_args+=(CLAUDE_PROJECT_DIR="$TEST_PROJECT") ;;
+        gemini) env_args+=(GEMINI_PROJECT_DIR="$TEST_PROJECT") ;;
+        codex) env_args+=(CODEX_PROJECT_DIR="$TEST_PROJECT") ;;
+        *) echo "Unknown missing-jq agent: $agent" >&2; exit 1 ;;
+    esac
+
+    HOOK_EXIT=0
+    env PATH="$no_jq_path" HOME="$TEST_AGENT_HOME" "${env_args[@]}" \
+        "$BASH" "$HOOKS_DIR/$script" > "$tmp_out" 2> "$tmp_err" <<< "$input" || HOOK_EXIT=$?
+
+    HOOK_STDOUT=$(cat "$tmp_out")
+    HOOK_STDERR=$(cat "$tmp_err")
+    rm -f "$tmp_out" "$tmp_err"
+    rm -rf "$no_jq_path"
+}
+
+codex_protected_events_file() {
+    local project_dir="${1:-$TEST_PROJECT}"
+    local task_file="${2:-}"
+    local task_identity="${3:-}"
+
+    if [[ -z "$task_identity" && -n "$task_file" && -f "$task_file" ]]; then
+        task_identity="$(
+            HOME="$TEST_AGENT_HOME" bash -c '
+                . "$1"
+                assistant_hook_task_identity_from_file "$2" || true
+            ' _ "$HOOKS_DIR/hook-runtime.sh" "$task_file"
+        )"
+    fi
+
+    HOME="$TEST_AGENT_HOME" bash -c '
+        . "$1"
+        assistant_hook_codex_subagent_events_file_for_project "$2" "$3"
+    ' _ "$HOOKS_DIR/hook-runtime.sh" "$project_dir" "$task_identity"
+}
+
+record_codex_subagent_event() {
+    local event="$1"
+    local agent_type="$2"
+    local agent_id="$3"
+    local project_dir="${4:-$TEST_PROJECT}"
+    local tmp_out
+
+    tmp_out=$(mktemp)
+    printf '{"hook_event_name":"%s","agent_type":"%s","agent_id":"%s","cwd":"%s"}\n' \
+        "$event" "$agent_type" "$agent_id" "$project_dir" | \
+        HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$project_dir" bash "$HOOKS_DIR/subagent-monitor.sh" \
+        > "$tmp_out" 2>/dev/null
+    rm -f "$tmp_out"
+}
+
+record_codex_subagent_event_pair() {
+    local agent_type="$1"
+    local agent_id="$2"
+    local project_dir="${3:-$TEST_PROJECT}"
+
+    record_codex_subagent_event "SubagentStart" "$agent_type" "$agent_id" "$project_dir"
+    record_codex_subagent_event "SubagentStop" "$agent_type" "$agent_id" "$project_dir"
 }
 
 review_controller_reason() {
@@ -146,9 +263,17 @@ review_gate_reason() {
 
 subagent_evidence_reason() {
     local task_file="$1"
-    bash -c '
+    HOME="$TEST_AGENT_HOME" bash -c '
         . "$1"
         assistant_phase_subagent_evidence_missing_reason_key "$2"
+    ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
+}
+
+required_subagent_roles() {
+    local task_file="$1"
+    HOME="$TEST_AGENT_HOME" bash -c '
+        . "$1"
+        assistant_phase_required_subagent_roles "$2"
     ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "$task_file"
 }
 
@@ -257,9 +382,197 @@ if ! command -v jq >/dev/null 2>&1; then
     echo ""
 fi
 
+# ── critical hook dependency tests ────────────────────────────────────────────
+
+echo "critical hook dependencies"
+
+if test_start "critical hooks: workflow-guard missing jq under Claude PreToolUse denies"; then
+    run_hook_without_jq "workflow-guard.sh" '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"src/App.cs"}}' "claude"
+    if assert_claude_pretooluse_deny_contains "requires jq"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny mentioning jq; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
+if test_start "critical hooks: workflow-enforcer missing jq blocks UserPromptSubmit"; then
+    run_hook_without_jq "workflow-enforcer.sh" '{"hook_event_name":"UserPromptSubmit","prompt":"fix the hook"}' "claude"
+    if assert_top_level_block_contains "requires jq"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected UserPromptSubmit block mentioning jq; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
+if test_start "critical hooks: stop-review missing jq blocks Claude Stop"; then
+    run_hook_without_jq "stop-review.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "claude"
+    if assert_top_level_block_contains "requires jq"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude Stop block mentioning jq; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
+if test_start "critical hooks: stop-review missing jq retries Gemini AfterAgent"; then
+    run_hook_without_jq "stop-review.sh" '{"hook_event_name":"AfterAgent","agent_output":"done"}' "gemini"
+    if assert_top_level_retry_contains "requires jq"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Gemini AfterAgent retry mentioning jq; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
+if test_start "critical hooks: subagent-monitor missing jq under Claude SubagentStart adds degraded context"; then
+    run_hook_without_jq "subagent-monitor.sh" '{"hook_event_name":"SubagentStart","agent_type":"code-writer","agent_id":"cw-1"}' "claude"
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '
+            .hookSpecificOutput.hookEventName == "SubagentStart"
+            and (.hookSpecificOutput.additionalContext | contains("requires jq"))
+            and (
+                (.hookSpecificOutput.additionalContext | contains("cannot block"))
+                or (.hookSpecificOutput.additionalContext | contains("degraded"))
+            )
+        ' >/dev/null 2>&1 \
+        && ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude SubagentStart additionalContext degraded jq warning; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
+if test_start "critical hooks: subagent-monitor missing jq under Codex SubagentStart blocks"; then
+    run_hook_without_jq "subagent-monitor.sh" '{"hook_event_name":"SubagentStart","agent_type":"code-writer","agent_id":"cw-1"}' "codex"
+    if assert_top_level_block_contains "requires jq"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Codex SubagentStart block mentioning jq; stdout='$HOOK_STDOUT' stderr='$HOOK_STDERR'"
+    fi
+fi
+
 # ── workflow-phase-gates.sh tests ────────────────────────────────────────────
 
 echo "workflow-phase-gates.sh"
+
+if test_start "workflow-phase-gates: focused modules source and public helpers load"; then
+    gate_modules=(
+        review-controller.sh
+        qa-controller.sh
+        learning-controller.sh
+        metrics.sh
+        subagent-evidence.sh
+        subagent-orchestration.sh
+    )
+    gate_helpers=(
+        assistant_phase_review_controller_missing_reason_key
+        assistant_phase_requires_qa_evaluator
+        assistant_phase_review_missing_reason_key
+        assistant_phase_learning_missing_reason_key
+        assistant_phase_has_metrics_today
+        assistant_phase_required_subagent_roles
+        assistant_phase_has_role_dispatch_result_evidence
+        assistant_phase_subagent_evidence_missing_reason_key
+        assistant_phase_reason_missing_field
+        assistant_phase_subagent_warning_action
+    )
+    missing_gate_module=""
+    for gate_module in "${gate_modules[@]}"; do
+        if [[ ! -f "$HOOKS_DIR/workflow-phase-gates.d/$gate_module" ]] \
+            || ! grep -Fq "\"$gate_module\"" "$HOOKS_DIR/workflow-phase-gates.sh"; then
+            missing_gate_module="$gate_module"
+            break
+        fi
+    done
+    if [[ -z "$missing_gate_module" ]] \
+        && bash -c '
+            . "$1"
+            shift
+            for helper in "$@"; do
+                declare -F "$helper" >/dev/null || exit 1
+            done
+        ' _ "$HOOKS_DIR/workflow-phase-gates.sh" "${gate_helpers[@]}"; then
+        pass
+    else
+        fail "workflow-phase-gates.sh did not load focused module/helpers; missing_module='$missing_gate_module'"
+    fi
+fi
+
+if test_start "workflow-phase-gates: QA evaluator requirement helper has single definition"; then
+    definition_count=$(
+        grep -R -h -E '^[[:space:]]*(function[[:space:]]+)?assistant_phase_requires_qa_evaluator[[:space:]]*\(\)' \
+            "$HOOKS_DIR/workflow-phase-gates.sh" "$HOOKS_DIR/workflow-phase-gates.d"/*.sh | wc -l | tr -d '[:space:]'
+    )
+    if [[ "$definition_count" == "1" ]]; then
+        pass
+    else
+        fail "expected exactly one assistant_phase_requires_qa_evaluator definition, found $definition_count"
+    fi
+fi
+
+if test_start "workflow-phase-gates: source-changing BUILDING without Required agents infers required roles"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Task type: feature
+Subagent execution mode: not_applicable
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    roles=$(required_subagent_roles "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "not_applicable_with_required_roles" ]] \
+        && printf '%s\n' "$roles" | grep -qx "Code Writer" \
+        && printf '%s\n' "$roles" | grep -qx "Builder/Tester" \
+        && printf '%s\n' "$roles" | grep -qx "Code Reviewer"; then
+        pass
+    else
+        fail "expected inferred Code Writer/Builder/Tester/Code Reviewer and not_applicable block; reason='$helper_reason' roles='$roles'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: source-changing VERIFYING with malformed Required agents infers required roles"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: VERIFYING
+Triaged as: small
+Task type: bugfix
+Subagent execution mode: not_applicable
+Required agents: ???
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    roles=$(required_subagent_roles "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "not_applicable_with_required_roles" ]] \
+        && printf '%s\n' "$roles" | grep -qx "Code Writer" \
+        && printf '%s\n' "$roles" | grep -qx "Builder/Tester" \
+        && printf '%s\n' "$roles" | grep -qx "Code Reviewer"; then
+        pass
+    else
+        fail "expected malformed Required agents to be repaired by source-changing inference; reason='$helper_reason' roles='$roles'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "workflow-phase-gates: explicit no-source-change escape avoids role inference"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Task type: feature
+Source changes: no
+Subagent execution mode: not_applicable
+TASK
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.claude/task.md")
+    roles=$(required_subagent_roles "$TEST_PROJECT/.claude/task.md")
+    if [[ "$helper_reason" == "complete" && -z "$roles" ]]; then
+        pass
+    else
+        fail "expected explicit no-source-change escape to avoid inferred roles; reason='$helper_reason' roles='$roles'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
 
 if test_start "workflow-phase-gates: detects medium approved plan/review/metrics"; then
     mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
@@ -854,11 +1167,13 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "workflow-phase-gates: Codex compact template role evidence matches lifecycle events"; then
+if test_start "workflow-phase-gates: forged Codex project-local lifecycle events do not satisfy delegated roles"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: forged-local-task
 Status: BUILDING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -877,10 +1192,131 @@ TASK
 {"event":"SubagentStop","agent_type":"builder-tester","agent_name":"builder-tester","agent_id":"bt-1"}
 JSONL
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_writer" ]]; then
+        pass
+    else
+        fail "expected forged project-local lifecycle evidence to block delegated Code Writer, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-phase-gates: Codex canonical task heading role evidence matches protected lifecycle events"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+## Task:
+Created: protected-role-task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch/result/direct evidence: dispatch cw-1; result DONE changed src/App.cs
+- Builder/Tester dispatch/result/direct evidence: dispatch bt-1; result DONE tests passed
+TASK
+    record_codex_subagent_event_pair "code-writer" "cw-1"
+    record_codex_subagent_event_pair "builder-tester" "bt-1"
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "complete" ]]; then
         pass
     else
         fail "expected complete, got '$helper_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-phase-gates: Codex lifecycle evidence is scoped to Created task identity"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Created: task-a
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch: event cw-reused
+- Code Writer result: changed src/App.cs event cw-reused
+- Builder/Tester dispatch: event bt-reused
+- Builder/Tester result: tests passed event bt-reused
+TASK
+    record_codex_subagent_event_pair "code-writer" "cw-reused"
+    record_codex_subagent_event_pair "builder-tester" "bt-reused"
+    task_a_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Created: task-b
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch: event cw-reused
+- Code Writer result: changed src/App.cs event cw-reused
+- Builder/Tester dispatch: event bt-reused
+- Builder/Tester result: tests passed event bt-reused
+TASK
+    task_b_stale_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+
+    record_codex_subagent_event_pair "code-writer" "cw-reused"
+    record_codex_subagent_event_pair "builder-tester" "bt-reused"
+    task_b_fresh_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+
+    if [[ "$task_a_reason" == "complete" ]] \
+        && [[ "$task_b_stale_reason" == "delegated_missing_code_writer" ]] \
+        && [[ "$task_b_fresh_reason" == "complete" ]]; then
+        pass
+    else
+        fail "expected task A complete, task B stale block, task B fresh complete; got A='$task_a_reason' B-stale='$task_b_stale_reason' B-fresh='$task_b_fresh_reason'"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "workflow-phase-gates: Codex task without Created fails closed despite lifecycle evidence"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
+    mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Status: BUILDING
+Triaged as: small
+Subagent policy state: delegation_authorized
+Subagent execution mode: delegated
+Required agents:
+- Code Writer
+- Builder/Tester
+## Agent Dispatch Log
+- Code Writer dispatch: event cw-1
+- Code Writer result: changed src/App.cs event cw-1
+- Builder/Tester dispatch: event bt-1
+- Builder/Tester result: tests passed event bt-1
+TASK
+    record_codex_subagent_event_pair "code-writer" "cw-1"
+    record_codex_subagent_event_pair "builder-tester" "bt-1"
+    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
+{"event":"SubagentStart","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}
+{"event":"SubagentStop","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}
+{"event":"SubagentStart","agent_type":"builder-tester","agent_name":"builder-tester","agent_id":"bt-1"}
+{"event":"SubagentStop","agent_type":"builder-tester","agent_name":"builder-tester","agent_id":"bt-1"}
+JSONL
+    helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
+    if [[ "$helper_reason" == "delegated_missing_code_writer" ]]; then
+        pass
+    else
+        fail "expected missing Created to fail closed with delegated_missing_code_writer, got '$helper_reason'"
     fi
     rm -rf "$TEST_PROJECT/.codex"
 fi
@@ -960,9 +1396,11 @@ fi
 
 if test_start "workflow-phase-gates: Codex reviewer lifecycle with matching QA-labeled agent_id does not satisfy QA Evaluator"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: reviewer-qa-compatibility-task
 Status: REVIEWING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -978,12 +1416,8 @@ qa_evaluation_mode: required
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
     append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer-1"}
-{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer-1"}
-JSONL
+    record_codex_subagent_event_pair "code-reviewer" "cr-1"
+    record_codex_subagent_event_pair "reviewer" "qa-reviewer-1"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -995,9 +1429,11 @@ fi
 
 if test_start "workflow-phase-gates: Codex qa-evaluator lifecycle with matching QA-labeled agent_id satisfies QA Evaluator"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: qa-evaluator-task
 Status: REVIEWING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -1013,12 +1449,8 @@ qa_evaluation_mode: required
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00 id=qa-1
 TASK
     append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStart","agent_type":"qa-evaluator","agent_name":"QAEvaluator","agent_id":"qa-1"}
-{"event":"SubagentStop","agent_type":"qa-evaluator","agent_name":"QAEvaluator","agent_id":"qa-1"}
-JSONL
+    record_codex_subagent_event_pair "code-reviewer" "cr-1"
+    record_codex_subagent_event_pair "qa-evaluator" "qa-1"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "complete" ]]; then
         pass
@@ -1030,9 +1462,11 @@ fi
 
 if test_start "workflow-phase-gates: Codex reviewer lifecycle with QA-labeled agent_id prefix does not satisfy QA Evaluator"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: reviewer-qa-prefix-task
 Status: REVIEWING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -1048,12 +1482,8 @@ qa_evaluation_mode: required
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
     append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer"}
-{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"qa-reviewer"}
-JSONL
+    record_codex_subagent_event_pair "code-reviewer" "cr-1"
+    record_codex_subagent_event_pair "reviewer" "qa-reviewer"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -1065,9 +1495,11 @@ fi
 
 if test_start "workflow-phase-gates: Codex stale reviewer lifecycle without matching QA-labeled agent_id blocks QA Evaluator"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: stale-qa-reviewer-task
 Status: REVIEWING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -1083,12 +1515,8 @@ qa_evaluation_mode: required
 - QA Evaluator result: accepted final_verdict accepted score_progression 4.00
 TASK
     append_required_qa_review_complete_log "$TEST_PROJECT/.codex/task.md"
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStop","agent_type":"code-reviewer","agent_name":"code-reviewer","agent_id":"cr-1"}
-{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-qa-reviewer"}
-{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-qa-reviewer"}
-JSONL
+    record_codex_subagent_event_pair "code-reviewer" "cr-1"
+    record_codex_subagent_event_pair "reviewer" "old-qa-reviewer"
     helper_reason=$(subagent_evidence_reason "$TEST_PROJECT/.codex/task.md")
     if [[ "$helper_reason" == "delegated_missing_qa_evaluator" ]]; then
         pass
@@ -2150,9 +2578,11 @@ fi
 
 if test_start "stop-review: Codex delegated journal evidence without lifecycle events blocks"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: codex-no-lifecycle-stop-task
 Status: REVIEWING
 Triaged as: medium
 Plan approval: yes
@@ -2204,9 +2634,11 @@ fi
 
 if test_start "stop-review: Codex stale lifecycle events without referenced agent_id block"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: codex-unreferenced-lifecycle-task
 Status: REVIEWING
 Triaged as: medium
 Plan approval: yes
@@ -2238,12 +2670,8 @@ Required agents:
 - Result: CLEAN
 - Score progression: 4.00
 TASK
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"old-cm"}
-{"event":"SubagentStop","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"old-cm"}
-{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-rv"}
-{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"old-rv"}
-JSONL
+    record_codex_subagent_event_pair "code-mapper" "old-cm"
+    record_codex_subagent_event_pair "reviewer" "old-rv"
     _today=$(date +%Y-%m-%d)
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
 
@@ -2264,9 +2692,11 @@ fi
 
 if test_start "stop-review: Codex delegated lifecycle events plus journal evidence pass"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex" "$TEST_AGENT_HOME/.codex/memory/metrics"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
 # Task
+Created: codex-stop-review-pass-task
 Status: REVIEWING
 Triaged as: medium
 Plan approval: yes
@@ -2298,12 +2728,8 @@ Required agents:
 - Result: CLEAN
 - Score progression: 4.00
 TASK
-    cat > "$TEST_PROJECT/.codex/subagent-events.jsonl" <<'JSONL'
-{"event":"SubagentStart","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"cm-1"}
-{"event":"SubagentStop","agent_type":"code-mapper","agent_name":"code-mapper","agent_id":"cm-1"}
-{"event":"SubagentStart","agent_type":"reviewer","agent_name":"reviewer","agent_id":"rv-1"}
-{"event":"SubagentStop","agent_type":"reviewer","agent_name":"reviewer","agent_id":"rv-1"}
-JSONL
+    record_codex_subagent_event_pair "code-mapper" "cm-1"
+    record_codex_subagent_event_pair "reviewer" "rv-1"
     _today=$(date +%Y-%m-%d)
     echo "{\"date\":\"$_today\",\"project\":\"test\",\"task\":\"test\",\"size\":\"medium\"}" > "$TEST_AGENT_HOME/.codex/memory/metrics/workflow-metrics.jsonl"
 
@@ -6072,7 +6498,14 @@ echo "subagent-monitor.sh"
 
 if test_start "subagent-monitor: Codex SubagentStart records lifecycle event and context"; then
     rm -rf "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Created: monitor-start-task
+Status: BUILDING
+TASK
+    EVENTS_FILE="$(codex_protected_events_file "$TEST_PROJECT" "$TEST_PROJECT/.codex/task.md")"
     echo "{\"hook_event_name\":\"SubagentStart\",\"agent_type\":\"code-writer\",\"agent_id\":\"cw-1\",\"turn_id\":\"turn-1\",\"session_id\":\"sess-1\",\"cwd\":\"$TEST_PROJECT\"}" | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/subagent-monitor.sh" \
         > /tmp/_subagent_out 2>/dev/null
@@ -6082,21 +6515,30 @@ if test_start "subagent-monitor: Codex SubagentStart records lifecycle event and
     if [[ $HOOK_EXIT -eq 0 ]] \
         && is_valid_json "$HOOK_STDOUT" \
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.hookEventName == "SubagentStart"' >/dev/null 2>&1 \
-        && [[ -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]] \
-        && grep -q '"event":"SubagentStart"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
-        && grep -q '"agent_type":"code-writer"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
-        && grep -q '"turn_id":"turn-1"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
-        && grep -q '"session_id":"sess-1"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
+        && [[ -f "$EVENTS_FILE" ]] \
+        && grep -q '"event":"SubagentStart"' "$EVENTS_FILE" \
+        && grep -q '"agent_type":"code-writer"' "$EVENTS_FILE" \
+        && grep -q '"turn_id":"turn-1"' "$EVENTS_FILE" \
+        && grep -q '"session_id":"sess-1"' "$EVENTS_FILE" \
+        && grep -q '"task_identity":"monitor-start-task"' "$EVENTS_FILE" \
+        && [[ ! -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected Codex lifecycle event; stdout='$HOOK_STDOUT'; events='$(cat "$TEST_PROJECT/.codex/subagent-events.jsonl" 2>/dev/null || true)'"
+        fail "exit=$HOOK_EXIT, expected protected Codex lifecycle event; stdout='$HOOK_STDOUT'; events='$(cat "$EVENTS_FILE" 2>/dev/null || true)'"
     fi
     rm -rf "$TEST_PROJECT/.codex"
 fi
 
 if test_start "subagent-monitor: Codex SubagentStop records lifecycle event without plain-text output"; then
     rm -rf "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
+    cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+# Task
+Created: monitor-stop-task
+Status: REVIEWING
+TASK
+    EVENTS_FILE="$(codex_protected_events_file "$TEST_PROJECT" "$TEST_PROJECT/.codex/task.md")"
     echo "{\"hook_event_name\":\"SubagentStop\",\"agent_type\":\"reviewer\",\"agent_id\":\"rv-1\",\"agent_transcript_path\":\"/tmp/rv.jsonl\",\"cwd\":\"$TEST_PROJECT\"}" | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/subagent-monitor.sh" \
         > /tmp/_subagent_out 2>/dev/null
@@ -6104,14 +6546,34 @@ if test_start "subagent-monitor: Codex SubagentStop records lifecycle event with
     HOOK_STDOUT=$(cat /tmp/_subagent_out)
     rm -f /tmp/_subagent_out
     if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]] \
-        && [[ -f "$TEST_PROJECT/.codex/subagent-events.jsonl" ]] \
-        && grep -q '"event":"SubagentStop"' "$TEST_PROJECT/.codex/subagent-events.jsonl" \
-        && grep -q '"agent_type":"reviewer"' "$TEST_PROJECT/.codex/subagent-events.jsonl"; then
+        && [[ -f "$EVENTS_FILE" ]] \
+        && grep -q '"event":"SubagentStop"' "$EVENTS_FILE" \
+        && grep -q '"agent_type":"reviewer"' "$EVENTS_FILE" \
+        && grep -q '"task_identity":"monitor-stop-task"' "$EVENTS_FILE"; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected Codex stop event without stdout; stdout='$HOOK_STDOUT'; events='$(cat "$TEST_PROJECT/.codex/subagent-events.jsonl" 2>/dev/null || true)'"
+        fail "exit=$HOOK_EXIT, expected protected Codex stop event without stdout; stdout='$HOOK_STDOUT'; events='$(cat "$EVENTS_FILE" 2>/dev/null || true)'"
     fi
     rm -rf "$TEST_PROJECT/.codex"
+fi
+
+if test_start "subagent-monitor: Codex invalid traversal cwd is rejected"; then
+    clear_workflow_cache
+    invalid_cwd="$TEST_PROJECT/../missing-subagent-dir"
+    echo "{\"hook_event_name\":\"SubagentStart\",\"agent_type\":\"code-writer\",\"agent_id\":\"cw-invalid\",\"cwd\":\"$invalid_cwd\"}" | \
+        HOME="$TEST_AGENT_HOME" CODEX_HOME="$FRAMEWORK_DIR" bash "$HOOKS_DIR/subagent-monitor.sh" \
+        > /tmp/_subagent_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_subagent_out)
+    rm -f /tmp/_subagent_out
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "existing absolute canonical directory"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected invalid cwd block; stdout='$HOOK_STDOUT'"
+    fi
 fi
 
 # ── workflow-guard.sh tests ──────────────────────────────────────────────────
@@ -6130,6 +6592,851 @@ if test_start "workflow-guard: non-Edit tool → no output"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: Claude code-writer frontmatter does not grant Bash"; then
+    if grep -Fq 'tools: Read, Grep, Glob, LS, Edit, Write' "$FRAMEWORK_DIR/agents/claude/code-writer.md" \
+        && ! grep -Eq '^tools: .*Bash' "$FRAMEWORK_DIR/agents/claude/code-writer.md"; then
+        pass
+    else
+        fail "agents/claude/code-writer.md should not include Bash in frontmatter tools"
+    fi
+fi
+
+if test_start "workflow-guard: code-writer Bash is blocked"; then
+    echo '{"tool_name":"Bash","agent_type":"code-writer","tool_input":{"command":"dotnet test"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Code Writer is not allowed to run Bash"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for code-writer Bash; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: lifecycle evidence Bash is blocked"; then
+    echo '{"tool_name":"Bash","tool_input":{"command":"cat .codex/subagent-events.jsonl"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Lifecycle evidence files are hook-owned"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for lifecycle evidence Bash; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester production edit is blocked"; then
+    echo '{"tool_name":"Edit","agent_type":"builder-tester","tool_input":{"file_path":"hooks/scripts/workflow-guard.sh"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester production edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester production C# files with test suffix substrings are blocked"; then
+    builder_tester_block_miss=""
+    for target_path in "src/Contest.cs" "src/Latest.cs"; do
+        printf '{"tool_name":"Edit","agent_type":"builder-tester","tool_input":{"file_path":"%s"}}\n' "$target_path" | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_block_miss="$target_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_block_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester traversal into production edit is blocked"; then
+    echo '{"tool_name":"Edit","agent_type":"builder-tester","tool_input":{"file_path":"tests/../hooks/scripts/workflow-guard.sh"}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester traversal edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester outside absolute tests path writes are blocked"; then
+    outside_tests_path="$(dirname "$TEST_PROJECT")/outside-project/tests/test-hooks.sh"
+    builder_tester_outside_miss=""
+    jq -n --arg path "$outside_tests_path" \
+        '{tool_name: "Edit", agent_type: "builder-tester", tool_input: {file_path: $path}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        builder_tester_outside_miss="Edit path=$outside_tests_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+    fi
+
+    if [[ -z "$builder_tester_outside_miss" ]]; then
+        jq -n --arg patch "$(printf "*** Begin Patch\n*** Update File: %s\n@@\n-old\n+new\n*** End Patch" "$outside_tests_path")" \
+            '{tool_name: "apply_patch", agent_type: "builder-tester", tool_input: {patch: $patch}}' | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_outside_miss="apply_patch path=$outside_tests_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+        fi
+    fi
+
+    if [[ -z "$builder_tester_outside_miss" ]]; then
+        for command in \
+            "printf x | tee $outside_tests_path" \
+            "printf x > $outside_tests_path" \
+            "python3 -c 'open(\"$outside_tests_path\",\"w\").write(\"x\")'"; do
+            jq -n --arg command "$command" \
+                '{tool_name: "Bash", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+                HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+                > /tmp/_wg_out 2>/dev/null
+            HOOK_EXIT=$?
+            HOOK_STDOUT=$(cat /tmp/_wg_out)
+            rm -f /tmp/_wg_out
+            if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+                builder_tester_outside_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$builder_tester_outside_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_outside_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester apply_patch command production edit is blocked"; then
+    jq -n --arg command $'*** Begin Patch\n*** Update File: hooks/scripts/workflow-guard.sh\n@@\n-old\n+new\n*** End Patch' \
+        '{tool_name: "apply_patch", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester apply_patch command production edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester apply_patch move-to production edit is blocked"; then
+    jq -n --arg patch $'*** Begin Patch\n*** Update File: tests/test-hooks.sh\n*** Move to: hooks/scripts/workflow-guard.sh\n@@\n-old\n+new\n*** End Patch' \
+        '{tool_name: "apply_patch", agent_type: "builder-tester", tool_input: {patch: $patch}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester apply_patch move-to production edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash apply_patch production edit is blocked"; then
+    bash_patch_command=$(printf "apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: hooks/scripts/workflow-guard.sh\n@@\n-old\n+new\n*** End Patch\nPATCH")
+    jq -n --arg command "$bash_patch_command" \
+        '{tool_name: "Bash", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester Bash apply_patch production edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash apply_patch move-to production edit is blocked"; then
+    bash_patch_command=$(printf "apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: tests/test-hooks.sh\n*** Move to: hooks/scripts/workflow-guard.sh\n@@\n-old\n+new\n*** End Patch\nPATCH")
+    jq -n --arg command "$bash_patch_command" \
+        '{tool_name: "Bash", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+        HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+        > /tmp/_wg_out 2>/dev/null
+    HOOK_EXIT=$?
+    HOOK_STDOUT=$(cat /tmp/_wg_out)
+    rm -f /tmp/_wg_out
+    if assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected Claude PreToolUse deny for builder-tester Bash apply_patch move-to production edit; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash production writes are blocked"; then
+    builder_tester_write_miss=""
+    for command in \
+        "printf x | tee hooks/scripts/workflow-guard.sh" \
+        "printf x > hooks/scripts/workflow-guard.sh" \
+        "python3 -c 'open(\"hooks/scripts/workflow-guard.sh\",\"w\").write(\"x\")'" \
+        "python3 -c 'open(\"hooks/scripts/workflow-guard.sh\", mode=\"w\").write(\"x\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/workflow-guard.sh\").open(\"w\").write(\"x\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/workflow-guard.sh\").open(mode=\"w\").write(\"x\")'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_write_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_write_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_write_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash wrapper production redirections are blocked"; then
+    builder_tester_wrapper_redirection_miss=""
+    for command in \
+        "bash -lc 'echo hi > hooks/scripts/workflow-guard.sh'" \
+        "sh -c 'printf hi > hooks/scripts/workflow-guard.sh'" \
+        "zsh -c 'echo hi > hooks/scripts/workflow-guard.sh'" \
+        "env bash -lc 'echo hi > hooks/scripts/workflow-guard.sh'" \
+        "bash -lc 'echo hi' > hooks/scripts/workflow-guard.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_wrapper_redirection_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_wrapper_redirection_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_wrapper_redirection_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash common mutating production targets are blocked"; then
+    builder_tester_mutator_miss=""
+    for command in \
+        "sed -i 's/old/new/' hooks/scripts/workflow-guard.sh" \
+        "perl -pi -e 's/old/new/' hooks/scripts/workflow-guard.sh" \
+        "cp tests/test-hooks.sh hooks/scripts/workflow-guard.sh" \
+        "mv tests/generated-test.sh hooks/scripts/workflow-guard.sh" \
+        "rm hooks/scripts/workflow-guard.sh" \
+        "touch hooks/scripts/workflow-guard.sh" \
+        "install tests/test-hooks.sh hooks/scripts/workflow-guard.sh" \
+        "truncate -s 0 hooks/scripts/workflow-guard.sh" \
+        "dd if=/dev/zero of=hooks/scripts/workflow-guard.sh" \
+        "node -e 'const fs=require(\"fs\"); fs.writeFileSync(\"hooks/scripts/workflow-guard.sh\",\"x\")'" \
+        "node -e 'const fs=require(\"fs\"); fs.appendFileSync(\"hooks/scripts/workflow-guard.sh\",\"x\")'" \
+        "node -e 'const fs=require(\"fs\"); fs.createWriteStream(\"hooks/scripts/workflow-guard.sh\")'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_mutator_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_mutator_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_mutator_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash absolute executable production writes are blocked"; then
+    builder_tester_absolute_executable_miss=""
+    for command in \
+        "/usr/bin/sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "/bin/rm hooks/scripts/workflow-guard.sh" \
+        "/bin/bash -c \"touch hooks/scripts/workflow-guard.sh\"" \
+        "/usr/bin/python3 -c 'open(\"hooks/scripts/workflow-guard.sh\",\"w\").write(\"x\")'" \
+        "/usr/bin/perl -pi -e 's/old/new/' hooks/scripts/workflow-guard.sh" \
+        "/usr/bin/env /usr/bin/sed -i s/old/new/ hooks/scripts/workflow-guard.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "hooks/scripts/workflow-guard.sh" \
+            && ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_absolute_executable_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_absolute_executable_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_absolute_executable_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash assignment-prefixed production writes are blocked"; then
+    builder_tester_assignment_miss=""
+    for command in \
+        "FOO=1 sed -i 's/old/new/' hooks/scripts/workflow-guard.sh" \
+        "FOO=1 touch hooks/scripts/workflow-guard.sh" \
+        "FOO=1 bash -c \"touch hooks/scripts/workflow-guard.sh\"" \
+        "FOO=1 bash -c \"sed -i s/old/new/ hooks/scripts/workflow-guard.sh\""; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_assignment_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_assignment_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_assignment_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash nested production wrappers are blocked"; then
+    builder_tester_wrapper_miss=""
+    for command in \
+        "bash -c \"sed -i s/old/new/ hooks/scripts/workflow-guard.sh\"" \
+        "sh -c \"rm hooks/scripts/workflow-guard.sh\"" \
+        "zsh -c \"touch hooks/scripts/workflow-guard.sh\"" \
+        "env node -e 'const fs=require(\"fs\"); fs.writeFileSync(\"hooks/scripts/workflow-guard.sh\",\"x\")'" \
+        "env bash -c \"sed -i s/old/new/ hooks/scripts/workflow-guard.sh\""; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "Builder/Tester may only edit test files and build configuration"; then
+            builder_tester_wrapper_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_wrapper_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_wrapper_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash shell command wrappers fail closed"; then
+    builder_tester_shell_wrapper_miss=""
+    for command in \
+        "command sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "exec sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "time sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "builtin eval 'touch hooks/scripts/workflow-guard.sh'" \
+        "FOO=1 command sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "FOO=1 exec sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "FOO=1 time sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "FOO=1 builtin eval 'touch hooks/scripts/workflow-guard.sh'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_shell_wrapper_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_shell_wrapper_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_shell_wrapper_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash env, nice, and common executor wrappers fail closed"; then
+    builder_tester_env_executor_miss=""
+    for command in \
+        "env xargs sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "env -i xargs sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "env time sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "nice sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "nohup sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "timeout 5 sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "stdbuf -o0 sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "flock /tmp/lock sed -i s/old/new/ hooks/scripts/workflow-guard.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_env_executor_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_env_executor_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_env_executor_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash reserved precommands fail closed"; then
+    builder_tester_reserved_precommand_miss=""
+    for command in \
+        "! sed -i s/old/new/ hooks/scripts/workflow-guard.sh" \
+        "! touch hooks/scripts/workflow-guard.sh" \
+        "! bash -c \"touch hooks/scripts/workflow-guard.sh\"" \
+        "coproc sed -i s/old/new/ hooks/scripts/workflow-guard.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_reserved_precommand_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_reserved_precommand_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_reserved_precommand_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash opaque wrapper writes fail closed"; then
+    builder_tester_opaque_miss=""
+    for command in \
+        "bash -c \"\$MUTATING_COMMAND\"" \
+        "sh -c 'sed -i s/old/new/ \$TARGET_FILE'" \
+        "zsh -c \"touch \$TARGET_FILE\"" \
+        "env bash -c \"\$MUTATING_COMMAND\"" \
+        "env node -e 'const fs=require(\"fs\"); fs.writeFileSync(process.env.TARGET_FILE,\"x\")'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_opaque_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_opaque_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_opaque_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash command substitutions fail closed"; then
+    builder_tester_substitution_miss=""
+    for command in \
+        "\$(sed -i s/old/new/ hooks/scripts/workflow-guard.sh)" \
+        "\`sed -i s/old/new/ hooks/scripts/workflow-guard.sh\`" \
+        "\`touch hooks/scripts/workflow-guard.sh\`"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_substitution_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_substitution_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_substitution_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash dynamic mutating targets fail closed"; then
+    builder_tester_dynamic_miss=""
+    for command in \
+        "sed -i 's/old/new/' \"\$TARGET_FILE\"" \
+        "perl -pi -e 's/old/new/' \"\$TARGET_FILE\"" \
+        "cp tests/fixture.sh \"\$TARGET_FILE\"" \
+        "mv tests/generated-test.sh \"\$TARGET_FILE\"" \
+        "rm \"\$TARGET_FILE\"" \
+        "touch \"\$TARGET_FILE\"" \
+        "install tests/fixture.sh \"\$TARGET_FILE\"" \
+        "truncate -s 0 \"\$TARGET_FILE\"" \
+        "dd if=/dev/zero of=\"\$TARGET_FILE\"" \
+        "node -e 'const fs=require(\"fs\"); fs.writeFileSync(process.env.TARGET_FILE,\"x\")'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_dynamic_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_dynamic_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_dynamic_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash shell functions fail closed"; then
+    builder_tester_function_miss=""
+    for command in \
+        "f(){ sed -i s/old/new/ hooks/scripts/workflow-guard.sh; }; f" \
+        "function f { touch hooks/scripts/workflow-guard.sh; }; f"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_function_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_function_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_function_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash loops and case fail closed"; then
+    builder_tester_compound_miss=""
+    for command in \
+        "for f in hooks/scripts/workflow-guard.sh; do sed -i s/old/new/ \"\$f\"; done" \
+        "while true; do touch hooks/scripts/workflow-guard.sh; break; done" \
+        "until false; do touch hooks/scripts/workflow-guard.sh; break; done" \
+        "case hooks/scripts/workflow-guard.sh in hooks/*) touch hooks/scripts/workflow-guard.sh ;; esac"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_compound_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_compound_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_compound_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash grouping and subshell fail closed"; then
+    builder_tester_grouping_miss=""
+    for command in \
+        "{ sed -i s/old/new/ hooks/scripts/workflow-guard.sh; }" \
+        "( sed -i s/old/new/ hooks/scripts/workflow-guard.sh )"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_grouping_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_grouping_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_grouping_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash alias eval and source fail closed"; then
+    builder_tester_indirection_miss=""
+    for command in \
+        "alias mutate='touch hooks/scripts/workflow-guard.sh'; mutate" \
+        "eval 'touch hooks/scripts/workflow-guard.sh'" \
+        "source tests/generated-test.sh" \
+        ". tests/generated-test.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_indirection_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_indirection_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_indirection_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash find actions fail closed"; then
+    builder_tester_find_miss=""
+    for command in \
+        "find hooks -name workflow-guard.sh -exec sed -i s/old/new/ {} \\;" \
+        "find hooks -name workflow-guard.sh -execdir sed -i s/old/new/ {} \\;" \
+        "find hooks -name workflow-guard.sh -delete" \
+        "find hooks -name workflow-guard.sh -ok sed -i s/old/new/ {} \\;" \
+        "find hooks -name workflow-guard.sh -okdir sed -i s/old/new/ {} \\;" \
+        "find hooks -name workflow-guard.sh -fprint hooks/scripts/workflow-guard.sh" \
+        "find hooks -name workflow-guard.sh -fprint0 hooks/scripts/workflow-guard.sh" \
+        "find hooks -name workflow-guard.sh -fprintf hooks/scripts/workflow-guard.sh '%p\n'" \
+        "find hooks -name workflow-guard.sh -fls hooks/scripts/workflow-guard.sh"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_find_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_find_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_find_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash inline interpreter evals fail closed"; then
+    builder_tester_inline_eval_miss=""
+    for command in \
+        "ruby -e 'File.write(\"hooks/scripts/workflow-guard.sh\", \"x\")'" \
+        "perl -e 'open(my \$fh, \">\", \"hooks/scripts/workflow-guard.sh\"); print \$fh \"x\"'" \
+        "php -r 'file_put_contents(\"hooks/scripts/workflow-guard.sh\", \"x\");'" \
+        "awk 'BEGIN { print \"x\" > \"hooks/scripts/workflow-guard.sh\" }'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_inline_eval_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_inline_eval_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_inline_eval_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash combined inline eval flags fail closed"; then
+    builder_tester_combined_inline_eval_miss=""
+    for command in \
+        "ruby -we 'File.write(\"hooks/scripts/workflow-guard.sh\", \"x\")'" \
+        "perl -we 'open(my \$fh, \">\", \"hooks/scripts/workflow-guard.sh\"); print \$fh \"x\"'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_combined_inline_eval_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_combined_inline_eval_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_combined_inline_eval_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash opaque Python filesystem mutations fail closed"; then
+    builder_tester_python_opaque_miss=""
+    for command in \
+        "python3 -c 'import shutil; shutil.copyfile(\"tests/test-hooks.sh\",\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'import shutil; shutil.copytree(\"tests\", \"hooks/scripts/workflow-guard.d/copied-tests\")'" \
+        "python3 -c 'from shutil import copytree; copytree(\"tests\", \"hooks/scripts/workflow-guard.d/copied-tests\")'" \
+        "python3 -c 'import os; os.remove(\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'from os import replace; replace(\"tests/generated-test.sh\",\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/generated.sh\").touch()'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/generated-dir\").mkdir()'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/generated-dir\").rmdir()'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-test.sh\").rename(\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-test.sh\").replace(\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'import os as o; o.replace(\"tests/generated-test.sh\", \"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'import shutil as s; s.copytree(\"tests\", \"hooks/scripts/workflow-guard.d/copied-tests\")'" \
+        "python3 -c 'from os import remove as r; r(\"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'from shutil import copyfile as cf; cf(\"tests/test-hooks.sh\", \"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'import os, shutil as s; s.copyfile(\"tests/test-hooks.sh\", \"hooks/scripts/workflow-guard.sh\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"hooks/scripts/workflow-guard.sh\").unlink()'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_python_opaque_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_python_opaque_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_python_opaque_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash xargs command execution fails closed"; then
+    builder_tester_xargs_miss=""
+    for command in \
+        "printf '%s\n' hooks/scripts/workflow-guard.sh | xargs sed -i s/old/new/" \
+        "printf '%s\n' hooks/scripts/workflow-guard.sh | xargs -I{} sh -c 'touch \"{}\"'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_xargs_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_xargs_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_xargs_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash non-apply-patch heredoc and herestring fail closed"; then
+    builder_tester_here_miss=""
+    heredoc_command=$(printf "cat <<'EOF' > hooks/scripts/workflow-guard.sh\nx\nEOF")
+    herestring_command="cat > hooks/scripts/workflow-guard.sh <<< x"
+    for command in "$heredoc_command" "$herestring_command"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_here_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_here_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_here_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash process substitution fails closed"; then
+    builder_tester_process_substitution_miss=""
+    for command in \
+        "cat <(sed -i s/old/new/ hooks/scripts/workflow-guard.sh)" \
+        "cat tests/test-hooks.sh >(sed -i s/old/new/ hooks/scripts/workflow-guard.sh)"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if ! assert_claude_pretooluse_deny_contains "unproven shell write target"; then
+            builder_tester_process_substitution_miss="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_process_substitution_miss" ]]; then
+        pass
+    else
+        fail "$builder_tester_process_substitution_miss"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester test and build-config edits are allowed"; then
+    builder_tester_block=""
+    for target_path in "tests/test-hooks.sh" "tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj" "Directory.Build.props"; do
+        printf '{"tool_name":"Edit","agent_type":"builder-tester","tool_input":{"file_path":"%s"}}\n' "$target_path" | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if [[ $HOOK_EXIT -ne 0 ]] || echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="$target_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash test and build-config writes are allowed"; then
+    builder_tester_block=""
+    for command in \
+        "printf x | tee tests/test-hooks.sh" \
+        "printf x > tests/test-hooks.sh" \
+        "python3 -c 'open(\"tests/test-hooks.sh\",\"w\").write(\"x\")'" \
+        "/usr/bin/python3 -c 'open(\"tests/test-hooks.sh\",\"w\").write(\"x\")'" \
+        "python3 -c 'open(\"tests/test-hooks.sh\", mode=\"w\").write(\"x\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-test.sh\").write_text(\"x\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-output.txt\").write_text(\"ok\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-output.txt\").open(\"w\").write(\"ok\")'" \
+        "python3 -c 'from pathlib import Path; Path(\"tests/generated-output.txt\").open(mode=\"w\").write(\"ok\")'" \
+        "printf x | tee tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj" \
+        "printf x > Directory.Build.props" \
+        "python3 -c 'open(\"tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj\",\"w\").write(\"x\")'" \
+        "touch tests/generated-test.sh" \
+        "cp tests/fixture.sh tests/generated-test.sh" \
+        "sed -i 's/old/new/' tests/test-hooks.sh" \
+        "truncate -s 0 Directory.Build.props"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash wrapper test redirections are allowed"; then
+    builder_tester_block=""
+    for command in \
+        "bash -lc 'echo hi > tests/generated.txt'" \
+        "sh -c 'printf hi > tests/generated.txt'" \
+        "zsh -c 'echo hi > tests/generated.txt'" \
+        "env bash -lc 'echo hi > tests/generated.txt'" \
+        "bash -lc 'echo hi' > tests/generated.txt"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash nested test writes are allowed"; then
+    builder_tester_block=""
+    for command in \
+        "bash -c \"touch tests/generated-test.sh\"" \
+        "sh -c \"sed -i s/old/new/ tests/test-hooks.sh\"" \
+        "zsh -c \"touch tests/generated-test.sh\"" \
+        "env bash -c \"touch tests/generated-test.sh\"" \
+        "env node -e 'const fs=require(\"fs\"); fs.writeFileSync(\"tests/generated-test.sh\",\"x\")'"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester dotnet build and test commands are allowed"; then
+    builder_tester_block=""
+    for command in \
+        "dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal" \
+        "dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal"; do
+        run_workflow_guard_builder_tester_bash "$command"
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="command=$command exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash filtered hook tests are allowed"; then
+    run_workflow_guard_builder_tester_bash "bash tests/test-hooks.sh --filter workflow-guard"
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && ! echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, expected filtered hook-test Bash command to be allowed; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-guard: builder-tester Bash apply_patch test and build-config edits are allowed"; then
+    builder_tester_block=""
+    for target_path in "tests/test-hooks.sh" "tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj"; do
+        jq -n --arg command "$(printf "apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: %s\n@@\n-old\n+new\n*** End Patch\nPATCH" "$target_path")" \
+            '{tool_name: "Bash", agent_type: "builder-tester", tool_input: {command: $command}}' | \
+            HOME="$TEST_AGENT_HOME" CLAUDE_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny" or .decision == "block"' >/dev/null 2>&1; then
+            builder_tester_block="$target_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$builder_tester_block" ]]; then
+        pass
+    else
+        fail "$builder_tester_block"
     fi
 fi
 
@@ -6276,6 +7583,64 @@ if test_start "workflow-guard: Codex apply_patch only state artifacts → no out
     rm -f "$TEST_PROJECT/.codex/task.md"
 fi
 
+if test_start "workflow-guard: Codex outside state artifact paths do not bypass unresolved policy"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    mkdir -p "$TEST_PROJECT/.codex"
+    echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
+    outside_state_path="$(dirname "$TEST_PROJECT")/outside-project/.codex/task.md"
+    state_bypass_miss=""
+
+    for target_path in "../outside-project/.codex/task.md" "$outside_state_path"; do
+        jq -n --arg path "$target_path" \
+            '{tool_name: "Edit", tool_input: {file_path: $path}}' | \
+            HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if [[ $HOOK_EXIT -ne 0 ]] || ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+            || ! echo "$HOOK_STDOUT" | grep -q "subagent policy is unresolved"; then
+            state_bypass_miss="Edit path=$target_path exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+
+    if [[ -z "$state_bypass_miss" ]]; then
+        jq -n --arg patch $'*** Begin Patch\n*** Update File: ../outside-project/.codex/task.md\n@@\n-old\n+new\n*** End Patch' \
+            '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+            HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if [[ $HOOK_EXIT -ne 0 ]] || ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+            || ! echo "$HOOK_STDOUT" | grep -q "subagent policy is unresolved"; then
+            state_bypass_miss="apply_patch traversal exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+        fi
+    fi
+
+    if [[ -z "$state_bypass_miss" ]]; then
+        jq -n --arg patch "$(printf "*** Begin Patch\n*** Update File: %s\n@@\n-old\n+new\n*** End Patch" "$outside_state_path")" \
+            '{tool_name: "apply_patch", tool_input: {patch: $patch}}' | \
+            HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
+            > /tmp/_wg_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wg_out)
+        rm -f /tmp/_wg_out
+        if [[ $HOOK_EXIT -ne 0 ]] || ! echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+            || ! echo "$HOOK_STDOUT" | grep -q "subagent policy is unresolved"; then
+            state_bypass_miss="apply_patch absolute exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+        fi
+    fi
+
+    if [[ -z "$state_bypass_miss" ]]; then
+        pass
+    else
+        fail "$state_bypass_miss"
+    fi
+    rm -rf "$TEST_PROJECT/.codex"
+fi
+
 if test_start "workflow-guard: Codex apply_patch mixed source and state with unresolved policy → blocks"; then
     mkdir -p "$TEST_PROJECT/.codex"
     echo -e "Status: BUILDING [step 2/3]" > "$TEST_PROJECT/.codex/task.md"
@@ -6297,8 +7662,10 @@ fi
 
 if test_start "workflow-guard: Codex delegated Build without Code Writer event → blocks"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Created: workflow-guard-missing-code-writer-task
 Status: BUILDING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -6325,8 +7692,10 @@ fi
 
 if test_start "workflow-guard: Codex delegated Build with Code Writer start event → warning only"; then
     rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    clear_workflow_cache
     mkdir -p "$TEST_PROJECT/.codex"
     cat > "$TEST_PROJECT/.codex/task.md" <<'TASK'
+Created: workflow-guard-code-writer-start-task
 Status: BUILDING
 Triaged as: small
 Subagent policy state: delegation_authorized
@@ -6336,7 +7705,7 @@ Required agents:
 ## Agent Dispatch Log
 - Code Writer dispatch: event cw-1
 TASK
-    echo '{"event":"SubagentStart","agent_type":"code-writer","agent_name":"code-writer","agent_id":"cw-1"}' > "$TEST_PROJECT/.codex/subagent-events.jsonl"
+    record_codex_subagent_event "SubagentStart" "code-writer" "cw-1"
     echo '{"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Update File: src/App.cs\n*** End Patch"}}' | \
         HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-guard.sh" \
         > /tmp/_wg_out 2>/dev/null
@@ -6784,6 +8153,10 @@ if test_start "codex strict install: workflow-guard installs and legacy post-too
         fail "missing task-journal-resolver.sh after install"
     elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-phase-gates.sh" ]]; then
         fail "missing workflow-phase-gates.sh after install"
+    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-guard.d/path-policy.sh" \
+        || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-guard.d/shell-write-parser.sh" \
+        || ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-guard.d/workflow-state-artifacts.sh" ]]; then
+        fail "missing workflow-guard.d module after install"
     elif [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/post-tool-context.sh" \
         || ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/tool-failure-advisor.sh" ]]; then
         fail "legacy post-tool shim scripts should be installed as executable no-ops"
@@ -6860,9 +8233,18 @@ if test_start "codex default install: workflow hooks install and compaction hook
         pre-compress.sh \
         post-compact.sh \
         task-journal-resolver.sh \
-        workflow-phase-gates.sh; do
+        workflow-phase-gates.sh \
+        hook-runtime.sh; do
         if [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/$required_hook" ]]; then
             missing_default_hook="$required_hook"
+            break
+        fi
+    done
+
+    missing_workflow_guard_module=""
+    for required_guard_module in path-policy.sh shell-write-parser.sh workflow-state-artifacts.sh; do
+        if [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-guard.d/$required_guard_module" ]]; then
+            missing_workflow_guard_module="$required_guard_module"
             break
         fi
     done
@@ -6871,6 +8253,10 @@ if test_start "codex default install: workflow hooks install and compaction hook
         fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
     elif [[ -n "$missing_default_hook" ]]; then
         fail "Codex default install did not create executable $missing_default_hook"
+    elif [[ -n "$missing_workflow_guard_module" ]]; then
+        fail "Codex default install did not copy workflow-guard.d/$missing_workflow_guard_module"
+    elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-phase-gates.d/subagent-evidence.sh" ]]; then
+        fail "Codex default install did not copy workflow-phase-gates.d/subagent-evidence.sh"
     elif ! jq -e --arg command_dir "$INSTALL_TEST_HOME/.codex/hooks/assistant" '
         {
             sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
@@ -7041,6 +8427,66 @@ if test_start "workflow-enforcer: Codex dev prompt without task asks once for de
         pass
     else
         fail "exit=$HOOK_EXIT, expected Codex ask-once authorization context; stdout='$HOOK_STDOUT'"
+    fi
+fi
+
+if test_start "workflow-enforcer: Codex subagent approval parser rejects question quoted and meta prompts"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    parser_failure=""
+    for prompt in \
+        "should I use agents to fix the hook?" \
+        "The phrase \"use agents\" is only an example; fix the hook" \
+        "do not assume use agents is approval; fix the hook"; do
+        jq -cn --arg prompt "$prompt" '{prompt: $prompt, hook_event_name: "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wf_out)
+        rm -f /tmp/_wf_out
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || ! echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+            || ! echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
+            || echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (denied)"; then
+            parser_failure="prompt='$prompt' exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$parser_failure" ]]; then
+        pass
+    else
+        fail "$parser_failure"
+    fi
+fi
+
+if test_start "workflow-enforcer: Codex subagent approval parser accepts bounded approval prompts"; then
+    rm -rf "$TEST_PROJECT/.claude" "$TEST_PROJECT/.gemini" "$TEST_PROJECT/.codex"
+    parser_failure=""
+    for prompt in \
+        "Use delegation." \
+        "yes, use subagents" \
+        "approve subagents for this task" \
+        "approve use subagents" \
+        "delegate this work in parallel" \
+        "spawn two agents" \
+        "use one agent per point"; do
+        jq -cn --arg prompt "$prompt" '{prompt: $prompt, hook_event_name: "UserPromptSubmit"}' | \
+            HOME="$TEST_AGENT_HOME" CODEX_PROJECT_DIR="$TEST_PROJECT" bash "$HOOKS_DIR/workflow-enforcer.sh" \
+            > /tmp/_wf_out 2>/dev/null
+        HOOK_EXIT=$?
+        HOOK_STDOUT=$(cat /tmp/_wf_out)
+        rm -f /tmp/_wf_out
+        if [[ $HOOK_EXIT -ne 0 ]] \
+            || ! echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
+            || echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (ask-once)" \
+            || echo "$HOOK_STDOUT" | grep -q "CODEX SUBAGENT AUTHORIZATION (denied)"; then
+            parser_failure="prompt='$prompt' exit=$HOOK_EXIT stdout='$HOOK_STDOUT'"
+            break
+        fi
+    done
+    if [[ -z "$parser_failure" ]]; then
+        pass
+    else
+        fail "$parser_failure"
     fi
 fi
 

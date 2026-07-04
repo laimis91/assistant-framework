@@ -21,78 +21,47 @@
 
 set -euo pipefail
 
-command -v jq >/dev/null 2>&1 || exit 0
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/hook-runtime.sh"
+assistant_hook_require_jq "workflow-guard.sh" "PreToolUse"
+
 . "$SCRIPT_DIR/task-journal-resolver.sh"
 . "$SCRIPT_DIR/workflow-phase-gates.sh"
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
 IS_CODEX=false
-if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+if assistant_hook_runtime_is_codex; then
     IS_CODEX=true
 fi
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
+if [[ -d "$PROJECT_DIR" ]]; then
+    PROJECT_DIR="$(assistant_canonical_dir "$PROJECT_DIR")"
+fi
 
-assistant_is_workflow_state_artifact_path() {
-    local candidate="${1:-}"
-
-    [[ -n "$candidate" ]] || return 1
-    candidate="${candidate#./}"
-
-    case "$candidate" in
-        .claude/task.md|.claude/context-map.md|.claude/session.md|.claude/working-buffer.md|\
-        .codex/task.md|.codex/context-map.md|.codex/session.md|.codex/working-buffer.md|\
-        .gemini/task.md|.gemini/context-map.md|.gemini/session.md|.gemini/working-buffer.md|\
-        */.claude/task.md|*/.claude/context-map.md|*/.claude/session.md|*/.claude/working-buffer.md|\
-        */.codex/task.md|*/.codex/context-map.md|*/.codex/session.md|*/.codex/working-buffer.md|\
-        */.gemini/task.md|*/.gemini/context-map.md|*/.gemini/session.md|*/.gemini/working-buffer.md)
-            return 0
-            ;;
-    esac
-
-    return 1
+assistant_workflow_guard_block() {
+    local reason="$1"
+    assistant_hook_emit_block "PreToolUse" "$reason"
 }
 
-assistant_patch_targets_only_workflow_state_artifacts() {
-    local patch_text="${1:-}"
-    local path
-    local saw_path=false
+assistant_workflow_guard_source_module() {
+    local module_name="$1"
+    local module_path="$SCRIPT_DIR/workflow-guard.d/$module_name"
 
-    [[ -n "$patch_text" ]] || return 1
-
-    while IFS= read -r path; do
-        saw_path=true
-        if ! assistant_is_workflow_state_artifact_path "$path"; then
-            return 1
-        fi
-    done < <(
-        printf '%s\n' "$patch_text" | awk '
-            /^\*\*\* (Add|Update|Delete) File: / {
-                sub(/^\*\*\* (Add|Update|Delete) File: /, "", $0)
-                print
-            }
-        '
-    )
-
-    [[ "$saw_path" == "true" ]]
-}
-
-assistant_tool_targets_only_workflow_state_artifacts() {
-    local direct_path patch_text
-
-    direct_path=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // .tool_input.filename // empty' 2>/dev/null || true)
-    if [[ -n "$direct_path" ]] && assistant_is_workflow_state_artifact_path "$direct_path"; then
-        return 0
+    if [[ ! -f "$module_path" ]]; then
+        assistant_workflow_guard_block "Required workflow-guard module is missing: workflow-guard.d/$module_name"
+        exit 0
     fi
 
-    patch_text=$(echo "$INPUT" | jq -r '.tool_input.patch // .tool_input.input // empty' 2>/dev/null || true)
-    if assistant_patch_targets_only_workflow_state_artifacts "$patch_text"; then
-        return 0
+    if ! . "$module_path"; then
+        assistant_workflow_guard_block "Required workflow-guard module failed to load: workflow-guard.d/$module_name"
+        exit 0
     fi
-
-    return 1
 }
+
+assistant_workflow_guard_source_module "path-policy.sh"
+assistant_workflow_guard_source_module "shell-write-parser.sh"
+assistant_workflow_guard_source_module "workflow-state-artifacts.sh"
 
 # Auto-add --tl:on to dotnet build/test commands (Terminal Logger for cleaner output).
 # Codex currently rejects PreToolUse updatedInput payloads, so keep this optimization
@@ -100,6 +69,28 @@ assistant_tool_targets_only_workflow_state_artifacts() {
 if [[ "$TOOL_NAME" == "Bash" ]]; then
     COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
     if [[ -n "$COMMAND" ]]; then
+        ACTOR_NAME="$(assistant_tool_actor_name)"
+        if assistant_actor_is "$ACTOR_NAME" "code-writer"; then
+            assistant_workflow_guard_block "Code Writer is not allowed to run Bash. Builder/Tester owns builds, tests, and command execution."
+            exit 0
+        fi
+        if assistant_bash_command_targets_lifecycle_evidence "$COMMAND"; then
+            assistant_workflow_guard_block "Lifecycle evidence files are hook-owned. Do not read or write subagent-events evidence through Bash; rely on SubagentStart/SubagentStop hooks."
+            exit 0
+        fi
+        if assistant_actor_is "$ACTOR_NAME" "builder-tester"; then
+            disallowed_path="$(assistant_builder_tester_targets_disallowed_path || true)"
+            if [[ -n "$disallowed_path" ]]; then
+                assistant_workflow_guard_block "Builder/Tester may only edit test files and build configuration. Disallowed path: $disallowed_path"
+                exit 0
+            fi
+            disallowed_path="$(assistant_builder_tester_bash_disallowed_write_target "$COMMAND" || true)"
+            if [[ -n "$disallowed_path" ]]; then
+                assistant_workflow_guard_block "Builder/Tester may only edit test files and build configuration. Disallowed path: $disallowed_path"
+                exit 0
+            fi
+        fi
+
         NEEDS_UPDATE=false
         UPDATED_COMMAND="$COMMAND"
 
@@ -130,7 +121,15 @@ case "$TOOL_NAME" in
     *) exit 0 ;;
 esac
 
-PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
+ACTOR_NAME="$(assistant_tool_actor_name)"
+if assistant_actor_is "$ACTOR_NAME" "builder-tester"; then
+    disallowed_path="$(assistant_builder_tester_targets_disallowed_path || true)"
+    if [[ -n "$disallowed_path" ]]; then
+        assistant_workflow_guard_block "Builder/Tester may only edit test files and build configuration. Disallowed path: $disallowed_path"
+        exit 0
+    fi
+fi
+
 TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 # No active task = no enforcement (ad-hoc edits are fine)
@@ -148,11 +147,6 @@ fi
 if assistant_tool_targets_only_workflow_state_artifacts; then
     exit 0
 fi
-
-assistant_workflow_guard_block() {
-    local reason="$1"
-    jq -cn --arg reason "$reason" '{decision: "block", reason: $reason}'
-}
 
 subagent_missing_key="$(assistant_phase_subagent_evidence_missing_reason_key "$TASK_FILE" || true)"
 subagent_policy_state="$(assistant_phase_subagent_policy_state "$TASK_FILE" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"

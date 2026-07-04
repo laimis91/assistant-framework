@@ -6,6 +6,19 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 test_start "runtime phase-gate helper exists and is wired into runtime hooks"
 missing_runtime_helper_terms=()
 helper_file="$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh"
+helper_surfaces=("$helper_file")
+for module_file in "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.d/"*.sh; do
+    [[ -e "$module_file" ]] && helper_surfaces+=("$module_file")
+done
+runtime_helper_term_present() {
+    local term="$1"
+    local surface
+    for surface in "${helper_surfaces[@]}"; do
+        [[ -f "$surface" ]] || continue
+        grep -Fq "$term" "$surface" && return 0
+    done
+    return 1
+}
 if [[ ! -f "$helper_file" ]]; then
     missing_runtime_helper_terms+=("workflow-phase-gates.sh exists")
 else
@@ -20,7 +33,7 @@ else
         "assistant_phase_reason_action" \
         "assistant_phase_subagent_warning_reason_key" \
         "assistant_phase_subagent_warning_action"; do
-        if ! grep -Fq "$term" "$helper_file"; then
+        if ! runtime_helper_term_present "$term"; then
             missing_runtime_helper_terms+=("$term")
         fi
     done
@@ -53,8 +66,8 @@ for term in \
     "missing_durable_lesson_decision" \
     "missing_persistence_evidence" \
     "missing_no_save_rationale"; do
-    if ! grep -Fq "$term" "$helper_file"; then
-        missing_runtime_helper_terms+=("workflow-phase-gates.sh owns $term")
+    if ! runtime_helper_term_present "$term"; then
+        missing_runtime_helper_terms+=("workflow-phase-gates helpers own $term")
     fi
 done
 for term in \

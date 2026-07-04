@@ -23,6 +23,7 @@ Write to `{agent_state_dir}/task.md` in the project root when a local state dire
 
 ```markdown
 ## Task: [1-sentence description]
+Created: [stable task identity, e.g. ISO timestamp created once]
 Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING | DOCUMENTING | DONE
 Triaged as: [small | medium | large | mega]
 Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
@@ -55,7 +56,7 @@ Plan approval: [yes/no + date]
 [strict subagent evidence inspected by stop-review/phase gates]
 - Required roles: Code Writer, Builder/Tester, Code Reviewer; QA Evaluator when `qa_evaluation_mode=required`; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
 - Execution mode: delegated | direct_fallback | not_applicable
-- Codex lifecycle evidence: delegated Codex roles need matching `.codex/subagent-events.jsonl` `SubagentStart`/`SubagentStop` records and dispatch/result refs with the same `agent_id`; journal text alone is insufficient.
+- Codex lifecycle evidence: delegated Codex roles need hook-written protected workflow-state `SubagentStart`/`SubagentStop` records task-bound to this journal's `Created:` identity, plus dispatch/result refs with the same `agent_id`; project-local `.codex/subagent-events.jsonl` is diagnostic only and journal text alone is insufficient.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
 - Evidence shorthand: delegated = dispatch/result refs; direct_fallback = role-equivalent direct evidence; N/A only when role not required.
 - Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]

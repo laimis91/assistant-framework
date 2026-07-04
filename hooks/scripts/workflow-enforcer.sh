@@ -21,9 +21,10 @@
 
 set -euo pipefail
 
-command -v jq >/dev/null 2>&1 || exit 0
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/hook-runtime.sh"
+assistant_hook_require_jq "workflow-enforcer.sh" "UserPromptSubmit"
+
 # Shared resolver handles nested cwd and sub-agent cache fallback.
 . "$SCRIPT_DIR/task-journal-resolver.sh"
 . "$SCRIPT_DIR/workflow-phase-gates.sh"
@@ -37,7 +38,7 @@ TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 STATE_DIR=".claude"
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     STATE_DIR=".gemini"
-elif [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+elif assistant_hook_runtime_is_codex; then
     STATE_DIR=".codex"
 fi
 
@@ -82,49 +83,68 @@ $extra_context"
     emit_additional_context "$context"
 }
 
-assistant_codex_prompt_subagent_decision() {
-    local prompt_lc
-    prompt_lc="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
+assistant_codex_prompt_has_subagent_denial() {
+    printf '%s\n' "$PROMPT" | awk '
+        {
+            line = tolower($0)
+            if (line ~ /(^|[^[:alnum:]_-])(deny|decline)[[:space:]]+(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(no|without)[[:space:]]+(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(don'\''t|dont|do not)[[:space:]]+(delegate|use[[:space:]]+(subagents|agents|delegation))([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(don'\''t|dont|do not|not)[[:space:]]+(approve|authorize)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])direct[[:space:]_-]+fallback([^[:alnum:]_-]|$)/) {
+                found = 1
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
 
-    if [[ "$prompt_lc" == *"deny subagents"* \
-        || "$prompt_lc" == *"deny delegation"* \
-        || "$prompt_lc" == *"decline subagents"* \
-        || "$prompt_lc" == *"decline delegation"* \
-        || "$prompt_lc" == *"no subagents"* \
-        || "$prompt_lc" == *"no delegation"* \
-        || "$prompt_lc" == *"without subagents"* \
-        || "$prompt_lc" == *"without delegation"* \
-        || "$prompt_lc" == *"don't delegate"* \
-        || "$prompt_lc" == *"dont delegate"* \
-        || "$prompt_lc" == *"do not delegate"* \
-        || "$prompt_lc" == *"don't use subagents"* \
-        || "$prompt_lc" == *"dont use subagents"* \
-        || "$prompt_lc" == *"do not use subagents"* \
-        || "$prompt_lc" == *"don't use delegation"* \
-        || "$prompt_lc" == *"dont use delegation"* \
-        || "$prompt_lc" == *"do not use delegation"* \
-        || "$prompt_lc" == *"no agents"* \
-        || "$prompt_lc" == *"don't use agents"* \
-        || "$prompt_lc" == *"dont use agents"* \
-        || "$prompt_lc" == *"do not use agents"* \
-        || "$prompt_lc" == *"direct fallback"* ]]; then
+assistant_codex_prompt_has_bounded_subagent_approval() {
+    printf '%s\n' "$PROMPT" | awk '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+        function looks_meta(line) {
+            return line ~ /(^|[^[:alnum:]_-])(assume|example|phrase|quote|quoted|question|should|whether)([^[:alnum:]_-]|$)/
+        }
+        function approve_line(line, low) {
+            line = trim(line)
+            sub(/^[[:space:]]*[-*][[:space:]]*/, "", line)
+            low = tolower(line)
+            if (low ~ /\?/ || low ~ /[`"'\'']/ || looks_meta(low)) {
+                return 0
+            }
+            return low ~ /^(yes|y|yep|yeah),?[[:space:]]+(please[[:space:]]+)?(use|spawn)[[:space:]]+(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(approve|approved|authorize|authorized)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^i[[:space:]]+(approve|authorize)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?(use|spawn)[[:space:]]+(subagents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?delegate[[:space:]]+this[[:space:]]+work[[:space:]]+in[[:space:]]+parallel([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?spawn[[:space:]]+two[[:space:]]+agents([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?use[[:space:]]+one[[:space:]]+agent[[:space:]]+per[[:space:]]+point([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?delegate[[:space:]]+(the[[:space:]]+)?work([[:space:].!]|$)/
+        }
+        {
+            if (approve_line($0)) {
+                found = 1
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
+
+assistant_codex_prompt_subagent_decision() {
+    if assistant_codex_prompt_has_subagent_denial; then
         printf 'denied\n'
         return
     fi
 
-    if [[ "$prompt_lc" == *"approve subagents"* \
-        || "$prompt_lc" == *"authorize subagents"* \
-        || "$prompt_lc" == *"use subagents"* \
-        || "$prompt_lc" == *"spawn subagents"* \
-        || "$prompt_lc" == *"approve delegation"* \
-        || "$prompt_lc" == *"authorize delegation"* \
-        || "$prompt_lc" == *"use delegation"* \
-        || "$prompt_lc" == *"delegate work"* \
-        || "$prompt_lc" == *"delegate the work"* \
-        || "$prompt_lc" == *"please delegate"* \
-        || "$prompt_lc" == *"use agents"* \
-        || "$prompt_lc" == *"spawn agents"* \
-        || "$prompt_lc" == *"delegated agents"* ]]; then
+    if assistant_codex_prompt_has_bounded_subagent_approval; then
         printf 'approved\n'
         return
     fi
@@ -140,7 +160,7 @@ assistant_codex_prompt_looks_like_dev_work() {
 
 assistant_block_subagent_authorization() {
     local reason="$1"
-    jq -cn --arg reason "$reason" '{decision: "block", reason: $reason}'
+    assistant_hook_emit_block "UserPromptSubmit" "$reason"
 }
 
 read_scalar_field() {
@@ -190,7 +210,7 @@ if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
         if [[ "$codex_subagent_decision" == "none" ]]; then
             emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (ask-once):
 - Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, Code Reviewer, or QA Evaluator (legacy Reviewer labels are compatibility routing only).
-- Authorization examples: 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', 'approve subagents for this task'.
+- Authorization examples: 'Use delegation.', 'yes, use subagents', 'delegate this work in parallel', 'spawn two agents', 'use one agent per point'.
 - Denial examples: 'no delegation', 'do not delegate', 'no agents', 'do not use agents', 'deny subagents and use direct fallback'.
 - Do not hard block this first prompt. Ask, then wait before delegated responsibilities."
             exit 0

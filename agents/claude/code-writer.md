@@ -1,7 +1,7 @@
 ---
 name: code-writer
 description: Focused code implementer that writes production code following a plan. Does not run builds or tests — that's the builder-tester's job. Does not review — that's code-reviewer's job; reviewer remains compatibility routing. Use during build phase.
-tools: Read, Grep, Glob, LS, Edit, Write, Bash
+tools: Read, Grep, Glob, LS, Edit, Write
 model: opus
 ---
 

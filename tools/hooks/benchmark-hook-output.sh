@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HOOKS_DIR="$FRAMEWORK_DIR/hooks/scripts"
+. "$HOOKS_DIR/hook-runtime.sh"
 
 METRIC_COLUMNS=(hook_name scenario stdout_bytes stdout_words stderr_bytes exit_code first_blocker_or_action)
 
@@ -83,6 +84,10 @@ new_fixture() {
     PROJECT_DIR="$CURRENT_ROOT/project"
     AGENT_HOME="$CURRENT_ROOT/home"
     mkdir -p "$PROJECT_DIR/.codex" "$AGENT_HOME/.codex"
+}
+
+codex_lifecycle_events_file() {
+    HOME="$AGENT_HOME" assistant_hook_codex_subagent_events_file_for_project "$PROJECT_DIR"
 }
 
 run_hook_scenario() {
@@ -260,7 +265,7 @@ run_subagent_monitor_start() {
         --arg cwd "$PROJECT_DIR" \
         '{hook_event_name:"SubagentStart",agent_type:"code-writer",agent_id:"cw-bench-1",turn_id:"turn-bench",session_id:"session-bench",agent_transcript_path:"/tmp/benchmark-transcript",cwd:$cwd}')"
     run_hook_scenario "subagent-monitor" "codex code-writer start" "$stdin_json" \
-        "recorded SubagentStart lifecycle evidence" "$PROJECT_DIR/.codex/subagent-events.jsonl" \
+        "recorded SubagentStart lifecycle evidence" "$(codex_lifecycle_events_file)" \
         "SUBAGENT CONSTRAINT" "SubagentStart" "code-writer"
 }
 
@@ -277,7 +282,7 @@ run_subagent_monitor_stop() {
     env HOME="$AGENT_HOME" CODEX_PROJECT_DIR="$PROJECT_DIR" bash "$HOOKS_DIR/subagent-monitor.sh" \
         >/dev/null 2>/dev/null <<< "$stdin_start"
     run_hook_scenario "subagent-monitor" "codex code-writer stop" "$stdin_stop" \
-        "recorded SubagentStop lifecycle evidence" "$PROJECT_DIR/.codex/subagent-events.jsonl" \
+        "recorded SubagentStop lifecycle evidence" "$(codex_lifecycle_events_file)" \
         "SubagentStart" "SubagentStop" "cw-bench-1"
 }
 
@@ -327,7 +332,7 @@ EOF
 - `subagent-monitor` / `codex code-writer start`: `SUBAGENT CONSTRAINT`, `SubagentStart`, `code-writer`
 - `subagent-monitor` / `codex code-writer stop`: `SubagentStart`, `SubagentStop`, `cw-bench-1`
 
-The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the project-local `.codex/subagent-events.jsonl` file written by `subagent-monitor.sh`.
+The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the protected agent-owned workflow-state event file written by `subagent-monitor.sh`; project-local `.codex/subagent-events.jsonl` files are diagnostic only.
 EOF
 }
 

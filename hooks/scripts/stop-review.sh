@@ -27,10 +27,14 @@
 
 set -euo pipefail
 
-# jq is required for both JSON parsing and output
-command -v jq >/dev/null 2>&1 || { exit 0; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/hook-runtime.sh"
+STOP_REVIEW_HOOK_EVENT="Stop"
+if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
+    STOP_REVIEW_HOOK_EVENT="AfterAgent"
+fi
+assistant_hook_require_jq "stop-review.sh" "$STOP_REVIEW_HOOK_EVENT"
+
 . "$SCRIPT_DIR/task-journal-resolver.sh"
 . "$SCRIPT_DIR/workflow-phase-gates.sh"
 
@@ -84,9 +88,9 @@ emit_stop_reason() {
 
     if $IS_GEMINI; then
         touch "${RETRY_FLAG}"
-        jq -n --arg reason "$reason" '{decision: "retry", reason: $reason}'
+        assistant_hook_emit_block "AfterAgent" "$reason"
     else
-        jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
+        assistant_hook_emit_block "Stop" "$reason"
     fi
 }
 

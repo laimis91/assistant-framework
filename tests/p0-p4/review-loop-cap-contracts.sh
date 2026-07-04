@@ -5,6 +5,25 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+workflow_phase_gate_runtime_files=("$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh")
+for module_file in "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.d/"*.sh; do
+    [[ -e "$module_file" ]] && workflow_phase_gate_runtime_files+=("$module_file")
+done
+review_cap_runtime_term_present() {
+    local file="$1"
+    local term="$2"
+    local runtime_file
+    if [[ "$file" == "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh" ]]; then
+        for runtime_file in "${workflow_phase_gate_runtime_files[@]}"; do
+            [[ -f "$runtime_file" ]] || continue
+            grep -Fq "$term" "$runtime_file" && return 0
+        done
+        return 1
+    fi
+
+    [[ -f "$file" ]] && grep -Fq "$term" "$file"
+}
+
 active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
@@ -23,7 +42,7 @@ active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md"
     "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"
     "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh"
+    "${workflow_phase_gate_runtime_files[@]}"
     "$FRAMEWORK_DIR/install.sh"
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml"
     "$FRAMEWORK_DIR/agents/codex/reviewer.toml"
@@ -108,8 +127,12 @@ for file_and_term in \
     "$FRAMEWORK_DIR/docs/harness-design-guide.md::| 10 | Terminal report"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        missing_runtime_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    if ! review_cap_runtime_term_present "$file" "$term"; then
+        if [[ "$file" == "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh" ]]; then
+            missing_runtime_cap_terms+=("hooks/scripts/workflow-phase-gates.sh or workflow-phase-gates.d/*.sh: $term")
+        else
+            missing_runtime_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+        fi
     fi
 done
 if [[ "${#missing_runtime_cap_terms[@]}" -eq 0 ]]; then

@@ -42,4 +42,4 @@ The C slice trimmed repeated explanatory prose from `session-start`, `workflow-e
 - `subagent-monitor` / `codex code-writer start`: `SUBAGENT CONSTRAINT`, `SubagentStart`, `code-writer`
 - `subagent-monitor` / `codex code-writer stop`: `SubagentStart`, `SubagentStop`, `cw-bench-1`
 
-The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the project-local `.codex/subagent-events.jsonl` file written by `subagent-monitor.sh`.
+The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the protected agent-owned workflow-state event file written by `subagent-monitor.sh`; project-local `.codex/subagent-events.jsonl` files are diagnostic only.

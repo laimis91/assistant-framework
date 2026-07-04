@@ -131,7 +131,7 @@ hook_profile_allowed_json() {
             printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
             ;;
         workflow)
-            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh"]'
+            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
             ;;
         strict)
             printf '%s\n' 'null'
@@ -154,7 +154,7 @@ hook_selected_for_profile() {
             ;;
         workflow)
             case "$hook_name" in
-                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) return 0 ;;
+                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) return 0 ;;
                 *) return 1 ;;
             esac
             ;;
@@ -1551,7 +1551,7 @@ if $INSTALL_HOOKS; then
                     # SubagentStart/SubagentStop, PreToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) ;;  # supported + shared helper dependencies
                             *) continue ;;  # skip unsupported hooks
                         esac
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
@@ -1575,6 +1575,14 @@ if $INSTALL_HOOKS; then
                     fi
                     cp "$hook_script" "$HOOKS_TARGET/"
                 done
+                if hook_selected_for_profile "workflow-phase-gates.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-phase-gates.d" ]]; then
+                    mkdir -p "$HOOKS_TARGET/workflow-phase-gates.d"
+                    cp "$HOOKS_SOURCE/scripts/workflow-phase-gates.d/"*.sh "$HOOKS_TARGET/workflow-phase-gates.d/"
+                fi
+                if hook_selected_for_profile "workflow-guard.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-guard.d" ]]; then
+                    mkdir -p "$HOOKS_TARGET/workflow-guard.d"
+                    cp "$HOOKS_SOURCE/scripts/workflow-guard.d/"*.sh "$HOOKS_TARGET/workflow-guard.d/"
+                fi
                 # chmod only if files were actually copied
                 if compgen -G "$HOOKS_TARGET/*.sh" >/dev/null; then
                     chmod +x "$HOOKS_TARGET/"*.sh
