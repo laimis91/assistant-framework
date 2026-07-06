@@ -238,6 +238,64 @@ else
     fail "workflow candidate-search phase 1 contract missing terms: ${missing_candidate_terms[*]}"
 fi
 
+test_start "workflow loop experiment artifacts stay conditional and non-harness"
+missing_loop_artifact_terms=()
+for term in \
+    "workflow_experiment_ledger" \
+    "explicit workflow experiment" \
+    "loop_readiness_assessment" \
+    "explicit repeat or optimization loop" \
+    "retry_or_empty_result_handling" \
+    "tool_error_handling" \
+    "low_confidence_escalation" \
+    "loop artifacts alone do not require"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
+        missing_loop_artifact_terms+=("output.yaml: $term")
+    fi
+done
+for term in \
+    "P_WORKFLOW_EXPERIMENT_LEDGER" \
+    "P_LOOP_READINESS" \
+    "retry_or_empty_result_handling" \
+    "tool_error_handling" \
+    "low_confidence_escalation" \
+    "Keep harness_routing=not_required unless harness_capable == true"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        missing_loop_artifact_terms+=("phase-gates.yaml: $term")
+    fi
+done
+for term in \
+    "Loop / Experiment Routing" \
+    "harness_capable=false" \
+    "retry_or_empty_result_handling" \
+    "tool_error_handling" \
+    "low_confidence_escalation" \
+    "loop artifacts alone do not"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
+        missing_loop_artifact_terms+=("plan-template.md: $term")
+    fi
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
+        missing_loop_artifact_terms+=("task-journal-template.md: $term")
+    fi
+done
+for term in \
+    "loop-experiment-artifacts-stay-conditional" \
+    "workflow_experiment_ledger" \
+    "loop_readiness_assessment" \
+    "retry_or_empty_result_handling" \
+    "tool_error_handling" \
+    "low_confidence_escalation" \
+    "harness_capable=false"; do
+    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
+        missing_loop_artifact_terms+=("workflow eval: $term")
+    fi
+done
+if [[ "${#missing_loop_artifact_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow loop experiment contract missing terms: ${missing_loop_artifact_terms[*]}"
+fi
+
 test_start "workflow candidate-search root and assistant-dev plugin copies stay in sync"
 if [[ -d "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" ]] \
     && diff -qr "$FRAMEWORK_DIR/skills/assistant-workflow" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" >/tmp/p0p4-candidate-plugin-parity.out; then

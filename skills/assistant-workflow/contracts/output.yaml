@@ -13,17 +13,17 @@ skill: assistant-workflow
 completion_tiers:
   small:
     required_artifacts: [changed_files, validation_results, manual_test_steps, user_approval]
-    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract]
+    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "self-review or explicit validation summary unless risk_tier in [high, critical]"
     checkpoint_policy: "inline plan/check summary is enough; phase_checkpoints are strict-profile only"
   medium:
     required_artifacts: [triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, plan_document, user_approval]
-    conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions"
   large_critical:
     required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
-    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, candidate_search_result, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -1290,6 +1290,132 @@ artifacts:
         condition: "candidate search occurred after plan approval or selected candidate changes approved scope/files/behavior/risk"
         validation: "Records deviation, impact, rollback/re-approval status, and user approval when required"
 
+  - name: workflow_experiment_ledger
+    type: object[]
+    required: conditional
+    condition: "explicit workflow experiment, loop-optimization experiment, or approved plan labels the work as an experiment"
+    description: "Lightweight ledger for explicit workflow experiments only; not required for ordinary medium+ work."
+    validation: "Each entry includes experiment_id, hypothesis, intervention, expected_signal, measurement_method, baseline_or_control, result_status, evidence, decision, and next_check. The ledger does not by itself require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
+    on_fail: "When the approved plan names an explicit workflow experiment, add the missing ledger entry before running the experiment; otherwise record N/A and do not add harness artifacts unless harness_capable == true."
+    min_items: 1
+    object_fields:
+      - name: experiment_id
+        type: string
+        required: true
+        validation: "Stable local id unique within the workflow task"
+      - name: hypothesis
+        type: string
+        required: true
+        validation: "Testable claim about workflow behavior, cost, speed, quality, or reliability"
+      - name: intervention
+        type: string
+        required: true
+        validation: "Specific workflow, contract, prompt, hook, or process change being tried"
+      - name: expected_signal
+        type: string
+        required: true
+        validation: "Observable signal expected to move if the hypothesis is useful"
+      - name: measurement_method
+        type: string
+        required: true
+        validation: "Command, metric, review criterion, or inspection that measures the signal"
+      - name: baseline_or_control
+        type: string
+        required: true
+        validation: "Previous behavior, control condition, or explicit no-baseline reason"
+      - name: result_status
+        type: enum
+        required: true
+        enum_values: [planned, running, measured, inconclusive, stopped]
+      - name: evidence
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Plan ref, command result, review note, metric, or explicit pending-evidence marker for planned experiments"
+      - name: decision
+        type: enum
+        required: true
+        enum_values: [pending, continue, adjust, stop, inconclusive]
+      - name: next_check
+        type: string
+        required: true
+        validation: "Next measurement, review, or stop point"
+
+  - name: loop_readiness_assessment
+    type: object
+    required: conditional
+    condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates"
+    description: "Pre-loop gate for repeat/optimization loops; not required for one-pass work or the normal required review loop."
+    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
+    on_fail: "Before running the repeat/optimization loop, add the readiness assessment or remove the loop from the plan. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
+    object_fields:
+      - name: loop_type
+        type: enum
+        required: true
+        enum_values: [repeat, optimization, experiment]
+      - name: loop_trigger
+        type: string
+        required: true
+        validation: "Why a repeated loop is needed instead of a single planned pass"
+      - name: readiness_state
+        type: enum
+        required: true
+        enum_values: [ready, blocked]
+        validation: "Must be ready before the loop starts"
+      - name: verifier
+        type: string
+        required: true
+        validation: "Check, role, command, metric, or reviewer that judges each iteration"
+      - name: stop_condition
+        type: string
+        required: true
+        validation: "Concrete pass, budget, stagnation, or failure condition that ends the loop"
+      - name: max_iterations
+        type: int
+        required: true
+        validation: "Positive finite cap"
+      - name: budget_limit
+        type: string
+        required: true
+        validation: "Token, time, cost, run-count, or explicit local-effort cap"
+      - name: tool_access
+        type: string[]
+        required: true
+        validation: "Tools/commands/agents needed for the loop, or explicit none entry"
+      - name: state_tracking
+        type: string
+        required: true
+        validation: "Where iteration state, results, and decisions are recorded"
+      - name: retry_or_empty_result_handling
+        type: string
+        required: true
+        validation: "How the loop handles retries, empty verifier results, empty search/tool results, exhausted no-result paths, or no-result exit evidence before another iteration is attempted"
+        on_missing: fail
+      - name: tool_error_handling
+        type: string
+        required: true
+        validation: "How tool errors route before another iteration, including retry limits, fallback role/action, blocker classification, or stop condition"
+        on_missing: fail
+      - name: low_confidence_escalation
+        type: string
+        required: true
+        validation: "Escalation path when verifier confidence is low, evidence is inconclusive, or repeated iterations do not improve confidence"
+        on_missing: fail
+      - name: rollback_or_exit
+        type: string
+        required: true
+        validation: "Action when stop_condition fails or the loop exhausts its cap"
+      - name: harness_routing
+        type: enum
+        required: true
+        enum_values: [not_required, required]
+        validation: "not_required unless harness_capable == true or QA criteria already apply"
+      - name: evidence
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Plan ref, task packet ref, or readiness check evidence"
+
   - name: plan_document
     type: string
     required: conditional
@@ -1317,8 +1443,10 @@ artifacts:
 # 5. If qa_evaluation_mode=required: qa_evaluation_result is populated after build/test and code-review evidence; QA evaluation does not replace review_result. Scoped domain rubrics require selected_domain_rubrics and domain_quality_scores; unscoped rubric scoring is invalid.
 # 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
-# 8. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff
-# 9. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
+# 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
+# 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
+# 10. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff
+# 11. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
   - name: verified_skill_distillation
     type: object

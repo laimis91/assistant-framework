@@ -73,6 +73,11 @@ gates:
         check: "Each finding has a confidence level assigned based on source count and quality"
         on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
 
+      - id: SY_CANDIDATE_MECHANISMS
+        check: "When candidate_mechanisms are produced: each mechanism is labeled candidate, needs_validation, unsupported, or rejected; includes evidence, confidence, counterevidence_or_conflicts, gaps, and validation_method; and is not presented as a proven cause"
+        condition: "question asks why/how something happens, asks for causes, asks for improvement mechanisms, or candidate_mechanisms is non-empty"
+        on_fail: "Add missing candidate_mechanism fields, downgrade unsupported items to gaps, or relabel causal language as a candidate mechanism before Verify."
+
       - id: SY5
         check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings"
         condition: "research_method == five_lens_briefing"
@@ -108,6 +113,11 @@ gates:
         check: "Low-confidence findings are explicitly flagged in the output"
         on_fail: "Add explicit LOW confidence labels to single-source or conflicting findings"
 
+      - id: VR_CANDIDATE_MECHANISMS
+        check: "Candidate mechanisms without executed validation evidence are presented as hypotheses to test, not conclusions or proven causes"
+        condition: "candidate_mechanisms is non-empty"
+        on_fail: "Rewrite candidate mechanisms as hypotheses, add validation_method and gaps, or move validated source-backed claims to findings with evidence."
+
 # ─────────────────────────────────────────────
 # Research invariants
 # ─────────────────────────────────────────────
@@ -141,3 +151,8 @@ invariants:
     check: "For finance/trading, legal, medical, safety-critical, or similarly high-impact topics, the output is framed as educational due diligence with risk/context caveats and defaults to investigate_further unless verified evidence, explicit user context, and peer review support a stronger recommendation"
     scope: all_phases
     on_fail: "Add high-stakes caveats and downgrade the recommendation to investigate_further unless the stronger recommendation is explicitly justified"
+
+  - id: INV7
+    check: "Candidate mechanisms are never presented as proven causes; executed validation evidence is recorded separately in findings"
+    scope: all_phases
+    on_fail: "Relabel the mechanism as candidate or needs_validation, record counterevidence/conflicts and gaps, and add a validation_method before presenting it"

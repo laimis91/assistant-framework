@@ -282,6 +282,16 @@ gates:
         check: "Each task packet includes a deviation/rollback rule, or small inline plan explicitly states how deviations are handled"
         on_fail: "Add deviation/rollback handling before seeking plan approval"
 
+      - id: P_WORKFLOW_EXPERIMENT_LEDGER
+        check: "When the approved work is an explicit workflow experiment: workflow_experiment_ledger records hypothesis, intervention, expected signal, measurement method, baseline/control, result status, evidence, decision, and next check before the experiment runs"
+        condition: "explicit workflow experiment, loop-optimization experiment, or approved plan labels the work as an experiment"
+        on_fail: "Add the workflow_experiment_ledger entry to the plan/task journal before running the experiment, or remove the experiment label. Do not add Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply."
+
+      - id: P_LOOP_READINESS
+        check: "Before any explicit repeat or optimization loop outside standard required workflow phase gates starts: loop_readiness_assessment records loop type, trigger, readiness state, verifier, stop condition, finite max iterations, budget limit, tool access, state tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback/exit action, harness routing, and evidence"
+        condition: "task will start an explicit repeat or optimization loop"
+        on_fail: "Add loop_readiness_assessment before the loop starts, including retry/empty-result handling, tool-error routing, and low-confidence escalation, or remove the loop from the plan. Keep harness_routing=not_required unless harness_capable == true or QA criteria independently apply."
+
       - id: CS1
         check: "When search_mode == candidate_search: goal tree decomposes the existing acceptance criteria and slice acceptance/verification criteria"
         condition: "search_mode == candidate_search"

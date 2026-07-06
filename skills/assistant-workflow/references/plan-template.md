@@ -1,11 +1,10 @@
 # Plan Templates
 
-Three tiers — match ceremony to task size (don't get fancy when N is small).
+Three tiers — match ceremony to task size.
 
-Harness details are optional appendices. For medium+ harness-capable work, keep
-compact refs in the base plan and load `references/plan-harness-appendix.md`
-for the full schema. For non-harness work, record `N/A: [reason]` instead of
-copying harness sections into the base plan.
+Harness details live in optional appendices. Base plans keep compact refs only:
+load `references/plan-harness-appendix.md` for harness-capable work, otherwise
+record `N/A: [reason]`.
 
 ## Small Tasks — Inline Plan
 
@@ -60,15 +59,11 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
-- Harness routing:
-  - applies: [required for medium+ harness-capable work; otherwise N/A: reason]
-  - appendix: [references/plan-harness-appendix.md, or N/A: reason]
-  - done_contract_ref: [section/ref, or N/A: reason]
-  - harness_recipe_ref: [section/ref, or N/A: reason]
-  - harness_run_state_ref: [section/ref, or N/A: reason]
-  - trace_ledger_ref: [section/ref, or N/A: reason]
-  - replay_packet_ref: [section/ref, or N/A: reason]
-  - artifact_reference_ledger_ref: [section/ref, or N/A: reason]
+- Loop / Experiment Routing:
+  - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
+  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise ref with retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
+  - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
+- Harness routing: [N/A unless harness_capable=true or QA criteria independently apply; otherwise refs to appendix, Done Contract, Harness Recipe, run state, trace/replay, artifact ledger]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -136,16 +131,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Architecture
 - Current architecture: [identified or "new project"]
 - Architecture for this change: [Clean/MVVM/Hexagonal/etc.]
-- Layer rules:
-  - [e.g., Domain has no external dependencies]
-  - [e.g., ViewModels don't reference Views]
+- Layer rules: [key dependency boundaries]
 - Dependency direction: [A → B → C]
-- New files placement:
-  - [file → layer/folder rationale]
-- SOLID design notes:
-  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
-  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
-  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
+- New files placement: [file → layer/folder rationale]
+- SOLID notes: [SRP/OCP/DIP risks or N/A]
 
 ## Analysis
 ### Candidate search summary
@@ -185,12 +174,20 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
+## Loop / Experiment Routing
+
+Only for explicit workflow experiments or explicit repeat/optimization loops.
+Ordinary medium+ tasks keep `harness_capable=false`; loop artifacts alone do not
+require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact
+Reference Ledger, or QA evaluation.
+
+- workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
+- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise compact ref with loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
+
 ## Harness Appendix Routing
 
-Required only for medium+ harness-capable work; otherwise keep every field as
-`N/A: [reason]`. Load `references/plan-harness-appendix.md` for the full Done
-Contract, Harness Recipe, runtime artifact, typed artifact ref, and QA routing
-schemas.
+Required only for medium+ harness-capable work; otherwise use `N/A: [reason]`.
+Load `references/plan-harness-appendix.md` for full harness and QA schemas.
 
 - appendix_status: [required | N/A: reason]
 - done_contract_ref: [section/ref, or N/A: reason]
@@ -243,28 +240,6 @@ Start with the Medium template, then add the sections below.
 - Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
 - Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.
 
-## Harness Appendix Routing
-
-Required only for medium+ harness-capable work; otherwise record
-`N/A: [reason]`. Load `references/plan-harness-appendix.md` for full harness,
-typed artifact reference, pivot/restart, and QA routing schemas.
-
-- appendix_status: [required | N/A: reason]
-- done_contract_ref: [section/ref, or N/A: reason]
-- harness_recipe_ref: [section/ref, or N/A: reason]
-- harness_run_state_ref: [section/ref, or N/A: reason]
-- trace_ledger_ref: [section/ref, or N/A: reason]
-- replay_packet_ref: [section/ref, or N/A: reason]
-- artifact_reference_ledger_ref: [section/ref, or N/A: reason]
-- qa_evaluation_mode: [required | optional | not_required + reason]
-
-## Slice manifest from Decompose
-
-Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
-
-## Task packets
-Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the Decompose slice manifest directly, and keep each slice independently verifiable before the next slice starts.
-
 ## Tests to run
 - [command]: [what it validates]
 ```
@@ -281,8 +256,8 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 
 ## Context Budget
 
-- Exact/pinned: [goal, acceptance criteria, safety constraints, exact errors, files in scope, validation requirements]
-- Summarized: [logs, tool output, conversation history, repetitive evidence]
+- Exact/pinned: [goal, criteria, constraints, errors, scoped files, validation]
+- Summarized: [logs, tool output, history, repetitive evidence]
 - Omitted/deferred: [out-of-scope files/results and why]
 - Split/delegation plan: [slice/task split when material exceeds one faithful context]
 
