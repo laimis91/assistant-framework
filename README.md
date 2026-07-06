@@ -78,6 +78,8 @@ Only tracked `assistant-*` directories are first-class release skills.
 ### assistant-workflow
 Core development pipeline: idea-to-action decomposition, triage, discover, plan, build & test, verify, document.
 
+Loop readiness is conditional. Ordinary day-to-day development, such as taking a work item, prompting once, waiting for implementation, and manually testing the result, stays in the normal workflow. Add `loop_readiness_assessment` only before an explicit repeat, optimization, or experiment loop outside the standard phase gates. Examples include "keep fixing build/test failures until green", "iterate on this interface until the manual checklist passes", or "optimize until a measured target is reached". A loop plan must name the verifier, stop condition, finite max iterations, budget limit, retry/empty-result handling, tool-error handling, low-confidence escalation, rollback/exit action, and harness routing. Loop readiness alone does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness or QA criteria independently apply.
+
 Triggers on: build, implement, fix, refactor, plan, create, idea
 
 ### assistant-clarify
