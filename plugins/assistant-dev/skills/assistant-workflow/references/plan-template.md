@@ -60,6 +60,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
 - Loop / Experiment Routing:
+  - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
   - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
   - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise ref with retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
   - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
@@ -108,6 +109,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Triage result
 - Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 - Risk tier: [low | moderate | high | critical]
+- Controller intensity: [light | standard | strict]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
@@ -190,6 +192,7 @@ Required only for medium+ harness-capable work; otherwise use `N/A: [reason]`.
 Load `references/plan-harness-appendix.md` for full harness and QA schemas.
 
 - appendix_status: [required | N/A: reason]
+- controller_intensity: [light | standard | strict + reason]
 - done_contract_ref: [section/ref, or N/A: reason]
 - harness_recipe_ref: [section/ref, or N/A: reason]
 - harness_run_state_ref: [section/ref, or N/A: reason]
@@ -197,6 +200,7 @@ Load `references/plan-harness-appendix.md` for full harness and QA schemas.
 - replay_packet_ref: [section/ref, or N/A: reason]
 - artifact_reference_ledger_ref: [section/ref, or N/A: reason]
 - qa_evaluation_mode: [required | optional | not_required + reason]
+- qa_trigger_reason: [QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.]
 
 ## Slice manifest from Decompose
 

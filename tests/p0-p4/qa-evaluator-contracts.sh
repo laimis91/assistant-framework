@@ -213,6 +213,8 @@ fi
 
 test_start "QA evaluation required mode is explicitly scoped"
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
+qa_positive_trigger_wording="QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
+qa_negative_trigger_wording="QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 require_terms "workflow QA mode" "$workflow_dir/contracts/input.yaml" \
     "- name: harness_capable" \
     "default: false" \
@@ -239,6 +241,41 @@ require_terms "QA loop routing" "$review_dir/references/qa-evaluation-loop.md" \
 require_terms "workflow QA output mode" "$workflow_dir/contracts/output.yaml" \
     'condition: "qa_evaluation_mode == required"' \
     "QA evaluation does not replace review_result"
+
+test_start "workflow and review QA trigger wording is mirrored"
+qa_trigger_wording_missing=()
+for file in \
+    "$workflow_dir/SKILL.md" \
+    "$workflow_dir/contracts/input.yaml" \
+    "$workflow_dir/contracts/phase-gates.yaml" \
+    "$workflow_dir/references/phases.md" \
+    "$workflow_dir/references/plan-harness-appendix.md" \
+    "$workflow_dir/references/subagent-dispatch.md" \
+    "$workflow_dir/references/plan-template.md" \
+    "$workflow_dir/references/task-journal-template.md" \
+    "$review_dir/SKILL.md" \
+    "$review_dir/contracts/input.yaml" \
+    "$review_dir/references/qa-evaluation-loop.md"; do
+    for term in "$qa_positive_trigger_wording" "$qa_negative_trigger_wording"; do
+        if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+            qa_trigger_wording_missing+=("${file#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+done
+if [[ "${#qa_trigger_wording_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "QA positive/negative trigger wording is not mirrored: ${qa_trigger_wording_missing[*]}"
+fi
+
+test_start "workflow QA trigger wording avoids broad DX-facing scope"
+if rg -n "UI/visual/product/UX/docs/DX-facing" \
+    "$workflow_dir/SKILL.md" \
+    "$workflow_dir/references/plan-harness-appendix.md" >/tmp/p0p4-stale-qa-facing-wording.out; then
+    fail "workflow root QA surfaces contain broad DX-facing wording; see /tmp/p0p4-stale-qa-facing-wording.out"
+else
+    pass
+fi
 
 test_start "workflow QA Done Contract debate_record contract is mirrored"
 workflow_debate_failures=()

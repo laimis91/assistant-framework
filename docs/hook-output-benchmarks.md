@@ -13,10 +13,10 @@ Current rows: 7
 | hook_name | scenario | stdout_bytes | stdout_words | stderr_bytes | exit_code | first_blocker_or_action |
 |---|---|---:|---:|---:|---:|---|
 | session-start | codex active task journal | 980 | 102 | 0 | 0 | ACTIVE TASK JOURNAL AVAILABLE |
-| workflow-enforcer | codex building phase gates | 1511 | 164 | 0 | 0 | WORKFLOW STATE (auto-injected every prompt): |
+| workflow-enforcer | codex building phase gates | 1364 | 145 | 0 | 0 | WORKFLOW STATE (auto-injected every prompt): |
 | post-compact | codex restored active task | 749 | 75 | 0 | 0 | RESTORED AFTER COMPACTION — Active task journal available |
 | skill-router | codex assistant-workflow route | 498 | 47 | 0 | 0 | SKILL MATCH (1/1): This request matches assistant-workflow. You MUST load and follow this SKILL.md and its contracts before acting. At minimum: triage the task size, then build with tests included in the Build phase. Skipping workflow for speed is explicitly prohibited. Required inputs for this skill: [task_description,task_type,clarification_status,unresolved_clarification_topics,clarification_defaults_applied] |
-| stop-review | codex missing spec review blocker | 207 | 26 | 0 | 0 | review_gate:no_spec_review missing=no Spec Review; ### Spec Review #N action=run Spec Review first and record PASS/FAIL plus scope, mismatch, and required-fix fields |
+| stop-review | codex missing spec review blocker | 198 | 21 | 0 | 0 | review_gate:no_spec_review missing=no Spec Review; ### Spec Review #N action=run Spec Review first and record PASS/FAIL plus scope, mismatch, and required-fix fields |
 | subagent-monitor | codex code-writer start | 200 | 20 | 0 | 0 | SUBAGENT CONSTRAINT: You are a code writer. Write code only. Do NOT run builds or tests — builder-tester handles that. |
 | subagent-monitor | codex code-writer stop | 0 | 0 | 0 | 0 | recorded SubagentStop lifecycle evidence |
 
@@ -29,8 +29,8 @@ The C slice trimmed repeated explanatory prose from `session-start`, `workflow-e
 | c-hook-output-trim | session-start | 2122 | 225 | 1766 | 183 |
 | c-hook-output-trim | workflow-enforcer | 1892 | 232 | 1625 | 184 |
 | c-hook-output-trim | post-compact | 2131 | 218 | 1526 | 154 |
-| runtime-gate-output-trim | workflow-enforcer | 1626 | 184 | 1511 | 164 |
-| runtime-gate-output-trim | stop-review | 371 | 54 | 207 | 26 |
+| runtime-gate-output-trim | workflow-enforcer | 1626 | 184 | 1364 | 145 |
+| runtime-gate-output-trim | stop-review | 371 | 54 | 198 | 21 |
 
 ## Signal Anchors Checked
 

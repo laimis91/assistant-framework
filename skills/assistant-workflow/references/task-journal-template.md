@@ -23,6 +23,7 @@ Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING |
 Triaged as: [small | medium | large | mega]
 Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 Risk tier: [low | moderate | high | critical]
+Controller intensity: [light | standard | strict]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification confidence: [low | medium | high]
@@ -88,6 +89,7 @@ Plan approval: [yes/no + date]
 ## Harness Appendix Routing
 [required only for medium+ harness-capable work; otherwise `N/A: [reason]`; full schema in `references/task-journal-harness-appendix.md`]
 - Appendix: `references/task-journal-harness-appendix.md`
+- Controller intensity: [light | standard | strict + reason]
 - Done Contract: [section/ref, or N/A: reason]
 - Harness Recipe: [section/ref, or N/A: reason]
 - Harness Run State: [section/ref, or N/A: reason]
@@ -192,6 +194,7 @@ do not start the next slice until the current one is `VERIFIED`
 
 ### QA Evaluation
 - Mode: required | optional | not_required
+- QA trigger reason: [QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.]
 - QA Evaluator result: [final_verdict/result ref, or N/A: reason]
 - Selected domain rubrics: [families used, or N/A]
 - Domain quality scores: [compact scores, or N/A]

@@ -23,6 +23,9 @@ gate_tiers:
   blocker: "Prevents phase transition; missing evidence would make the workflow unsafe or unverifiable."
   guidance: "Preferred discipline; record or follow when useful, but do not ask ritual questions or block low-risk progress solely for this item."
   strict_only: "Enforced only when hook_profile == strict or project policy explicitly requests full harness enforcement."
+# controller_intensity maps onto these gate_tiers: light keeps low-risk guidance
+# compact, standard uses normal medium blockers/review without harness/QA
+# defaults, and strict may enforce strict_only gates when independent criteria apply.
 
 gates:
 
@@ -50,6 +53,10 @@ gates:
         check: "risk_tier is set to one of: low, moderate, high, critical"
         on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
 
+      - id: T_CONTROLLER_INTENSITY
+        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; strict is selected only for high/critical risk, hook_profile == strict, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria"
+        on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
+
       - id: T6
         check: "required_gates includes common gates plus every applicable task-category gate pack"
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
@@ -59,9 +66,9 @@ gates:
         on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
 
       - id: T_QA_EVALUATOR
-        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility"
+        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
         condition: "qa_evaluation_mode == required"
-        on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable."
+        on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
       - id: T9
         check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents; development/code-work that needs workflow roles starts as authorization_required unless the current user prompt explicitly authorized subagents"
@@ -80,7 +87,7 @@ gates:
 
       - id: T8
         severity: guidance
-        check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | gates={count} | agents={count}' message was printed to user"
+        check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | intensity={controller_intensity} | gates={count} | agents={count}' message was printed to user"
         on_fail: "Print structured triage metadata when medium+ complexity or user visibility needs it"
 
   # ─────────────────────────────────────────────
@@ -577,3 +584,8 @@ invariants:
     check: "Any pivot_restart_decision that changes approved scope, files, behavior, risk, verification, or acceptance criteria has reapproval_required=true and records approval before Build or Review continues"
     scope: all_phases
     on_fail: "Pause the workflow, mark reapproval_required=true, update the plan/task journal, and wait for user approval before continuing the changed path"
+
+  - id: INV_CONTROLLER_INTENSITY_STANDARD
+    check: "controller_intensity == standard with harness_capable=false and qa_evaluation_mode=not_required does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation"
+    scope: all_phases
+    on_fail: "Remove accidental strict/harness/QA requirements, or re-triage with explicit independent criteria before promoting controller_intensity to strict."

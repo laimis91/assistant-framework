@@ -95,6 +95,29 @@ require_terms "workflow input contract" "$workflow_dir/contracts/input.yaml" \
     "ordinary medium+ workflow tasks default to false" \
     "source-changing workflow tasks"
 
+test_start "controller intensity keeps ordinary medium work at standard"
+require_terms "controller intensity input contract" "$workflow_dir/contracts/input.yaml" \
+    "- name: controller_intensity" \
+    "enum_values: [light, standard, strict]" \
+    "ordinary medium+" \
+    "harness_capable == false" \
+    "qa_evaluation_mode == not_required" \
+    "Do not infer" \
+    "strict from size=medium+ or delegation alone"
+require_terms "controller intensity phase gates" "$workflow_dir/contracts/phase-gates.yaml" \
+    "T_CONTROLLER_INTENSITY" \
+    "ordinary medium+ non-harness work uses standard" \
+    "Do not infer strict from size=medium+ or delegation alone" \
+    "controller_intensity == standard with harness_capable=false and qa_evaluation_mode=not_required does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation"
+if rg -n 'size=medium\+?[[:space:]]*->[[:space:]]*strict|strict (for|when|because of) size=medium\+?|size=medium\+?[^.\n]*(promote|requires|selects|uses)[^.\n]*strict|delegation alone[^.\n]*(promote|requires|selects|uses|means)[^.\n]*strict|strict (for|when|because of) delegation alone' \
+    "$workflow_dir/contracts/input.yaml" \
+    "$workflow_dir/contracts/phase-gates.yaml" \
+    "$workflow_dir/references/triage-rubric.md" >/tmp/p0p4-controller-intensity-bad-promotion.out; then
+    fail "controller intensity must not promote medium size or delegation alone to strict; see /tmp/p0p4-controller-intensity-bad-promotion.out"
+else
+    pass
+fi
+
 test_start "harness artifacts are not unconditional medium+ requirements"
 unconditional_harness_terms_output="$(mktemp)"
 p0p4_register_cleanup "$unconditional_harness_terms_output"

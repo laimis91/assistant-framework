@@ -28,6 +28,10 @@ if grep -Fq "completion_tiers:" "$workflow_output" \
     && grep -Fq "small:" "$workflow_output" \
     && grep -Fq "medium:" "$workflow_output" \
     && grep -Fq "large_critical:" "$workflow_output" \
+    && grep -Fq "controller_intensity: light" "$workflow_output" \
+    && grep -Fq "controller_intensity: standard" "$workflow_output" \
+    && grep -Fq "controller_intensity: strict" "$workflow_output" \
+    && grep -Fq "standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation" "$workflow_output" \
     && grep -Fq "self-review or explicit validation summary" "$workflow_output" \
     && grep -Fq "phase_checkpoints are strict-profile only" "$workflow_output" \
     && grep -Fq "condition: \"size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict\"" "$workflow_output" \
@@ -35,7 +39,7 @@ if grep -Fq "completion_tiers:" "$workflow_output" \
     && grep -Fq "When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: review_result.quality_review_status is not missing" "$workflow_output"; then
     pass
 else
-    fail "assistant-workflow output contract must define small/medium/large-critical completion tiers and conditional heavy review artifacts"
+    fail "assistant-workflow output contract must define small/medium/large-critical completion tiers, controller intensity mapping, and conditional heavy review artifacts"
 fi
 
 test_start "phase gates separate blockers from guidance"
@@ -94,6 +98,24 @@ if [[ -f "$benchmark_doc" ]]; then
     done
     if ! grep -Fq "runtime-gate-output-trim" "$benchmark_doc"; then
         benchmark_failures+=("benchmark doc missing runtime-gate-output-trim history row")
+    fi
+    workflow_enforcer_budget="$(awk -F'|' '
+        $2 ~ /^[[:space:]]*workflow-enforcer[[:space:]]*$/ && $3 ~ /^[[:space:]]*codex building phase gates[[:space:]]*$/ {
+            bytes = $4
+            words = $5
+            gsub(/[[:space:]]/, "", bytes)
+            gsub(/[[:space:]]/, "", words)
+            print bytes " " words
+            exit
+        }
+    ' "$benchmark_doc")"
+    if [[ -z "$workflow_enforcer_budget" ]]; then
+        benchmark_failures+=("benchmark doc missing workflow-enforcer active journal metrics")
+    else
+        read -r workflow_enforcer_bytes workflow_enforcer_words <<< "$workflow_enforcer_budget"
+        if (( workflow_enforcer_bytes >= 1511 || workflow_enforcer_words >= 164 )); then
+            benchmark_failures+=("workflow-enforcer active metrics not reduced below 1511 bytes / 164 words")
+        fi
     fi
 fi
 if [[ -f "$benchmark_script" ]] && ! grep -Fq "runtime-gate-output-trim" "$benchmark_script"; then

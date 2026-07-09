@@ -3,8 +3,8 @@
 Load this appendix only for medium+ harness-capable work: explicit harness work,
 long-running or trace/replay-ready multi-slice work, high-risk harness work,
 accepted Done Contract/Harness Recipe work, domain-scored work, or
-UI/visual/product/UX/docs/DX-facing work. For ordinary medium+ source changes,
-keep the base plan's harness fields as `N/A: [reason]`.
+scoped UI/visual/product/UX/docs/DX acceptance. For ordinary medium+ source
+changes, keep the base plan's harness fields as `N/A: [reason]`.
 
 ## Task Packet Harness Fields
 
@@ -90,10 +90,13 @@ Each row is a typed producer/consumer record, not an ad hoc string reference.
 QA Evaluator remains separate from Code Reviewer. Use this routing only when
 `qa_evaluation_mode=required`: explicit QA/acceptance evaluation,
 harness-capable acceptance scope, accepted Done Contract, domain-scored work, or
-UI/visual/product/UX/docs/DX-facing work.
+scoped UI/visual/product/UX/docs/DX acceptance.
+
+QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
+QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 
 - qa_evaluation_mode: [required | optional | not_required]
-- qa_trigger_reason: [explicit QA request, Done Contract, harness acceptance scope, domain-scored, UI/visual/product/UX/docs/DX, or N/A: reason]
+- qa_trigger_reason: [explicit QA request, accepted Done Contract, harness acceptance scope, domain-scored, scoped UI/visual/product/UX/docs/DX acceptance, or N/A: reason]
 - code_review_result_ref: [Code Reviewer/Reviewer compatibility result ref]
 - qa_evaluation_result_ref: [QA Evaluator result ref, or N/A: reason]
 - domain_context_ref: [domain/rubric context ref, or N/A: reason]

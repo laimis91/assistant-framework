@@ -352,7 +352,7 @@ assistant_phase_required_subagent_roles() {
             if (low ~ /architect/) emit("Architect")
             if (low ~ /code writer|code-writer/) emit("Code Writer")
             if (low ~ /builder\/tester|builder-tester/) emit("Builder/Tester")
-            if (low ~ /qa[ _-]?evaluator|qaevaluator/) emit("QA Evaluator")
+            if (qa_required == "yes" && low ~ /qa[ _-]?evaluator|qaevaluator/) emit("QA Evaluator")
             if (low ~ /code[ _-]?reviewer|codereviewer/) {
                 emit("Code Reviewer")
             } else if (low ~ /(^|[^[:alnum:]_-])reviewer([^[:alnum:]_-]|$)/) {

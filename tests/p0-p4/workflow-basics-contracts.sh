@@ -78,6 +78,7 @@ for term in \
     "Required Triage Output" \
     "Task type" \
     "Risk tier" \
+    "Controller intensity" \
     "Required gates" \
     "Required agents" \
     "Subagent policy state" \
@@ -96,13 +97,15 @@ for term in \
 done
 for term in \
     "references/triage-rubric.md" \
-    "Triage metadata"; do
+    "Triage metadata" \
+    "intensity=[controller_intensity]"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
         missing_triage_terms+=("SKILL.md: $term")
     fi
 done
 for term in \
     "risk_tier" \
+    "controller_intensity" \
     "required_gates" \
     "required_agents" \
     "subagent_policy_state" \
@@ -114,9 +117,11 @@ for term in \
 done
 for term in \
     "T4" \
+    "T_CONTROLLER_INTENSITY" \
     "T9" \
     "T10" \
     "risk_tier is set" \
+    "controller_intensity is set" \
     "required_gates includes common gates" \
     "required_agents or fallback execution roles are populated" \
     "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized" \
@@ -128,6 +133,7 @@ done
 for term in \
     "Task type:" \
     "Risk tier:" \
+    "Controller intensity:" \
     "Required gates:" \
     "Required agents:" \
     "Subagent policy state:" \

@@ -4,14 +4,17 @@ Use this reference after build/test evidence and the Code Reviewer loop exist. Q
 
 ## When QA Runs
 
+QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
+QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
+
 Run QA evaluation when any of these are true:
 - The user explicitly asks for QA or acceptance evaluation.
 - The task has an accepted Done Contract.
 - The task is harness-capable and acceptance evaluation is in scope.
-- The task is subjective, domain-scored, or UI/visual/product/UX/docs/DX-facing.
-- Workflow Review needs a final acceptance verdict beyond code/security/architecture/test-coverage review.
+- The task has domain-scored scope or scoped UI/visual/product/UX/docs/DX acceptance.
+- Workflow Review needs a final acceptance verdict because one of the positive triggers above is present.
 
-Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope, and the workflow output records `qa_evaluation_mode=not_required` with a reason.
+Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope, and the workflow output records `qa_evaluation_mode=not_required` with a reason. Template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work do not force QA.
 
 ## Inputs
 

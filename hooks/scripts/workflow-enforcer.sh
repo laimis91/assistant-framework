@@ -62,7 +62,7 @@ emit_workflow_rules_context() {
 - Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
 - Do not skip phases; small tasks still use lightweight phases.
 - BUILD includes same-step tests for features.
-- REVIEW loops until clean.
+- REVIEW loops until clean or max 10 rounds.
 
 STATE BOOTSTRAP (when no active task journal is present):
 - For development/code-work, create or refresh $STATE_DIR/task.md before planning or implementation.
@@ -260,6 +260,20 @@ subagent_policy_state=${subagent_policy_state:-unknown}
 subagent_execution_mode=${subagent_execution_mode:-unknown}
 subagent_authorization_scope=${subagent_authorization_scope:-}
 
+subagent_scope_items=()
+while IFS= read -r scope_item; do
+    subagent_scope_items+=("$scope_item")
+done < <(printf '%s\n' "$subagent_authorization_scope" | sed '/^[[:space:]]*$/d')
+
+if (( ${#subagent_scope_items[@]} == 0 )) || [[ ${#subagent_scope_items[@]} -eq 1 && "${subagent_scope_items[0]}" == "none" ]]; then
+    subagent_authorization_scope_summary="none"
+else
+    subagent_authorization_scope_summary="${subagent_scope_items[0]}"
+    for ((i = 1; i < ${#subagent_scope_items[@]}; i++)); do
+        subagent_authorization_scope_summary+=", ${subagent_scope_items[i]}"
+    done
+fi
+
 has_clarification_status_field="no"
 has_clarification_defaults_field="no"
 has_clarification_topics_field="no"
@@ -415,40 +429,20 @@ if [[ "$STATE_DIR" == ".codex" && "$subagent_policy_state" == "authorization_req
     exit 0
 fi
 
-# Build phase-aware enforcement context
+# Build compact phase-aware enforcement context. Detailed recovery text is
+# appended below only for gates that are incomplete and actionable now.
 context="WORKFLOW STATE (auto-injected every prompt):
-- Task: $task_name
-- Size: $size
-- Phase: $status
-- Clarification status: $clarification_status
-- Clarification defaults applied: $clarification_defaults
-- Clarification confidence: $clarification_confidence
-- Clarification questions: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota)
-- Clarification admissibility: $clarification_admissibility
-- Unresolved clarification topics: $clarification_topics_summary
-- Plan approved: $has_plan_approval
-- Reviews completed: $review_count
-- Final result: $has_final_result
-- Review gate complete: $has_review_completion
-- Subagent policy state: $subagent_policy_state
-- Subagent execution mode: $subagent_execution_mode
-- Subagent authorization scope: ${subagent_authorization_scope:-none}
-- Subagent evidence gate: $subagent_gate_status
-- Metrics today: $has_metrics_today
-
-PHASE RULES:
-- Current phase is $status — stay until exit criteria pass.
-- PLAN approval before BUILD; BUILD includes same-step tests for new components.
-- REVIEW loops review -> fix -> re-review until clean or max 10 rounds.
-- State the current phase before the next action."
+state: Task: $task_name | Size: $size | Phase: $status
+clarification: Clarification status: $clarification_status | Clarification defaults applied: $clarification_defaults | Clarification confidence: $clarification_confidence | Clarification questions: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota) | Clarification admissibility: $clarification_admissibility | Unresolved clarification topics: $clarification_topics_summary
+plan: Plan approved: $has_plan_approval
+review: Reviews completed: $review_count | Final result: $has_final_result | Review gate complete: $has_review_completion
+subagent: Subagent policy state: $subagent_policy_state | Subagent execution mode: $subagent_execution_mode | Subagent authorization scope: $subagent_authorization_scope_summary | Subagent evidence gate: $subagent_gate_status
+metrics: Metrics today: $has_metrics_today
+rule: Current phase is $status; state phase before action."
 
 context+="
 
-RUNTIME PHASE GATES:
-- Plan approved: $has_plan_approval
-- Review gate complete: $has_review_completion
-- Subagent evidence gate: $subagent_gate_status
-- Metrics today: $has_metrics_today"
+RUNTIME PHASE GATES: Plan approved: $has_plan_approval | Review gate complete: $has_review_completion | Subagent evidence gate: $subagent_gate_status | Metrics today: $has_metrics_today"
 
 if [[ "$clarification_gate_active" == "yes" ]]; then
     context+="
@@ -500,28 +494,28 @@ if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "sma
     plan_missing_field="$(assistant_phase_reason_missing_field "plan_gate" "$plan_missing_key")"
     plan_action="$(assistant_phase_reason_action "plan_gate" "$plan_missing_key")"
     context+="
-WARNING: You are BUILDING without an approved plan ($plan_missing_key). missing=$plan_missing_field action=$plan_action"
+WARNING: You are BUILDING without an approved plan ($plan_missing_key). plan_gate:$plan_missing_key missing=$plan_missing_field action=$plan_action"
 fi
 
 subagent_warning_key="$(assistant_phase_subagent_warning_reason_key "$TASK_FILE" "$subagent_gate_status" "$status" || true)"
 subagent_warning_action="$(assistant_phase_subagent_warning_action "$subagent_warning_key" "$status" || true)"
 if [[ -n "$subagent_warning_action" ]]; then
     context+="
-WARNING: Subagent evidence gate incomplete ($subagent_warning_key). $subagent_warning_action"
+WARNING: Subagent evidence gate incomplete ($subagent_warning_key). subagent_evidence_gate:$subagent_warning_key $subagent_warning_action"
 fi
 
 if [[ ( "$is_reviewing" == "yes" || "$is_documenting" == "yes" ) && "$has_review_completion" == "no" ]]; then
     review_missing_field="$(assistant_phase_reason_missing_field "review_gate" "$review_gate_status")"
     review_action="$(assistant_phase_reason_action "review_gate" "$review_gate_status")"
     context+="
-WARNING: Review gate incomplete ($review_gate_status). missing=$review_missing_field action=$review_action"
+WARNING: Review gate incomplete ($review_gate_status). review_gate:$review_gate_status missing=$review_missing_field action=$review_action"
 fi
 
 if [[ "$is_documenting" == "yes" && "$has_metrics_today" == "no" ]]; then
     metrics_missing_field="$(assistant_phase_reason_missing_field "metrics_gate" "missing_metrics_today")"
     metrics_action="$(assistant_phase_reason_action "metrics_gate" "missing_metrics_today")"
     context+="
-WARNING: Metrics gate incomplete. missing=$metrics_missing_field action=$metrics_action"
+WARNING: Metrics gate incomplete. metrics_gate:missing_metrics_today missing=$metrics_missing_field action=$metrics_action"
 fi
 
 if [[ "$clarification_gate_active" == "yes" && "$requires_saved_clarification_state" == "yes" ]]; then
