@@ -200,6 +200,65 @@
           "source-grounded answers optional"
         ]
       }
+    },
+    {
+      "id": "candidate-mechanisms-are-evidence-backed-hypotheses",
+      "title": "Candidate mechanisms are evidence-backed hypotheses",
+      "category": "candidate_mechanisms",
+      "purpose": "Checks that why/how or improvement-mechanism research presents candidate mechanisms with evidence, confidence, conflicts, gaps, and validation methods instead of proven-cause claims.",
+      "prompt": "Research candidate mechanisms behind why workflow review loops keep drifting, and suggest how we could validate each mechanism before changing the framework.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "The user asks for candidate mechanisms and validation methods.",
+        "No mechanism has been experimentally validated in the current project yet."
+      ],
+      "expected_behavior": [
+        "Includes a CANDIDATE MECHANISMS section separate from FINDINGS.",
+        "Labels mechanisms as candidate hypotheses or needs_validation, not proven causes.",
+        "Includes evidence and confidence for each candidate mechanism.",
+        "Includes counterevidence or conflicts for each candidate mechanism, or an explicit none-found entry.",
+        "Includes gaps for each candidate mechanism.",
+        "Includes a validation method for each candidate mechanism.",
+        "Keeps validated factual claims in FINDINGS with source attribution."
+      ],
+      "pass_criteria": [
+        "The response includes candidate_mechanisms or a CANDIDATE MECHANISMS section.",
+        "Each mechanism includes evidence, confidence, counterevidence/conflicts, gaps, and validation method.",
+        "The response says mechanisms are hypotheses to test or candidates.",
+        "The response does not present candidate mechanisms as proven causes."
+      ],
+      "fail_signals": [
+        "Presents the mechanisms as proven causes without executed validation evidence.",
+        "Omits counterevidence or conflicts.",
+        "Omits gaps.",
+        "Omits validation methods.",
+        "Uses confidence without evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "CANDIDATE MECHANISMS",
+          "candidate",
+          "hypotheses",
+          "Evidence",
+          "confidence",
+          "Counterevidence",
+          "conflicts",
+          "Gaps",
+          "Validation method",
+          "FINDINGS"
+        ],
+        "forbidden_substrings": [
+          "claim_status: proven",
+          "\"claim_status\": \"proven\"",
+          "status: proven",
+          "\"status\": \"proven\"",
+          "definitely causes",
+          "No validation needed",
+          "counterevidence omitted",
+          "gaps omitted",
+          "confidence without evidence"
+        ]
+      }
     }
   ]
 }

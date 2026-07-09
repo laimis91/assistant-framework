@@ -616,6 +616,73 @@
       }
     },
     {
+      "id": "qa-evaluator-uses-domain-rubrics-conditionally",
+      "title": "QA evaluator uses domain rubrics conditionally",
+      "category": "qa_domain_rubric_evaluation",
+      "purpose": "Checks that QAEvaluator loads and applies domain-rubrics.md only for scoped subjective, docs, DX, product, UX, UI, or domain acceptance and returns selected rubric scores separately from code-review findings.",
+      "prompt": "Run the QA evaluation lane for a completed docs/DX workflow slice. The Done Contract says setup documentation must be accurate, the developer handoff must be easy to follow, and QA should use rubric_refs documentation_quality and developer_experience. Build/test and code-review evidence already exist.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "qa_evaluation_mode is required and code-review/build evidence already exists.",
+        "The Done Contract and acceptance criteria scope documentation accuracy and developer experience.",
+        "domain_context describes a developer onboarding workflow.",
+        "rubric_refs contains documentation_quality and developer_experience.",
+        "No UI, visual design, product workflow, or unrelated domain craft rubric is in scope."
+      ],
+      "expected_behavior": [
+        "Loads references/qa-evaluation-loop.md for the QA lane after code-review/build evidence.",
+        "Conditionally loads references/domain-rubrics.md because Done Contract, domain_context, and rubric_refs scope docs/DX quality.",
+        "Selects only documentation_quality and developer_experience rubrics.",
+        "Returns selected_domain_rubrics with the selected families.",
+        "Returns domain_quality_scores with evidence-backed per-dimension scores and action guidance.",
+        "Marks unscoped UI, product, and domain-specific craft dimensions not_applicable or omits them.",
+        "Keeps QA findings tied to acceptance criteria, Done Contract, verification evidence, domain_context, or rubric_refs.",
+        "Does not replace Code Reviewer or report general code defects unless they directly block acceptance.",
+        "Does not load or invent domain rubrics for unscoped acceptance."
+      ],
+      "pass_criteria": [
+        "The response mentions references/domain-rubrics.md as conditional.",
+        "The response selects documentation_quality and developer_experience only.",
+        "The response returns selected_domain_rubrics and domain_quality_scores.",
+        "The response ties domain scores to acceptance criteria, Done Contract, domain_context, rubric_refs, and evidence.",
+        "The response keeps unscoped UI/product/domain craft rubrics not applicable or omitted.",
+        "The response keeps QA separate from code-review findings."
+      ],
+      "fail_signals": [
+        "Always loads domain-rubrics.md for QA even when no domain quality is scoped.",
+        "Invents a UI or product rubric when the case only scopes docs/DX.",
+        "Omits selected_domain_rubrics or domain_quality_scores.",
+        "Scores domain quality without evidence.",
+        "Uses QAEvaluator as a replacement for Code Reviewer.",
+        "Reports general code defects not tied to acceptance."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "references/domain-rubrics.md",
+          "conditional",
+          "selected_domain_rubrics",
+          "domain_quality_scores",
+          "documentation_quality",
+          "developer_experience",
+          "acceptance criteria",
+          "Done Contract",
+          "domain_context",
+          "rubric_refs",
+          "evidence",
+          "not_applicable",
+          "Code Reviewer"
+        ],
+        "forbidden_substrings": [
+          "always load domain-rubrics",
+          "invent a UI rubric",
+          "product rubric required",
+          "domain scores do not need evidence",
+          "QAEvaluator replaces Code Reviewer",
+          "general code defects are QA findings"
+        ]
+      }
+    },
+    {
       "id": "review-finding-distills-permanent-rule-candidates",
       "title": "Review finding distills permanent rule candidates",
       "category": "review_finding_rule_distillation",

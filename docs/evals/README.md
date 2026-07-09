@@ -20,6 +20,12 @@ under common operating conditions:
 - structured worker status packets from subagents
 - subagent authorization denial direct fallback
 - Codex role constraints without SubagentStart reinforcement
+- Done Contract debate and Harness Recipe before Build
+- trace/replay artifacts and typed artifact refs for harness recovery
+- separate Code Reviewer and QA Evaluator evidence
+- QA loop behavior with conditional domain rubrics
+- pivot/restart decisions for stagnation and Code Writer blockers
+- terminal max 10 review/QA round behavior
 
 ## Framework Instruction Fixtures
 

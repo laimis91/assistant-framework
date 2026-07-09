@@ -1,6 +1,6 @@
 # Task Journal Template
 
-Write to `{agent_state_dir}/task.md` in the project root when a local agent state directory is configured and policy allows local state artifacts. If no safe state directory is available, keep the same content in the response/plan packet. This state is the single source of truth for the current task — it survives context compression and session continuations when persisted. It is a framework-owned ignored state artifact, so the orchestrator may create and update it directly when allowed.
+Write to `{agent_state_dir}/task.md` in the project root when a local state directory is configured and policy allows. If none is safe, keep the same content in the response/plan packet. This framework-owned ignored artifact is the task source of truth, survives compression/continuation when persisted, and may be updated by the orchestrator.
 
 ## When to create
 - Any task that enters clarification wait: during Discover, before printing clarification questions or the wait message
@@ -9,22 +9,21 @@ Write to `{agent_state_dir}/task.md` in the project root when a local agent stat
 
 ## When to update
 - When clarification questions are asked, answered, or resolved via explicit `defaults`
-- After each Build step completes (update Progress, Artifact Registry, and check off Milestones)
-- When key decisions are made
-- When constraints are added by the user
-- After each review cycle pass (append to Review Log — never overwrite)
-- At verification summary (all steps done)
-- During user review feedback
-- During Document, after review/build/user-correction evidence has been checked for durable lessons
+- After each Build step: Progress, Artifact Registry, Milestones
+- After key decisions, new user constraints, review passes, verification summary, or user review feedback
+- After harness-capable events, Pivot/Restart Decisions, typed artifact refs, or QA results when applicable
+- During Document, after review/build/user-correction evidence is checked for durable lessons
 
 ## Template
 
 ```markdown
 ## Task: [1-sentence description]
+Created: [stable task identity, e.g. ISO timestamp created once]
 Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING | DOCUMENTING | DONE
 Triaged as: [small | medium | large | mega]
 Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 Risk tier: [low | moderate | high | critical]
+Controller intensity: [light | standard | strict]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification confidence: [low | medium | high]
@@ -47,33 +46,28 @@ Candidate scope scan:
 - Adjacent surfaces: [tests/docs/contracts/config/mirrors/hooks/runtime surfaces to inspect]
 - Confidence: [low | medium | high]
 - Unknowns: [none, or one short scope/risk unknown per line]
+Loop / Experiment Routing:
+- workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop; otherwise compact ref with loop_type/trigger/verifier/stop/max_iterations/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 Plan approval: [yes/no + date]
 
 ## Agent Dispatch Log
-[strict subagent evidence inspected by stop-review/phase gates]
-- Required roles: Code Writer, Builder/Tester, Reviewer [plus Code Mapper/Explorer/Architect when required by size/risk]
+[subagent evidence inspected by stop-review/phase gates]
+- Required roles: Code Writer, Builder/Tester, Code Reviewer; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
 - Execution mode: delegated | direct_fallback | not_applicable
-- Codex lifecycle evidence: delegated Codex roles must have matching `.codex/subagent-events.jsonl` `SubagentStart` + `SubagentStop` records; dispatch/result entries must cite the matching `agent_id`; journal text alone is not proof.
+- Codex lifecycle evidence: delegated Codex roles need hook-written protected workflow-state `SubagentStart`/`SubagentStop` records, task-bound to this journal's `Created:` identity; project-local `.codex/subagent-events.jsonl` is diagnostic only.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
-- Code Mapper dispatch: [subagent/tool/run id, mapping packet, timestamp, or N/A only in direct_fallback/not required]
-- Code Mapper result: [context map summary/evidence, or N/A only in direct_fallback/not required]
-- Code Mapper direct evidence: [role-equivalent context map evidence when direct_fallback, else N/A]
-- Explorer dispatch: [subagent/tool/run id, exploration packet, timestamp, or N/A only in direct_fallback/not required]
-- Explorer result: [execution path/dependency evidence, or N/A only in direct_fallback/not required]
-- Explorer direct evidence: [role-equivalent exploration evidence when direct_fallback, else N/A]
-- Architect dispatch: [subagent/tool/run id, architecture/decomposition packet, timestamp, or N/A only in direct_fallback/not required]
-- Architect result: [slice/blueprint/design evidence, or N/A only in direct_fallback/not required]
-- Architect direct evidence: [role-equivalent decomposition/architecture evidence when direct_fallback, else N/A]
-- Code Writer dispatch: [subagent/tool/run id, prompt/packet, timestamp, or N/A only in direct_fallback/not required]
-- Code Writer result: [returned files/summary/evidence, or N/A only in direct_fallback/not required]
-- Code Writer direct evidence: [role-equivalent implementation evidence when direct_fallback, else N/A]
-- Builder/Tester dispatch: [subagent/tool/run id, verification packet, timestamp, or N/A only in direct_fallback/not required]
-- Builder/Tester result: [commands/results/success signal returned, or N/A only in direct_fallback/not required]
-- Builder/Tester direct evidence: [role-equivalent build/test/validation evidence when direct_fallback, else N/A]
-- Reviewer dispatch: [reviewer subagent/tool/run id or assistant-review dispatch, or N/A only in direct_fallback/not required]
-- Reviewer result: [spec/quality review result evidence returned, or N/A only in direct_fallback/not required]
-- Reviewer direct evidence: [fresh review/spec+quality evidence when direct_fallback, else N/A]
-- Per-slice dispatch evidence: [medium+ delegated only: slice_id -> Code Writer dispatch/result + Builder/Tester dispatch/result; direct_fallback records sequential role-equivalent slice evidence]
+- Evidence shorthand: delegated refs | role-equivalent direct evidence | N/A only when role not required.
+- Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Explorer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Architect dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Code Writer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Builder/Tester dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Code Reviewer dispatch/result/direct evidence: [delegated refs | Code Reviewer direct evidence | Reviewer legacy compatibility | N/A]
+- Reviewer dispatch/result/direct evidence: [compatibility refs/direct evidence when used | N/A]
+- QA Evaluator dispatch/result/direct evidence: [delegated QA refs | direct evidence | N/A when not required]
+- Per-slice dispatch evidence: [medium+ delegated slice_id -> Code Writer + Builder/Tester refs; otherwise N/A: reason]
 
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
@@ -92,6 +86,19 @@ Plan approval: [yes/no + date]
 |------|---------|-----------|
 | [path] | [what and why] | Step N |
 
+## Harness Appendix Routing
+[required only for medium+ harness-capable work; otherwise `N/A: [reason]`; full schema in `references/task-journal-harness-appendix.md`]
+- Appendix: `references/task-journal-harness-appendix.md`
+- Controller intensity: [light | standard | strict + reason]
+- Done Contract: [section/ref, or N/A: reason]
+- Harness Recipe: [section/ref, or N/A: reason]
+- Harness Run State: [section/ref, or N/A: reason]
+- Trace Ledger: [section/ref, or N/A: reason]
+- Replay Packet: [section/ref, or N/A: reason]
+- Pivot/Restart Log: [section/ref when triggered, or N/A: reason]
+- Artifact Reference Ledger: [section/ref when artifacts cross agents, or N/A: reason]
+- QA Evaluation Log: [section/ref when qa_evaluation_mode=required, or N/A: reason]
+
 ## Milestones
 [compression-safe boundaries — each marks a point where context can be safely truncated]
 - [ ] M1: [milestone description] (after Step N)
@@ -104,6 +111,7 @@ Plan approval: [yes/no + date]
 
 ## Slice Verification Ledger
 [required for medium+ tasks; update after each slice before starting the next]
+do not start the next slice until the current one is `VERIFIED`
 | Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
 |-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
 | S1: [slice_id] [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `[command]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
@@ -138,7 +146,7 @@ Plan approval: [yes/no + date]
 - [anything not covered or deferred]
 
 ## Review Log
-[append an entry each time a review stage runs — never overwrite previous entries]
+[append entries; Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop); never overwrite previous entries]
 
 ### Spec Review #1
 - Result: PASS | FAIL
@@ -157,6 +165,7 @@ Plan approval: [yes/no + date]
 - Weighted: [score]
 - Delta from previous: — (first round)
 - Drift check: — (first round)
+- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
 - Complexity: [ran / skipped (not C#) / tool unavailable]
   - [method (line N): score X — refactored to Y, or "within threshold"]
 - Must-fix:
@@ -173,6 +182,7 @@ Plan approval: [yes/no + date]
 - Weighted: [score]
 - Delta from previous: [+/- amount]
 - Drift check: [GENUINE / SUSPICIOUS / DRIFT / REGRESSION / STAGNATION / NEUTRAL]
+- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
 - Must-fix:
   - [x] [file:line] — [issue] → [fix applied]
 - Should-fix:
@@ -182,12 +192,25 @@ Plan approval: [yes/no + date]
 [...repeat until clean or max rounds reached...]
 [Note: On test failure, skip this entry — write only "- Result: HAS_REMAINING_ITEMS" to Final result]
 
+### QA Evaluation
+- Mode: required | optional | not_required
+- QA trigger reason: [QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.]
+- QA Evaluator result: [final_verdict/result ref, or N/A: reason]
+- Selected domain rubrics: [families used, or N/A]
+- Domain quality scores: [compact scores, or N/A]
+- Code Review evidence: [Code Reviewer/Reviewer result ref, or N/A: reason]
+- Full schema: `references/task-journal-harness-appendix.md#qa-evaluation-log` when required
+
 ### Final result
 - Result: CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
 - Review rounds: [count]
+- QA result: [accepted | accepted_with_concerns | rejected | blocked | not_required]
+- QA rounds: [count or N/A]
+- QA score progression: [round1->round2->...roundN or N/A]
 - Final rubric score: [weighted score] ([PASS/REFINE/PIVOT])
 - Score progression: [round1→round2→...roundN] (e.g., 3.50→3.85→4.10)
 - Drift incidents: [count, or "none"]
+- Pivot/Restart decisions: [count and refs, or "none"]
 - Total must-fix resolved: [count across all rounds]
 - Total should-fix resolved: [count across all rounds]
 - Should-fix deferred: [list any remaining]
@@ -217,23 +240,22 @@ Plan approval: [yes/no + date]
 
 ## Lifecycle
 
-1. **Created** during Discover when clarification state must be tracked. Any task that enters clarification wait creates it before the wait; medium+ tasks also create it before leaving Discover even when no clarification wait is needed.
-2. **Triage metadata** — record `Task type`, `Risk tier`, `Required gates`, `Required agents`, `Subagent policy state`, `Subagent execution mode`, and `Subagent authorization scope` before leaving Triage. Discovery may re-triage these fields when code/context evidence changes the risk or required gates.
-3. **Clarification** updates — question caps are maximums, not quotas. Clear medium+ tasks may record `Clarification questions asked: 0` with `Clarification confidence: high`. While waiting, keep `Status: DISCOVERING`, set `Clarification status: needs_clarification`, set `Clarification defaults applied: false`, set confidence/cap/admissibility fields, and list every unresolved implementation-shaping topic. On explicit answers, clear unresolved topics, keep `Clarification defaults applied: false`, and set `Clarification status: ready`. On explicit `defaults`, print the applied defaults, clear unresolved topics, set `Clarification defaults applied: true`, and set `Clarification status: ready`.
-4. **Decompose** — medium+ tasks set `Status: DECOMPOSING` after Discover is ready, then persist the slice manifest before moving on to planning. Small tasks skip this state.
-5. **Plan approval** — once ready to plan, set `Status: PLANNING`, include the slice manifest in the plan for medium+ tasks, capture the approved plan, and update `Plan approval`.
-6. **Build** each step — update Progress, Artifact Registry, Key Decisions, Status after each step. For medium+ tasks, update the Slice Verification Ledger after each slice and do not start the next slice until the current one is `VERIFIED`. Check off Milestones when reached.
-7. **Review cycle** when all steps done — Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop), fix must-fix → re-test → re-review until clean, fill Final Result
-8. **Document** after review cycle passes — fill Verification Summary, add the Learning Controller block, Status: DOCUMENTING
-9. **Handoff** to user — they test manually and add Review Notes
-10. **Review fixes** — fix issues, re-test, re-review, update Progress
-11. **Done** — Status: DONE, promote only evidence-backed durable lessons to approved local memory if available, record backend_unavailable/policy_disallowed/no-save rationale when not saved, and leave the ignored state file in place unless the user asks for cleanup
+1. **Create** during Discover for clarification waits and all medium+ tasks.
+2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
+3. **Clarification** caps are maximums, not quotas. Waiting state stays `DISCOVERING`; explicit answers clear unresolved topics, while explicit `defaults` also sets `Clarification defaults applied: true`.
+4. **Decompose/Plan** persists the slice manifest for medium+ work, captures approval, then updates `Plan approval`.
+5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, and Slice Verification Ledger before the next slice.
+6. **Review** runs Spec Review, then Quality Review, fixing/re-testing/re-reviewing until clean or routed by Pivot/Restart; fill Final Result.
+7. **Document/Handoff** fills Verification Summary, Learning Controller, Review Notes, and user manual-test notes.
+8. **Done** sets `Status: DONE`, records only evidence-backed durable lessons when allowed, and leaves the ignored state file unless cleanup is requested.
 
 ## Rules
 
 - Keep entries concise — this is a log, not documentation
 - Resume from clarification waits only on explicit numbered answers or explicit `defaults`
 - Constraints are checked before each Build step
+- Producer roles update Artifact Reference Ledger entries in `references/task-journal-harness-appendix.md` when they create or move artifacts; Consumer roles validate `schema_or_contract` and update `validation_status` before using them
+- Pivot/Restart Decisions are append-only recovery records. If the selected action changes scope, files, behavior, risk, verification, or acceptance criteria, record `reapproval_required: true` and wait for approval before continuing.
 - On context continuation: read the configured task journal FIRST when it exists, before any other action
 - Never delete constraints unless the user explicitly removes them
-- The Verification Summary replaces the need for context-handoff templates during active work
+- The Replay Packet in `references/task-journal-harness-appendix.md` replaces context-handoff templates during active harness work

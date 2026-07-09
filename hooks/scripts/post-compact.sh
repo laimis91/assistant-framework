@@ -16,16 +16,18 @@
 #   CLAUDE_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
-#   Re-injects task journal, session state, working buffer, depth profile, and memory-graph instructions after compaction.
+#   Re-injects compact task journal pointer, session state, working buffer, depth profile, and memory-graph instructions after compaction.
 #   No output if nothing found (exit 0).
 #   Not installed for Gemini — session-start.sh handles re-injection on resume.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/task-journal-resolver.sh"
+
 INPUT=$(cat)
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(pwd)}}}"
+PROJECT_DIR="$(assistant_resolve_project_dir "$(pwd)")"
 AGENT_HOME="$HOME/.claude"
 IS_CODEX=false
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
@@ -40,17 +42,15 @@ fi
 
 context_parts=()
 
-# Re-inject task journal
-for dir in .claude .gemini .codex; do
-    TASK_FILE="$PROJECT_DIR/$dir/task.md"
-    if [[ -f "$TASK_FILE" ]]; then
-        task_content=$(cat "$TASK_FILE")
-        context_parts+=("RESTORED AFTER COMPACTION — Task journal:")
-        context_parts+=("$task_content")
-        context_parts+=("---")
-        break
-    fi
-done
+# Re-inject compact active task journal pointer
+TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
+if [[ -f "$TASK_FILE" ]] && ! assistant_task_journal_completed "$TASK_FILE"; then
+    assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
+    context_parts+=("RESTORED AFTER COMPACTION — Active task journal available")
+    context_parts+=("Task journal path: $TASK_FILE")
+    context_parts+=("Read this file when task recovery details are needed.")
+    context_parts+=("---")
+fi
 
 # Re-inject Telos context (purpose/strategic priorities — lightweight, always relevant)
 TELOS_FILE="$AGENT_HOME/telos.md"

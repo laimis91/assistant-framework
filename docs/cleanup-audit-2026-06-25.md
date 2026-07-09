@@ -151,7 +151,7 @@ These can be removed without changing tracked project behavior. Completed items 
 3. Stale `.codex/` workflow state after the active task is complete.
    - Status: NOT CLEARED by this execution.
    - Current `.codex/**` remains ignored live workflow state.
-   - Clear `.codex/task.md`, `.codex/context-map.md`, `.codex/working-buffer.md`, `.codex/session.md`, or `.codex/subagent-events.jsonl` only after no active task needs resume context.
+   - Clear `.codex/task.md`, `.codex/context-map.md`, `.codex/working-buffer.md`, `.codex/session.md`, or any project-local diagnostic `.codex/subagent-events.jsonl` only after no active task needs resume context.
 
 Recommended verification after clearing ignored files:
 

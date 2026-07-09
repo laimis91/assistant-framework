@@ -42,6 +42,11 @@ gates:
         check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are resolved before any Reviewer subagent dispatch"
         on_fail: "Resolve the active adapter/tool policy. Ask once when explicit authorization is required, or set direct_fallback/not_applicable and record why no Reviewer subagent will be spawned."
 
+      - id: E7
+        check: "If qa_evaluation_mode is required: Done Contract with debate_record when available, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, and qa_filter_policy are resolved before QAEvaluator dispatch"
+        condition: "qa_evaluation_mode == required"
+        on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
+
   # ─────────────────────────────────────────────
   # REVIEW step — per round
   # ─────────────────────────────────────────────
@@ -109,12 +114,12 @@ gates:
     exit_assertions:
 
       - id: EV1
-        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, CONTINUE"
-        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix (nits OK, note in report) and, for medium+ scope, weighted_score >= 4.0. EXIT_ISSUES_FIXED = round 10, all issues fixed this session, no must-fix/should-fix findings, and, for medium+ scope, weighted_score >= 4.0. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings."
+        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, ESCALATE_PIVOT_RESTART, CONTINUE"
+        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix (nits OK, note in report) and, for medium+ scope, weighted_score >= 4.0. EXIT_ISSUES_FIXED = round 10, all issues fixed this session, no must-fix/should-fix findings, and, for medium+ scope, weighted_score >= 4.0. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings. ESCALATE_PIVOT_RESTART = STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT."
 
       - id: EV2
         check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0"
-        on_fail: "Findings exist or medium+ weighted_score is below 4.0 — must CONTINUE to FIX step"
+        on_fail: "Findings exist or medium+ weighted_score is below 4.0 — apply rubric action first. REFINE continues to FIX; PIVOT escalates through pivot_restart_decision."
 
       - id: EV3
         check: "EXIT_MAX_ROUNDS only if: round == 10"
@@ -126,14 +131,19 @@ gates:
         on_fail: "Audit mode does not fix or loop — present findings and exit"
 
       - id: EV5
-        check: "For medium+ scope: rubric threshold action is applied — PASS exits, REFINE continues, PIVOT escalates"
+        check: "For medium+ scope: rubric threshold action is applied — PASS exits, REFINE continues, PIVOT escalates through pivot_restart_decision"
         condition: "scope_size in [medium, large] and rubric_scores is present"
         on_fail: "Check rubric weighted_score against threshold table in references/review-rubric.md and apply the correct action"
 
       - id: EV6
-        check: "PIVOT action triggers escalation to orchestrator — do not silently continue after PIVOT"
+        check: "PIVOT action triggers orchestrator-owned pivot_restart_decision — do not silently continue after PIVOT"
         condition: "rubric_scores.action == PIVOT"
-        on_fail: "Flag to orchestrator: weighted score below pivot threshold. Include lowest-scoring dimensions and recommendations."
+        on_fail: "Create pivot_restart_signal and require the orchestrator to record pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action before another fix/review dispatch."
+
+      - id: EV7
+        check: "STAGNATION, repeated DRIFT, or repeated REGRESSION triggers ESCALATE_PIVOT_RESTART and records pivot_restart_signal before another fix/review dispatch"
+        condition: "scope_size in [medium, large] and round >= 2"
+        on_fail: "Pause the loop, build pivot_restart_signal from score_history, and require orchestrator-owned pivot_restart_decision. Do not advance to another review round until the decision names the exact next action."
 
   # ─────────────────────────────────────────────
   # FIX step — per round (review-fix mode only)
@@ -179,6 +189,45 @@ gates:
         on_fail: "Run complexity analysis and flag methods exceeding threshold"
 
   # ─────────────────────────────────────────────
+  # QA EVALUATION step — after code review/build evidence
+  # ─────────────────────────────────────────────
+  - phase: QA_EVALUATION_STEP
+    condition: "qa_evaluation_mode == required"
+    checkpoint_start: null
+    checkpoint_end: null
+    exit_assertions:
+
+      - id: QA1
+        check: "QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available"
+        on_fail: "Return to validation or code review. Do not dispatch QAEvaluator until code-review/build evidence exists."
+
+      - id: QA2
+        check: "QAEvaluator received done_contract with debate_record when present, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, round, previously_failed_acceptance_items, and qa_filter_policy"
+        on_fail: "Re-dispatch QAEvaluator with the full QA handoff context, or complete direct-fallback QA context before continuing."
+
+      - id: QA3
+        check: "QAEvaluator returned status, round, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were selected, final_verdict, result, evidence, and score_entry"
+        on_fail: "In delegated mode, re-dispatch QAEvaluator requesting the missing fields. In direct fallback mode, complete the missing QA evidence before deciding acceptance. Require selected_domain_rubrics/domain_quality_scores only when domain rubrics are scoped."
+
+      - id: QA4
+        check: "QAEvaluator findings stay in the QA lane and do not replace code-reviewer findings"
+        on_fail: "Move generic code/security/architecture/test-coverage findings back to Code Reviewer unless they directly block an acceptance criterion or Done Contract item."
+
+      - id: QA5
+        check: "QA loop exit decision is accepted, accepted_with_concerns, rejected, or blocked; round 10 is terminal and never starts round 11"
+        on_fail: "Apply references/qa-evaluation-loop.md terminal behavior. If round < 10 and rejected, return failed acceptance items to Build; if round == 10, record remaining failed acceptance items in qa_evaluation_result."
+
+      - id: QA6
+        check: "Domain rubrics from references/domain-rubrics.md are loaded and applied only when scoped by acceptance criteria, Done Contract, domain_context, or explicit rubric_refs"
+        condition: "qa_evaluation_mode == required"
+        on_fail: "Remove unscoped rubric scoring, or re-dispatch QAEvaluator with the explicit domain_context/rubric_refs and require selected_domain_rubrics plus domain_quality_scores."
+
+      - id: QA7
+        check: "QA STAGNATION, repeated DRIFT, repeated REGRESSION, or scoped domain action pivot triggers pivot_restart_signal and orchestrator-owned pivot_restart_decision before another QA/build dispatch"
+        condition: "qa_evaluation_mode == required"
+        on_fail: "Pause QA, create pivot_restart_signal from score_entry, score_progression, or domain_quality_scores action=pivot, and require pivot_restart_decision with exact_next_action. Round 10 remains terminal and never starts round 11."
+
+  # ─────────────────────────────────────────────
   # EXIT — after loop completes
   # ─────────────────────────────────────────────
   - phase: EXIT
@@ -199,6 +248,11 @@ gates:
         check: "For medium+ scope: rubric_summary is populated in output with final scores and score progression"
         condition: "scope_size in [medium, large]"
         on_fail: "Populate rubric_summary with final_scores from last round and score_progression from all rounds"
+
+      - id: X4
+        check: "If qa_evaluation_mode is required: qa_evaluation_result is populated with final_verdict, result, acceptance_findings, qa_scorecard, score_progression, and evidence"
+        condition: "qa_evaluation_mode == required"
+        on_fail: "Run or complete the QA evaluation loop before presenting final review results."
 
 # ─────────────────────────────────────────────
 # Loop invariants
@@ -235,8 +289,9 @@ invariants:
     condition: "scope_size in [medium, large] and round >= 2"
     on_fail: >
       Drift detected: score increased without corresponding quality improvement.
-      Per references/score-tracking.md: reset evaluator context by dispatching a fresh Reviewer
-      with stricter prompt. Add 'Drift detected in round N' to the final summary.
+      Per references/score-tracking.md: reset evaluator context once by dispatching a fresh Reviewer
+      with stricter prompt; repeated DRIFT triggers pivot_restart_signal and orchestrator-owned
+      pivot_restart_decision before another dispatch.
 
   - id: INV6
     check: "For medium+ scope: score does not stagnate (unchanged for 2+ rounds with findings present)"
@@ -244,8 +299,8 @@ invariants:
     condition: "scope_size in [medium, large] and round >= 3"
     on_fail: >
       Stagnation detected: score unchanged for 2+ rounds while findings remain.
-      Escalate to orchestrator — the loop is churning without progress. Consider whether
-      remaining issues are architectural (require broader changes) or the approach needs a PIVOT.
+      Return pivot_restart_signal and require orchestrator-owned pivot_restart_decision before
+      another fix/review dispatch.
 
 
   - id: INV7
@@ -267,3 +322,27 @@ invariants:
     scope: all_rounds
     condition: "agentic_loop_safety_review_required is true"
     on_fail: "Run the Agentic Loop Safety Checklist before declaring the review clean; report missing bounds, stop conditions, retry caps, empty-result handling, tool-error routing, stagnation detection, cost/token guards, or low-confidence escalation as findings."
+
+  - id: INV_QA1
+    check: "QA evaluation never replaces Code Reviewer or Reviewer compatibility review"
+    scope: all_rounds
+    condition: "qa_evaluation_mode == required"
+    on_fail: "Run code review first and record QAEvaluator only as the independent acceptance lane."
+
+  - id: INV_QA2
+    check: "QA evaluation round is always between 1 and 10, and round 10 is terminal"
+    scope: all_rounds
+    condition: "qa_evaluation_mode == required"
+    on_fail: "Clamp QA execution to the 10-round cap and return the final verdict with remaining failed acceptance items instead of starting round 11."
+
+  - id: INV_QA3
+    check: "QAEvaluator does not invent domain rubrics, subjective standards, or domain-quality penalties when no acceptance criteria, Done Contract, domain_context, or rubric_refs scope them"
+    scope: all_rounds
+    condition: "qa_evaluation_mode == required"
+    on_fail: "Discard unscoped domain rubric output and rerun QA with references/domain-rubrics.md conditional selection rules."
+
+  - id: INV_QA4
+    check: "QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists"
+    scope: all_rounds
+    condition: "qa_evaluation_mode == required"
+    on_fail: "Move unsupported QA concerns to non-blocking observations or request missing context with NEEDS_CONTEXT/BLOCKED."

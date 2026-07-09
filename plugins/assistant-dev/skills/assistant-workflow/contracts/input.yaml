@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Reviewer responsibilities."
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs when explicitly recorded."
     default: []
     on_missing: skip
 
@@ -134,6 +134,58 @@ fields:
     default: []
     on_missing: skip
     notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
+
+  - name: harness_capable
+    type: boolean
+    required: false
+    description: "Whether the task is scoped into the harness controller; ordinary medium+ workflow tasks default to false."
+    validation: "False by default. True only for explicitly requested harness work, long-running work, trace/replay-ready multi-slice work, high-risk harness work, domain-scored work, UI/visual/product/UX/docs/DX-facing work, or accepted Done Contract/Harness Recipe presence."
+    default: false
+    on_missing: infer
+    infer_from: >
+      Default false. Set true only when the user or approved plan explicitly requests harness work,
+      the work is long-running, trace/replay-ready multi-slice work, high-risk harness work,
+      domain-scored, UI/visual/product/UX/docs/DX-facing, or already has an accepted Done Contract
+      or Harness Recipe. Do not infer true from size=medium+, delegation alone, or ordinary
+      source-changing workflow tasks.
+
+  - name: controller_intensity
+    type: enum
+    required: false
+    enum_values: [light, standard, strict]
+    description: "Completion/gate intensity selected during Triage; maps onto existing completion_tiers and gate_tiers."
+    validation: "light uses small/low-risk guidance, standard uses ordinary medium+ completion/review without harness/QA defaults, and strict uses strict gates or harness/QA artifacts only when their existing conditions apply."
+    default: standard
+    on_missing: infer
+    infer_from: >
+      Use light for small low-risk localized work. Use standard for ordinary medium+
+      source-changing work, including delegated work, when harness_capable == false
+      and qa_evaluation_mode == not_required. Use strict only for high/critical risk,
+      hook_profile == strict, harness_capable == true, qa_evaluation_mode == required,
+      explicit harness/QA acceptance work, or trace/replay-ready work. Do not infer
+      strict from size=medium+ or delegation alone.
+
+  - name: qa_evaluation_mode
+    type: enum
+    required: false
+    enum_values: [not_required, optional, required]
+    description: "Whether Review phase should run the independent QA Evaluator acceptance loop after build/test and code-review evidence"
+    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
+    default: not_required
+    on_missing: infer
+    infer_from: >
+      Use required only for QA required positive triggers: explicit QA/acceptance evaluation request,
+      accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped
+      UI/visual/product/UX/docs/DX acceptance.
+      Use required when the user explicitly requests QA/acceptance evaluation, the task has an
+      accepted Done Contract, harness_capable == true and acceptance evaluation is in scope, the task
+      is domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
+      QA non-triggers: template labels/placeholders, generic acceptance criteria labels,
+      optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+
+      code-review-only/source-changing work.
+      Use optional when acceptance material exists but QA is not required.
+      Use not_required for ordinary medium+ code-review-only/source-changing work with no separate
+      acceptance evidence need.
 
   - name: search_mode
     type: enum

@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HOOKS_DIR="$FRAMEWORK_DIR/hooks/scripts"
+. "$HOOKS_DIR/hook-runtime.sh"
 
 METRIC_COLUMNS=(hook_name scenario stdout_bytes stdout_words stderr_bytes exit_code first_blocker_or_action)
 
@@ -36,6 +37,10 @@ ANCHOR_FAILURES=0
 CURRENT_ROOT=""
 PROJECT_DIR=""
 AGENT_HOME=""
+WORKFLOW_ENFORCER_PHASE_TRIM_BYTES=""
+WORKFLOW_ENFORCER_PHASE_TRIM_WORDS=""
+STOP_REVIEW_PHASE_TRIM_BYTES=""
+STOP_REVIEW_PHASE_TRIM_WORDS=""
 
 markdown_escape() {
     local value="$1"
@@ -81,6 +86,10 @@ new_fixture() {
     mkdir -p "$PROJECT_DIR/.codex" "$AGENT_HOME/.codex"
 }
 
+codex_lifecycle_events_file() {
+    HOME="$AGENT_HOME" assistant_hook_codex_subagent_events_file_for_project "$PROJECT_DIR"
+}
+
 run_hook_scenario() {
     local hook_name="$1"
     local scenario="$2"
@@ -104,6 +113,14 @@ run_hook_scenario() {
     stdout_words="$(wc -w < "$stdout_file" | tr -d ' ')"
     stderr_bytes="$(wc -c < "$stderr_file" | tr -d ' ')"
     first_action="$(extract_first_action "$stdout_file" "$fallback_action")"
+
+    if [[ "$hook_name" == "workflow-enforcer" && "$scenario" == "codex building phase gates" ]]; then
+        WORKFLOW_ENFORCER_PHASE_TRIM_BYTES="$stdout_bytes"
+        WORKFLOW_ENFORCER_PHASE_TRIM_WORDS="$stdout_words"
+    elif [[ "$hook_name" == "stop-review" && "$scenario" == "codex missing spec review blocker" ]]; then
+        STOP_REVIEW_PHASE_TRIM_BYTES="$stdout_bytes"
+        STOP_REVIEW_PHASE_TRIM_WORDS="$stdout_words"
+    fi
 
     cat "$stdout_file" "$stderr_file" > "$combined_file"
     if [[ -n "$extra_anchor_file" && -f "$extra_anchor_file" ]]; then
@@ -248,7 +265,7 @@ run_subagent_monitor_start() {
         --arg cwd "$PROJECT_DIR" \
         '{hook_event_name:"SubagentStart",agent_type:"code-writer",agent_id:"cw-bench-1",turn_id:"turn-bench",session_id:"session-bench",agent_transcript_path:"/tmp/benchmark-transcript",cwd:$cwd}')"
     run_hook_scenario "subagent-monitor" "codex code-writer start" "$stdin_json" \
-        "recorded SubagentStart lifecycle evidence" "$PROJECT_DIR/.codex/subagent-events.jsonl" \
+        "recorded SubagentStart lifecycle evidence" "$(codex_lifecycle_events_file)" \
         "SUBAGENT CONSTRAINT" "SubagentStart" "code-writer"
 }
 
@@ -265,7 +282,7 @@ run_subagent_monitor_stop() {
     env HOME="$AGENT_HOME" CODEX_PROJECT_DIR="$PROJECT_DIR" bash "$HOOKS_DIR/subagent-monitor.sh" \
         >/dev/null 2>/dev/null <<< "$stdin_start"
     run_hook_scenario "subagent-monitor" "codex code-writer stop" "$stdin_stop" \
-        "recorded SubagentStop lifecycle evidence" "$PROJECT_DIR/.codex/subagent-events.jsonl" \
+        "recorded SubagentStop lifecycle evidence" "$(codex_lifecycle_events_file)" \
         "SubagentStart" "SubagentStop" "cw-bench-1"
 }
 
@@ -298,6 +315,12 @@ The C slice trimmed repeated explanatory prose from `session-start`, `workflow-e
 | c-hook-output-trim | session-start | 2122 | 225 | 1766 | 183 |
 | c-hook-output-trim | workflow-enforcer | 1892 | 232 | 1625 | 184 |
 | c-hook-output-trim | post-compact | 2131 | 218 | 1526 | 154 |
+EOF
+    cat <<EOF
+| runtime-gate-output-trim | workflow-enforcer | 1626 | 184 | ${WORKFLOW_ENFORCER_PHASE_TRIM_BYTES:-pending} | ${WORKFLOW_ENFORCER_PHASE_TRIM_WORDS:-pending} |
+| runtime-gate-output-trim | stop-review | 371 | 54 | ${STOP_REVIEW_PHASE_TRIM_BYTES:-pending} | ${STOP_REVIEW_PHASE_TRIM_WORDS:-pending} |
+EOF
+    cat <<'EOF'
 
 ## Signal Anchors Checked
 
@@ -309,7 +332,7 @@ The C slice trimmed repeated explanatory prose from `session-start`, `workflow-e
 - `subagent-monitor` / `codex code-writer start`: `SUBAGENT CONSTRAINT`, `SubagentStart`, `code-writer`
 - `subagent-monitor` / `codex code-writer stop`: `SubagentStart`, `SubagentStop`, `cw-bench-1`
 
-The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the project-local `.codex/subagent-events.jsonl` file written by `subagent-monitor.sh`.
+The subagent stop scenario emits no user-facing stdout in the current hook behavior. The benchmark records the locally feasible lifecycle evidence by checking the protected agent-owned workflow-state event file written by `subagent-monitor.sh`; project-local `.codex/subagent-events.jsonl` files are diagnostic only.
 EOF
 }
 

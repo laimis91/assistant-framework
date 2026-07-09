@@ -9,6 +9,7 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 - `Task type`: `feature`, `bugfix`, `refactor`, `migration`, `rewrite`, `config`, `infra`, `security`, `docs`, or `spike`
 - `Risk tier`: `low`, `moderate`, `high`, or `critical`
 - `Triaged as`: `small`, `medium`, `large`, or `mega`
+- `Controller intensity`: `light`, `standard`, or `strict`
 - `Required agents`: the roles required by size and risk
 - `Subagent policy state`: `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, or `policy_disallowed`
 - `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
@@ -27,6 +28,16 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 | `mega` | Rewrite, migration, port, legacy-to-new-structure work, 10+ files across layers, or behavior parity across subsystems. |
 
 Escalate size when risk exceeds file count. Auth, PII, payments, destructive data changes, public API changes, or behavior-preserving legacy migration are at least `large` unless discovery proves they are isolated and fully covered.
+
+## Controller Intensity Rules
+
+| Intensity | Use when |
+|---|---|
+| `light` | Small low-risk localized work can use compact guidance and validation. |
+| `standard` | Ordinary medium+ source-changing work, including delegated work, when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
+| `strict` | High/critical risk, `hook_profile == strict`, `harness_capable=true`, `qa_evaluation_mode=required`, or explicit trace/replay/harness/QA criteria. |
+
+Do not infer `strict` from `size=medium+` or delegation alone. `standard` keeps ordinary medium non-harness work out of Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, and QA defaults.
 
 ## Candidate Scope Scan
 

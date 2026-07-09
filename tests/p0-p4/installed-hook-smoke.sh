@@ -129,9 +129,10 @@ TASK
     workflow_guard="$installed_hooks_dir/workflow-guard.sh"
     stop_review="$installed_hooks_dir/stop-review.sh"
     subagent_monitor="$installed_hooks_dir/subagent-monitor.sh"
+    post_compact="$installed_hooks_dir/post-compact.sh"
 
     if [[ -z "$smoke_failed" ]]; then
-        for required_path in "$session_start" "$skill_router" "$workflow_enforcer" "$workflow_guard" "$stop_review" "$subagent_monitor"; do
+        for required_path in "$session_start" "$skill_router" "$workflow_enforcer" "$workflow_guard" "$stop_review" "$subagent_monitor" "$post_compact"; do
             if [[ ! -x "$required_path" ]]; then
                 smoke_failed="required Codex workflow hook is not executable: $required_path"
                 break
@@ -153,6 +154,29 @@ TASK
             smoke_failed="installed session-start.sh emitted non-JSON stdout"
         elif [[ "$session_stdout" == *"ACTIVE TASK JOURNAL"* || "$session_stdout" == *"stale completed smoke task"* || "$session_stdout" == *"This completed task text must not be injected"* ]]; then
             smoke_failed="installed session-start.sh injected completed task journal"
+        fi
+    fi
+
+    if [[ -z "$smoke_failed" ]]; then
+        post_compact_out="$(mktemp)"
+        post_compact_err="$(mktemp)"
+        post_compact_exit=0
+        env HOME="$HOOK_SMOKE_HOME" CODEX_PROJECT_DIR="$HOOK_SMOKE_PROJECT" bash "$post_compact" \
+            >"$post_compact_out" 2>"$post_compact_err" <<< '{"hook_event_name":"PostCompact","trigger":"manual"}' || post_compact_exit=$?
+        post_compact_stdout="$(cat "$post_compact_out")"
+        rm -f "$post_compact_out" "$post_compact_err"
+        post_compact_context="$(echo "$post_compact_stdout" | jq -r '.systemMessage // empty' 2>/dev/null || true)"
+        if [[ "$post_compact_exit" -ne 0 ]]; then
+            smoke_failed="installed post-compact.sh failed with exit $post_compact_exit"
+        elif [[ -n "$post_compact_stdout" ]] && ! echo "$post_compact_stdout" | jq -e . >/dev/null 2>&1; then
+            smoke_failed="installed post-compact.sh emitted non-JSON stdout"
+        elif [[ -n "$post_compact_stdout" ]] && ! echo "$post_compact_stdout" | jq -e '(has("hookSpecificOutput") | not) and (.systemMessage | type == "string")' >/dev/null 2>&1; then
+            smoke_failed="installed post-compact.sh emitted unsupported JSON shape: stdout='$post_compact_stdout'"
+        elif [[ "$post_compact_context" == *"RESTORED AFTER COMPACTION — Active task journal available"* \
+            || "$post_compact_context" == *"ACTIVE TASK JOURNAL AVAILABLE"* \
+            || "$post_compact_context" == *"stale completed smoke task"* \
+            || "$post_compact_context" == *"This completed task text must not be injected"* ]]; then
+            smoke_failed="installed post-compact.sh injected completed task journal state"
         fi
     fi
 

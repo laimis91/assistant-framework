@@ -50,7 +50,12 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "Discovery context maps are owned by code-mapper for medium+ work" "$agents_file" \
-            && grep -Fq "code-mapper, code-writer, builder-tester, reviewer" "$agents_file" \
+            && grep -Fq "code-mapper, code-writer, builder-tester, architect, explorer, code-reviewer, reviewer" "$agents_file" \
+            && grep -Fq "reviewer remains a compatibility route for existing handoffs" "$agents_file" \
+            && grep -Fq "| code-reviewer | read-only | Canonical code/security/architecture review |" "$agents_file" \
+            && grep -Fq "| reviewer | read-only | Compatibility route for existing review handoffs |" "$agents_file" \
+            && [[ -f "$INSTALL_HOME/.codex/agents/code-reviewer.toml" ]] \
+            && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME/.codex/agents/code-reviewer.toml" \
             && grep -Fq "The orchestrator may create and update framework-owned state artifacts" "$agents_file" \
             && grep -Fq ".codex/context-map.md" "$agents_file" \
             && grep -Fq "it does not edit project source files directly" "$agents_file" \
@@ -64,13 +69,21 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "preserve user custom sections below the installer block" "$agents_file"; then
             pass
         else
-            fail "expected one Codex framework block, one protocol block, current generated wording, and context budget guidance"
+            fail "expected one Codex framework block, one protocol block, current generated wording, code-reviewer compatibility guidance, and context budget guidance"
         fi
     else
         fail "second install failed; see /tmp/p0p4-install-2.err"
     fi
 else
     fail "first install failed; see /tmp/p0p4-install-1.err"
+fi
+
+test_start "subagent monitor recognizes code-reviewer as read-only Reviewer compatibility"
+if grep -Fq 'code-reviewer) role_constraint="SUBAGENT CONSTRAINT: You are a code reviewer. Read-only code/security/architecture/test-coverage review. Do NOT edit any files. Report findings only."' "$FRAMEWORK_DIR/hooks/scripts/subagent-monitor.sh" \
+    && grep -Fq 'code-reviewer|reviewer) role_name="Reviewer"' "$FRAMEWORK_DIR/hooks/scripts/subagent-monitor.sh"; then
+    pass
+else
+    fail "subagent-monitor.sh must reinforce code-reviewer read-only constraints and map it to Reviewer handoff contracts"
 fi
 
 test_start "Codex single-skill install generates AGENTS skill table from installed skills"

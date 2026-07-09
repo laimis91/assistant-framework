@@ -6,6 +6,11 @@
 # task-journal-resolver.sh so these helpers do not accidentally revive stale
 # workflow state.
 
+ASSISTANT_PHASE_GATES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$ASSISTANT_PHASE_GATES_DIR/hook-runtime.sh" ]]; then
+    . "$ASSISTANT_PHASE_GATES_DIR/hook-runtime.sh"
+fi
+
 assistant_phase_scalar_field() {
     local file="$1"
     local label="$2"
@@ -19,7 +24,23 @@ assistant_phase_scalar_field() {
 }
 
 assistant_phase_status() {
-    assistant_phase_scalar_field "$1" "Status"
+    local file="$1"
+    awk '
+        function is_task_heading(line) {
+            return line ~ /^##+[[:space:]]*Task([[:space:]]*:|[[:space:]]*$)/
+        }
+        function is_nested_section(line) {
+            return line ~ /^##+[[:space:]]+/ && !is_task_heading(line)
+        }
+        is_nested_section($0) {
+            exit
+        }
+        $0 ~ "^(#[[:space:]]*)?Status:" {
+            sub("^(#[[:space:]]*)?Status:[[:space:]]*", "", $0)
+            print
+            exit
+        }
+    ' "$file" 2>/dev/null
 }
 
 assistant_phase_is_medium_plus() {
@@ -35,6 +56,20 @@ assistant_phase_status_is_lifecycle_active() {
 assistant_phase_has_plan_approval() {
     local file="$1"
     grep -qE "(^Plan approval:.*yes|PLAN COMPLETE \(approved\))" "$file" 2>/dev/null
+}
+
+assistant_phase_plan_missing_reason_key() {
+    local file="$1"
+    local has_plan
+
+    has_plan="$(grep -m1 -E "^(Plan approval:|## Plan)" "$file" 2>/dev/null || true)"
+    if [[ -z "$has_plan" ]]; then
+        printf 'no_plan\n'
+    elif ! assistant_phase_has_plan_approval "$file"; then
+        printf 'plan_not_approved\n'
+    else
+        printf 'complete\n'
+    fi
 }
 
 assistant_phase_has_spec_review_entry() {
@@ -724,480 +759,6 @@ assistant_phase_final_result_has_remaining_rationale() {
     return 1
 }
 
-assistant_phase_review_controller_missing_reason_key() {
-    local file="$1"
-    local quality_review_line="$2"
-    local minimum_review_line="${3:-0}"
-    local quality_block final_block round_line findings_line rubric_line weighted_line delta_line drift_line score_progression_line
-    local round max_round heading_round must_fix should_fix current_findings weighted delta drift_value score_progression final_result_line final_result score_x100
-    local previous_quality_review_line previous_quality_block previous_weighted previous_findings previous_score observed_weighted_sequence
-
-    quality_block="$(assistant_phase_review_block_after_line "$file" "$quality_review_line" || true)"
-    final_block="$(assistant_phase_final_result_block_after_line "$file" "$quality_review_line" || true)"
-
-    round_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Round:" || true)"
-    if [[ ! "$round_line" =~ Round:[[:space:]]*([0-9]+)[[:space:]]+of[[:space:]]+([0-9]+) ]]; then
-        printf 'missing_review_round\n'
-        return 0
-    fi
-    round="${BASH_REMATCH[1]}"
-    max_round="${BASH_REMATCH[2]}"
-    if [[ "$max_round" -ne 10 || "$round" -lt 1 || "$round" -gt 10 ]]; then
-        printf 'round_overflow\n'
-        return 0
-    fi
-    heading_round="$(assistant_phase_quality_review_heading_round "$file" "$quality_review_line" || true)"
-    if [[ -z "$heading_round" || "$heading_round" -ne "$round" ]]; then
-        printf 'round_overflow\n'
-        return 0
-    fi
-
-    findings_line="$(printf '%s\n' "$quality_block" | grep -m1 -Ei "^[[:space:]]*-[[:space:]]Found([[:space:]]this[[:space:]]round)?:" || true)"
-    if [[ -z "$findings_line" ]]; then
-        printf 'missing_findings_summary\n'
-        return 0
-    fi
-    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+must-fix ]]; then
-        must_fix="${BASH_REMATCH[1]}"
-    else
-        printf 'missing_findings_summary\n'
-        return 0
-    fi
-    if [[ "$findings_line" =~ ([0-9]+)[[:space:]]+should-fix ]]; then
-        should_fix="${BASH_REMATCH[1]}"
-    else
-        printf 'missing_findings_summary\n'
-        return 0
-    fi
-    current_findings="$((must_fix + should_fix))"
-
-    rubric_line="$(printf '%s\n' "$quality_block" | grep -E "^[[:space:]]*-[[:space:]]Rubric:" | tail -1 || true)"
-    if [[ -z "$rubric_line" ]] || ! assistant_phase_rubric_scores_are_valid "$rubric_line"; then
-        printf 'missing_rubric_scores\n'
-        return 0
-    fi
-
-    weighted_line="$(printf '%s\n' "$quality_block" | grep -E "^[[:space:]]*-[[:space:]]Weighted:" | tail -1 || true)"
-    weighted="$(assistant_phase_value_after_colon "$weighted_line")"
-    if [[ -z "$weighted_line" ]] || ! assistant_phase_decimal_in_range "$weighted" "0" "5" \
-        || ! assistant_phase_rubric_weighted_score_matches "$rubric_line" "$weighted"; then
-        printf 'missing_weighted_score\n'
-        return 0
-    fi
-
-    if [[ "$round" -gt 1 ]]; then
-        delta_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Delta from previous:" || true)"
-        delta="$(assistant_phase_value_after_colon "$delta_line")"
-        if [[ -z "$delta_line" ]] || ! assistant_phase_signed_decimal_is_valid "$delta"; then
-            printf 'missing_delta_from_previous\n'
-            return 0
-        fi
-        drift_line="$(printf '%s\n' "$quality_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Drift check:" || true)"
-        drift_value="$(assistant_phase_value_after_colon "$drift_line")"
-        if [[ -z "$drift_line" ]] || ! assistant_phase_drift_check_is_valid "$drift_value"; then
-            printf 'missing_drift_check\n'
-            return 0
-        fi
-    fi
-
-    final_result_line="$(printf '%s\n' "$final_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Result:[[:space:]]*(CLEAN|ISSUES_FIXED|HAS_REMAINING_ITEMS)[[:space:]]*$" || true)"
-    if [[ ! "$final_result_line" =~ Result:[[:space:]]*(CLEAN|ISSUES_FIXED|HAS_REMAINING_ITEMS)[[:space:]]*$ ]]; then
-        printf 'no_final_result\n'
-        return 0
-    fi
-    final_result="${BASH_REMATCH[1]}"
-
-    score_progression_line="$(printf '%s\n' "$final_block" | grep -m1 -E "^[[:space:]]*-[[:space:]]Score progression:" || true)"
-    score_progression="$(assistant_phase_value_after_colon "$score_progression_line")"
-    if [[ -z "$score_progression_line" ]] || ! assistant_phase_score_progression_is_valid "$score_progression" "$weighted" "$round"; then
-        printf 'missing_score_progression\n'
-        return 0
-    fi
-
-    if ! observed_weighted_sequence="$(assistant_phase_quality_review_observed_weighted_sequence "$file" "$minimum_review_line" "$quality_review_line" "$round")"; then
-        if [[ "$round" -gt 1 ]]; then
-            printf 'missing_delta_from_previous\n'
-        else
-            printf 'missing_score_progression\n'
-        fi
-        return 0
-    fi
-
-    if ! assistant_phase_score_progression_matches_observed_sequence "$score_progression" "$observed_weighted_sequence"; then
-        printf 'missing_score_progression\n'
-        return 0
-    fi
-
-    if [[ "$round" -gt 1 ]]; then
-        previous_quality_review_line="$(assistant_phase_previous_quality_review_line_before_line "$file" "$quality_review_line" "$minimum_review_line" || true)"
-        if [[ -z "$previous_quality_review_line" ]]; then
-            printf 'missing_delta_from_previous\n'
-            return 0
-        fi
-        previous_quality_block="$(assistant_phase_review_block_after_line "$file" "$previous_quality_review_line" || true)"
-        previous_weighted="$(assistant_phase_review_weighted_from_block "$previous_quality_block" || true)"
-        previous_findings="$(assistant_phase_review_findings_count_from_block "$previous_quality_block" || true)"
-        if [[ -z "$previous_weighted" || -z "$previous_findings" ]]; then
-            printf 'missing_delta_from_previous\n'
-            return 0
-        fi
-        previous_score="$previous_weighted"
-        if [[ -z "$previous_score" ]] || ! assistant_phase_delta_matches_scores "$delta" "$previous_score" "$weighted"; then
-            printf 'missing_delta_from_previous\n'
-            return 0
-        fi
-        if ! assistant_phase_drift_check_matches_movement "$drift_value" "$delta" "$previous_findings" "$current_findings"; then
-            printf 'missing_drift_check\n'
-            return 0
-        fi
-    fi
-
-    if [[ "$final_result" == "CLEAN" || "$final_result" == "ISSUES_FIXED" ]]; then
-        score_x100="$(awk -v score="$weighted" 'BEGIN { printf "%d", score * 100 }')"
-        if [[ "$score_x100" -lt 400 ]]; then
-            printf 'weighted_score_below_pass\n'
-            return 0
-        fi
-        if [[ "$must_fix" -ne 0 || "$should_fix" -ne 0 ]]; then
-            printf 'unresolved_findings\n'
-            return 0
-        fi
-    elif [[ "$final_result" == "HAS_REMAINING_ITEMS" ]]; then
-        if ! assistant_phase_final_result_has_remaining_rationale "$final_block"; then
-            printf 'missing_remaining_rationale\n'
-            return 0
-        fi
-    fi
-
-    printf 'complete\n'
-}
-
-assistant_phase_has_learning_controller() {
-    local file="$1"
-    grep -qE "^### Learning Controller[[:space:]]*$" "$file" 2>/dev/null
-}
-
-assistant_phase_learning_controller_block() {
-    local file="$1"
-    awk '
-        /^### Learning Controller[[:space:]]*$/ {
-            found = 1
-            in_block = 1
-            next
-        }
-        in_block && /^### / { exit }
-        in_block { print }
-        END { exit found ? 0 : 1 }
-    ' "$file" 2>/dev/null
-}
-
-assistant_phase_has_learning_controller_after_line() {
-    local file="$1"
-    local minimum_line="$2"
-    [[ -n "$minimum_line" ]] || return 1
-    awk -v minimum_line="$minimum_line" '
-        BEGIN { minimum_line += 0 }
-        NR <= minimum_line { next }
-        /^### Learning Controller[[:space:]]*$/ {
-            found = 1
-            exit
-        }
-        END { exit found ? 0 : 1 }
-    ' "$file" 2>/dev/null
-}
-
-assistant_phase_learning_controller_block_after_line() {
-    local file="$1"
-    local minimum_line="$2"
-    [[ -n "$minimum_line" ]] || return 1
-    awk -v minimum_line="$minimum_line" '
-        BEGIN { minimum_line += 0 }
-        NR <= minimum_line { next }
-        /^### Learning Controller[[:space:]]*$/ {
-            found = 1
-            in_block = 1
-            next
-        }
-        in_block && /^### / { exit }
-        in_block { print }
-        END { exit found ? 0 : 1 }
-    ' "$file" 2>/dev/null
-}
-
-assistant_phase_learning_field_value() {
-    local block="$1"
-    local label="$2"
-    printf '%s\n' "$block" | awk -v label="$label" '
-        BEGIN { wanted = tolower(label) ":" }
-        {
-            line = $0
-            sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", line)
-            low = tolower(line)
-            if (index(low, wanted) == 1) {
-                sub(/^[^:]*:[[:space:]]*/, "", line)
-                sub(/[[:space:]]*$/, "", line)
-                print line
-                exit
-            }
-        }
-    '
-}
-
-assistant_phase_learning_evidence_item_is_valid() {
-    local value="$1"
-    local label item_value
-
-    value="$(assistant_phase_trim_value "$value")"
-    if [[ ! "$value" =~ ^([^:]+):[[:space:]]*(.*)$ ]]; then
-        return 1
-    fi
-
-    label="$(assistant_phase_trim_value "${BASH_REMATCH[1]}")"
-    label="$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]-]+/_/g')"
-    case "$label" in
-        none|review_finding|build_test_failure|user_correction|memory_trend) ;;
-        *)
-            return 1
-            ;;
-    esac
-
-    item_value="$(assistant_phase_trim_value "${BASH_REMATCH[2]}")"
-    ! assistant_phase_value_is_noneish "$item_value" && ! assistant_phase_value_is_bracket_placeholder "$item_value"
-}
-
-assistant_phase_learning_considered_item_is_valid() {
-    local value="$1"
-    local item_value
-
-    value="$(assistant_phase_trim_value "$value")"
-    if assistant_phase_value_is_noneish "$value" || assistant_phase_value_is_bracket_placeholder "$value"; then
-        return 1
-    fi
-
-    if [[ "$value" =~ ^[^:]+:[[:space:]]*(.*)$ ]]; then
-        item_value="$(assistant_phase_trim_value "${BASH_REMATCH[1]}")"
-        ! assistant_phase_value_is_noneish "$item_value" && ! assistant_phase_value_is_bracket_placeholder "$item_value"
-        return $?
-    fi
-
-    return 0
-}
-
-assistant_phase_learning_section_has_item() {
-    local block="$1"
-    local label="$2"
-    local validator="${3:-learning_evidence}"
-    local item
-    local found=0
-    local invalid=0
-
-    while IFS= read -r item; do
-        found=1
-        case "$validator" in
-            learning_evidence)
-                assistant_phase_learning_evidence_item_is_valid "$item" || invalid=1
-                ;;
-            considered)
-                assistant_phase_learning_considered_item_is_valid "$item" || invalid=1
-                ;;
-        esac
-    done < <(
-        printf '%s\n' "$block" | awk -v label="$label" '
-            function is_learning_field(line, clean) {
-                clean = line
-                sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", clean)
-                return clean ~ /^(Memory trend checked|Learning evidence reviewed|Review findings considered|Build\/test failures considered|User corrections considered|Durable lesson decision|Persistence evidence|No-save rationale):/
-            }
-            BEGIN { wanted = tolower(label) ":" }
-            {
-                line = $0
-                clean = line
-                sub(/^[[:space:]]*[-*]?[[:space:]]*/, "", clean)
-                if (index(tolower(clean), wanted) == 1) {
-                    in_section = 1
-                    next
-                }
-                if (in_section && is_learning_field($0)) {
-                    exit
-                }
-                if (in_section && $0 ~ /^[[:space:]]+[-*][[:space:]]+/) {
-                    item = $0
-                    sub(/^[[:space:]]*[-*][[:space:]]+/, "", item)
-                    sub(/[[:space:]]*$/, "", item)
-                    print item
-                }
-            }
-        '
-    )
-
-    [[ "$found" -eq 1 && "$invalid" -eq 0 ]]
-}
-
-assistant_phase_learning_missing_reason_key() {
-    local file="$1"
-    local status block trend decision persistence no_save_rationale
-    local spec_pass_line quality_review_line final_result_line
-
-    if ! assistant_phase_is_medium_plus "$file"; then
-        printf 'complete\n'
-        return 0
-    fi
-
-    status="$(assistant_phase_status "$file" || true)"
-    if [[ "$status" != *"DOCUMENTING"* ]]; then
-        printf 'complete\n'
-        return 0
-    fi
-
-    spec_pass_line="$(assistant_phase_latest_spec_review_pass_line "$file" || true)"
-    if [[ -n "$spec_pass_line" ]]; then
-        quality_review_line="$(assistant_phase_quality_review_after_line "$file" "$spec_pass_line" || true)"
-        if [[ -n "$quality_review_line" ]]; then
-            final_result_line="$(assistant_phase_final_result_heading_line_after_line "$file" "$quality_review_line" || true)"
-        fi
-    fi
-
-    if [[ -n "$final_result_line" ]]; then
-        if ! assistant_phase_has_learning_controller_after_line "$file" "$final_result_line"; then
-            printf 'no_learning_controller\n'
-            return 0
-        fi
-        block="$(assistant_phase_learning_controller_block_after_line "$file" "$final_result_line" || true)"
-    else
-        if ! assistant_phase_has_learning_controller "$file"; then
-            printf 'no_learning_controller\n'
-            return 0
-        fi
-        block="$(assistant_phase_learning_controller_block "$file" || true)"
-    fi
-
-    trend="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Memory trend checked")")"
-    case "$trend" in
-        checked|backend_unavailable|policy_disallowed|not_configured) ;;
-        *)
-            printf 'missing_memory_trend_checked\n'
-            return 0
-            ;;
-    esac
-
-    if ! assistant_phase_learning_section_has_item "$block" "Learning evidence reviewed" "learning_evidence"; then
-        printf 'missing_learning_evidence_reviewed\n'
-        return 0
-    fi
-
-    if ! assistant_phase_learning_section_has_item "$block" "Review findings considered" "considered"; then
-        printf 'missing_review_findings_considered\n'
-        return 0
-    fi
-
-    if ! assistant_phase_learning_section_has_item "$block" "Build/test failures considered" "considered"; then
-        printf 'missing_build_test_failures_considered\n'
-        return 0
-    fi
-
-    if ! assistant_phase_learning_section_has_item "$block" "User corrections considered" "considered"; then
-        printf 'missing_user_corrections_considered\n'
-        return 0
-    fi
-
-    decision="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Durable lesson decision")")"
-    case "$decision" in
-        durable_saved|durable_updated|skipped_not_durable|backend_unavailable|policy_disallowed|refused_sensitive) ;;
-        *)
-            printf 'missing_durable_lesson_decision\n'
-            return 0
-            ;;
-    esac
-
-    persistence="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "Persistence evidence")")"
-    if [[ -z "$persistence" ]]; then
-        printf 'missing_persistence_evidence\n'
-        return 0
-    fi
-
-    case "$decision" in
-        durable_saved|durable_updated)
-            if assistant_phase_value_is_noneish "$persistence" || assistant_phase_value_is_bracket_placeholder "$persistence"; then
-                printf 'missing_persistence_evidence\n'
-                return 0
-            fi
-            ;;
-        skipped_not_durable|backend_unavailable|policy_disallowed|refused_sensitive)
-            no_save_rationale="$(assistant_phase_trim_value "$(assistant_phase_learning_field_value "$block" "No-save rationale")")"
-            if assistant_phase_value_is_noneish "$no_save_rationale" || assistant_phase_value_is_bracket_placeholder "$no_save_rationale"; then
-                printf 'missing_no_save_rationale\n'
-                return 0
-            fi
-            ;;
-    esac
-
-    printf 'complete\n'
-}
-
-assistant_phase_review_complete() {
-    local file="$1"
-    [[ "$(assistant_phase_review_missing_reason_key "$file")" == "complete" ]]
-}
-
-assistant_phase_review_missing_reason_key() {
-    local file="$1"
-    local spec_pass_line
-    local quality_review_line
-
-    if ! assistant_phase_has_spec_review_entry "$file"; then
-        printf 'no_spec_review\n'
-        return 0
-    fi
-
-    spec_pass_line="$(assistant_phase_latest_spec_review_pass_line "$file" || true)"
-    if [[ -z "$spec_pass_line" ]]; then
-        printf 'spec_not_pass\n'
-        return 0
-    fi
-
-    quality_review_line="$(assistant_phase_quality_review_after_line "$file" "$spec_pass_line" || true)"
-    if [[ -z "$quality_review_line" ]]; then
-        printf 'no_quality_review\n'
-        return 0
-    fi
-
-    if assistant_phase_is_medium_plus "$file"; then
-        assistant_phase_review_controller_missing_reason_key "$file" "$quality_review_line" "$spec_pass_line"
-        return 0
-    fi
-
-    if ! assistant_phase_final_result_after_line "$file" "$quality_review_line" >/dev/null; then
-        printf 'no_final_result\n'
-        return 0
-    fi
-
-    printf 'complete\n'
-}
-
-assistant_phase_agent_home() {
-    if [[ -n "${CODEX_PROJECT_DIR:-}" ]]; then
-        printf '%s/.codex\n' "$HOME"
-    elif [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
-        printf '%s/.gemini\n' "$HOME"
-    else
-        printf '%s/.claude\n' "$HOME"
-    fi
-}
-
-assistant_phase_metrics_file() {
-    printf '%s/memory/metrics/workflow-metrics.jsonl\n' "$(assistant_phase_agent_home)"
-}
-
-assistant_phase_has_metrics_today() {
-    local metrics_file
-    local today
-    metrics_file="$(assistant_phase_metrics_file)"
-    today="$(date +%Y-%m-%d)"
-
-    [[ -f "$metrics_file" ]] || return 1
-    grep -q "\"date\":\"$today\"" "$metrics_file" 2>/dev/null
-}
-
 assistant_phase_subagent_mode() {
     assistant_phase_scalar_field "$1" "Subagent execution mode"
 }
@@ -1206,7 +767,7 @@ assistant_phase_subagent_policy_state() {
     assistant_phase_scalar_field "$1" "Subagent policy state"
 }
 
-assistant_phase_labeled_evidence_value() {
+assistant_phase_exact_labeled_evidence_value() {
     local file="$1"
     local label="$2"
     awk -v label="$label" '
@@ -1225,6 +786,35 @@ assistant_phase_labeled_evidence_value() {
     ' "$file" 2>/dev/null
 }
 
+assistant_phase_compact_labeled_evidence_value() {
+    local file="$1"
+    local label="$2"
+    local role
+
+    case "$label" in
+        *" dispatch") role="${label% dispatch}" ;;
+        *" result") role="${label% result}" ;;
+        *" direct evidence") role="${label% direct evidence}" ;;
+        *) return 1 ;;
+    esac
+
+    assistant_phase_exact_labeled_evidence_value "$file" "$role dispatch/result/direct evidence"
+}
+
+assistant_phase_labeled_evidence_value() {
+    local file="$1"
+    local label="$2"
+    local value
+
+    value="$(assistant_phase_exact_labeled_evidence_value "$file" "$label")"
+    if [[ -n "$value" ]]; then
+        printf '%s\n' "$value"
+        return 0
+    fi
+
+    assistant_phase_compact_labeled_evidence_value "$file" "$label"
+}
+
 assistant_phase_has_labeled_evidence() {
     local file="$1"
     local label="$2"
@@ -1232,264 +822,37 @@ assistant_phase_has_labeled_evidence() {
     value="$(assistant_phase_labeled_evidence_value "$file" "$label")"
 
     [[ -n "$value" ]] || return 1
-    [[ ! "$value" =~ ^(\[.*\]|none|None|NONE|n/a|N/A|missing|todo|TODO|tbd|TBD)$ ]]
+    ! assistant_phase_labeled_evidence_value_is_placeholder "$value"
 }
 
-assistant_phase_is_codex_task() {
-    local file="$1"
-    [[ "$file" == */.codex/task.md || "$file" == .codex/task.md ]]
-}
+assistant_phase_labeled_evidence_value_is_placeholder() {
+    local value="$1"
+    local low
 
-assistant_phase_subagent_events_file() {
-    local file="$1"
-    printf '%s/subagent-events.jsonl\n' "$(dirname "$file")"
-}
+    value="$(assistant_phase_trim_value "$value")"
+    [[ -n "$value" ]] || return 0
+    assistant_phase_value_is_noneish "$value" && return 0
+    [[ "$value" =~ ^\[.*\]$ ]] && return 0
 
-assistant_phase_role_agent_pattern() {
-    case "$1" in
-        "Code Mapper") printf 'code-mapper|codemapper|Code Mapper' ;;
-        "Explorer") printf 'explorer|Explorer' ;;
-        "Architect") printf 'architect|Architect' ;;
-        "Code Writer") printf 'code-writer|codewriter|Code Writer' ;;
-        "Builder/Tester") printf 'builder-tester|builder/tester|Builder/Tester' ;;
-        "Reviewer") printf 'reviewer|Reviewer' ;;
-        *) printf '%s' "$1" ;;
-    esac
-}
-
-assistant_phase_json_field_value() {
-    local json_line="$1"
-    local field="$2"
-    printf '%s\n' "$json_line" | sed -n 's/.*"'"$field"'":"\([^"]*\)".*/\1/p'
-}
-
-assistant_phase_event_role_matches() {
-    local json_line="$1"
-    local role="$2"
-    local pattern name agent_type agent_name
-    pattern="$(assistant_phase_role_agent_pattern "$role")"
-    agent_type="$(assistant_phase_json_field_value "$json_line" "agent_type" | tr '[:upper:]' '[:lower:]')"
-    agent_name="$(assistant_phase_json_field_value "$json_line" "agent_name" | tr '[:upper:]' '[:lower:]')"
-    IFS='|' read -r -a names <<< "$pattern"
-    for name in "${names[@]}"; do
-        name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
-        [[ "$agent_type" == "$name" || "$agent_name" == "$name" ]] && return 0
-    done
+    low="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+    [[ "$low" =~ ^(pending|waiting|missing|todo|tbd|none)([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^n[/.]?a([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^in[[:space:]_-]?progress([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^not[[:space:]_-]?yet([[:space:][:punct:]]|$) ]] && return 0
+    [[ "$low" =~ ^not[[:space:]_-]?(required|applicable)([[:space:][:punct:]]|$) ]] && return 0
     return 1
 }
 
-assistant_phase_codex_role_event_ids() {
-    local file="$1"
-    local role="$2"
-    local event="$3"
-    local events_file line id
-    events_file="$(assistant_phase_subagent_events_file "$file")"
-    [[ -f "$events_file" ]] || return 1
-    while IFS= read -r line; do
-        [[ "$line" == *"\"event\":\"$event\""* ]] || continue
-        assistant_phase_event_role_matches "$line" "$role" || continue
-        id="$(assistant_phase_json_field_value "$line" "agent_id")"
-        [[ -n "$id" ]] || continue
-        printf '%s\n' "$id"
-    done < "$events_file"
-}
-
-assistant_phase_journal_mentions_agent_id() {
-    local file="$1"
-    local role="$2"
-    local agent_id="$3"
-    local dispatch result combined
-    [[ -n "$agent_id" ]] || return 1
-    dispatch="$(assistant_phase_labeled_evidence_value "$file" "$role dispatch")"
-    result="$(assistant_phase_labeled_evidence_value "$file" "$role result")"
-    combined="$dispatch
-$result"
-    printf '%s\n' "$combined" | grep -Fq -- "$agent_id"
-}
-
-assistant_phase_has_role_event_pair_evidence() {
-    local file="$1"
-    local role="$2"
-    local start_id
-    while IFS= read -r start_id; do
-        [[ -n "$start_id" ]] || continue
-        assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" || continue
-        if assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStop" | grep -Fxq -- "$start_id"; then
-            return 0
-        fi
-    done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
-    return 1
-}
-
-assistant_phase_has_role_start_event_evidence() {
-    local file="$1"
-    local role="$2"
-    local start_id
-    while IFS= read -r start_id; do
-        [[ -n "$start_id" ]] || continue
-        assistant_phase_journal_mentions_agent_id "$file" "$role" "$start_id" && return 0
-    done < <(assistant_phase_codex_role_event_ids "$file" "$role" "SubagentStart" || true)
-    return 1
-}
-
-assistant_phase_has_role_stop_event_evidence() {
-    assistant_phase_has_role_event_pair_evidence "$1" "$2"
-}
-
-assistant_phase_has_role_dispatch_result_evidence() {
-    local file="$1"
-    local role="$2"
-
-    assistant_phase_has_labeled_evidence "$file" "$role dispatch" \
-        && assistant_phase_has_labeled_evidence "$file" "$role result" \
-        || return 1
-
-    # Codex task journals are not sufficient proof by themselves: Codex can write
-    # fake dispatch text after doing work inline. Require real lifecycle evidence
-    # captured by SubagentStart/SubagentStop hooks for delegated Codex roles.
-    if assistant_phase_is_codex_task "$file"; then
-        assistant_phase_has_role_start_event_evidence "$file" "$role" \
-            && assistant_phase_has_role_stop_event_evidence "$file" "$role"
-        return $?
+assistant_phase_source_gate_module() {
+    local module="$ASSISTANT_PHASE_GATES_DIR/workflow-phase-gates.d/$1"
+    if [[ -f "$module" ]]; then
+        . "$module"
     fi
-
-    return 0
 }
 
-assistant_phase_direct_fallback_reason_valid() {
-    local file="$1"
-    grep -qiE "^[[:space:]]*[-*]?[[:space:]]*Direct fallback reason:[[:space:]]*(authorization_denied|subagents_unavailable|policy_disallowed)([[:space:]]|$)" "$file" 2>/dev/null
-}
-
-assistant_phase_has_role_equivalent_evidence() {
-    local file="$1"
-    local role="$2"
-    assistant_phase_has_labeled_evidence "$file" "$role direct evidence"
-}
-
-assistant_phase_has_per_slice_dispatch_evidence() {
-    local file="$1"
-    ! assistant_phase_is_medium_plus "$file" && return 0
-    assistant_phase_has_labeled_evidence "$file" "Per-slice dispatch evidence"
-}
-
-assistant_phase_required_subagent_roles() {
-    local file="$1"
-    local status mode
-    status="$(assistant_phase_status "$file" | tr '[:upper:]' '[:lower:]' || true)"
-    mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
-    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" '
-        function emit(role) {
-            if (!seen[role]) {
-                seen[role] = 1
-                print role
-            }
-        }
-        function scan(line, low) {
-            low = tolower(line)
-            if (low ~ /code mapper|code-mapper/) emit("Code Mapper")
-            if (low ~ /explorer/) emit("Explorer")
-            if (low ~ /architect/) emit("Architect")
-            if (low ~ /code writer|code-writer/) emit("Code Writer")
-            if (low ~ /builder\/tester|builder-tester/) emit("Builder/Tester")
-            if (low ~ /reviewer/) emit("Reviewer")
-        }
-        BEGIN {
-            # Medium+ discovery always requires a Code Mapper context map once
-            # subagent execution mode has been resolved. Add the role from task
-            # size even if the journal forgot to list it.
-            if (mode ~ /^(delegated|direct_fallback)$/ && is_medium_plus == "yes") emit("Code Mapper")
-            # Once a delegated/fallback task is in Review/Document, the review
-            # role is required even for no-op/no-code-change outcomes; otherwise
-            # "review phase" can be satisfied inline while claiming delegated mode.
-            if (mode ~ /^(delegated|direct_fallback)$/ && status ~ /(reviewing|documenting)/) emit("Reviewer")
-        }
-        /^Required agents:[[:space:]]*$/ { in_required = 1; next }
-        /^Required agents:[[:space:]]*(.+)$/ {
-            scan($0)
-            next
-        }
-        in_required && /^[[:space:]]*-[[:space:]]+/ {
-            scan($0)
-            next
-        }
-        in_required && /^[^[:space:]-]/ { in_required = 0 }
-    ' "$file" 2>/dev/null
-}
-
-assistant_phase_requires_subagent_roles() {
-    [[ -n "$(assistant_phase_required_subagent_roles "$1")" ]]
-}
-
-assistant_phase_role_reason_slug() {
-    printf '%s' "$1" | tr '[:upper:]/ ' '[:lower:]__'
-}
-
-assistant_phase_subagent_evidence_missing_reason_key() {
-    local file="$1"
-    local mode policy_state role roles
-    mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
-    policy_state="$(assistant_phase_subagent_policy_state "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
-    roles="$(assistant_phase_required_subagent_roles "$file")"
-
-    # Authorization-required is a wait state, not an execution mode. If a task
-    # has reached an active workflow phase while authorization is unresolved,
-    # block before it can silently complete work inline.
-    if [[ "$policy_state" == "authorization_required" ]]; then
-        printf 'authorization_required_unresolved\n'
-        return 0
-    fi
-
-    # Strict subagent evidence applies whenever workflow subagent roles are
-    # declared, not only when source code changed. Discovery/review-only work can
-    # legitimately skip Code Writer and Builder/Tester, but delegated Code Mapper,
-    # Explorer, Architect, or Reviewer responsibilities still need evidence.
-    if [[ -z "$roles" ]]; then
-        printf 'complete\n'
-        return 0
-    fi
-
-    case "$mode" in
-        delegated)
-            while IFS= read -r role; do
-                [[ -n "$role" ]] || continue
-                if ! assistant_phase_has_role_dispatch_result_evidence "$file" "$role"; then
-                    printf 'delegated_missing_%s\n' "$(assistant_phase_role_reason_slug "$role")"
-                    return 0
-                fi
-            done <<< "$roles"
-            if printf '%s\n' "$roles" | grep -Eq '^(Code Writer|Builder/Tester)$' \
-                && ! assistant_phase_has_per_slice_dispatch_evidence "$file"; then
-                printf 'delegated_missing_per_slice\n'
-                return 0
-            fi
-            ;;
-        direct_fallback)
-            if [[ "$policy_state" != "authorization_denied" && "$policy_state" != "subagents_unavailable" && "$policy_state" != "policy_disallowed" ]]; then
-                printf 'direct_fallback_invalid_policy_state\n'
-                return 0
-            fi
-            if ! assistant_phase_direct_fallback_reason_valid "$file"; then
-                printf 'direct_fallback_missing_reason\n'
-                return 0
-            fi
-            while IFS= read -r role; do
-                [[ -n "$role" ]] || continue
-                if ! assistant_phase_has_role_equivalent_evidence "$file" "$role"; then
-                    printf 'direct_fallback_missing_%s\n' "$(assistant_phase_role_reason_slug "$role")"
-                    return 0
-                fi
-            done <<< "$roles"
-            ;;
-        not_applicable|"")
-            printf 'not_applicable_with_required_roles\n'
-            return 0
-            ;;
-        *)
-            printf 'unknown_execution_mode\n'
-            return 0
-            ;;
-    esac
-
-    printf 'complete\n'
-}
+assistant_phase_source_gate_module "review-controller.sh"
+assistant_phase_source_gate_module "qa-controller.sh"
+assistant_phase_source_gate_module "learning-controller.sh"
+assistant_phase_source_gate_module "metrics.sh"
+assistant_phase_source_gate_module "subagent-evidence.sh"
+assistant_phase_source_gate_module "subagent-orchestration.sh"

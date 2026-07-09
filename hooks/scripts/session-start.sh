@@ -16,7 +16,7 @@
 #   CLAUDE_PROJECT_DIR / GEMINI_PROJECT_DIR / CODEX_PROJECT_DIR — project root
 #
 # Behavior:
-#   1. Active task journal ({state_dir}/task.md) — injects full state
+#   1. Active task journal ({state_dir}/task.md) — emits compact recovery pointer
 #   2. Telos context (~/{agent}/telos.md) — purpose/strategic priorities
 #   3. Compact instruction to call memory_context / memory_search via memory-graph MCP
 #   4. No output if nothing found (exit 0)
@@ -61,10 +61,10 @@ context_parts=()
 TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 
 if [[ -f "$TASK_FILE" ]] && ! assistant_task_journal_completed "$TASK_FILE"; then
-    task_content=$(cat "$TASK_FILE")
     assistant_cache_task_journal "$TASK_FILE" "$PROJECT_DIR"
-    context_parts+=("ACTIVE TASK JOURNAL (read this first — it has full task state):")
-    context_parts+=("$task_content")
+    context_parts+=("ACTIVE TASK JOURNAL AVAILABLE")
+    context_parts+=("Task journal path: $TASK_FILE")
+    context_parts+=("Read this file when task recovery details are needed.")
     context_parts+=("---")
 fi
 
@@ -95,7 +95,7 @@ fi
 # 5. Instruction to load project context via memory-graph MCP
 if $IS_CODEX; then
     context_parts+=("SESSION START — Codex Protocol:")
-    context_parts+=("1. Read active task journal above first when present.")
+    context_parts+=("1. If an active task journal is available above, read it when task recovery details are needed.")
     context_parts+=("2. Run memory_context before planning/implementation; use memory_search as needed.")
     context_parts+=("3. Consult AGENTS.md for the full role, workflow, memory, and review protocol.")
     context_parts+=("---")

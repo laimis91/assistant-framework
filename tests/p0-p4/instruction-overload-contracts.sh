@@ -8,6 +8,10 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+plan_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
+task_journal_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"
+plan_harness_appendix="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-harness-appendix.md"
+task_journal_harness_appendix="$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md"
 reduction_doc="$FRAMEWORK_DIR/docs/instruction-overload-reduction.md"
 benchmark_script="$FRAMEWORK_DIR/tools/hooks/benchmark-hook-output.sh"
 benchmark_doc="$FRAMEWORK_DIR/docs/hook-output-benchmarks.md"
@@ -24,6 +28,10 @@ if grep -Fq "completion_tiers:" "$workflow_output" \
     && grep -Fq "small:" "$workflow_output" \
     && grep -Fq "medium:" "$workflow_output" \
     && grep -Fq "large_critical:" "$workflow_output" \
+    && grep -Fq "controller_intensity: light" "$workflow_output" \
+    && grep -Fq "controller_intensity: standard" "$workflow_output" \
+    && grep -Fq "controller_intensity: strict" "$workflow_output" \
+    && grep -Fq "standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation" "$workflow_output" \
     && grep -Fq "self-review or explicit validation summary" "$workflow_output" \
     && grep -Fq "phase_checkpoints are strict-profile only" "$workflow_output" \
     && grep -Fq "condition: \"size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict\"" "$workflow_output" \
@@ -31,7 +39,7 @@ if grep -Fq "completion_tiers:" "$workflow_output" \
     && grep -Fq "When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: review_result.quality_review_status is not missing" "$workflow_output"; then
     pass
 else
-    fail "assistant-workflow output contract must define small/medium/large-critical completion tiers and conditional heavy review artifacts"
+    fail "assistant-workflow output contract must define small/medium/large-critical completion tiers, controller intensity mapping, and conditional heavy review artifacts"
 fi
 
 test_start "phase gates separate blockers from guidance"
@@ -88,6 +96,30 @@ if [[ -f "$benchmark_doc" ]]; then
             benchmark_failures+=("benchmark doc missing $hook row")
         fi
     done
+    if ! grep -Fq "runtime-gate-output-trim" "$benchmark_doc"; then
+        benchmark_failures+=("benchmark doc missing runtime-gate-output-trim history row")
+    fi
+    workflow_enforcer_budget="$(awk -F'|' '
+        $2 ~ /^[[:space:]]*workflow-enforcer[[:space:]]*$/ && $3 ~ /^[[:space:]]*codex building phase gates[[:space:]]*$/ {
+            bytes = $4
+            words = $5
+            gsub(/[[:space:]]/, "", bytes)
+            gsub(/[[:space:]]/, "", words)
+            print bytes " " words
+            exit
+        }
+    ' "$benchmark_doc")"
+    if [[ -z "$workflow_enforcer_budget" ]]; then
+        benchmark_failures+=("benchmark doc missing workflow-enforcer active journal metrics")
+    else
+        read -r workflow_enforcer_bytes workflow_enforcer_words <<< "$workflow_enforcer_budget"
+        if (( workflow_enforcer_bytes >= 1511 || workflow_enforcer_words >= 164 )); then
+            benchmark_failures+=("workflow-enforcer active metrics not reduced below 1511 bytes / 164 words")
+        fi
+    fi
+fi
+if [[ -f "$benchmark_script" ]] && ! grep -Fq "runtime-gate-output-trim" "$benchmark_script"; then
+    benchmark_failures+=("benchmark script does not render runtime-gate-output-trim history")
 fi
 if [[ "${#benchmark_failures[@]}" -eq 0 ]]; then
     pass
@@ -127,10 +159,39 @@ if awk '
 ' "$workflow_output"; then
     bloat_failures+=("review_result is still unconditionally required")
 fi
-if [[ "${#bloat_failures[@]}" -eq 0 ]] && grep -Fq "Prompt bloat linting" "$reduction_doc"; then
+if [[ "${#bloat_failures[@]}" -eq 0 ]] \
+    && grep -Fq "Prompt bloat linting" "$reduction_doc" \
+    && grep -Fq "Phase-scoped hook warnings" "$reduction_doc" \
+    && grep -Fq 'gate:key missing=... action=...' "$reduction_doc"; then
     pass
 else
-    fail "prompt bloat lint failed: ${bloat_failures[*]:-reduction doc missing Prompt bloat linting section}"
+    fail "prompt bloat lint failed: ${bloat_failures[*]:-reduction doc missing phase-scoped warning/prompt bloat sections}"
+fi
+
+test_start "base workflow templates keep harness detail in optional appendices"
+template_bloat_failures=()
+combined_template_words=$(( $(wc -w < "$plan_template") + $(wc -w < "$task_journal_template") ))
+if [[ "$combined_template_words" -gt 3984 ]]; then
+    template_bloat_failures+=("base plan+journal word count $combined_template_words exceeds 3984")
+fi
+for file in "$plan_harness_appendix" "$task_journal_harness_appendix"; do
+    if [[ ! -f "$file" ]]; then
+        template_bloat_failures+=("missing ${file#$FRAMEWORK_DIR/}")
+    fi
+done
+if ! grep -Fq "references/plan-harness-appendix.md" "$plan_template"; then
+    template_bloat_failures+=("plan-template.md missing plan harness appendix pointer")
+fi
+if ! grep -Fq "references/task-journal-harness-appendix.md" "$task_journal_template"; then
+    template_bloat_failures+=("task-journal-template.md missing task journal harness appendix pointer")
+fi
+if ! grep -Fq "N/A: [reason]" "$plan_template" || ! grep -Fq "N/A: [reason]" "$task_journal_template"; then
+    template_bloat_failures+=("base templates missing N/A-with-reason fields")
+fi
+if [[ "${#template_bloat_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "optional harness appendix split failed: ${template_bloat_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

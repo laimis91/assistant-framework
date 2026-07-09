@@ -168,8 +168,14 @@ assistant_task_journal_completed() {
 
     status_token=$(
         awk '
-            $0 ~ /^(#+[[:space:]]*)?Status:/ {
-                sub(/^(#+[[:space:]]*)?Status:[[:space:]]*/, "", $0)
+            /^##[[:space:]]+Task[[:space:]]*:/ {
+                next
+            }
+            /^##([[:space:]]|$)/ {
+                exit
+            }
+            $0 ~ /^#?[[:space:]]*Status:/ {
+                sub(/^#?[[:space:]]*Status:[[:space:]]*/, "", $0)
                 gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
                 split($0, parts, /[[:space:]]+/)
                 print toupper(parts[1])
@@ -178,9 +184,11 @@ assistant_task_journal_completed() {
         ' "$task_file" 2>/dev/null
     )
 
-    if [[ "$status_token" == "DONE" ]]; then
-        return 0
-    fi
+    case "$status_token" in
+        DONE|COMPLETE|COMPLETED)
+            return 0
+            ;;
+    esac
 
     if grep -qF 'WORKFLOW COMPLETE' "$task_file" 2>/dev/null; then
         return 0

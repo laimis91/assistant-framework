@@ -47,6 +47,14 @@ Use `memory_add_insight` to record notable findings in the knowledge graph for f
 
 Research angles are required; subagent dispatch is optional. If the active adapter and user/tool policy permit parallel agents, each angle can be delegated independently. If not, run the angles sequentially in the main session and record that delegation was unavailable. Never reduce source diversity just because delegation is unavailable.
 
+## Candidate mechanisms
+
+When the question asks why/how something happens, what caused a pattern, or
+which improvement mechanisms to try, produce candidate mechanisms. Treat them
+as hypotheses to validate, not proven causes. Each candidate mechanism needs
+supporting evidence, confidence, counterevidence/conflicts, gaps, and a
+validation method.
+
 ## Mandatory: URL Verification
 **Every URL presented to the user MUST be verified.** See `url-verify.md`.
 AI agents hallucinate plausible-looking URLs routinely. Never present an unverified URL.
@@ -76,6 +84,13 @@ FINDINGS
    Source: [source]
 3. [finding] — confidence: LOW (single source, unverified)
    Source: [source]
+
+CANDIDATE MECHANISMS (when requested by why/how/causal/improvement questions)
+1. [mechanism] — confidence: MEDIUM — status: candidate
+   Evidence: [source-backed evidence or inference notes]
+   Counterevidence/conflicts: [conflicting evidence or none found]
+   Gaps: [missing evidence or uncertainty]
+   Validation method: [test, metric, comparison, experiment, or next check]
 
 CONFLICTS
 - [source A] says X, [source B] says Y — [assessment of which is more likely correct]

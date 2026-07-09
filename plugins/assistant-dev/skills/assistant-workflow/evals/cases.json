@@ -626,6 +626,66 @@
           ]
         ]
       }
+    },
+    {
+      "id": "loop-experiment-artifacts-stay-conditional",
+      "title": "Loop and experiment artifacts stay conditional",
+      "category": "loop_readiness_and_experiments",
+      "purpose": "Checks that workflow experiment and repeat/optimization loop artifacts are required only when explicitly scoped and do not turn ordinary medium work into harness work.",
+      "prompt": "Plan a medium Assistant Framework workflow experiment to compare two review-loop prompts. Keep ordinary harness routing off unless the plan explicitly needs trace/replay or QA.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The request explicitly labels the work as a workflow experiment.",
+        "The task may use a bounded repeat/optimization loop, but no harness, trace/replay, Done Contract, or QA acceptance criteria were requested."
+      ],
+      "expected_behavior": [
+        "Keeps ordinary medium task routing at harness_capable=false unless independent harness criteria apply.",
+        "Adds workflow_experiment_ledger only because the prompt explicitly asks for a workflow experiment.",
+        "Adds loop_readiness_assessment only before starting an explicit repeat or optimization loop.",
+        "Records hypothesis, intervention, expected signal, measurement method, baseline/control, evidence, decision, and next check.",
+        "Records verifier, stop condition, max iterations, budget limit, tool access, state tracking, retry or empty-result handling, tool-error handling, low-confidence escalation, and rollback/exit before any loop starts.",
+        "Does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation from loop artifacts alone."
+      ],
+      "pass_criteria": [
+        "The response marks workflow_experiment_ledger as conditional on explicit workflow experiments.",
+        "The response marks loop_readiness_assessment as conditional before repeat/optimization loops.",
+        "The response keeps harness_capable=false for ordinary medium work.",
+        "The response says loop artifacts alone do not require harness or QA artifacts."
+      ],
+      "fail_signals": [
+        "Requires workflow_experiment_ledger for every medium task.",
+        "Requires loop_readiness_assessment without an explicit repeat or optimization loop.",
+        "Treats loop artifacts as proof that harness_capable must be true.",
+        "Requires Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation from loop artifacts alone."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "workflow_experiment_ledger",
+          "explicit workflow experiment",
+          "loop_readiness_assessment",
+          "repeat/optimization loop",
+          "harness_capable=false",
+          "hypothesis",
+          "measurement method",
+          "baseline/control",
+          "verifier",
+          "stop condition",
+          "max iterations",
+          "budget limit",
+          "state tracking",
+          "retry_or_empty_result_handling",
+          "tool_error_handling",
+          "low_confidence_escalation",
+          "loop artifacts alone do not require"
+        ],
+        "forbidden_substrings": [
+          "workflow_experiment_ledger is required for every medium task",
+          "loop_readiness_assessment is always required",
+          "harness_capable=true by default",
+          "Done Contract is required by loop artifacts",
+          "QA evaluation is required by loop artifacts"
+        ]
+      }
     }
   ]
 }

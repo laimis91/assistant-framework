@@ -23,6 +23,13 @@ This skill is intentionally agent-agnostic: it must work in restricted company e
 
 - Triage, discovery, planning, build, review, and document phases run at the smallest useful depth.
 - Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- Medium+ harness-capable work has an accepted Done Contract and Harness Recipe before Build.
+- Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts.
+- Ordinary medium+ workflow tasks default to `harness_capable=false` and do not inherit Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless explicit harness/QA criteria apply.
+- `controller_intensity=standard` is the ordinary medium+ non-harness default; `strict` needs independent strict/harness/QA criteria.
+- QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
+- QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
+- Required QA records independent QA Evaluator evidence after build/test and code-review evidence.
 - Behavior changes have tests or explicit validation attached to the implementation step they protect.
 - Final output reports changed files, verification evidence, residual risks, and next steps.
 - Candidate Search is used for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots — not as default ceremony.
@@ -173,7 +180,7 @@ Load `references/triage-rubric.md`. Perform a quick read-only candidate scope sc
 [Design] = include if task has UI work, skip for backend-only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
-Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
 
 If scope exceeds initial triage during any phase, stop and re-triage.
 
@@ -202,12 +209,13 @@ Load `references/phases.md` and execute the phase matching your current stage. U
 | **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, slices, and build plan. |
 | **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
 | **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
-| **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts. |
+| **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts for code review. Stage 3: QA Evaluator runs when acceptance QA is required. |
 | **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
 
-For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed delegation scope and wait before continuing phases that require subagents. A sufficient prompt is: `This workflow expects Code Mapper, Architect, Code Writer, Builder/Tester, and Reviewer subagents for [scope]. May I use subagents for this task?` After authorization, use `delegated` mode and spawn the configured role agents. Use `direct_fallback` only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
+For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed delegation scope and wait before continuing phases that require subagents. A sufficient prompt is: `This workflow expects Code Mapper, Architect, Code Writer, Builder/Tester, Code Reviewer, and QA Evaluator when QA is required for [scope]. May I use subagents for this task?` After authorization, use `delegated` mode and spawn the configured role agents. Use `direct_fallback` only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
 For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
+Load `references/harness-controller.md` only when medium+ work is harness-capable: long-running, trace/replay-ready multi-slice, high-risk harness, subjective/domain-scored, scoped UI/visual/product/UX/docs/DX acceptance, or explicitly requested as harness work.
 
 ## Planning Checklist
 
@@ -239,14 +247,15 @@ Before final output for medium+ or high-risk work:
 - Run the relevant build/test/lint/typecheck commands available in the repo.
 - Review the diff against the acceptance criteria.
 - For bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or a clear reason it was not applicable.
-- Use `assistant-review` for quality/spec review when the change is non-trivial.
+- Use `assistant-review` for code quality/spec review when the change is non-trivial.
+- Use QA Evaluator through `assistant-review` when `qa_evaluation_mode=required`: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance after build/test and code-review evidence.
 - Use `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
 
 Review findings must cite evidence and concrete risk. Avoid generic style feedback unless it affects correctness, security, maintainability, or test reliability.
 
 ## Context Management
 
-- **On continuation**: read the active project task journal FIRST; it has the full task state
+- **On continuation**: use compact pointers first; read the active project task journal when recovery details are needed. The journal has the full task state
 - Small: read only target files. Medium: read touched files + plan template.
 - Large: read interfaces/contracts + plan template + playbook.
 - Mega: each slice gets its own strict slice brief and context.

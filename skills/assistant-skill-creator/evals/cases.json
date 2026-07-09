@@ -219,6 +219,58 @@
           "stored PR numbers"
         ]
       }
+    },
+    {
+      "id": "loop-process-skill-applies-harness-patterns",
+      "title": "Loop-based process skill applies harness patterns",
+      "category": "harness_patterns",
+      "purpose": "Checks that assistant-skill-creator applies the harness-pattern reference when creating a loop-based Process skill.",
+      "prompt": "Create an assistant-release-check skill that runs a multi-round implementation, code review, QA acceptance, and restart loop for risky releases.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "The requested skill is a Process skill with subagents, quality loops, QA acceptance, and restart behavior.",
+        "No design has been approved yet."
+      ],
+      "expected_behavior": [
+        "Classifies the request as a Process skill.",
+        "Loads or applies references/harness-patterns.md before designing contracts.",
+        "Includes Done Contract and Harness Recipe artifacts for pre-Build controller behavior.",
+        "Uses typed Artifact References for cross-agent artifacts.",
+        "Keeps Code Reviewer and QA Evaluator handoffs and outputs separate.",
+        "Includes conditional domain rubric fields only when acceptance scopes domain quality.",
+        "Adds pivot/restart decision fields for stagnation, drift, regression, rubric pivot, and Code Writer blockers.",
+        "Bounds review and QA loops with max 10 rounds and terminal round 10 behavior."
+      ],
+      "pass_criteria": [
+        "The contract design includes input, output, phase-gates, and handoffs for a Process skill.",
+        "The response explicitly names the harness patterns being applied.",
+        "The response does not collapse code review and QA into one evaluator.",
+        "The response includes bounded loop, trace/replay, and pivot/restart artifacts before BUILD approval."
+      ],
+      "fail_signals": [
+        "Creates files before presenting the Process contract design.",
+        "Uses only a generic generator/evaluator loop.",
+        "Sets a max 20 round cap for the review or QA loop.",
+        "Omits pivot/restart handling for stagnation or Code Writer blockers."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Process",
+          "references/harness-patterns.md",
+          "Done Contract",
+          "Harness Recipe",
+          "Artifact Reference",
+          "Code Reviewer",
+          "QA Evaluator",
+          "pivot_restart_decision",
+          "max 10"
+        ],
+        "forbidden_substrings": [
+          "generic generator/evaluator loop is enough",
+          "max 20",
+          "QA replaces code review"
+        ]
+      }
     }
   ]
 }

@@ -131,7 +131,7 @@ hook_profile_allowed_json() {
             printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
             ;;
         workflow)
-            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh"]'
+            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
             ;;
         strict)
             printf '%s\n' 'null'
@@ -154,7 +154,7 @@ hook_selected_for_profile() {
             ;;
         workflow)
             case "$hook_name" in
-                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) return 0 ;;
+                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) return 0 ;;
                 *) return 1 ;;
             esac
             ;;
@@ -1551,7 +1551,7 @@ if $INSTALL_HOOKS; then
                     # SubagentStart/SubagentStop, PreToolUse, PreCompact, and PostCompact.
                     if [[ "$AGENT" == "codex" ]]; then
                         case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh) ;;  # supported + shared helper dependencies
+                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) ;;  # supported + shared helper dependencies
                             *) continue ;;  # skip unsupported hooks
                         esac
                         if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
@@ -1575,6 +1575,14 @@ if $INSTALL_HOOKS; then
                     fi
                     cp "$hook_script" "$HOOKS_TARGET/"
                 done
+                if hook_selected_for_profile "workflow-phase-gates.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-phase-gates.d" ]]; then
+                    mkdir -p "$HOOKS_TARGET/workflow-phase-gates.d"
+                    cp "$HOOKS_SOURCE/scripts/workflow-phase-gates.d/"*.sh "$HOOKS_TARGET/workflow-phase-gates.d/"
+                fi
+                if hook_selected_for_profile "workflow-guard.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-guard.d" ]]; then
+                    mkdir -p "$HOOKS_TARGET/workflow-guard.d"
+                    cp "$HOOKS_SOURCE/scripts/workflow-guard.d/"*.sh "$HOOKS_TARGET/workflow-guard.d/"
+                fi
                 # chmod only if files were actually copied
                 if compgen -G "$HOOKS_TARGET/*.sh" >/dev/null; then
                     chmod +x "$HOOKS_TARGET/"*.sh
@@ -1872,14 +1880,14 @@ if [[ "$AGENT" == "codex" ]]; then
 
 ## Role
 
-You are an orchestrator for development work. Coordinate specialized agents (code-mapper, code-writer, builder-tester, architect, explorer, reviewer), keep phase gates visible, and communicate progress. Discovery context maps are owned by code-mapper for medium+ work, file edits/code implementation are owned by code-writer, builds/tests by builder-tester, and independent review by reviewer when subagent delegation is authorized and available; framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md are owned by the orchestrator. Assistant Framework policy requires explicit user authorization before spawning subagents for any development/code-work role unless the current user prompt already explicitly authorizes subagents. Ask once for the needed delegation scope, then wait before continuing phases that require subagents. Current Codex CLI/app releases support native subagent workflows by default; custom agents are configured in ~/.codex/agents/ and spawned by explicitly asking Codex to spawn an agent by name. Do not treat the absence of a visible tool named Task, delegate, or subagent as proof that subagents are unavailable. After approval, spawn the requested Codex agents and set subagent_execution_mode=delegated. Use direct fallback only when authorization is denied, a real spawn attempt fails with an unavailable-agent error, or policy disallows spawning, and record equivalent role, phase, verification, and review evidence. Gather context, clarify requirements, decompose work, persist workflow state, and prepare handoffs yourself when that does not modify project source files. Follow matching skill instructions, phase gates, and review loops exactly. When a skill matches your task, invoke it instead of replacing it with ad hoc steps.
+You are an orchestrator for development work. Coordinate specialized agents (code-mapper, code-writer, builder-tester, architect, explorer, code-reviewer, reviewer, qa-evaluator), keep phase gates visible, and communicate progress. Discovery context maps are owned by code-mapper for medium+ work, file edits/code implementation are owned by code-writer, builds/tests by builder-tester, independent code/security/architecture review by code-reviewer when subagent delegation is authorized and available, and independent QA acceptance evaluation by qa-evaluator after build/test and code-review evidence when applicable; reviewer remains a compatibility route for existing handoffs. Framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md are owned by the orchestrator. Assistant Framework policy requires explicit user authorization before spawning subagents for any development/code-work role unless the current user prompt already explicitly authorizes subagents. Ask once for the needed delegation scope, then wait before continuing phases that require subagents. Current Codex CLI/app releases support native subagent workflows by default; custom agents are configured in ~/.codex/agents/ and spawned by explicitly asking Codex to spawn an agent by name. Do not treat the absence of a visible tool named Task, delegate, or subagent as proof that subagents are unavailable. After approval, spawn the requested Codex agents and set subagent_execution_mode=delegated. Use direct fallback only when authorization is denied, a real spawn attempt fails with an unavailable-agent error, or policy disallows spawning, and record equivalent role, phase, verification, and review evidence. Gather context, clarify requirements, decompose work, persist workflow state, and prepare handoffs yourself when that does not modify project source files. Follow matching skill instructions, phase gates, and review loops exactly. When a skill matches your task, invoke it instead of replacing it with ad hoc steps.
 
 <behavioral_rules>
 These rules define the operating contract for every response.
 
 1. SKILL ROUTING: Before acting on ANY request, check if it matches an installed skill in ~/.codex/skills/. When a skill matches, load and follow the skill's SKILL.md before proceeding; use the skill workflow as the source of truth.
 
-2. ORCHESTRATOR OWNERSHIP: Coordinate the work; keep discovery context mapping with code-mapper for medium+ work, project source edits and code implementation with code-writer, builds/tests with builder-tester, and independent review with reviewer when subagent delegation is authorized and available. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes subagents. Ask once before spawning and wait before continuing phases that require subagents; after approval, use delegated mode. For Codex, spawn custom agents by explicitly asking Codex to spawn the configured agent name (for example, code-mapper, code-writer, builder-tester, reviewer); a hidden/implicit subagent capability may not appear as a normal tool in the visible tool list. Use direct fallback only for explicit authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed. The orchestrator may create and update framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md; it does not edit project source files directly in delegated mode.
+2. ORCHESTRATOR OWNERSHIP: Coordinate the work; keep discovery context mapping with code-mapper for medium+ work, project source edits and code implementation with code-writer, builds/tests with builder-tester, independent code/security/architecture review with code-reviewer when subagent delegation is authorized and available, and independent QA acceptance evaluation with qa-evaluator after build/test and code-review evidence when applicable; reviewer remains a compatibility route for existing handoffs. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes subagents. Ask once before spawning and wait before continuing phases that require subagents; after approval, use delegated mode. For Codex, spawn custom agents by explicitly asking Codex to spawn the configured agent name (for example, code-mapper, code-writer, builder-tester, code-reviewer, qa-evaluator; reviewer remains compatibility routing); a hidden/implicit subagent capability may not appear as a normal tool in the visible tool list. Use direct fallback only for explicit authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed. The orchestrator may create and update framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md; it does not edit project source files directly in delegated mode.
 
 3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
 
@@ -1911,7 +1919,9 @@ $AGENTS_SKILL_ROWS
 | architect | read-only | Design implementation blueprints |
 | code-writer | write | Implement code following a plan |
 | builder-tester | write | Build, write tests, run tests |
-| reviewer | read-only | Independent code review, confidence-filtered |
+| code-reviewer | read-only | Canonical code/security/architecture review |
+| reviewer | read-only | Compatibility route for existing review handoffs |
+| qa-evaluator | read-only | Acceptance, Done Contract, and QA evaluation |
 
 ## Memory
 

@@ -15,13 +15,14 @@ triggers:
 | Contract | File | Purpose |
 |---|---|---|
 | **Input** | `contracts/input.yaml` | Question, tier, tool selection |
-| **Output** | `contracts/output.yaml` | Findings with confidence scores, conflicts, gaps |
+| **Output** | `contracts/output.yaml` | Findings, candidate mechanisms, confidence scores, conflicts, gaps |
 | **Phase Gates** | `contracts/phase-gates.yaml` | Search → Synthesize → Verify pipeline gates |
 
 **Rules:**
 - Every finding must have a confidence level (HIGH/MEDIUM/LOW) based on source count
 - Every URL must be verified before presenting to user
 - Conflicts and gaps must be explicitly checked and reported (even if empty)
+- Candidate mechanisms are hypotheses, not proven causes; include evidence, confidence, counterevidence/conflicts, gaps, and validation method
 
 On-demand investigation capabilities with tiered depth and URL verification.
 
@@ -35,6 +36,7 @@ Answer research questions with evidence-weighted findings, verified URLs, explic
 - Findings include confidence levels based on source quality and agreement.
 - URLs are verified before presentation or explicitly omitted/flagged.
 - Conflicts and gaps are reported even when the answer is otherwise clear.
+- Candidate mechanisms are clearly labeled as candidates and include validation methods before being used as explanations.
 
 ## Constraints
 
@@ -80,6 +82,7 @@ Return:
 - **Status** - completion state and confidence for the research result.
 - **Answer** - concise synthesis of the research result.
 - **Findings** - confidence-scored findings with source attribution.
+- **Candidate mechanisms** - when researching causes, why/how, or improvement mechanisms, evidence-backed hypotheses with confidence, counterevidence/conflicts, gaps, and validation method.
 - **Sources** - verified URLs only, with enough context to understand relevance.
 - **Conflicts** - conflicting evidence or interpretations, or "none found".
 - **Gaps** - unanswered questions, weak evidence, stale sources, or recommended next checks.
@@ -89,4 +92,5 @@ Return:
 
 - Stop and ask one focused question only when scope or decision criteria would materially change source selection or interpretation.
 - Stop and report a gap when required sources are inaccessible, stale, conflicting, or too weak for the requested confidence.
+- Do not present candidate mechanisms as proven causes without executed validation evidence.
 - Do not finalize with unverified URLs.

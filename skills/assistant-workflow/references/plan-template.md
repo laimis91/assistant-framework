@@ -1,6 +1,10 @@
 # Plan Templates
 
-Three tiers — match ceremony to task size (don't get fancy when N is small).
+Three tiers — match ceremony to task size.
+
+Harness details live in optional appendices. Base plans keep compact refs only:
+load `references/plan-harness-appendix.md` for harness-capable work, otherwise
+record `N/A: [reason]`.
 
 ## Small Tasks — Inline Plan
 
@@ -55,6 +59,12 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
+- Loop / Experiment Routing:
+  - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
+  - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
+  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise ref with retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
+  - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
+- Harness routing: [N/A unless harness_capable=true or QA criteria independently apply; otherwise refs to appendix, Done Contract, Harness Recipe, run state, trace/replay, artifact ledger]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
 - Worker status / evidence:
@@ -99,6 +109,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Triage result
 - Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 - Risk tier: [low | moderate | high | critical]
+- Controller intensity: [light | standard | strict]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
@@ -122,16 +133,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Architecture
 - Current architecture: [identified or "new project"]
 - Architecture for this change: [Clean/MVVM/Hexagonal/etc.]
-- Layer rules:
-  - [e.g., Domain has no external dependencies]
-  - [e.g., ViewModels don't reference Views]
+- Layer rules: [key dependency boundaries]
 - Dependency direction: [A → B → C]
-- New files placement:
-  - [file → layer/folder rationale]
-- SOLID design notes:
-  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
-  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
-  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
+- New files placement: [file → layer/folder rationale]
+- SOLID notes: [SRP/OCP/DIP risks or N/A]
 
 ## Analysis
 ### Candidate search summary
@@ -171,6 +176,32 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
+## Loop / Experiment Routing
+
+Only for explicit workflow experiments or explicit repeat/optimization loops.
+Ordinary medium+ tasks keep `harness_capable=false`; loop artifacts alone do not
+require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact
+Reference Ledger, or QA evaluation.
+
+- workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
+- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise compact ref with loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
+
+## Harness Appendix Routing
+
+Required only for medium+ harness-capable work; otherwise use `N/A: [reason]`.
+Load `references/plan-harness-appendix.md` for full harness and QA schemas.
+
+- appendix_status: [required | N/A: reason]
+- controller_intensity: [light | standard | strict + reason]
+- done_contract_ref: [section/ref, or N/A: reason]
+- harness_recipe_ref: [section/ref, or N/A: reason]
+- harness_run_state_ref: [section/ref, or N/A: reason]
+- trace_ledger_ref: [section/ref, or N/A: reason]
+- replay_packet_ref: [section/ref, or N/A: reason]
+- artifact_reference_ledger_ref: [section/ref, or N/A: reason]
+- qa_evaluation_mode: [required | optional | not_required + reason]
+- qa_trigger_reason: [QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.]
+
 ## Slice manifest from Decompose
 
 Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
@@ -187,45 +218,7 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 Everything from Medium, plus Security and Operability sections. Use when the task touches auth, external inputs, infrastructure, or multi-module boundaries.
 
 ```markdown
-## Goal
-- [1-3 sentence restated requirement from Discovery]
-
-## Triage result
-- Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
-- Risk tier: [low | moderate | high | critical]
-- Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
-- Required agents: [roles/skills selected from size, task type, and risk]
-- Search mode: [none | lightweight | candidate_search]
-
-## Constraints & decisions (from Discovery)
-- [Q&A question]: [chosen option and why]
-- [Q&A question]: [chosen option and why]
-- Assumed (not explicitly asked): [assumption and reasoning]
-- Non-goals: [what's explicitly out of scope]
-
-## Research (current state)
-- Modules/subprojects: ...
-- Key files/paths: ...
-- Entrypoints: ...
-- Configs/flags: ...
-- Data models: ...
-- Existing patterns: ...
-
-## Architecture
-- Current architecture: [identified or "new project"]
-- Architecture for this change: [Clean/MVVM/Hexagonal/etc.]
-- Layer rules:
-  - [e.g., Domain has no external dependencies]
-  - [e.g., ViewModels don't reference Views]
-- Dependency direction: [A → B → C]
-- New files placement:
-  - [file → layer/folder rationale]
-- SOLID design notes:
-  - SRP: [which classes own which responsibility — flag any class with >1 reason to change]
-  - OCP: [will new variants require modifying existing classes? If yes, plan extension points]
-  - LSP: [any inheritance hierarchies? Do subtypes preserve base type contracts?]
-  - ISP: [any interfaces? Are they minimal or do implementers need to stub methods?]
-  - DIP: [which high-level modules depend on abstractions vs concrete implementations?]
+Start with the Medium template, then add the sections below.
 
 ## Security considerations
 - Data classification: [does this touch PII, auth, payments, external inputs?]
@@ -245,39 +238,11 @@ Everything from Medium, plus Security and Operability sections. Use when the tas
   - Revert commit sufficient: [yes/no]
 - Runbook updates: [new on-call procedures needed?]
 
-## Analysis
-### Candidate search summary
-- Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
-- Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
-- Goal tree source: [acceptance criteria/slice criteria used]
-
-### Options
-1. [approach] — [tradeoff]
-2. [approach] — [tradeoff]
-
-### Decision
-- Chosen: [#] because [reason]
-
-### Risks / edge cases
-- [risk]: [mitigation]
-
-## Decomposition Plan Review
-
-- Scope understanding: [pass/fix needed + evidence]
-- Slice/subagent count: [count + sanity rationale]
-- Step/cost budget: [budget or direct-fallback rationale]
-- Dependency order: [summary]
-- Output-plan match: [artifact/verification alignment]
-- Fallback path: [subagent path or direct equivalent]
-- Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
-- Decision: proceed | revise_decomposition | return_to_discover
-
-## Slice manifest from Decompose
-
-Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
-
-## Task packets
-Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the Decompose slice manifest directly, and keep each slice independently verifiable before the next slice starts.
+## Large/Mega addenda
+- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent authorization scope`, and `Search mode` as in Medium.
+- Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
+- Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
+- Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.
 
 ## Tests to run
 - [command]: [what it validates]
@@ -295,8 +260,8 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 
 ## Context Budget
 
-- Exact/pinned: [goal, acceptance criteria, safety constraints, exact errors, files in scope, validation requirements]
-- Summarized: [logs, tool output, conversation history, repetitive evidence]
+- Exact/pinned: [goal, criteria, constraints, errors, scoped files, validation]
+- Summarized: [logs, tool output, history, repetitive evidence]
 - Omitted/deferred: [out-of-scope files/results and why]
 - Split/delegation plan: [slice/task split when material exceeds one faithful context]
 

@@ -37,6 +37,58 @@ artifacts:
         description: "URLs that were verified as accessible"
         validation: "Every URL listed here was checked and returned a valid response"
 
+  - name: candidate_mechanisms
+    type: object[]
+    required: conditional
+    condition: "question asks why/how something happens, asks for causes, asks for improvement mechanisms, or requests candidate mechanisms"
+    description: "Evidence-backed hypotheses for mechanisms that could explain a pattern or guide validation; not proven causes."
+    min_items: 1
+    validation: "Each candidate mechanism includes mechanism, claim_status, evidence, confidence, counterevidence_or_conflicts, gaps, and validation_method. Do not present candidate mechanisms as proven causes."
+    on_fail: "Add missing mechanism fields or downgrade the claim to a gap. If validation was not executed, label the item as candidate or needs_validation instead of proven."
+    object_fields:
+      - name: mechanism
+        type: string
+        required: true
+        description: "The hypothesized mechanism, causal path, or improvement lever"
+      - name: claim_status
+        type: enum
+        required: true
+        enum_values: [candidate, needs_validation, unsupported, rejected]
+        validation: "Must not use proven as a candidate mechanism status"
+      - name: evidence
+        type: object[]
+        required: true
+        min_items: 1
+        validation: "Source-backed support, inference-only support, or explicit unresolved evidence marker"
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+          - name: evidence_status
+            type: enum
+            required: true
+            enum_values: [source_backed, inference_only, unresolved]
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+        validation: "Assigned from evidence strength and conflict level; low when evidence is single-source, inference-only, unresolved, or materially conflicting"
+      - name: counterevidence_or_conflicts
+        type: string[]
+        required: true
+        description: "Counterevidence, conflicts, or explicit none-found entry"
+      - name: gaps
+        type: string[]
+        required: true
+        description: "Missing data, untested assumptions, stale sources, or unresolved checks"
+      - name: validation_method
+        type: string
+        required: true
+        validation: "Concrete test, metric, comparison, experiment, or next source check that could confirm or reject the mechanism"
+
   - name: perspective_scan
     type: object[]
     required: conditional
@@ -263,6 +315,13 @@ artifacts:
 #    Verified URLs: {verified URL 1, verified URL 2 if any}
 # 2. ...
 #
+# CANDIDATE MECHANISMS (required when the question asks why/how, causes, or improvement mechanisms)
+# 1. {candidate mechanism} — confidence: {HIGH/MEDIUM/LOW} — status: {candidate/needs_validation/unsupported/rejected}
+#    Evidence: {source-backed support, inference-only support, or unresolved marker}
+#    Counterevidence/conflicts: {conflicts or none found}
+#    Gaps: {missing evidence or uncertainty}
+#    Validation method: {test, metric, comparison, experiment, or next source check}
+#
 # CONFLICTS
 # - {source A} says X, {source B} says Y — {assessment}
 #
@@ -282,3 +341,4 @@ artifacts:
 # 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, and peer_review are present
 # 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis
 # 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
+# 10. candidate_mechanisms exists when why/how/cause/improvement mechanisms were requested, and every candidate has evidence, confidence, counterevidence_or_conflicts, gaps, validation_method, and non-proven claim_status

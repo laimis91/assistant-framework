@@ -6,14 +6,16 @@
 #   Codex SubagentStart / SubagentStop
 #
 # Codex evidence:
-#   Appends real lifecycle events to <project>/.codex/subagent-events.jsonl so
-#   phase gates can distinguish actual spawned agents from task-journal text.
+#   Appends real lifecycle events to agent-owned workflow state outside the
+#   workspace so phase gates can distinguish actual spawned agents from
+#   task-journal text and project-local diagnostic files.
 
 set -euo pipefail
 
-command -v jq >/dev/null 2>&1 || exit 0
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/hook-runtime.sh"
+assistant_hook_require_jq "subagent-monitor.sh" "SubagentStart"
+
 if [[ -f "$SCRIPT_DIR/task-journal-resolver.sh" ]]; then
     . "$SCRIPT_DIR/task-journal-resolver.sh"
 fi
@@ -30,7 +32,7 @@ CWD_INPUT=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || true)
 [[ -n "$AGENT_NAME" ]] || exit 0
 
 IS_CODEX=false
-if [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* || "$EVENT" == Subagent* ]]; then
+if assistant_hook_runtime_is_codex || [[ "$EVENT" == Subagent* && -z "${CLAUDE_PROJECT_DIR:-}" && -z "${GEMINI_PROJECT_DIR:-}" ]]; then
     IS_CODEX=true
 fi
 
@@ -41,6 +43,8 @@ fi
 
 role_constraint=""
 case "$AGENT_NAME" in
+    code-reviewer) role_constraint="SUBAGENT CONSTRAINT: You are a code reviewer. Read-only code/security/architecture/test-coverage review. Do NOT edit any files. Report findings only." ;;
+    qa-evaluator) role_constraint="SUBAGENT CONSTRAINT: You are a QA evaluator. Read-only acceptance, Done Contract, verification evidence, domain quality, score progression, and final result evaluation. Do NOT edit any files. Do NOT replace code-reviewer." ;;
     reviewer) role_constraint="SUBAGENT CONSTRAINT: You are a reviewer. Do NOT edit any files. Report findings only." ;;
     architect) role_constraint="SUBAGENT CONSTRAINT: You are an architect. Do NOT write implementation code. Design only." ;;
     explorer) role_constraint="SUBAGENT CONSTRAINT: You are an explorer. Read-only analysis. Do NOT modify any files." ;;
@@ -51,11 +55,22 @@ esac
 
 if $IS_CODEX; then
     # Codex SubagentStart/SubagentStop hook input uses agent_type and agent_id.
-    # Persist machine-readable evidence in the project state directory. The file
-    # is deliberately project-local so tests and reviewers can verify actual
-    # lifecycle events without trusting model-written journal text.
+    # Persist machine-readable evidence in protected agent-owned state. A
+    # project-local .codex/subagent-events.jsonl file is diagnostic only and is
+    # never authoritative for phase-gate enforcement.
     if [[ "$EVENT" == "SubagentStart" || "$EVENT" == "SubagentStop" ]]; then
-        mkdir -p "$PROJECT_DIR/.codex"
+        TASK_FILE=""
+        TASK_IDENTITY=""
+        if ! PROJECT_DIR="$(assistant_hook_canonical_existing_dir "$PROJECT_DIR")"; then
+            assistant_hook_emit_block "$EVENT" "Subagent lifecycle evidence refused: project directory must be an existing absolute canonical directory."
+            exit 0
+        fi
+        TASK_FILE="$PROJECT_DIR/.codex/task.md"
+        if [[ -f "$TASK_FILE" ]]; then
+            TASK_IDENTITY="$(assistant_hook_task_identity_from_file "$TASK_FILE" || true)"
+        fi
+        EVENTS_FILE="$(assistant_hook_codex_subagent_events_file_for_project "$PROJECT_DIR" "$TASK_IDENTITY")"
+        mkdir -p "$(dirname "$EVENTS_FILE")"
         jq -cn \
             --arg event "$EVENT" \
             --arg agent_type "$AGENT_NAME" \
@@ -64,9 +79,11 @@ if $IS_CODEX; then
             --arg turn_id "$TURN_ID" \
             --arg session_id "$SESSION_ID" \
             --arg transcript_path "$TRANSCRIPT_PATH" \
+            --arg project_dir "$PROJECT_DIR" \
+            --arg task_identity "$TASK_IDENTITY" \
             --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{event:$event,agent_type:$agent_type,agent_name:$agent_name,agent_id:$agent_id,turn_id:$turn_id,session_id:$session_id,transcript_path:$transcript_path,timestamp:$timestamp}' \
-            >> "$PROJECT_DIR/.codex/subagent-events.jsonl"
+            '{event:$event,agent_type:$agent_type,agent_name:$agent_name,agent_id:$agent_id,turn_id:$turn_id,session_id:$session_id,transcript_path:$transcript_path,project_dir:$project_dir,task_identity:$task_identity,timestamp:$timestamp}' \
+            >> "$EVENTS_FILE"
     fi
 
     if [[ "$EVENT" == "SubagentStart" && -n "$role_constraint" ]]; then
@@ -93,7 +110,8 @@ fi
 
 role_name=""
 case "$AGENT_NAME" in
-    reviewer) role_name="Reviewer" ;;
+    code-reviewer|reviewer) role_name="Reviewer" ;;
+    qa-evaluator) role_name="QAEvaluator" ;;
     architect) role_name="Architect" ;;
     explorer) role_name="Explorer" ;;
     code-mapper) role_name="CodeMapper" ;;

@@ -21,9 +21,10 @@
 
 set -euo pipefail
 
-command -v jq >/dev/null 2>&1 || exit 0
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/hook-runtime.sh"
+assistant_hook_require_jq "workflow-enforcer.sh" "UserPromptSubmit"
+
 # Shared resolver handles nested cwd and sub-agent cache fallback.
 . "$SCRIPT_DIR/task-journal-resolver.sh"
 . "$SCRIPT_DIR/workflow-phase-gates.sh"
@@ -37,7 +38,7 @@ TASK_FILE="$(assistant_find_task_journal "$PROJECT_DIR" "$(pwd)" || true)"
 STATE_DIR=".claude"
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
     STATE_DIR=".gemini"
-elif [[ -n "${CODEX_PROJECT_DIR:-}" || "$SCRIPT_DIR" == "$HOME/.codex/"* ]]; then
+elif assistant_hook_runtime_is_codex; then
     STATE_DIR=".codex"
 fi
 
@@ -61,7 +62,7 @@ emit_workflow_rules_context() {
 - Phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT
 - Do not skip phases; small tasks still use lightweight phases.
 - BUILD includes same-step tests for features.
-- REVIEW loops until clean.
+- REVIEW loops until clean or max 10 rounds.
 
 STATE BOOTSTRAP (when no active task journal is present):
 - For development/code-work, create or refresh $STATE_DIR/task.md before planning or implementation.
@@ -82,49 +83,68 @@ $extra_context"
     emit_additional_context "$context"
 }
 
-assistant_codex_prompt_subagent_decision() {
-    local prompt_lc
-    prompt_lc="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
+assistant_codex_prompt_has_subagent_denial() {
+    printf '%s\n' "$PROMPT" | awk '
+        {
+            line = tolower($0)
+            if (line ~ /(^|[^[:alnum:]_-])(deny|decline)[[:space:]]+(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(no|without)[[:space:]]+(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(don'\''t|dont|do not)[[:space:]]+(delegate|use[[:space:]]+(subagents|agents|delegation))([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])(don'\''t|dont|do not|not)[[:space:]]+(approve|authorize)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([^[:alnum:]_-]|$)/ ||
+                line ~ /(^|[^[:alnum:]_-])direct[[:space:]_-]+fallback([^[:alnum:]_-]|$)/) {
+                found = 1
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
 
-    if [[ "$prompt_lc" == *"deny subagents"* \
-        || "$prompt_lc" == *"deny delegation"* \
-        || "$prompt_lc" == *"decline subagents"* \
-        || "$prompt_lc" == *"decline delegation"* \
-        || "$prompt_lc" == *"no subagents"* \
-        || "$prompt_lc" == *"no delegation"* \
-        || "$prompt_lc" == *"without subagents"* \
-        || "$prompt_lc" == *"without delegation"* \
-        || "$prompt_lc" == *"don't delegate"* \
-        || "$prompt_lc" == *"dont delegate"* \
-        || "$prompt_lc" == *"do not delegate"* \
-        || "$prompt_lc" == *"don't use subagents"* \
-        || "$prompt_lc" == *"dont use subagents"* \
-        || "$prompt_lc" == *"do not use subagents"* \
-        || "$prompt_lc" == *"don't use delegation"* \
-        || "$prompt_lc" == *"dont use delegation"* \
-        || "$prompt_lc" == *"do not use delegation"* \
-        || "$prompt_lc" == *"no agents"* \
-        || "$prompt_lc" == *"don't use agents"* \
-        || "$prompt_lc" == *"dont use agents"* \
-        || "$prompt_lc" == *"do not use agents"* \
-        || "$prompt_lc" == *"direct fallback"* ]]; then
+assistant_codex_prompt_has_bounded_subagent_approval() {
+    printf '%s\n' "$PROMPT" | awk '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+        function looks_meta(line) {
+            return line ~ /(^|[^[:alnum:]_-])(assume|example|phrase|quote|quoted|question|should|whether)([^[:alnum:]_-]|$)/
+        }
+        function approve_line(line, low) {
+            line = trim(line)
+            sub(/^[[:space:]]*[-*][[:space:]]*/, "", line)
+            low = tolower(line)
+            if (low ~ /\?/ || low ~ /[`"'\'']/ || looks_meta(low)) {
+                return 0
+            }
+            return low ~ /^(yes|y|yep|yeah),?[[:space:]]+(please[[:space:]]+)?(use|spawn)[[:space:]]+(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(approve|approved|authorize|authorized)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^i[[:space:]]+(approve|authorize)[[:space:]]+(use[[:space:]]+)?(subagents|agents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?(use|spawn)[[:space:]]+(subagents|delegation)([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?delegate[[:space:]]+this[[:space:]]+work[[:space:]]+in[[:space:]]+parallel([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?spawn[[:space:]]+two[[:space:]]+agents([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?use[[:space:]]+one[[:space:]]+agent[[:space:]]+per[[:space:]]+point([[:space:].!]|$)/ ||
+                low ~ /^(please[[:space:]]+)?delegate[[:space:]]+(the[[:space:]]+)?work([[:space:].!]|$)/
+        }
+        {
+            if (approve_line($0)) {
+                found = 1
+            }
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    '
+}
+
+assistant_codex_prompt_subagent_decision() {
+    if assistant_codex_prompt_has_subagent_denial; then
         printf 'denied\n'
         return
     fi
 
-    if [[ "$prompt_lc" == *"approve subagents"* \
-        || "$prompt_lc" == *"authorize subagents"* \
-        || "$prompt_lc" == *"use subagents"* \
-        || "$prompt_lc" == *"spawn subagents"* \
-        || "$prompt_lc" == *"approve delegation"* \
-        || "$prompt_lc" == *"authorize delegation"* \
-        || "$prompt_lc" == *"use delegation"* \
-        || "$prompt_lc" == *"delegate work"* \
-        || "$prompt_lc" == *"delegate the work"* \
-        || "$prompt_lc" == *"please delegate"* \
-        || "$prompt_lc" == *"use agents"* \
-        || "$prompt_lc" == *"spawn agents"* \
-        || "$prompt_lc" == *"delegated agents"* ]]; then
+    if assistant_codex_prompt_has_bounded_subagent_approval; then
         printf 'approved\n'
         return
     fi
@@ -140,7 +160,7 @@ assistant_codex_prompt_looks_like_dev_work() {
 
 assistant_block_subagent_authorization() {
     local reason="$1"
-    jq -cn --arg reason "$reason" '{decision: "block", reason: $reason}'
+    assistant_hook_emit_block "UserPromptSubmit" "$reason"
 }
 
 read_scalar_field() {
@@ -189,8 +209,8 @@ if [[ -z "$TASK_FILE" ]] || assistant_task_journal_completed "$TASK_FILE"; then
     if [[ "$STATE_DIR" == ".codex" ]] && assistant_codex_prompt_looks_like_dev_work; then
         if [[ "$codex_subagent_decision" == "none" ]]; then
             emit_workflow_rules_context "CODEX SUBAGENT AUTHORIZATION (ask-once):
-- Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer.
-- Authorization examples: 'Use delegation', 'use delegation when possible', 'delegate work', 'use agents', 'spawn agents', 'approve subagents for this task'.
+- Ask once for the needed delegation scope and WAIT before responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, Code Reviewer, or QA Evaluator (legacy Reviewer labels are compatibility routing only).
+- Authorization examples: 'Use delegation.', 'yes, use subagents', 'delegate this work in parallel', 'spawn two agents', 'use one agent per point'.
 - Denial examples: 'no delegation', 'do not delegate', 'no agents', 'do not use agents', 'deny subagents and use direct fallback'.
 - Do not hard block this first prompt. Ask, then wait before delegated responsibilities."
             exit 0
@@ -239,6 +259,20 @@ clarification_admissibility=${clarification_admissibility:-unknown}
 subagent_policy_state=${subagent_policy_state:-unknown}
 subagent_execution_mode=${subagent_execution_mode:-unknown}
 subagent_authorization_scope=${subagent_authorization_scope:-}
+
+subagent_scope_items=()
+while IFS= read -r scope_item; do
+    subagent_scope_items+=("$scope_item")
+done < <(printf '%s\n' "$subagent_authorization_scope" | sed '/^[[:space:]]*$/d')
+
+if (( ${#subagent_scope_items[@]} == 0 )) || [[ ${#subagent_scope_items[@]} -eq 1 && "${subagent_scope_items[0]}" == "none" ]]; then
+    subagent_authorization_scope_summary="none"
+else
+    subagent_authorization_scope_summary="${subagent_scope_items[0]}"
+    for ((i = 1; i < ${#subagent_scope_items[@]}; i++)); do
+        subagent_authorization_scope_summary+=", ${subagent_scope_items[i]}"
+    done
+fi
 
 has_clarification_status_field="no"
 has_clarification_defaults_field="no"
@@ -395,40 +429,20 @@ if [[ "$STATE_DIR" == ".codex" && "$subagent_policy_state" == "authorization_req
     exit 0
 fi
 
-# Build phase-aware enforcement context
+# Build compact phase-aware enforcement context. Detailed recovery text is
+# appended below only for gates that are incomplete and actionable now.
 context="WORKFLOW STATE (auto-injected every prompt):
-- Task: $task_name
-- Size: $size
-- Phase: $status
-- Clarification status: $clarification_status
-- Clarification defaults applied: $clarification_defaults
-- Clarification confidence: $clarification_confidence
-- Clarification questions: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota)
-- Clarification admissibility: $clarification_admissibility
-- Unresolved clarification topics: $clarification_topics_summary
-- Plan approved: $has_plan_approval
-- Reviews completed: $review_count
-- Final result: $has_final_result
-- Review gate complete: $has_review_completion
-- Subagent policy state: $subagent_policy_state
-- Subagent execution mode: $subagent_execution_mode
-- Subagent authorization scope: ${subagent_authorization_scope:-none}
-- Subagent evidence gate: $subagent_gate_status
-- Metrics today: $has_metrics_today
-
-PHASE RULES:
-- Current phase is $status — stay until exit criteria pass.
-- PLAN approval before BUILD; BUILD includes same-step tests for new components.
-- REVIEW loops review -> fix -> re-review until clean or max 10 rounds.
-- State the current phase before the next action."
+state: Task: $task_name | Size: $size | Phase: $status
+clarification: Clarification status: $clarification_status | Clarification defaults applied: $clarification_defaults | Clarification confidence: $clarification_confidence | Clarification questions: $clarification_questions_asked/$clarification_question_cap (cap is maximum, not quota) | Clarification admissibility: $clarification_admissibility | Unresolved clarification topics: $clarification_topics_summary
+plan: Plan approved: $has_plan_approval
+review: Reviews completed: $review_count | Final result: $has_final_result | Review gate complete: $has_review_completion
+subagent: Subagent policy state: $subagent_policy_state | Subagent execution mode: $subagent_execution_mode | Subagent authorization scope: $subagent_authorization_scope_summary | Subagent evidence gate: $subagent_gate_status
+metrics: Metrics today: $has_metrics_today
+rule: Current phase is $status; state phase before action."
 
 context+="
 
-RUNTIME PHASE GATES:
-- Plan approved: $has_plan_approval
-- Review gate complete: $has_review_completion
-- Subagent evidence gate: $subagent_gate_status
-- Metrics today: $has_metrics_today"
+RUNTIME PHASE GATES: Plan approved: $has_plan_approval | Review gate complete: $has_review_completion | Subagent evidence gate: $subagent_gate_status | Metrics today: $has_metrics_today"
 
 if [[ "$clarification_gate_active" == "yes" ]]; then
     context+="
@@ -471,28 +485,37 @@ elif [[ "$subagent_policy_state" == "authorization_required" ]]; then
 SUBAGENT AUTHORIZATION GATE:
 - Assistant Framework policy requires explicit user authorization before spawning subagents for workflow roles.
 - Ask once for the needed delegation scope and WAIT for approval or denial.
-- Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, or Reviewer until authorization is resolved.
+- Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require Code Mapper, Explorer, Architect, Code Writer, Builder/Tester, Code Reviewer, or QA Evaluator (legacy Reviewer labels are compatibility routing only) until authorization is resolved.
 - Do not switch to direct_fallback unless the user denies authorization, policy disallows spawning, or a real spawn attempt proves subagents unavailable."
 fi
 
-if [[ "$subagent_gate_status" != "complete" ]]; then
+if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
+    plan_missing_key="$(assistant_phase_plan_missing_reason_key "$TASK_FILE")"
+    plan_missing_field="$(assistant_phase_reason_missing_field "plan_gate" "$plan_missing_key")"
+    plan_action="$(assistant_phase_reason_action "plan_gate" "$plan_missing_key")"
     context+="
-WARNING: Subagent evidence gate incomplete ($subagent_gate_status). If execution mode is delegated, dispatch and record every required workflow role before moving on; if using direct_fallback, record a valid fallback reason plus role-equivalent evidence. Do not silently complete Discovery or Review inline when delegated."
+WARNING: You are BUILDING without an approved plan ($plan_missing_key). plan_gate:$plan_missing_key missing=$plan_missing_field action=$plan_action"
 fi
 
-if [[ "$is_building" == "yes" && "$has_plan_approval" == "no" && "$size" != "small" && "$size" != "trivial" ]]; then
+subagent_warning_key="$(assistant_phase_subagent_warning_reason_key "$TASK_FILE" "$subagent_gate_status" "$status" || true)"
+subagent_warning_action="$(assistant_phase_subagent_warning_action "$subagent_warning_key" "$status" || true)"
+if [[ -n "$subagent_warning_action" ]]; then
     context+="
-WARNING: You are BUILDING without an approved plan. Medium+ tasks require plan approval first. STOP and get plan approved."
+WARNING: Subagent evidence gate incomplete ($subagent_warning_key). subagent_evidence_gate:$subagent_warning_key $subagent_warning_action"
 fi
 
 if [[ ( "$is_reviewing" == "yes" || "$is_documenting" == "yes" ) && "$has_review_completion" == "no" ]]; then
+    review_missing_field="$(assistant_phase_reason_missing_field "review_gate" "$review_gate_status")"
+    review_action="$(assistant_phase_reason_action "review_gate" "$review_gate_status")"
     context+="
-WARNING: Review gate incomplete ($review_gate_status). Complete structured Spec Review PASS, Quality Review, and Final Result before leaving REVIEW/DOCUMENT."
+WARNING: Review gate incomplete ($review_gate_status). review_gate:$review_gate_status missing=$review_missing_field action=$review_action"
 fi
 
 if [[ "$is_documenting" == "yes" && "$has_metrics_today" == "no" ]]; then
+    metrics_missing_field="$(assistant_phase_reason_missing_field "metrics_gate" "missing_metrics_today")"
+    metrics_action="$(assistant_phase_reason_action "metrics_gate" "missing_metrics_today")"
     context+="
-WARNING: Metrics gate incomplete. Record today's workflow metrics before finishing DOCUMENT."
+WARNING: Metrics gate incomplete. metrics_gate:missing_metrics_today missing=$metrics_missing_field action=$metrics_action"
 fi
 
 if [[ "$clarification_gate_active" == "yes" && "$requires_saved_clarification_state" == "yes" ]]; then
