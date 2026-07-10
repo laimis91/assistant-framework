@@ -8,89 +8,76 @@ triggers:
     reminder: "This request matches assistant-research. Consider whether the Skill tool should be invoked with skill='assistant-research' for research and investigation."
 ---
 
-# Research Tools
-
-## Contracts
-
-| Contract | File | Purpose |
-|---|---|---|
-| **Input** | `contracts/input.yaml` | Question, tier, tool selection |
-| **Output** | `contracts/output.yaml` | Findings, candidate mechanisms, confidence scores, conflicts, gaps |
-| **Phase Gates** | `contracts/phase-gates.yaml` | Search → Synthesize → Verify pipeline gates |
-
-**Rules:**
-- Every finding must have a confidence level (HIGH/MEDIUM/LOW) based on source count
-- Every URL must be verified before presenting to user
-- Conflicts and gaps must be explicitly checked and reported (even if empty)
-- Candidate mechanisms are hypotheses, not proven causes; include evidence, confidence, counterevidence/conflicts, gaps, and validation method
-
-On-demand investigation capabilities with tiered depth and URL verification.
+# Research
 
 ## Goal
 
-Answer research questions with evidence-weighted findings, verified URLs, explicit conflicts, and clear gaps.
+Answer research questions with source-weighted findings, verified URLs,
+explicit conflicts, and honest evidence gaps at proportional depth.
 
 ## Success Criteria
 
-- Research depth matches the decision risk and evidence available.
-- Findings include confidence levels based on source quality and agreement.
-- URLs are verified before presentation or explicitly omitted/flagged.
-- Conflicts and gaps are reported even when the answer is otherwise clear.
-- Candidate mechanisms are clearly labeled as candidates and include validation methods before being used as explanations.
+- Research depth matches decision risk and available evidence.
+- Findings cite supporting sources and calibrated confidence.
+- Every URL presented is verified or omitted.
+- Conflicts and gaps are reported, even when empty.
+- Candidate mechanisms remain hypotheses until a validation method is executed.
 
 ## Constraints
 
-- Ask only when the missing scope materially changes source selection, depth, jurisdiction/domain, or decision criteria and cannot be inferred.
-- Do not present single-source claims as high confidence unless the source is primary/official and the claim is directly supported.
-- Do not hardcode subagent counts as mandatory behavior; use evidence budgets and research angles that fit the active adapter.
+- Ask only when scope changes source selection, jurisdiction/domain, depth, or
+  decision criteria and cannot be inferred safely.
+- Do not call a single-source claim HIGH confidence unless a primary/official
+  source directly supports it.
+- Fit evidence budgets and research angles to the active adapter; do not hardcode
+  mandatory subagent counts.
 
-## Available Tools
+## Progressive Contract Loading
 
-| Tool | File | When to use |
-|---|---|---|
-| **Research** | `research.md` | Information gathering at 4 tiers: quick / standard / extensive / deep |
-| **Five-Lens Briefing** | `five-lens-briefing.md` | STORM-inspired perspective scan → contradiction map → synthesis → peer review for decision-grade research |
-| **Investigate** | `investigate.md` | Deep entity/domain investigation with ethical framework |
-| **Verify URLs** | `url-verify.md` | Validate any URLs before presenting to user |
+Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`, and
+`contracts/phase-gates.yaml`.
 
-## Usage
+Read `contracts/index.yaml` first and load only the active boundary:
 
-Read the relevant tool file when the situation calls for it.
+- `entry` for question, tier, method, role/goal, purpose, and known context;
+- `current_phase` for SEARCH, SYNTHESIZE, or VERIFY;
+- `source_research`, `five_lens`, or `investigate` only after method selection; and
+- `completion` only for the artifact being returned.
 
-**Choosing the right tier (Research tool):**
-- **Quick**: Single-source lookup, factual questions
-- **Standard**: Multi-source comparison, technology evaluation
-- **Extensive**: Comprehensive analysis, decision support with multiple perspectives
-- **Deep**: Full investigation with primary sources, expert synthesis
+Missing or invalid selectors fall back to the full named canonical contract. Do
+not load every contract or research method at entry.
 
-**Choosing the right method:**
-- **source_research**: factual lookup, source collection, comparison where direct evidence is enough.
-- **five_lens_briefing**: decision-grade research where practitioner reality, evidence, skepticism, incentives, historical parallels, contradictions, and peer review matter.
+## Ownership
 
-For five-lens work, read `five-lens-briefing.md` and still verify decision-critical claims with source-backed research.
+assistant-research owns source selection, evidence synthesis, confidence, and
+URL verification. Generic workflow may coordinate the task, but specialist gates are authoritative.
 
-**When to use Investigate vs Research:**
-- Research: "What caching libraries exist for .NET?" (broad exploration)
-- Investigate: "How does Redis Cluster handle failover?" (deep dive on specific entity)
+## Method Selection
 
-**URL Verification:**
-Always verify URLs before presenting them to the user. Dead links erode trust.
+- **source_research** — factual lookup, comparison, and source collection. Load
+  `source_research`; choose quick, standard, extensive, or deep tier by risk.
+- **five_lens_briefing** — decision-grade work needing perspectives,
+  contradictions, incentives, synthesis, and peer review. Load `five_lens`.
+- **investigate** — deep entity/domain analysis with ethical boundaries. Load
+  `investigate`.
+
+Quick tier may use one strong primary source. Standard uses multiple sources.
+Extensive/deep tiers expand perspectives and primary evidence only when the
+decision warrants the cost.
+
+Every finding needs confidence grounded in source quality and agreement. For
+causal or improvement questions, return candidate mechanisms with evidence,
+counterevidence, gaps, and a validation method—not proven-cause language.
 
 ## Output
 
-Return:
-- **Status** - completion state and confidence for the research result.
-- **Answer** - concise synthesis of the research result.
-- **Findings** - confidence-scored findings with source attribution.
-- **Candidate mechanisms** - when researching causes, why/how, or improvement mechanisms, evidence-backed hypotheses with confidence, counterevidence/conflicts, gaps, and validation method.
-- **Sources** - verified URLs only, with enough context to understand relevance.
-- **Conflicts** - conflicting evidence or interpretations, or "none found".
-- **Gaps** - unanswered questions, weak evidence, stale sources, or recommended next checks.
-- **Five-lens artifacts** - when using `five_lens_briefing`, include perspective scan, contradiction map, synthesis, and peer review.
+Return status/confidence, concise answer, source-backed findings, candidate
+mechanisms when applicable, verified sources, conflicts, gaps, and five-lens
+artifacts only when that method ran.
 
 ## Stop Rules
 
-- Stop and ask one focused question only when scope or decision criteria would materially change source selection or interpretation.
-- Stop and report a gap when required sources are inaccessible, stale, conflicting, or too weak for the requested confidence.
-- Do not present candidate mechanisms as proven causes without executed validation evidence.
-- Do not finalize with unverified URLs.
+- Ask at most one focused question when missing scope changes interpretation.
+- Report a gap when sources are inaccessible, stale, conflicting, or too weak.
+- Do not finalize with any unverified URL.
+- Do not present candidate mechanisms as causes without executed validation.

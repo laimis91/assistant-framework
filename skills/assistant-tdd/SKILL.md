@@ -10,92 +10,55 @@ triggers:
 
 # Test-Driven Development
 
-## Contracts
-
-This skill enforces strict gate assertions at every RED -> GREEN -> REFACTOR transition.
-
-| Contract | File | Purpose |
-|---|---|---|
-| **Input** | `contracts/input.yaml` | Behaviors to implement, test framework, exceptions |
-| **Output** | `contracts/output.yaml` | Cycle log with verified pass/fail at each phase |
-| **Phase Gates** | `contracts/phase-gates.yaml` | RED/GREEN/REFACTOR transition assertions + invariants |
-| **Handoffs** | `contracts/handoffs.yaml` | Subagent dispatch contracts (currently none; workflow owns TDD handoffs) |
-
-**Rules:**
-- Check phase gate assertions at every transition (RED->GREEN, GREEN->REFACTOR, REFACTOR->next RED)
-- Every cycle must have verified test execution results (not assumed)
-- Production implementation starts only after a verified failing test; this is structurally enforced, not advisory
-
-Enforces the Red-Green-Refactor cycle. When active, every production change begins with a failing test.
-
 ## Goal
 
-Protect behavior changes with a verified Red-Green-Refactor loop before production code is trusted. In normal development workflow, tests-first is the default for behavior changes, even when the user did not explicitly say "TDD".
+Protect each behavior change with verified RED, minimal GREEN, and
+behavior-neutral REFACTOR evidence before production code is trusted.
 
 ## Success Criteria
 
 - Each behavior starts with a test that fails for the intended reason.
-- Production code is limited to the minimal change required to pass the failing test.
+- Production code is limited to the smallest change that makes that test pass.
 - Targeted and relevant regression tests pass before the next cycle.
-- Cycle evidence is recorded in the task journal or returned output.
+- RED/GREEN/REFACTOR evidence is recorded in the task journal or output.
 
 ## Constraints
 
+- Never treat syntax, import, environment, or flaky failures as valid RED.
 - Do not write production code before RED evidence exists.
-- Do not treat syntax errors, missing imports, or flaky failures as valid RED evidence.
-- Ask only when the target behavior or acceptable test scope is materially unclear.
+- Ask only when behavior or acceptable test scope materially changes the test.
 
-## The Iron Law
+## Progressive Contract Loading
 
-Production code starts after a failing test proves the missing behaviour. Recovery: if implementation appears before its test, **delete the code**, write the test, verify RED, then implement GREEN. This is mandatory because code written before tests has unknown coverage and cannot be trusted.
+Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
+`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
 
-## Activation
+Read `contracts/index.yaml` first and load only the active enforcement boundary:
 
-This skill activates when:
-- The user explicitly requests TDD ("use TDD", "tests first", "red green refactor")
-- `assistant-workflow` is building a behavior change, bug fix, or interface-affecting refactor and records `TDD: active` in the plan constraints
-- The plan includes `TDD: active` in constraints
-- The project's CLAUDE.md, AGENTS.md, README, or conventions require tests-first
+- `entry` for activation, behaviors, debugging evidence, framework, and exceptions;
+- `current_phase` for RED, GREEN, or REFACTOR; and
+- `completion` for the returned cycle artifact.
 
-When active, add to the task journal constraints:
-```
-- TDD: active (Red-Green-Refactor enforced)
-```
+The handoffs contract remains canonical but empty because `assistant-workflow`
+owns cross-role dispatch. Missing or invalid selectors fall back to the full
+named canonical contract; do not load every contract at entry.
 
-## The Cycle
+## Ownership
 
-For each behaviour or plan step:
+assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
+task packets and role dispatch, but specialist gates are authoritative.
 
-### RED - Write a failing test
+When workflow delegates:
 
-1. Write ONE test that describes the desired behaviour
-2. Run it; it **MUST** fail
-3. Verify it fails for the **RIGHT reason** (not a syntax error or missing import)
-4. If it passes: the behaviour already exists or the test is wrong. Investigate.
-
-### GREEN - Make it pass
-
-1. Write the **SIMPLEST** code that makes the test pass
-2. Keep the change limited to the code needed for this test
-3. Run the test; it must pass
-4. Run **ALL** tests to confirm existing behaviour still passes
-
-### REFACTOR - Clean up
-
-1. Remove duplication introduced in the GREEN step
-2. Improve naming, extract methods, simplify
-3. Run ALL tests after each refactoring; they must stay green
-4. Keep refactoring behaviour-neutral; add new behaviour in the next RED cycle
-
-## Orchestrated role ownership
-
-When TDD runs inside `assistant-workflow`, preserve agent ownership:
-
-- **Builder/Tester owns RED**: write one failing behaviour test, run it, verify the failure is for the intended reason, and return RED evidence.
-- **Code Writer owns GREEN**: implement the minimal production change only after RED evidence is present in the task packet or handoff.
-- **Builder/Tester owns verification and refactor-safety**: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures.
+- **Builder/Tester owns RED**: write one failing behavior test, run it, and prove
+  the failure is for the intended reason.
+- **Code Writer owns GREEN**: implement the minimal production change after RED
+  evidence is present.
+- **Builder/Tester owns verification and refactor-safety**: run the targeted
+  test, relevant suite, and regression checks; request production fixes when needed.
 
 Required RED evidence before production implementation:
+
 - Test file and test name
 - Command run
 - Failure summary
@@ -103,109 +66,30 @@ Required RED evidence before production implementation:
 
 If TDD is active and RED evidence is missing, Code Writer must return `NEEDS_CONTEXT` and make no production changes.
 
-## Verification gates
+## Cycle
 
-Each transition has a gate that must pass before proceeding:
+1. **RED** — write one behavior test, run it, and verify the right failure. If it
+   passes unexpectedly, inspect whether behavior already exists or the test is wrong.
+2. **GREEN** — write the simplest passing code, rerun the target, then relevant
+   regressions. Repair regressions before continuing.
+3. **REFACTOR** — remove duplication or improve names without new behavior; keep
+   tests green after each change.
+4. Repeat for the next behavior.
 
-```
-RED:      test written -> test runs -> test FAILS -> failure reason is correct
-GREEN:    code written -> failing test PASSES -> all other tests still pass
-REFACTOR: code cleaned -> all tests still pass -> no new behaviour added
-```
+For unknown-cause bugs, use `assistant-debugging` first. Start TDD only after
+reproduction/root-cause evidence can define a meaningful regression test.
 
-Advance only when the current gate passes. Recovery: if the test does not fail in RED, stop and fix the test or requirement. If other tests break in GREEN, stop and fix the regression. If tests fail after REFACTOR, undo the refactor and try again.
-
-## When to apply
-
-**Always use TDD for:**
-- New features with defined acceptance criteria
-- Bug fixes (write the failing test that reproduces the bug first)
-- Refactors that change interfaces (characterization tests first)
-- Any behaviour in the test plan from `assistant-workflow`
-
-**Exceptions (require explicit user approval when TDD is active):**
-- Throwaway prototypes / spikes
-- Generated code (scaffolding, migrations)
-- Documentation-only changes
-- Configuration-only changes with no behavior logic
-- UI layout / styling with no logic
-
-Approved exceptions are outside the TDD cycle log. Record the approval and reason in the owning workflow/plan, then use the workflow's normal validation rules instead of claiming TDD completion for that behavior.
-
-## Bug fix pattern
-
-Bug fixes get their own TDD variant:
-
-1. **Reproduce**: write a failing test that demonstrates the bug (RED - the failure proves the bug exists)
-2. **Fix**: make the minimal change to fix the bug (GREEN - the failing test now passes)
-3. **Protect**: keep the regression test, verify no regressions, refactor only if needed
-
-If the bug cannot be reproduced with a meaningful test yet, do not enter a TDD cycle. First load and follow `assistant-debugging` (or use the same direct fallback when unavailable/policy-disallowed), gather enough reproduction/root-cause evidence to write a meaningful failing regression test, then return to RED.
-
-## Common shortcuts and required response
-
-Each shortcut routes back to the RED gate:
-
-| Shortcut | Required response |
-|---|---|
-| "Tests after achieve the same thing" | Tests-first discover requirements; tests-after verify remembered cases |
-| "I already tested it manually" | Manual testing is unrepeatable and incomplete |
-| "Deleting working code is wasteful" | Unverified code is technical debt, not an asset |
-| "TDD slows me down" | TDD is faster than production debugging |
-| "This is too simple to need a test" | Simple code becomes complex code. The test documents intent. |
-| "I'll add the test right after" | Write the test now, before production code. |
-
-## Task journal integration
-
-When TDD is active, the task journal Progress section must show the cycle for each step:
-
-```markdown
-- [x] Step 1: User registration endpoint
-  - RED: test_register_valid_user - fails (no endpoint exists)
-  - GREEN: POST /api/users returns 201 - test passes
-  - REFACTOR: extracted validation to UserValidator - all tests pass
-- [x] Step 2: Duplicate email rejection
-  - RED: test_register_duplicate_email - fails (no uniqueness check)
-  - GREEN: returns 409 on duplicate - test passes
-  - REFACTOR: moved email check to domain service - all tests pass
-```
-
-## Review cycle integration
-
-When TDD is active, the Spec Review (Stage 1) adds an extra check:
-- Every new public method/endpoint has a corresponding test
-- Tests were written BEFORE implementation (verify via commit history or task journal RED entries)
-- Every production change has a matching test and RED entry
-
-## Pairing with assistant-workflow
-
-This skill enhances the Build loop in `assistant-workflow`. For unknown-cause bugfixes, `assistant-debugging` runs first; this skill starts only after the failure mechanism is understood enough to define RED regression evidence:
-- Step 6 in the Build loop activates Red-Green-Refactor per plan step
-- The test plan from `references/prompts/test-strategy.md` defines the behaviours to TDD
-- The review cycle verifies TDD discipline was maintained
-
-## Quick reference
-
-```
-1. Pick next behaviour from test plan
-2. RED:      write test -> run -> must FAIL -> right reason?
-3. GREEN:    write code -> run -> must PASS -> all tests pass?
-4. REFACTOR: clean up -> run -> still PASS -> no new behaviour?
-5. Log RED/GREEN/REFACTOR in task journal
-6. Repeat from 1
-```
+Allowed exceptions require recorded approval/reason when TDD is active:
+throwaway spikes, generated code, docs-only work, behavior-free config, and
+layout-only styling. Do not claim TDD completion for an exception.
 
 ## Output
 
-Return:
-- **Status** - current cycle state or completion result.
-- **Cycle log** - RED, GREEN, and REFACTOR evidence with commands and outcomes.
-- **Changed files** - tests and production files touched.
-- **Verification** - targeted and regression test results.
-- **Gaps** - missing behavior details, skipped exceptions, or blockers.
+Return status, cycle log with commands/outcomes, test and production files,
+targeted/regression verification, approved exceptions, and blockers.
 
 ## Stop Rules
 
-- Stop before production edits when RED evidence is missing or invalid.
-- Stop and fix the test when RED passes unexpectedly or fails for the wrong reason.
-- Stop and repair regressions before starting the next behavior cycle.
+- Stop before production edits when RED is absent or invalid.
+- Stop and repair the test when RED passes or fails for the wrong reason.
+- Stop and repair regressions before the next behavior.

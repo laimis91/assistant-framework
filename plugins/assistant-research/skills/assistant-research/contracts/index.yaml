@@ -1,0 +1,82 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-research
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+
+load_sets:
+  entry:
+    selectors:
+      - id: research-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: research-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_research_phase
+        allowed_names: [SEARCH, SYNTHESIZE, VERIFY]
+      - id: research-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV4, INV5, INV6, INV7]
+    budget_words: 5000
+  source_research:
+    references:
+      - research.md
+      - url-verify.md
+    selectors:
+      - id: research-source-method
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [research_method]
+    budget_words: 2500
+  five_lens:
+    references:
+      - five-lens-briefing.md
+      - research.md
+      - url-verify.md
+    selectors:
+      - id: research-five-lens-method
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [research_method]
+    budget_words: 3500
+  investigate:
+    references:
+      - investigate.md
+      - url-verify.md
+    selectors:
+      - id: research-investigate-tool
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [tool]
+    budget_words: 2000
+  completion:
+    selectors:
+      - id: research-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, conflicts, gaps, summary, insight_captured]
+    budget_words: 6000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

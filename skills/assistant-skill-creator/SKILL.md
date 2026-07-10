@@ -11,250 +11,108 @@ triggers:
 
 # Skill Creator
 
-Create V1 framework skills with proper contracts following the [contract design guide](references/skill-contract-design-guide.md). Think of this skill as a blueprint printer — you describe what you want the skill to do, and it produces the full directory structure with typed contracts.
-
-## Contracts
-
-| Contract | File | Purpose |
-|---|---|---|
-| **Input** | `contracts/input.yaml` | Fields to resolve before starting |
-| **Output** | `contracts/output.yaml` | Artifacts that must exist when done |
-| **Phase Gates** | `contracts/phase-gates.yaml` | Assertions at each phase transition |
-
 ## Goal
 
-Create compact, contract-backed skills that give agents clear outcomes, validation boundaries, and safe fallback behavior without loading unnecessary prose into every turn.
+Create compact, contract-backed V1 skills with precise routing, typed boundaries,
+safe fallback behavior, and offline validation.
 
 ## Success Criteria
 
-- The skill has the required contract tier for its category.
-- Root `SKILL.md` states Goal, Success criteria, Constraints, Output, and Stop rules when they change behavior.
-- Required inputs use `ask` only for material, non-discoverable missing data; otherwise they infer, skip, or fail with a concrete reason.
-- Evals or contract guards cover both positive routing and at least one false-positive or unsafe behavior case.
+- The skill uses the correct Process, Analysis, or Utility contract tier.
+- Root instructions state Goal, Success Criteria, Constraints, Output, and Stop Rules.
+- Missing inputs ask only when outcome-shaping and otherwise infer, skip, or fail.
+- Evals cover positive routing plus a false-positive or unsafe behavior case.
 
 ## Constraints
 
-- Keep `SKILL.md` concise; move long examples and procedures into `references/`.
-- Do not add subagent handoffs to Analysis or Utility skills.
-- Do not hardcode model-version-specific prompt knobs in general-purpose skills.
-- Keep skills company-safe and agent-agnostic: no mandatory Claude/Gemini/Codex runtime assumptions unless the skill is explicitly about that tool.
-- Treat memory, metrics, hooks, subagents, external tools, and generated state paths as optional/configurable and policy-gated.
-- Prefer local files and repo-native validation. Do not add SaaS calls, installers, or external dependencies without explicit user approval.
-- Do not encode secrets, private endpoints, customer data, or workplace-specific confidential details in examples, evals, or templates.
+- Keep root `SKILL.md` concise and move detail to on-demand references.
+- Analysis and Utility skills do not gain subagent handoffs.
+- Memory, metrics, hooks, subagents, external tools, and state paths stay
+  optional/configurable and policy-gated unless the skill explicitly owns them.
+- Keep examples agent-agnostic and free of secrets, private endpoints, customer
+  data, and workplace-specific confidential details.
 
-## Output
+## Progressive Contract Loading
 
-Return:
-- **Status** - created, updated, validated, or blocked.
-- **Files** - skill, contract, eval, reference, or script paths changed.
-- **Contract summary** - category, required fields, gates, handoffs, and output artifacts.
-- **Validation** - commands or checks run and their result.
-- **Policy safety summary** - memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples used or explicitly absent; fallback behavior for anything optional/configurable.
-- **Gaps** - missing inputs, deferred optional files, or risks requiring follow-up.
+Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`, and
+`contracts/phase-gates.yaml`.
 
-## Stop Rules
+Read `contracts/index.yaml` first and load only the active boundary:
 
-- Stop and ask when the skill purpose, category, or required behavior is ambiguous enough to change contract shape.
-- Stop before creating/updating a skill if `docs/skill-contract-design-guide.md` has not been read for skill work.
-- Stop before final response if contracts or validation checks are missing.
+- `entry` for purpose, category, triggers, dependencies, policy, and existing path;
+- `current_phase` for CAPTURE, DESIGN, VERIFIED_DISTILLATION, BUILD, or VALIDATE;
+- `contract_design` for ordinary contract design;
+- `harness_design` only for loop-based Process skills;
+- `verified_distillation` only when promoting a completed workflow/lesson;
+- `validation` only for the final checklist; and
+- `completion` only for the artifact being returned.
+
+Missing or invalid selectors fall back to the full named canonical contract. Do
+not load every contract or reference at entry.
+
+The skill-local contract guide is generated from docs/skill-contract-design-guide.md;
+edit the docs source, then run
+`tools/skills/sync-skill-contract-guide.sh --apply`.
+
+## Ownership
+
+assistant-skill-creator owns skill contract design, routing precision, and
+contract validation. Generic workflow may coordinate file edits and review, but
+specialist gates are authoritative.
 
 ## Phases
 
-```
-CAPTURE → DESIGN → VERIFIED_DISTILLATION (conditional) → BUILD → VALIDATE
-```
+### CAPTURE
 
-### Phase 1: CAPTURE — Understand the Skill
+Resolve name, purpose, category, triggers, dependencies, policy constraints, and
+effort. **Existing skill shortcut:** when `existing_skill_path` exists, read the
+current skill and proceed to DESIGN without asking for captured facts again.
 
-> **Existing skill shortcut:** If `existing_skill_path` is provided, skip this phase entirely. Read the existing SKILL.md to extract skill_name, purpose, category, and triggers, then proceed directly to DESIGN.
+Contract tiers:
 
-Gather the following from the user (or infer from context):
+- Utility: input + output
+- Analysis: input + output + phase-gates
+- Process: input + output + phase-gates + handoffs
 
-1. **Skill name** — `kebab-case`, prefixed with domain (`assistant-`, `unity-`, etc.)
-2. **Purpose** — One sentence: what does this skill enable the agent to do?
-3. **Category** — Process, Analysis, or Utility (determines contract tier):
+### DESIGN
 
-| Category | When to use | Contract files |
-|---|---|---|
-| **Process** | Multi-phase, subagent dispatch, approval gates | input + output + phase-gates + handoffs |
-| **Analysis** | Multi-step pipeline, no subagents | input + output + phase-gates |
-| **Utility** | Single-pass: accept input, produce output | input + output |
+Load `contract_design`. Define typed input/output fields, recovery actions,
+binary phase gates, invariants, and matching handoffs where applicable. Present
+new or materially changed contract design for user review before BUILD. A small,
+reversible existing-skill edit may proceed when direction is already explicit.
 
-4. **Triggers** — What user phrases should activate this skill?
-5. **Dependencies** — Does it require other skills? Avoid dependencies unless required; prefer optional references and fallback behavior. Do not require `assistant-memory` just to record lessons.
-6. **Effort** — low, medium, or high
-7. **Policy/runtime assumptions** — any memory, hooks, subagents, external commands, state paths, or SaaS/tooling dependencies must be explicit, optional/configurable, and policy-gated unless the skill is specifically for that runtime.
+For a Process skill with multi-round review, QA, optimization, or restart loops,
+load `harness_design` and apply `references/harness-patterns.md`: bounded rounds,
+rubric/score progression, drift/stagnation handling, separate generation and
+evaluation, and explicit completion/pivot artifacts.
 
-If the user has a vague idea, help them sharpen it:
-- "What should the skill produce as output?"
-- "Is this a multi-step process or a single operation?"
-- "What phrases would a user say when they need this?"
+### VERIFIED_DISTILLATION
 
-Print: `--- PHASE: CAPTURE COMPLETE ---`
+When turning a completed workflow or lesson into a reusable skill, load
+`verified_distillation`. Require `distillation_verification` with
+`verifier_result: approved` before writing. Remove task progress, PR numbers,
+secrets, logs, and stale facts; otherwise return a revision checklist.
 
-### Phase 2: DESIGN — Design the Contracts
+### BUILD
 
-Read `references/skill-contract-design-guide.md` for the full schema reference. Then design contracts for the skill.
+Create `skills/<name>/SKILL.md`, required tier contracts, and focused evals.
+Keep canonical contract headers and descriptions precise. Reuse repository
+templates; add references only when they reduce root load.
 
-#### For ALL skills (input + output):
+### VALIDATE
 
-**Input contract** — What does the skill need to start?
-- Identify 3-8 input fields
-- Each field needs: name, type, required, description, on_missing
-- Required fields MUST have `on_missing` actions (ask, infer, skip, fail)
-- Enum types MUST list all valid values
-- Add `examples:` for ambiguous fields
-- Add `infer_from:` when the agent can derive a value
+Load `validation`; run the 13 contract design guide rules plus company-safety,
+source validation, eval validation, sync checks, and relevant P0-P4 contracts.
+Fix failures before reporting `VALIDATE COMPLETE`.
 
-**Output contract** — What must the skill produce?
-- Identify 2-6 output artifacts
-- Each artifact needs: name, type, required, description
-- Conditional artifacts use `condition:` to scope when they're needed
-- Include `on_fail:` for required artifacts
+## Output
 
-#### For Process and Analysis skills (add phase-gates):
+Return status, changed files, contract tier/summary, validation evidence,
+policy-safety summary, and unresolved gaps.
 
-**Phase gates** — What must be true at each transition?
-- Binary assertions only — "X is true" or "X is false"
-- Each assertion: id, check (plain English), on_fail (actionable corrective action)
-- "fix it" is NOT an actionable corrective action
-- Add cross-phase invariants for things that must ALWAYS be true
+## Stop Rules
 
-#### For Process skills (add handoffs):
-
-**Handoffs** — What data flows between subagents?
-- Define from/to roles
-- `context_fields` — what the orchestrator sends
-- `return_fields` — what the subagent must return
-- Producer's `return_fields` must satisfy consumer's `context_fields`
-
-#### For Process skills with evaluation loops:
-
-If the skill includes a multi-round loop (review, refinement, optimization), read `references/harness-patterns.md` and apply the relevant patterns:
-
-| Pattern | When to Apply |
-|---|---|
-| **Rubric Scoring** | Loop evaluates quality against criteria |
-| **Drift Detection** | Loop runs 2+ rounds with scoring |
-| **Harness Gates** | Loop must complete before task finishes |
-| **Generation/Evaluation Separation** | One agent creates, another evaluates |
-
-These patterns add rubric return fields to handoffs, drift invariants to phase-gates, and score progression to output contracts. Most loop-based Process skills will use all four.
-
-Present the contract design to the user for review before building. For small, low-risk edits to an existing skill, proceed without a separate approval round when the requested direction is explicit and reversible; still record assumptions.
-
-Print: `--- PHASE: DESIGN COMPLETE ---`
-
-### Conditional Phase: VERIFIED_DISTILLATION — Approve Reusable Lessons Before Writing
-
-Run this phase before BUILD when creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested "save this as a skill" request.
-
-1. Load `references/verified-skill-distillation.md`.
-2. Require the full distillation packet: candidate workflow, inputs, process steps, output artifact, verification gate, learned constraints, scope/non-goals, evidence, verifier result, and promotion decision.
-3. If `verifier_result` is not `approved`, do not write skill files. Return the missing verification or revision checklist.
-4. Remove one-off task progress, PR numbers, secrets, run logs, and stale facts before continuing.
-
-Print: `--- PHASE: VERIFIED DISTILLATION COMPLETE ---`
-
-### Phase 3: BUILD — Create the Files
-
-Create the skill directory under `skills/`:
-
-```
-skills/<skill-name>/
-  SKILL.md              # Entry point with YAML frontmatter
-  contracts/
-    input.yaml          # Always
-    output.yaml         # Always
-    phase-gates.yaml    # Process + Analysis only
-    handoffs.yaml       # Process only
-```
-
-#### SKILL.md structure:
-
-```yaml
----
-name: <skill-name>
-description: "<what it does>. <when to trigger>. Triggers on: '<trigger phrases>'."
-effort: <low|medium|high>
-requires:              # optional; only when no safe fallback exists
-  - <dependency>
-triggers:
-  - pattern: "<regex pattern for routing>"
-    priority: <40-90>
-    min_words: <2-5>
-    reminder: "This request matches <skill-name>. You MUST invoke the Skill tool with skill='<skill-name>' BEFORE proceeding."
----
-```
-
-Body structure:
-1. **Goal** — User-visible outcome the skill produces
-2. **Success criteria** — What must be true before completion
-3. **Constraints** — Scope, evidence, safety, side-effect, company policy, and adapter/runtime limits
-4. **Contracts table** — Link to contract files with one-line purpose
-5. **Phases/Steps** — How the skill executes (phases for Process/Analysis, steps for Utility)
-6. **Output** — Required response or artifact shape
-7. **Stop rules** — When to ask, retry, fall back, abstain, or stop
-8. **References** — Pointers to sub-files loaded on demand
-
-Keep SKILL.md under 500 lines. If longer, split into sub-files in `references/`.
-
-#### Contract YAML structure:
-
-Follow the schemas from the contract design guide exactly. Every contract file starts with:
-
-```yaml
-schema_version: "1.0"
-contract: <input|output|phase-gates|handoffs>
-skill: <skill-name>
-```
-
-Print: `--- PHASE: BUILD COMPLETE ---`
-
-### Phase 4: VALIDATE — Check Against Design Guide Rules
-
-Run through the 12 contract design guide rules as a checklist. Read `references/contract-design-checklist.md` for the full list.
-
-**Must pass all 12:**
-
-1. Required fields have `on_missing` actions
-2. Enum types list all values (no open-ended enums)
-3. Validation rules are plain English (no regex/code)
-4. Phase gates are binary assertions (if applicable)
-5. Handoff schemas match: producer return_fields satisfy consumer context_fields (if applicable)
-6. Corrective actions are actionable (not "fix it")
-7. Contracts are additive (new fields only)
-8. Conditional fields use `condition:`
-9. Ambiguous fields have `examples:`
-10. Cross-phase invariants exist for drift prevention (if applicable)
-11. Root SKILL.md has compact Goal, Success criteria, Constraints, Output, and Stop rules when the skill has non-trivial behavior
-12. Clarification prompts are admissible: material to outcome, not discoverable from context/source, no safe default
-13. Company-safe/agent-agnostic check passes: no hidden Claude/Hermes/Codex assumptions, external tool installs, mandatory memory/hooks/subagents, hardcoded state paths, or sensitive examples unless explicitly scoped and policy-gated
-
-If any rule fails: fix the contract, explain what was wrong, and re-check.
-
-Present a summary of the created skill:
-- File count and paths
-- Contract tier (Process/Analysis/Utility)
-- Field count per contract
-- Phase count (if applicable)
-
-Print: `--- PHASE: VALIDATE COMPLETE ---`
-
-## References
-
-- [Contract Design Guide](references/skill-contract-design-guide.md) — mandatory reading before designing contracts
-- [Contract Design Checklist](references/contract-design-checklist.md) — validation checklist for Phase 4
-- [Harness Patterns](references/harness-patterns.md) — rubric, drift detection, gates, and separation patterns for loop-based Process skills
-- [Verified Skill Distillation](references/verified-skill-distillation.md) — verifier-approved promotion from workflow lesson to reusable skill
-- Existing skills in `skills/` — use as examples for your category tier
-
-## Tips
-
-- **Start simple.** A Utility skill with 3 input fields and 2 output artifacts is better than an over-designed Process skill. You can always add phases later.
-- **Steal from existing skills.** Look at `assistant-memory` (Utility), `assistant-ideate` (Analysis), or `assistant-workflow` (Process) for your tier's pattern — but do not copy runtime-specific assumptions blindly.
-- **Descriptions are triggers.** The `description:` field in frontmatter is what the skill router uses for matching. Be specific about when to trigger — include example phrases.
-- **Add negative triggers.** Include at least one eval or test showing when the skill must not route or must not ask a clarification.
-- **Ask only when it changes the result.** Question budgets are caps, not quotas; proceed with stated defaults when context is enough.
-- **Progressive loading matters.** SKILL.md loads into context whenever triggered. Keep it lean. Put detailed reference material in sub-files.
-- **Policy gates matter.** If a skill mentions memory, metrics, hooks, subagents, generated state paths, installs, network calls, or external tools, define the fallback when those are unavailable or disallowed.
+- Stop when purpose/category ambiguity changes contract shape.
+- Stop before skill work if the canonical contract guide was not read.
+- Stop before BUILD when required design approval or verified distillation is absent.
+- Stop before completion when contracts, evals, validation, or generated sync fail.

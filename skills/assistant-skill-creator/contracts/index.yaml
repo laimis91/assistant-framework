@@ -1,0 +1,89 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-skill-creator
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+
+load_sets:
+  entry:
+    selectors:
+      - id: skill-creator-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_name, skill_purpose, skill_category, trigger_phrases, dependencies, policy_constraints, effort_level, existing_skill_path]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: skill-creator-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_skill_creator_phase
+        allowed_names: [CAPTURE, DESIGN, VERIFIED_DISTILLATION, BUILD, VALIDATE]
+      - id: skill-creator-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2]
+    budget_words: 5000
+  contract_design:
+    references:
+      - references/skill-contract-design-guide.md
+    selectors:
+      - id: skill-creator-contract-category
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_category]
+    budget_words: 5000
+  harness_design:
+    references:
+      - references/skill-contract-design-guide.md
+      - references/harness-patterns.md
+    selectors:
+      - id: skill-creator-harness-category
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_category]
+    budget_words: 7000
+  verified_distillation:
+    references:
+      - references/verified-skill-distillation.md
+    selectors:
+      - id: skill-creator-distillation-path
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [existing_skill_path]
+    budget_words: 2500
+  validation:
+    references:
+      - references/contract-design-checklist.md
+    selectors:
+      - id: skill-creator-validation-summary
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [validation_summary]
+    budget_words: 2500
+  completion:
+    selectors:
+      - id: skill-creator-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [skill_md, input_contract, output_contract, phase_gates_contract, handoffs_contract, validation_summary, policy_safety_summary, distillation_verification]
+    budget_words: 5000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

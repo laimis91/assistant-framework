@@ -1,8 +1,8 @@
 # Contract Design Checklist
 
-Validate every new or modified skill against these 12 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
+Validate every new or modified skill against these 13 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
 
-## The 12 Rules
+## The 13 Rules
 
 ### 1. Required fields have `on_missing` actions
 - [ ] Every field with `required: true` has an `on_missing:` value
@@ -66,6 +66,12 @@ Validate every new or modified skill against these 12 rules from the [contract d
 - [ ] `on_missing: ask` is used only for missing data that materially changes the outcome
 - [ ] The answer cannot be discovered from prompt, context, local files, or safe defaults
 - [ ] Question budgets are maximums, not quotas; clear prompts proceed without ritual questions
+
+### 13. Loop controllers are explicit and bounded
+- [ ] Loop-based Process skills define explicit bounded controller artifacts
+- [ ] Code review and QA remain distinct responsibilities and handoffs
+- [ ] Stagnation, repeated drift/regression, pivots, and blockers use explicit pivot/restart decisions
+- [ ] Review, QA, and fix-verify loops terminate after at most 10 rounds
 
 ## Quick Reference: Contract Tier Requirements
 

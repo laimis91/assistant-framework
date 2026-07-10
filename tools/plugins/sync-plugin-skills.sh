@@ -29,6 +29,13 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PLUGIN_DOC="$FRAMEWORK_DIR/docs/plugin-architecture.md"
+CONTRACT_GUIDE_SYNC="$FRAMEWORK_DIR/tools/skills/sync-skill-contract-guide.sh"
+
+if [[ "$MODE" == "--apply" ]]; then
+    "$CONTRACT_GUIDE_SYNC" --apply
+else
+    "$CONTRACT_GUIDE_SYNC" --check
+fi
 
 plugin_boundary() {
     local plugin_name="$1"
