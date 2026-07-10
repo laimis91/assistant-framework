@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "Structured dev workflow: triage through document. Use for build, implement, fix, refactor, plan, create/make dev artifacts, add feature, break this down, and dev idea-to-action."
+description: "Run proportional development phases. Use to plan, build, implement, fix, migrate, or refactor project artifacts."
 effort: high
 triggers:
   - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|(create|make) (a |an |the |new )*(rest |api )?(endpoint|dashboard|screen|page|component|service|tool|app|feature)|idea into (an |a )?(implementation plan|implementation|plan|code|feature)|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"

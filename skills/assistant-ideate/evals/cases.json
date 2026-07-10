@@ -9,10 +9,104 @@
   "model_specific_api_calls": false,
   "recommended_use": [
     "Run each case with the assistant-ideate skill instructions loaded.",
-    "Compare the local response against UNDERSTAND, DIVERGE, CONVERGE, REFINE, and DECIDE contracts.",
+    "Compare the response against the selected mode gates; REFINE and a decision packet apply only to deep mode.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
+    {
+      "id": "quick-improvement-scan-uses-light-mode",
+      "title": "Quick improvement scan uses light mode",
+      "category": "adaptive_ideation_depth",
+      "purpose": "Checks that a broad what-else request gets several ranked options without deep-mode scoring ceremony.",
+      "prompt": "What else could improve skill activation precision without adding more hooks?",
+      "setup_context": [
+        "The assistant-ideate skill instructions are active.",
+        "The user asks for a quick improvement scan, not a comprehensive brainstorm.",
+        "No user choice packet was requested."
+      ],
+      "expected_behavior": [
+        "Selects ideation_mode light.",
+        "Generates 3-5 distinct options before ranking.",
+        "Returns quick_ranking entries with reasons, trade-offs, and first steps.",
+        "Ends with recommended_next_step without forcing a user decision.",
+        "Does not emit a five-criterion weighted scoring matrix."
+      ],
+      "pass_criteria": [
+        "The response labels light mode.",
+        "The response presents 3-5 options.",
+        "The response contains a quick ranking and recommended next step.",
+        "The response avoids deep-mode scoring ceremony."
+      ],
+      "fail_signals": [
+        "Generates eight or more ideas for the quick scan.",
+        "Builds a weighted scoring table.",
+        "Forces a follow-up decision packet."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ideation_mode: light",
+          "3-5 options",
+          "quick_ranking",
+          "trade-off",
+          "first_step",
+          "recommended_next_step"
+        ],
+        "forbidden_substrings": [
+          "weighted_score",
+          "impact*3",
+          "decision_options",
+          "user_decision:"
+        ]
+      }
+    },
+    {
+      "id": "explicit-brainstorm-uses-deep-mode",
+      "title": "Explicit brainstorm uses deep mode",
+      "category": "adaptive_ideation_depth",
+      "purpose": "Checks that an explicit broad brainstorm retains the full deep pipeline.",
+      "prompt": "Brainstorm broadly and compare many ways to make agent skill routing more precise.",
+      "setup_context": [
+        "The assistant-ideate skill instructions are active.",
+        "The user explicitly requests broad brainstorming and comparison."
+      ],
+      "expected_behavior": [
+        "Selects ideation_mode deep.",
+        "Generates at least 8 ideas before scoring.",
+        "Uses the five deep scoring criteria and weighted_score.",
+        "Refines at least 3 candidates and presents a decision packet."
+      ],
+      "pass_criteria": [
+        "The response labels deep mode.",
+        "The response follows the full deep pipeline.",
+        "The response includes decision_point and decision_options."
+      ],
+      "fail_signals": [
+        "Returns only a quick list.",
+        "Skips deep scoring.",
+        "Presents a single option."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ideation_mode: deep",
+          "DIVERGE",
+          "8 ideas",
+          "impact",
+          "feasibility",
+          "alignment",
+          "novelty",
+          "risk",
+          "weighted_score",
+          "refined_candidates",
+          "decision_point",
+          "decision_options"
+        ],
+        "forbidden_substrings": [
+          "quick mode only",
+          "single option",
+          "user_decision:"
+        ]
+      }
+    },
     {
       "id": "brainstorm-diverges-before-ranking",
       "title": "Brainstorm diverges before ranking",
@@ -25,7 +119,8 @@
         "No idea has been selected yet."
       ],
       "expected_behavior": [
-        "Starts with UNDERSTAND and writes a 2-3 sentence problem statement.",
+        "Selects ideation_mode deep because the prompt explicitly asks to brainstorm.",
+        "Starts with UNDERSTAND and writes a 1-3 sentence problem statement.",
         "Records constraints, including no provider dependencies.",
         "Runs DIVERGE before CONVERGE and produces at least 8 ideas.",
         "Scores all ideas by impact, feasibility, alignment, novelty, and risk.",
@@ -50,6 +145,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
+          "ideation_mode: deep",
           "UNDERSTAND",
           "DIVERGE",
           "CONVERGE",

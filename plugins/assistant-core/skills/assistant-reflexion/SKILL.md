@@ -1,6 +1,6 @@
 ---
 name: assistant-reflexion
-description: "This skill provides a self-improvement loop for cross-task learning: post-task reflection, lesson recall, strategy profiles, and confidence calibration. Use when the user says 'reflect', 'what did we learn', 'lessons', 'how did that go', 'performance', 'calibrate'. Auto-activates at task completion for post-task reflection."
+description: "Reflect on evidence-backed lessons or recall prior ones. Use for explicit retrospectives, calibration, or a concrete durable lesson."
 effort: low
 triggers:
   - pattern: "reflect|what did we learn|lessons learned|how did that go|performance review|calibrate|self-assess|retrospective"
@@ -25,7 +25,7 @@ triggers:
 
 Cross-task learning system where insights from task N improve performance on task N+1.
 
-Core principle: **Every task should make the next task better.**
+Core principle: **Capture durable lessons, not routine task ceremony.**
 
 ## Goal
 
@@ -48,15 +48,16 @@ Convert task outcomes, mistakes, calibration signals, and reusable lessons into 
 
 ### Mode 1: Post-Task Reflection (after completing work)
 
-Triggered automatically at workflow completion or manually by user.
+Run reflection only when the user explicitly asks or concrete evidence suggests a durable lesson.
 
 ### Mode 2: Pre-Task Lesson Recall (before starting work)
 
-Triggered automatically during the Discover phase of `assistant-workflow`.
+Recall prior lessons only when current work depends on earlier context.
 
 ## Post-Task Reflection Protocol
 
-After a task completes (workflow ends, significant work done, or user asks):
+After a user asks to reflect, or after review findings, build/test failures,
+user corrections, or memory trends expose a concrete reusable lesson:
 
 ### Step 1: Capture Context
 
@@ -176,7 +177,8 @@ Update (don't overwrite) — add new lessons, reinforce existing ones.
 
 ## Pre-Task Lesson Recall Protocol
 
-During the Discover phase, before planning:
+Use before planning only when prior project decisions, corrections, preferences,
+or lessons can materially change the current approach.
 
 ### Step 1: Query Relevant Lessons
 
@@ -248,7 +250,7 @@ Lesson created (confidence: 0.5)
 
 | Skill | How Reflexion Integrates |
 |---|---|
-| `assistant-workflow` | Lesson recall in Discover; reflection at Phase 6 |
+| `assistant-workflow` | Conditional recall when prior context matters; conditional reflection when durable evidence exists |
 | `assistant-memory` | Stores reflexion entries and strategy profiles |
 | `assistant-onboard` | First reflexion seeds from onboarding observations |
 | `assistant-review` | Review findings feed into lessons about common mistakes |
@@ -276,14 +278,14 @@ Return:
 
 Following the "invisible workflow" principle:
 
-- **During Discover**: single line ("Found N lessons") unless user asks for details
+- **During relevant recall**: single line ("Found N lessons") unless user asks for details
 - **During Reflection**: concise summary unless user asks to see full assessment
 - **Strategy profiles**: only surface when directly relevant
 - **Calibration data**: only mention when it changes a recommendation
 
 ## Rules
 
-- **Never skip reflection on medium+ tasks** — it's where the compounding happens
+- **Skip routine reflection** — run it only for an explicit request or a concrete durable lesson
 - **Be honest** — reflexion that says "everything went perfectly" every time isn't useful
 - **Actionable over observational** — "X was slow" is observation; "next time do Y instead of X" is actionable
 - **Don't over-capture** — 2-3 good lessons per task beats 10 vague ones

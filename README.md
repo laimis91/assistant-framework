@@ -142,9 +142,9 @@ Systematic codebase learning for new projects. Six-phase protocol: surface scan,
 Triggers on: learn this codebase, onboard, get familiar with, map this project
 
 ### assistant-ideate
-Structured brainstorming pipeline: understand → diverge (8-15 ideas) → converge (scored ranking) → refine (top candidates) → decide. Codebase-aware ideation scans TODOs, complexity hotspots, and recent momentum.
+Mode-aware ideation: light mode returns 3-5 quickly ranked options for improvement scans; deep mode runs the full 8-15 idea, weighted-score, refine, and decide pipeline. Codebase-aware ideation scans only the local context needed to shape useful options.
 
-Triggers on: brainstorm, feature idea, what if, how could we, possibilities
+Triggers on: brainstorm, feature ideas, what if, how could we, alternatives, or what-else improvement scans
 
 ### assistant-diagrams
 Visual documentation from code analysis. Seven diagram types: architecture, sequence, entity-relationship, flow, component, class, state. All output as Mermaid for markdown embedding.

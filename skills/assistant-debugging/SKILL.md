@@ -1,6 +1,6 @@
 ---
 name: assistant-debugging
-description: "This skill runs evidence-first debugging: reproduce, hypothesize, isolate, fix, and verify without random patching. Use when the user says 'debug', 'root cause', 'investigate failure', 'why is this broken', 'reproduce bug', 'flaky test', 'production issue', or when assistant-tdd cannot yet write a meaningful failing test because the failure mechanism is unknown."
+description: "Diagnose unknown failures by reproducing and isolating before fixing. Use for debugging, root causes, flaky tests, or unexplained breakage."
 effort: high
 triggers:
   - pattern: "debug|root cause|investigate (failure|bug|issue)|why .* broken|reproduce (bug|issue)|flaky test|production issue|failing test|test failure"

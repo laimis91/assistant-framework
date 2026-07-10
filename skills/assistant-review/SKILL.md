@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "This skill runs an autonomous code review loop and optional independent QA evaluation loop: review, fix, re-review until clean (max 10 rounds), then evaluate acceptance when QA is required. Use when the user says 'review', 'fresh review', 'code review', 'review this', 'check the code'. Also activates when the workflow's Review phase requires quality review or QA evaluation dispatch."
+description: "Review code and re-review fixes until clean. Use for explicit code review or the workflow Review phase; QA runs only when required."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"

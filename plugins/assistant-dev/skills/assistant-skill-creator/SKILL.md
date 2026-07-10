@@ -1,6 +1,6 @@
 ---
 name: assistant-skill-creator
-description: "This skill creates new V1 skills with proper contracts, phase gates, and handoffs following the contract design guide. Use when the user says 'create skill', 'new skill', 'add contracts', 'skill contracts', 'scaffold skill'. Also activates when validating existing skill contract compliance."
+description: "Create or update V1 skills and contracts. Use for skill scaffolding, contract design, or contract-compliance validation."
 effort: medium
 triggers:
   - pattern: "create skill|new skill|add contracts|skill contracts|scaffold skill|create a skill|make a skill|build a skill"

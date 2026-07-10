@@ -1,9 +1,9 @@
 ---
 name: assistant-clarify
-description: "Clarification workflow for messy, ambiguous, or multi-intent prompts. Use when the user writes in fragments, compresses several asks together, leaves key goals or constraints implicit, or signals uncertainty about what they actually want. Triggers on: 'chaotic prompt', 'messy prompt', 'unclear prompt', 'figure out what I mean', 'help me structure this', 'not sure how to ask this', 'can you make sense of this'."
+description: "Clarify ambiguous or multi-intent requests. Use when the user asks to untangle, structure, or restate what they mean."
 effort: medium
 triggers:
-  - pattern: "chaotic prompt|messy prompt|unclear prompt|figure out what i mean|help me structure this|turn this into a structured prompt|clarify my request|not sure how to ask this|can you make sense of this|i'm not sure what i'm asking|not sure what i need|help me untangle this|sort this out with me|i have a few things mixed together|this might be two separate asks|i'm deciding between|should i do x or y"
+  - pattern: "chaotic prompt|messy prompt|unclear prompt|figure out what i mean|help me structure this|turn this into a structured prompt|clarify my request|not sure how to ask this|can you make sense of this|i'm not sure what i'm asking|not sure what i need|help me untangle|sort this out with me|i have a few things mixed together|this might be two separate asks|i'm deciding between|should i do x or y"
     priority: 75
     min_words: 4
     reminder: "This request matches assistant-clarify. Invoke it to restate the likely goal, ask 0-3 high-yield clarification questions only when needed, apply safe defaults when possible, and convert the input into a structured brief before proceeding."

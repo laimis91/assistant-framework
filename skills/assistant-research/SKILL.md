@@ -1,8 +1,8 @@
 ---
 name: assistant-research
-description: "This skill provides research and investigation tools for information gathering. Use when the user says 'research', 'investigate', 'look into', 'find out about', 'what is', 'compare options for'. Also activates during the workflow's Discovery phase when external information gathering is needed."
+description: "Gather and synthesize source-backed information. Use for explicit research, topic investigation, current evidence, or option comparison."
 triggers:
-  - pattern: "research|investigate|look into|find out about|what is|compare options for"
+  - pattern: "research|look into|find out about|compare (options|approaches|tools|technologies)|investigate (a |the )?(topic|technology|market|literature)|current state of|latest evidence on"
     priority: 65
     min_words: 4
     reminder: "This request matches assistant-research. Consider whether the Skill tool should be invoked with skill='assistant-research' for research and investigation."
