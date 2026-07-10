@@ -1,129 +1,44 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+## Repository
 
-## Project Overview
+Assistant Framework is a framework repository, not an application. It installs skills, optional lifecycle hooks, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
 
-Assistant Framework v0.3.0 — a personal AI assistant framework providing 12+ composable skills, lifecycle hooks, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
+Root `skills/assistant-*` directories are the editable source of truth. Plugin-local skill copies are generated mirrors; refresh them with `tools/plugins/sync-plugin-skills.sh --apply` and verify with `--check`. See `README.md` and `docs/plugin-architecture.md` for architecture and platform details.
 
-## Build and Test Commands
+## Workflow
 
-### Memory Graph
+- Route requests through installed skill descriptions and follow a matching `SKILL.md`.
+- For Codex, native skill routing is the default. A plain Codex install registers no Assistant Framework hooks. The explicit Codex `minimal` hook profile provides the legacy compatibility router; `workflow` and `strict` add enforcement while retaining native routing.
+- Keep work proportional to risk. Plan medium or larger changes before implementation, add tests with behavior changes, run relevant verification, and review before completion.
+- Preserve unrelated user changes. Avoid destructive Git operations and never hardcode secrets or log PII.
+
+When creating or modifying skills, read `docs/skill-contract-design-guide.md`. Contracts must follow that guide; do not duplicate its rules here.
+
+## Commands
 
 ```bash
-# Build
-dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal
+# Install; plain Codex uses native routing with no framework hooks
+./install.sh --agent codex
+./install.sh --agent codex --skill assistant-workflow
+./install.sh --agent codex --hook-profile workflow
+./install.sh --agent codex --dry-run
 
-# Run tests
+# Skills and generated plugin mirrors
+tools/skills/validate-skills.sh
+tools/plugins/sync-plugin-skills.sh --check
+tools/plugins/sync-plugin-skills.sh --apply
+
+# Hook and contract suites
+./tests/test-hooks.sh
+./tests/test-p0-p4-contracts.sh
+
+# Memory Graph (.NET 8)
+dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal
 dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal
 
-# Run a single test
-dotnet test tools/memory-graph/tests/MemoryGraph.Tests/ --filter "FullyQualifiedName~TestMethodName"
-```
-
-Target framework: .NET 8 (`net8.0`), with `RollForward=LatestMajor`. Single dependency: `Microsoft.Data.Sqlite`.
-
-### Cognitive Complexity Tool
-
-```bash
+# Cognitive complexity tool
 dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:minimal
 ```
 
-### Hook Tests
-
-```bash
-./tests/test-hooks.sh                    # All tests
-./tests/test-hooks.sh --verbose          # With output
-./tests/test-hooks.sh --filter stop      # Filter by name
-```
-
-### Installation
-
-```bash
-./install.sh --agent codex              # Install all skills + hooks + memory seed
-./install.sh --agent codex --skill assistant-workflow  # Single skill
-./install.sh --agent codex --no-hooks   # Skills only
-./install.sh --agent codex --dry-run    # Preview
-./install.sh --agent codex --test-hooks # Validate hooks
-```
-
-## Architecture
-
-### Three-layer design
-
-1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with YAML frontmatter (name, description, triggers). Sub-files load on demand (progressive loading). Skills are agent-agnostic.
-
-2. **Hooks** (`hooks/`) — Shell scripts that fire on agent lifecycle events (SessionStart, UserPromptSubmit, Stop, PreCompact, PostCompact, etc.). Agent-specific settings files (`claude-settings.json`, `gemini-settings.json`, `codex-settings.json`) map events to scripts. Hooks enforce behaviors like skill routing, review gating, and memory injection.
-
-3. **Tools** (`tools/`) — Compiled utilities exposed as MCP servers or CLI tools.
-   - `memory-graph/` — C# MCP server (stdio, JSON-RPC) with 14 tools. In-memory knowledge graph + SQLite/FTS5 for reflexions/decisions. Source in `src/MemoryGraph/` with subdirs: `Graph/`, `Storage/`, `Tools/`, `Server/`.
-   - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
-
-### Skill anatomy
-
-```
-skills/<skill-name>/
-  SKILL.md              # Entry point — always loaded when triggered
-  contracts/            # Input/output YAML contracts
-  *.md                  # Sub-tools loaded on demand
-  playbooks/            # (workflow) Project-type architecture guides
-  references/           # (workflow) Templates, prompts, checklists
-  scripts/              # (workflow) Automation scripts (decompose, agents)
-  agents/               # (workflow) Agent preset configs per platform
-```
-
-Skills are routed by the `skill-router.sh` hook, which pattern-matches user prompts against `triggers:` frontmatter in each SKILL.md. Priority ordering resolves conflicts (higher priority = matched first).
-
-### Hook lifecycle
-
-| Hook Script | Event | Purpose |
-|---|---|---|
-| `session-start.sh` | SessionStart | Inject task journal + memory feedback |
-| `skill-router.sh` | UserPromptSubmit | Route prompts to matching skills |
-| `learning-signals.sh` | UserPromptSubmit | Detect corrections/approvals for trend analysis |
-| `workflow-enforcer.sh` | UserPromptSubmit | Inject workflow phase state + enforcement rules on every prompt (combats rule drift) |
-| `workflow-guard.sh` | PreToolUse | Warn when orchestrator uses Edit/Write directly during active task (reinforces delegation) |
-| `stop-review.sh` | Stop | Consolidated strict stop gate: plan approval, review, rubric, and metrics before task completion |
-| `pre-compress.sh` | PreCompact | Save state before context compression |
-| `post-compact.sh` | PostCompact | Re-inject context after compaction |
-| `task-completed.sh` | TaskCompleted | Post-task processing |
-| `subagent-monitor.sh` | SubagentStart | Monitor subagent spawning |
-| `session-end.sh` | SessionEnd | Reminder to capture insights |
-
-### Agent configurations
-
-`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
-
-### Codex execution policy rules
-
-`codex-rules/` contains Starlark `.rules` files installed to `~/.codex/rules/`. These provide **deterministic** enforcement (system-level, not prompt-level) — they always execute regardless of LLM reasoning. Current rules:
-- `workflow.rules` — Git safety (block force push, confirm commits/pushes), destructive operation guards, build/test allow-listing
-
-## Mandatory: Skill Contract Design Guide
-
-When creating or modifying skills, you **must** follow the contract design guide at `docs/skill-contract-design-guide.md`. Read it before starting any skill work. Key rules:
-
-- **Every skill must have contracts.** At minimum: `contracts/input.yaml` and `contracts/output.yaml`. Process skills (workflow, review, tdd, security) also need `phase-gates.yaml` and `handoffs.yaml`. Analysis skills (thinking, research, ideate) also need `phase-gates.yaml`.
-- **Required fields must have `on_missing` actions** — never leave the agent guessing what to do when data is absent.
-- **Enum types must list all values** — open-ended enums defeat the purpose of typing.
-- **Validation rules are plain English** — no regex, no code, no framework syntax.
-- **Phase gates are binary assertions** — "X is true" or "X is false", nothing subjective.
-- **Handoff schemas must match** — producer's `return_fields` must satisfy consumer's `context_fields`.
-- **Corrective actions must be actionable** — "fix it" is not a corrective action; "re-dispatch CodeMapper requesting the missing field" is.
-- **Contracts only grow** — adding fields is safe, removing required fields is a breaking change.
-
-Use the field schema, phase gate schema, and handoff schema formats defined in the guide. Refer to existing skills' `contracts/` directories for examples.
-
-## Key conventions
-
-- **Skills are markdown, not code.** They are prompt engineering artifacts. Edit them as structured prose, not programs.
-- **Triggers drive routing.** Adding a new skill requires only a SKILL.md with `triggers:` frontmatter — no script changes needed.
-- **Hooks are bash scripts** that output plain text (Codex) or JSON (Gemini). They must exit 0 under normal conditions.
-- **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.
-- **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. All assistant skills have contracts; see the Mandatory section above.
-- **Unity skills** (`unity-*`) are a separate family targeting Unity game development via UnityMCP.
-
-## Important sources
-
-- https://developers.openai.com/api/docs/guides/prompt-guidance?model=gpt-5.5
-- https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide
+Hooks are optional Bash lifecycle integrations and must exit zero during normal operation. Codex execution policies live in `codex-rules/`; do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

@@ -125,6 +125,129 @@ index_load_set_is_bounded() {
     ' "$index_file"
 }
 
+rule_pattern_has_decision() {
+    local rules_file="$1"
+    local pattern="$2"
+    local decision="$3"
+
+    awk -v pattern="$pattern" -v decision="$decision" '
+        /^[[:space:]]*prefix_rule\([[:space:]]*$/ {
+            in_rule = 1
+            has_pattern = 0
+            has_decision = 0
+            next
+        }
+        in_rule {
+            assignment = $0
+            sub(/[[:space:]]*#.*/, "", assignment)
+            sub(/^[[:space:]]*/, "", assignment)
+            sub(/[[:space:]]*$/, "", assignment)
+            if (assignment == "pattern=" pattern ",") {
+                has_pattern = 1
+            }
+            if (assignment == "decision=\"" decision "\",") {
+                has_decision = 1
+            }
+        }
+        in_rule && /^[[:space:]]*\)[[:space:]]*$/ {
+            if (has_pattern && has_decision) {
+                found = 1
+            }
+            in_rule = 0
+        }
+        END { exit found ? 0 : 1 }
+    ' "$rules_file"
+}
+
+RULE_MATCH_FIXTURE="$(mktemp "${TMPDIR:-/tmp}/sol-native-rule-match.XXXXXX")"
+p0p4_register_cleanup "$RULE_MATCH_FIXTURE"
+cat > "$RULE_MATCH_FIXTURE" <<'RULES'
+prefix_rule(
+    # pattern=["git", "push"],
+    # decision="prompt",
+)
+
+prefix_rule(
+    pattern=["git", "commit"],
+    decision="prompt", # operative assignment with a Starlark inline comment
+)
+
+prefix_rule(
+    pattern=["git", "status"], trailing_invalid_tokens
+    decision="prompt",
+)
+
+prefix_rule(
+    pattern=["git", "fetch"],
+    decision="prompt" if false else "allow",
+)
+
+prefix_rule(
+    pattern=["git", "branch"]
+    decision="prompt",
+)
+
+prefix_rule(
+    pattern=["git", "restore"],
+    decision="prompt"
+)
+RULES
+test_start "execution-policy matcher requires exact operative assignments"
+if ! rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "push"]' prompt \
+    && rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "commit"]' prompt \
+    && ! rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "status"]' prompt \
+    && ! rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "fetch"]' prompt \
+    && ! rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "branch"]' prompt \
+    && ! rule_pattern_has_decision "$RULE_MATCH_FIXTURE" '["git", "restore"]' prompt; then
+    pass
+else
+    fail "only exact operative pattern/decision assignments with trailing commas may satisfy the matcher"
+fi
+
+agents_file="$FRAMEWORK_DIR/AGENTS.md"
+workflow_rules="$FRAMEWORK_DIR/codex-rules/workflow.rules"
+agents_word_count="$(wc -w < "$agents_file" | tr -d ' ')"
+test_start "standing Codex guidance is compact/current and execution-policy safeguards remain deterministic (AGENTS words=$agents_word_count)"
+standing_guidance_failures=()
+if (( agents_word_count > 450 )); then
+    standing_guidance_failures+=("AGENTS.md words $agents_word_count exceed 450")
+fi
+if rg -qi '^[[:space:]]*[.]\/install[.]sh[[:space:]]+--agent[[:space:]]+codex[[:space:]]+#.*hooks' "$agents_file"; then
+    standing_guidance_failures+=("AGENTS.md still says the plain Codex install includes hooks")
+fi
+if rg -qi 'skills are routed by (the )?`?skill-router[.]sh`? hook|`?skill-router[.]sh`?.*UserPromptSubmit.*route prompts to matching skills' "$agents_file"; then
+    standing_guidance_failures+=("AGENTS.md still presents skill-router.sh as normal Codex skill routing")
+fi
+if rg -qi '^[[:space:]]*#[[:space:]]*hooks[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$workflow_rules"; then
+    standing_guidance_failures+=("workflow.rules still instructs enabling hooks=true")
+fi
+if ! rule_pattern_has_decision "$workflow_rules" '["git", "push"]' prompt; then
+    standing_guidance_failures+=("workflow.rules lost the git push prompt")
+fi
+if ! rule_pattern_has_decision "$workflow_rules" '["git", "commit"]' prompt; then
+    standing_guidance_failures+=("workflow.rules lost the git commit prompt")
+fi
+for force_push_pattern in \
+    '["git", "push", "--force"]' \
+    '["git", "push", "-f"]'; do
+    if ! rule_pattern_has_decision "$workflow_rules" "$force_push_pattern" forbidden; then
+        standing_guidance_failures+=("workflow.rules lost forbidden force-push pattern $force_push_pattern")
+    fi
+done
+for destructive_pattern in \
+    '["git", "reset", "--hard"]' \
+    '["git", "branch", "-D"]' \
+    '["rm", "-rf"]'; do
+    if ! rule_pattern_has_decision "$workflow_rules" "$destructive_pattern" prompt; then
+        standing_guidance_failures+=("workflow.rules lost destructive-operation prompt $destructive_pattern")
+    fi
+done
+if [[ "${#standing_guidance_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "standing guidance contract failed (${#standing_guidance_failures[@]}): ${standing_guidance_failures[*]}"
+fi
+
 test_start "fresh Codex default is native and registers zero framework hook commands"
 CODEX_NATIVE_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_NATIVE_HOME"
