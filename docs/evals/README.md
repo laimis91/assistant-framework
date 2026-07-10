@@ -34,9 +34,11 @@ under common operating conditions:
 - `framework-instruction-cases.json` - machine-readable eval cases with prompts,
   setup context, expected behavior, pass criteria, failure signals, and local
   machine expectations.
+- `framework-instruction-trace-result.schema.json` - strict, redacted result
+  contract for importing completed runs or unavailable-adapter records.
 - `../../tools/evals/run-framework-instruction-evals.sh` - offline helper for
-  validating the fixture, listing cases, emitting prompt packets, and grading
-  captured responses locally.
+  validating the fixture and imported traces, listing cases, emitting prompt
+  packets, grading captured responses, and comparing variants locally.
 
 ### How To Use
 
@@ -76,6 +78,68 @@ missing files, empty responses, exact fail-signal phrase hits where useful,
 missing required substrings, and forbidden substring hits. These deterministic
 substring checks are proxies that complement human review or a separate LLM
 judge; they do not replace natural language judgment.
+
+### Trace import and A/B comparison
+
+Model or provider execution stays outside this repository runner. An adapter,
+manual session, or replay system may execute an emitted prompt packet, but it
+must export one redacted JSON result per run using
+`framework-instruction-trace-result.schema.json`. The local runner does not
+invoke a model, provider SDK, endpoint, or network service.
+
+Validate imported files with the `--validate-traces DIR` mode:
+
+```bash
+tools/evals/run-framework-instruction-evals.sh --validate-traces /tmp/framework-eval-traces
+```
+
+A `completed` result records only run identity and these measurements: input
+and output tokens, latency, tool calls, unnecessary questions, time to first
+useful action, rework count, and acceptance. It must not contain a raw prompt,
+response body, credential, or secret. An `adapter_unavailable` result records a
+structured error for diagnostics; it means the local execution adapter could
+not run and is not counted as an acceptance failure.
+
+Use baseline and candidate variants for the same case and model, then produce a
+deterministic paired comparison with the `--compare-traces DIR` mode:
+
+```bash
+tools/evals/run-framework-instruction-evals.sh --compare-traces /tmp/framework-eval-traces
+```
+
+The comparison reports per-variant means and acceptance rates, candidate minus
+baseline absolute and percentage deltas, and a separate redacted list of
+unavailable runs. Percentage delta is `null` when the baseline is zero. Adapter
+error messages are deliberately omitted from aggregate output.
+
+### Installed context budget
+
+Generate the reproducible native Codex inventory used alongside trace results.
+The reporter is intentionally Codex-only until equivalent installed-context and
+hook-output semantics are defined and tested for other agents:
+
+```bash
+tools/context-budget-report.sh --agent codex --hook-profile none --skill assistant-workflow --format json
+```
+
+The reporter requires a successful isolated temporary install and emits counts,
+not instruction text. Installation or non-empty hook-benchmark failures stop the
+report instead of emitting partial or zero-filled inventory. `project_agents`
+measures the repository `AGENTS.md`.
+`generated_global_agents` and `generated_memory_protocol` separately measure
+their installer-owned marker blocks. `native_skill_catalog_descriptions`
+measures the first-class `assistant-*` description catalog. The selected
+skill's initial boundary is `SKILL.md` plus `contracts/index.yaml` when present;
+its entry boundary adds references declared for the `entry` load set and only
+the contract items selected there. Hook command count comes from the isolated
+registration, while hook output counts use locally reproducible benchmark
+scenarios for registered framework hooks. The `none` profile therefore reports
+zero hook commands and zero hook output.
+
+Pass a prior JSON report with `--baseline FILE` to add current-minus-baseline
+absolute and percentage deltas. A zero baseline produces a `null` percentage.
+The report never includes prompt bodies, instruction bodies, responses,
+credentials, or environment values.
 
 The cases are intended for prompt/instruction behavior comparisons. They should
 be useful whether the evaluated assistant is backed by GPT 5.4, GPT 5.5, Claude,
