@@ -1,6 +1,6 @@
 ---
 name: assistant-diagrams
-description: "This skill creates Mermaid diagrams from code analysis: architecture, sequence, ER, flow, component, class, and state diagrams. Use when the user says 'diagram', 'draw', 'visualize', 'show me the flow', 'architecture diagram', 'sequence diagram', 'ER diagram', 'data model diagram'."
+description: "Create Mermaid architecture, sequence, ER, flow, class, or state diagrams. Use for explicit diagram or system-flow visualization requests."
 effort: medium
 triggers:
   - pattern: "diagram|draw|visualize|show me the flow|architecture diagram|sequence diagram|er diagram|data model|class diagram|state diagram|flow chart"

@@ -1,6 +1,6 @@
 ---
 name: assistant-docs
-description: "This skill generates and maintains documentation: API docs, architecture docs, README, changelogs, and migration guides. Use when the user says 'document', 'write docs', 'update readme', 'changelog', 'API docs', 'architecture doc', 'migration guide', 'generate docs', 'doc this'."
+description: "Create or update README, API, architecture, changelog, or migration docs. Use for explicit documentation work."
 effort: medium
 triggers:
   - pattern: "document|write docs|update readme|changelog|api docs|architecture doc|migration guide|generate docs|doc this|explain this code"

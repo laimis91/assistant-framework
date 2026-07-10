@@ -1,8 +1,8 @@
 ---
 name: assistant-memory
-description: "This skill manages durable, policy-safe memory through the configured local memory backend when available. Use when the user says 'remember this', 'save insight', 'update memory', 'what do you know about me', 'forget', 'preferences'. Also activates when the user provides a correction or states a behavioral preference that should persist."
+description: "Manage durable memory safely. Use for explicit remember, recall, forget, or memory-health requests and stable corrections or preferences."
 triggers:
-  - pattern: "remember this|save insight|update memory|what do you know about me|forget|memory|preferences"
+  - pattern: "remember this|save insight|update memory|what do you know about me|forget this|forget what|recall (my|our|the)|search memory|show memory|memory (status|stats|health)|save (this |my )?preference|my preferences"
     priority: 70
     min_words: 3
     reminder: "This request matches assistant-memory. Load and follow this SKILL.md and its contracts before managing memory."
@@ -105,7 +105,7 @@ When a memory request comes from the workflow Learning Controller or assistant-r
 
 ## Querying Memory
 
-- `memory_context("ProjectName")` — get everything relevant for a project (session start)
+- `memory_context("ProjectName")` — retrieve relevant project context when the current task depends on prior corrections, preferences, recovery state, or durable lessons
 - `memory_search("EF Core migration")` — find entities by text across the graph
 - `memory_graph()` — full dump for debugging or overview
 

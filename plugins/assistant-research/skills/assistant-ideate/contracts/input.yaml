@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: input
 skill: assistant-ideate
 
@@ -9,6 +9,16 @@ fields:
     description: "The idea, question, or problem to brainstorm around"
     validation: "Non-empty string describing something to ideate on"
     on_missing: ask
+    ask_prompt: "What problem or opportunity should I generate options for?"
+
+  - name: ideation_mode
+    type: enum
+    required: false
+    description: "Depth of ideation appropriate to the request"
+    validation: "Light is used for quick improvement or what-else scans; deep is used for explicit brainstorming or broad exploration"
+    on_missing: infer
+    infer_from: "Use deep when the user explicitly asks to brainstorm, explore broadly, or generate many/comprehensive alternatives; otherwise use light"
+    enum_values: [light, deep]
 
   - name: goal
     type: string
@@ -16,6 +26,7 @@ fields:
     description: "What success looks like for this ideation"
     validation: "Describes a desired outcome or success criterion"
     on_missing: infer
+    infer_from: "Infer the desired outcome from the seed and current context"
 
   - name: constraints
     type: string[]

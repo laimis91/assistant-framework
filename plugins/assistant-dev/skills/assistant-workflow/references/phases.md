@@ -56,8 +56,8 @@ Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mo
 
 1. Read repo: README, CLAUDE.md, AGENTS.md, key files. Batch independent file reads/searches when the active tool policy supports parallel calls; use sequential reads otherwise.
 2. Compare current state against request
-3. **Recall lessons**: If `assistant-reflexion` is available, check past lessons for this project type and task type. Incorporate high-confidence lessons into constraints.
-   Print: `>> Found [N] relevant lessons from past tasks` (or skip silently if none)
+3. **Recall lessons when relevant**: Recall prior lessons only when they can materially affect the current task, such as after a user correction, task recovery, or a request that depends on earlier project decisions. Incorporate high-confidence matches into constraints; otherwise skip memory retrieval.
+   Print: `>> Found [N] relevant lessons from past tasks` only when recall ran and returned useful context.
 4. **Agent readiness check** (medium+ tasks): Quick scan of the project environment. Score 0-5:
    - Linter config present? (eslint, .editorconfig, analyzers, etc.)
    - Build scripted/documented? (CI, Makefile, documented `dotnet build` command, etc.)

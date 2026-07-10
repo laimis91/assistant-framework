@@ -1,9 +1,9 @@
 ---
 name: assistant-ideate
-description: "This skill provides structured brainstorming via a diverge-converge-refine pipeline. Use when the user says 'brainstorm', 'idea', 'what if', 'how could we', 'possibilities', 'options for', 'alternatives', 'explore ways to', 'feature ideas', 'improve this'. Best for generating and evaluating multiple solutions before committing."
+description: "Generate and rank options. Use light mode for quick improvement scans and deep mode for explicit brainstorming or broad exploration."
 effort: medium
 triggers:
-  - pattern: "brainstorm|feature idea|what if we|how could we|possibilities for|options for|alternatives to|explore ways|what could|improve this|ideas for"
+  - pattern: "brainstorm|feature ideas?|what if we|how could we|possibilities for|options for|alternatives to|explore (ways|options|ideas)|what else (could|can|should)|more areas to improve|ideas for"
     priority: 55
     min_words: 4
     reminder: "This request matches assistant-ideate. Load and follow this SKILL.md and its contracts for structured brainstorming."
@@ -11,86 +11,92 @@ triggers:
 
 # Idea Generation
 
-Structured brainstorming pipeline that turns vague desires into ranked, actionable ideas.
+Mode-aware ideation that turns vague opportunities into proportionally ranked options.
 
-Core principle: **Diverge wide, converge ruthlessly, refine what survives.**
+Core principle: **Match ideation depth to the decision.**
 
 ## Contracts
 
 | Contract | File | Purpose |
 |---|---|---|
-| **Input** | `contracts/input.yaml` | Seed idea, goal, constraints |
-| **Output** | `contracts/output.yaml` | Ideas, rankings, refined candidates, decision point/options, conditional user decision |
-| **Phase Gates** | `contracts/phase-gates.yaml` | UNDERSTAND → DIVERGE → CONVERGE → REFINE → DECIDE gates |
+| **Input** | `contracts/input.yaml` | Seed, mode, goal, and constraints |
+| **Output** | `contracts/output.yaml` | Mode-appropriate ranking, next step or decision packet |
+| **Phase Gates** | `contracts/phase-gates.yaml` | Light and deep pipeline gates |
+
+Contract v2 makes the former deep-only ranking, refinement, and decision
+artifacts conditional; deep mode preserves those v1 artifacts, while light mode
+uses `quick_ranking` and `recommended_next_step`.
 
 **Rules:**
-- DIVERGE must produce 8+ ideas before CONVERGE can score them
+- Infer light mode unless the user explicitly asks for broad/deep exploration
+- Light mode produces 3-5 options and a quick ranking without a full scoring matrix
+- Deep mode produces 8-15 ideas, full scoring, and at least 3 refined candidates
 - Never present a single option — ideation means choices
 - Constraints from input are respected throughout all phases
-- Initial DECIDE output must include `decision_point` and `decision_options`; capture `user_decision` only after an actual user choice
+- Deep DECIDE output includes `decision_point` and `decision_options`; capture `user_decision` only after an actual user choice
 
-## Required Reference
+## Required References
 
-Before running the pipeline, load and apply `references/ideation-pipeline.md`. That reference is mandatory for phase mechanics, scoring, output templates, codebase-aware ideation, and the pinned behavior guarantees that should not be duplicated here.
+Before running the pipeline, load and apply `references/ideation-pipeline.md`.
+Light mode uses only that compact selector. Deep mode additionally loads
+`references/deep-ideation.md`; load it only for deep mode.
 
 ## Goal
 
-Generate a broad option set, rank it against explicit criteria, and turn the strongest candidates into actionable next steps.
+Generate several useful options at the least costly depth that supports the user's decision.
 
 ## Success Criteria
 
-- The problem statement and constraints are explicit before ideation.
-- Divergence produces at least eight distinct ideas before scoring starts.
-- Convergence scores ideas against impact, feasibility, alignment, novelty, and risk, with a weighted score.
-- At least the top 3 candidates are refined before asking the user to decide.
-- The final output gives the user a clear decision point, not a single unexamined option.
-- The first ideation response does not fabricate `user_decision`; that field is reserved for a follow-up choice.
+- The response states whether it used light or deep mode.
+- Light mode returns 3-5 options, a quick ranking, trade-offs, and one recommended next step.
+- Deep mode generates at least 8 ideas before full scoring and refines at least the top 3.
+- Neither mode fabricates a user choice or presents one unexamined option.
 
 ## Constraints
 
-- Do not collapse to one recommendation before the Diverge and Converge phases run.
+- Do not force deep-mode ceremony onto a quick improvement or "what else" request.
+- Do not collapse to one recommendation before generating multiple options.
 - Ask only when missing goals or constraints would materially change the idea space or ranking.
 - Respect explicit constraints throughout scoring and refinement.
 - Respect prior attempts; do not re-propose rejected approaches unchanged.
-- Include at least one wild or unconventional idea before scoring.
+- Include a wild or unconventional idea in deep mode.
+
+## Modes
+
+### Light mode
+
+Use for quick improvement scans, "what else" questions, or a small set of
+alternatives. Run UNDERSTAND → DIVERGE → CONVERGE → DECIDE with 3-5 options,
+a qualitative quick ranking, trade-offs, first steps, and one recommended next
+step. Do not build a five-criterion score table unless the user asks.
+
+### Deep mode
+
+Use when the user explicitly asks to brainstorm, explore broadly, generate many
+ideas, or compare a wide solution space. Run the full pipeline with 8-15 ideas,
+five-criterion weighted scoring, at least 3 refined candidates, and a decision
+packet.
 
 ## Pipeline
 
-```
-Seed (user's vague idea or question)
-    │
-    ▼
-1. UNDERSTAND — What are we really trying to solve?
-    │
-    ▼
-2. DIVERGE — Generate many ideas (quantity over quality)
-    │
-    ▼
-3. CONVERGE — Score and rank against criteria
-    │
-    ▼
-4. REFINE — Detail the top candidates
-    │
-    ▼
-5. DECIDE — Present for user decision
+```text
+Light: UNDERSTAND -> DIVERGE (3-5) -> CONVERGE (quick rank) -> DECIDE (next step)
+Deep:  UNDERSTAND -> DIVERGE (8-15) -> CONVERGE (weighted) -> REFINE -> DECIDE
 ```
 
 ## Output
 
 Return:
-- **Problem statement** - the clarified goal and constraints.
-- **Ideas** - the divergent idea set with short rationale for each.
-- **Ranking** - scored shortlist with criteria and trade-offs.
-- **Refined candidates** - the top options with first step, effort, risks, and dependencies.
-- **Decision point** - recommended next action, user choice requested, or open questions blocking selection.
-- **Decision options** - explicit choices to select one candidate, combine candidates, reject all, or request more ideas.
-- **User decision** - only when the user has actually chosen in a follow-up prompt.
-- **Status** - ready for decision, needs more ideation, or blocked by missing constraints.
+- Both modes: `ideation_mode`, problem statement, and multiple ideas.
+- Light: `quick_ranking` and `recommended_next_step`.
+- Deep: `ranked_ideas`, `refined_candidates`, `decision_point`, and `decision_options`.
+- `user_decision` only after the user explicitly chooses.
 
 ## Stop Rules
 
 - Stop and ask when the goal or hard constraints are too ambiguous to generate useful options.
-- Stop after the DECIDE phase with a clear decision point and options, unless the user already made a follow-up choice or asked for implementation.
+- In light mode, stop after the ranked options and recommended next step; do not force a follow-up decision.
+- In deep mode, stop after the decision point and options unless the user already chose or asked for implementation.
 - Do not enter implementation; hand selected candidates to `assistant-workflow` when build work starts.
 
 ## Integration with Workflow
@@ -98,4 +104,4 @@ Return:
 When an idea is selected:
 1. Decompose into testable criteria (using `assistant-workflow`'s idea-to-action pipeline)
 2. Hand off to workflow for implementation
-3. Capture the ideation outcome in memory for future reference
+3. Save the outcome only when the user asks or it contains a concrete durable lesson

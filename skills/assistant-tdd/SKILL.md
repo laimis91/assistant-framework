@@ -1,6 +1,6 @@
 ---
 name: assistant-tdd
-description: "This skill enforces Test-Driven Development with Red-Green-Refactor cycle and strict verification gates. Use when the user says 'tests first', 'test-driven', 'TDD', 'write the test first', 'red green refactor'. Also activates when project conventions require tests-first development."
+description: "Apply Red-Green-Refactor. Use when tests-first/TDD is requested or required by project conventions."
 effort: high
 triggers:
   - pattern: "tdd|tests? first|test.driven|red green refactor|write the test first"

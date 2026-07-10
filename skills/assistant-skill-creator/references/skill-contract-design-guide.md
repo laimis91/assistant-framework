@@ -233,7 +233,7 @@ handoffs:
 - Multi-step pipeline (e.g., diverge → converge → refine)
 - Phase gates enforce pipeline ordering
 - No subagent delegation — the main agent does all work
-- Example: assistant-ideate (8+ ideas in DIVERGE before CONVERGE can score)
+- Example: assistant-ideate (light mode ranks 3-5 options quickly; deep mode generates 8-15 ideas before full scoring)
 
 ### Utility skills (2 files)
 - Single-pass: accept input, produce output
@@ -289,7 +289,7 @@ Local response grading is deterministic and heuristic: missing files, empty resp
 4. **Phase gates are binary assertions** — "X is true" or "X is false", nothing subjective
 5. **Handoff schemas match producer output to consumer input** — if the Architect returns `implementation_steps`, the CodeWriter must accept `implementation_steps`
 6. **Corrective actions are actionable** — "fix it" is not a corrective action; "re-dispatch CodeMapper requesting the missing field" is
-7. **Contracts only grow** — adding fields is safe, removing required fields is a breaking change
+7. **Contracts grow within a major version** — adding optional fields is safe; removing or weakening a required field needs a major `schema_version` bump, a root `SKILL.md` migration note, and updated consumers, evals, and mirrors
 8. **Conditional fields use `condition:`** — don't make everything required; scope to when it matters
 9. **Examples clarify ambiguous fields** — when `description` alone isn't enough, add `examples:`
 10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates

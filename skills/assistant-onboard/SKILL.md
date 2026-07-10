@@ -1,6 +1,6 @@
 ---
 name: assistant-onboard
-description: "This skill performs systematic codebase learning for new projects. Maps structure, identifies patterns, and may generate project-local orientation artifacts. Use when the user says 'learn this codebase', 'onboard', 'get familiar with', 'map this project', 'what does this project do', 'new to this repo', 'first time here'."
+description: "Map an unfamiliar codebase and its patterns. Use for onboarding, project orientation, or explicit codebase-learning requests."
 effort: high
 triggers:
   - pattern: "learn this codebase|onboard|get familiar with|map this project|what does this project do|new to this repo|first time"

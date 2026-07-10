@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-ideate
 
@@ -8,80 +8,96 @@ gates:
     checkpoint_end: "--- PHASE: UNDERSTAND COMPLETE ---"
     exit_assertions:
       - id: U1
-        check: "Problem statement is written as 2-3 sentences"
-        on_fail: "Ask clarifying questions until the problem can be stated in 2-3 sentences"
+        check: "The problem statement is written as 1-3 sentences"
+        on_fail: "Restate the goal and material constraints in 1-3 sentences"
       - id: U2
-        check: "Constraints are identified (or explicitly noted as none)"
-        on_fail: "Ask about budget, timeline, tech stack, and other limitations"
+        check: "Material constraints are identified or explicitly noted as none"
+        on_fail: "Infer safe defaults or ask only for a missing constraint that changes the option set"
 
   - phase: DIVERGE
     checkpoint_start: "--- PHASE: DIVERGE ---"
     checkpoint_end: "--- PHASE: DIVERGE COMPLETE ---"
     exit_assertions:
-      - id: D1
-        check: "At least 8 ideas have been generated"
-        on_fail: "Continue generating ideas using additional diverge techniques"
-      - id: D2
+      - id: D_LIGHT_COUNT
+        check: "Between 3 and 5 distinct options have been generated"
+        condition: "when ideation_mode is light"
+        on_fail: "Add or consolidate options until the light-mode set contains 3-5 distinct choices"
+      - id: D_DEEP_COUNT
+        check: "Between 8 and 15 distinct ideas have been generated"
+        condition: "when ideation_mode is deep"
+        on_fail: "Add or consolidate ideas until the deep-mode set contains 8-15 distinct choices"
+      - id: D_DEEP_WILD
         check: "At least 1 wild or unconventional idea is included"
-        on_fail: "Apply constraint-removal or inversion technique to produce a wild idea"
-      - id: D3
-        check: "Each idea has a name, description, and rationale"
-        on_fail: "Fill in missing fields for incomplete ideas"
+        condition: "when ideation_mode is deep"
+        on_fail: "Apply constraint removal or inversion to add a wild idea"
+      - id: D_FIELDS
+        check: "Every idea satisfies the ideas artifact contract"
+        on_fail: "Complete the missing ideas artifact fields before ranking"
 
   - phase: CONVERGE
     checkpoint_start: "--- PHASE: CONVERGE ---"
     checkpoint_end: "--- PHASE: CONVERGE COMPLETE ---"
     exit_assertions:
-      - id: C1
-        check: "All ideas are scored on all 5 criteria (impact, feasibility, alignment, novelty, risk)"
-        on_fail: "Score any unscored ideas before proceeding"
-      - id: C2
-        check: "Weighted scores are calculated for every idea"
+      - id: C_LIGHT_RANK
+        check: "The quick_ranking artifact satisfies its output contract"
+        condition: "when ideation_mode is light"
+        on_fail: "Complete the quick_ranking artifact without adding a full scoring matrix"
+      - id: C_DEEP_SCORE
+        check: "The ranked_ideas artifact satisfies its output contract"
+        condition: "when ideation_mode is deep"
+        on_fail: "Complete the ranked_ideas artifact before refinement"
+      - id: C_DEEP_WEIGHT
+        check: "A weighted score is calculated for every deep-mode idea"
+        condition: "when ideation_mode is deep"
         on_fail: "Calculate weighted_score = impact*3 + feasibility*2 + alignment*2 + novelty*1 - risk*1"
-      - id: C3
-        check: "Top 3 or more ideas are advanced to REFINE"
-        on_fail: "Select at least the top 3 scoring ideas for refinement"
+      - id: C_DEEP_TOP
+        check: "At least the top 3 deep-mode ideas advance to REFINE"
+        condition: "when ideation_mode is deep"
+        on_fail: "Advance at least the top 3 scoring ideas"
 
   - phase: REFINE
+    condition: "when ideation_mode is deep"
     checkpoint_start: "--- PHASE: REFINE ---"
     checkpoint_end: "--- PHASE: REFINE COMPLETE ---"
     exit_assertions:
       - id: R1
-        check: "Each top candidate has an elevator pitch (2 sentences)"
-        on_fail: "Write elevator pitches for candidates missing them"
+        check: "Every selected candidate has an elevator pitch"
+        on_fail: "Write the missing elevator pitches"
       - id: R2
-        check: "Each candidate has how-it-works (3-5 bullets), technical needs, risks with mitigations, and a first step"
-        on_fail: "Complete all missing sections for each refined candidate"
+        check: "Every selected candidate satisfies the refined_candidates artifact contract"
+        on_fail: "Complete the missing refined_candidates artifact fields"
 
   - phase: DECIDE
     checkpoint_start: "--- PHASE: DECIDE ---"
     checkpoint_end: "--- PHASE: DECIDE COMPLETE ---"
     exit_assertions:
-      - id: DE1
-        check: "Multiple options are presented to the user (never a single option)"
-        on_fail: "Ensure at least 2 refined candidates are shown with clear choice prompts"
-      - id: DE2
-        check: "decision_point and decision_options are present, including selected, combined, rejected, and more_ideas choices"
-        on_fail: "Ask the user to choose: go with one, combine, reject all, or request more ideas"
-      - id: DE3
-        check: "User decision is captured as one of: selected, combined, rejected, more_ideas only when an explicit follow-up choice exists"
+      - id: DE_LIGHT_NEXT
+        check: "A concrete recommended_next_step is present"
+        condition: "when ideation_mode is light"
+        on_fail: "Add the best immediate action from the quick ranking"
+      - id: DE_DEEP_OPTIONS
+        check: "The decision_point and decision_options artifacts satisfy their output contracts"
+        condition: "when ideation_mode is deep or the user explicitly requests a choice packet"
+        on_fail: "Complete the decision_point and decision_options artifacts"
+      - id: DE_USER
+        check: "User decision is captured only when an explicit follow-up choice exists"
         condition: "when the user has already replied with a choice or the current prompt includes an explicit selection"
-        on_fail: "Capture the explicit follow-up choice, or omit user_decision and stop at the decision_point with decision_options"
+        on_fail: "Capture the explicit choice, or omit user_decision until the user chooses"
 
 invariants:
   - id: INV1
-    check: "No criticism of ideas during DIVERGE phase"
+    check: "No ideas are criticized during DIVERGE"
     scope: all_phases
-    on_fail: "Remove evaluative language and defer scoring to CONVERGE"
+    on_fail: "Remove evaluative language and defer ranking to CONVERGE"
   - id: INV2
-    check: "Never present a single option — ideation means choices"
+    check: "At least 3 options are presented"
     scope: all_phases
-    on_fail: "Generate or refine additional candidates before presenting"
+    on_fail: "Generate additional options before presenting results"
   - id: INV3
-    check: "Constraints from input are respected throughout all phases"
+    check: "Input constraints are respected throughout the active mode"
     scope: all_phases
-    on_fail: "Review ideas against stated constraints and flag or remove violations"
+    on_fail: "Remove or flag options that violate stated constraints"
   - id: INV4
     check: "user_decision is never fabricated before the user chooses"
     scope: all_phases
-    on_fail: "Remove the fabricated user_decision and return decision_point with decision_options instead"
+    on_fail: "Remove the fabricated user_decision and present the appropriate next step or choice packet"

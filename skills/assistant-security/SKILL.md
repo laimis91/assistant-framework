@@ -1,6 +1,6 @@
 ---
 name: assistant-security
-description: "This skill provides security analysis: threat modeling, code review, dependency auditing, and attack surface mapping. Use when the user says 'security', 'threat model', 'audit', 'vulnerability', 'attack surface', 'OWASP', 'CVE', 'dependency check'. Also activates when touching authentication, user inputs, or sensitive data handling."
+description: "Analyze threats, vulnerabilities, dependencies, and attack surfaces. Use for explicit security work or changes to auth, input, or sensitive data."
 triggers:
   - pattern: "security review|security audit|security analysis"
     priority: 85

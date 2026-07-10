@@ -35,9 +35,11 @@ Validate every new or modified skill against these 12 rules from the [contract d
 - [ ] Each `on_fail:` describes a specific recovery step
 - [ ] Recovery steps reference concrete actions (ask user, re-dispatch agent, add field)
 
-### 7. Contracts only grow
-- [ ] No removal of previously required fields (breaking change)
-- [ ] New optional fields use `required: false` with defaults
+### 7. Contracts grow within a major version
+- [ ] Existing major versions do not remove or weaken required fields
+- [ ] Breaking required-field changes bump the major `schema_version` and add a root `SKILL.md` migration note
+- [ ] Consumers, evals, and mirrors are updated for the new major version
+- [ ] New optional fields use `required: false` with a default or explicit inference rule
 - [ ] N/A for brand-new skills (no prior version)
 
 ### 8. Conditional fields use `condition:`

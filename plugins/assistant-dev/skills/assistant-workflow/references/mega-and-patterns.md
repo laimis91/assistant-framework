@@ -27,8 +27,8 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 - **assistant-thinking**: Structured reasoning for architecture decisions (Discovery, Plan phases)
 - **assistant-research**: Information gathering during Discovery phase
 - **assistant-security**: Security analysis during Plan/Build phases
-- **assistant-memory**: Capture insights at task completion (Phase 7)
-- **assistant-reflexion**: Lesson recall in Discovery phase; post-task reflection in Document phase
+- **assistant-memory**: Recall context when prior lessons are relevant; save only stable preferences, corrections, or reusable insights
+- **assistant-reflexion**: Recall when prior context can change the approach; reflect when concrete durable lessons exist
 - **assistant-docs**: Documentation generation in Document phase or standalone
 - **assistant-onboard**: Systematic project learning when entering a new codebase
 - **assistant-ideate**: Brainstorming pipeline during idea-to-action decomposition

@@ -1,6 +1,6 @@
 ---
 name: assistant-telos
-description: "This skill implements the Telos purpose and strategic context framework (Daniel Miessler). Creates structured Telos Context Files capturing problems, mission, goals, challenges, and strategies. Use when the user says 'telos', 'purpose', 'why am I doing this', 'what matters', 'my mission', 'update telos'."
+description: "Create or update Telos purpose, mission, goals, challenges, and strategies. Use for explicit purpose or Telos work."
 effort: medium
 triggers:
   - pattern: "telos|my purpose|why am I doing this|what matters most|my mission|update telos|strategic context"
