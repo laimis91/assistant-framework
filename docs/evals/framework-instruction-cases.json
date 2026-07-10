@@ -11,6 +11,17 @@
     "Compare observed behavior against pass criteria and failure signals.",
     "Use results to compare model adherence, not API feature support."
   ],
+  "trace_results": {
+    "schema": "framework-instruction-trace-result.schema.json",
+    "statuses": [
+      "completed",
+      "adapter_unavailable"
+    ],
+    "variants": [
+      "baseline",
+      "candidate"
+    ]
+  },
   "cases": [
     {
       "id": "small-fix-stays-lightweight",
