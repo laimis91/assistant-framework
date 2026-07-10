@@ -298,16 +298,16 @@ for term in \
     "Builder/Tester owns RED" \
     "Code Writer owns GREEN" \
     "Required RED evidence before production implementation:"; do
-    if ! p0p4_section_has_term "$tdd_skill" "## Orchestrated role ownership" "$term"; then
-        missing_paired_guidance+=("assistant-tdd Orchestrated role ownership: $term")
+    if ! p0p4_section_has_term "$tdd_skill" "## Ownership" "$term"; then
+        missing_paired_guidance+=("assistant-tdd Ownership: $term")
     fi
 done
 for term in \
-    "Each shortcut routes back to the RED gate:" \
-    "| Shortcut | Required response |" \
-    "Write the test now, before production code."; do
-    if ! p0p4_section_has_term "$tdd_skill" "## Common shortcuts and required response" "$term"; then
-        missing_paired_guidance+=("assistant-tdd Common shortcuts: $term")
+    "RED" \
+    "passes unexpectedly" \
+    "Repair regressions before continuing"; do
+    if ! p0p4_section_has_term "$tdd_skill" "## Cycle" "$term"; then
+        missing_paired_guidance+=("assistant-tdd Cycle recovery: $term")
     fi
 done
 

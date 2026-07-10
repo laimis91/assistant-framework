@@ -1,0 +1,59 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-debugging
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    selectors:
+      - id: debugging-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [symptom, expected_behavior, scope, reproduction_target, severity, constraints, can_modify_code]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: debugging-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_debugging_phase
+        allowed_names: [SCOPE, REPRODUCE, HYPOTHESIZE, ISOLATE, FIX, VERIFY]
+      - id: debugging-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3]
+    budget_words: 4000
+  selected_handoff:
+    selectors:
+      - id: debugging-selected-handoff
+        path: contracts/handoffs.yaml
+        section: handoffs
+        key: name
+        name_from: selected_handoff_name
+        allowed_names: [debugging_investigation, debugging_fix]
+    budget_words: 4000
+  completion:
+    selectors:
+      - id: debugging-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification, residual_risks]
+    budget_words: 5000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

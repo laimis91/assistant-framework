@@ -1,5 +1,9 @@
 # Skill Contract Design Guide
 
+docs/skill-contract-design-guide.md is canonical. The skill-local copy is
+generated for installed-skill portability; refresh it with
+`tools/skills/sync-skill-contract-guide.sh --apply` and verify it with `--check`.
+
 Enforcements and best practices for designing strict, well-defined skills with typed inputs, validated outputs, and structural gates. Based on research across DSPy, CrewAI, Guardrails AI, RAIL spec, OpenAI Agents SDK, Google A2A, and Addy Osmani's agent spec work.
 
 ## Core Principle
@@ -162,7 +166,7 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 
 Contract files required by a skill tier are mandatory for applicable validation, not mandatory for eager context loading. Every applicable canonical rule must still be checked at its enforcement point, but a skill does not need to load every canonical contract file when it starts.
 
-Large Process skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
+Non-trivial Process or Analysis skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
 
 - declare `schema_version`, `contract: index`, and `skill`;
 - list every canonical file under `authoritative_contracts`;

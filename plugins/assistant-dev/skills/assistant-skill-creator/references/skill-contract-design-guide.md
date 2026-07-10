@@ -1,5 +1,9 @@
 # Skill Contract Design Guide
 
+docs/skill-contract-design-guide.md is canonical. The skill-local copy is
+generated for installed-skill portability; refresh it with
+`tools/skills/sync-skill-contract-guide.sh --apply` and verify it with `--check`.
+
 Enforcements and best practices for designing strict, well-defined skills with typed inputs, validated outputs, and structural gates. Based on research across DSPy, CrewAI, Guardrails AI, RAIL spec, OpenAI Agents SDK, Google A2A, and Addy Osmani's agent spec work.
 
 ## Core Principle
@@ -137,14 +141,14 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 **Key patterns:**
 - Output guardrails perform filtering and relevancy checks for domain drift
 - Format validation ensures structured outputs via schema enforcement
-- Confidence thresholds block low-certainty responses
+- Evidence and confidence filters keep low-certainty responses from blocking completion
 - Prompt construction guardrails inject structured metadata (roles, permissions) into system prompts
 - Automated policy trees compiled into lightweight classifiers audit agent behavior at runtime
 
 **Enforcement for skills:**
 - Phase gate assertions prevent drift — the agent must prove it's on track before continuing
 - Cross-phase invariants catch slow drift (e.g., constraints list only grows, never shrinks)
-- Confidence thresholds in review contracts increase with each round (80% → 85% → 90%)
+- Evidence-backed review filters keep speculative concerns non-blocking, and review contracts preserve the hard max-round cap
 
 ---
 
@@ -157,6 +161,20 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 - **Recoverable**: Every failure has a defined corrective action
 - **Outcome-shaped**: Root instructions state the goal, success criteria, constraints, output, and stop rules before detailed procedure
 - **Material clarification only**: `on_missing: ask` is reserved for implementation-shaping missing data that cannot be safely inferred or discovered
+
+### Progressive contract loading
+
+Contract files required by a skill tier are mandatory for applicable validation, not mandatory for eager context loading. Every applicable canonical rule must still be checked at its enforcement point, but a skill does not need to load every canonical contract file when it starts.
+
+Non-trivial Process or Analysis skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
+
+- declare `schema_version`, `contract: index`, and `skill`;
+- list every canonical file under `authoritative_contracts`;
+- define selector-bounded load sets with a positive `budget_words` value;
+- route entry inputs, the current phase or round gate, the selected handoff, and completion outputs to their enforcement points; and
+- use `load_full_authoritative_file` for both missing and invalid selectors so the full named canonical file is validated instead of silently skipping rules.
+
+The root `SKILL.md` must tell the agent to read the index first, load only the selector applicable to the current boundary, and preserve the canonical files as the source of truth. Adding an index does not change the required contract tier or relax any validation rule.
 
 ### Field schema
 
@@ -229,6 +247,19 @@ handoffs:
 - Handoff schemas ensure subagents get proper context and return structured data
 - Example: assistant-workflow, assistant-review
 
+For loop-based Process skills, model the harness controller explicitly instead
+of hiding it in prose. Medium+ harness-capable work should define a Done
+Contract and Harness Recipe before Build, carry typed Artifact References across
+handoffs, and record run-state, trace, replay, review, QA, and pivot/restart
+artifacts when the controller requires them. Code Reviewer and QA Evaluator
+handoffs stay separate: Code Reviewer owns code defects, security,
+architecture, test coverage, and structural code risk; QA Evaluator owns Done
+Contract, acceptance criteria, verification evidence, final readiness, and
+scoped domain quality. Review/QA loops must be bounded, currently with a max 10
+round terminal cap, and stagnation, repeated drift/regression, rubric pivots, or
+Code Writer unexpected blockers must route through an explicit
+`pivot_restart_decision` rather than silently continuing.
+
 ### Analysis skills (3 files)
 - Multi-step pipeline (e.g., diverge → converge → refine)
 - Phase gates enforce pipeline ordering
@@ -245,6 +276,29 @@ handoffs:
 
 ## Enforcement Mechanisms
 
+### Source validation foundation
+
+Run the source validator before changing first-class skill contracts:
+
+```bash
+tools/skills/validate-skills.sh
+```
+
+The default inventory is the tracked first-class release set: `skills/assistant-*/SKILL.md`. Local-only `skills/unity-*` directories are excluded by default. Use targeted validation when working on one skill:
+
+```bash
+tools/skills/validate-skills.sh --skill assistant-thinking
+tools/skills/validate-skills.sh --skill skills/assistant-thinking/SKILL.md
+```
+
+Use `--include-local` only for local experiments:
+
+```bash
+tools/skills/validate-skills.sh --include-local
+```
+
+This validator checks source skill metadata and contract structure: frontmatter, required contract tier files, contract headers, required-field recovery behavior, and enum value declarations. It intentionally stays on the source side. Canonical source paths such as `.claude` remain valid in source skills; installed-agent path substitution for `.codex` and `.gemini` stays covered by installer tests.
+
 ### Level 1: Contract files exist (passive)
 The contracts are YAML files in the skill directory. Agents read them as part of skill execution. This relies on the agent following instructions — the same trust model as the existing SKILL.md.
 
@@ -256,8 +310,10 @@ Shell scripts in hooks validate contract compliance while the workflow is runnin
 - Prompt-time hooks inject active phase-gate state before the agent can skip ahead
 - Pre-tool hooks warn when active workflow ownership boundaries are crossed
 - Stop hooks check output contract completeness before task handoff
-- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, document, and metrics gates
-- `stop-review.sh` is the consolidated strict stop gate for review, metrics, plan, and rubric completion during active build/review/document statuses
+- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, and document gates plus optional metrics diagnostics
+- `stop-review.sh` is the consolidated strict stop gate for applicable review, plan, final-result, and rubric completion during active build/review/document statuses
+
+Workflow metrics are optional, non-blocking observability and must not block completion when their file or current-task entry is absent. Learning capture is conditional: in `auto` mode the Learning Controller becomes applicable only when the journal contains lesson-bearing review findings, build/test failures, user corrections, or memory-trend evidence.
 
 The source validator is the Level 3 foundation: it gives runtime hooks a consistent, checked contract shape to rely on.
 
@@ -293,3 +349,11 @@ Local response grading is deterministic and heuristic: missing files, empty resp
 8. **Conditional fields use `condition:`** — don't make everything required; scope to when it matters
 9. **Examples clarify ambiguous fields** — when `description` alone isn't enough, add `examples:`
 10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates
+11. **Root SKILL.md stays compact and outcome-shaped** — detailed controller
+    patterns live in references loaded only when the active task needs them
+12. **Clarification prompts are admissible** — ask only for material,
+    non-discoverable missing data with no safe default
+13. **Loop controllers are explicit and bounded** — use Done Contract, Harness
+    Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
+    decisions, and the max 10 terminal cap when the Process skill has
+    long-running review, QA, or fix-verify loops

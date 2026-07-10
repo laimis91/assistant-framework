@@ -1,0 +1,50 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-tdd
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    selectors:
+      - id: tdd-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [activation_reason, behaviors, debugging_evidence, test_framework, exceptions]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: tdd-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_tdd_phase
+        allowed_names: [RED, GREEN, REFACTOR]
+      - id: tdd-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV4]
+    budget_words: 3500
+  completion:
+    selectors:
+      - id: tdd-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [cycle_log, coverage_summary, task_journal_entry]
+    budget_words: 3500
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file
