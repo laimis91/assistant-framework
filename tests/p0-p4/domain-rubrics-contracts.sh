@@ -132,7 +132,7 @@ for file_and_term in \
     "$workflow_dir/contracts/output.yaml::selected_domain_rubrics" \
     "$workflow_dir/contracts/output.yaml::domain_quality_scores" \
     "$workflow_dir/contracts/phase-gates.yaml::reject invented rubric scoring" \
-    "$workflow_dir/references/phases.md::references/domain-rubrics.md\` only when" \
+    "$workflow_dir/references/review-qa-router.md::references/domain-rubrics.md\` only when" \
     "$workflow_dir/references/task-journal-template.md::Selected domain rubrics" \
     "$workflow_dir/references/task-journal-template.md::Domain quality scores" \
     "$workflow_dir/references/harness-controller.md::domain_context" \
@@ -170,7 +170,7 @@ for file in \
     "$review_dir/references/qa-evaluation-loop.md" \
     "$review_dir/contracts/handoffs.yaml" \
     "$review_dir/contracts/phase-gates.yaml" \
-    "$workflow_dir/references/phases.md" \
+    "$workflow_dir/references/review-qa-router.md" \
     "$workflow_dir/references/subagent-roles.md" \
     "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml" \
     "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"; do

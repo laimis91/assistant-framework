@@ -512,10 +512,8 @@ WARNING: Review gate incomplete ($review_gate_status). review_gate:$review_gate_
 fi
 
 if [[ "$is_documenting" == "yes" && "$has_metrics_today" == "no" ]]; then
-    metrics_missing_field="$(assistant_phase_reason_missing_field "metrics_gate" "missing_metrics_today")"
-    metrics_action="$(assistant_phase_reason_action "metrics_gate" "missing_metrics_today")"
     context+="
-WARNING: Metrics gate incomplete. metrics_gate:missing_metrics_today missing=$metrics_missing_field action=$metrics_action"
+OPTIONAL METRICS: No workflow metrics entry exists for today. Metrics are non-blocking observability; continue completion without one unless capture is useful and configured."
 fi
 
 if [[ "$clarification_gate_active" == "yes" && "$requires_saved_clarification_state" == "yes" ]]; then

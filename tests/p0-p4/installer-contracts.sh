@@ -35,7 +35,7 @@ p0p4_path_without_jq() {
     done
 }
 
-test_start "Codex reinstall keeps one framework block, one memory protocol block, and current wording"
+test_start "Codex reinstall keeps one lean framework block and one memory protocol block"
 INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME"
 if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-1.out 2>/tmp/p0p4-install-1.err; then
@@ -49,27 +49,23 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
-            && grep -Fq "Discovery context maps are owned by code-mapper for medium+ work" "$agents_file" \
-            && grep -Fq "code-mapper, code-writer, builder-tester, architect, explorer, code-reviewer, reviewer" "$agents_file" \
-            && grep -Fq "reviewer remains a compatibility route for existing handoffs" "$agents_file" \
-            && grep -Fq "| code-reviewer | read-only | Canonical code/security/architecture review |" "$agents_file" \
-            && grep -Fq "| reviewer | read-only | Compatibility route for existing review handoffs |" "$agents_file" \
+            && grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
+            && grep -Fq "load only the references or contracts relevant to the current phase" "$agents_file" \
+            && grep -Fq 'The compatibility `skill-router.sh` hook is not needed for native Codex routing.' "$agents_file" \
+            && grep -Fq "Medium and larger changes require an approved plan" "$agents_file" \
+            && grep -Fq "Delegation consent is required only before an actual subagent spawn." "$agents_file" \
+            && grep -Fq "Continue safe non-spawn work while authorization is unresolved." "$agents_file" \
+            && grep -Fq "use native Codex subagents by configured name" "$agents_file" \
+            && ! grep -Fq "## Skills (loaded" "$agents_file" \
             && [[ -f "$INSTALL_HOME/.codex/agents/code-reviewer.toml" ]] \
             && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME/.codex/agents/code-reviewer.toml" \
-            && grep -Fq "The orchestrator may create and update framework-owned state artifacts" "$agents_file" \
+            && grep -Fq "The orchestrator owns framework state files" "$agents_file" \
             && grep -Fq ".codex/context-map.md" "$agents_file" \
-            && grep -Fq "it does not edit project source files directly" "$agents_file" \
-            && grep -Fq "Current Codex CLI/app releases support native subagent workflows by default" "$agents_file" \
-            && grep -Fq "Assistant Framework policy requires explicit user authorization before spawning subagents" "$agents_file" \
-            && grep -Fq "wait before continuing phases that require subagents" "$agents_file" \
-            && grep -Fq "Do not treat the absence of a visible tool named Task, delegate, or subagent as proof" "$agents_file" \
-            && grep -Fq "after approval, use delegated mode" "$agents_file" \
-            && ! grep -Fq "otherwise use direct fallback" "$agents_file" \
-            && grep -Fq "CONTEXT BUDGET: Keep generated guidance concise." "$agents_file" \
-            && grep -Fq "preserve user custom sections below the installer block" "$agents_file"; then
+            && grep -Fq "Do not infer that subagents are unavailable from the absence of a visible tool name" "$agents_file" \
+            && grep -Fq "Preserve user-authored project files and existing dirty work." "$agents_file"; then
             pass
         else
-            fail "expected one Codex framework block, one protocol block, current generated wording, code-reviewer compatibility guidance, and context budget guidance"
+            fail "expected one lean native-Codex framework block and one current memory protocol block"
         fi
     else
         fail "second install failed; see /tmp/p0p4-install-2.err"
@@ -86,7 +82,7 @@ else
     fail "subagent-monitor.sh must reinforce code-reviewer read-only constraints and map it to Reviewer handoff contracts"
 fi
 
-test_start "Codex single-skill install generates AGENTS skill table from installed skills"
+test_start "Codex single-skill install keeps routing metadata in the installed skill"
 INSTALL_HOME_SKILL_TABLE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SKILL_TABLE"
 if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-single-skill-table.out 2>/tmp/p0p4-install-single-skill-table.err; then
@@ -98,12 +94,10 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
         fail "expected assistant-workflow to be installed"
     elif [[ -d "$installed_skills_dir/assistant-review" || -d "$installed_skills_dir/assistant-docs" ]]; then
         fail "expected single-skill install to avoid installing assistant-review and assistant-docs"
-    elif [[ "$assistant_skill_rows" != "1" ]]; then
-        fail "expected generated Codex AGENTS.md to list exactly one assistant skill; found $assistant_skill_rows"
-    elif ! grep -Fq "| assistant-workflow | build, implement, fix, refactor, plan | Structured dev: triage through document |" "$agents_file"; then
-        fail "expected generated Codex AGENTS.md to list assistant-workflow with first-class metadata"
-    elif grep -Fq "| assistant-review |" "$agents_file" || grep -Fq "| assistant-docs |" "$agents_file"; then
-        fail "expected generated Codex AGENTS.md to omit uninstalled assistant-review and assistant-docs"
+    elif [[ "$assistant_skill_rows" != "0" ]]; then
+        fail "expected lean Codex AGENTS.md to avoid duplicating installed skill routing tables; found $assistant_skill_rows rows"
+    elif ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to delegate routing to the installed SKILL.md"
     else
         pass
     fi
@@ -205,7 +199,7 @@ else
     fail "assistant-core dry-run drift rejection should explain manifest skills metadata"
 fi
 
-test_start "Codex assistant-core plugin install installs only core skills and AGENTS rows"
+test_start "Codex assistant-core plugin install installs only core skills with lean AGENTS guidance"
 INSTALL_HOME_PLUGIN="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN"
 if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks >/tmp/p0p4-install-plugin-core.out 2>/tmp/p0p4-install-plugin-core.err; then
@@ -219,13 +213,9 @@ if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --
             missing_core_skill="$core_skill"
             break
         fi
-        if ! grep -Fq "| $core_skill |" "$agents_file"; then
-            missing_core_skill="$core_skill AGENTS.md"
-            break
-        fi
     done
     for non_core_skill in assistant-workflow assistant-review assistant-security assistant-research assistant-thinking assistant-docs; do
-        if [[ -d "$installed_skills_dir/$non_core_skill" ]] || grep -Fq "| $non_core_skill |" "$agents_file"; then
+        if [[ -d "$installed_skills_dir/$non_core_skill" ]]; then
             unexpected_profile_skill="$non_core_skill"
             break
         fi
@@ -235,8 +225,8 @@ if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --
         fail "assistant-core plugin install missed $missing_core_skill"
     elif [[ -n "$unexpected_profile_skill" ]]; then
         fail "assistant-core plugin install included non-core skill $unexpected_profile_skill"
-    elif [[ "$agents_assistant_skill_rows" != "4" ]]; then
-        fail "expected assistant-core Codex AGENTS.md to list 4 assistant skills; found $agents_assistant_skill_rows"
+    elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
+        fail "expected assistant-core Codex AGENTS.md to stay lean and delegate routing to installed skills"
     else
         pass
     fi
@@ -244,7 +234,7 @@ else
     fail "assistant-core plugin install failed; see /tmp/p0p4-install-plugin-core.err"
 fi
 
-test_start "Codex assistant-research plugin install installs only research skills and AGENTS rows"
+test_start "Codex assistant-research plugin install installs only research skills with lean AGENTS guidance"
 INSTALL_HOME_PLUGIN_RESEARCH="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_RESEARCH"
 if HOME="$INSTALL_HOME_PLUGIN_RESEARCH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-research --no-hooks >/tmp/p0p4-install-plugin-research.out 2>/tmp/p0p4-install-plugin-research.err; then
@@ -258,13 +248,9 @@ if HOME="$INSTALL_HOME_PLUGIN_RESEARCH" bash "$FRAMEWORK_DIR/install.sh" --agent
             missing_research_skill="$research_skill"
             break
         fi
-        if ! grep -Fq "| $research_skill |" "$research_agents_file"; then
-            missing_research_skill="$research_skill AGENTS.md"
-            break
-        fi
     done
     for non_research_skill in assistant-workflow assistant-review assistant-security assistant-memory assistant-telos assistant-docs; do
-        if [[ -d "$installed_research_skills_dir/$non_research_skill" ]] || grep -Fq "| $non_research_skill |" "$research_agents_file"; then
+        if [[ -d "$installed_research_skills_dir/$non_research_skill" ]]; then
             unexpected_research_profile_skill="$non_research_skill"
             break
         fi
@@ -274,8 +260,8 @@ if HOME="$INSTALL_HOME_PLUGIN_RESEARCH" bash "$FRAMEWORK_DIR/install.sh" --agent
         fail "assistant-research plugin install missed $missing_research_skill"
     elif [[ -n "$unexpected_research_profile_skill" ]]; then
         fail "assistant-research plugin install included non-research skill $unexpected_research_profile_skill"
-    elif [[ "$research_agents_assistant_skill_rows" != "3" ]]; then
-        fail "expected assistant-research Codex AGENTS.md to list 3 assistant skills; found $research_agents_assistant_skill_rows"
+    elif [[ "$research_agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$research_agents_file"; then
+        fail "expected assistant-research Codex AGENTS.md to stay lean and delegate routing to installed skills"
     else
         pass
     fi
@@ -283,7 +269,7 @@ else
     fail "assistant-research plugin install failed; see /tmp/p0p4-install-plugin-research.err"
 fi
 
-test_start "Codex assistant-dev plugin install installs only development skills and AGENTS rows"
+test_start "Codex assistant-dev plugin install installs only development skills with lean AGENTS guidance"
 INSTALL_HOME_PLUGIN_DEV="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DEV"
 if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-dev.out 2>/tmp/p0p4-install-plugin-dev.err; then
@@ -297,13 +283,9 @@ if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent code
             missing_dev_skill="$dev_skill"
             break
         fi
-        if ! grep -Fq "| $dev_skill |" "$dev_agents_file"; then
-            missing_dev_skill="$dev_skill AGENTS.md"
-            break
-        fi
     done
     for non_dev_skill in assistant-clarify assistant-memory assistant-reflexion assistant-telos assistant-ideate assistant-research assistant-thinking; do
-        if [[ -d "$installed_dev_skills_dir/$non_dev_skill" ]] || grep -Fq "| $non_dev_skill |" "$dev_agents_file"; then
+        if [[ -d "$installed_dev_skills_dir/$non_dev_skill" ]]; then
             unexpected_dev_profile_skill="$non_dev_skill"
             break
         fi
@@ -313,8 +295,8 @@ if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent code
         fail "assistant-dev plugin install missed $missing_dev_skill"
     elif [[ -n "$unexpected_dev_profile_skill" ]]; then
         fail "assistant-dev plugin install included non-development skill $unexpected_dev_profile_skill"
-    elif [[ "$dev_agents_assistant_skill_rows" != "9" ]]; then
-        fail "expected assistant-dev Codex AGENTS.md to list 9 assistant skills; found $dev_agents_assistant_skill_rows"
+    elif [[ "$dev_agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$dev_agents_file"; then
+        fail "expected assistant-dev Codex AGENTS.md to stay lean and delegate routing to installed skills"
     else
         pass
     fi
@@ -491,7 +473,9 @@ if HOME="$INSTALL_HOME_FOUR" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --s
     if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
         && grep -q "User-managed Gemini heading before installer content." "$gemini_file" \
         && grep -Fq ".gemini/task.md" "$gemini_file" \
-        && grep -Fq ".gemini/context-map.md" "$gemini_file" \
+        && grep -Fq ".gemini/session.md" "$gemini_file" \
+        && grep -Fq ".gemini/working-buffer.md" "$gemini_file" \
+        && grep -Fq "Routine completion does not require reflection, metrics, memory writes, consolidation, or health checks." "$gemini_file" \
         && ! grep -Fq ".codex/task.md" "$gemini_file" \
         && ! grep -Fq ".claude/task.md" "$gemini_file" \
         && ! grep -q "Interrupted installer-owned Gemini memory content" "$gemini_file"; then
@@ -670,7 +654,6 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
     installed_skills_dir="$INSTALL_HOME_TEN/.codex/skills"
     agents_file="$INSTALL_HOME_TEN/.codex/AGENTS.md"
     missing_assistant_skill=""
-    missing_agents_skill=""
     unexpected_installed_skill=""
     source_assistant_skill_count=0
     agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
@@ -680,10 +663,6 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         source_skill="$(basename "$(dirname "$source_skill_md")")"
         if [[ ! -d "$installed_skills_dir/$source_skill" ]]; then
             missing_assistant_skill="$source_skill"
-            break
-        fi
-        if ! grep -Fq "| $source_skill |" "$agents_file"; then
-            missing_agents_skill="$source_skill"
             break
         fi
     done < <(find "$FRAMEWORK_DIR/skills" -maxdepth 2 -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -type f | sort)
@@ -705,12 +684,10 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
 
     if [[ -n "$missing_assistant_skill" ]]; then
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
-    elif [[ -n "$missing_agents_skill" ]]; then
-        fail "expected generated Codex AGENTS.md to include first-class assistant skill $missing_agents_skill"
     elif [[ "$source_assistant_skill_count" -lt "16" ]]; then
         fail "expected source inventory to contain at least 16 assistant skills including the assistant-named custom fixture; found $source_assistant_skill_count"
-    elif [[ "$agents_assistant_skill_rows" != "$source_assistant_skill_count" ]]; then
-        fail "expected generated Codex AGENTS.md to list all $source_assistant_skill_count assistant skills; found $agents_assistant_skill_rows"
+    elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to stay lean and keep routing metadata in installed skills"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
     elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then
@@ -1006,6 +983,63 @@ else
     fail "minimal no-jq Codex reinstall failed; see /tmp/p0p4-install-minimal-no-jq-existing-codex.err"
 fi
 
+test_start "Codex native-default migration works without jq and preserves custom hooks"
+NO_JQ_NATIVE_CODEX_HOME="$(mktemp -d)"
+NO_JQ_NATIVE_CODEX_BIN="$(mktemp -d)"
+p0p4_register_cleanup "$NO_JQ_NATIVE_CODEX_HOME" "$NO_JQ_NATIVE_CODEX_BIN"
+p0p4_path_without_jq "$NO_JQ_NATIVE_CODEX_BIN"
+mkdir -p "$NO_JQ_NATIVE_CODEX_HOME/.codex"
+cat > "$NO_JQ_NATIVE_CODEX_HOME/.codex/hooks.json" <<JSON
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"/tmp/user-codex-native-custom.sh"},
+          {"type":"command","command":"\$HOME/.codex/hooks/assistant/custom-user.sh --keep"},
+          {"type":"command","command":"\$HOME/.codex/hooks/assistant/workflow-enforcer.sh"}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type":"command","command":"$NO_JQ_NATIVE_CODEX_HOME/.codex/hooks/assistant/stop-review.sh --stale"}
+        ]
+      }
+    ]
+  }
+}
+JSON
+if HOME="$NO_JQ_NATIVE_CODEX_HOME" PATH="$NO_JQ_NATIVE_CODEX_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-native-no-jq-codex.out 2>/tmp/p0p4-install-native-no-jq-codex.err; then
+    if jq -e '
+        [.. | objects | .command? // empty] as $commands
+        | ($commands | length) == 2
+        and ($commands | any(. == "/tmp/user-codex-native-custom.sh"))
+        and ($commands | any(. == "$HOME/.codex/hooks/assistant/custom-user.sh --keep"))
+    ' "$NO_JQ_NATIVE_CODEX_HOME/.codex/hooks.json" >/dev/null; then
+        missing_native_no_jq_shim=""
+        for cached_hook in session-start.sh skill-router.sh learning-signals.sh workflow-enforcer.sh workflow-guard.sh stop-review.sh subagent-monitor.sh pre-compress.sh post-compact.sh; do
+            if [[ ! -x "$NO_JQ_NATIVE_CODEX_HOME/.codex/hooks/assistant/$cached_hook" ]] \
+                || ! grep -Fq "Assistant Framework native-profile migration shim" "$NO_JQ_NATIVE_CODEX_HOME/.codex/hooks/assistant/$cached_hook"; then
+                missing_native_no_jq_shim="$cached_hook"
+                break
+            fi
+        done
+        if [[ -z "$missing_native_no_jq_shim" ]]; then
+            pass
+        else
+            fail "native no-jq Codex migration missed cached entrypoint shim $missing_native_no_jq_shim"
+        fi
+    else
+        fail "native no-jq Codex migration should remove known framework commands and preserve custom hooks"
+    fi
+else
+    fail "native no-jq Codex migration failed; see /tmp/p0p4-install-native-no-jq-codex.err"
+fi
+
 test_start "Claude strict hook profile installs enforcement hooks"
 CLAUDE_STRICT_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CLAUDE_STRICT_HOME"
@@ -1084,19 +1118,19 @@ else
     fail "Gemini strict setup for downgrade failed; see /tmp/p0p4-install-gemini-downgrade-strict.err"
 fi
 
-test_start "Codex default install registers absolute hook command paths"
+test_start "Codex explicit workflow install registers absolute hook command paths without skill-router"
 CODEX_DEFAULT_ABS_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_DEFAULT_ABS_HOME"
-if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-absolute-default.out 2>/tmp/p0p4-install-codex-absolute-default.err; then
+if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile workflow >/tmp/p0p4-install-codex-absolute-default.out 2>/tmp/p0p4-install-codex-absolute-default.err; then
     missing_codex_default_hook=""
-    for hook_name in session-start.sh skill-router.sh learning-signals.sh workflow-enforcer.sh workflow-guard.sh stop-review.sh subagent-monitor.sh task-journal-resolver.sh workflow-phase-gates.sh; do
+    for hook_name in session-start.sh learning-signals.sh workflow-enforcer.sh workflow-guard.sh stop-review.sh subagent-monitor.sh task-journal-resolver.sh workflow-phase-gates.sh; do
         if [[ ! -x "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant/$hook_name" ]]; then
             missing_codex_default_hook="$hook_name"
             break
         fi
     done
     if [[ -n "$missing_codex_default_hook" ]]; then
-        fail "Codex default install should create executable workflow hook/helper $missing_codex_default_hook"
+        fail "Codex explicit workflow install should create executable workflow hook/helper $missing_codex_default_hook"
     elif jq -e --arg command_dir "$CODEX_DEFAULT_ABS_HOME/.codex/hooks/assistant" '
         [.. | objects | .command? // empty] as $commands
         | {
@@ -1111,11 +1145,11 @@ if HOME="$CODEX_DEFAULT_ABS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex
             subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
             subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
         }
-        | .allAbsolute and .noHomeLiteral and .sessionStart and .skillRouter and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
+        | .allAbsolute and .noHomeLiteral and .sessionStart and (.skillRouter | not) and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
     ' "$CODEX_DEFAULT_ABS_HOME/.codex/hooks.json" >/dev/null; then
         pass
     else
-        fail "Codex default install should emit absolute executable workflow/delegation hook command paths"
+        fail "Codex explicit workflow install should emit absolute workflow/delegation paths without duplicating native skill routing"
     fi
 else
     fail "Codex default absolute hook install failed; see /tmp/p0p4-install-codex-absolute-default.err"
@@ -1127,7 +1161,7 @@ p0p4_register_cleanup "$CODEX_STALE_HOOK_HOME"
 mkdir -p "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant"
 printf '%s\n' '#!/usr/bin/env bash' 'echo stale harness gate' > "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh"
 chmod +x "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh"
-if HOME="$CODEX_STALE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-stale-hook.out 2>/tmp/p0p4-install-codex-stale-hook.err; then
+if HOME="$CODEX_STALE_HOOK_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile workflow >/tmp/p0p4-install-codex-stale-hook.out 2>/tmp/p0p4-install-codex-stale-hook.err; then
     if [[ -e "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/harness-gate.sh" ]]; then
         fail "Codex workflow reinstall should remove stale profile-excluded harness-gate.sh"
     elif [[ ! -x "$CODEX_STALE_HOOK_HOME/.codex/hooks/assistant/stop-review.sh" ]] \
@@ -1140,33 +1174,40 @@ else
     fail "Codex stale hook cleanup install failed; see /tmp/p0p4-install-codex-stale-hook.err"
 fi
 
-test_start "Codex default reinstall upgrades explicit minimal to workflow hooks"
+test_start "Codex default reinstall migrates explicit minimal hooks to native mode"
 CODEX_DEFAULT_REINSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_DEFAULT_REINSTALL_HOME"
 if HOME="$CODEX_DEFAULT_REINSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile minimal >/tmp/p0p4-install-codex-default-reinstall-minimal.out 2>/tmp/p0p4-install-codex-default-reinstall-minimal.err; then
     tmp_hooks="$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json.tmp"
     jq '.hooks.UserPromptSubmit[0].hooks += [{"type":"command","command":"/tmp/user-codex-default-custom.sh"}]' "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json" > "$tmp_hooks" \
         && mv "$tmp_hooks" "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json"
-    if HOME="$CODEX_DEFAULT_REINSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-default-reinstall-workflow.out 2>/tmp/p0p4-install-codex-default-reinstall-workflow.err; then
+    if HOME="$CODEX_DEFAULT_REINSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-codex-default-reinstall-native.out 2>/tmp/p0p4-install-codex-default-reinstall-native.err; then
         if jq -e --arg command_dir "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks/assistant" '
             [.. | objects | .command? // empty] as $commands
             | {
                 custom: ($commands | any(. == "/tmp/user-codex-default-custom.sh")),
-                skillRouter: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
-                workflowEnforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
-                workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
-                stopReview: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
-                subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
-                subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
+                onlyCustomCommandRemains: (($commands | length) == 1)
             }
-            | .custom and .skillRouter and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
+            | .custom and .onlyCustomCommandRemains
         ' "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks.json" >/dev/null; then
-            pass
+            missing_native_shim=""
+            for cached_hook in session-start.sh skill-router.sh learning-signals.sh workflow-enforcer.sh workflow-guard.sh stop-review.sh subagent-monitor.sh pre-compress.sh post-compact.sh; do
+                if [[ ! -x "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks/assistant/$cached_hook" ]] \
+                    || ! grep -Fq "Assistant Framework native-profile migration shim" "$CODEX_DEFAULT_REINSTALL_HOME/.codex/hooks/assistant/$cached_hook"; then
+                    missing_native_shim="$cached_hook"
+                    break
+                fi
+            done
+            if [[ -z "$missing_native_shim" ]]; then
+                pass
+            else
+                fail "Codex native migration missed cached entrypoint shim $missing_native_shim"
+            fi
         else
-            fail "Codex default reinstall should preserve custom hooks and install workflow/delegation hooks"
+            fail "Codex default reinstall should preserve custom hooks and remove explicit minimal framework commands"
         fi
     else
-        fail "Codex default workflow reinstall failed; see /tmp/p0p4-install-codex-default-reinstall-workflow.err"
+        fail "Codex default native reinstall failed; see /tmp/p0p4-install-codex-default-reinstall-native.err"
     fi
 else
     fail "Codex explicit minimal setup failed; see /tmp/p0p4-install-codex-default-reinstall-minimal.err"
@@ -1178,11 +1219,15 @@ CODEX_CUSTOM_ACTIVE_HOME="$CODEX_CUSTOM_HOME_PARENT/active-codex-home"
 CODEX_CUSTOM_UNUSED_HOME="$CODEX_CUSTOM_HOME_PARENT/unrelated-user-home"
 p0p4_register_cleanup "$CODEX_CUSTOM_HOME_PARENT"
 mkdir -p "$CODEX_CUSTOM_ACTIVE_HOME" "$CODEX_CUSTOM_UNUSED_HOME/.codex"
-cat > "$CODEX_CUSTOM_ACTIVE_HOME/hooks.json" <<'JSON'
+cat > "$CODEX_CUSTOM_ACTIVE_HOME/hooks.json" <<JSON
 {
   "hooks": {
     "UserPromptSubmit": [
-      {"matcher":"","hooks":[{"type":"command","command":"/tmp/user-codex-custom.sh"}]}
+      {"matcher":"","hooks":[
+        {"type":"command","command":"/tmp/user-codex-custom.sh"},
+        {"type":"command","command":"$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh --old-framework"},
+        {"type":"command","command":"\$HOME/.codex/hooks/assistant/learning-signals.sh --old-framework"}
+      ]}
     ],
     "PreToolUse": [
       {"matcher":"","hooks":[{"type":"command","command":"/old/custom/home/hooks/assistant/workflow-guard.sh"}]}
@@ -1193,22 +1238,23 @@ JSON
 if HOME="$CODEX_CUSTOM_UNUSED_HOME" CODEX_HOME="$CODEX_CUSTOM_ACTIVE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile strict >/tmp/p0p4-install-codex-codehome.out 2>/tmp/p0p4-install-codex-codehome.err; then
     if [[ ! -f "$CODEX_CUSTOM_UNUSED_HOME/.codex/hooks.json" ]] \
         && [[ -x "$CODEX_CUSTOM_ACTIVE_HOME/hooks/assistant/subagent-monitor.sh" ]] \
-        && jq -e --arg command_dir "$CODEX_CUSTOM_ACTIVE_HOME/hooks/assistant" '
+        && jq -e --arg command_dir "$CODEX_CUSTOM_ACTIVE_HOME/hooks/assistant" --arg framework_dir "$FRAMEWORK_DIR" '
             [.. | objects | .command? // empty] as $commands
             | {
                 custom: ($commands | any(. == "/tmp/user-codex-custom.sh")),
+                unrelatedSameBasename: ($commands | any(. == "/old/custom/home/hooks/assistant/workflow-guard.sh")),
                 sessionStart: ([.hooks.SessionStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/session-start.sh"))),
                 workflowGuard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
                 subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
                 subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
                 noHomeCodexCommands: ($commands | all(startswith("$HOME/.codex/hooks/assistant/") | not)),
-                noOldFrameworkCommand: ($commands | all(. != "/old/custom/home/hooks/assistant/workflow-guard.sh"))
+                noRepoFrameworkCommand: ($commands | all(. != ($framework_dir + "/hooks/scripts/workflow-enforcer.sh --old-framework")))
             }
-            | .custom and .sessionStart and .workflowGuard and .subagentStart and .subagentStop and .noHomeCodexCommands and .noOldFrameworkCommand
+            | .custom and .unrelatedSameBasename and .sessionStart and .workflowGuard and .subagentStart and .subagentStop and .noHomeCodexCommands and .noRepoFrameworkCommand
         ' "$CODEX_CUSTOM_ACTIVE_HOME/hooks.json" >/dev/null; then
         pass
     else
-        fail "Codex CODEX_HOME install should write active hooks.json with absolute command paths and prune old framework hooks"
+        fail "Codex CODEX_HOME install should preserve unrelated same-basename roots and prune exact old framework-owned roots"
     fi
 else
     fail "Codex CODEX_HOME install failed; see /tmp/p0p4-install-codex-codehome.err"

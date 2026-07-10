@@ -77,24 +77,28 @@ fi
 
 test_start "workflow review phases load spec-review before distinct quality review"
 missing_spec_phase_terms=()
+review_qa_router="$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
 for term in \
-    "### Stage 1 — Spec Review" \
+    "## Stage 1 - Spec Review" \
     'Load and follow `references/prompts/spec-review.md`.' \
     "Quality review cannot satisfy spec review." \
     "Append" \
     "### Spec Review #N" \
     "Spec review FAIL" \
     "Spec review PASS" \
-    "### Stage 2 — Quality Review" \
+    "## Stage 2 - Code Quality Review" \
     'loading assistant-review SKILL.md'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    if ! p0p4_contains_text_ci "$review_qa_router" "$term"; then
         missing_spec_phase_terms+=("$term")
     fi
 done
+if ! grep -Fq -- "Load \`references/review-qa-router.md\`" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    missing_spec_phase_terms+=("phases.md missing review-qa-router loader")
+fi
 if [[ "${#missing_spec_phase_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "phases.md missing separate spec/quality review terms: ${missing_spec_phase_terms[*]}"
+    fail "review-qa-router.md missing separate spec/quality review terms: ${missing_spec_phase_terms[*]}"
 fi
 
 test_start "workflow phase gates require Spec Review PASS before quality loop"
@@ -139,14 +143,19 @@ for term in \
     fi
 done
 for artifact in review_result spec_review_result; do
-    if ! awk -v artifact="$artifact" '
+    if [[ "$artifact" == "review_result" ]]; then
+        expected_condition="controller_intensity in [standard, strict] or risk_tier in [high, critical] or hook_profile == strict"
+    else
+        expected_condition="size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict"
+    fi
+    if ! awk -v artifact="$artifact" -v expected_condition="$expected_condition" '
         $0 == "  - name: " artifact { in_artifact = 1; next }
         in_artifact && /^  - name: / { exit }
         in_artifact && /required: conditional/ { found_required = 1 }
-        in_artifact && /size in \[medium, large, mega\] or risk_tier in \[high, critical\] or hook_profile == strict/ { found_condition = 1 }
+        in_artifact && index($0, expected_condition) { found_condition = 1 }
         END { exit (found_required && found_condition) ? 0 : 1 }
     ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-        missing_review_output_terms+=("$artifact conditional medium+/high-risk/strict requirement")
+        missing_review_output_terms+=("$artifact conditional controller/size, high-risk, or strict requirement")
     fi
 done
 if [[ "${#missing_review_output_terms[@]}" -eq 0 ]]; then

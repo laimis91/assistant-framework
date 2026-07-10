@@ -218,6 +218,42 @@ else
     fail "brainstorm prompts should route to ideate only: ${brainstorm_trigger_failures[*]}"
 fi
 
+test_start "assistant-workflow routes concrete dev creation without stealing brainstorming"
+workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_pattern="$(awk -F'"' '/^[[:space:]]*- pattern:/ { print $2; exit }' "$workflow_skill")"
+workflow_creation_failures=()
+
+workflow_prompt_matches() {
+    local prompt="$1"
+    printf '%s\n' "$prompt" | tr '[:upper:]' '[:lower:]' | grep -qE "\b($workflow_pattern)\b"
+}
+
+if [[ -z "$workflow_pattern" ]]; then
+    workflow_creation_failures+=("assistant-workflow pattern missing")
+else
+    for prompt in \
+        "create a new REST endpoint" \
+        "make a dashboard" \
+        "turn this idea into an implementation plan"; do
+        if ! workflow_prompt_matches "$prompt"; then
+            workflow_creation_failures+=("does not route: $prompt")
+        fi
+    done
+    for prompt in \
+        "brainstorm dashboard ideas" \
+        "ideas for dashboard"; do
+        if workflow_prompt_matches "$prompt"; then
+            workflow_creation_failures+=("steals brainstorming: $prompt")
+        fi
+    done
+fi
+
+if [[ "${#workflow_creation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-workflow dev creation routing failed: ${workflow_creation_failures[*]}"
+fi
+
 test_start "assistant-workflow small plans can proceed without ritual approval"
 workflow_small_failures=()
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
@@ -306,6 +342,7 @@ review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.m
 review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 review_phases="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 
 for file_and_term in \
     "$review_skill::references/review-principles.md" \
@@ -337,7 +374,8 @@ review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
 
 for file_and_term in \
-    "$review_skill::Use fresh direct-fallback review context" \
+    "$review_skill::load \`references/review-loop.md\` before the first REVIEW step" \
+    "$review_loop::In direct fallback, start a fresh isolated pass with the same bounded bundle" \
     "$review_input::subagent_execution_mode" \
     "$review_input::direct_fallback" \
     "$review_output::review_delegation_path" \

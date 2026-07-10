@@ -49,6 +49,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Depends on: [slice ids or "none"]
 - TDD / RED step:
   - tdd_applies: [true/false]
+  - TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason
   - RED command: [command or "N/A"]
   - Expected failure: [specific failing test/assertion or "N/A"]
 - Implementation notes / constraints:

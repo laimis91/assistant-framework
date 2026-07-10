@@ -53,18 +53,22 @@ Preview without making changes:
 ./install.sh --agent claude --dry-run
 ```
 
-Each skill auto-triggers independently based on what you're doing.
+Codex discovers and routes installed skills natively. Claude and Gemini use the compatibility skill router in their default hook profile.
 
-Hook profiles control how much lifecycle automation is installed. Plain Codex installs default to `workflow`: skill routing, workflow/delegation prompts, tool-use guard, subagent lifecycle monitor, consolidated stop review, and compaction helpers. Claude and Gemini default to `minimal`: skill routing plus session/compaction context helpers. Use explicit `minimal` for low-friction Codex installs, `strict` for every supported enforcement hook, or `none`/`--no-hooks` for skills only:
+Hook profiles control optional lifecycle automation. Plain Codex installs default to `none`, leaving native skill routing, permissions, subagents, rules, and compaction in charge without registering Assistant Framework hooks. Claude and Gemini continue to default to `minimal`. Codex can opt into `minimal` compatibility hooks or the `workflow` and `strict` enforcement profiles; its enforcement profiles intentionally do not add the compatibility skill router:
 
 ```bash
-./install.sh --agent codex                          # default workflow/delegation hooks
-./install.sh --agent codex --hook-profile minimal   # explicit low-friction hooks
+./install.sh --agent codex                          # native Codex; no framework hooks
+./install.sh --agent codex --hook-profile minimal   # compatibility routing + context hooks
+./install.sh --agent codex --hook-profile workflow  # workflow/delegation enforcement
+./install.sh --agent codex --hook-profile strict    # all supported enforcement hooks
 ./install.sh --agent claude --hook-profile minimal  # Claude/Gemini default
 ./install.sh --agent claude --hook-profile strict   # all supported enforcement hooks
 ./install.sh --agent claude --hook-profile none     # skills/tools only
 ./install.sh --agent claude --no-hooks              # alias for none
 ```
+
+Migrating an existing Codex install is safe: rerun the plain Codex install. It removes only known Assistant Framework commands from `~/.codex/hooks.json`, preserves unrelated custom hooks, and leaves silent shims for framework hook entrypoints that a running Codex process may still have cached. Restart Codex after migration. Execution-policy rules under `~/.codex/rules/` remain installed independently of hooks.
 
 Test hooks before installing:
 ```bash
@@ -459,27 +463,31 @@ You: "Does this task align with my goals?"
 Telos skill: Checks active work against your purpose chain
 ```
 
-## Hooks (automated behaviors)
+## Hooks (optional automated behaviors)
 
-Hooks fire automatically on agent lifecycle events. Installed for Claude Code, Gemini CLI, and Codex. Codex hooks use `~/.codex/hooks.json` with the `hooks` feature enabled. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported lifecycle and tool-use hooks.
+Hooks fire on agent lifecycle events when their profile is enabled. Claude Code and Gemini CLI default to the `minimal` profile; Codex defaults to native, hookless operation and uses `~/.codex/hooks.json` only after an explicit non-`none` profile is selected. Codex compaction hooks require Codex CLI 0.129.0 or newer; older Codex installs still receive the supported events for the selected profile.
 
 | Hook | Event | What it does |
 |---|---|---|
 | **Session start** | Session begins/resumes | Injects task journal + memory feedback into context |
 | **Skill router** | User submits prompt | Pattern-matches prompt against skill triggers; injects reminder to invoke the correct skill |
-| **Workflow enforcer** | User submits prompt | Injects current workflow state plus runtime phase-gate warnings for decomposition, plan, review, document, and metrics gates |
+| **Workflow enforcer** | User submits prompt | Injects current workflow state plus runtime phase-gate warnings and optional metrics diagnostics |
 | **Learning signals** | User submits prompt | Detects corrections, approvals, frustrations, and pivots; logs to signals.jsonl for trend analysis |
 | **Workflow guard** | Before tool use | Warns when direct edits happen during an active build/review workflow and keeps supported tool-use adjustments centralized |
 | **Pre-compress** | Before context compaction | Reminds agent to update task journal before state is lost |
 | **Post-compact** | After compaction completes | Re-injects task journal and feedback rules |
-| **Stop review** | Agent finishes responding during active build/review/document work | Consolidated strict stop gate: approved medium+ plan, structured Spec Review, Quality Review, Final Result, medium+ rubric score, and metrics before task handoff |
+| **Stop review** | Agent finishes responding during active build/review/document work | Consolidated strict stop gate for approved plans, structured review, final results, and applicable rubric evidence |
 | **Session end** | Session terminates | Logs reminder about uncaptured insights |
 
-These replace manual steps — you no longer need to ask "did you read the task journal?" or "do a fresh review".
+These are compatibility or enforcement extensions, not requirements for native Codex operation.
+
+Workflow metrics are optional, non-blocking observability. A missing metrics file or entry must not block completion. Learning capture is also conditional: `auto` mode requires a Learning Controller record only when the task journal contains lesson-bearing review findings, build/test failures, user corrections, or memory-trend evidence.
 
 ### Skill routing
 
-The skill router hook prevents the agent from freelancing tasks that skills already handle. It fires on every user prompt, scans all installed skills for `triggers:` frontmatter, and injects a context reminder when a match is found.
+The compatibility skill router fires on user prompts, scans installed skills for `triggers:` frontmatter, and injects one primary match. Highest priority wins; ties keep stable discovery order. If the selected skill has an input contract, only required top-level fields are included in the reminder.
+
+Claude and Gemini install this router in their default `minimal` profile. Native Codex routing does not need it: the default, `workflow`, and `strict` Codex profiles do not register `skill-router.sh`; explicit Codex `minimal` remains available for compatibility.
 
 **Adding triggers to a skill** — add a `triggers:` block to the SKILL.md frontmatter:
 
@@ -505,7 +513,7 @@ triggers:
 | `reminder` | No | Custom text injected into agent context. Default: generic "invoke skill X" message |
 | `min_words` | No | Minimum word count in prompt to trigger. Prevents false positives on short messages |
 
-**Priority ordering** ensures specific skills match before broad ones (e.g., "use TDD to implement X" matches assistant-tdd at priority 85, not assistant-workflow at priority 30).
+**Priority ordering** ensures a specific primary skill wins over broader matches (e.g., "use TDD to implement X" selects assistant-tdd at priority 85 instead of assistant-workflow at priority 30).
 
 No script changes needed when adding new skills — just add the frontmatter and reinstall.
 

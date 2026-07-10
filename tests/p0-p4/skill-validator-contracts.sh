@@ -99,6 +99,81 @@ else
     fail "targeted custom skill path did not validate"
 fi
 
+test_start "skill validator supports a valid contracts index"
+indexed_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-indexed.XXXXXX")"
+p0p4_register_cleanup "$indexed_root"
+p0p4_write_valid_skill_fixture "$indexed_root/indexed-validator-skill"
+cat >"$indexed_root/indexed-validator-skill/contracts/index.yaml" <<'EOF'
+schema_version: "1.0"
+contract: index
+skill: indexed-validator-skill
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+
+load_sets:
+  entry:
+    selectors:
+      - id: fixture-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [request]
+    budget_words: 500
+  completion:
+    selectors:
+      - id: fixture-completion-artifacts
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [result]
+    budget_words: 500
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file
+EOF
+if "$skill_validator" --skill "$indexed_root/indexed-validator-skill" >/dev/null; then
+    pass
+else
+    fail "validator rejected a valid contracts/index.yaml"
+fi
+
+test_start "skill validator reports CONTRACT_INDEX diagnostics for malformed indexes"
+malformed_index_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-malformed-index.XXXXXX")"
+malformed_index_err="$(mktemp "${TMPDIR:-/tmp}/skill-validator-malformed-index-err.XXXXXX")"
+p0p4_register_cleanup "$malformed_index_root" "$malformed_index_err"
+p0p4_write_valid_skill_fixture "$malformed_index_root/malformed-index-skill"
+cat >"$malformed_index_root/malformed-index-skill/contracts/index.yaml" <<'EOF'
+schema_version: "1.0"
+contract: malformed
+skill: malformed-index-skill
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+
+load_sets:
+  entry:
+    selectors: []
+    budget_words: 0
+
+fallback:
+  on_missing_selector: ignore
+EOF
+if "$skill_validator" --skill "$malformed_index_root/malformed-index-skill" >/dev/null 2>"$malformed_index_err"; then
+    fail "validator accepted a malformed contracts index"
+elif grep -Fq "CONTRACT_INDEX_" "$malformed_index_err"; then
+    pass
+else
+    fail "malformed index failure did not include CONTRACT_INDEX diagnostics, stderr=$(cat "$malformed_index_err")"
+fi
+
 test_start "skill validator rejects missing contract headers"
 missing_header_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-missing-header.XXXXXX")"
 missing_header_err="$(mktemp "${TMPDIR:-/tmp}/skill-validator-missing-header-err.XXXXXX")"

@@ -158,6 +158,20 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 - **Outcome-shaped**: Root instructions state the goal, success criteria, constraints, output, and stop rules before detailed procedure
 - **Material clarification only**: `on_missing: ask` is reserved for implementation-shaping missing data that cannot be safely inferred or discovered
 
+### Progressive contract loading
+
+Contract files required by a skill tier are mandatory for applicable validation, not mandatory for eager context loading. Every applicable canonical rule must still be checked at its enforcement point, but a skill does not need to load every canonical contract file when it starts.
+
+Large Process skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
+
+- declare `schema_version`, `contract: index`, and `skill`;
+- list every canonical file under `authoritative_contracts`;
+- define selector-bounded load sets with a positive `budget_words` value;
+- route entry inputs, the current phase or round gate, the selected handoff, and completion outputs to their enforcement points; and
+- use `load_full_authoritative_file` for both missing and invalid selectors so the full named canonical file is validated instead of silently skipping rules.
+
+The root `SKILL.md` must tell the agent to read the index first, load only the selector applicable to the current boundary, and preserve the canonical files as the source of truth. Adding an index does not change the required contract tier or relax any validation rule.
+
 ### Field schema
 
 ```yaml
@@ -292,8 +306,10 @@ Shell scripts in hooks validate contract compliance while the workflow is runnin
 - Prompt-time hooks inject active phase-gate state before the agent can skip ahead
 - Pre-tool hooks warn when active workflow ownership boundaries are crossed
 - Stop hooks check output contract completeness before task handoff
-- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, document, and metrics gates
-- `stop-review.sh` is the consolidated strict stop gate for review, metrics, plan, and rubric completion during active build/review/document statuses
+- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, and document gates plus optional metrics diagnostics
+- `stop-review.sh` is the consolidated strict stop gate for applicable review, plan, final-result, and rubric completion during active build/review/document statuses
+
+Workflow metrics are optional, non-blocking observability and must not block completion when their file or current-task entry is absent. Learning capture is conditional: in `auto` mode the Learning Controller becomes applicable only when the journal contains lesson-bearing review findings, build/test failures, user corrections, or memory-trend evidence.
 
 The source validator is the Level 3 foundation: it gives runtime hooks a consistent, checked contract shape to rely on.
 

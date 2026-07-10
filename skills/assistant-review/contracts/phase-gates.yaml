@@ -47,6 +47,16 @@ gates:
         condition: "qa_evaluation_mode == required"
         on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
 
+      - id: E8
+        check: "Standalone review without carried evidence performs Spec Review against the user request and review scope, records spec_review_pass_ref before Reviewer dispatch, fixes any scope mismatch on FAIL, and does not require a task journal"
+        condition: "review_preparation_mode == standalone"
+        on_fail: "Block Reviewer dispatch, run Spec Review against user request/review scope, fix missing or extra scope on FAIL, repeat until PASS, and record the PASS pointer; do not require task_journal_path."
+
+      - id: E9
+        check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"
+        condition: "review_preparation_mode == workflow_composed"
+        on_fail: "Block dispatch and request the carried Spec Review PASS and current build/test evidence refs from the composing workflow."
+
   # ─────────────────────────────────────────────
   # REVIEW step — per round
   # ─────────────────────────────────────────────
@@ -61,17 +71,25 @@ gates:
         on_fail: "Dispatch a new Reviewer subagent with the current review material snapshot and previously_fixed list"
 
       - id: RS1A
-        check: "For medium+ scope in direct fallback mode: review context was reset or isolated enough to reduce stale-context risk, and that fresh-context evidence is recorded"
+        check: "For medium+ scope in direct fallback mode: the same bounded fresh_reviewer_context bundle was created only when the review pass began, review context was isolated, and fresh-context evidence is recorded"
         condition: "scope_size in [medium, large] and subagent_execution_mode == direct_fallback"
-        on_fail: "Create a fresh review material snapshot, clear stale assumptions, record direct-fallback review evidence, and do not claim a Reviewer subagent was dispatched"
+        on_fail: "Resolve the reviewer_context load set, create the same bounded bundle used by delegated review, clear stale assumptions, record direct-fallback evidence, and do not claim a Reviewer subagent was dispatched"
 
       - id: RS2
-        check: "Reviewer or direct-fallback review context received: review_material_snapshot, round number, previously_fixed list, and finding_filter_policy"
-        on_fail: "In delegated mode, re-dispatch with all required context fields per handoffs contract. In direct fallback mode, rebuild the fresh review context packet before continuing."
+        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, review_preparation_mode, review_evidence_pointer proving latest Spec Review PASS plus required build_test_verification_ref, round, previously_fixed, finding_filter_policy, review-principles, review-rubric when required, and only triggered checklist sections"
+        on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and re-dispatch or restart direct fallback with the repaired bundle."
+
+      - id: RS2A
+        check: "build_test_verification_ref contains current real passed build/test evidence whenever source fix/build is in scope; not_applicable is one of audit_only, read_only, or no_build_scope only when no source fix/build is in scope and is invalid after any source fix"
+        on_fail: "Block Reviewer dispatch. Run current build/tests when fix/build is in scope or after a source fix; otherwise record exactly one allowed explicit not_applicable reason."
+
+      - id: RS2B
+        check: "The declared reviewer_context boundary closure is strictly below 5000 words and excludes orchestrator_to_reviewer.return_fields"
+        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5000 words."
 
       - id: RS3
-        check: "Reviewer or direct-fallback review returned: findings[], summary, verdict — all present"
-        on_fail: "In delegated mode, re-dispatch Reviewer requesting the missing fields. In direct fallback mode, complete the missing review fields before evaluating."
+        check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"
+        on_fail: "Resolve reviewer_return_validation after the result, then re-dispatch Reviewer or complete direct-fallback return evidence for every missing canonical field before evaluating."
 
       - id: RS4
         check: "No previously-fixed item was re-reported in findings"
@@ -187,6 +205,10 @@ gates:
         check: "For C# projects: cognitive complexity analysis was run on changed files"
         condition: "project is C# and complexity tool is available"
         on_fail: "Run complexity analysis and flag methods exceeding threshold"
+
+      - id: V4
+        check: "After any source fix, build_test_verification_ref was refreshed with current real passed build/test evidence for every subsequent Reviewer dispatch; not_applicable is absent"
+        on_fail: "Run current build/tests, record the passed evidence ref, and block the next review round until the fresh evidence is available."
 
   # ─────────────────────────────────────────────
   # QA EVALUATION step — after code review/build evidence

@@ -333,12 +333,21 @@ assistant_phase_source_changing_work() {
 
 assistant_phase_required_subagent_roles() {
     local file="$1"
-    local status mode qa_required source_changing
+    local status mode intensity risk task_type qa_required source_changing light_inline
     status="$(assistant_phase_status "$file" | tr '[:upper:]' '[:lower:]' || true)"
     mode="$(assistant_phase_subagent_mode "$file" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    intensity="$(assistant_phase_scalar_field "$file" "Controller intensity" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    risk="$(assistant_phase_scalar_field "$file" "Risk tier" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
+    task_type="$(assistant_phase_scalar_field "$file" "Task type" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true)"
     qa_required="$(assistant_phase_requires_qa_evaluator "$file" && printf yes || printf no)"
     source_changing="$(assistant_phase_source_changing_work "$file" "$status" && printf yes || printf no)"
-    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" -v qa_required="$qa_required" -v source_changing="$source_changing" '
+    light_inline=no
+    if [[ "$intensity" == "light" && "$risk" == "low" && "$task_type" != "security" && "$qa_required" == "no" ]] \
+        && grep -qE "^(#+[[:space:]]*)?Triaged as:[[:space:]]*small([[:space:]]|$)" "$file" 2>/dev/null \
+        && ! grep -qiE "^(#+[[:space:]]*)?(Harness capable|harness_capable):[[:space:]]*true([[:space:]]|$)" "$file" 2>/dev/null; then
+        light_inline=yes
+    fi
+    awk -v is_medium_plus="$(assistant_phase_is_medium_plus "$file" && printf yes || printf no)" -v status="$status" -v mode="$mode" -v light_inline="$light_inline" -v qa_required="$qa_required" -v source_changing="$source_changing" '
         function emit(role) {
             if (!seen[role]) {
                 seen[role] = 1
@@ -360,7 +369,7 @@ assistant_phase_required_subagent_roles() {
             }
         }
         BEGIN {
-            if (source_changing == "yes") {
+            if (source_changing == "yes" && light_inline != "yes") {
                 emit("Code Writer")
                 emit("Builder/Tester")
                 emit("Code Reviewer")
@@ -375,9 +384,9 @@ assistant_phase_required_subagent_roles() {
             if (mode ~ /^(delegated|direct_fallback)$/ && status ~ /(reviewing|documenting)/) emit("Code Reviewer")
             if (qa_required == "yes") emit("QA Evaluator")
         }
-        /^Required agents:[[:space:]]*$/ { in_required = 1; next }
+        /^Required agents:[[:space:]]*$/ { in_required = (light_inline != "yes"); next }
         /^Required agents:[[:space:]]*(.+)$/ {
-            scan($0)
+            if (light_inline != "yes") scan($0)
             next
         }
         in_required && /^[[:space:]]*-[[:space:]]+/ {

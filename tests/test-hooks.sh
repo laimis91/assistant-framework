@@ -3045,7 +3045,7 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: DOCUMENTING review complete but no metrics → blocks"; then
+if test_start "stop-review: DOCUMENTING review complete but no metrics → allows stop"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -3067,13 +3067,10 @@ TASK
     rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
 
     HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
-    if [[ $HOOK_EXIT -eq 0 ]] \
-        && is_valid_json "$HOOK_STDOUT" \
-        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
-        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "metrics"; then
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected DOCUMENTING to block without metrics"
+        fail "exit=$HOOK_EXIT, metrics are observability and must not block DOCUMENTING; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -3856,7 +3853,7 @@ if test_start "stop-review: Gemini, retry flag exists → exit 0 (loop guard)"; 
     rm -rf "$TEST_PROJECT/.gemini"
 fi
 
-if test_start "stop-review: Claude, review complete but no metrics → blocks"; then
+if test_start "stop-review: Claude, review complete but no metrics → allows stop"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -3875,14 +3872,14 @@ Status: BUILDING
 ### Final result
 - Result: CLEAN
 TASK
-    # No metrics file in test home — should trigger block
+    # No metrics file in test home — completion remains non-blocking.
     rm -rf "$TEST_AGENT_HOME/.claude/memory/metrics"
 
     HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
-    if [[ $HOOK_EXIT -eq 0 ]] && is_valid_json "$HOOK_STDOUT" && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "metrics"; then
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
         pass
     else
-        fail "exit=$HOOK_EXIT, expected {decision: block} mentioning metrics"
+        fail "exit=$HOOK_EXIT, metrics are observability and must not block completion; stdout='$HOOK_STDOUT'"
     fi
     rm -rf "$TEST_PROJECT/.claude"
 fi
@@ -4072,7 +4069,83 @@ TASK
     rm -rf "$TEST_PROJECT/.claude"
 fi
 
-if test_start "stop-review: Claude, DOCUMENTING medium missing Learning Controller → blocks"; then
+if test_start "stop-review: Claude, DOCUMENTING medium auto learning without evidence → allows stop"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Learning capture mode: auto
+Plan approval: yes
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 && -z "$HOOK_STDOUT" ]]; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, auto learning without lesson-bearing evidence should not require Learning Controller; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, DOCUMENTING medium auto learning with evidence → requires Learning Controller"; then
+    mkdir -p "$TEST_PROJECT/.claude"
+    cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
+# Task
+Status: DOCUMENTING
+Triaged as: medium
+Learning capture mode: auto
+Plan approval: yes
+User correction: Preserve custom hooks during native-profile migration.
+## Review Log
+### Spec Review #1
+- Result: PASS
+- Scope reviewed: approved plan and changed files
+- Missing acceptance criteria: none
+- Extra scope: none
+- Changed files mismatch: none
+- Verification evidence mismatch: none
+- Required fixes: none
+### Quality Review #1
+- Round: 1 of 10
+- Found this round: 0 must-fix, 0 should-fix, 0 nits
+- Rubric: correctness 4.0, code_quality 4.0, architecture 4.0, security 4.0, test_coverage 4.0
+- Weighted: 4.00
+### Final result
+- Result: CLEAN
+- Score progression: 4.00
+TASK
+
+    HOME="$TEST_AGENT_HOME" run_hook stop-review.sh claude
+    if [[ $HOOK_EXIT -eq 0 ]] \
+        && is_valid_json "$HOOK_STDOUT" \
+        && echo "$HOOK_STDOUT" | jq -e '.decision == "block"' >/dev/null 2>&1 \
+        && echo "$HOOK_STDOUT" | jq -r '.reason' | grep -q "no_learning_controller"; then
+        pass
+    else
+        fail "exit=$HOOK_EXIT, auto learning with concrete evidence should require Learning Controller; stdout='$HOOK_STDOUT'"
+    fi
+    rm -rf "$TEST_PROJECT/.claude"
+fi
+
+if test_start "stop-review: Claude, legacy DOCUMENTING medium missing Learning Controller → blocks"; then
     mkdir -p "$TEST_PROJECT/.claude" "$TEST_AGENT_HOME/.claude/memory/metrics"
     cat > "$TEST_PROJECT/.claude/task.md" <<'TASK'
 # Task
@@ -8207,24 +8280,23 @@ if test_start "codex strict install: workflow-guard installs and legacy post-too
     rm -rf "$INSTALL_TEST_HOME" "$CODEX_STUB_DIR"
 fi
 
-if test_start "codex default install: workflow hooks install and compaction hooks detect Codex by script path"; then
+if test_start "codex workflow profile: hooks install and compaction hooks detect Codex by script path"; then
     INSTALL_TEST_HOME=$(mktemp -d)
     CODEX_STUB_DIR=$(make_codex_version_stub "0.129.0")
     local_tmp_out=$(mktemp)
     local_tmp_err=$(mktemp)
     HOOK_EXIT=0
 
-    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex \
+    env HOME="$INSTALL_TEST_HOME" PATH="$CODEX_STUB_DIR:$PATH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --hook-profile workflow \
         > "$local_tmp_out" 2> "$local_tmp_err" || HOOK_EXIT=$?
 
     INSTALL_STDOUT=$(cat "$local_tmp_out")
     INSTALL_STDERR=$(cat "$local_tmp_err")
     rm -f "$local_tmp_out" "$local_tmp_err"
 
-    missing_default_hook=""
+    missing_workflow_hook=""
     for required_hook in \
         session-start.sh \
-        skill-router.sh \
         learning-signals.sh \
         workflow-enforcer.sh \
         workflow-guard.sh \
@@ -8236,7 +8308,7 @@ if test_start "codex default install: workflow hooks install and compaction hook
         workflow-phase-gates.sh \
         hook-runtime.sh; do
         if [[ ! -x "$INSTALL_TEST_HOME/.codex/hooks/assistant/$required_hook" ]]; then
-            missing_default_hook="$required_hook"
+            missing_workflow_hook="$required_hook"
             break
         fi
     done
@@ -8251,8 +8323,8 @@ if test_start "codex default install: workflow hooks install and compaction hook
 
     if [[ $HOOK_EXIT -ne 0 ]]; then
         fail "install exit=$HOOK_EXIT, stderr='$INSTALL_STDERR'"
-    elif [[ -n "$missing_default_hook" ]]; then
-        fail "Codex default install did not create executable $missing_default_hook"
+    elif [[ -n "$missing_workflow_hook" ]]; then
+        fail "Codex workflow profile did not create executable $missing_workflow_hook"
     elif [[ -n "$missing_workflow_guard_module" ]]; then
         fail "Codex default install did not copy workflow-guard.d/$missing_workflow_guard_module"
     elif [[ ! -f "$INSTALL_TEST_HOME/.codex/hooks/assistant/workflow-phase-gates.d/subagent-evidence.sh" ]]; then
@@ -8270,9 +8342,9 @@ if test_start "codex default install: workflow hooks install and compaction hook
             preCompact: ([.hooks.PreCompact[]?.hooks[]?.command?] | any(. == ($command_dir + "/pre-compress.sh"))),
             postCompact: ([.hooks.PostCompact[]?.hooks[]?.command?] | any(. == ($command_dir + "/post-compact.sh")))
         }
-        | .sessionStart and .skillRouter and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop and .preCompact and .postCompact
+        | .sessionStart and (.skillRouter | not) and .learningSignals and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop and .preCompact and .postCompact
     ' "$INSTALL_TEST_HOME/.codex/hooks.json" >/dev/null 2>&1; then
-        fail "Codex default hooks.json did not register workflow/delegation hooks"
+        fail "Codex workflow hooks.json did not register workflow/delegation hooks without duplicating native skill routing"
     else
         mkdir -p "$TEST_PROJECT/.codex" "$INSTALL_TEST_HOME/.codex"
         echo -e "# Task\nStatus: BUILDING\nStep: unique installed codex compaction body" > "$TEST_PROJECT/.codex/task.md"
@@ -9499,7 +9571,7 @@ EOF
     rm -f "$TEST_PROJECT/.claude/task.md"
 fi
 
-if test_start "workflow-enforcer: DOCUMENTING with review complete but no metrics → includes metrics gate warning"; then
+if test_start "workflow-enforcer: DOCUMENTING with review complete but no metrics → includes optional notice"; then
     mkdir -p "$TEST_PROJECT/.claude"
     cat > "$TEST_PROJECT/.claude/task.md" <<'EOF'
 Task: Runtime metrics gate
@@ -9539,7 +9611,9 @@ EOF
         && echo "$HOOK_STDOUT" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1 \
         && echo "$HOOK_STDOUT" | grep -q "Review gate complete: yes" \
         && echo "$HOOK_STDOUT" | grep -q "Metrics today: no" \
-        && echo "$HOOK_STDOUT" | grep -q "WARNING: Metrics gate incomplete"; then
+        && echo "$HOOK_STDOUT" | grep -q "OPTIONAL METRICS:" \
+        && echo "$HOOK_STDOUT" | grep -q "Metrics are non-blocking observability" \
+        && ! echo "$HOOK_STDOUT" | grep -q "WARNING: Metrics gate incomplete"; then
         pass
     else
         fail "exit=$HOOK_EXIT, stdout='$HOOK_STDOUT'"

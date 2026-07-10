@@ -24,3 +24,13 @@ assistant_phase_has_metrics_today() {
     [[ -f "$metrics_file" ]] || return 1
     grep -q "\"date\":\"$today\"" "$metrics_file" 2>/dev/null
 }
+
+assistant_phase_metrics_status() {
+    if assistant_phase_has_metrics_today; then
+        printf 'recorded\n'
+    else
+        # Metrics are optional observability. Missing configuration, policy
+        # permission, directory, or today's entry never blocks completion.
+        printf 'missing_optional\n'
+    fi
+}

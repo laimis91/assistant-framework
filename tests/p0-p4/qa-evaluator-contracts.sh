@@ -87,20 +87,19 @@ else
     fail "subagent-monitor.sh must constrain qa-evaluator read-only and map it to QAEvaluator separately from Reviewer"
 fi
 
-test_start "Codex installer generated AGENTS text and table include qa-evaluator"
+test_start "Codex installer keeps AGENTS lean and installs read-only qa-evaluator"
 INSTALL_HOME_QA="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_QA"
 if HOME="$INSTALL_HOME_QA" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-qa-evaluator.out 2>/tmp/p0p4-install-qa-evaluator.err; then
     agents_file="$INSTALL_HOME_QA/.codex/AGENTS.md"
-    if grep -Fq "code-mapper, code-writer, builder-tester, architect, explorer, code-reviewer, reviewer, qa-evaluator" "$agents_file" \
-        && grep -Fq "independent QA acceptance evaluation by qa-evaluator after build/test and code-review evidence when applicable" "$agents_file" \
-        && grep -Fq "code-reviewer, qa-evaluator; reviewer remains compatibility routing" "$agents_file" \
-        && grep -Fq "| qa-evaluator | read-only | Acceptance, Done Contract, and QA evaluation |" "$agents_file" \
+    if grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
+        && ! grep -Fq "| qa-evaluator |" "$agents_file" \
+        && ! grep -Fq "independent QA acceptance evaluation by qa-evaluator" "$agents_file" \
         && [[ -f "$INSTALL_HOME_QA/.codex/agents/qa-evaluator.toml" ]] \
         && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME_QA/.codex/agents/qa-evaluator.toml"; then
         pass
     else
-        fail "generated Codex AGENTS.md or installed agent missing qa-evaluator role text/table/read-only config"
+        fail "Codex install must keep standing AGENTS guidance lean and install the read-only qa-evaluator config"
     fi
 else
     fail "Codex install failed; see /tmp/p0p4-install-qa-evaluator.err"
@@ -112,8 +111,9 @@ missing_review_terms=()
 for file_and_term in \
     "$review_dir/SKILL.md::optional independent QA evaluation loop" \
     "$review_dir/SKILL.md::QA evaluation runs after code-review/build evidence" \
-    "$review_dir/SKILL.md::Load \`references/qa-evaluation-loop.md\` before dispatching QAEvaluator" \
-    "$review_dir/SKILL.md::that reference owns the detailed algorithm" \
+    "$review_dir/SKILL.md::Load \`references/qa-evaluation-loop.md\`" \
+    "$review_dir/references/review-loop.md::load \`qa-evaluation-loop.md\` before dispatching QAEvaluator" \
+    "$review_dir/references/review-loop.md::That reference owns the detailed QA algorithm" \
     "$review_dir/references/qa-evaluation-loop.md::while round <= 10" \
     "$review_dir/references/qa-evaluation-loop.md::Round 10 is terminal" \
     "$review_dir/references/qa-evaluation-loop.md::does not replace code-reviewer" \
@@ -180,6 +180,7 @@ fi
 
 test_start "workflow records separate Code Reviewer and QA Evaluator evidence"
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+review_qa_router="$workflow_dir/references/review-qa-router.md"
 missing_workflow_terms=()
 for file_and_term in \
     "$workflow_dir/contracts/handoffs.yaml::to: QAEvaluator" \
@@ -191,8 +192,8 @@ for file_and_term in \
     "$workflow_dir/contracts/phase-gates.yaml::R_QA_EVALUATION" \
     "$workflow_dir/contracts/phase-gates.yaml::Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence" \
     "$workflow_dir/contracts/phase-gates.yaml::When qa_evaluation_mode == required: required_agents includes QA Evaluator" \
-    "$workflow_dir/references/phases.md::Stage 3: QA Evaluation" \
-    "$workflow_dir/references/phases.md::QA Evaluation result must exist when qa_evaluation_mode=required." \
+    "$review_qa_router::Stage 3 - QA Evaluation" \
+    "$review_qa_router::QA Evaluation result must exist when qa_evaluation_mode=required." \
     "$workflow_dir/references/subagent-dispatch.md::QA Evaluator" \
     "$workflow_dir/references/subagent-dispatch.md::QA evidence gate" \
     "$workflow_dir/references/subagent-roles.md::QA Evaluator dispatch" \
@@ -245,10 +246,9 @@ require_terms "workflow QA output mode" "$workflow_dir/contracts/output.yaml" \
 test_start "workflow and review QA trigger wording is mirrored"
 qa_trigger_wording_missing=()
 for file in \
-    "$workflow_dir/SKILL.md" \
     "$workflow_dir/contracts/input.yaml" \
     "$workflow_dir/contracts/phase-gates.yaml" \
-    "$workflow_dir/references/phases.md" \
+    "$workflow_dir/references/review-qa-router.md" \
     "$workflow_dir/references/plan-harness-appendix.md" \
     "$workflow_dir/references/subagent-dispatch.md" \
     "$workflow_dir/references/plan-template.md" \

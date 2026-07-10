@@ -48,7 +48,9 @@ plan_harness_appendix="$workflow_dir/references/plan-harness-appendix.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
 task_journal_harness_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
 phases_ref="$workflow_dir/references/phases.md"
+build_worker_ref="$workflow_dir/references/build-worker-protocol.md"
 harness_ref="$workflow_dir/references/harness-controller.md"
+harness_runtime_ref="$workflow_dir/references/harness-runtime-artifacts.md"
 missing_typed_artifact_terms=()
 for term in \
     "artifact_reference_protocol:" \
@@ -114,23 +116,28 @@ for term in \
         missing_typed_artifact_terms+=("task-journal-harness-appendix.md/task-journal-template.md: $term")
     fi
 done
+if ! grep -Fq -- "Artifact Reference Ledger refs before task packets" "$phases_ref"; then
+    missing_typed_artifact_terms+=("phases.md: Artifact Reference Ledger refs before task packets")
+fi
 for term in \
-    "Artifact Reference Ledger refs before task packets" \
     'typed `artifact_refs`' \
     "changed_files, verification_evidence, pivot_restart_decision, and plan_deviation refs"; do
-    if ! grep -Fq -- "$term" "$phases_ref"; then
-        missing_typed_artifact_terms+=("phases.md: $term")
+    if ! p0p4_contains_text "$build_worker_ref" "$term"; then
+        missing_typed_artifact_terms+=("build-worker-protocol.md: $term")
     fi
 done
 for term in \
-    "## Typed Artifact References" \
+    "## Artifact Reference Ledger" \
     "Producer responsibility: create or update the artifact" \
     'Consumer responsibility: validate `schema_or_contract` and' \
     "Done Contract, Harness Recipe, Harness Run State, Trace"; do
-    if ! grep -Fq -- "$term" "$harness_ref"; then
-        missing_typed_artifact_terms+=("harness-controller.md: $term")
+    if ! p0p4_contains_text "$harness_runtime_ref" "$term"; then
+        missing_typed_artifact_terms+=("harness-runtime-artifacts.md: $term")
     fi
 done
+if ! grep -Fq -- "references/harness-runtime-artifacts.md" "$harness_ref"; then
+    missing_typed_artifact_terms+=("harness-controller.md: references/harness-runtime-artifacts.md")
+fi
 if [[ "${#missing_typed_artifact_terms[@]}" -eq 0 ]]; then
     pass
 else
