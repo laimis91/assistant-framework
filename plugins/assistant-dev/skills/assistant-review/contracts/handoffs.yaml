@@ -28,6 +28,60 @@ worker_status_protocol:
     - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_progression or score_entry; selected_domain_rubrics and domain_quality_scores are required only when scoped domain rubrics are selected. QA evaluation does not replace Reviewer/code-reviewer findings."
     - "Reviewer and QAEvaluator may return pivot_restart_signal for PIVOT, STAGNATION, repeated DRIFT, or repeated REGRESSION; the orchestrator owns the final pivot_restart_decision."
 
+# Boundary records point to canonical handoff fields without duplicating them.
+# Dispatch and return validation are separate load boundaries so the Reviewer
+# does not receive its own return schema in the worker context.
+dispatch_context_bundles:
+  - name: fresh_reviewer_context
+    phase: REVIEW_STEP
+    selected_dispatch_context_ref: "handoffs.orchestrator_to_reviewer.context_fields"
+    activation: "Resolve only when a Reviewer pass begins. Standalone review first produces Spec Review PASS against user request/scope without requiring a task journal; workflow-composed review consumes carried Spec PASS and build/test refs. Never resolve at assistant-review entry."
+    review_evidence_pointer:
+      required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
+      validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
+    worker_references:
+      - path: references/review-principles.md
+        sections: [all]
+      - path: references/review-checklists.md
+        sections:
+          - name: Semantic Contract Review Checklist
+            condition: "semantic_contract_review_required is true"
+          - name: Behavioral Contract Review Checklist
+            condition: "behavioral_contract_review_required is true"
+          - name: Agentic Loop Safety Checklist
+            condition: "agentic_loop_safety_review_required is true"
+        exclusion: "Every untriggered checklist section is excluded; include none when all three flags are false."
+      - path: references/review-rubric.md
+        sections: [all]
+        condition: "scope_size in [medium, large] or rubric_required is true"
+    direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
+    excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
+    return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
+    budget_words: 5000
+    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5000 words."
+
+  - name: qa_evaluator_context
+    phase: QA_EVALUATION_STEP
+    selected_dispatch_context_ref: "handoffs.orchestrator_to_qa_evaluator.context_fields"
+    activation: "Resolve only when qa_evaluation_mode is required and build/test plus Code Reviewer or Reviewer compatibility evidence exists."
+    return_schema_policy: "Defer orchestrator_to_qa_evaluator.return_fields until qa_evaluator_return_validation after a QA result exists."
+
+return_validation_bundles:
+  - name: reviewer_return_validation
+    phase: REVIEW_STEP
+    return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
+    activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
+    validation: "Validate status, round, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    dispatch_context_excluded: true
+
+  - name: qa_evaluator_return_validation
+    phase: QA_EVALUATION_STEP
+    return_schema_ref: "handoffs.orchestrator_to_qa_evaluator.return_fields"
+    activation: "Resolve only after a required QA result exists and before the QA exit decision."
+    validation: "Validate the canonical QAEvaluator return fields without replacing code-review evidence."
+    dispatch_context_excluded: true
+
 handoffs:
 
   # ─────────────────────────────────────────────
@@ -40,6 +94,36 @@ handoffs:
     notes: "Fresh Reviewer dispatch each round for medium+ scope when subagent_execution_mode=delegated. For direct_fallback, preserve the same fields as local review evidence without spawning. For trivial/small, self-review is acceptable."
 
     context_fields:
+      - name: review_preparation_mode
+        type: enum
+        required: true
+        enum_values: [standalone, workflow_composed]
+        description: "Whether preparation was created from the user request/review scope or consumed from carried workflow evidence"
+
+      - name: spec_review_pass_ref
+        type: string
+        required: true
+        description: "Pointer to the current Spec Review PASS recorded before Reviewer dispatch"
+        validation: "Standalone points to Spec Review against user request/review scope; workflow_composed points to carried Spec PASS. FAIL or missing evidence blocks dispatch."
+
+      - name: build_test_verification_ref
+        type: object
+        required: true
+        description: "Current real build/test evidence, or explicit not_applicable only when no source fix/build is in scope"
+        validation: "After any source fix, every subsequent Reviewer dispatch has a current passed evidence_ref and not_applicable is invalid."
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: conditional
+            condition: "source fix/build is in scope or a source fix occurred"
+            description: "Pointer to current real passed build/test evidence"
+          - name: not_applicable
+            type: enum
+            required: conditional
+            condition: "no source fix/build is in scope and evidence_ref is absent"
+            enum_values: [audit_only, read_only, no_build_scope]
+            description: "Explicit scoped reason; invalid after any source fix"
+
       - name: review_material_snapshot
         type: object
         required: true

@@ -28,14 +28,14 @@ This document captures the source-grounded simplification strategy for Assistant
 `install.sh` now supports:
 
 - `--hook-profile minimal` — low-friction profile. Installs skill routing plus session/compaction context hooks.
-- `--hook-profile workflow` — Codex default. Installs the workflow/delegation prompt, guard, subagent monitor, stop-review, and context hooks needed for ask-once delegation behavior.
+- `--hook-profile workflow` — opt-in workflow/delegation enforcement, guard, subagent monitor, stop-review, and context hooks.
 - `--hook-profile strict` — full legacy enforcement hook stack.
 - `--hook-profile none` — no hooks.
 - `--no-hooks` — backward-compatible alias for `none`.
 
 Default profile by agent:
 
-- Codex: `workflow`
+- Codex: `none` (native skill routing and runtime behavior)
 - Claude/Gemini: `minimal`
 
 Minimal profile registers only:
@@ -57,11 +57,23 @@ This removes the highest-friction default hooks from normal installs:
 - `subagent-monitor.sh`
 - `session-end.sh`
 
-Codex's `workflow` profile intentionally keeps the workflow/delegation hooks as the default because Codex subagent spawning depends on explicit user authorization and runtime lifecycle evidence. Users who want the lowest-friction Codex setup can still opt out with `./install.sh --agent codex --hook-profile minimal`.
+For Codex, `minimal` is an explicit compatibility option. `workflow` and `strict` are explicit enforcement options for projects that need deterministic lifecycle gates. The default and both enforcement profiles rely on native Codex skill routing and do not register `skill-router.sh`; Claude and Gemini defaults are unchanged.
+
+### Safe Codex migration
+
+Reinstalling with the plain Codex command migrates an older hook-enabled default to native mode. The installer removes only known Assistant Framework commands from `~/.codex/hooks.json`, preserves unrelated custom hooks, and writes silent executable shims for framework entrypoints that the current Codex process may still have cached. Restart Codex after migration. Codex execution-policy rules continue to install independently from hooks.
 
 ### Codex hook feature flag
 
 Codex `hooks = true` is now enabled only when installing a non-`none` hook profile. `--no-hooks` / `--hook-profile none` no longer enables hook infrastructure.
+
+### One primary compatibility route
+
+The retained compatibility router now emits exactly one highest-priority skill match. Equal priorities use stable discovery order, and required-input hints include only top-level fields from `contracts/input.yaml`, not nested object members. This keeps Claude/Gemini compatibility routing deterministic without duplicating native Codex routing.
+
+### Generated guidance budget
+
+Fresh Codex installs generate compact Assistant Framework and memory blocks totaling fewer than 900 words. The blocks retain native skill routing, consent immediately before a real subagent spawn, medium+ plan approval, state-artifact ownership, verification/review, `memory_context`, and no-secrets rules. Repeated role prose, skill/agent inventories, lifecycle repetition, and unconditional reflection or metrics ceremony were removed. Installer-owned marker replacement continues to preserve user-authored sections outside those markers.
 
 ### Phase gate source of truth cleanup
 

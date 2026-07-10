@@ -3,16 +3,20 @@
 Write to `{agent_state_dir}/task.md` in the project root when a local state directory is configured and policy allows. If none is safe, keep the same content in the response/plan packet. This framework-owned ignored artifact is the task source of truth, survives compression/continuation when persisted, and may be updated by the orchestrator.
 
 ## When to create
-- Any task that enters clarification wait: during Discover, before printing clarification questions or the wait message
-- Medium+: during Discover, before leaving Discover even when no clarification wait is needed
-- Small tasks without clarification wait: optional unless the task is multi-step
+- When `workflow_state_mode=journal`: during Discover before the first wait,
+  delegation handoff, cross-session/compaction boundary, or strict/harness/QA gate
+- Clarification waits use journal mode when local state is available and allowed;
+  otherwise carry the same state inline before waiting
+- Medium+ size alone does not require a task journal; `workflow_state_mode=inline`
+  keeps the approved plan and evidence in the active packet
 
 ## When to update
 - When clarification questions are asked, answered, or resolved via explicit `defaults`
 - After each Build step: Progress, Artifact Registry, Milestones
 - After key decisions, new user constraints, review passes, verification summary, or user review feedback
 - After harness-capable events, Pivot/Restart Decisions, typed artifact refs, or QA results when applicable
-- During Document, after review/build/user-correction evidence is checked for durable lessons
+- During Document, after lesson-bearing evidence is checked when
+  `learning_capture_mode=required` or auto activates
 
 ## Template
 
@@ -24,6 +28,9 @@ Triaged as: [small | medium | large | mega]
 Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
+Workflow state mode: [inline | journal]
+Manual verification mode: [not_required | optional | required]
+Learning capture mode: [auto | not_required | required]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification confidence: [low | medium | high]
@@ -140,7 +147,13 @@ do not start the next slice until the current one is `VERIFIED`
 - [test]: [what it verifies]
 
 ### Manual test instructions
-1. [step-by-step for the user to verify]
+[N/A unless manual_verification_mode is optional/required; otherwise actionable steps]
+
+### Manual Verification Result
+- Mode: [not_required | optional | required]
+- Trigger: [explicit_request | subjective_or_ui | external_effect | destructive_or_migration | automated_verification_inadequate | N/A]
+- Result: [passed | optional_not_run | not_required | blocked]
+- Evidence: [command, observation, user report, external result, or N/A]
 
 ### Known limitations
 - [anything not covered or deferred]
@@ -219,6 +232,7 @@ do not start the next slice until the current one is `VERIFIED`
 ## Document Log
 
 ### Learning Controller
+[include only when learning_capture_mode=required or auto found concrete lesson-bearing evidence]
 - Memory trend checked: [checked | backend_unavailable | policy_disallowed | not_configured]
 - Learning evidence reviewed:
   - [review_finding | build_test_failure | user_correction | memory_trend | none]: [source reference] — [summary, or none-with-reason]
@@ -240,13 +254,13 @@ do not start the next slice until the current one is `VERIFIED`
 
 ## Lifecycle
 
-1. **Create** during Discover for clarification waits and all medium+ tasks.
+1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline.
 2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** caps are maximums, not quotas. Waiting state stays `DISCOVERING`; explicit answers clear unresolved topics, while explicit `defaults` also sets `Clarification defaults applied: true`.
 4. **Decompose/Plan** persists the slice manifest for medium+ work, captures approval, then updates `Plan approval`.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, and Slice Verification Ledger before the next slice.
 6. **Review** runs Spec Review, then Quality Review, fixing/re-testing/re-reviewing until clean or routed by Pivot/Restart; fill Final Result.
-7. **Document/Handoff** fills Verification Summary, Learning Controller, Review Notes, and user manual-test notes.
+7. **Document/Handoff** fills Verification Summary, conditional Manual Verification Result, Review Notes, and Learning Controller only when its mode/evidence activates.
 8. **Done** sets `Status: DONE`, records only evidence-backed durable lessons when allowed, and leaves the ignored state file unless cleanup is requested.
 
 ## Rules

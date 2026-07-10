@@ -3,7 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "Codex installed hooks execute from installed location"
+test_start "Codex workflow-profile hooks execute from installed location"
 HOOK_SMOKE_HOME="$(mktemp -d)"
 HOOK_SMOKE_PROJECT="$(mktemp -d)"
 p0p4_register_cleanup "$HOOK_SMOKE_HOME" "$HOOK_SMOKE_PROJECT"
@@ -51,7 +51,7 @@ p0p4_installed_hook_payload() {
     esac
 }
 
-if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err"; then
+if p0p4_install_codex_fixture "$HOOK_SMOKE_HOME" "$install_out" "$install_err" --hook-profile workflow; then
     mkdir -p "$HOOK_SMOKE_PROJECT/.codex"
     cat > "$HOOK_SMOKE_PROJECT/.codex/task.md" <<'TASK'
 Task: stale completed smoke task
@@ -78,9 +78,9 @@ TASK
             subagentStart: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh"))),
             subagentStop: ([.hooks.SubagentStop[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
         }
-        | .sessionStart and .skillRouter and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
+        | .sessionStart and (.skillRouter | not) and .workflowEnforcer and .workflowGuard and .stopReview and .subagentStart and .subagentStop
     ' "$hooks_file" >/dev/null; then
-        smoke_failed="plain Codex install did not register the workflow/delegation hook set"
+        smoke_failed="Codex workflow profile did not register the workflow/delegation hook set without duplicating native skill routing"
     else
         while IFS=$'\t' read -r event command; do
             if p0p4_hook_command_seen "$command"; then
@@ -124,7 +124,6 @@ TASK
     fi
 
     session_start="$installed_hooks_dir/session-start.sh"
-    skill_router="$installed_hooks_dir/skill-router.sh"
     workflow_enforcer="$installed_hooks_dir/workflow-enforcer.sh"
     workflow_guard="$installed_hooks_dir/workflow-guard.sh"
     stop_review="$installed_hooks_dir/stop-review.sh"
@@ -132,7 +131,7 @@ TASK
     post_compact="$installed_hooks_dir/post-compact.sh"
 
     if [[ -z "$smoke_failed" ]]; then
-        for required_path in "$session_start" "$skill_router" "$workflow_enforcer" "$workflow_guard" "$stop_review" "$subagent_monitor" "$post_compact"; do
+        for required_path in "$session_start" "$workflow_enforcer" "$workflow_guard" "$stop_review" "$subagent_monitor" "$post_compact"; do
             if [[ ! -x "$required_path" ]]; then
                 smoke_failed="required Codex workflow hook is not executable: $required_path"
                 break
@@ -177,19 +176,6 @@ TASK
             || "$post_compact_context" == *"stale completed smoke task"* \
             || "$post_compact_context" == *"This completed task text must not be injected"* ]]; then
             smoke_failed="installed post-compact.sh injected completed task journal state"
-        fi
-    fi
-
-    if [[ -z "$smoke_failed" ]]; then
-        router_out="$(mktemp)"
-        router_err="$(mktemp)"
-        router_exit=0
-        env HOME="$HOOK_SMOKE_HOME" CODEX_PROJECT_DIR="$HOOK_SMOKE_PROJECT" bash "$skill_router" \
-            >"$router_out" 2>"$router_err" <<< '{"prompt":"please build a feature with the workflow process","hook_event_name":"UserPromptSubmit"}' || router_exit=$?
-        router_stdout="$(cat "$router_out")"
-        rm -f "$router_out" "$router_err"
-        if [[ "$router_exit" -ne 0 || "$router_stdout" != *"assistant-workflow"* ]]; then
-            smoke_failed="installed skill-router.sh did not route assistant-workflow; exit=$router_exit stdout='$router_stdout'"
         fi
     fi
 

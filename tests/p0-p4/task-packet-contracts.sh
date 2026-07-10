@@ -50,10 +50,11 @@ else
     fail "phase-gates.yaml missing executable task packet gates: ${missing_phase_gate_terms[*]}"
 fi
 
-test_start "workflow phases enforce medium slice verification loop"
+test_start "workflow build worker protocol enforces medium slice verification loop"
 missing_slice_phase_terms=()
+build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    "**For medium+ tasks with slices:** execute one slice at a time" \
+    "For medium+ tasks with slices, execute one slice at a time" \
     "Load the approved task packet for the slice, including slice_id, observable increment, deliverable type, files, acceptance criteria, verification command, expected success signal, evidence to record, and deviation/rollback rule" \
     "Confirm prior slice status is \`VERIFIED\` before advancing" \
     "Check each acceptance criterion from the slice manifest independently" \
@@ -61,14 +62,17 @@ for term in \
     "Run a small self-check/local sanity check" \
     "Mark the slice \`VERIFIED\` only after all criteria pass and evidence is recorded" \
     "Only proceed to the next slice after the current one is fully verified"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_slice_phase_terms+=("$term")
     fi
 done
+if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    missing_slice_phase_terms+=("phases.md missing build-worker-protocol loader")
+fi
 if [[ "${#missing_slice_phase_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "phases.md missing per-slice verification loop terms: ${missing_slice_phase_terms[*]}"
+    fail "build-worker-protocol.md missing per-slice verification loop terms: ${missing_slice_phase_terms[*]}"
 fi
 
 test_start "workflow task journal template includes slice verification ledger fields"
@@ -632,6 +636,10 @@ workflow_sync_pairs=(
     "skills/assistant-workflow/contracts/phase-gates.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"
     "skills/assistant-workflow/contracts/handoffs.yaml|plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml"
     "skills/assistant-workflow/references/phases.md|plugins/assistant-dev/skills/assistant-workflow/references/phases.md"
+    "skills/assistant-workflow/references/build-worker-protocol.md|plugins/assistant-dev/skills/assistant-workflow/references/build-worker-protocol.md"
+    "skills/assistant-workflow/references/review-qa-router.md|plugins/assistant-dev/skills/assistant-workflow/references/review-qa-router.md"
+    "skills/assistant-workflow/references/harness-runtime-artifacts.md|plugins/assistant-dev/skills/assistant-workflow/references/harness-runtime-artifacts.md"
+    "skills/assistant-workflow/references/completion-controller.md|plugins/assistant-dev/skills/assistant-workflow/references/completion-controller.md"
     "skills/assistant-workflow/references/plan-template.md|plugins/assistant-dev/skills/assistant-workflow/references/plan-template.md"
     "skills/assistant-workflow/references/subagent-dispatch.md|plugins/assistant-dev/skills/assistant-workflow/references/subagent-dispatch.md"
     "skills/assistant-workflow/references/task-journal-template.md|plugins/assistant-dev/skills/assistant-workflow/references/task-journal-template.md"
@@ -770,14 +778,14 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
     "skills/assistant-workflow/references/phases.md|\`Reviewer\` only as compatibility routing"
     "skills/assistant-workflow/references/phases.md|subagent_execution_mode=delegated"
-    "skills/assistant-workflow/references/phases.md|Direct fallback mode"
-    "skills/assistant-workflow/references/phases.md|Silent fallback cannot complete"
+    "skills/assistant-workflow/references/build-worker-protocol.md|Direct fallback mode"
+    "skills/assistant-workflow/references/build-worker-protocol.md|Silent fallback cannot complete"
 )
 for pair in "${workflow_subagent_gate_terms[@]}"; do
     IFS='|' read -r root_surface term <<< "$pair"
     plugin_surface="plugins/assistant-dev/$root_surface"
     for surface in "$root_surface" "$plugin_surface"; do
-        if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$surface"; then
+        if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
             missing_workflow_subagent_gate+=("$surface: $term")
         fi
     done
@@ -2099,15 +2107,15 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::B_CODE_WRITER_BLOCKER_ROUTING" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::R_PIVOT_RESTART_DECISION" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::INV_PIVOT_RESTART_REAPPROVAL" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::## Pivot/Restart Controller" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md::Round 10 remains terminal" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Code Writer unexpected blockers" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::## Pivot/Restart Controller" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::Round 10 remains terminal" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md::Code Writer Unexpected Blockers" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::## Pivot/Restart Log" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::pivot_restart_decision"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if ! p0p4_contains_text "$file" "$term"; then
         missing_pivot_restart_terms+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
@@ -2130,7 +2138,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::scope_conflict" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::tool_environment" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::tdd_red_missing" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::debugging, explorer, architect, candidate_search, replan, restart" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md::debugging, explorer, architect, candidate_search, replan, restart" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md::Unexpected blockers must be classified" \
     "$FRAMEWORK_DIR/agents/codex/code-writer.toml::Unexpected blocker protocol" \
     "$FRAMEWORK_DIR/agents/codex/code-writer.toml::Do not widen scope" \
@@ -2138,7 +2146,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/agents/claude/code-writer.md::Do not widen scope"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if ! p0p4_contains_text "$file" "$term"; then
         missing_codewriter_blocker_terms+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
@@ -2152,7 +2160,8 @@ test_start "assistant-review stagnation and QA pivot escalate to pivot restart d
 missing_review_pivot_terms=()
 for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::pivot_restart_signal" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::orchestrator records pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::orchestrator records \`pivot_restart_decision\`" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::orchestrator records pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::- name: pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::ESCALATE_PIVOT_RESTART" \

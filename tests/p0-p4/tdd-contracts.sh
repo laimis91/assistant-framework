@@ -43,22 +43,52 @@ else
     fail "Builder/Tester prompts missing TDD ownership evidence terms: ${missing_builder_tester_terms[*]}"
 fi
 
-test_start "workflow phases document Builder RED Code Writer GREEN Builder verification"
+test_start "workflow build worker protocol documents Builder RED Code Writer GREEN Builder verification"
 missing_tdd_phase_terms=()
+build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    'Print: `>> Dispatching Builder/Tester' \
-    'RED evidence` (TDD active)' \
+    "## TDD Sandwich" \
     "Builder/Tester RED: write one failing behaviour test, run it, verify right failure reason, and return RED evidence." \
     "Code Writer GREEN: implement minimal production code only after RED evidence is present." \
     "Builder/Tester VERIFY/REFACTOR-SAFETY: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures."; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
 done
+if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+    missing_tdd_phase_terms+=("phases.md missing build-worker-protocol loader")
+fi
 if [[ "${#missing_tdd_phase_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "phases.md missing TDD sandwich ownership terms: ${missing_tdd_phase_terms[*]}"
+    fail "build-worker-protocol.md missing TDD sandwich ownership terms: ${missing_tdd_phase_terms[*]}"
+fi
+
+test_start "workflow defaults TDD active for behavior-changing work"
+missing_tdd_default_terms=()
+workflow_input="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"
+workflow_plan="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
+workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+for file_and_term in \
+    "$workflow_input::Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors" \
+    "$workflow_input::unknown-cause bugfix -> run assistant-debugging first, then infer true once failure mechanism is understood" \
+    "$workflow_input::non-behavior docs/config/spike/prototype/generated-code/layout-only work -> false with recorded reason" \
+    "$workflow_input::False is allowed only with an explicit not-feasible or non-behavior exception reason" \
+    "$workflow_plan::tdd_applies: [true/false]" \
+    "$workflow_plan::TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason" \
+    "$build_worker_ref::Workflow sets TDD active by default for behavior changes, bugfixes with RED-ready reproduction/root-cause evidence, and interface-affecting refactors" \
+    "$build_worker_ref::When \`tdd_mode=true\` or \`tdd_applies=true\`, use the TDD sandwich per step" \
+    "$workflow_skill::Behavior changes default tests-first or carry explicit validation in the same Build step."; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        missing_tdd_default_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#missing_tdd_default_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow TDD default activation guard failed: ${missing_tdd_default_terms[*]}"
 fi
 
 test_start "TDD skill documents orchestrated ownership and required RED evidence"

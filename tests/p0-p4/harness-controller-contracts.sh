@@ -23,8 +23,33 @@ require_terms() {
     fi
 }
 
+require_normalized_terms() {
+    local label="$1"
+    local file="$2"
+    shift 2
+
+    local normalized_content
+    normalized_content="$(tr '\n' ' ' <"$file" | sed 's/[[:space:]][[:space:]]*/ /g')"
+
+    local missing=()
+    local term
+    for term in "$@"; do
+        if [[ "$normalized_content" != *"$term"* ]]; then
+            missing+=("${file#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+
+    if [[ "${#missing[@]}" -eq 0 ]]; then
+        pass
+    else
+        fail "$label missing terms: ${missing[*]}"
+    fi
+}
+
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+workflow_controller_ref="$workflow_dir/references/workflow-controller.md"
 harness_ref="$workflow_dir/references/harness-controller.md"
+harness_runtime_ref="$workflow_dir/references/harness-runtime-artifacts.md"
 plan_appendix="$workflow_dir/references/plan-harness-appendix.md"
 task_journal_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
 
@@ -55,20 +80,29 @@ fi
 test_start "workflow loads harness reference only for relevant medium+ work"
 missing_load_terms=()
 for term in \
-    "Medium+ harness-capable work has an accepted Done Contract and Harness Recipe before Build." \
-    'Ordinary medium+ workflow tasks default to `harness_capable=false`' \
-    "Load \`references/harness-controller.md\` only when medium+ work is harness-capable"; do
+    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation." \
+    "Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply." \
+    "Load \`references/harness-controller.md\` only after \`references/workflow-controller.md\` or carried-forward phase state establishes \`harness_capable=true\`."; do
     if ! grep -Fq -- "$term" "$workflow_dir/SKILL.md"; then
         missing_load_terms+=("SKILL.md: $term")
     fi
 done
 for term in \
     "Treat \`harness_capable\` as false unless" \
-    "For medium+ harness-capable work, load \`references/harness-controller.md\`" \
-    "has compact refs for an accepted Done Contract, selected Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger before dispatching Code Writer or Builder/Tester" \
-    "references/task-journal-harness-appendix.md" \
-    'done_contract_ref' \
-    'harness_recipe_ref'; do
+    "\`references/harness-controller.md\` is loaded only after" \
+    "\`harness_capable=true\` is established" \
+    "Do not load \`references/harness-controller.md\` for ordinary medium work" \
+    "When harness routing applies, \`references/harness-controller.md\` owns Done"; do
+    if ! grep -Fq -- "$term" "$workflow_controller_ref"; then
+        missing_load_terms+=("workflow-controller.md: $term")
+    fi
+done
+if ! grep -Fq -- "references/harness-runtime-artifacts.md" "$harness_ref"; then
+    missing_load_terms+=("harness-controller.md: references/harness-runtime-artifacts.md")
+fi
+for term in \
+    "When \`harness_capable=true\`, load \`references/harness-controller.md\` plus \`references/plan-harness-appendix.md\`" \
+    "compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets"; do
     if ! grep -Fq -- "$term" "$workflow_dir/references/phases.md"; then
         missing_load_terms+=("phases.md: $term")
     fi
@@ -117,6 +151,38 @@ if rg -n 'size=medium\+?[[:space:]]*->[[:space:]]*strict|strict (for|when|becaus
 else
     pass
 fi
+
+test_start "workflow controller preserves ordinary defaults and harness boundary"
+require_terms "workflow controller defaults" "$workflow_controller_ref" \
+    'ordinary medium+ source-changing work defaults to' \
+    '`controller_intensity=standard`, `harness_capable=false`, and' \
+    '`qa_evaluation_mode=not_required`' \
+    "Do not infer \`strict\`, \`harness_capable=true\`, or required QA from" \
+    "size=medium+ or delegation alone" \
+    'Treat `harness_capable` as false unless' \
+    'Treat `qa_evaluation_mode=not_required` unless'
+require_terms "workflow controller harness boundary" "$workflow_controller_ref" \
+    '`references/harness-controller.md` is loaded only after' \
+    '`harness_capable=true` is established' \
+    "Do not load \`references/harness-controller.md\` for ordinary medium work" \
+    "source-changing work alone" \
+    "delegation alone" \
+    "When harness routing applies, \`references/harness-controller.md\` owns Done" \
+    "Contract, Harness Recipe, and the harness entry gate." \
+    '`references/harness-runtime-artifacts.md` owns Harness Run State, Trace'
+require_terms "harness runtime reference" "$harness_runtime_ref" \
+    "## Harness Run State" \
+    "## Trace Ledger" \
+    "## Replay Packet" \
+    "## Artifact Reference Ledger" \
+    "## Pivot/Restart Controller" \
+    "Missing run-state/trace/replay evidence"
+require_terms "workflow controller review QA separation" "$workflow_controller_ref" \
+    "Code Reviewer and QA Evaluator responsibilities stay separate" \
+    "Code Reviewer reviews code quality, defects, security, architecture, and test" \
+    "QA Evaluator runs only when \`qa_evaluation_mode=required\`"
+require_normalized_terms "workflow controller review QA separation" "$workflow_controller_ref" \
+    "does not satisfy required QA Evaluator evidence"
 
 test_start "harness artifacts are not unconditional medium+ requirements"
 unconditional_harness_terms_output="$(mktemp)"

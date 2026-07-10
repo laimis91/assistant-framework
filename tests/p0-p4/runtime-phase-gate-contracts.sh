@@ -82,12 +82,14 @@ for term in \
     "compact_stop_reason" \
     "subagent_evidence_gate" \
     "review_gate" \
-    "learning_gate" \
-    "metrics_gate"; do
+    "learning_gate"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
         missing_runtime_helper_terms+=("stop-review.sh formats $term")
     fi
 done
+if grep -Fq "metrics_gate" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
+    missing_runtime_helper_terms+=("stop-review.sh must not format a blocking metrics_gate")
+fi
 if [[ "${#missing_runtime_helper_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -168,6 +170,34 @@ else
     fail "QA parser let stale negative modes suppress positive triggers: ${qa_negative_mode_override_missing[*]}"
 fi
 
+test_start "runtime QA parser lets mixed positive and negative rationale require QA"
+qa_mixed_rationale_missing=()
+for spec in \
+    "explicit_qa_without_done_contract|QA trigger reason: explicit QA requested; no accepted Done Contract" \
+    "explicit_qa_comma_without_done_contract|QA trigger reason: explicit QA requested, no accepted Done Contract" \
+    "explicit_qa_but_without_done_contract|QA trigger reason: explicit QA requested but no accepted Done Contract" \
+    "explicit_qa_parenthetical_without_done_contract|QA trigger reason: explicit QA requested (no accepted Done Contract)" \
+    "domain_scored_without_harness|QA trigger reason: domain-scored scope; without harness-capable acceptance scope"; do
+    label="${spec%%|*}"
+    trigger_line="${spec#*|}"
+    qa_mixed_file="$(mktemp)"
+    p0p4_register_cleanup "$qa_mixed_file"
+    cat > "$qa_mixed_file" <<TASK
+# Task
+Status: REVIEWING
+Triaged as: medium
+$trigger_line
+TASK
+    if ! qa_parser_requires_file "$qa_mixed_file"; then
+        qa_mixed_rationale_missing+=("$label")
+    fi
+done
+if [[ "${#qa_mixed_rationale_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "QA parser let embedded negative rationale suppress positive triggers: ${qa_mixed_rationale_missing[*]}"
+fi
+
 test_start "runtime QA parser ignores placeholder and generic trigger labels"
 qa_placeholder_file="$(mktemp)"
 p0p4_register_cleanup "$qa_placeholder_file"
@@ -242,12 +272,16 @@ for term in \
     "assistant_phase_subagent_warning_action" \
     "WARNING: Review gate incomplete" \
     'review_gate:$review_gate_status missing=' \
-    "WARNING: Metrics gate incomplete" \
-    "metrics_gate:missing_metrics_today missing="; do
+    "OPTIONAL METRICS: No workflow metrics entry exists for today." \
+    "Metrics are non-blocking observability"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"; then
         missing_workflow_gate_terms+=("$term")
     fi
 done
+if grep -Fq "WARNING: Metrics gate incomplete" "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh" \
+    || grep -Fq "metrics_gate:missing_metrics_today" "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"; then
+    missing_workflow_gate_terms+=("workflow-enforcer.sh must not emit blocking metrics warnings")
+fi
 if [[ "${#missing_workflow_gate_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -261,6 +295,8 @@ skill_file="$workflow_dir/SKILL.md"
 output_contract="$workflow_dir/contracts/output.yaml"
 phase_gates="$workflow_dir/contracts/phase-gates.yaml"
 harness_ref="$workflow_dir/references/harness-controller.md"
+runtime_artifacts_ref="$workflow_dir/references/harness-runtime-artifacts.md"
+workflow_controller_ref="$workflow_dir/references/workflow-controller.md"
 phases_ref="$workflow_dir/references/phases.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
 task_journal_harness_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
@@ -290,9 +326,14 @@ for term in \
         missing_runtime_artifact_terms+=("output.yaml: $term")
     fi
 done
-if ! grep -Fq -- "Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts." "$skill_file"; then
-    missing_runtime_artifact_terms+=("SKILL.md: Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts.")
-fi
+for term in \
+    "When harness routing applies, \`references/harness-controller.md\` owns Done" \
+    "Contract, Harness Recipe, and the harness entry gate." \
+    '`references/harness-runtime-artifacts.md` owns Harness Run State, Trace'; do
+    if ! grep -Fq -- "$term" "$workflow_controller_ref"; then
+        missing_runtime_artifact_terms+=("workflow-controller.md: $term")
+    fi
+done
 for term in \
     "- id: P_HARNESS_RUNTIME_ARTIFACTS" \
     "- id: B_HARNESS_RUN_STATE_TRACE_REPLAY" \
@@ -303,12 +344,21 @@ for term in \
     fi
 done
 for term in \
+    "references/harness-runtime-artifacts.md" \
+    "Required runtime refs for trace/replay-ready harness work remain Harness Run"; do
+    if ! grep -Fq -- "$term" "$harness_ref"; then
+        missing_runtime_artifact_terms+=("harness-controller.md: $term")
+    fi
+done
+for term in \
     "## Harness Run State" \
     "## Trace Ledger" \
     "## Replay Packet" \
+    "## Artifact Reference Ledger" \
+    "## Pivot/Restart Controller" \
     "Missing run-state/trace/replay evidence"; do
-    if ! grep -Fq -- "$term" "$harness_ref"; then
-        missing_runtime_artifact_terms+=("harness-controller.md: $term")
+    if [[ ! -f "$runtime_artifacts_ref" ]] || ! grep -Fq -- "$term" "$runtime_artifacts_ref"; then
+        missing_runtime_artifact_terms+=("harness-runtime-artifacts.md: $term")
     fi
 done
 for term in \
@@ -337,11 +387,17 @@ if [[ ! -f "$plan_harness_appendix" ]] || ! grep -Fq -- "Runtime Harness Artifac
 fi
 for term in \
     "Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger" \
+    "references/harness-runtime-artifacts.md"; do
+    if ! grep -Fq -- "$term" "$phases_ref"; then
+        missing_runtime_artifact_terms+=("phases.md: $term")
+    fi
+done
+for term in \
     "Update Harness Run State after each slice/step" \
     "Append Trace Ledger entries" \
     "Refresh the Replay Packet"; do
-    if ! grep -Fq -- "$term" "$phases_ref"; then
-        missing_runtime_artifact_terms+=("phases.md: $term")
+    if [[ ! -f "$runtime_artifacts_ref" ]] || ! grep -Fq -- "$term" "$runtime_artifacts_ref"; then
+        missing_runtime_artifact_terms+=("harness-runtime-artifacts.md: $term")
     fi
 done
 if [[ "${#missing_runtime_artifact_terms[@]}" -eq 0 ]]; then

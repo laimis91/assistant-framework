@@ -21,6 +21,31 @@ assistant_phase_requires_qa_evaluator() {
             value = trim(value)
             return value ~ /^\[[^]]*\]$/
         }
+        function has_concrete_positive_clause(value, low, n, parts, i, clause) {
+            low = tolower(trim(value))
+            gsub(/`/, "", low)
+            n = split(low, parts, /[;,()]|[[:space:]]but[[:space:]]/)
+            for (i = 1; i <= n; i++) {
+                clause = trim(parts[i])
+                if (clause == "" ||
+                    clause ~ /(^|[[:space:][:punct:]])(no|without|not|n\/a|na|not_required|not required|not-required|not-applicable|not_applicable|not applicable|optional)([[:space:][:punct:]]|$)/ ||
+                    clause ~ /(template|placeholder|generic acceptance criteria)/) {
+                    continue
+                }
+                if (clause ~ /^required([[:space:][:punct:]]|$)/ ||
+                    clause ~ /qa[ _-]?evaluation[ _-]?mode[[:space:]]*[:=][[:space:]]*required([[:space:][:punct:]]|$)/ ||
+                    clause ~ /(explicit|requested|user[^[:alnum:]]+asks)[^.\n]*(qa|acceptance[ _-]?evaluation)/ ||
+                    clause ~ /(qa|acceptance[ _-]?evaluation)[^.\n]*(explicit|requested|required)/ ||
+                    clause ~ /(accepted[ _-]?done[ _-]?contract|done[ _-]?contract[^.\n]*(accepted|accepted_by))/ ||
+                    clause ~ /(harness[ _-]?capable|harness_capable|harness)[^.\n]*(acceptance[ _-]?(scope|evaluation)|acceptance)/ ||
+                    clause ~ /(domain[ _-]?scored|domain[ _-]?quality|domain[ _-]?context|domain[ _-]?rubric|rubric_refs)/ ||
+                    (clause ~ /(^|[[:space:][:punct:]])(ui|visual|product|ux|docs|dx)([[:space:][:punct:]]|$)/ && clause ~ /(acceptance|quality|rubric|domain)/) ||
+                    clause ~ /(multi_agent|agent_id|final[ _-]?verdict|qa[ _-]?result)/) {
+                    return 1
+                }
+            }
+            return 0
+        }
         function non_trigger_text(value, low) {
             low = tolower(trim(value))
             gsub(/`/, "", low)
@@ -30,7 +55,7 @@ assistant_phase_requires_qa_evaluator() {
                 explicit_not_required(low) ||
                 explicit_optional(low) ||
                 low ~ /(^|[[:space:][:punct:]])(n\/a|not_required|not required|not-required|not-applicable|not_applicable|not applicable|optional)([[:space:][:punct:]]|$)/ ||
-                low ~ /(^|[[:space:][:punct:]])(no|without)[[:space:]]+(explicit qa|qa request|accepted done contract|done contract|harness-capable acceptance|harness capable acceptance|domain-scored|domain scored|ui|visual|product|ux|docs|dx)/ ||
+                (!has_concrete_positive_clause(low) && low ~ /(^|[[:space:][:punct:]])(no|without)[[:space:]]+(explicit qa|qa request|accepted done contract|done contract|harness-capable acceptance|harness capable acceptance|domain-scored|domain scored|ui|visual|product|ux|docs|dx)/) ||
                 low ~ /(^|[[:space:][:punct:]])(pending|waiting|todo|tbd|not yet)([[:space:][:punct:]]|$)/ ||
                 low ~ /(when|if|unless|only when)[^.\n]*(required|qa_evaluation_mode|qa evaluation mode)/ ||
                 low ~ /(template|placeholder|generic acceptance criteria)/
@@ -44,6 +69,22 @@ assistant_phase_requires_qa_evaluator() {
             return low ~ /^required([[:space:][:punct:]]|$)/ ||
                 low ~ /qa[ _-]?evaluation[ _-]?mode[[:space:]]*[:=][[:space:]]*required([[:space:][:punct:]]|$)/ ||
                 low ~ /(^|[[:space:][:punct:]])qa[ _-]?evaluator([[:space:][:punct:]]|$)/ ||
+                low ~ /(explicit|requested|user[^[:alnum:]]+asks)[^.\n]*(qa|acceptance[ _-]?evaluation)/ ||
+                low ~ /(qa|acceptance[ _-]?evaluation)[^.\n]*(explicit|requested|required)/ ||
+                low ~ /(accepted[ _-]?done[ _-]?contract|done[ _-]?contract[^.\n]*(accepted|accepted_by))/ ||
+                low ~ /(harness[ _-]?capable|harness_capable|harness)[^.\n]*(acceptance[ _-]?(scope|evaluation)|acceptance)/ ||
+                low ~ /(domain[ _-]?scored|domain[ _-]?quality|domain[ _-]?context|domain[ _-]?rubric|rubric_refs)/ ||
+                (low ~ /(^|[[:space:][:punct:]])(ui|visual|product|ux|docs|dx)([[:space:][:punct:]]|$)/ && low ~ /(acceptance|quality|rubric|domain)/) ||
+                low ~ /(multi_agent|agent_id|final[ _-]?verdict|qa[ _-]?result)/
+        }
+        function concrete_positive_trigger(value, low) {
+            low = tolower(trim(value))
+            gsub(/`/, "", low)
+            if (non_trigger_text(low)) {
+                return 0
+            }
+            return low ~ /^required([[:space:][:punct:]]|$)/ ||
+                low ~ /qa[ _-]?evaluation[ _-]?mode[[:space:]]*[:=][[:space:]]*required([[:space:][:punct:]]|$)/ ||
                 low ~ /(explicit|requested|user[^[:alnum:]]+asks)[^.\n]*(qa|acceptance[ _-]?evaluation)/ ||
                 low ~ /(qa|acceptance[ _-]?evaluation)[^.\n]*(explicit|requested|required)/ ||
                 low ~ /(accepted[ _-]?done[ _-]?contract|done[ _-]?contract[^.\n]*(accepted|accepted_by))/ ||
@@ -127,8 +168,13 @@ assistant_phase_requires_qa_evaluator() {
             low = tolower(line)
             return low ~ /(qa[ _-]?evaluator|qaevaluator|qa[ _-]?evaluation|qa_evaluation_mode|qa[ _-]?loop)/
         }
-        function scan_required_line(line) {
-            if (qa_marker(line) && !line_marks_not_required(line) && positive_required_trigger(line)) {
+        function scan_required_line(line, section) {
+            if (!qa_marker(line) || line_marks_not_required(line) || !positive_required_trigger(line)) {
+                return
+            }
+            if (section == "gates" && !concrete_positive_trigger(line)) {
+                generic_found = 1
+            } else {
                 found = 1
             }
         }
@@ -216,11 +262,11 @@ assistant_phase_requires_qa_evaluator() {
             }
             if (low ~ /^required agents:[[:space:]]*.+$/ ||
                 low ~ /^required gates:[[:space:]]*.+$/) {
-                scan_required_line(line)
+                scan_required_line(line, low ~ /^required gates:/ ? "gates" : "agents")
                 next
             }
             if ((in_required_agents || in_required_gates) && line ~ /^[[:space:]]*-[[:space:]]+/) {
-                scan_required_line(line)
+                scan_required_line(line, in_required_gates ? "gates" : "agents")
                 next
             }
             if ((in_required_agents || in_required_gates) && line ~ /^[^[:space:]-]/) {
@@ -234,6 +280,9 @@ assistant_phase_requires_qa_evaluator() {
             }
             if ((not_required_mode || optional_mode) && !required_mode) {
                 exit 1
+            }
+            if (generic_found) {
+                exit 0
             }
             exit 1
         }

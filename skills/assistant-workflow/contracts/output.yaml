@@ -16,21 +16,21 @@ skill: assistant-workflow
 completion_tiers:
   small:
     controller_intensity: light
-    required_artifacts: [changed_files, validation_results, manual_test_steps, user_approval]
-    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract, workflow_experiment_ledger, loop_readiness_assessment]
-    review_gate: "self-review or explicit validation summary unless risk_tier in [high, critical]"
-    checkpoint_policy: "inline plan/check summary is enough; phase_checkpoints are strict-profile only"
+    required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
+    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract, manual_test_steps, manual_verification_result, learning_controller, workflow_experiment_ledger, loop_readiness_assessment]
+    review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
+    checkpoint_policy: "inline plan/check summary is enough; exact phase markers are required only by strict intensity, explicit project policy, or user request"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    required_artifacts: [triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, plan_document, user_approval]
-    conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, plan_document]
+    conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
-    checkpoint_policy: "task journal or carried-forward state records phase transitions"
+    checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
-    required_artifacts: [triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, learning_controller, manual_test_steps, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document, user_approval]
-    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document]
+    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -59,6 +59,21 @@ artifacts:
         required: true
         enum_values: [light, standard, strict]
         validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default; strict requires independent strict, harness, or QA criteria. Do not infer strict from size=medium+ or delegation alone."
+      - name: workflow_state_mode
+        type: enum
+        required: true
+        enum_values: [inline, journal]
+        validation: "journal is selected only when persistence, delegation, cross-session continuation, clarification wait, strict, harness, required QA, or explicit durable-state criteria apply; size alone does not require it"
+      - name: manual_verification_mode
+        type: enum
+        required: true
+        enum_values: [not_required, optional, required]
+        validation: "required only for explicit, subjective/UI, external-effect, destructive/migration, or inadequate-automation triggers"
+      - name: learning_capture_mode
+        type: enum
+        required: true
+        enum_values: [auto, not_required, required]
+        validation: "auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals"
       - name: required_gates
         type: string[]
         required: true
@@ -113,15 +128,44 @@ artifacts:
             required: true
             validation: "Remaining scope/risk unknowns for Discover, or empty when confidence is high"
 
+  - name: completion_policy
+    type: object
+    required: true
+    condition: "always"
+    description: "Compact adaptive-completion selection carried in the inline packet or task journal."
+    validation: "Records controller intensity and all three execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
+    on_fail: "Resolve and record controller_intensity, workflow_state_mode, manual_verification_mode, and learning_capture_mode before completion."
+    object_fields:
+      - name: controller_intensity
+        type: enum
+        required: true
+        enum_values: [light, standard, strict]
+      - name: workflow_state_mode
+        type: enum
+        required: true
+        enum_values: [inline, journal]
+      - name: manual_verification_mode
+        type: enum
+        required: true
+        enum_values: [not_required, optional, required]
+      - name: learning_capture_mode
+        type: enum
+        required: true
+        enum_values: [auto, not_required, required]
+      - name: selection_reason
+        type: string
+        required: true
+        validation: "Names the concrete state, manual-verification, and learning triggers or states that none apply."
+
   - name: phase_checkpoints
     type: string[]
     required: conditional
-    condition: "hook_profile == strict or size in [large, mega] or local task journal is enforcing phase gates"
+    condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"
     validation: >
-      Must contain paired entries for every phase that ran:
+      When required, must contain paired entries for every phase that ran:
       '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
-      Missing checkpoints = workflow was not followed.
-    on_fail: "Reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
+      Light/standard work without an exact-marker trigger records concise natural progress instead.
+    on_fail: "When exact markers were required, reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
     minimum_entries:
       # TRIAGE has no COMPLETE marker (checkpoint_end: null), so it contributes 1.
       # All other phases contribute 2 (start + complete).
@@ -224,10 +268,33 @@ artifacts:
         type: string
         required: true
 
+  - name: fresh_review_result
+    type: object
+    required: conditional
+    condition: "controller_intensity == light"
+    description: "Compact review performed after relevant validation with fresh attention to the inline plan, changed files, and acceptance criteria."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected."
+    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
+    object_fields:
+      - name: result
+        type: enum
+        required: true
+        enum_values: [PASS]
+      - name: reviewed_scope
+        type: string
+        required: true
+      - name: findings
+        type: string[]
+        required: true
+        validation: "Empty or contains only explicitly resolved findings."
+      - name: evidence
+        type: string
+        required: true
+
   - name: review_result
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict"
+    condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical] or hook_profile == strict"
     validation: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. This is the code quality review result; QA acceptance is recorded separately in qa_evaluation_result when required."
     on_fail: "Run assistant-review code quality review and record quality status, rounds, and resolved findings"
     object_fields:
@@ -415,7 +482,7 @@ artifacts:
   - name: learning_controller
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "learning_capture_mode == required or (learning_capture_mode == auto and concrete lesson-bearing review finding, build/test failure, user correction, or memory trend evidence exists)"
     description: "Document-phase learning decision that reviews review/build/user-correction evidence and either persists durable lessons or records why nothing was saved"
     validation: "Task journal or equivalent workflow output contains a canonical '### Learning Controller' block with memory trend status, evidence reviewed, review findings considered, build/test failures considered, user corrections considered, durable lesson decision, and persistence evidence or no-save rationale"
     on_fail: "During Document, add the Learning Controller block by checking memory trends when available, reviewing Review Log findings, build/test failures, and user corrections, then recording a durable-save/no-save decision. Do not save random task progress as a lesson."
@@ -484,17 +551,37 @@ artifacts:
 
   - name: manual_test_steps
     type: string[]
-    required: true
-    condition: "user-runnable behavior changed or release handoff needs manual verification"
+    required: conditional
+    condition: "manual_verification_mode == required"
     validation: "At least 1 actionable step the user can follow to verify the change"
     on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
+
+  - name: manual_verification_result
+    type: object
+    required: conditional
+    condition: "manual_verification_mode == required"
+    description: "Evidence for the exceptional manual acceptance gate; it does not require ritual user confirmation when an equivalent observation proves the result."
+    validation: "trigger is one allowed reason, result is passed, and evidence names the observation, user report, external check, or manual run that passed."
+    on_fail: "Perform the scoped manual verification, record passed evidence, or return blocked without claiming workflow completion."
+    object_fields:
+      - name: trigger
+        type: enum
+        required: true
+        enum_values: [explicit_request, subjective_or_ui, external_effect, destructive_or_migration, automated_verification_inadequate]
+      - name: result
+        type: enum
+        required: true
+        enum_values: [passed]
+      - name: evidence
+        type: string
+        required: true
 
   - name: subagent_evidence
     type: object
     required: conditional
-    condition: "development/code-work task changes project source, tests, docs, config, hooks, contracts, or generated project artifacts"
-    description: "Strict evidence that required subagent roles were dispatched or explicitly handled through direct fallback."
-    validation: "required_agents includes at minimum Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded. delegated mode records dispatch and result evidence for each required role; medium+ delegated work records per-slice dispatch evidence when slices apply. direct_fallback records one explicit policy reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus equivalent role, phase, verification, and Code Reviewer review evidence; Reviewer direct evidence is compatibility evidence only. not_applicable is invalid for source-changing Build tasks. QA Evaluator evidence is also required when qa_evaluation_mode=required."
+    condition: "controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, hooks, contracts, or generated project artifacts"
+    description: "Standard/strict evidence that required subagent roles were dispatched or explicitly handled through direct fallback."
+    validation: "required_agents includes at minimum Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded. delegated mode records dispatch and result evidence for each required role; medium+ delegated work records per-slice dispatch evidence when slices apply. direct_fallback records one explicit policy reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus equivalent role, phase, verification, and Code Reviewer review evidence; Reviewer direct evidence is compatibility evidence only. For standard/strict work, not_applicable is invalid for source-changing Build tasks. Light source-changing work uses subagent_policy_state=not_required, execution_mode=not_applicable, relevant automated validation/tests, and fresh_review_result instead of this artifact. QA Evaluator evidence is also required when qa_evaluation_mode=required."
     on_fail: "Update the task journal Agent Dispatch Log. If delegated, add Code Writer, Builder/Tester, and Code Reviewer dispatch/result evidence, or Reviewer compatibility dispatch/result evidence for existing/legacy handoffs, plus medium+ per-slice dispatch evidence. If direct_fallback, add the explicit policy reason and role-equivalent Code Reviewer direct evidence, or Reviewer direct evidence only as compatibility evidence. Do not complete with silent fallback. When QA is required, add QAEvaluator dispatch/result or direct evidence separately from Code Reviewer/Reviewer compatibility."
     object_fields:
       - name: execution_mode
@@ -546,7 +633,7 @@ artifacts:
   - name: task_journal
     type: file
     required: conditional
-    condition: "size in [medium, large, mega] and agent_state_dir is configured and policy allows local state artifacts"
+    condition: "workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
     validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md and contains Status: DONE"
     on_fail: "Create or update task journal when configured and policy-allowed, or record carried-forward state fallback"
     location: "{agent_state_dir}/task.md"
@@ -554,7 +641,7 @@ artifacts:
   - name: context_map
     type: file
     required: conditional
-    condition: "size in [medium, large, mega] and agent_state_dir is configured and policy allows local state artifacts"
+    condition: "size in [medium, large, mega] and workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
     validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/context-map.md"
     on_fail: "Create context map when configured and policy-allowed, or include context map in carried-forward plan/task packet"
     location: "{agent_state_dir}/context-map.md"
@@ -1216,10 +1303,11 @@ artifacts:
 
   - name: metrics_entry
     type: jsonl_line
-    required: conditional
-    condition: "local metrics are configured and policy allows persistent workflow metrics"
+    required: false
+    condition: "local metrics are configured and policy allows persistent workflow metrics and optional capture is useful"
     validation: "Valid JSON with required keys: date, project, task, size, review_rounds, plan_deviations, build_failures"
-    on_fail: "Append valid metrics when configured and policy-allowed, or record metrics unavailable/disallowed in final output"
+    on_missing: skip
+    on_fail: "Discard or repair an invalid optional metrics entry; missing metrics never blocks workflow completion"
     location: "{agent_metrics_path}/workflow-metrics.jsonl"
 
   - name: candidate_search_result
@@ -1441,10 +1529,10 @@ artifacts:
   - name: user_approval
     type: enum
     required: conditional
-    condition: "size in [medium, large, mega] or risk/ambiguity requires approval; small low-risk work may use not_required_small"
+    condition: "manual_verification_mode == required and the selected manual verification trigger specifically needs user observation or confirmation"
     enum_values: [confirmed, confirmed_with_issues, not_required_small]
-    validation: "Medium+ tasks require explicit confirmation before Document. Small tasks may use not_required_small only when the inline plan proceeded without risk/ambiguity requiring approval."
-    on_fail: "Obtain user approval or justify not_required_small eligibility before completion"
+    validation: "Records user confirmation only when the scoped manual verification actually depends on the user's observation; plan approval is enforced separately and user confirmation is not ritual."
+    on_fail: "Request the specific user observation needed for manual verification, or record equivalent non-user evidence when the trigger does not require user confirmation."
 
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
@@ -1458,7 +1546,7 @@ artifacts:
 # 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
 # 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
 # 10. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
-# 11. user_approval is confirmed, confirmed_with_issues, or not_required_small for eligible small tasks
+# 11. manual_verification_result exists only when manual_verification_mode=required; user_approval exists only when that scoped check depends on user observation. Metrics, reflexion, and memory never block completion.
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
   - name: verified_skill_distillation
     type: object

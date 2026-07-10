@@ -1,0 +1,80 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-review
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    selectors:
+      - id: review-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required]
+    budget_words: 5000
+  current_round:
+    selectors:
+      - id: review-current-round-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_review_step
+        allowed_names: [ENTRY, REVIEW_STEP, EVALUATE_STEP, FIX_STEP, VALIDATE_STEP, QA_EVALUATION_STEP, EXIT]
+      - id: review-round-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV0, INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
+    budget_words: 12000
+  selected_handoff:
+    selectors:
+      - id: review-selected-dispatch-context
+        path: contracts/handoffs.yaml
+        section: dispatch_context_bundles
+        key: name
+        name_from: selected_dispatch_context_name
+        allowed_names: [fresh_reviewer_context, qa_evaluator_context]
+    budget_words: 5000
+  reviewer_context:
+    references:
+      - references/review-principles.md
+      - references/review-checklists.md
+      - references/review-rubric.md
+    selectors:
+      - id: fresh-reviewer-context-bundle
+        path: contracts/handoffs.yaml
+        section: dispatch_context_bundles
+        key: name
+        names: [fresh_reviewer_context]
+    budget_words: 5000
+  return_validation:
+    selectors:
+      - id: review-return-validation-bundle
+        path: contracts/handoffs.yaml
+        section: return_validation_bundles
+        key: name
+        name_from: selected_return_validation_name
+        allowed_names: [reviewer_return_validation, qa_evaluator_return_validation]
+    budget_words: 5000
+  completion:
+    selectors:
+      - id: review-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [review_delegation_path, qa_evaluation_delegation_path, pivot_restart_decision, review_finding_rule_distillation, final_summary, qa_evaluation_result, rubric_summary, agentic_loop_safety_review, behavioral_contract_review, semantic_contract_review, bugfix_evidence_review, build_verification, task_journal_entry, audit_report]
+    budget_words: 10000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

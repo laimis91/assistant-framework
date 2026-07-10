@@ -18,6 +18,8 @@ p0p4_reference_section_has_term() {
 
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
 review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md"
+review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
+review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
 review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
@@ -40,7 +42,10 @@ done
 
 for file_and_term in \
     "$review_skill::references/review-checklists.md" \
-    "$review_skill::Load and apply references/review-checklists.md" \
+    "$review_skill::fresh Reviewer context bundle points to \`references/review-checklists.md\`" \
+    "$review_skill::load \`references/review-loop.md\` before the first REVIEW step" \
+    "$review_loop::only triggered sections from \`references/review-checklists.md\`" \
+    "$review_index::references/review-checklists.md" \
     "$review_skill::Agentic Loop Safety Checklist" \
     "$review_skill::Behavioral Contract Review Checklist" \
     "$review_skill::Semantic Contract Review Checklist" \
@@ -109,9 +114,9 @@ for file_and_forbidden in \
 done
 
 for file_and_term in \
-    "$review_skill::PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN" \
-    "$review_skill::REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3" \
-    "$review_skill::Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0" \
+    "$review_loop::PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN" \
+    "$review_loop::REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3" \
+    "$review_loop::Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0" \
     "$review_phase_gates::EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0" \
     "$review_rubric::| 4-10 | 4.0+ | 3.25"; do
     file="${file_and_term%%::*}"

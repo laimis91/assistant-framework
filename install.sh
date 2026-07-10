@@ -19,7 +19,7 @@
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent codex --plugin assistant-research  # research profile only
 #   ./install.sh --agent codex --plugin assistant-dev       # development profile only
-#   ./install.sh --agent codex                             # workflow/delegation hooks by default
+#   ./install.sh --agent codex                             # native Codex behavior, no framework hooks by default
 #   ./install.sh --agent claude --hook-profile minimal      # default low-friction hooks for Claude/Gemini
 #   ./install.sh --agent codex --hook-profile minimal       # explicit low-friction hooks
 #   ./install.sh --agent claude --hook-profile strict       # full enforcement hooks
@@ -59,7 +59,7 @@ Options:
   --skill NAME       Install only one skill (default: all)
   --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
   --hook-profile P  Hook profile: minimal, workflow, strict, or none
-                    Default: workflow for codex, minimal for claude/gemini
+                    Default: none for codex, minimal for claude/gemini
   --no-hooks         Alias for --hook-profile none
   --test-hooks       Run hook integration tests (requires --agent)
   --dry-run          Show what would be done without doing it
@@ -107,7 +107,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$AGENT" == "codex" && "$INSTALL_HOOKS" == "true" && "$HOOK_PROFILE_EXPLICIT" == "false" ]]; then
-    HOOK_PROFILE="workflow"
+    HOOK_PROFILE="none"
 fi
 
 case "$HOOK_PROFILE" in
@@ -125,13 +125,48 @@ info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
 
+# Canonical union of Codex hook commands directly registered by released
+# hooks/codex-settings.json versions. Native-profile cleanup and cached shims
+# must stay aligned with this list.
+codex_historical_hook_entrypoints() {
+    printf '%s\n' \
+        session-start.sh \
+        skill-router.sh \
+        learning-signals.sh \
+        workflow-enforcer.sh \
+        workflow-guard.sh \
+        stop-review.sh \
+        harness-gate.sh \
+        subagent-monitor.sh \
+        pre-compress.sh \
+        post-compact.sh \
+        session-end.sh \
+        post-tool-context.sh \
+        tool-failure-advisor.sh \
+        task-completed.sh
+}
+
+# These files are internal helpers, not directly registered hook entrypoints.
+# Recognize only their exact historical source-tree commands during cleanup;
+# never replace them with cached executable shims.
+framework_hook_cleanup_helpers() {
+    printf '%s\n' \
+        task-journal-resolver.sh \
+        workflow-phase-gates.sh \
+        hook-runtime.sh
+}
+
 hook_profile_allowed_json() {
     case "$HOOK_PROFILE" in
         minimal)
             printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
             ;;
         workflow)
-            printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
+            if [[ "$AGENT" == "codex" ]]; then
+                printf '%s\n' '["session-start.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
+            else
+                printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
+            fi
             ;;
         strict)
             printf '%s\n' 'null'
@@ -145,7 +180,10 @@ hook_profile_allowed_json() {
 hook_selected_for_profile() {
     local hook_name="$1"
     case "$HOOK_PROFILE" in
-        strict) return 0 ;;
+        strict)
+            [[ "$AGENT" == "codex" && "$hook_name" == "skill-router.sh" ]] && return 1
+            return 0
+            ;;
         minimal)
             case "$hook_name" in
                 skill-router.sh|session-start.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) return 0 ;;
@@ -154,7 +192,8 @@ hook_selected_for_profile() {
             ;;
         workflow)
             case "$hook_name" in
-                session-start.sh|skill-router.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) return 0 ;;
+                skill-router.sh) [[ "$AGENT" != "codex" ]] ;;
+                session-start.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) return 0 ;;
                 *) return 1 ;;
             esac
             ;;
@@ -168,7 +207,7 @@ write_profiled_hooks_settings() {
     local allowed_json
     allowed_json="$(hook_profile_allowed_json)"
 
-    if [[ "$HOOK_PROFILE" == "strict" ]]; then
+    if [[ "$HOOK_PROFILE" == "strict" && "$AGENT" != "codex" ]]; then
         cp "$source_settings" "$target_settings"
         return 0
     fi
@@ -187,7 +226,14 @@ write_profiled_hooks_settings() {
                         | map(
                             .hooks = (
                                 (.hooks // [])
-                                | map(select(((.command // "") | command_basename) as $name | ($allowed | index($name)) != null))
+                                | map(select(
+                                    ((.command // "") | command_basename) as $name
+                                    | if $allowed == null then
+                                        $name != "skill-router.sh"
+                                      else
+                                        ($allowed | index($name)) != null
+                                      end
+                                ))
                             )
                         )
                         | map(select((.hooks // []) | length > 0))
@@ -207,7 +253,9 @@ import re
 import sys
 
 source_settings, target_settings, allowed_json = sys.argv[1:4]
-allowed = set(json.loads(allowed_json))
+allowed_data = json.loads(allowed_json)
+strict_codex = allowed_data is None
+allowed = set(allowed_data or [])
 
 with open(source_settings, "r", encoding="utf-8") as f:
     settings = json.load(f)
@@ -233,7 +281,7 @@ for event, groups in (settings.get("hooks") or {}).items():
             command = str(hook.get("command") or "")
             first_shell_token = re.sub(r"\s+", " ", command.strip()).split(" ")[0] if command.strip() else ""
             hook_name = os.path.basename(first_shell_token)
-            if hook_name in allowed:
+            if (strict_codex and hook_name != "skill-router.sh") or hook_name in allowed:
                 kept_hooks.append(hook)
 
         if kept_hooks:
@@ -311,33 +359,33 @@ merge_profiled_hooks_settings_python() {
     local hooks_target="$5"
     local output_kind="$6"
     local codex_supports_compaction_hooks="${7:-true}"
+    local historical_entrypoints
+    local cleanup_helpers
+
+    historical_entrypoints="$(codex_historical_hook_entrypoints)"
+    cleanup_helpers="$(framework_hook_cleanup_helpers)"
 
     command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to merge hook settings"
-    python3 - "$existing_settings" "$profiled_settings" "$target_settings" "$agent" "$hooks_target" "$output_kind" "$codex_supports_compaction_hooks" <<'PY'
+    python3 - "$existing_settings" "$profiled_settings" "$target_settings" "$agent" "$hooks_target" "$output_kind" "$codex_supports_compaction_hooks" "$FRAMEWORK_DIR/hooks/scripts" "$historical_entrypoints" "$cleanup_helpers" <<'PY'
 import json
 import os
 import re
 import sys
 
-existing_path, profiled_path, target_path, agent, hooks_target, output_kind, codex_supports_compaction = sys.argv[1:8]
-assistant_hook_names = {
-    "session-start.sh",
-    "skill-router.sh",
-    "learning-signals.sh",
-    "workflow-enforcer.sh",
-    "workflow-guard.sh",
-    "stop-review.sh",
-    "harness-gate.sh",
-    "subagent-monitor.sh",
-    "post-compact.sh",
-    "pre-compress.sh",
-    "session-end.sh",
-    "post-tool-context.sh",
-    "tool-failure-advisor.sh",
-    "task-completed.sh",
-    "task-journal-resolver.sh",
-    "workflow-phase-gates.sh",
-}
+(
+    existing_path,
+    profiled_path,
+    target_path,
+    agent,
+    hooks_target,
+    output_kind,
+    codex_supports_compaction,
+    framework_hooks_dir,
+    historical_entrypoints_text,
+    cleanup_helpers_text,
+) = sys.argv[1:11]
+historical_entrypoints = set(historical_entrypoints_text.splitlines())
+cleanup_helpers = set(cleanup_helpers_text.splitlines())
 
 def load_json(path, default):
     if not path or not os.path.exists(path):
@@ -363,21 +411,15 @@ def is_assistant_hook(command):
     token = first_shell_token(command)
     if not token:
         return False
-    if output_kind == "codex":
-        return any(
-            token == f"$HOME/.codex/hooks/assistant/{name}"
-            or token == f"{hooks_target}/{name}"
-            or token.endswith(f"/.codex/hooks/assistant/{name}")
-            or token.endswith(f"/hooks/assistant/{name}")
-            or token.endswith(f"/hooks/scripts/{name}")
-            for name in assistant_hook_names
-        )
+    agent_home_root = f"$HOME/.{agent}/hooks/assistant"
     return any(
-        token == f"$HOME/.{agent}/hooks/assistant/{name}"
+        token == f"{agent_home_root}/{name}"
         or token == f"{hooks_target}/{name}"
-        or token.endswith(f"/.{agent}/hooks/assistant/{name}")
-        or token.endswith(f"/hooks/scripts/{name}")
-        for name in assistant_hook_names
+        or token == f"{framework_hooks_dir}/{name}"
+        for name in historical_entrypoints
+    ) or any(
+        token == f"{framework_hooks_dir}/{name}"
+        for name in cleanup_helpers
     )
 
 def remove_assistant_hooks(hooks_obj):
@@ -460,6 +502,148 @@ with open(f"{target_path}.tmp", "w", encoding="utf-8") as f:
     f.write("\n")
 os.replace(f"{target_path}.tmp", target_path)
 PY
+}
+
+migrate_codex_native_hook_profile() {
+    local hooks_file="$1"
+    local hooks_target="$2"
+    local cached_hook
+    local historical_entrypoints
+    local cleanup_helpers
+
+    historical_entrypoints="$(codex_historical_hook_entrypoints)"
+    cleanup_helpers="$(framework_hook_cleanup_helpers)"
+
+    mkdir -p "$hooks_target"
+
+    if [[ -f "$hooks_file" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            if ! jq \
+                --arg hooks_target "$hooks_target" \
+                --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
+                --arg historical_entrypoints "$historical_entrypoints" \
+                --arg cleanup_helpers "$cleanup_helpers" '
+                def assistant_framework_codex_hook_names:
+                    $historical_entrypoints | split("\n") | map(select(length > 0));
+                def assistant_framework_cleanup_helper_names:
+                    $cleanup_helpers | split("\n") | map(select(length > 0));
+                def first_shell_token:
+                    (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
+                def assistant_framework_codex_hook_command:
+                    (. // "") as $command
+                    | ($command | first_shell_token) as $token
+                    | (any(assistant_framework_codex_hook_names[]; . as $hook_name |
+                        $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
+                        or $token == ($hooks_target + "/" + $hook_name)
+                        or $token == ($framework_hooks_dir + "/" + $hook_name)
+                    )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
+                        $token == ($framework_hooks_dir + "/" + $helper_name)
+                    ));
+                .hooks = (
+                    (.hooks // {})
+                    | with_entries(
+                        .value = (
+                            (.value | if type == "array" then . else [.] end)
+                            | map(
+                                if type == "object" then
+                                    .hooks = (
+                                        (.hooks // [] | if type == "array" then . else [.] end)
+                                        | map(select(
+                                            type != "object"
+                                            or (((.command // "") | assistant_framework_codex_hook_command) | not)
+                                        ))
+                                    )
+                                else
+                                    .
+                                end
+                            )
+                            | map(select(type != "object" or ((.hooks // []) | length > 0)))
+                        )
+                    )
+                    | with_entries(select((.value // []) | length > 0))
+                )
+            ' "$hooks_file" > "${hooks_file}.tmp"; then
+                rm -f "${hooks_file}.tmp"
+                fail "Failed to remove Assistant Framework commands from $hooks_file"
+            fi
+            mv "${hooks_file}.tmp" "$hooks_file"
+        else
+            command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to migrate Codex hooks"
+            python3 - "$hooks_file" "$hooks_target" "$FRAMEWORK_DIR/hooks/scripts" "$historical_entrypoints" "$cleanup_helpers" <<'PY'
+import json
+import os
+import re
+import sys
+
+hooks_file, hooks_target, framework_hooks_dir, historical_entrypoints_text, cleanup_helpers_text = sys.argv[1:6]
+historical_entrypoints = set(historical_entrypoints_text.splitlines())
+cleanup_helpers = set(cleanup_helpers_text.splitlines())
+
+def as_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+def first_shell_token(command):
+    command = str(command or "").strip()
+    if not command:
+        return ""
+    return re.sub(r"\s+", " ", command).split(" ")[0]
+
+def is_assistant_hook(command):
+    token = first_shell_token(command)
+    return any(
+        token == f"$HOME/.codex/hooks/assistant/{name}"
+        or token == f"{hooks_target}/{name}"
+        or token == f"{framework_hooks_dir}/{name}"
+        for name in historical_entrypoints
+    ) or any(
+        token == f"{framework_hooks_dir}/{name}"
+        for name in cleanup_helpers
+    )
+
+with open(hooks_file, "r", encoding="utf-8") as f:
+    output = json.load(f)
+
+cleaned_hooks = {}
+for event, groups in (output.get("hooks") or {}).items():
+    kept_groups = []
+    for group in as_list(groups):
+        if not isinstance(group, dict):
+            kept_groups.append(group)
+            continue
+        kept_hooks = [
+            hook
+            for hook in as_list(group.get("hooks"))
+            if not isinstance(hook, dict) or not is_assistant_hook(hook.get("command"))
+        ]
+        if kept_hooks:
+            kept_group = dict(group)
+            kept_group["hooks"] = kept_hooks
+            kept_groups.append(kept_group)
+    if kept_groups:
+        cleaned_hooks[event] = kept_groups
+
+output["hooks"] = cleaned_hooks
+with open(f"{hooks_file}.tmp", "w", encoding="utf-8") as f:
+    json.dump(output, f, indent=2)
+    f.write("\n")
+os.replace(f"{hooks_file}.tmp", hooks_file)
+PY
+        fi
+    fi
+
+    # A running Codex process can retain hook commands from before reinstall.
+    # Keep only these known cached framework entrypoints as silent executable
+    # shims; arbitrary user scripts in the same directory remain untouched.
+    while IFS= read -r cached_hook; do
+        [[ -n "$cached_hook" ]] || continue
+        printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            '# Assistant Framework native-profile migration shim.' \
+            'exit 0' > "$hooks_target/$cached_hook"
+        chmod +x "$hooks_target/$cached_hook"
+    done < <(codex_historical_hook_entrypoints)
 }
 
 plugin_profile_line() {
@@ -694,59 +878,6 @@ cleanup_installed_tool_build_artifacts() {
     if $DRY_RUN && ! $found; then
         dry "No stale tool build artifacts found under $tools_target"
     fi
-}
-
-codex_skill_table_trigger() {
-    case "$1" in
-        assistant-workflow) printf '%s\n' "build, implement, fix, refactor, plan" ;;
-        assistant-clarify) printf '%s\n' "ambiguous, multi-intent, underspecified prompts" ;;
-        assistant-diagrams) printf '%s\n' "diagram, draw, visualize, flow" ;;
-        assistant-docs) printf '%s\n' "document, docs, README, changelog" ;;
-        assistant-ideate) printf '%s\n' "brainstorm, ideas, options, alternatives" ;;
-        assistant-memory) printf '%s\n' "remember, save insight, preferences" ;;
-        assistant-onboard) printf '%s\n' "learn codebase, onboard, map project" ;;
-        assistant-reflexion) printf '%s\n' "reflect, lessons, retrospective" ;;
-        assistant-research) printf '%s\n' "research, investigate, compare options" ;;
-        assistant-review) printf '%s\n' "review, check the code" ;;
-        assistant-security) printf '%s\n' "security, threat model, audit" ;;
-        assistant-skill-creator) printf '%s\n' "create skill, scaffold skill, contracts" ;;
-        assistant-tdd) printf '%s\n' "tests first, test-driven, red green" ;;
-        assistant-telos) printf '%s\n' "telos, purpose, mission, strategy" ;;
-        assistant-thinking) printf '%s\n' "think through, stress test, debate" ;;
-        *) printf '%s\n' "explicit install" ;;
-    esac
-}
-
-codex_skill_table_description() {
-    case "$1" in
-        assistant-workflow) printf '%s\n' "Structured dev: triage through document" ;;
-        assistant-clarify) printf '%s\n' "Clarify the request before execution" ;;
-        assistant-diagrams) printf '%s\n' "Create Mermaid architecture and flow diagrams" ;;
-        assistant-docs) printf '%s\n' "Generate and maintain project documentation" ;;
-        assistant-ideate) printf '%s\n' "Structured idea generation and refinement" ;;
-        assistant-memory) printf '%s\n' "Cross-session persistent memory" ;;
-        assistant-onboard) printf '%s\n' "Systematic project orientation" ;;
-        assistant-reflexion) printf '%s\n' "Post-task learning and calibration" ;;
-        assistant-research) printf '%s\n' "Tiered research with source verification" ;;
-        assistant-review) printf '%s\n' "Autonomous review-fix loop (max 10 rounds)" ;;
-        assistant-security) printf '%s\n' "STRIDE, OWASP, CVE analysis" ;;
-        assistant-skill-creator) printf '%s\n' "Create V1 framework skills" ;;
-        assistant-tdd) printf '%s\n' "Red-Green-Refactor with verification gates" ;;
-        assistant-telos) printf '%s\n' "Purpose and strategic context management" ;;
-        assistant-thinking) printf '%s\n' "Structured reasoning for trade-offs" ;;
-        *) printf '%s\n' "Installed custom skill; open SKILL.md for trigger guidance" ;;
-    esac
-}
-
-build_codex_skill_table_rows() {
-    local skill
-
-    for skill in "${SKILLS[@]}"; do
-        printf '| %s | %s | %s |\n' \
-            "$skill" \
-            "$(codex_skill_table_trigger "$skill")" \
-            "$(codex_skill_table_description "$skill")"
-    done
 }
 
 register_codex_memory_graph_mcp() {
@@ -1497,6 +1628,17 @@ fi
 
 # ── Install hooks ─────────────────────────────────────────────────────────
 
+if [[ "$AGENT" == "codex" && "$HOOK_PROFILE" == "none" ]]; then
+    echo ""
+    if $DRY_RUN; then
+        dry "Remove Assistant Framework commands from $AGENT_HOME/hooks.json while preserving custom hooks"
+        dry "Install silent migration shims for cached framework hook entrypoints in $HOOKS_TARGET/"
+    else
+        migrate_codex_native_hook_profile "$AGENT_HOME/hooks.json" "$HOOKS_TARGET"
+        ok "Codex native hook profile -> framework commands removed; custom hooks preserved"
+    fi
+fi
+
 if $INSTALL_HOOKS; then
     echo ""
 
@@ -1625,38 +1767,27 @@ if $INSTALL_HOOKS; then
                 if [[ -f "$CODEX_HOOKS_FILE" ]]; then
                     if command -v jq &>/dev/null; then
                         # Merge with existing hooks.json
-                        existing_hooks=$(jq --arg hooks_target "$HOOKS_TARGET" '
+                        existing_hooks=$(jq \
+                            --arg hooks_target "$HOOKS_TARGET" \
+                            --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
+                            --arg historical_entrypoints "$(codex_historical_hook_entrypoints)" \
+                            --arg cleanup_helpers "$(framework_hook_cleanup_helpers)" '
                         def assistant_framework_codex_hook_names:
-                            [
-                                "session-start.sh",
-                                "skill-router.sh",
-                                "learning-signals.sh",
-                                "workflow-enforcer.sh",
-                                "workflow-guard.sh",
-                                "stop-review.sh",
-                                "harness-gate.sh",
-                                "subagent-monitor.sh",
-                                "post-compact.sh",
-                                "pre-compress.sh",
-                                "session-end.sh",
-                                "post-tool-context.sh",
-                                "tool-failure-advisor.sh",
-                                "task-completed.sh",
-                                "task-journal-resolver.sh",
-                                "workflow-phase-gates.sh"
-                            ];
+                            $historical_entrypoints | split("\n") | map(select(length > 0));
+                        def assistant_framework_cleanup_helper_names:
+                            $cleanup_helpers | split("\n") | map(select(length > 0));
                         def first_shell_token:
                             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
                         def assistant_framework_codex_hook_command:
                             (. // "") as $command
                             | ($command | first_shell_token) as $token
-                            | any(assistant_framework_codex_hook_names[]; . as $hook_name |
+                            | (any(assistant_framework_codex_hook_names[]; . as $hook_name |
                                 $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
                                 or $token == ($hooks_target + "/" + $hook_name)
-                                or ($token | endswith("/.codex/hooks/assistant/" + $hook_name))
-                                or ($token | endswith("/hooks/assistant/" + $hook_name))
-                                or ($token | endswith("/hooks/scripts/" + $hook_name))
-                            );
+                                or $token == ($framework_hooks_dir + "/" + $hook_name)
+                            )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
+                                $token == ($framework_hooks_dir + "/" + $helper_name)
+                            ));
                         (.hooks // {})
                         | with_entries(
                             .value = (
@@ -1751,37 +1882,28 @@ if $INSTALL_HOOKS; then
                 # Settings exists — merge hooks key
                 if command -v jq &>/dev/null; then
                     # Use jq to merge (preserves existing settings)
-                    existing_hooks=$(jq --arg agent "$AGENT" --arg hooks_target "$HOOKS_TARGET" '
+                    existing_hooks=$(jq \
+                        --arg agent "$AGENT" \
+                        --arg hooks_target "$HOOKS_TARGET" \
+                        --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
+                        --arg historical_entrypoints "$(codex_historical_hook_entrypoints)" \
+                        --arg cleanup_helpers "$(framework_hook_cleanup_helpers)" '
                         def assistant_framework_hook_names:
-                            [
-                                "session-start.sh",
-                                "skill-router.sh",
-                                "learning-signals.sh",
-                                "workflow-enforcer.sh",
-                                "workflow-guard.sh",
-                                "stop-review.sh",
-                                "harness-gate.sh",
-                                "subagent-monitor.sh",
-                                "post-compact.sh",
-                                "pre-compress.sh",
-                                "session-end.sh",
-                                "post-tool-context.sh",
-                                "tool-failure-advisor.sh",
-                                "task-completed.sh",
-                                "task-journal-resolver.sh",
-                                "workflow-phase-gates.sh"
-                            ];
+                            $historical_entrypoints | split("\n") | map(select(length > 0));
+                        def assistant_framework_cleanup_helper_names:
+                            $cleanup_helpers | split("\n") | map(select(length > 0));
                         def first_shell_token:
                             (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
                         def assistant_framework_hook_command:
                             (. // "") as $command
                             | ($command | first_shell_token) as $token
-                            | any(assistant_framework_hook_names[]; . as $hook_name |
+                            | (any(assistant_framework_hook_names[]; . as $hook_name |
                                 $token == ("$HOME/." + $agent + "/hooks/assistant/" + $hook_name)
                                 or $token == ($hooks_target + "/" + $hook_name)
-                                or ($token | endswith("/." + $agent + "/hooks/assistant/" + $hook_name))
-                                or ($token | endswith("/hooks/scripts/" + $hook_name))
-                            );
+                                or $token == ($framework_hooks_dir + "/" + $hook_name)
+                            )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
+                                $token == ($framework_hooks_dir + "/" + $helper_name)
+                            ));
                         (.hooks // {})
                         | with_entries(
                             .value = (
@@ -1865,76 +1987,24 @@ AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
 
 if [[ "$AGENT" == "codex" ]]; then
     AGENTS_MD="$AGENT_HOME/AGENTS.md"
-    AGENTS_SKILL_ROWS="$(build_codex_skill_table_rows)"
     echo ""
 
-    # Build the installer-owned content block (wrapped in markers)
-    #
-    # DESIGN: This AGENTS.md uses three enforcement techniques from research:
-    # 1. XML behavioral_rules block — parses more reliably than markdown for rules
-    # 2. Recursive self-display — rule 6 requires restating phase, keeping rules in context
-    # 3. Concise structure — long instruction files get selectively ignored; stay under 4K
-    #
+    # Keep the installer-owned standing guidance small. Installed SKILL.md files
+    # are the native source of routing metadata and detailed workflow policy.
     AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
 # AGENTS.md — Codex Agent Instructions
 
-## Role
+Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase. The compatibility \`skill-router.sh\` hook is not needed for native Codex routing.
 
-You are an orchestrator for development work. Coordinate specialized agents (code-mapper, code-writer, builder-tester, architect, explorer, code-reviewer, reviewer, qa-evaluator), keep phase gates visible, and communicate progress. Discovery context maps are owned by code-mapper for medium+ work, file edits/code implementation are owned by code-writer, builds/tests by builder-tester, independent code/security/architecture review by code-reviewer when subagent delegation is authorized and available, and independent QA acceptance evaluation by qa-evaluator after build/test and code-review evidence when applicable; reviewer remains a compatibility route for existing handoffs. Framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md are owned by the orchestrator. Assistant Framework policy requires explicit user authorization before spawning subagents for any development/code-work role unless the current user prompt already explicitly authorizes subagents. Ask once for the needed delegation scope, then wait before continuing phases that require subagents. Current Codex CLI/app releases support native subagent workflows by default; custom agents are configured in ~/.codex/agents/ and spawned by explicitly asking Codex to spawn an agent by name. Do not treat the absence of a visible tool named Task, delegate, or subagent as proof that subagents are unavailable. After approval, spawn the requested Codex agents and set subagent_execution_mode=delegated. Use direct fallback only when authorization is denied, a real spawn attempt fails with an unavailable-agent error, or policy disallows spawning, and record equivalent role, phase, verification, and review evidence. Gather context, clarify requirements, decompose work, persist workflow state, and prepare handoffs yourself when that does not modify project source files. Follow matching skill instructions, phase gates, and review loops exactly. When a skill matches your task, invoke it instead of replacing it with ad hoc steps.
+## Development workflow
 
-<behavioral_rules>
-These rules define the operating contract for every response.
-
-1. SKILL ROUTING: Before acting on ANY request, check if it matches an installed skill in ~/.codex/skills/. When a skill matches, load and follow the skill's SKILL.md before proceeding; use the skill workflow as the source of truth.
-
-2. ORCHESTRATOR OWNERSHIP: Coordinate the work; keep discovery context mapping with code-mapper for medium+ work, project source edits and code implementation with code-writer, builds/tests with builder-tester, independent code/security/architecture review with code-reviewer when subagent delegation is authorized and available, and independent QA acceptance evaluation with qa-evaluator after build/test and code-review evidence when applicable; reviewer remains a compatibility route for existing handoffs. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes subagents. Ask once before spawning and wait before continuing phases that require subagents; after approval, use delegated mode. For Codex, spawn custom agents by explicitly asking Codex to spawn the configured agent name (for example, code-mapper, code-writer, builder-tester, code-reviewer, qa-evaluator; reviewer remains compatibility routing); a hidden/implicit subagent capability may not appear as a normal tool in the visible tool list. Use direct fallback only for explicit authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed. The orchestrator may create and update framework-owned state artifacts such as .codex/task.md, .codex/context-map.md, .codex/session.md, and .codex/working-buffer.md; it does not edit project source files directly in delegated mode.
-
-3. PHASE GATES: Development follows phases: TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT. You MUST NOT skip phases. Small tasks use lightweight phases, but NEVER skip entirely.
-
-4. PLAN BEFORE BUILD: For medium+ tasks, you MUST have an approved plan before writing implementation code. Present the plan, wait for approval, THEN build.
-
-5. CLARIFY BEFORE PLAN: During preparation/DISCOVER and PLAN, do not silently assume answers to implementation-shaping unknowns. If a missing answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification, cannot be discovered locally, and has no safe default, ask bounded clarification questions and wait. If the path is clear, record explicit assumptions/defaults before planning.
-
-6. TESTS WITH FEATURES: Every new component or feature MUST have tests in the SAME step. Include the test with the implementation work.
-
-7. REVIEW IS A LOOP: After code changes, run the review cycle: review -> fix -> re-review -> fix -> re-review until clean (max 10 rounds). Continue until the review is clean or the max round is reached.
-
-8. STATE YOUR PHASE: Before every response that involves code work, state your current workflow phase. This is mandatory — it keeps you on track.
-
-9. CONTEXT BUDGET: Keep generated guidance concise. Load detailed skill references only when the active task requires them, avoid duplicating AGENTS.md content in replies, and preserve user custom sections below the installer block.
-</behavioral_rules>
-
-## Skills (loaded from ~/.codex/skills/)
-
-| Skill | Trigger | What it does |
-|-------|---------|-------------|
-$AGENTS_SKILL_ROWS
-
-## Agents (in ~/.codex/agents/)
-
-| Agent | Access | Role |
-|-------|--------|------|
-| code-mapper | read-only | Map project structure and entry points |
-| explorer | read-only | Trace execution paths, understand architecture |
-| architect | read-only | Design implementation blueprints |
-| code-writer | write | Implement code following a plan |
-| builder-tester | write | Build, write tests, run tests |
-| code-reviewer | read-only | Canonical code/security/architecture review |
-| reviewer | read-only | Compatibility route for existing review handoffs |
-| qa-evaluator | read-only | Acceptance, Done Contract, and QA evaluation |
-
-## Memory
-
-- Global: memory-graph MCP backed by ~/.codex/memory (local memory store)
-- Project state: .codex/session.md, .codex/working-buffer.md, .codex/context-map.md, and .codex/task.md at project root; these are ignored framework-owned state artifacts the orchestrator may update directly
-- Rules and preferences are retrieved at session start via memory_context; hooks do not inject rule bodies.
-
-## Conventions
-
-- C# on modern .NET; respect existing repo style
-- Clean Architecture; dependency inversion
-- Never hardcode secrets; never log PII
-- Tests: Arrange-Act-Assert, descriptive naming
+- Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan before project source, test, documentation, configuration, or hook edits begin.
+- Resolve material unknowns before planning. State safe defaults when local evidence makes the path clear.
+- The orchestrator owns framework state files such as \`.codex/task.md\`, \`.codex/context-map.md\`, \`.codex/session.md\`, and \`.codex/working-buffer.md\`. Preserve user-authored project files and existing dirty work.
+- Delegation consent is required only before an actual subagent spawn. Do not ask during preparation merely because agents might be useful. Ask once immediately before the first spawn unless the user already authorized that scope. Continue safe non-spawn work while authorization is unresolved.
+- After authorization, use native Codex subagents by configured name. Do not infer that subagents are unavailable from the absence of a visible tool name; use direct fallback only after denial, policy restriction, or a real unavailable-agent failure.
+- Verify changes with the relevant repository commands. Review the result against the approved scope and fix material findings before handoff; use independent review when the active skill or risk requires it.
+- Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- $AGENTS_MD_MARKER_END -->"
 
     if $DRY_RUN; then
@@ -2080,10 +2150,10 @@ if $INSTALL_HOOKS; then
             workflow|strict)
                 if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
                     echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
-                    echo "  Workflow/delegation: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
+                    echo "  Workflow/delegation: workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
                 else
                     echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
-                    echo "  Workflow/delegation: skill-router + workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
+                    echo "  Workflow/delegation: workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
                     echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
                 fi
                 ;;

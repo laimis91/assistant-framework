@@ -1,94 +1,66 @@
 ---
 name: assistant-workflow
-description: "This skill provides a structured development workflow with phases: triage, discover, decompose when needed, plan, design when needed, build, review, document. Tests are part of Build; Review is the post-build verification loop. Use when the user says 'build', 'implement', 'fix', 'refactor', 'plan', 'create', 'add feature', 'idea', 'how should I approach', 'break this down', 'start working on'. Also activates for any non-trivial development task requiring discovery and planning before coding."
+description: "Structured dev workflow: triage through document. Use for build, implement, fix, refactor, plan, create/make dev artifacts, add feature, break this down, and dev idea-to-action."
 effort: high
 triggers:
-  - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
+  - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|(create|make) (a |an |the |new )*(rest |api )?(endpoint|dashboard|screen|page|component|service|tool|app|feature)|idea into (an |a )?(implementation plan|implementation|plan|code|feature)|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
     priority: 40
     min_words: 2
-    reminder: "This request matches assistant-workflow. You MUST load and follow this SKILL.md and its contracts before acting. At minimum: triage the task size, then build with tests included in the Build phase. Skipping workflow for speed is explicitly prohibited."
+    reminder: "This matches assistant-workflow. Read this SKILL.md and contracts/index.yaml first, then load the selector. Triage task size and include tests in Build; do not skip phases."
 ---
 
 # Development Workflow
 
-Core principles: **verify before deciding**, **right-sized ceremony**, **every idea becomes testable criteria**, **tests travel with the implementation**, and **final answers need evidence**.
+Public routing contract; detailed mechanics live in references and contracts.
 
 ## Goal
 
-Move non-trivial development work from request to verified outcome through right-sized phases, explicit gates, tests, review, and company-safe execution.
-
-This skill is intentionally agent-agnostic: it must work in restricted company environments where third-party tools, remote AI services, unapproved package installs, and external code sharing may be prohibited. Use the repo's native tools first, document assumptions, and never require framework-specific infrastructure to produce good development results.
+Move work to verified outcome through right-sized phases, gates, tests, review, and company-safe execution.
 
 ## Success Criteria
 
-- Triage, discovery, planning, build, review, and document phases run at the smallest useful depth.
-- Medium+ work has an approved plan before implementation; small work has an inline plan and proceeds without ceremony unless risk requires approval.
-- Medium+ harness-capable work has an accepted Done Contract and Harness Recipe before Build.
-- Trace/replay-ready harness work maintains Harness Run State, Trace Ledger, and Replay Packet artifacts.
-- Ordinary medium+ workflow tasks default to `harness_capable=false` and do not inherit Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless explicit harness/QA criteria apply.
-- `controller_intensity=standard` is the ordinary medium+ non-harness default; `strict` needs independent strict/harness/QA criteria.
-- QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
-- QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
-- Required QA records independent QA Evaluator evidence after build/test and code-review evidence.
-- Behavior changes have tests or explicit validation attached to the implementation step they protect.
-- Final output reports changed files, verification evidence, residual risks, and next steps.
-- Candidate Search is used for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots — not as default ceremony.
-- Company-safe constraints are respected: no unapproved external installs, no code/secrets exfiltration, and no hidden dependency on third-party agent tooling.
+- Core phases run at smallest useful depth; Decompose and Design run only when needed.
+- No phase is skipped; small work scales down and durable state is used only when its mode triggers.
+- Medium+ work has an approved plan before Build; small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation.
+- Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
+- Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
+- Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
+- Behavior changes default tests-first or carry explicit validation in the same Build step.
+- Review, QA, and security routing apply when triggered.
+- Final output gives changed files, evidence, review status, risks, next steps.
 
 ## Constraints
 
 - Do not skip phases; scale them down for small work instead.
-- Do not ask ritual clarification or approval questions when code/context makes the next safe action clear.
-- Do ask bounded clarification questions during Discover/preparation before planning when an implementation-shaping unknown would change correctness, scope, behavior, data, public contract, security, migration safety, or verification, cannot be discovered locally, and has no safe default.
-- Do not enter Plan by silently assuming answers to unresolved implementation-shaping unknowns; either ask and wait, explicitly apply safe defaults, or record why local context made the path clear.
-- Keep scope changes explicit and tied to correctness, security, safety, or verification risk.
+- Do not ask ritual questions when code/context makes the next safe action clear.
+- Ask bounded clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification.
+- Keep scope changes explicit and tied to correctness, security, safety, or verification.
 - Do not install tools, upload code, call external services, or paste proprietary content into third-party systems unless the user explicitly approved that path.
-- Prefer local, repo-native commands (`npm test`, `dotnet test`, `pytest`, project scripts, existing linters) over introducing new tooling.
-
-## Company-Safe Mode
-
-Assume company repositories may have strict policy until proven otherwise.
-
-Default behavior:
-- Read local files and run local project commands only.
-- Do not add dependencies, CLIs, services, browser extensions, MCP servers, or agent-specific integrations without explicit approval.
-- Do not send source code, logs with secrets, stack traces containing customer data, credentials, or private URLs to external services.
-- Do not store secrets, tokens, internal endpoints, or temporary task progress in long-term memory.
-- If a requested action conflicts with policy, propose a local/manual alternative and state the trade-off.
-
-Allowed without extra approval when already available in the repo/environment:
-- Existing test/build/lint/typecheck commands.
-- Existing package manager commands that do not install new dependencies.
-- Reading documentation, configs, source files, and tests in the checked-out repo.
-
-Ask before:
-- Installing or upgrading dependencies.
-- Enabling external integrations.
-- Running destructive commands or migrations.
-- Sharing code or artifacts outside the local environment.
+- Prefer repo-native commands over new tooling.
+- When external services, installs, or sensitive-data handling are in scope, load `references/ai-usage-policy.md` for company-safe detail. It is not an entry dependency.
 
 ## Contracts
 
-This skill enforces strict input/output contracts and phase gate assertions. Read the contract files in `contracts/` before executing the workflow. All contracts are **mandatory** and enforced.
+Canonical files stay authoritative; validate applicable rules at enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry. Load only the contract selector applicable to current boundary:
 
-| Contract | File | Purpose |
-|---|---|---|
-| **Input** | `contracts/input.yaml` | Required fields to resolve before Triage |
-| **Output** | `contracts/output.yaml` | Artifacts that must exist before `--- WORKFLOW COMPLETE ---` |
-| **Phase Gates** | `contracts/phase-gates.yaml` | Assertions checked at every phase transition |
-| **Handoffs** | `contracts/handoffs.yaml` | Data shapes between subagent dispatch and return |
+- `entry`: select `task_description`, `task_type`, `scope_hint`, `target_files`, `constraints`, and `acceptance_criteria` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
+- `current_phase`: active `contracts/phase-gates.yaml` at transition.
+- `selected_handoff`: `contracts/handoffs.yaml` before dispatch and return validation.
+- `completion`: `contracts/output.yaml` at completion before final exit.
 
-**Rules:**
-- Resolve all input contract fields before printing `--- PHASE: TRIAGE ---`
-- Check phase gate assertions before printing any `--- PHASE: {name} COMPLETE ---`
-- Include all required handoff context fields when dispatching subagents
-- Validate all required handoff return fields when subagents complete
-- Verify all output contract artifacts before printing `--- WORKFLOW COMPLETE ---`
-- If any contract check fails: resolve it before proceeding and record the recovery
+Selectors resolve by unique id plus canonical path, exact section, key, and explicit names. Runtime selectors resolve `name_from` only through their declared `allowed_names`.
+
+Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
 ## Visible Checkpoints
 
-You MUST print checkpoint messages at every phase transition and key step so the user can see workflow progress. Use this exact format:
+Phase markers are required only for `controller_intensity=strict`, explicit
+project policy, or a user request. Light and standard work still follows every
+logical phase and gate, but reports progress with concise natural updates
+without exact marker ceremony.
+
+When exact markers are required, use this instruction: `Use this exact format:`
 
 ```
 --- PHASE: [name] ---
@@ -106,181 +78,69 @@ For completion:
 --- PHASE: [name] COMPLETE ---
 ```
 
-These are mandatory. Visible checkpoints are the proof that the workflow is being followed.
-
-## Idea-to-Action Pipeline
-
-Before any workflow, classify the input:
-
-```
-Input arrives
-    |
-Is this an idea/question (not a concrete task)?
-    YES --> Decompose into testable criteria (see below), then Triage
-    NO  --> Triage directly
-```
-
-### Decomposing ideas into criteria
-
-When the user has an idea, question, or vague goal - not a concrete task - decompose it before triaging:
-
-1. **Reverse engineer**: What do they explicitly want? What constraints or exclusions did they state? What's implied?
-2. **Extract criteria**: Write 4-12 atomic, binary, testable statements (8-12 words each)
-3. **Apply splitting test**: If a criterion joins two verifiable things (AND/WITH) -> split. If parts can fail independently -> split. If it says "all/every/complete" -> enumerate.
-4. **Present for confirmation**: Show criteria, get approval, then triage as a task.
-
-**Example:**
-```
-Idea: "I want to add caching to our API"
-
-Criteria:
-- [ ] GET endpoints return cached responses for repeated calls
-- [ ] Cache TTL is configurable per endpoint
-- [ ] Cache invalidates on POST/PUT/DELETE to same resource
-- [ ] Cache-Control headers are set on cached responses
-- [ ] Cache miss falls through to normal handler transparently
-- [ ] Cache can be disabled per-request via header
-- [ ] Cache storage is abstracted behind an interface
-
-Approve these criteria? Then I'll triage and plan.
-```
-
-## Acceptance Criteria Quality Bar
-
-Criteria must be useful to implementers and reviewers.
-
-Good criteria are:
-- **Atomic**: one independently verifiable behavior per bullet.
-- **Binary**: pass/fail is clear.
-- **Observable**: test, command, UI behavior, API response, or documented artifact can prove it.
-- **Scoped**: avoids vague words like "complete", "robust", "clean", or "better" unless decomposed.
-
-If a criterion contains `and`, `with`, `all`, `every`, `complete`, or multiple failure modes, split it before planning.
+These examples are conditional on the exact-marker triggers above.
 
 ## Refactor Guidance
 
-When a task includes incidental or scope-expanding refactor work:
-- Justify it with a concrete risk only: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, or poor extension seam.
+- Justify it with a concrete risk only: correctness, security, unsafe change surface, ownership, brittle testing, or poor extension seam.
 - Tie incidental or scope-expanding refactors to concrete risk instead of vague framing such as generic convention language, style, cleanliness, or generic improvement.
 - Choose the smallest useful, durable fix that removes the identified risk. Keep cleanup scoped unless the user explicitly requested cleanup, reorganization, or refactor work.
 
 ## Triage
 
-Print: `--- PHASE: TRIAGE ---`
+Start Triage with a concise progress update. When exact markers are required,
+use `--- PHASE: TRIAGE ---`.
 
-Load `references/triage-rubric.md`. Perform a quick read-only candidate scope scan, then assess task type, risk tier, size, required gates, required agents, and `search_mode`. Size determines which phases run, but risk and task type determine the gate packs.
+Load `references/triage-rubric.md`. Perform a quick read-only Candidate scope scan, then assess task type, risk tier, size, gates, agents, `controller_intensity`, subagent state, and `search_mode`. For ideas, create binary observable criteria before planning.
 
 | Size | Phases |
 |---|---|
-| **Small** (bugfix, typo, config, one-file) | Discover (quick) -> Plan (inline, no wait unless risk/ambiguity requires it) -> Build -> Review -> Document |
-| **Medium** (feature, refactor, endpoint) | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
-| **Large** (new project, multi-module) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
-| **Mega** (rewrite, 10+ files across layers) | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
+| **Small** | Discover quick -> Plan inline/no-wait unless risk/ambiguity -> Build -> Review -> Document |
+| **Medium** | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
+| **Large** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
+| **Mega** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
 
-[Design] = include if task has UI work, skip for backend-only.
+[Design] = UI only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
 Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
 
-If scope exceeds initial triage during any phase, stop and re-triage.
+If scope exceeds initial triage during any phase, stop and re-triage. Use `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 
-### Risk tiers
+## Phase Routing
 
-Use the contract/rubric values exactly: `low`, `moderate`, `high`, or `critical`.
-
-- **low**: local, reversible, tested, no public behavior or data impact.
-- **moderate**: multiple files, shared helpers, unclear edge cases, or moderate verification work.
-- **high**: public contracts, data shape, migration, behavior parity, security-sensitive paths, weak tests, or multi-layer coupling.
-- **critical**: irreversible data loss risk, auth bypass, secret exposure, payment/security boundary, or production outage risk.
-
-High and critical work require an explicit risk note in the plan and a review/security gate before finalizing. Critical work also requires an approval gate before Build.
-
-## Phase Execution
-
-Load `references/phases.md` and execute the phase matching your current stage. Use `references/context-budget-and-pattern-retrieval.md` when material is large or when editing framework patterns. Use `references/artifact-first-output-contract.md` before Plan so implementation starts from concrete deliverables and verification signals. Use `references/decomposition-plan-review.md` before medium+ work leaves Decompose. Use `references/context-handoff-templates.md` for context engineering and continuation packets when no task journal/equivalent state exists, or when an explicit non-standard handoff is requested. Each phase has:
-- Entry checkpoint: `--- PHASE: [name] ---`
-- Exit checkpoint: `--- PHASE: [name] COMPLETE ---`
-- Approval gates where indicated (WAIT for user)
+Load `references/phases.md` for the current phase. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. Use `references/context-budget-and-pattern-retrieval.md` for large material or framework patterns, `references/artifact-first-output-contract.md` before Plan, `references/decomposition-plan-review.md` before medium+ Decompose exits, `references/plan-template.md` during Plan, and `references/context-handoff-templates.md` for non-standard continuations.
 
 | Phase | When | Key Actions |
 |---|---|---|
-| **Discover** | All sizes | Read repo, resolve unknowns, restate requirements. Medium+: produce Code Mapper context map via delegated mode or direct fallback. Unknown-cause bugfixes: load and follow `assistant-debugging` before planning a fix. |
-| **Decompose** | Medium+ | Produce one or more smallest iterable slices with strict acceptance and verification fields. Feed the slice manifest into Plan. |
-| **Plan** | All sizes | Implementation steps with file paths. Load `references/plan-template.md`. Small tasks use inline no-wait plans unless risk/ambiguity requires approval; medium+ tasks use the single approval gate for scope, slices, and build plan. |
-| **Design** | UI tasks only | Design direction, mockup, production checklist. Approval gate. |
-| **Build** | All sizes | One step at a time. Code Writer -> Builder/Tester. Tests alongside code. |
-| **Review** | All sizes | Stage 1: Spec Review. Stage 2: load and follow `assistant-review` SKILL.md and contracts for code review. Stage 3: QA Evaluator runs when acceptance QA is required. |
-| **Document** | All sizes | Small: metrics only. Medium+: docs + metrics + reflection. |
+| Discover | All | Read repo, resolve unknowns, restate requirements. Medium+: Code Mapper map. Unknown-cause bugfixes: load `assistant-debugging`. |
+| Decompose | Medium+ | Smallest iterable slices with acceptance and verification fields. |
+| Plan | All | Small: inline no-wait plan unless risk/ambiguity requires approval. Medium+: WAIT for approved scope, slices, packets, files, verification, and risks before Build. |
+| Design | UI only | Direction, mockup, checklist, approval gate. |
+| Build | All | Light may use `workflow_state_mode=inline`, `subagent_policy_state=not_required`, and `subagent_execution_mode=not_applicable` for direct implementation; standard/strict use Code Writer -> Builder/Tester. Tests or relevant validation travel with code. |
+| Review | All | Light gets a fresh self-review without worker/reviewer dispatch evidence; standard/strict use Spec Review then independent `assistant-review`; QA only when required. |
+| Document | All | Apply the state/manual/learning modes; metrics, reflexion, and memory are optional/non-blocking. |
 
-For subagent roles and dispatch rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before any subagent spawn. Assistant Framework policy requires explicit user authorization before spawning subagents for development/code-work roles unless the current user prompt already explicitly authorizes them for this task. Ask once for the needed delegation scope and wait before continuing phases that require subagents. A sufficient prompt is: `This workflow expects Code Mapper, Architect, Code Writer, Builder/Tester, Code Reviewer, and QA Evaluator when QA is required for [scope]. May I use subagents for this task?` After authorization, use `delegated` mode and spawn the configured role agents. Use `direct_fallback` only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
-For BES-style option exploration, load `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
-For mega tasks and anti-patterns, load `references/mega-and-patterns.md`.
-Load `references/harness-controller.md` only when medium+ work is harness-capable: long-running, trace/replay-ready multi-slice, high-risk harness, subjective/domain-scored, scoped UI/visual/product/UX/docs/DX acceptance, or explicitly requested as harness work.
+For subagent rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before spawning. Light small low-risk localized work may select `not_required` plus `not_applicable` and does not ask for delegation. For standard/strict development work, Assistant Framework policy requires explicit user authorization before spawning subagents unless the current prompt already authorizes them. Ask once for the needed delegation scope and wait before continuing phases that require subagents. After authorization, use `delegated` mode and spawn the configured role agents. Use direct fallback only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
 
-## Planning Checklist
-
-Medium+ plans must include:
-- **Goal**: one sentence.
-- **Non-goals**: what will not be changed.
-- **Acceptance criteria**: atomic checklist.
-- **Likely files**: exact paths when known; otherwise directories and discovery tasks.
-- **Implementation steps**: ordered, small enough to verify independently.
-- **Test strategy**: failing tests, focused tests, regression checks, or explicit validation when tests are not feasible.
-- **Risk/security notes**: especially for high-risk surfaces.
-- **Rollback/mitigation**: only when deployment/data/config risk exists.
-
-Small tasks still need an inline plan, but it may be 2-5 bullets.
-
-## Build Rules
-
-- For behavior changes, use tests-first by default: reproduce/RED, implement/GREEN, refactor only after green.
-- If tests-first is not feasible, state the exception and run the smallest reliable validation command.
-- For bug fixes, reproduce the bug with a failing test or minimal command before fixing whenever feasible.
-- When a bugfix starts with unknown cause, load and follow `assistant-debugging` during Discover/Build before entering `assistant-tdd`; capture reproduction, hypotheses, disconfirming evidence, root cause status, confidence, and residual risks.
-- Once the failure mechanism is understood, transition into `assistant-tdd` with a regression test based on the original reproduction path.
-- Never claim a fix works from code inspection alone when a command, test, or local reproduction is available.
-- If verification fails and the next fix is obvious, fix and rerun. If the cause is unclear, switch back to `assistant-debugging` instead of random patching.
-
-## Review and Security Gates
-
-Before final output for medium+ or high-risk work:
-- Run the relevant build/test/lint/typecheck commands available in the repo.
-- Review the diff against the acceptance criteria.
-- For bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or a clear reason it was not applicable.
-- Use `assistant-review` for code quality/spec review when the change is non-trivial.
-- Use QA Evaluator through `assistant-review` when `qa_evaluation_mode=required`: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance after build/test and code-review evidence.
-- Use `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
-
-Review findings must cite evidence and concrete risk. Avoid generic style feedback unless it affects correctness, security, maintainability, or test reliability.
-
-## Context Management
-
-- **On continuation**: use compact pointers first; read the active project task journal when recovery details are needed. The journal has the full task state
-- Small: read only target files. Medium: read touched files + plan template.
-- Large: read interfaces/contracts + plan template + playbook.
-- Mega: each slice gets its own strict slice brief and context.
-- Files >500 lines: search first, read sections as needed.
-- After 3+ build/fix iterations: summarize and drop stale context.
+Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
+Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
 
 ## Output
 
 Return:
-- **Status** - complete, partially complete, blocked, or plan ready.
-- **Changed files** - paths and purpose for each change.
-- **Verification** - commands run, pass/fail results, and skipped checks with reasons.
-- **Review result** - spec, quality, and security review outcome when applicable.
-- **Residual risk** - blockers, assumptions, policy constraints, or follow-up work.
-- **Next step** - one practical recommendation.
+- Status: complete, partially complete, blocked, or plan ready.
+- Changed files: paths and purpose.
+- Verification: commands, pass/fail, skipped checks with reasons.
+- Review result: spec, quality, QA, and security when applicable.
+- Residual risk: blockers, assumptions, policy constraints, or follow-up.
+- Next step: one practical recommendation.
 
 Do not use phrases like "should work", "probably fixed", or "looks good" unless immediately qualified with evidence or uncertainty.
 
 ## Stop Rules
 
 - Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
-- Stop before medium+ Build until the plan is approved.
+- Stop before medium+ Build until plan approval.
 - Stop before final response if build, tests, required review, or output contract evidence is missing.
-
-
-## Verified Skill Distillation
-
-Use `references/verified-skill-distillation.md` before promoting successful workflows or review lessons into skills, constraints, or evals.
+- Stop when a plan deviation changes approved scope, files, behavior, risk, verification, or acceptance criteria; record the deviation and get approval before continuing.

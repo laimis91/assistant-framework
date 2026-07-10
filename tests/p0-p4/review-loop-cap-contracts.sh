@@ -26,6 +26,7 @@ review_cap_runtime_term_present() {
 
 active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
@@ -37,6 +38,7 @@ active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md"
@@ -78,7 +80,7 @@ test_start "assistant-review contracts and loop use 10-round cap"
 missing_review_cap_terms=()
 for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::max 10 rounds" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::while round <= 10:" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::while round <= 10:" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::round 10 is terminal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::validation: \">= 1 and <= 10\"" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::rounds (1-10)" \
@@ -103,13 +105,13 @@ else
     fail "assistant-review 10-round cap terms missing: ${missing_review_cap_terms[*]}"
 fi
 
-test_start "workflow hooks installer and prompts use 10-round review cap"
+test_start "workflow hooks and prompts use 10-round review cap"
 missing_runtime_cap_terms=()
 for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::validation: \">= 1 and <= 10\"" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::Current review round number (1-10)" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::Round 8-10: 90" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::max 10 rounds" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::max 10 rounds" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 1 of 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 2 of 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::up to 10 rounds" \
@@ -121,8 +123,6 @@ for file_and_term in \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh::max 10 rounds" \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::max_round\" -ne 10" \
     "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::round\" -gt 10" \
-    "$FRAMEWORK_DIR/install.sh::Autonomous review-fix loop (max 10 rounds)" \
-    "$FRAMEWORK_DIR/install.sh::clean (max 10 rounds)" \
     "$FRAMEWORK_DIR/docs/harness-design-guide.md::while round <= 10:" \
     "$FRAMEWORK_DIR/docs/harness-design-guide.md::| 10 | Terminal report"; do
     file="${file_and_term%%::*}"

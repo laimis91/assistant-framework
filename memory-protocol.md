@@ -1,60 +1,15 @@
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->
 # Assistant Framework — Memory Protocol
 
-## Role
-
-You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator may create and update framework-owned state artifacts such as {agent_state_dir}/task.md, {agent_state_dir}/context-map.md, {agent_state_dir}/session.md, and {agent_state_dir}/working-buffer.md; it does not edit project source files directly. When a skill matches your task, invoke it and follow its instructions.
-
 <!-- This is a template. Paths like ~/{agent_state_dir}/ are substituted during install.sh for the active agent. -->
 <!-- Appended by Assistant Framework install. Do not remove this marker. -->
 
-## Memory System (Assistant Framework)
+Cross-session memory is available through the memory-graph MCP and its local store under `~/{agent_state_dir}/memory`.
 
-All cross-session memory is accessed through the **memory-graph MCP tools**, backed by the local memory store under `~/{agent_state_dir}/memory`.
-
-### Entity Types
-
-| Type | Purpose | Priority |
-|---|---|---|
-| `Rule` | Behavioral mandates, corrections | Highest — retrieve via `memory_context` at session start |
-| `Preference` | User coding preferences, working style | High — loaded via memory_context |
-| `Insight` | Learned facts from past sessions | Normal — loaded via memory_context |
-| `Project` | Codebase / repository | Normal |
-| `Technology` | Framework, library, tool | Normal |
-| `Pattern` | Architectural decision | Normal |
-| `Convention` | Project-specific convention | Normal |
-
-**Project session state** — lives in `{agent_state_dir}/` at the project root (create on first use):
-
-| File | Purpose |
-|---|---|
-| `{agent_state_dir}/session.md` | Current session state: task, progress, blockers (ephemeral) |
-| `{agent_state_dir}/working-buffer.md` | Scratch space for mid-session summaries (ephemeral) |
-| `{agent_state_dir}/task.md` | Task journal for active work — single source of truth during build (ephemeral) |
-
-### Rules
-
-#### Session Start
-1. Call `memory_context` with the current project name or path — returns dependencies, technologies, patterns, conventions, preferences, rules, and recent insights.
-2. If `{agent_state_dir}/task.md` exists → read it (active task state).
-3. If `{agent_state_dir}/session.md` exists → read it; resume from where it left off.
-4. If `{agent_state_dir}/working-buffer.md` exists → read it, then **clear** its contents.
-
-Hooks do not inject rule bodies directly. Use `memory_context` and `memory_search` to retrieve rules, preferences, and prior lessons.
-
-#### When Corrected
-If the user corrects a mistake or clarifies a preference:
-1. Use `memory_add_entity` with type `Rule` to record the correction through memory-graph MCP.
-2. Acknowledge the correction, then continue.
-
-#### After Task Completion
-If the task produced reusable insights:
-1. Use `memory_add_insight` to record the insight through memory-graph MCP.
-2. If `assistant-reflexion` is available, invoke it for structured reflection.
-
-#### Memory Hygiene
-- Use `memory_consolidate` to decay stale insights and archive low-confidence ones.
-- Use `memory_stats` to check memory system health.
-- Never store secrets, API keys, or PII in memory.
+- At session start, call `memory_context` with the current project name or path. Use `memory_search` only when the returned context is insufficient.
+- If present, read `{agent_state_dir}/task.md` and `{agent_state_dir}/session.md` to resume active work. Use `{agent_state_dir}/working-buffer.md` only as temporary recovery context.
+- Treat memory as supporting context, not as a replacement for current repository evidence. Verify drift-prone facts before changing code or configuration.
+- Save only durable rules, preferences, or reusable insights when useful. Routine completion does not require reflection, metrics, memory writes, consolidation, or health checks.
+- Never store credentials, API keys, secrets, PII, private endpoints, customer data, or temporary task progress in memory.
 
 <!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->

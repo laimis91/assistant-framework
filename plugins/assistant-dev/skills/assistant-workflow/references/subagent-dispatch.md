@@ -14,7 +14,27 @@ Before spawning any subagent, resolve:
 | `subagent_execution_mode` | `delegated`, `direct_fallback`, `not_applicable` | Whether work is executed by subagents, by direct fallback with equivalent evidence, or without any subagent role |
 | `subagent_authorization_scope` | list of roles/phases/actions | What the user explicitly authorized, when authorization was required |
 
-Assistant Framework policy requires explicit user authorization before spawning subagents for any development/code-work workflow role. Ask once for the required scope before the first spawn unless the current user prompt already explicitly authorizes subagents for this task. If authorization is granted, set `subagent_policy_state=delegation_authorized`, set `subagent_execution_mode=delegated`, and spawn the configured role agents. If authorization has not been granted or denied yet, keep `subagent_policy_state=authorization_required`, ask the authorization question, and wait; do not continue through Discover/Decompose/Plan/Build/Review phases that require subagents. For Codex, current CLI/app releases support native subagent workflows by default; custom agents live in `~/.codex/agents/` or project `.codex/agents/` and are spawned by explicitly asking Codex to spawn an agent by name. Do not mark `subagents_unavailable` merely because the visible tool list lacks a tool named `Task`, `delegate`, or `subagent`; only use `subagents_unavailable` after a real spawn attempt fails or the adapter documentation/configuration proves no subagent mechanism exists. If the user declines or policy disallows spawning, use `direct_fallback` and preserve the same phase gates, role separation, verification evidence, and review evidence.
+Light small low-risk localized work uses `subagent_policy_state=not_required`
+and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
+instead records direct implementation, relevant automated validation/tests, and
+a fresh self-review. For standard/strict development/code-work roles, Assistant
+Framework policy requires explicit user authorization before spawning subagents.
+Ask once for the required scope before the first spawn unless the current
+user prompt already explicitly authorizes subagents for this task. If authorization
+is granted, set `subagent_policy_state=delegation_authorized`, set
+`subagent_execution_mode=delegated`, and spawn the configured role agents. If
+authorization has not been granted or denied yet, keep
+`subagent_policy_state=authorization_required`, ask the authorization question,
+and wait; do not continue through phases that require subagents. For Codex,
+current CLI/app releases support native subagent workflows by default; custom
+agents live in `~/.codex/agents/` or project `.codex/agents/` and are spawned by
+explicitly asking Codex to spawn an agent by name. Do not mark
+`subagents_unavailable` merely because the visible tool list lacks a tool named
+`Task`, `delegate`, or `subagent`; only use `subagents_unavailable` after a real
+spawn attempt fails or the adapter documentation/configuration proves no subagent
+mechanism exists. If the user declines or policy disallows spawning for
+standard/strict work, use `direct_fallback` and preserve the same phase gates,
+role separation, verification evidence, and review evidence.
 
 ## Roles
 
@@ -42,7 +62,12 @@ Assistant Framework policy requires explicit user authorization before spawning 
 
 ## Phase-to-subagent requirements
 
-Every phase has a declared role responsibility. Phases without a subagent role are handled directly by the Orchestrator with explicit justification. Phases with a subagent role dispatch only when `subagent_execution_mode=delegated`; otherwise the Orchestrator records direct fallback evidence for the same role responsibility.
+Standard/strict phases have declared role responsibilities. Phases without a
+subagent role are handled directly by the Orchestrator with explicit
+justification. Phases with a subagent role dispatch only when
+`subagent_execution_mode=delegated`; otherwise standard/strict direct fallback
+records equivalent evidence. The light lane is direct/not_applicable and uses
+its compact validation plus fresh-review evidence instead.
 
 | Phase | Subagent(s) | Condition | Justification |
 |---|---|---|---|
@@ -52,9 +77,9 @@ Every phase has a declared role responsibility. Phases without a subagent role a
 | **DECOMPOSE** | Architect | Medium+ | Analyzes problem boundaries and proposes strict slice manifest |
 | **PLAN** | Architect | Large+ | Designs full implementation blueprint from slice manifest |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
-| **BUILD** | Code Writer | All sizes | Implements code following the plan |
-| **BUILD** | Builder/Tester | All sizes | Builds, runs tests, returns concise results |
-| **REVIEW** | Code Reviewer, or Reviewer compatibility | All sizes | Independent code review via `assistant-review` skill |
+| **BUILD** | Code Writer | Standard/strict | Implements code following the plan |
+| **BUILD** | Builder/Tester | Standard/strict | Builds, runs tests, returns concise results |
+| **REVIEW** | Code Reviewer, or Reviewer compatibility | Standard/strict | Independent code review via `assistant-review` skill |
 | **REVIEW** | QA Evaluator | `qa_evaluation_mode=required` only | Independent acceptance QA via `assistant-review` QA loop |
 | **DOCUMENT** | — (Orchestrator direct) | All sizes | Documentation generation is orchestrator's synthesis work |
 
@@ -64,15 +89,42 @@ Every phase has a declared role responsibility. Phases without a subagent role a
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small** | Code Writer → Builder/Tester → Code Reviewer | Sequential, minimal (no Decompose); Reviewer may be used only as compatibility; QA only when explicitly requested |
+| **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; promote out of light when risk/harness/QA criteria apply |
+| **Small standard/strict** | Code Writer → Builder/Tester → Code Reviewer | Sequential, minimal (no Decompose); Reviewer may be used only as compatibility; QA only when required |
 | **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Mapper feeds Architect, slices feed Writer; Reviewer may be used only as compatibility |
 | **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer may be used only as compatibility |
 | **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration |
 
 ## Dispatch guidelines
 
-- **Every task gets at minimum**: Code Writer → Builder/Tester → Code Reviewer responsibilities. `reviewer` remains valid compatibility routing for existing handoffs, but new dispatches should use `code-reviewer` for code defects, security, architecture, test coverage, and structural code issues. In delegated mode these are subagents; in direct fallback they are explicitly recorded role-equivalent steps. No code ships without build + test + review evidence. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts MUST infer required_agents with at least Code Writer, Builder/Tester, and Code Reviewer (or Reviewer compatibility); `not_applicable` is invalid for source-changing Build tasks.
-- **Strict evidence gate**: delegated mode is not complete until the task journal Agent Dispatch Log records Code Writer dispatch/result, Builder/Tester dispatch/result, and Code Reviewer dispatch/result evidence, or Reviewer dispatch/result evidence when compatibility routing is used. Medium+ delegated slice work also records per-slice dispatch evidence before each slice is marked verified. **Codex adds a stronger check:** delegated Codex evidence must correspond to real hook-written `SubagentStart`/`SubagentStop` lifecycle records in protected agent-owned workflow state; each dispatch/result entry must reference the matching lifecycle `agent_id`, and task-journal text or project-local `.codex/subagent-events.jsonl` diagnostics are insufficient because Codex can otherwise run phases inline and write claimed dispatch entries. Direct fallback is allowed only for explicit `authorization_denied`, `subagents_unavailable`, or `policy_disallowed` reasons, and must record equivalent role, phase, verification, and review evidence; silent fallback fails the stop-review/phase gates.
+- **Light lane**: small low-risk localized work may keep `required_agents`
+  empty and use direct implementation, relevant automated validation/tests, and
+  fresh self-review evidence. `subagent_execution_mode=not_applicable` is valid
+  for this lane. Security, high-risk, harness-capable, required-QA, or otherwise
+  promoted work cannot use this exception.
+- **Standard/strict minimum**: Code Writer → Builder/Tester → Code Reviewer
+  responsibilities. `reviewer` remains valid compatibility routing for existing
+  handoffs, but new dispatches should use `code-reviewer` for code defects,
+  security, architecture, test coverage, and structural code issues. In
+  delegated mode these are subagents; in direct fallback they are explicitly
+  recorded role-equivalent steps. Standard/strict source-changing work infers
+  these roles; `not_applicable` is invalid for its Build tasks.
+- **Strict evidence gate for standard/strict work**: delegated mode is not complete until the
+  task journal Agent Dispatch Log records Code Writer dispatch/result,
+  Builder/Tester dispatch/result, and Code Reviewer dispatch/result evidence,
+  or Reviewer dispatch/result evidence when compatibility routing is used.
+  Medium+ delegated slice work also records per-slice dispatch evidence before
+  each slice is marked verified. **Codex adds a stronger check:** delegated
+  Codex evidence must correspond to real hook-written
+  `SubagentStart`/`SubagentStop` lifecycle records in protected agent-owned
+  workflow state; each dispatch/result entry must reference the matching
+  lifecycle `agent_id`, and task-journal text or project-local
+  `.codex/subagent-events.jsonl` diagnostics are insufficient because Codex can
+  otherwise run phases inline and write claimed dispatch entries. Direct
+  fallback is allowed only for explicit `authorization_denied`,
+  `subagents_unavailable`, or `policy_disallowed` reasons, and must record
+  equivalent role, phase, verification, and review evidence; silent fallback
+  fails the stop-review/phase gates.
 - **QA evidence gate**: when QA is required, delegated mode is not complete until the task journal Agent Dispatch Log records QA Evaluator dispatch/result evidence after Builder/Tester and Code Reviewer evidence. Direct fallback must record fresh QA Evaluator direct evidence separately from Code Reviewer direct evidence. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 - **Every medium+ task gets Architect decomposition responsibility**: In delegated mode the Architect proposes smallest iterable slice boundaries; in direct fallback the same criteria and evidence are recorded directly.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)

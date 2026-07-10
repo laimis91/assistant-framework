@@ -1,6 +1,65 @@
 #!/usr/bin/env bash
 # learning-controller.sh -- Learning controller gate helpers.
 
+assistant_phase_learning_capture_mode() {
+    local file="$1"
+    local mode
+
+    mode="$(assistant_phase_scalar_field "$file" "Learning capture mode" || true)"
+    if [[ -z "$mode" ]]; then
+        mode="$(assistant_phase_scalar_field "$file" "learning_capture_mode" || true)"
+    fi
+    printf '%s' "$mode" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || true
+}
+
+assistant_phase_has_lesson_bearing_evidence() {
+    local file="$1"
+
+    awk '
+        function trim(s) {
+            sub(/^[[:space:]]+/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            return s
+        }
+        function absence_phrase(value, low) {
+            low = tolower(trim(value))
+            sub(/[.!]+$/, "", low)
+            low = trim(low)
+            return low ~ /^(none|n\/a|not[_ -]?applicable|not[_ -]?required|todo|tbd|placeholder|no corrections?|no changes?|none recorded)$/
+        }
+        function concrete(value) {
+            value = trim(value)
+            if (value == "" || value ~ /^\[[^]]+\]$/) {
+                return 0
+            }
+            return !absence_phrase(value)
+        }
+        {
+            line = $0
+            low = tolower(line)
+
+            if (low ~ /found( this round)?:/ &&
+                (low ~ /[1-9][0-9]*[[:space:]]+must-fix/ || low ~ /[1-9][0-9]*[[:space:]]+should-fix/)) {
+                found = 1
+            }
+            if (low ~ /^[[:space:]]*-[[:space:]]*result:[[:space:]]*fail([[:space:]]|$)/ ||
+                low ~ /build:[[:space:]]*failed/ ||
+                low ~ /tests?:[^\n]*[1-9][0-9]*[[:space:]]+failed/ ||
+                low ~ /build[_ ]failures:[[:space:]]*[1-9][0-9]*/) {
+                found = 1
+            }
+            if (low ~ /^[[:space:]]*[-*]?[[:space:]]*(user correction|user_correction|memory trend signal|memory_trend)[[:space:]]*:/) {
+                value = line
+                sub(/^[^:]*:[[:space:]]*/, "", value)
+                if (concrete(value)) {
+                    found = 1
+                }
+            }
+        }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null
+}
+
 assistant_phase_has_learning_controller() {
     local file="$1"
     grep -qE "^### Learning Controller[[:space:]]*$" "$file" 2>/dev/null
@@ -164,10 +223,24 @@ assistant_phase_learning_section_has_item() {
 
 assistant_phase_learning_missing_reason_key() {
     local file="$1"
-    local status block trend decision persistence no_save_rationale
+    local status mode block trend decision persistence no_save_rationale
     local spec_pass_line quality_review_line final_result_line
 
-    if ! assistant_phase_is_medium_plus "$file"; then
+    mode="$(assistant_phase_learning_capture_mode "$file")"
+
+    # Journals created before learning_capture_mode existed keep the legacy
+    # medium+ requirement. New journals use explicit adaptive semantics.
+    if [[ -z "$mode" ]] && ! assistant_phase_is_medium_plus "$file"; then
+        printf 'complete\n'
+        return 0
+    fi
+
+    if [[ "$mode" == "not_required" ]]; then
+        printf 'complete\n'
+        return 0
+    fi
+
+    if [[ "$mode" == "auto" ]] && ! assistant_phase_has_lesson_bearing_evidence "$file"; then
         printf 'complete\n'
         return 0
     fi

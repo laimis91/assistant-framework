@@ -9,7 +9,7 @@
   "model_specific_api_calls": false,
   "recommended_use": [
     "Run each case with the assistant-workflow skill instructions loaded.",
-    "Compare the local response against the expected phase checkpoints, approval gates, and build/test discipline.",
+    "Compare the local response against the expected logical phases, adaptive progress updates, approval gates, and build/test discipline.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
@@ -25,7 +25,7 @@
         "No implementation plan has been approved yet."
       ],
       "expected_behavior": [
-        "Prints visible workflow checkpoints beginning with TRIAGE and DISCOVER.",
+        "Reports concise natural progress for Triage and Discover without requiring exact phase markers at standard intensity.",
         "Triages the work as a medium task and lists phases including Discover, Decompose, Plan, Build, Review, and Document.",
         "Records a candidate scope scan before finalizing Triage.",
         "Records references checked in the Discover context map.",
@@ -35,7 +35,7 @@
         "Stops at WAITING for plan approval and does not create fixture files or modify tests before approval."
       ],
       "pass_criteria": [
-        "The response includes workflow phase checkpoints.",
+        "The response visibly reports Triage and Discover progress.",
         "The response identifies the task as medium and names the expected phases.",
         "The response includes slice decomposition or task packets before Build.",
         "The response asks for plan approval before implementation.",
@@ -45,17 +45,17 @@
         "Starts writing fixtures before an approved plan.",
         "Skips straight to Build without Decompose or Plan.",
         "Treats tests or docs as optional follow-up work.",
-        "Omits phase checkpoints entirely."
+        "Omits phase progress entirely."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "--- PHASE: TRIAGE ---",
-          "--- PHASE: DISCOVER ---",
+          "Triage",
+          "Discover",
           "Triaged as: medium",
           "Candidate scope scan",
           "References Checked",
-          "--- PHASE: DECOMPOSE ---",
-          "--- PHASE: PLAN ---",
+          "Decompose",
+          "Plan",
           "WAITING: Plan approval required",
           "verification criteria",
           "exact file paths"
@@ -80,7 +80,7 @@
         "The approved slices include fixtures, contract tests, and docs."
       ],
       "expected_behavior": [
-        "Prints PLAN COMPLETE and BUILD phase checkpoints.",
+        "Reports the approved Plan transition and Build progress without requiring exact markers at standard intensity.",
         "Processes one slice at a time instead of batching every file change without evidence.",
         "Runs the relevant validation or test command for each slice before advancing.",
         "Records slice verification evidence and updates task progress.",
@@ -104,7 +104,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "--- PHASE: BUILD ---",
+          "Build",
           "Slice 1",
           "verification command",
           "Expected success signal",
@@ -156,7 +156,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "--- PHASE: TRIAGE ---",
+          "Triage",
           "rewrite",
           "raw `code`",
           "not a standalone workflow trigger"
@@ -164,6 +164,47 @@
         "forbidden_substrings": [
           "raw code always triggers workflow",
           "review this code triggers workflow by itself",
+          "Skipping Triage"
+        ]
+      }
+    },
+    {
+      "id": "workflow-trigger-routes-create-make-dev-idea-action",
+      "title": "Workflow trigger routes create/make dev idea action",
+      "category": "trigger_routing",
+      "purpose": "Checks that workflow routing covers common concrete dev creation prompts while leaving pure brainstorming to assistant-ideate.",
+      "prompt": "Create a new REST endpoint, make a dashboard, and turn this idea into an implementation plan.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The request asks for concrete development artifacts, not pure brainstorming.",
+        "Pure brainstorming prompts should remain owned by assistant-ideate."
+      ],
+      "expected_behavior": [
+        "Routes workflow because create/make target concrete development artifacts.",
+        "Treats idea-to-action phrasing as workflow only because the idea is being turned into implementation work.",
+        "Starts with Triage before planning or building.",
+        "Does not claim pure brainstorming belongs to assistant-workflow."
+      ],
+      "pass_criteria": [
+        "The response starts with Triage.",
+        "The response treats the REST endpoint and dashboard as development artifacts.",
+        "The response converts the idea-to-action request into implementation criteria.",
+        "The response preserves assistant-ideate ownership for pure brainstorming."
+      ],
+      "fail_signals": [
+        "Does not route create/make development artifact prompts to workflow.",
+        "Treats pure brainstorming as assistant-workflow work.",
+        "Skips Triage for the creation request."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Triage",
+          "REST endpoint",
+          "dashboard",
+          "implementation"
+        ],
+        "forbidden_substrings": [
+          "pure brainstorming belongs to assistant-workflow",
           "Skipping Triage"
         ]
       }
@@ -241,7 +282,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "--- PHASE: TRIAGE ---",
+          "Triage",
           "bugfix",
           "debugging_mode",
           "assistant-debugging",
@@ -684,6 +725,117 @@
           "harness_capable=true by default",
           "Done Contract is required by loop artifacts",
           "QA evaluation is required by loop artifacts"
+        ]
+      }
+    },
+    {
+      "id": "workflow-controller-default-boundary",
+      "title": "Internal workflow controller preserves ordinary defaults",
+      "category": "workflow_controller_routing",
+      "purpose": "Checks that ordinary medium workflow routing uses the internal decision-boundary reference without creating a public workflow-controller skill or enabling harness/QA by default.",
+      "prompt": "Plan an ordinary medium source-changing assistant-workflow refactor. Keep harness and QA off unless explicit criteria apply, and do not create any new public workflow skills.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The task is ordinary medium source-changing work.",
+        "No harness, trace/replay, Done Contract, domain scoring, or QA acceptance criteria were requested."
+      ],
+      "expected_behavior": [
+        "Uses references/workflow-controller.md as an internal decision-boundary reference while assistant-workflow remains the public entrypoint.",
+        "Keeps controller_intensity=standard, harness_capable=false, and qa_evaluation_mode=not_required.",
+        "Does not create or route to a public skills/*workflow-controller* skill directory.",
+        "Does not load harness-controller.md unless harness_capable=true is established by explicit criteria.",
+        "Keeps Code Reviewer and QA Evaluator responsibilities separate."
+      ],
+      "pass_criteria": [
+        "The response names the internal workflow controller boundary.",
+        "The response preserves ordinary medium standard/non-harness/non-QA defaults.",
+        "The response keeps assistant-workflow as the public entrypoint.",
+        "The response keeps harness-controller.md harness-only.",
+        "The response does not treat Code Reviewer evidence as QA Evaluator evidence."
+      ],
+      "fail_signals": [
+        "Creates a new public workflow-controller skill.",
+        "Treats ordinary medium source-changing work as harness_capable=true by default.",
+        "Requires QA evaluation for ordinary medium work without explicit QA criteria.",
+        "Treats Code Reviewer and QA Evaluator as interchangeable."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "references/workflow-controller.md",
+          "decision-boundary",
+          "assistant-workflow",
+          "public entrypoint",
+          "controller_intensity=standard",
+          "harness_capable=false",
+          "qa_evaluation_mode=not_required",
+          "harness-controller.md",
+          "harness_capable=true",
+          "Code Reviewer",
+          "QA Evaluator"
+        ],
+        "forbidden_substrings": [
+          "skills/workflow-controller",
+          "new public workflow-controller skill",
+          "harness_capable=true by default",
+          "QA evaluation is required for ordinary medium work",
+          "Code Reviewer replaces QA Evaluator",
+          "QA Evaluator replaces Code Reviewer"
+        ]
+      }
+    },
+    {
+      "id": "workflow-boundary-refs-load-conditionally",
+      "title": "Workflow boundary refs load conditionally",
+      "category": "workflow_controller_routing",
+      "purpose": "Checks that assistant-workflow keeps phases.md as a thin phase shell and loads internal boundary references only when their active Build, Review, Document, or harness runtime boundary applies.",
+      "prompt": "Plan a medium source-changing workflow refactor with Build, Review, and Document steps. Keep harness runtime artifacts off unless harness_capable=true, and do not create public workflow sub-skills.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The task changes source and tests, then needs Review and Document phases.",
+        "No explicit harness, trace/replay, Done Contract, QA acceptance, or domain-scored criteria were requested."
+      ],
+      "expected_behavior": [
+        "Keeps assistant-workflow as the public entrypoint and does not create public workflow sub-skill directories.",
+        "Keeps phases.md as a thin phase shell that points to boundary references instead of carrying full Build, Review, QA, harness runtime, or completion procedures.",
+        "Loads references/build-worker-protocol.md only for source-changing Build work.",
+        "Loads references/review-qa-router.md during Review.",
+        "Loads references/completion-controller.md during Document.",
+        "Does not load references/harness-runtime-artifacts.md unless harness_capable=true is established."
+      ],
+      "pass_criteria": [
+        "The response names the internal boundary references and when each loads.",
+        "The response says phases.md remains a thin phase shell.",
+        "The response keeps harness runtime artifacts conditional on harness_capable=true.",
+        "The response does not create or route to public workflow sub-skills."
+      ],
+      "fail_signals": [
+        "Always loads all boundary references from assistant-workflow root.",
+        "Creates public workflow-controller, build-worker, review-router, harness-runtime, or completion-controller skill directories.",
+        "Requires harness runtime artifacts for ordinary medium source-changing work.",
+        "Moves full Build, Review, QA, or Document procedure text back into phases.md."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "references/build-worker-protocol.md",
+          "source-changing Build",
+          "references/review-qa-router.md",
+          "Review",
+          "references/completion-controller.md",
+          "Document",
+          "references/harness-runtime-artifacts.md",
+          "harness_capable=true",
+          "thin phase shell",
+          "assistant-workflow",
+          "public entrypoint"
+        ],
+        "forbidden_substrings": [
+          "always load all boundary references",
+          "skills/build-worker-protocol",
+          "skills/review-qa-router",
+          "skills/harness-runtime-artifacts",
+          "skills/completion-controller",
+          "harness runtime artifacts are required for ordinary medium work",
+          "phases.md owns full Build Review QA Document procedures"
         ]
       }
     }

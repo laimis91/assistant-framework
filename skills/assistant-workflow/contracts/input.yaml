@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Any development/code-work task that will change project source, tests, docs, config, hooks, contracts, or generated project artifacts must include at minimum Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs when explicitly recorded."
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Standard/strict development work that changes project artifacts includes Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
     default: []
     on_missing: skip
 
@@ -59,17 +59,17 @@ fields:
     validation: "Must describe the current authorization or availability state before any subagent dispatch occurs"
     default: not_required
     on_missing: infer
-    infer_from: "Use authorization_required for any development/code-work task that will require workflow subagent roles unless the current user prompt already explicitly authorizes subagents for this task; use delegation_authorized only after explicit user approval or when the user explicitly asks for subagents/agents in an adapter that supports them; use authorization_denied when the user declines; use subagents_unavailable only after a real spawn attempt fails or adapter documentation/configuration proves no subagent mechanism exists (for Codex, current CLI/app releases support native subagent workflows and absence of a visible Task/delegate/subagent tool is not proof of unavailability); use policy_disallowed when policy forbids spawning; use not_required only when the workflow phase does not need subagents."
+    infer_from: "Use not_required for controller_intensity=light inline/direct work. Use authorization_required for standard/strict development work that needs workflow subagent roles unless the prompt already authorizes them; use delegation_authorized only after explicit approval, authorization_denied when declined, subagents_unavailable only after a real spawn failure, and policy_disallowed when policy forbids spawning."
 
   - name: subagent_execution_mode
     type: enum
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How role responsibilities will be executed for this task"
-    validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable applies when no subagent role is required"
+    validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
     default: not_applicable
     on_missing: infer
-    infer_from: "If required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If the task will change project source, tests, docs, config, hooks, contracts, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
+    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, hooks, contracts, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
 
   - name: subagent_authorization_scope
     type: string[]
@@ -111,10 +111,11 @@ fields:
   - name: tdd_mode
     type: boolean
     required: false
-    description: "Whether to enforce Red-Green-Refactor cycle via assistant-tdd skill"
+    description: "Whether workflow enforces tests-first Red-Green-Refactor via assistant-tdd. Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors unless a not-feasible exception is recorded."
     default: false
-    on_missing: skip
-    infer_from: "User says 'TDD', 'tests first', 'red green refactor' -> true"
+    on_missing: infer
+    infer_from: "User says 'TDD', 'tests first', 'red green refactor' -> true; task_type in [feature, bugfix] with behavior change and enough evidence to write a RED test -> true; interface-affecting refactor -> true; unknown-cause bugfix -> run assistant-debugging first, then infer true once failure mechanism is understood; non-behavior docs/config/spike/prototype/generated-code/layout-only work -> false with recorded reason"
+    validation: "False is allowed only with an explicit not-feasible or non-behavior exception reason. Unknown-cause bugfixes preserve debugging first, then RED once root cause/failure mechanism is understood."
 
   - name: debugging_mode
     type: enum
@@ -164,6 +165,50 @@ fields:
       hook_profile == strict, harness_capable == true, qa_evaluation_mode == required,
       explicit harness/QA acceptance work, or trace/replay-ready work. Do not infer
       strict from size=medium+ or delegation alone.
+
+  - name: workflow_state_mode
+    type: enum
+    required: false
+    enum_values: [inline, journal]
+    description: "Whether workflow state stays in the current response/plan packet or is persisted in the durable task journal."
+    validation: "inline is valid for light work and standard work that does not need persistence. journal is required when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
+    default: inline
+    on_missing: infer
+    infer_from: >
+      Use journal when the task enters clarification wait, uses delegated workflow roles,
+      is expected to cross sessions or compaction boundaries, explicitly requests persisted
+      workflow state, uses controller_intensity == strict, harness_capable == true, or
+      qa_evaluation_mode == required. Otherwise use inline, including small low-risk work and
+      ordinary standard work whose approved plan and evidence fit safely in the active packet.
+
+  - name: manual_verification_mode
+    type: enum
+    required: false
+    enum_values: [not_required, optional, required]
+    description: "Whether completion needs a manual acceptance check after automated Build and Review evidence."
+    validation: "required only for an explicit user request, subjective or UI acceptance, external effects that cannot be proven locally, destructive or migration work, or inadequate automated verification. Task size, controller intensity, and user confirmation rituals alone do not make manual verification required."
+    default: not_required
+    on_missing: infer
+    infer_from: >
+      Use required only when the user explicitly asks to test or confirm the result manually,
+      acceptance is subjective or UI-facing, the change has external effects that local checks
+      cannot prove, the work is destructive or migration-related, or automated verification is
+      inadequate. Use optional when helpful manual checks exist but automated verification is
+      sufficient. Otherwise use not_required.
+
+  - name: learning_capture_mode
+    type: enum
+    required: false
+    enum_values: [auto, not_required, required]
+    description: "Whether Document must run the Learning Controller and consider durable reflexion/memory capture."
+    validation: "required means the user or approved plan explicitly requested learning capture. auto requires the Learning Controller only when concrete lesson-bearing evidence exists in review findings, build/test failures, user corrections, or memory trend signals. not_required skips learning capture."
+    default: auto
+    on_missing: infer
+    infer_from: >
+      Use required when the user or approved plan explicitly requests reflection, learning, or
+      durable memory capture. Use auto for normal work so concrete review findings, build/test
+      failures, user corrections, or memory trend signals activate the Learning Controller.
+      Use not_required when policy disallows learning capture or the task is explicitly excluded.
 
   - name: qa_evaluation_mode
     type: enum
@@ -278,7 +323,7 @@ fields:
     notes: "Never infer this from follow-up wording or continuation text."
 
 # Validation behavior:
-# 1. Resolve all required fields BEFORE printing --- PHASE: TRIAGE ---
+# 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.
 # 2. If on_missing=ask: present ONE focused question, wait for answer
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value

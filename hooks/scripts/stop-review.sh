@@ -16,8 +16,8 @@
 #
 # Behavior:
 #   Only activates when task journal is in BUILDING/VERIFYING/REVIEWING/DOCUMENTING state.
-#   Consolidated strict stop gate checks plan approval, structured review, optional rubric scores,
-#   and metrics in one hook so users see one stop reason instead of competing hook blockers.
+#   Consolidated stop gate checks plan approval, structured review, optional rubric scores,
+#   and conditional learning capture. Metrics are observability only and never block.
 #   Review checks require: (1) Review Log has a latest structured "### Spec Review #N"
 #   entry with "- Result: PASS" and resolved required fixes, (2) Review Log has a
 #   "### Quality Review #N" entry after that pass, (3) Review Log has a "- Result:"
@@ -133,20 +133,9 @@ if [[ "$review_missing_key" != "complete" ]]; then
     exit 0
 fi
 
-# Check if metrics were recorded (all task sizes require metrics)
-METRICS_FILE="$(assistant_phase_metrics_file)"
-TODAY=$(date +%Y-%m-%d)
-
-if ! assistant_phase_has_metrics_today; then
-    metrics_field="$(assistant_phase_reason_missing_field "metrics_gate" "missing_metrics_today")"
-    metrics_action="$(assistant_phase_reason_action "metrics_gate" "missing_metrics_today")"
-    METRICS_REASON="metrics_gate:missing_metrics_today missing=$metrics_field at $METRICS_FILE date=$TODAY action=$metrics_action"
-fi
-
-if [[ -n "${METRICS_REASON:-}" ]]; then
-    emit_stop_reason "$METRICS_REASON"
-    exit 0
-fi
+# Metrics remain visible to runtime diagnostics, but a missing file or entry is
+# never a completion blocker.
+METRICS_STATUS="$(assistant_phase_metrics_status)"
 
 learning_missing_key="$(assistant_phase_learning_missing_reason_key "$TASK_FILE")"
 

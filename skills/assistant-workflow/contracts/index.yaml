@@ -1,0 +1,61 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-workflow
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    references:
+      - references/triage-rubric.md
+    selectors:
+      - id: workflow-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [task_description, task_type, scope_hint, target_files, constraints, acceptance_criteria]
+    budget_words: 4000
+  current_phase:
+    selectors:
+      - id: workflow-current-phase-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_workflow_phase
+        allowed_names: [TRIAGE, DISCOVER, DECOMPOSE, PLAN, DESIGN, BUILD, REVIEW, DOCUMENT]
+      - id: workflow-phase-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV4, INV_PIVOT_RESTART_REAPPROVAL, INV_CONTROLLER_INTENSITY_STANDARD]
+    budget_words: 12000
+  selected_handoff:
+    selectors:
+      - id: workflow-selected-handoff
+        path: contracts/handoffs.yaml
+        section: handoffs
+        key: name
+        name_from: selected_handoff_name
+        allowed_names: [orchestrator_to_code_mapper, orchestrator_to_explorer, orchestrator_to_architect_decompose, orchestrator_to_architect, orchestrator_to_code_writer, orchestrator_to_builder_tester, orchestrator_to_reviewer, orchestrator_to_qa_evaluator]
+    budget_words: 15000
+  completion:
+    selectors:
+      - id: workflow-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [triage_result, completion_policy, phase_checkpoints, changed_files, debugging_result, test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, learning_controller, manual_test_steps, manual_verification_result, subagent_evidence, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
+    budget_words: 12000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

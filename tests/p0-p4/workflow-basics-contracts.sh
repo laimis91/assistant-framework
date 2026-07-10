@@ -15,12 +15,16 @@ else
     pass
 fi
 
-test_start "Codex AGENTS generated phase list includes conditional decompose and design"
-if grep -q "TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT" \
+test_start "Codex AGENTS delegates phase detail to native skill routing"
+if grep -Fq 'Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.' \
+    "$FRAMEWORK_DIR/install.sh" \
+    && grep -Fq "Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan" \
+    "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT" \
     "$FRAMEWORK_DIR/install.sh"; then
     pass
 else
-    fail "generated Codex AGENTS phase list is missing canonical conditional DECOMPOSE/DESIGN wording"
+    fail "generated Codex AGENTS guidance must stay lean and defer phase mechanics to the matched skill"
 fi
 
 test_start "review contracts support review_material_snapshot without diff-only gates"
@@ -44,7 +48,7 @@ fi
 test_start "agentic loop safety review requires low-confidence escalation evidence"
 missing_loop_safety_terms=()
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; do
@@ -52,6 +56,10 @@ for file in \
         missing_loop_safety_terms+=("$file")
     fi
 done
+if ! grep -Fq 'Agentic loop flag -> Agentic Loop Safety Checklist' "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" \
+    || ! grep -Fq 'references/review-checklists.md' "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"; then
+    missing_loop_safety_terms+=("assistant-review root/index worker-bundle routing")
+fi
 if [[ "${#missing_loop_safety_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -179,6 +187,96 @@ if [[ "${#missing_reference_mapping_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow reference mapping guard missing terms: ${missing_reference_mapping_terms[*]}"
+fi
+
+test_start "internal workflow controller reference exists and is linked"
+workflow_controller_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md"
+controller_link_failures=()
+if [[ ! -f "$workflow_controller_ref" ]]; then
+    controller_link_failures+=("missing skills/assistant-workflow/references/workflow-controller.md")
+fi
+for file in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; do
+    if ! grep -Fq "references/workflow-controller.md" "$file"; then
+        controller_link_failures+=("${file#$FRAMEWORK_DIR/}: missing references/workflow-controller.md")
+    fi
+done
+public_controller_dirs=()
+while IFS= read -r public_controller_dir; do
+    public_controller_dirs+=("$public_controller_dir")
+done < <(find "$FRAMEWORK_DIR/skills" -mindepth 1 -maxdepth 1 -type d -name '*workflow-controller*' -print)
+if [[ "${#public_controller_dirs[@]}" -ne 0 ]]; then
+    controller_link_failures+=("public workflow-controller skill dirs: ${public_controller_dirs[*]}")
+fi
+for ref in \
+    build-worker-protocol \
+    review-qa-router \
+    harness-runtime-artifacts \
+    completion-controller; do
+    if [[ ! -f "$FRAMEWORK_DIR/skills/assistant-workflow/references/$ref.md" ]]; then
+        controller_link_failures+=("missing skills/assistant-workflow/references/$ref.md")
+    fi
+done
+public_boundary_dirs=()
+while IFS= read -r public_boundary_dir; do
+    public_boundary_dirs+=("$public_boundary_dir")
+done < <(find "$FRAMEWORK_DIR/skills" -mindepth 1 -maxdepth 1 -type d \( \
+    -name '*build-worker-protocol*' -o \
+    -name '*review-qa-router*' -o \
+    -name '*harness-runtime-artifacts*' -o \
+    -name '*completion-controller*' \
+\) -print)
+if [[ "${#public_boundary_dirs[@]}" -ne 0 ]]; then
+    controller_link_failures+=("public workflow boundary skill dirs: ${public_boundary_dirs[*]}")
+fi
+phases_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+for copied_matrix_phrase in \
+    "light for small low-risk work" \
+    "strict only for high/critical" \
+    "Treat \`harness_capable\` as false unless" \
+    "Treat harness_capable as false unless" \
+    "Treat \`qa_evaluation_mode=not_required\` unless" \
+    "Treat qa_evaluation_mode=not_required unless"; do
+    if grep -Fq "$copied_matrix_phrase" "$phases_ref"; then
+        controller_link_failures+=("phases.md copied controller routing matrix phrase: $copied_matrix_phrase")
+    fi
+done
+for term in \
+    "Apply \`references/workflow-controller.md\` for shared routing/default decisions." \
+    "When \`harness_capable=true\`, load \`references/harness-controller.md\` plus \`references/plan-harness-appendix.md\`" \
+    "Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets" \
+    "Load \`references/build-worker-protocol.md\` for source-changing Build work" \
+    "Load \`references/review-qa-router.md\`" \
+    "Load \`references/completion-controller.md\`"; do
+    if ! grep -Fq "$term" "$phases_ref"; then
+        controller_link_failures+=("phases.md missing controller handoff term: $term")
+    fi
+done
+if ! grep -Fq "references/harness-runtime-artifacts.md" "$phases_ref" \
+    || ! grep -Fq "references/harness-runtime-artifacts.md" "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-controller.md"; then
+    controller_link_failures+=("harness runtime artifact reference is not linked from phases.md and harness-controller.md")
+fi
+skill_entrypoint="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+for term in \
+    "Load \`references/workflow-controller.md\` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions." \
+    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation."; do
+    if ! grep -Fq "$term" "$skill_entrypoint"; then
+        controller_link_failures+=("SKILL.md missing lean controller term: $term")
+    fi
+done
+for entrypoint_bloat_phrase in \
+    "## Internal Workflow Controller" \
+    "Load \`references/workflow-controller.md\` for shared routing/default decisions, then load \`references/phases.md\`" \
+    "Shared routing/default decisions come from the internal \`references/workflow-controller.md\` reference"; do
+    if grep -Fq "$entrypoint_bloat_phrase" "$skill_entrypoint"; then
+        controller_link_failures+=("SKILL.md reintroduced controller bloat phrase: $entrypoint_bloat_phrase")
+    fi
+done
+if [[ "${#controller_link_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow controller reference/linkage guard failed: ${controller_link_failures[*]}"
 fi
 
 test_start "workflow candidate-search phase 1 contracts are present and company-safe"

@@ -96,6 +96,22 @@ count_occurrences() {
     grep -c "$pattern" "$file" 2>/dev/null || true
 }
 
+p0p4_contains_text() {
+    local file="$1"
+    local expected="$2"
+
+    [[ -f "$file" ]] || return 1
+    tr '\n\t' '  ' <"$file" | tr -s '[:space:]' ' ' | grep -Fq -- "$expected"
+}
+
+p0p4_contains_text_ci() {
+    local file="$1"
+    local expected="$2"
+
+    [[ -f "$file" ]] || return 1
+    tr '\n\t' '  ' <"$file" | tr -s '[:space:]' ' ' | grep -Fqi -- "$expected"
+}
+
 field_required_true_after_anchor() {
     local file="$1"
     local anchor="$2"

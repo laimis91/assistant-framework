@@ -31,9 +31,12 @@ if grep -Fq "completion_tiers:" "$workflow_output" \
     && grep -Fq "controller_intensity: light" "$workflow_output" \
     && grep -Fq "controller_intensity: standard" "$workflow_output" \
     && grep -Fq "controller_intensity: strict" "$workflow_output" \
+    && grep -Fq "required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]" "$workflow_output" \
     && grep -Fq "standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation" "$workflow_output" \
-    && grep -Fq "self-review or explicit validation summary" "$workflow_output" \
-    && grep -Fq "phase_checkpoints are strict-profile only" "$workflow_output" \
+    && grep -Fq "fresh review after relevant validation" "$workflow_output" \
+    && grep -Fq 'condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"' "$workflow_output" \
+    && grep -Fq 'condition: "learning_capture_mode == required or (learning_capture_mode == auto and concrete lesson-bearing review finding, build/test failure, user correction, or memory trend evidence exists)"' "$workflow_output" \
+    && grep -Fq 'condition: "manual_verification_mode == required"' "$workflow_output" \
     && grep -Fq "condition: \"size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict\"" "$workflow_output" \
     && grep -Fq "When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: spec_review_result.status == PASS" "$workflow_output" \
     && grep -Fq "When size is medium/large/mega, risk_tier is high/critical, or hook_profile == strict: review_result.quality_review_status is not missing" "$workflow_output"; then
@@ -70,7 +73,7 @@ for settings in hooks/claude-settings.json hooks/gemini-settings.json hooks/code
     fi
 done
 if [[ "${#settings_failures[@]}" -eq 0 ]] \
-    && grep -Fq "Consolidated strict stop gate" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
+    && grep -Fq "Consolidated stop gate checks" "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"; then
     pass
 else
     fail "strict hook templates should register only stop-review.sh as the stop gate: ${settings_failures[*]:-missing stop-review consolidation marker}"
@@ -192,6 +195,76 @@ if [[ "${#template_bloat_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "optional harness appendix split failed: ${template_bloat_failures[*]}"
+fi
+
+test_start "internal workflow controller is decision-boundary oriented"
+workflow_controller_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md"
+controller_shape_failures=()
+for term in \
+    "## Controller Role and Non-Goals" \
+    "## Invocation and Loading Rules" \
+    "## Routing Defaults" \
+    "## Move Forward, Step Back, or Replan" \
+    "## Harness Boundary" \
+    "## Subagent, Review, and QA Separation" \
+    "## Validation Expectations" \
+    "Organize decisions by boundary, not by phase name"; do
+    if [[ ! -f "$workflow_controller_ref" ]] || ! grep -Fq "$term" "$workflow_controller_ref"; then
+        controller_shape_failures+=("workflow-controller.md: $term")
+    fi
+done
+if [[ -f "$workflow_controller_ref" ]] && rg -n '^## (Phase:|Triage|Discover|Decompose|Plan|Design|Build|Review|Document)\b' "$workflow_controller_ref" >/tmp/p0p4-workflow-controller-phase-fragmentation.out; then
+    controller_shape_failures+=("phase-name fragmentation; see /tmp/p0p4-workflow-controller-phase-fragmentation.out")
+fi
+if [[ "${#controller_shape_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow controller should be organized by decision boundary: ${controller_shape_failures[*]}"
+fi
+
+test_start "assistant-workflow decision-boundary split stays under final load thresholds"
+workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_contract_index="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml"
+workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+boundary_split_failures=()
+skill_words="$(wc -w < "$workflow_skill")"
+contract_index_words="$(wc -w < "$workflow_contract_index")"
+entry_words=$(( skill_words + contract_index_words ))
+phase_words="$(wc -w < "$workflow_phases")"
+root_phase_words=$(( skill_words + phase_words ))
+if (( entry_words > 2200 )); then
+    boundary_split_failures+=("SKILL.md+contracts/index.yaml entry word count $entry_words exceeds 2200")
+fi
+if (( phase_words > 3400 )); then
+    boundary_split_failures+=("phases.md word count $phase_words exceeds 3400")
+fi
+if (( root_phase_words > 6043 )); then
+    boundary_split_failures+=("root+phase word count $root_phase_words exceeds 6043")
+fi
+for ref in \
+    references/build-worker-protocol.md \
+    references/review-qa-router.md \
+    references/harness-runtime-artifacts.md \
+    references/completion-controller.md; do
+    if grep -Fq "$ref" "$workflow_skill"; then
+        boundary_split_failures+=("SKILL.md always-loads $ref")
+    fi
+done
+for file_and_term in \
+    "$workflow_phases::Load \`references/build-worker-protocol.md\` for source-changing Build work" \
+    "$workflow_phases::Load \`references/review-qa-router.md\`" \
+    "$workflow_phases::Load \`references/completion-controller.md\`" \
+    "$workflow_phases::\`harness_capable=true\`"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq "$term" "$file"; then
+        boundary_split_failures+=("${file#$FRAMEWORK_DIR/}: missing conditional loader term: $term")
+    fi
+done
+if [[ "${#boundary_split_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-workflow boundary split threshold guard failed: ${boundary_split_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

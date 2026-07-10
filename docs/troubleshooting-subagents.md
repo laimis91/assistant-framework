@@ -1,56 +1,58 @@
 # Troubleshooting: Subagents Not Being Used
 
-## What to look for
+## Start with the active profile
 
-### On Claude Code
-1. The workflow skill should reference `references/subagent-roles.md` and dispatch agents using the `Agent` tool
-2. Look for messages like "Launching Explorer agent..." or "Dispatching Reviewer..." in the output
-3. If the agent does everything sequentially in one context — it's not using subagents
+### Claude Code
 
-### On Codex
-1. Look for agent names (`code-mapper`, `reviewer`, etc.) being mentioned when work starts
-2. Codex should show subagent threads in the CLI output
-3. Check `~/.codex/agents/` — the TOML files must exist there
+Claude keeps its existing `minimal` hook default. Verify the workflow skill and the expected agent definitions are installed, then look for explicit dispatch messages or subagent threads.
+
+### Codex
+
+Plain `./install.sh --agent codex` is native and hookless. Subagents, permissions, skill routing, execution-policy rules, and compaction remain native Codex capabilities; absence of Assistant Framework hook output is expected.
+
+Delegation consent is needed only immediately before an actual spawn. Codex should continue safe triage, discovery, and planning without asking merely because agents might be useful. When a spawn is needed, authorize it explicitly or approve Codex's bounded request, then look for subagent threads and verify `~/.codex/agents/*.toml` exists.
+
+Codex hook profiles are opt-in:
+
+- `minimal`: compatibility skill routing plus session/compaction context.
+- `workflow`: workflow/delegation enforcement without the compatibility skill router.
+- `strict`: all supported enforcement hooks without the compatibility skill router.
+- `none`: native Codex default; no Assistant Framework hook commands.
+
+Claude and Gemini defaults are unchanged.
 
 ## Common causes and fixes
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Agent does everything itself, never dispatches | Subagent policy state was never resolved, workflow/delegation evidence was not required by the active profile, subagents are unavailable, or the task entered direct fallback | In Codex's default `workflow` profile and in `strict` profiles, this is a workflow failure unless the task journal records `subagent_execution_mode=direct_fallback`, explicit `Direct fallback reason: authorization_denied | subagents_unavailable | policy_disallowed`, and Code Writer/Builder/Tester/Reviewer direct evidence. If you want delegation, explicitly say "Use delegation" or "use subagents for this task" and verify Agent Dispatch Log entries exist. |
-| Claude uses wrong subagent type | Skill file not loaded or outdated | Re-run `install.sh --agent claude`, verify `~/.claude/skills/assistant-workflow/SKILL.md` has the new 6-role table |
-| Codex says "unknown agent" | TOML files not installed or agent name mismatch | Check `ls ~/.codex/agents/*.toml` — should show 6 files, and `grep "^name" ~/.codex/agents/*.toml` should match the names you asked Codex to spawn |
-| Codex says no subagent tool is visible/available | Codex subagent spawning is a native CLI/app workflow, not necessarily exposed as a visible tool named `Task`, `delegate`, or `subagent` | Do not switch to `subagents_unavailable` from tool-list inspection alone. Explicitly ask Codex to spawn the configured agent name (for example `Spawn the code-writer agent...`). Use `subagents_unavailable` only after a real spawn attempt fails or installed Codex version/docs prove no subagent support |
-| Codex ignores agents entirely | User authorization was not explicit enough, AGENTS.md/skill guidance is stale, or custom agents are not installed | Re-run `install.sh --agent codex`, verify `~/.codex/AGENTS.md` contains the native subagent guidance, verify `~/.codex/agents/*.toml`, then ask: `Spawn the code-writer, builder-tester, and reviewer agents...` |
-| Subagents spawn but don't get role instructions | Claude: skill not loaded so no prompts. Codex: TOML `developer_instructions` empty or stale | Verify file contents: `cat ~/.codex/agents/reviewer.toml` |
-| Agent dispatches but results are ignored | Orchestrator context got too large, lost track | Check if task journal (`.claude/task.md`, `.codex/task.md`, or equivalent state dir) exists and is being updated |
-| Reviewer never runs | Agent skips review, goes straight to handoff | The `stop-review.sh` hook should block this in Codex's default `workflow` profile and in `strict` hook profiles when hook support is installed/enabled |
+| Codex completes preparation without spawning | No task step needed a subagent yet, or consent has not been requested for the first real spawn | This is normal in native mode. If delegation is required, say “Use delegation” or authorize the specific agents when Codex is ready to spawn them. |
+| Codex needs a spawn but never asks | Installed workflow/AGENTS guidance is stale, or the matching skill was not loaded | Rerun `./install.sh --agent codex`, confirm the relevant `~/.codex/skills/*/SKILL.md`, and repeat the request with “Use delegation.” |
+| Codex says “unknown agent” | TOML definitions are missing or names do not match | Check `ls ~/.codex/agents/*.toml` and each file's `name` field, then reinstall if needed. |
+| Codex says no subagent tool is visible | Native spawning is not necessarily exposed as a tool named `Task`, `delegate`, or `subagent` | Ask Codex to spawn the configured agent by name. Record `subagents_unavailable` only after a real spawn fails or supported-version evidence proves it unavailable. |
+| A `workflow` or `strict` run silently bypasses required delegation/review | Enforcement profile was not installed, hooks are disabled, or the run entered valid direct fallback | Reinstall with the intended explicit profile, inspect `~/.codex/hooks.json`, and check the task journal for denial, policy restriction, or a real unavailable-agent failure. |
+| Claude uses the wrong agent | Skill or agent files are stale | Rerun `./install.sh --agent claude` and inspect `~/.claude/skills/assistant-workflow/` plus `~/.claude/agents/`. |
+| Spawned agents lack role instructions | Agent definition is stale or empty | Inspect the relevant Claude Markdown or Codex TOML definition and reinstall it. |
+| Results are ignored after dispatch | The orchestrator lost or failed to update durable task state | Inspect the project task journal and context map, then resume from the last verified step. |
 
-## Quick verification commands
+## Quick verification
 
 ```bash
-# Claude: verify skill has new roles
-grep "Code Mapper" ~/.claude/skills/assistant-workflow/SKILL.md
+# Codex: native default should have no Assistant Framework hook commands
+./install.sh --agent codex
 
-# Claude: verify role reference file exists
-ls ~/.claude/skills/assistant-workflow/references/subagent-roles.md
+# Codex: verify configured agents
+ls ~/.codex/agents/*.toml
+grep '^name' ~/.codex/agents/*.toml
 
-# Codex: verify agents installed
-ls ~/.codex/agents/
+# Codex: opt into deterministic workflow enforcement when required
+./install.sh --agent codex --hook-profile workflow
 
-# Codex: check a specific agent definition
-cat ~/.codex/agents/reviewer.toml
-
-# Codex: verify TOML name fields match expected agent names
-grep "^name" ~/.codex/agents/*.toml
+# Claude: refresh its unchanged minimal default
+./install.sh --agent claude
 ```
 
-## If subagents still aren't used
+## Migrating an older Codex install
 
-First check whether subagent spawning is authorized and available for the active tool. If explicit authorization is required, the agent must not spawn subagents until you ask for them. You can authorize a scope explicitly:
+Run `./install.sh --agent codex` and restart Codex. The installer removes only known Assistant Framework commands from `~/.codex/hooks.json`, preserves unrelated custom hooks, and leaves silent shims for cached framework entrypoints until the running process is replaced. Use an explicit `minimal`, `workflow`, or `strict` profile only when compatibility or deterministic enforcement is desired.
 
-- "Use the code-mapper agent to map the codebase first"
-- "Use delegation"
-- "Dispatch a reviewer subagent for the quality review"
-- "Run Code Writer and Builder/Tester as separate agents, not inline"
-
-If this happens consistently after authorization, check that `subagent_policy_state=delegation_authorized` and `subagent_execution_mode=delegated` are recorded. In delegated mode, completion also requires Agent Dispatch Log evidence: `Code Writer dispatch`/`Code Writer result`, `Builder/Tester dispatch`/`Builder/Tester result`, and `Reviewer dispatch`/`Reviewer result`; medium+ slice work also requires `Per-slice dispatch evidence`. If authorization is denied, unavailable, or policy-disallowed, the correct behavior is direct fallback with explicit `Direct fallback reason` plus equivalent Code Writer, Builder/Tester, and Reviewer evidence — not silent one-thread execution.
+Direct fallback is valid only after the user denies delegation, policy forbids it, or a real spawn attempt fails. In those cases, record the reason and equivalent implementation, verification, and review evidence instead of silently treating native mode as proof that subagents are unavailable.

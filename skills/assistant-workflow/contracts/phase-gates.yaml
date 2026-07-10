@@ -4,7 +4,8 @@
 # must satisfy the input contract of phase N+1.
 #
 # Any agent executing this skill MUST evaluate `exit_assertions` for the current
-# phase before printing --- PHASE: {name} COMPLETE ---.
+# phase before transitioning. Exact phase markers are conditional on strict
+# intensity, explicit project policy, or user request.
 # If an exit assertion fails, the agent MUST resolve it before proceeding.
 # `guidance_assertions` are non-blocking reminders unless `strict_only` policy,
 # strict hooks, or explicit project policy opts into stricter enforcement.
@@ -18,6 +19,10 @@
 schema_version: "1.0"
 contract: phase-gates
 skill: assistant-workflow
+
+checkpoint_policy:
+  exact_markers_required_when: "controller_intensity == strict, explicit project policy requires markers, or the user requests exact phase markers"
+  otherwise: "Use concise natural progress updates while still following every logical phase and applicable gate."
 
 gate_tiers:
   blocker: "Prevents phase transition; missing evidence would make the workflow unsafe or unverifiable."
@@ -57,13 +62,17 @@ gates:
         check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; strict is selected only for high/critical risk, hook_profile == strict, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria"
         on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
 
+      - id: T_ADAPTIVE_COMPLETION_MODES
+        check: "workflow_state_mode is inline or journal, manual_verification_mode is not_required, optional, or required, and learning_capture_mode is auto, not_required, or required; each mode has a concrete trigger/default reason"
+        on_fail: "Infer and record the three additive modes from the input contract before continuing; do not infer journal, manual verification, or learning ceremony from size alone."
+
       - id: T6
         check: "required_gates includes common gates plus every applicable task-category gate pack"
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents or fallback execution roles are populated from task size, task type, risk tier, subagent_policy_state, and subagent_execution_mode; source-changing development/code-work includes at minimum Code Writer, Builder/Tester, and Code Reviewer, with Reviewer compatibility allowed only for existing/legacy handoffs"
-        on_fail: "Select required workflow agents when subagent_execution_mode=delegated, or record direct fallback roles and responsibilities from references/subagent-dispatch.md and risk-specific gate packs. not_applicable is invalid for source-changing Build tasks."
+        check: "required_agents or fallback execution roles are populated from controller intensity, task size/type/risk, and subagent policy; standard/strict source-changing work includes Code Writer, Builder/Tester, and Code Reviewer, while light low-risk work may execute inline/direct with fresh review evidence"
+        on_fail: "Select workflow agents for standard/strict work, or record the light inline/direct path with relevant validation and fresh review evidence."
 
       - id: T_QA_EVALUATOR
         check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
@@ -400,9 +409,8 @@ gates:
         on_fail: "If any code diverges from the plan, print the deviation message and get resolution"
 
       - id: B6
-        check: "For medium+ tasks: task journal or equivalent carried-forward state is updated with progress for all completed steps"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Update the configured task journal when available, or the carried-forward task state packet when local state artifacts are unavailable/disallowed"
+        check: "When workflow_state_mode is journal, the task journal is current; when inline, the carried-forward packet contains progress and evidence for completed steps"
+        on_fail: "Update the selected state surface without creating a task journal solely because the task is medium+."
 
       - id: B12
         check: "For medium+ tasks: every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
@@ -411,7 +419,8 @@ gates:
 
       - id: B_SUBAGENT_EVIDENCE
         check: "For source-changing Build tasks: subagent_execution_mode is not not_applicable, required_agents includes Code Writer, Builder/Tester, and Code Reviewer, and the task journal Agent Dispatch Log records strict delegated dispatch/result evidence or explicit direct fallback role-equivalent evidence; Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded"
-        on_fail: "Update the Agent Dispatch Log before leaving Build. delegated mode requires Code Writer, Builder/Tester, and Code Reviewer dispatch/result evidence, or Reviewer compatibility dispatch/result evidence for existing/legacy handoffs. direct_fallback requires reason authorization_denied, subagents_unavailable, or policy_disallowed plus Code Writer, Builder/Tester, and Code Reviewer direct evidence; Reviewer direct evidence is compatibility evidence only."
+        condition: "controller_intensity in [standard, strict]"
+        on_fail: "Update the Agent Dispatch Log before leaving Build. Light work may instead record inline/direct validation plus fresh review evidence."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "For medium+ delegated tasks with slices: per-slice dispatch evidence is recorded before the slice is marked VERIFIED"
@@ -438,11 +447,13 @@ gates:
       - id: B9
         severity: blocker
         check: "Implementation was performed by Code Writer subagent when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
+        condition: "controller_intensity in [standard, strict]"
         on_fail: "Record Code Writer dispatch/result evidence or Code Writer direct fallback evidence before Review"
 
       - id: B10
         severity: blocker
         check: "Build/test/validation was performed by Builder/Tester subagent when subagent_execution_mode=delegated, or directly in fallback mode with equivalent command/result evidence"
+        condition: "controller_intensity in [standard, strict]"
         on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review"
 
       - id: B11
@@ -461,18 +472,27 @@ gates:
 
       - id: R1
         check: "Structured Spec Review completed by loading and following references/prompts/spec-review.md; latest Spec Review entry has Result: PASS and records missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes"
+        condition: "controller_intensity in [standard, strict]"
         on_fail: "Run Stage 1 Spec Review using references/prompts/spec-review.md, record the structured spec compliance result, fix any FAIL items, and re-run until Result: PASS before quality review."
 
       - id: R1A
         check: "Quality Review entries do not substitute for Spec Review; Stage 1 spec compliance result is present before Stage 2 quality review starts"
+        condition: "controller_intensity in [standard, strict]"
         on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
         check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts (not manual review)"
+        condition: "controller_intensity in [standard, strict]"
         on_fail: "Load and follow assistant-review SKILL.md and contracts. Do not manually dispatch reviewers."
+
+      - id: R_LIGHT_FRESH_REVIEW
+        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence"
+        condition: "controller_intensity == light"
+        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
         check: "Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence"
+        condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
         on_fail: "Update the Review Log, output contract, or carried-forward review state with distinct Code Reviewer/Reviewer and QA Evaluator entries. Do not collapse QA evaluation into code review."
 
       - id: R_QA_EVALUATION
@@ -494,8 +514,9 @@ gates:
         on_fail: "Add debugging evidence to the review material or downgrade confidence/status before final review."
 
       - id: R4
-        check: "User confirmed 'looks good' or equivalent approval"
-        on_fail: "Present verification summary and wait for user confirmation"
+        check: "Required manual verification has passed with trigger and evidence; user confirmation exists only when that scoped check depends on the user's observation"
+        condition: "manual_verification_mode == required"
+        on_fail: "Run the scoped manual verification or wait for the specific user observation it requires; do not ask for ritual confirmation."
 
       - id: R5
         check: "For medium+ tasks: task journal, output contract, or equivalent carried-forward review state has Final Result entry"
@@ -529,13 +550,9 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Review what documentation needs updating (README, CHANGELOG, code comments)"
 
-      - id: DOC2
-        check: "Metrics JSONL entry was appended when local metrics are configured and policy-allowed; otherwise metrics_unavailable_or_disallowed is recorded in the output/final response"
-        on_fail: "Append metrics when configured and allowed, or explicitly record why metrics were skipped"
-
       - id: DOC_LEARNING_CONTROLLER
-        check: "For medium+ tasks: task journal or equivalent workflow output contains a canonical '### Learning Controller' block with Memory trend checked, Learning evidence reviewed, Review findings considered, Build/test failures considered, User corrections considered, Durable lesson decision, and Persistence evidence or No-save rationale"
-        condition: "size in [medium, large, mega]"
+        check: "When learning capture is activated, the selected state surface contains the canonical Learning Controller evidence and decision fields"
+        condition: "learning_capture_mode == required or (learning_capture_mode == auto and concrete review finding, build/test failure, user correction, or memory trend evidence exists)"
         on_fail: "Load assistant-reflexion and assistant-memory contracts, inspect Review Log findings, build/test failures, and user corrections for durable lessons, check memory trend/backend availability when allowed, then write the Learning Controller block. Use backend_unavailable or policy_disallowed when appropriate; do not require a memory write when tools are unavailable, and do not persist routine progress as a lesson."
 
       - id: DOC_HARNESS_REPLAY_PACKET
@@ -555,6 +572,13 @@ gates:
         check: "If no task journal/equivalent state exists, or explicit non-standard handoff is requested: context_handoff_packet preserves pinned context, summarizes compressible context, prunes stale/unsafe residue, and names the exact next action"
         on_fail: "Create or repair the context_handoff_packet using references/context-handoff-templates.md before ending the session"
 
+    guidance_assertions:
+
+      - id: DOC2
+        severity: guidance
+        check: "Optional metrics were appended when useful and configured, or omitted without affecting completion"
+        on_fail: "Record metrics later if useful; missing metrics, reflexion, or memory never blocks completion."
+
 # ─────────────────────────────────────────────
 # Cross-phase invariants
 # These must hold true throughout the entire workflow, not just at gates.
@@ -571,9 +595,10 @@ invariants:
     on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing' and execute the skipped phase"
 
   - id: INV3
-    check: "Every phase prints its start checkpoint before any work and its end checkpoint after assertions pass"
+    check: "When controller_intensity is strict, explicit project policy requires markers, or the user requests exact markers, every executed phase prints its start checkpoint before work and its end checkpoint after assertions pass"
+    condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"
     scope: all_phases
-    on_fail: "Re-print the missing checkpoint marker and note the skipped protocol step in the configured task journal or equivalent carried-forward state"
+    on_fail: "Re-print the missing required checkpoint marker and note the protocol repair in the configured task journal or equivalent carried-forward state. Light/standard work without a marker trigger uses concise natural progress updates instead."
 
   - id: INV4
     check: "If scope grows beyond initial triage during any phase, stop and re-triage"

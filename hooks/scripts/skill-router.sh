@@ -5,7 +5,7 @@
 #
 # Scans installed skill SKILL.md files for `triggers:` frontmatter,
 # matches the user's prompt against each trigger pattern (sorted by priority),
-# and injects a reminder to invoke the matching skill.
+# and injects a reminder to invoke one primary matching skill.
 #
 # Adding a new skill? Just add a `triggers:` block to its SKILL.md frontmatter:
 #
@@ -42,8 +42,10 @@ fi
 SKILLS_DIR="$AGENT_HOME/skills"
 [[ -d "$SKILLS_DIR" ]] || exit 0
 
-# Collect all triggers from all skills: priority|pattern|min_words|reminder|skill_name
+# Collect all triggers from all skills:
+# priority|stable_order|pattern|min_words|reminder|skill_name
 triggers=()
+trigger_order=0
 
 for skill_dir in "$SKILLS_DIR"/*/; do
     skill_md="$skill_dir/SKILL.md"
@@ -66,7 +68,8 @@ for skill_dir in "$SKILLS_DIR"/*/; do
                 r="This request matches $skill_name. You MUST invoke the Skill tool with skill='$skill_name' BEFORE proceeding."
             fi
             # Use tab as delimiter (patterns contain | which would collide)
-            triggers+=("${current_priority}	${current_pattern}	${current_min_words}	${r}	${skill_name}")
+            triggers+=("${current_priority}	${trigger_order}	${current_pattern}	${current_min_words}	${r}	${skill_name}")
+            trigger_order=$((trigger_order + 1))
         fi
         current_pattern=""
         current_priority="50"
@@ -118,56 +121,56 @@ done
 # No triggers found — nothing to route
 [[ ${#triggers[@]} -gt 0 ]] || exit 0
 
-# Sort by priority descending (first tab-delimited field)
-# Sort by priority descending; use while-read to avoid glob expansion (safe on bash 3.2+)
+# Sort by priority descending, then by collection order for a deterministic,
+# stable tie-break. Use while-read to avoid glob expansion (safe on bash 3.2+).
 sorted=()
 while IFS= read -r line; do
     sorted+=("$line")
-done < <(printf '%s\n' "${triggers[@]}" | sort -t$'\t' -k1 -rn)
+done < <(printf '%s\n' "${triggers[@]}" | LC_ALL=C sort -t$'\t' -k1,1nr -k2,2n)
 
-# Match prompt against sorted triggers (collect ALL matches, deduplicate by skill)
-matched_skills=()
-matched_reminders=()
+# Match prompt against sorted triggers. The first match is the single primary
+# skill; lower-priority matches are intentionally ignored.
+matched_reminder=""
 
 for entry in "${sorted[@]}"; do
-    IFS=$'\t' read -r priority pattern min_words reminder skill_name <<< "$entry"
+    IFS=$'\t' read -r priority stable_order pattern min_words reminder skill_name <<< "$entry"
 
     # Check min_words gate
     if [[ "$min_words" -gt 0 && "$word_count" -lt "$min_words" ]]; then
         continue
     fi
 
-    # Skip if this skill already matched (higher-priority trigger won)
-    already_matched=false
-    if [[ ${#matched_skills[@]} -gt 0 ]]; then
-        for s in "${matched_skills[@]}"; do
-            [[ "$s" == "$skill_name" ]] && { already_matched=true; break; }
-        done
-    fi
-    $already_matched && continue
-
     # Match pattern against prompt (word boundary matching)
     # Note: patterns come from locally-installed SKILL.md files, not user input.
     # Guard against malformed regex by suppressing grep errors.
     if echo "$prompt_lower" | grep -qE "\b($pattern)\b" 2>/dev/null; then
-        matched_skills+=("$skill_name")
-
         # Check for input contract and extract required field names
         input_contract="$SKILLS_DIR/$skill_name/contracts/input.yaml"
         if [[ -f "$input_contract" ]]; then
-            # Extract required field names: find name: lines where required: true follows
+            # Extract required top-level fields only. Nested object_fields entries
+            # are more deeply indented and must not leak into the routing reminder.
             required_fields=()
-            prev_name=""
+            in_fields=false
+            current_field=""
             while IFS= read -r cline; do
-                if [[ "$cline" =~ ^[[:space:]]*-[[:space:]]*name:[[:space:]]*(.+)$ ]]; then
-                    prev_name="${BASH_REMATCH[1]}"
-                elif [[ "$cline" =~ ^[[:space:]]*name:[[:space:]]*(.+)$ ]]; then
-                    prev_name="${BASH_REMATCH[1]}"
-                elif [[ "$cline" =~ ^[[:space:]]*required:[[:space:]]*true && -n "$prev_name" ]]; then
-                    required_fields+=("$prev_name")
-                    prev_name=""
-                elif [[ "$cline" =~ ^[[:space:]]*required:[[:space:]] ]]; then
-                    prev_name=""
+                if [[ "$cline" == "fields:" ]]; then
+                    in_fields=true
+                    continue
+                fi
+                $in_fields || continue
+
+                # A new root-level YAML key ends the top-level fields list.
+                if [[ "$cline" =~ ^[^[:space:]#] ]]; then
+                    break
+                fi
+
+                if [[ "$cline" =~ ^[[:space:]]{2}-[[:space:]]name:[[:space:]]*(.+)$ ]]; then
+                    current_field="${BASH_REMATCH[1]}"
+                elif [[ "$cline" =~ ^[[:space:]]{4}required:[[:space:]]*true([[:space:]]*(#.*)?)$ && -n "$current_field" ]]; then
+                    required_fields+=("$current_field")
+                    current_field=""
+                elif [[ "$cline" =~ ^[[:space:]]{4}required:[[:space:]] && -n "$current_field" ]]; then
+                    current_field=""
                 fi
             done < "$input_contract"
 
@@ -177,21 +180,15 @@ for entry in "${sorted[@]}"; do
             fi
         fi
 
-        matched_reminders+=("$reminder")
+        matched_reminder="$reminder"
+        break
     fi
 done
 
-# Output combined reminders if any matched
-if [[ ${#matched_reminders[@]} -gt 0 ]]; then
-    combined=""
-    for i in "${!matched_reminders[@]}"; do
-        if [[ -n "$combined" ]]; then
-            combined+=$'\n\n'
-        fi
-        combined+="SKILL MATCH ($((i+1))/${#matched_reminders[@]}): ${matched_reminders[$i]}"
-    done
+# Output the primary reminder if a skill matched.
+if [[ -n "$matched_reminder" ]]; then
     jq -cn \
-        --arg ctx "$combined" \
+        --arg ctx "SKILL MATCH (1/1): $matched_reminder" \
         --arg event "$HOOK_EVENT" \
         '{hookSpecificOutput: {hookEventName: $event, additionalContext: $ctx}}'
 fi

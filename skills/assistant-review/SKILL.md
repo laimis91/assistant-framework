@@ -5,45 +5,42 @@ effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
     priority: 90
-    reminder: "This request to fix review issues matches assistant-review. You MUST load and follow this SKILL.md and its contracts before editing code. The skill includes fix -> validation -> re-review steps that run before the final summary."
+    reminder: "This request to fix review issues matches assistant-review. You MUST read this SKILL.md and contracts/index.yaml first, then load the applicable contract selector. The skill includes fix -> validation -> re-review steps that run before the final summary."
   - pattern: "review|fresh review|code review|review this|check the code|/review"
     priority: 80
-    reminder: "This request matches assistant-review. You MUST load and follow this SKILL.md and its contracts before doing anything else. Run the autonomous review-fix loop to its exit condition before reporting."
+    reminder: "This request matches assistant-review. You MUST read this SKILL.md and contracts/index.yaml first, then load the applicable contract selector. Run the autonomous review-fix loop to its exit condition before reporting."
 ---
 
 # Autonomous Review And QA Evaluation
 
 ## Contracts
 
-This skill enforces strict contracts on inputs, outputs, loop gates, reviewer handoffs, and QA evaluator handoffs. Read the contract files in `contracts/` before executing.
+Canonical input, output, phase-gate, and handoff schemas remain authoritative at their enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry.
 
-| Contract | File | Purpose |
-|---|---|---|
-| **Input** | `contracts/input.yaml` | Scope, mode, and review material snapshot to resolve before entering the loop |
-| **Output** | `contracts/output.yaml` | Final summary and verification artifacts |
-| **Phase Gates** | `contracts/phase-gates.yaml` | Per-round step assertions and loop invariants |
-| **Handoffs** | `contracts/handoffs.yaml` | Reviewer and QAEvaluator subagent dispatch and return schemas |
+- `entry`: `contracts/input.yaml` at review entry selects `review_scope`, `review_material_snapshot`, `scope_size`, `mode`, `change_kind`, `semantic_contract_review_required`, `behavioral_contract_review_required`, and `agentic_loop_safety_review_required`.
+- `current_round`: load the active round step from `contracts/phase-gates.yaml` at each transition.
+- `selected_handoff`: select the compact dispatch pointer from `contracts/handoffs.yaml` before Reviewer or QAEvaluator dispatch.
+- `reviewer_context`: resolve the fresh bounded Reviewer bundle only when a review pass begins.
+- `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
+- `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-**Rules:**
-- Resolve all input contract fields before entering the loop
-- Check phase gate assertions at every step transition within each round
-- Include all required context fields when dispatching Reviewer or QAEvaluator subagents, and record direct-fallback evidence when subagents are not authorized/available/allowed
-- Validate all required return fields when Reviewer or QAEvaluator completes
-- Verify all output contract artifacts before presenting the final summary
+Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 
-Run the code review loop autonomously from start to finish. Continue rounds until clean or max rounds reached, keep intermediate results inside the loop, and present one final result after exit. When QA is required, run the QA evaluation loop after build/test evidence and code-review evidence are available.
+If a selector is missing or invalid, apply `load_full_authoritative_file`: load the full named canonical file, validate the applicable rules, and record any recovery before proceeding.
+
+Run autonomously until clean or the cap, keep intermediate results inside the loop, and present one final result. Required QA follows build/test and code-review evidence.
 
 ## Goal
 
-Find concrete defects, risks, regressions, and test gaps; fix them when in review-fix mode; and return one evidence-backed final review result. When QA is required, independently evaluate the Done Contract, acceptance criteria, verification evidence, scoped UI/visual/product/UX/docs/DX/domain quality, score progression, and final acceptance result. Reviews must be useful in company environments: local-first, policy-safe, and focused on actionable engineering risk or acceptance evidence rather than generic style preferences.
+Find evidence-backed defects, regressions, and test gaps; fix them in review-fix mode; and return one policy-safe result. Required QA independently evaluates acceptance, evidence, scoped quality, progression, and readiness.
 
 ## Success Criteria
 
-- Review scope and mode are resolved before the loop starts.
-- Findings are severity-ranked with file evidence and confidence.
+- Scope, mode, and review material are resolved before the loop.
+- Findings are severity-ranked with evidence and confidence.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
-- Validation runs after fixes, and a fresh review confirms the final state.
+- Validation and a fresh review follow fixes.
 - QA evaluation runs after code-review/build evidence when `qa_evaluation_mode=required`, returns score progression and a final acceptance verdict, and does not replace code-reviewer.
 - QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
 - QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
@@ -59,59 +56,31 @@ Find concrete defects, risks, regressions, and test gaps; fix them when in revie
 
 ## Entry
 
-Determine the review scope:
-- If the user specified files, pasted content, or a diff -> review that material
-- If there are uncommitted changes -> review those (`git diff`)
-- If there's an active configured task journal, agent-state task file (`{agent_state_dir}/task.md`), or carried-forward task packet -> review all changes from that task
-- If the user requests an audit of current file contents -> review the relevant files even without a diff
-- Otherwise -> ask the user what to review
+Prefer explicit files/content/diff, then uncommitted changes, then the active task journal or packet, then requested current-file audit. Ask only when no review material can be determined.
+
+A standalone `review this` with no carried workflow evidence performs Spec Review against the user request and user scope, records a PASS evidence pointer before Reviewer dispatch, and blocks dispatch on FAIL until the scope mismatch is fixed and Spec Review passes. Standalone review does not require a task journal; `task_journal_path` remains optional.
+
+A workflow-composed review consumes the carried Spec Review PASS pointer and carried current build/test evidence. After any source fix, every subsequent Reviewer dispatch requires real current passed build/test evidence; a not-applicable marker is invalid.
 
 ## Review Modes
 
-Use the smallest mode that answers the request; combine modes when reviewing implementation work.
+Use the smallest applicable combination: spec, regression, test, maintainability, bugfix evidence, semantic contract, behavioral contract, agentic loop safety, and security. Contract and loop modes are enabled by the three entry flags; security-sensitive surfaces route to `assistant-security`.
 
-- **Spec review**: compare the diff/code to the stated goal and acceptance criteria. Report missing behavior, scope creep, and mismatched semantics.
-- **Behavioral contract review**: for code changes, check preserved behavior/invariants, interface-implementation alignment, inherited test coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
-- **Agentic loop safety review**: for agent/workflow/tool loops, check max steps/time budget, stop condition, retry/empty-result handling, tool-error handling, low-confidence escalation, and cost/token guardrails.
-- **Review finding distillation**: for blocker/must-fix findings, classify whether the issue is a one-off fix or a permanent rule candidate using `references/review-finding-permanent-rule.md`.
-- **Regression review**: identify likely breakage of existing behavior, public API contracts, migrations, configs, or compatibility assumptions.
-- **Test review**: verify that tests would fail without the implementation, cover meaningful edge cases, and are not only happy-path snapshots.
-- **Bugfix evidence review**: for bugfixes, verify the review material includes reproduction/root-cause evidence from `assistant-debugging` or an explicit not-applicable/blocker rationale; the regression test must trace to the isolated failure mechanism.
-- **Semantic contract review**: for skill/workflow/framework changes, check contract inheritance, method-template alignment, eval coverage, method-signature fidelity, and high-stakes recommendation guards before judging the change clean.
-- **Maintainability review**: apply SOLID/KISS/DRY/YAGNI/readability only when a concrete risk exists.
-- **Security handoff**: invoke `assistant-security` when the reviewed surface touches auth, permissions, secrets, input handling, persistence, shell commands, dependency/config changes, network calls, or external integrations.
-- **QA evaluation**: after code-review/build evidence exists, dispatch QAEvaluator only when `qa_evaluation_mode=required`. Load `references/qa-evaluation-loop.md`.
-- **Domain rubric QA**: within QA evaluation, load `references/domain-rubrics.md` only when scoped by acceptance criteria, Done Contract, `domain_context`, or explicit `rubric_refs`. QAEvaluator selects rubric families and returns domain-quality scores; Code Reviewer still owns code defects, security, architecture, and test coverage.
+Findings include severity (`must-fix`, `should-fix`, or `nit`), file/line evidence, concrete impact, smallest useful fix, and evidence-calibrated confidence. Speculative concerns remain non-blocking Observations.
 
-Finding format:
-
-```markdown
-- Severity: must-fix | should-fix | nit
-- Evidence: file:line or diff hunk plus observed behavior
-- Impact: what can break, leak, regress, or become hard to maintain
-- Recommendation: smallest useful fix
-- Confidence: evidence-calibrated percentage; speculative concerns belong in Observations and do not block completion
-```
-
-Severity mapping:
-- **must-fix**: correctness/security/regression issue that should block completion or release.
-- **should-fix**: concrete risk that should be resolved in the review-fix loop but may not block an audit report.
-- **nit**: low-priority observation with limited impact.
+QA evaluation runs after code-review/build evidence and only when `qa_evaluation_mode=required`. Load `references/qa-evaluation-loop.md` at that later boundary. Load `references/domain-rubrics.md` only when acceptance criteria, Done Contract, `domain_context`, or explicit `rubric_refs` scope domain quality; selected_domain_rubrics/domain_quality_scores when scoped. Code Reviewer still owns code defects, security, architecture, and test coverage.
 
 ## Company-Safe Review Rules
 
-- Prefer local diffs, local commands, and repo-native checks.
-- Do not require external SaaS scanners, remote LLM review, or unapproved package installs.
-- Do not quote secrets or proprietary data in review output; identify the file/location and redact sensitive values.
-- If an external scan would be useful but policy may block it, suggest a local/manual equivalent instead.
+Prefer local diffs and repo-native checks. Do not require external scanners, remote review, or unapproved installs; redact secrets and proprietary data. Offer local/manual equivalents when policy blocks an external scan.
 
 ## Mandatory Review Checklists
 
-Load and apply `references/review-checklists.md` before declaring clean whenever a corresponding review mode is applicable. Checklist headings alone are not evidence; each applicable area must produce concrete findings or an explicit "no concrete risk found" check.
+The fresh Reviewer context bundle points to `references/review-checklists.md` and supplies only the applicable checklist sections. Checklist headings alone are not evidence; each selected area produces findings or an explicit "no concrete risk found" check.
 
-- **Agentic loop safety review**: apply the Agentic Loop Safety Checklist for agent/workflow/tool loops and return `agentic_loop_safety_checks` covering bounded execution, stop condition, retry/empty-result handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation.
-- **Behavioral contract review**: apply the Behavioral Contract Review Checklist for behavior-bearing code and return `behavioral_contract_checks` covering existing invariants, interface-implementation alignment, test inheritance coverage, protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
-- **Semantic contract review**: apply the Semantic Contract Review Checklist for skill/workflow/framework changes and return `semantic_contract_checks` covering inherited contract obligations, template-contract alignment, eval inheritance coverage, external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.
+- Agentic loop flag -> Agentic Loop Safety Checklist -> `agentic_loop_safety_checks`.
+- Behavioral flag -> Behavioral Contract Review Checklist -> `behavioral_contract_checks`.
+- Semantic flag -> Semantic Contract Review Checklist -> `semantic_contract_checks`.
 
 ## Refactor-Related Findings
 
@@ -131,162 +100,30 @@ Use concrete risk framing instead of generic convention, style, cleanliness, or 
 
 ## Principle and Readability Lens
 
-Load `references/review-principles.md` before each REVIEW step. Apply SOLID, KISS, DRY, YAGNI, and readability checks to the review material. Report a principle finding only when the evidence shows concrete risk, such as duplicated knowledge that will diverge, speculative abstraction, hidden coupling, substitution breakage, needless branching, or code whose intent is hard to recover.
+The fresh Reviewer bundle includes `references/review-principles.md` for the SOLID, KISS, DRY, YAGNI, and readability lens. Report a principle finding only when evidence shows concrete correctness, coupling, duplication, complexity, or maintainability risk.
 
 For each principle/readability finding, include the violated lens, affected surface, concrete evidence, risk category, and smallest durable fix. Do not report acronym-only findings such as "violates SOLID" without naming the observed behavior and the user-facing or maintainer risk.
 
-## The Code Review Loop
+## Review Loop Routing
 
-```
-round = 1
-previously_fixed = []
-score_history = []
+After entry fields are resolved, load `references/review-loop.md` before the first REVIEW step. It is the only immediately mandatory first-review reference in orchestrator context and owns REVIEW -> EVALUATE -> FIX -> VALIDATE, fresh bundle construction, drift/pivot handling, and the max 10 rounds limit. Principles, applicable checklist sections, and rubric guidance belong to the fresh Reviewer worker bundle created only when a review pass begins; they are not assistant-review entry dependencies.
 
-while round <= 10:
-
-  1. REVIEW
-     - Dispatch a fresh Reviewer subagent when `subagent_execution_mode=delegated`
-     - Use fresh direct-fallback review context when `subagent_execution_mode=direct_fallback`
-     - Use self-review only for trivial/small scope or direct fallback mode with recorded fresh-context evidence
-     - Provide: review material snapshot, previously_fixed list, round number
-     - First run Spec Review against the user request and acceptance criteria
-     - For agent/workflow/tool loop changes: apply the Agentic Loop Safety Checklist before declaring clean
-     - For behavior-bearing code changes: apply the Behavioral Contract Review Checklist before declaring clean
-     - Then run Regression/Test/Maintainability modes as applicable
-     - If security-sensitive surfaces are present, hand off to `assistant-security`
-     - Load and apply references/review-principles.md as the clean-code lens
-     - Load and apply references/review-checklists.md when agentic loop safety, behavioral contract, or semantic contract review is applicable
-     - For skill/workflow/framework changes: apply the Semantic Contract Review Checklist before declaring clean
-     - For medium+ scope: set rubric_required=true (see references/review-rubric.md)
-     - Reviewer prompt must include:
-       "This is review round {round}. The following items were already
-       fixed — do NOT re-report them:
-       {previously_fixed}
-       If the current review material shows a residual or related risk, report it
-       only as a distinct new finding with new evidence; do not re-report the fixed item.
-       Finding filter policy:
-       - Report only evidence-backed findings with file/line evidence, concrete impact, and the smallest useful fix.
-       - Put speculative or low-evidence concerns in Observations; they do not block completion.
-       - In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers; round 10 is terminal and exits with remaining items instead of starting round 11.
-       Apply the SOLID, KISS, DRY, YAGNI, and readability lens from
-       references/review-principles.md. Report principle issues only when tied
-       to concrete evidence, concrete risk, and the smallest durable fix.
-       Load and apply references/review-checklists.md before declaring clean
-       when any checklist mode below is applicable.
-       For agent/workflow/tool loop changes, apply the Agentic Loop Safety Checklist:
-       max steps/time budget, stop condition, retry/empty-result handling,
-       tool-error handling, progress/stagnation detection, and cost/token guardrails.
-       For behavior-bearing code changes, apply the Behavioral Contract Review Checklist:
-       existing invariants, interface-implementation alignment, inherited test coverage,
-       protocol/algorithm fidelity, high-impact operation guards, and runtime-surface sync.
-       For skill/workflow/framework changes, also apply the Semantic Contract Review Checklist:
-       inherited contract obligations, template-contract alignment, eval inheritance,
-       external-method signature fidelity, high-stakes recommendation guards, and mirror-surface sync.
-       Score against the rubric (5 dimensions) per references/review-rubric.md."
-
-  2. EVALUATE
-     a. Check rubric score (medium+ scope):
-        - PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN
-        - PIVOT (weighted < threshold for round) -> escalate to orchestrator-owned pivot_restart_decision
-        - REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3
-          using lowest-scoring rubric dimensions as the improvement targets
-        - Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0 and zero
-          must-fix/should-fix findings
-     b. No rubric (small scope): use findings-based exit:
-        - No must-fix AND no should-fix -> EXIT CLEAN
-        - Only nits -> EXIT CLEAN (note nits in final report)
-     c. round == 10 with remaining must-fix or should-fix -> EXIT WITH REMAINING ITEMS
-     d. round == 10 with issues fixed and now clean -> EXIT ISSUES FIXED
-     e. Otherwise -> continue to step 3
-
-     Record in score_history: { round, weighted_score, finding_count, drift_status }
-     (see references/score-tracking.md for drift detection rules)
-     If score tracking reports STAGNATION, repeated DRIFT, repeated REGRESSION,
-     or rubric action PIVOT, pause the loop and return a pivot_restart_signal to
-     the orchestrator. The orchestrator records pivot_restart_decision with
-     trigger, evidence, affected_slice_or_round, options_considered,
-     selected_action, reapproval_required, next_agent, recovery_pointer, and
-     exact_next_action before another fix/review dispatch. If the selected action
-     changes scope, files, behavior, risk, verification, or acceptance criteria,
-     reapproval is required. Round 10 remains terminal and never starts round 11.
-
-  3. FIX
-     - Fix ALL must-fix and should-fix items (not just must-fix)
-     - Prioritize lowest-scoring rubric dimensions first
-     - Add each fixed item to previously_fixed with description
-
-  4. VALIDATE
-     - Run build + tests if applicable
-     - If build/tests fail -> fix and re-verify before continuing
-     - For C# projects: run the configured local cognitive-complexity check when available and policy-allowed, then flag methods exceeding threshold; if unavailable/disallowed, record that explicitly and use equivalent review evidence from source inspection, tests, and focused complexity reasoning.
-
-  5. round += 1 -> go to step 1
-```
-
-## The QA Evaluation Loop
-
-Run QA only when `qa_evaluation_mode=required`; the workflow Review phase should set that mode only from the QA required positive triggers above. Load `references/qa-evaluation-loop.md` before dispatching QAEvaluator; that reference owns the detailed algorithm, score progression, domain-rubric routing, pivot/restart behavior, and terminal round-10 cap.
-
-At this level, keep only the routing boundary: QA runs after build/test evidence and Code Reviewer or Reviewer compatibility evidence exist, and it evaluates acceptance criteria, Done Contract evidence, verification evidence, scoped domain quality, score progression, and final readiness. QA does not replace code review or report general code defects unless they directly block acceptance.
+Run QA only when `qa_evaluation_mode=required`. The loop routes to `references/qa-evaluation-loop.md` after build/test and code-review evidence exist; QA evaluates acceptance and scoped quality, and does not replace code review.
 
 ## Exit: Present Final Result
 
-After the loop completes, present ONE summary to the user:
-
-```
-## Review Complete
-
-**Rounds:** {N}
-**Result:** CLEAN | ISSUES_FIXED | HAS_REMAINING_ITEMS
-
-### Rubric Score (medium+ scope)
-| Dimension | Score | Justification |
-|---|---|---|
-| Correctness (0.30) | {score} | {one-line justification} |
-| Code Quality (0.20) | {score} | {one-line justification} |
-| Architecture (0.20) | {score} | {one-line justification} |
-| Security (0.15) | {score} | {one-line justification} |
-| Test Coverage (0.15) | {score} | {one-line justification} |
-| **Weighted** | **{score}** | **{PASS/REFINE/PIVOT}** |
-
-### Score Progression (if multiple rounds)
-| Round | Score | Findings | Delta | Drift |
-|---|---|---|---|---|
-| 1 | {score} | {count} | - | - |
-| 2 | {score} | {count} | {+/-} | {drift_status} |
-
-### Fixed in this review
-- [list of all items fixed across all rounds, grouped by severity]
-
-### Remaining (if any)
-- [items that could not be resolved]
-
-### Nits noted (not fixed)
-- [low-priority observations]
-```
+After the loop completes, present one summary with rounds, CLEAN/ISSUES_FIXED/HAS_REMAINING_ITEMS, final rubric and score progression when applicable, fixed findings, remaining items, nits, verification, and residual risk. Canonical field ownership remains in `contracts/output.yaml`.
 
 ## Rules
 
-- **Single final summary**: keep round results internal and report after the loop exits.
-- **Autonomous continuation**: advance to the next round while exit criteria are unmet.
-- **Fresh Reviewer each round** on medium+ scope: stale context weakens reviews.
-- **Previously-fixed list prevents re-reporting**: each round should find fewer issues.
-- **Evidence-backed filtering**: findings need file/line evidence, concrete impact, and the smallest useful fix; late rounds only stay open before the hard max for must-fix or high-confidence should-fix findings, and round 10 is terminal.
-- If scope is trivial (single small file, obvious change) -> one clean round can exit. If findings exist, continue looping.
+- Keep round results internal and present one final summary.
+- Use a fresh Reviewer bundle each medium+ round; direct fallback uses the same isolated bundle without claiming a subagent dispatch.
+- Previously fixed items are not re-reported; findings remain evidence-backed.
+- A trivial clean review may exit after one round. Otherwise continue until clean, blocked, or round 10 is terminal; never start round 11.
 
 ## Output
 
-Return:
-- **Rounds** - number of review rounds completed.
-- **Result** - CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS.
-- **Findings/fixed items** - severity, file, evidence, action, and round.
-- **Verification** - build/test commands or not-applicable reason.
-- **Bugfix evidence review** - when applicable, whether reproduction/root-cause evidence and regression linkage were reviewed.
-- **Agentic loop safety review** - when applicable, whether bounds, stop conditions, retry/empty handling, tool-error routing, progress checks, and cost/token guards were checked.
-- **Behavioral contract review** - when applicable, whether existing invariants, interface alignment, inherited tests, protocol fidelity, high-impact guards, and runtime surfaces were checked.
-- **Semantic contract review** - when applicable, whether inherited contracts, method signatures, eval coverage, high-stakes guards, and mirror surfaces were checked.
-- **QA evaluation result** - when applicable, final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped, score_progression, and blocked open questions.
-- **Residual risk** - remaining items, nits, or scope gaps.
+Return rounds/result, evidence-backed findings and fixes, verification, applicable bugfix/agentic/behavioral/semantic checks, required QA result, and residual risk. `contracts/output.yaml` owns the exact schema.
 
 ## Stop Rules
 
@@ -296,23 +133,7 @@ Return:
 
 ### Drift detection (medium+ scope)
 
-After each round, compare rubric scores to the previous round per `references/score-tracking.md`:
-
-- **GENUINE**: Score up, findings down -> continue normally
-- **SUSPICIOUS**: Score jumped > 1.0 in one round -> log warning, continue
-- **DRIFT**: Score up but findings didn't decrease -> **reset evaluator** (fresh agent, stricter prompt)
-- **REGRESSION**: Score down -> investigate; 2+ consecutive regressions trigger pivot_restart_signal
-- **NEUTRAL**: Score unchanged for 1 round with findings present -> log, no action yet
-- **STAGNATION**: Score unchanged for 2+ rounds with findings present -> return pivot_restart_signal to orchestrator
-
-On DRIFT, the next Reviewer dispatch MUST include this addition to its prompt:
-> "Previous rounds showed score inflation without corresponding quality improvement.
-> Apply maximum skepticism. Score conservatively; when uncertain, round DOWN."
-
-On repeated DRIFT after the reset, stop the current review dispatch path and
-return pivot_restart_signal. The orchestrator owns the pivot_restart_decision and
-selects reset, candidate search, replan, restart, or a blocked/user path without
-creating round 11 behavior.
+Compare rounds using `references/score-tracking.md`. GENUINE/SUSPICIOUS/NEUTRAL continue with recorded evidence; DRIFT resets fresh context once; REGRESSION and STAGNATION are investigated. Repeated DRIFT/REGRESSION or STAGNATION returns `pivot_restart_signal`; the orchestrator records `pivot_restart_decision` before another pass.
 
 
 ## Review Finding Rule Distillation
