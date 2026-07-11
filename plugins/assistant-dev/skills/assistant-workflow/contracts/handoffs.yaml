@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -229,7 +229,7 @@ handoffs:
           - name: relationship
             type: enum
             required: true
-            enum_values: [caller, consumer, test, docs, contract, config, mirror, hook, runtime, not_applicable, deferred]
+            enum_values: [caller, consumer, test, docs, contract, config, mirror, runtime, not_applicable, deferred]
           - name: outcome
             type: string
             required: true

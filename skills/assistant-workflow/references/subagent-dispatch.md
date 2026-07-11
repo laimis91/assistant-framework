@@ -114,17 +114,14 @@ its compact validation plus fresh-review evidence instead.
   Builder/Tester dispatch/result, and Code Reviewer dispatch/result evidence,
   or Reviewer dispatch/result evidence when compatibility routing is used.
   Medium+ delegated slice work also records per-slice dispatch evidence before
-  each slice is marked verified. **Codex adds a stronger check:** delegated
-  Codex evidence must correspond to real hook-written
-  `SubagentStart`/`SubagentStop` lifecycle records in protected agent-owned
-  workflow state; each dispatch/result entry must reference the matching
-  lifecycle `agent_id`, and task-journal text or project-local
-  `.codex/subagent-events.jsonl` diagnostics are insufficient because Codex can
-  otherwise run phases inline and write claimed dispatch entries. Direct
-  fallback is allowed only for explicit `authorization_denied`,
+  each slice is marked verified. Delegated evidence must correspond to a real
+  native dispatch/thread and result. Reference the agent id, task name, thread,
+  or tool result when the runtime exposes one; task-journal claims without a
+  matching native result do not satisfy delegated evidence. Direct fallback is
+  allowed only for explicit `authorization_denied`,
   `subagents_unavailable`, or `policy_disallowed` reasons, and must record
   equivalent role, phase, verification, and review evidence; silent fallback
-  fails the stop-review/phase gates.
+  fails the completion gates.
 - **QA evidence gate**: when QA is required, delegated mode is not complete until the task journal Agent Dispatch Log records QA Evaluator dispatch/result evidence after Builder/Tester and Code Reviewer evidence. Direct fallback must record fresh QA Evaluator direct evidence separately from Code Reviewer direct evidence. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 - **Every medium+ task gets Architect decomposition responsibility**: In delegated mode the Architect proposes smallest iterable slice boundaries; in direct fallback the same criteria and evidence are recorded directly.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)

@@ -144,9 +144,9 @@ for term in \
 done
 for artifact in review_result spec_review_result; do
     if [[ "$artifact" == "review_result" ]]; then
-        expected_condition="controller_intensity in [standard, strict] or risk_tier in [high, critical] or hook_profile == strict"
+        expected_condition="controller_intensity in [standard, strict] or risk_tier in [high, critical]"
     else
-        expected_condition="size in [medium, large, mega] or risk_tier in [high, critical] or hook_profile == strict"
+        expected_condition="size in [medium, large, mega] or risk_tier in [high, critical]"
     fi
     if ! awk -v artifact="$artifact" -v expected_condition="$expected_condition" '
         $0 == "  - name: " artifact { in_artifact = 1; next }

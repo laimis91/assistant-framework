@@ -6,7 +6,7 @@ namespace MemoryGraph.Tools;
 
 /// <summary>
 /// memory_trend — Surface actionable trends from calibration data and learning signals.
-/// Part of the continuous learning loop: signals are captured by hooks, trends are surfaced here.
+/// Part of the continuous learning loop: recorded signals are summarized here.
 /// </summary>
 public sealed class MemoryTrendTool : IMemoryTool
 {
@@ -114,7 +114,7 @@ public sealed class MemoryTrendTool : IMemoryTool
         }
         catch (IOException)
         {
-            // File may be locked or rotated by the learning-signals hook
+            // Another signal producer may be writing or rotating the file.
             return null;
         }
 

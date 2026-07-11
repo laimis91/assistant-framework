@@ -305,22 +305,22 @@ The contracts are YAML files in the skill directory. Agents read them as part of
 ### Level 2: SKILL.md references contracts (active)
 The SKILL.md explicitly says "read and follow contracts/". The Contracts section lists the files and summarizes the rules. This makes contracts visible and hard to miss.
 
-### Level 3: Hook-based validation (runtime)
-Shell scripts in hooks validate contract compliance while the workflow is running:
-- Prompt-time hooks inject active phase-gate state before the agent can skip ahead
-- Pre-tool hooks warn when active workflow ownership boundaries are crossed
-- Stop hooks check output contract completeness before task handoff
-- `workflow-enforcer.sh` uses `workflow-phase-gates.sh` to surface runtime decomposition, plan, review, and document gates plus optional metrics diagnostics
-- `stop-review.sh` is the consolidated strict stop gate for applicable review, plan, final-result, and rubric completion during active build/review/document statuses
+### Level 3: Source structural validation (automated)
+The source validator checks that skill metadata and contracts have a consistent,
+machine-checkable shape before release. It catches missing tier files, malformed
+headers, missing recovery behavior, undeclared enum values, invalid index
+selectors, and other structural drift. This remains provider-neutral and does
+not depend on an agent lifecycle integration.
 
-Workflow metrics are optional, non-blocking observability and must not block completion when their file or current-task entry is absent. Learning capture is conditional: in `auto` mode the Learning Controller becomes applicable only when the journal contains lesson-bearing review findings, build/test failures, user corrections, or memory-trend evidence.
-
-The source validator is the Level 3 foundation: it gives runtime hooks a consistent, checked contract shape to rely on.
+Runtime adherence still uses the agent's normal instruction-following model:
+the skill entrypoint loads the applicable contracts, the orchestrator records
+the required evidence, and review verifies that completion gates were met.
+Optional metrics remain non-blocking observability.
 
 ### Level 4: Conformance test suite (automated)
 YAML test cases define "given this input, skill must produce output matching this schema." Can be run as a verification step after skill modifications.
 
-The validator is also the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
+The validator is the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
 
 ```bash
 tools/evals/run-skill-evals.sh --validate-fixture
@@ -333,7 +333,7 @@ The default per-skill eval inventory is first-class `skills/assistant-*` skills 
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
-**Current implementation: Level 2 plus source structural validation, runtime phase-gate hooks, and complete first-class per-skill eval fixtures.** Level 3 covers prompt-time phase-gate warnings (`workflow-enforcer.sh` + `workflow-phase-gates.sh`) and consolidated stop-time review/harness enforcement (`stop-review.sh`). Local-only skill experiments remain opt-in through `--include-local`.
+**Current implementation: Levels 1-4 for every first-class skill, with complete first-class per-skill eval fixtures.** Level 3 is source structural validation; Level 4 is provider-neutral conformance fixtures plus semantic review. Local-only skill experiments remain opt-in through `--include-local`.
 
 ---
 

@@ -22,8 +22,8 @@ if jq -e . >/dev/null 2>&1 <<< '{}'; then
 fi
 MEMORY_DOC_INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$MEMORY_DOC_INSTALL_HOME"
-if p0p4_install_codex_fixture "$MEMORY_DOC_INSTALL_HOME" /tmp/p0p4-memory-doc-install.out /tmp/p0p4-memory-doc-install.err --no-hooks; then
-    if rg -n "WAL|markdown sync|memory files are the source of truth|knowledge graph .+source of truth|loaded at session start via hooks|graph\\.jsonl.+source of truth|\\.claude/" "$MEMORY_DOC_INSTALL_HOME/.codex/AGENTS.md" >/tmp/p0p4-memory-wording.out; then
+if p0p4_install_codex_fixture "$MEMORY_DOC_INSTALL_HOME" /tmp/p0p4-memory-doc-install.out /tmp/p0p4-memory-doc-install.err; then
+    if rg -n "WAL|markdown sync|memory files are the source of truth|knowledge graph .+source of truth|eagerly loaded at session start|graph\\.jsonl.+source of truth|\\.claude/" "$MEMORY_DOC_INSTALL_HOME/.codex/AGENTS.md" >/tmp/p0p4-memory-wording.out; then
         fail "installed Codex memory protocol has stale memory wording or paths; see /tmp/p0p4-memory-wording.out"
     else
         pass
@@ -33,7 +33,7 @@ else
 fi
 
 test_start "installer and protocol docs do not describe graph.jsonl as live source of truth"
-if rg -n 'graph\.jsonl.*source of truth|source of truth.*graph\.jsonl|rules are still loaded from graph\.jsonl|session-start hook directly from `graph\.jsonl`|knowledge graph seed installed' \
+if rg -n 'graph\.jsonl.*source of truth|source of truth.*graph\.jsonl|rules are still loaded from graph\.jsonl|session start directly from `graph\.jsonl`|knowledge graph seed installed' \
     "$FRAMEWORK_DIR/install.sh" \
     "$FRAMEWORK_DIR/memory-protocol.md" \
     "$FRAMEWORK_DIR/skills/assistant-memory/SKILL.md" >/tmp/p0p4-graph-source-wording.out; then

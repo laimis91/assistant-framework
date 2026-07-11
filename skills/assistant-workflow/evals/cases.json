@@ -214,7 +214,7 @@
       "title": "Clarification cap is not question quota",
       "category": "clarification_admissibility",
       "purpose": "Checks that clear medium+ tasks can proceed with zero clarification questions while ambiguous risky tasks block before planning.",
-      "prompt": "Implement the approved hook contract test exactly as described in the issue, using the named files and expected assertion text.",
+      "prompt": "Implement the approved runtime integration contract test exactly as described in the issue, using the named files and expected assertion text.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "The request is medium-sized but includes concrete files, behavior, and verification expectations.",
@@ -317,7 +317,7 @@
         "Summarizes repetitive logs/tool output/history after extracting evidence.",
         "Lists omitted or deferred material with reasons.",
         "Splits or delegates scope when material exceeds faithful single-context review.",
-        "Searches similar local skills/contracts/evals/hooks before editing.",
+        "Searches similar local skills/contracts/evals/runtime integrations before editing.",
         "Records canonical pattern used and counterexample/edge case checked, or explains no-pattern rationale.",
         "Uses real local paths or search queries, not only placeholder labels, for similar patterns searched.",
         "Names a concrete canonical pattern path such as a comparable skill contract/eval file, or gives an explicit no-pattern rationale.",

@@ -122,9 +122,7 @@ acceptance items instead of starting round 11.
 
 ## Status Gate
 
-When local hooks are configured and policy-allowed, use them to enforce the
-review cycle structurally. When hooks are unavailable, enforce the same gate
-manually before presenting results:
+Enforce the review cycle before presenting results:
 
 - Review Log or equivalent review result must exist.
 - QA Evaluation result must exist when qa_evaluation_mode=required.
@@ -132,7 +130,6 @@ manually before presenting results:
   repeated DRIFT, repeated REGRESSION, or pivot action.
 - Final Result must be recorded.
 - The full review cycle must complete before presenting results to the user.
-- Do not claim the hook ran unless it actually exists and executed.
 
 ## Verification Summary and Handoff
 

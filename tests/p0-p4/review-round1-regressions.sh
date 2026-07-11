@@ -7,171 +7,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
 
-# Canonical union of commands that were directly registered by released
-# hooks/codex-settings.json versions. Internal helpers are intentionally absent.
-historical_codex_entrypoints=(
-    session-start.sh
-    skill-router.sh
-    learning-signals.sh
-    workflow-enforcer.sh
-    workflow-guard.sh
-    stop-review.sh
-    harness-gate.sh
-    subagent-monitor.sh
-    pre-compress.sh
-    post-compact.sh
-    session-end.sh
-    post-tool-context.sh
-    tool-failure-advisor.sh
-    task-completed.sh
-)
-
-internal_codex_helpers=(
-    hook-runtime.sh
-    task-journal-resolver.sh
-    workflow-phase-gates.sh
-)
-
-review_round1_path_without_jq() {
-    local tmpbin="$1"
-    local directory
-    local file
-    local name
-
-    mkdir -p "$tmpbin"
-    for directory in /bin /usr/bin /usr/sbin /sbin; do
-        [[ -d "$directory" ]] || continue
-        for file in "$directory"/*; do
-            name="$(basename "$file")"
-            [[ "$name" == "jq" ]] && continue
-            [[ -e "$tmpbin/$name" ]] || ln -s "$file" "$tmpbin/$name" 2>/dev/null || true
-        done
-    done
-}
-
-json_command_present() {
-    local hooks_file="$1"
-    local command="$2"
-    jq -e --arg command "$command" '[.. | objects | .command? // empty] | any(. == $command)' "$hooks_file" >/dev/null
-}
-
-write_native_migration_fixture() {
-    local home_dir="$1"
-    local custom_scripts_command="$2"
-    local custom_assistant_command="$3"
-
-    mkdir -p "$home_dir/.codex"
-    cat > "$home_dir/.codex/hooks.json" <<JSON
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {"type":"command","command":"\$HOME/.codex/hooks/assistant/workflow-enforcer.sh --framework"},
-          {"type":"command","command":"$custom_scripts_command"}
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {"type":"command","command":"$home_dir/.codex/hooks/assistant/stop-review.sh --framework"},
-          {"type":"command","command":"$custom_assistant_command"}
-        ]
-      }
-    ]
-  }
-}
-JSON
-}
-
-test_start "native migration with jq removes exact framework commands but preserves known basenames under unrelated roots"
-JQ_SCOPE_HOME="$(mktemp -d)"
-p0p4_register_cleanup "$JQ_SCOPE_HOME"
-jq_custom_scripts="/opt/acme/hooks/scripts/workflow-enforcer.sh --custom"
-jq_custom_assistant="/srv/team/hooks/assistant/stop-review.sh --custom"
-write_native_migration_fixture "$JQ_SCOPE_HOME" "$jq_custom_scripts" "$jq_custom_assistant"
-if HOME="$JQ_SCOPE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow \
-    >/tmp/p0p4-review-r1-native-jq.out 2>/tmp/p0p4-review-r1-native-jq.err; then
-    if json_command_present "$JQ_SCOPE_HOME/.codex/hooks.json" "$jq_custom_scripts" \
-        && json_command_present "$JQ_SCOPE_HOME/.codex/hooks.json" "$jq_custom_assistant" \
-        && ! json_command_present "$JQ_SCOPE_HOME/.codex/hooks.json" '$HOME/.codex/hooks/assistant/workflow-enforcer.sh --framework' \
-        && ! json_command_present "$JQ_SCOPE_HOME/.codex/hooks.json" "$JQ_SCOPE_HOME/.codex/hooks/assistant/stop-review.sh --framework"; then
-        pass
-    else
-        fail "jq migration removed a custom known-basename hook or retained an exact framework-owned command"
-    fi
-else
-    fail "jq migration fixture install failed; see /tmp/p0p4-review-r1-native-jq.err"
-fi
-
-test_start "native migration without jq removes exact framework commands but preserves known basenames under unrelated roots"
-NO_JQ_SCOPE_HOME="$(mktemp -d)"
-NO_JQ_SCOPE_BIN="$(mktemp -d)"
-p0p4_register_cleanup "$NO_JQ_SCOPE_HOME" "$NO_JQ_SCOPE_BIN"
-review_round1_path_without_jq "$NO_JQ_SCOPE_BIN"
-no_jq_custom_scripts="/opt/acme/hooks/scripts/learning-signals.sh --custom"
-no_jq_custom_assistant="/srv/team/hooks/assistant/session-start.sh --custom"
-write_native_migration_fixture "$NO_JQ_SCOPE_HOME" "$no_jq_custom_scripts" "$no_jq_custom_assistant"
-if HOME="$NO_JQ_SCOPE_HOME" PATH="$NO_JQ_SCOPE_BIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow \
-    >/tmp/p0p4-review-r1-native-no-jq.out 2>/tmp/p0p4-review-r1-native-no-jq.err; then
-    if json_command_present "$NO_JQ_SCOPE_HOME/.codex/hooks.json" "$no_jq_custom_scripts" \
-        && json_command_present "$NO_JQ_SCOPE_HOME/.codex/hooks.json" "$no_jq_custom_assistant" \
-        && ! json_command_present "$NO_JQ_SCOPE_HOME/.codex/hooks.json" '$HOME/.codex/hooks/assistant/workflow-enforcer.sh --framework' \
-        && ! json_command_present "$NO_JQ_SCOPE_HOME/.codex/hooks.json" "$NO_JQ_SCOPE_HOME/.codex/hooks/assistant/stop-review.sh --framework"; then
-        pass
-    else
-        fail "no-jq migration removed a custom known-basename hook or retained an exact framework-owned command"
-    fi
-else
-    fail "no-jq migration fixture install failed; see /tmp/p0p4-review-r1-native-no-jq.err"
-fi
-
-test_start "native cached shims cover the canonical historical entrypoints without treating internal helpers as entrypoints"
-HISTORICAL_HOME="$(mktemp -d)"
-p0p4_register_cleanup "$HISTORICAL_HOME"
-mkdir -p "$HISTORICAL_HOME/.codex"
-{
-    printf '%s\n' '{"hooks":{"UserPromptSubmit":[{"matcher":"","hooks":['
-    separator=""
-    for entrypoint in "${historical_codex_entrypoints[@]}"; do
-        printf '%s{"type":"command","command":"$HOME/.codex/hooks/assistant/%s --cached"}' "$separator" "$entrypoint"
-        separator=,
-    done
-    for helper in "${internal_codex_helpers[@]}"; do
-        printf '%s{"type":"command","command":"$HOME/.codex/hooks/assistant/%s --user-wrapper"}' "$separator" "$helper"
-        separator=,
-    done
-    printf '%s\n' ']}]}}'
-} > "$HISTORICAL_HOME/.codex/hooks.json"
-if HOME="$HISTORICAL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow \
-    >/tmp/p0p4-review-r1-historical.out 2>/tmp/p0p4-review-r1-historical.err; then
-    historical_failures=()
-    for entrypoint in "${historical_codex_entrypoints[@]}"; do
-        if json_command_present "$HISTORICAL_HOME/.codex/hooks.json" '$HOME/.codex/hooks/assistant/'"$entrypoint"' --cached'; then
-            historical_failures+=("registered historical command remains: $entrypoint")
-        fi
-        shim="$HISTORICAL_HOME/.codex/hooks/assistant/$entrypoint"
-        if [[ ! -x "$shim" ]] || ! grep -Fq 'Assistant Framework native-profile migration shim' "$shim"; then
-            historical_failures+=("missing historical cached shim: $entrypoint")
-        fi
-    done
-    for helper in "${internal_codex_helpers[@]}"; do
-        if ! json_command_present "$HISTORICAL_HOME/.codex/hooks.json" '$HOME/.codex/hooks/assistant/'"$helper"' --user-wrapper'; then
-            historical_failures+=("internal helper was treated as a registered entrypoint: $helper")
-        fi
-    done
-    if [[ "${#historical_failures[@]}" -eq 0 ]]; then
-        pass
-    else
-        fail "${historical_failures[*]}"
-    fi
-else
-    fail "historical-entrypoint migration failed; see /tmp/p0p4-review-r1-historical.err"
-fi
-
 validator_load_set_closure_words() {
     local skill_name="$1"
     local load_set="$2"
@@ -517,65 +352,32 @@ else
     fail "${index_validation_failures[*]}"
 fi
 
-# Load runtime helpers directly so the test checks the same gate used by hooks.
-source "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh"
+test_start "native workflow contracts preserve adaptive intensity and role separation"
+intensity_failures=()
+workflow_input="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"
+workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
+workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+workflow_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md"
 
-write_controller_intensity_fixture() {
-    local file="$1"
-    local intensity="$2"
-    local size="$3"
-    local risk="$4"
-
-    cat > "$file" <<EOF
-# Task
-Status: DOCUMENTING
-Triaged as: $size
-Risk tier: $risk
-Controller intensity: $intensity
-Subagent policy state: policy_disallowed
-Subagent execution mode: not_applicable
-Changed files:
-- src/App.cs
-## Review Log
-### Spec Review #1
-- Result: PASS
-- Scope reviewed: inline plan, src/App.cs, and automated validation
-- Missing acceptance criteria: none
-- Extra scope: none
-- Changed files mismatch: none
-- Verification evidence mismatch: none
-- Required fixes: none
-### Quality Review #1
-- Found: 0 must-fix, 0 should-fix
-- Reviewer mode: fresh self-review
-### Final result
-- Result: CLEAN
-EOF
-}
-
-test_start "light small low-risk source work permits inline not_applicable and fresh self-review while standard and strict retain role gates"
-INTENSITY_ROOT="$(mktemp -d)"
-p0p4_register_cleanup "$INTENSITY_ROOT"
-write_controller_intensity_fixture "$INTENSITY_ROOT/light.md" light small low
-write_controller_intensity_fixture "$INTENSITY_ROOT/standard.md" standard medium medium
-write_controller_intensity_fixture "$INTENSITY_ROOT/strict.md" strict small high
-light_roles="$(assistant_phase_required_subagent_roles "$INTENSITY_ROOT/light.md")"
-light_reason="$(assistant_phase_subagent_evidence_missing_reason_key "$INTENSITY_ROOT/light.md")"
-light_review_reason="$(assistant_phase_review_missing_reason_key "$INTENSITY_ROOT/light.md")"
-standard_roles="$(assistant_phase_required_subagent_roles "$INTENSITY_ROOT/standard.md")"
-strict_roles="$(assistant_phase_required_subagent_roles "$INTENSITY_ROOT/strict.md")"
-if [[ -z "$light_roles" ]] \
-    && [[ "$light_reason" == complete ]] \
-    && [[ "$light_review_reason" == complete ]] \
-    && printf '%s\n' "$standard_roles" | grep -qx 'Code Writer' \
-    && printf '%s\n' "$standard_roles" | grep -qx 'Builder/Tester' \
-    && printf '%s\n' "$standard_roles" | grep -qx 'Code Reviewer' \
-    && printf '%s\n' "$strict_roles" | grep -qx 'Code Writer' \
-    && printf '%s\n' "$strict_roles" | grep -qx 'Builder/Tester' \
-    && printf '%s\n' "$strict_roles" | grep -qx 'Code Reviewer'; then
+if ! grep -Fq 'For controller_intensity=light small low-risk localized source changes, use not_applicable' "$workflow_input"; then
+    intensity_failures+=("light input routing no longer permits native inline execution")
+fi
+if ! grep -Fq 'fresh self-review' "$workflow_controller" \
+    || ! grep -Fq 'subagent_execution_mode=not_applicable' "$workflow_controller"; then
+    intensity_failures+=("light controller routing lost native fresh-self-review/not-applicable behavior")
+fi
+for role in 'Code Writer' 'Builder/Tester' 'Code Reviewer'; do
+    if ! grep -Fq "$role" "$workflow_gates" || ! grep -Fq "$role" "$workflow_output"; then
+        intensity_failures+=("standard/strict native contracts lost $role evidence")
+    fi
+done
+if ! grep -Fq 'controller_intensity in [standard, strict]' "$workflow_gates"; then
+    intensity_failures+=("standard/strict role gate is missing from native phase contracts")
+fi
+if [[ "${#intensity_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "light roles='$light_roles' evidence='$light_reason' review='$light_review_reason'; standard='$standard_roles'; strict='$strict_roles'"
+    fail "${intensity_failures[*]}"
 fi
 
 test_start "explicit phase markers are required only by strict intensity or explicit project policy"
@@ -590,62 +392,25 @@ else
     fail "workflow guidance still makes explicit phase markers universal instead of strict/project-policy only"
 fi
 
-test_start "learning auto mode treats no correction, no changes, and none recorded as absence of evidence"
-LEARNING_NEGATION_ROOT="$(mktemp -d)"
-p0p4_register_cleanup "$LEARNING_NEGATION_ROOT"
-learning_negation_failures=()
-for value in 'no correction' 'no changes' 'none recorded'; do
-    fixture="$LEARNING_NEGATION_ROOT/$(printf '%s' "$value" | tr ' ' '-').md"
-    cat > "$fixture" <<EOF
-# Task
-Status: DOCUMENTING
-Triaged as: medium
-Learning capture mode: auto
-User correction: $value
-EOF
-    if assistant_phase_has_lesson_bearing_evidence "$fixture"; then
-        learning_negation_failures+=("'$value' was treated as lesson-bearing evidence")
-    fi
-    if [[ "$(assistant_phase_learning_missing_reason_key "$fixture")" != complete ]]; then
-        learning_negation_failures+=("'$value' activated the Learning Controller gate")
-    fi
-done
-if [[ "${#learning_negation_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "${learning_negation_failures[*]}"
+test_start "native learning contracts activate auto mode only for concrete lesson-bearing evidence"
+learning_failures=()
+if ! grep -Fq 'auto requires the Learning Controller only when concrete lesson-bearing evidence exists' "$workflow_input"; then
+    learning_failures+=("input contract lost concrete-evidence activation for learning auto mode")
 fi
-
-test_start "learning auto mode treats No comma semicolon and em-dash corrections as lesson-bearing evidence"
-LEARNING_CORRECTION_ROOT="$(mktemp -d)"
-p0p4_register_cleanup "$LEARNING_CORRECTION_ROOT"
-learning_correction_failures=()
-correction_index=0
-while IFS= read -r value; do
-    correction_index=$(( correction_index + 1 ))
-    fixture="$LEARNING_CORRECTION_ROOT/correction-$correction_index.md"
-    cat > "$fixture" <<EOF
-# Task
-Status: DOCUMENTING
-Triaged as: medium
-Learning capture mode: auto
-User correction: $value
-EOF
-    if ! assistant_phase_has_lesson_bearing_evidence "$fixture"; then
-        learning_correction_failures+=("'$value' was treated as absence instead of a correction")
-    fi
-    if [[ "$(assistant_phase_learning_missing_reason_key "$fixture")" != no_learning_controller ]]; then
-        learning_correction_failures+=("'$value' did not activate the Learning Controller gate")
-    fi
-done <<'CORRECTIONS'
-No, preserve custom hooks during migration.
-No; use native routing for Codex.
-No — metrics are optional and non-blocking.
-CORRECTIONS
-if [[ "${#learning_correction_failures[@]}" -eq 0 ]]; then
+if ! grep -Fq 'auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals' "$workflow_output"; then
+    learning_failures+=("output contract broadened learning auto mode beyond concrete evidence")
+fi
+if ! grep -Fq 'learning_capture_mode == required or (learning_capture_mode == auto and concrete review finding, build/test failure, user correction, or memory trend evidence exists)' "$workflow_gates"; then
+    learning_failures+=("Document learning gate lost the provider-neutral concrete-evidence condition")
+fi
+if ! grep -Fq 'Metrics,' "$workflow_controller" \
+    || ! grep -Fq 'reflexion, and memory remain optional and non-blocking.' "$workflow_controller"; then
+    learning_failures+=("controller no longer keeps learning-related persistence optional and non-blocking")
+fi
+if [[ "${#learning_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "${learning_correction_failures[*]}"
+    fail "${learning_failures[*]}"
 fi
 
 test_start "README and contract design guide define metrics as optional non-blocking observability"

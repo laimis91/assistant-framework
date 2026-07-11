@@ -661,7 +661,7 @@ else
     fail "assistant-workflow root/plugin mirrors differ: ${workflow_unsynced_pairs[*]}"
 fi
 
-test_start "workflow task journal template anchors Codex lifecycle evidence to Created identity"
+test_start "workflow task journal template anchors native dispatch evidence to Created identity"
 missing_task_identity_terms=()
 task_journal_template_surfaces=(
     "skills/assistant-workflow/references/task-journal-template.md"
@@ -686,9 +686,9 @@ for surface in "${task_journal_template_surfaces[@]}"; do
         missing_task_identity_terms+=("$surface: Created must immediately follow ## Task near top")
     fi
     for term in \
-        "hook-written protected workflow-state \`SubagentStart\`/\`SubagentStop\` records" \
-        "task-bound to this journal's \`Created:\` identity" \
-        "project-local \`.codex/subagent-events.jsonl\` is diagnostic only"; do
+        "Native dispatch evidence:" \
+        "agent id, task name, thread, or tool result" \
+        "bind it to this journal's \`Created:\` identity"; do
         if ! grep -Fq -- "$term" "$file"; then
             missing_task_identity_terms+=("$surface: $term")
         fi
@@ -697,7 +697,7 @@ done
 if [[ "${#missing_task_identity_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "task-journal-template.md must anchor protected lifecycle evidence to Created identity: ${missing_task_identity_terms[*]}"
+    fail "task-journal-template.md must anchor native dispatch evidence to Created identity: ${missing_task_identity_terms[*]}"
 fi
 
 test_start "workflow subagent policy state gates delegation before fallback"

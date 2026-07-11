@@ -50,7 +50,7 @@ Subagent authorization scope:
 Candidate scope scan:
 - Likely touched paths: [exact paths, directories, modules, or unknown]
 - Symbols or terms searched: [search terms, commands, or none with reason]
-- Adjacent surfaces: [tests/docs/contracts/config/mirrors/hooks/runtime surfaces to inspect]
+- Adjacent surfaces: [tests/docs/contracts/config/mirrors/runtime surfaces to inspect]
 - Confidence: [low | medium | high]
 - Unknowns: [none, or one short scope/risk unknown per line]
 Loop / Experiment Routing:
@@ -60,10 +60,10 @@ Loop / Experiment Routing:
 Plan approval: [yes/no + date]
 
 ## Agent Dispatch Log
-[subagent evidence inspected by stop-review/phase gates]
+[subagent evidence required by completion gates]
 - Required roles: Code Writer, Builder/Tester, Code Reviewer; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
 - Execution mode: delegated | direct_fallback | not_applicable
-- Codex lifecycle evidence: delegated Codex roles need hook-written protected workflow-state `SubagentStart`/`SubagentStop` records, task-bound to this journal's `Created:` identity; project-local `.codex/subagent-events.jsonl` is diagnostic only.
+- Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
 - Evidence shorthand: delegated refs | role-equivalent direct evidence | N/A only when role not required.
 - Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]

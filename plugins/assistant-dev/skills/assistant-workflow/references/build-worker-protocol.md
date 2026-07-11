@@ -1,7 +1,7 @@
 # Build Worker Protocol
 
 Internal reference for source-changing Build execution. Load when entering
-Build for work that changes project source, tests, docs, config, hooks,
+Build for work that changes project source, tests, docs, config, runtime integrations,
 contracts, or generated artifacts. `references/phases.md` keeps the compact
 Build shell; this file owns worker sequencing, evidence, TDD ownership,
 unexpected blocker routing, and per-slice verification.

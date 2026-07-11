@@ -77,20 +77,10 @@ else
     fail "QA evaluator agent prompts missing read-only role terms: ${missing_agent_terms[*]}"
 fi
 
-test_start "subagent monitor maps qa-evaluator to QAEvaluator, not Reviewer"
-monitor="$FRAMEWORK_DIR/hooks/scripts/subagent-monitor.sh"
-if grep -Fq 'qa-evaluator) role_constraint="SUBAGENT CONSTRAINT: You are a QA evaluator. Read-only acceptance, Done Contract, verification evidence, domain quality, score progression, and final result evaluation. Do NOT edit any files. Do NOT replace code-reviewer."' "$monitor" \
-    && grep -Fq 'qa-evaluator) role_name="QAEvaluator" ;;' "$monitor" \
-    && grep -Fq 'code-reviewer|reviewer) role_name="Reviewer" ;;' "$monitor"; then
-    pass
-else
-    fail "subagent-monitor.sh must constrain qa-evaluator read-only and map it to QAEvaluator separately from Reviewer"
-fi
-
 test_start "Codex installer keeps AGENTS lean and installs read-only qa-evaluator"
 INSTALL_HOME_QA="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_QA"
-if HOME="$INSTALL_HOME_QA" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-qa-evaluator.out 2>/tmp/p0p4-install-qa-evaluator.err; then
+if HOME="$INSTALL_HOME_QA" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-qa-evaluator.out 2>/tmp/p0p4-install-qa-evaluator.err; then
     agents_file="$INSTALL_HOME_QA/.codex/AGENTS.md"
     if grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
         && ! grep -Fq "| qa-evaluator |" "$agents_file" \
@@ -109,7 +99,7 @@ test_start "assistant-review routes independent QA evaluation to reference with 
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
 missing_review_terms=()
 for file_and_term in \
-    "$review_dir/SKILL.md::optional independent QA evaluation loop" \
+    "$review_dir/SKILL.md::# Autonomous Review And QA Evaluation" \
     "$review_dir/SKILL.md::QA evaluation runs after code-review/build evidence" \
     "$review_dir/SKILL.md::Load \`references/qa-evaluation-loop.md\`" \
     "$review_dir/references/review-loop.md::load \`qa-evaluation-loop.md\` before dispatching QAEvaluator" \

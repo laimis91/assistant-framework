@@ -2,13 +2,8 @@
 # install.sh — Installs all Assistant Framework skills for any supported AI agent.
 #
 # Auto-discovers first-class release skills from skills/assistant-*/SKILL.md.
-# Also installs hooks + legacy graph seed/import compatibility.
-#
-# Also installs hooks for automated:
-#   - Context injection on session start/resume
-#   - State preservation before context compression
-#   - Self-review enforcement before task handoff
-#   - Session end reminders
+# Also installs legacy graph seed/import compatibility data and performs one
+# release of cleanup for retired Assistant Framework hook registrations.
 #
 # Usage:
 #   ./install.sh --agent claude     # → ~/.claude/skills/assistant-*/
@@ -19,11 +14,8 @@
 #   ./install.sh --agent codex --plugin assistant-core      # core profile only
 #   ./install.sh --agent codex --plugin assistant-research  # research profile only
 #   ./install.sh --agent codex --plugin assistant-dev       # development profile only
-#   ./install.sh --agent codex                             # native Codex behavior, no framework hooks by default
-#   ./install.sh --agent claude --hook-profile minimal      # default low-friction hooks for Claude/Gemini
-#   ./install.sh --agent codex --hook-profile minimal       # explicit low-friction hooks
-#   ./install.sh --agent claude --hook-profile strict       # full enforcement hooks
-#   ./install.sh --agent claude --no-hooks                  # alias for --hook-profile none
+#   ./install.sh --agent codex                              # native, hookless behavior
+#   ./install.sh --agent claude --no-hooks                  # deprecated compatibility no-op
 #
 # Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
 # only if it doesn't already exist — existing legacy data is never overwritten.
@@ -36,10 +28,6 @@ AGENT=""
 DRY_RUN=false
 SINGLE_SKILL=""
 PLUGIN_PROFILE=""
-INSTALL_HOOKS=true
-HOOK_PROFILE="minimal"
-HOOK_PROFILE_EXPLICIT=false
-TEST_HOOKS=false
 FRAMEWORK_DIR=""
 toml_files=()
 
@@ -58,10 +46,7 @@ Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
   --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
-  --hook-profile P  Hook profile: minimal, workflow, strict, or none
-                    Default: none for codex, minimal for claude/gemini
-  --no-hooks         Alias for --hook-profile none
-  --test-hooks       Run hook integration tests (requires --agent)
+  --no-hooks         Deprecated compatibility no-op; all installs are hookless
   --dry-run          Show what would be done without doing it
   -h, --help         Show this help
 
@@ -81,15 +66,12 @@ Examples:
   $(basename "$0") --agent claude
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
-  $(basename "$0") --agent codex --hook-profile minimal
-  $(basename "$0") --agent codex --hook-profile workflow
-  $(basename "$0") --agent claude --hook-profile strict
-  $(basename "$0") --agent claude --hook-profile none
+  $(basename "$0") --agent claude --no-hooks
   $(basename "$0") --agent codex --plugin assistant-core
   $(basename "$0") --agent codex --plugin assistant-research
   $(basename "$0") --agent codex --plugin assistant-dev
 EOF
-    exit 0
+    exit "${1:-0}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -97,26 +79,12 @@ while [[ $# -gt 0 ]]; do
         --agent)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; AGENT="$2"; shift 2 ;;
         --skill)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; SINGLE_SKILL="$2"; shift 2 ;;
         --plugin)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PLUGIN_PROFILE="$2"; shift 2 ;;
-        --hook-profile) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; HOOK_PROFILE="$2"; HOOK_PROFILE_EXPLICIT=true; INSTALL_HOOKS=true; shift 2 ;;
-        --no-hooks)   INSTALL_HOOKS=false; HOOK_PROFILE="none"; HOOK_PROFILE_EXPLICIT=true; shift ;;
-        --test-hooks) TEST_HOOKS=true; shift ;;
+        --no-hooks)   echo "WARNING: --no-hooks is deprecated; all Assistant Framework installs are hookless." >&2; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
-        -h|--help)  usage ;;
-        *)          echo "Unknown option: $1"; usage ;;
+        -h|--help)  usage 0 ;;
+        *)          echo "Unknown option: $1" >&2; usage 2 ;;
     esac
 done
-
-if [[ "$AGENT" == "codex" && "$INSTALL_HOOKS" == "true" && "$HOOK_PROFILE_EXPLICIT" == "false" ]]; then
-    HOOK_PROFILE="none"
-fi
-
-case "$HOOK_PROFILE" in
-    minimal|workflow|strict|none) ;;
-    *) echo "Unknown hook profile: $HOOK_PROFILE (expected minimal, workflow, strict, or none)" >&2; exit 1 ;;
-esac
-if [[ "$HOOK_PROFILE" == "none" ]]; then
-    INSTALL_HOOKS=false
-fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -125,10 +93,22 @@ info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
 
-# Canonical union of Codex hook commands directly registered by released
-# hooks/codex-settings.json versions. Native-profile cleanup and cached shims
-# must stay aligned with this list.
-codex_historical_hook_entrypoints() {
+metadata_preserving_temp() {
+    local source_file="$1"
+    local temp_file
+
+    temp_file="$(mktemp "${source_file}.tmp.XXXXXX")" || return 1
+    if ! cp -p "$source_file" "$temp_file"; then
+        rm -f "$temp_file"
+        return 1
+    fi
+    printf '%s\n' "$temp_file"
+}
+
+# Canonical union of commands directly registered by released Assistant
+# Framework hook settings. Keep this cleanup inventory for one compatibility
+# release after hook retirement so plain installs can remove stale registrations.
+legacy_framework_hook_entrypoints() {
     printf '%s\n' \
         session-start.sh \
         skill-router.sh \
@@ -146,438 +126,180 @@ codex_historical_hook_entrypoints() {
         task-completed.sh
 }
 
-# These files are internal helpers, not directly registered hook entrypoints.
-# Recognize only their exact historical source-tree commands during cleanup;
-# never replace them with cached executable shims.
-framework_hook_cleanup_helpers() {
+# Internal helpers were never direct lifecycle entrypoints and must not receive
+# cached shims. They are still recognized as retired framework commands.
+legacy_framework_hook_helpers() {
     printf '%s\n' \
         task-journal-resolver.sh \
         workflow-phase-gates.sh \
         hook-runtime.sh
 }
 
-hook_profile_allowed_json() {
-    case "$HOOK_PROFILE" in
-        minimal)
-            printf '%s\n' '["skill-router.sh","session-start.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh"]'
-            ;;
-        workflow)
-            if [[ "$AGENT" == "codex" ]]; then
-                printf '%s\n' '["session-start.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
-            else
-                printf '%s\n' '["session-start.sh","skill-router.sh","learning-signals.sh","workflow-enforcer.sh","workflow-guard.sh","stop-review.sh","subagent-monitor.sh","pre-compress.sh","post-compact.sh","task-journal-resolver.sh","workflow-phase-gates.sh","hook-runtime.sh"]'
-            fi
-            ;;
-        strict)
-            printf '%s\n' 'null'
-            ;;
-        none)
-            printf '%s\n' '[]'
-            ;;
-    esac
+legacy_framework_hook_modules() {
+    printf '%s\n' \
+        workflow-phase-gates.d/learning-controller.sh \
+        workflow-phase-gates.d/metrics.sh \
+        workflow-phase-gates.d/qa-controller.sh \
+        workflow-phase-gates.d/review-controller.sh \
+        workflow-phase-gates.d/subagent-evidence.sh \
+        workflow-phase-gates.d/subagent-orchestration.sh \
+        workflow-guard.d/path-policy.sh \
+        workflow-guard.d/shell-write-parser.sh \
+        workflow-guard.d/workflow-state-artifacts.sh
 }
 
-hook_selected_for_profile() {
-    local hook_name="$1"
-    case "$HOOK_PROFILE" in
-        strict)
-            [[ "$AGENT" == "codex" && "$hook_name" == "skill-router.sh" ]] && return 1
-            return 0
-            ;;
-        minimal)
-            case "$hook_name" in
-                skill-router.sh|session-start.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh) return 0 ;;
-                *) return 1 ;;
-            esac
-            ;;
-        workflow)
-            case "$hook_name" in
-                skill-router.sh) [[ "$AGENT" != "codex" ]] ;;
-                session-start.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|stop-review.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) return 0 ;;
-                *) return 1 ;;
-            esac
-            ;;
-        none) return 1 ;;
-    esac
+legacy_framework_hook_files_exist() {
+    local hooks_target="$1"
+    local relative_path
+
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        [[ -e "$hooks_target/$relative_path" ]] && return 0
+    done < <({ legacy_framework_hook_entrypoints; legacy_framework_hook_helpers; legacy_framework_hook_modules; })
+
+    return 1
 }
 
-write_profiled_hooks_settings() {
-    local source_settings="$1"
-    local target_settings="$2"
-    local allowed_json
-    allowed_json="$(hook_profile_allowed_json)"
+remove_legacy_framework_hook_helpers() {
+    local hooks_target="$1"
+    local relative_path
 
-    if [[ "$HOOK_PROFILE" == "strict" && "$AGENT" != "codex" ]]; then
-        cp "$source_settings" "$target_settings"
-        return 0
-    fi
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        rm -f "$hooks_target/$relative_path"
+    done < <({ legacy_framework_hook_helpers; legacy_framework_hook_modules; })
 
-    if command -v jq >/dev/null 2>&1; then
-        jq --argjson allowed "$allowed_json" '
-            def first_shell_token:
-                (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-            def command_basename:
-                (. // "") | first_shell_token | split("/") | last;
-            .hooks = (
-                (.hooks // {})
-                | with_entries(
-                    .value = (
-                        (.value | if type == "array" then . else [.] end)
-                        | map(
-                            .hooks = (
-                                (.hooks // [])
-                                | map(select(
-                                    ((.command // "") | command_basename) as $name
-                                    | if $allowed == null then
-                                        $name != "skill-router.sh"
-                                      else
-                                        ($allowed | index($name)) != null
-                                      end
-                                ))
-                            )
-                        )
-                        | map(select((.hooks // []) | length > 0))
-                    )
-                )
-                | with_entries(select((.value // []) | length > 0))
-            )
-        ' "$source_settings" > "$target_settings"
-        return 0
-    fi
-
-    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required for --hook-profile $HOOK_PROFILE"
-    python3 - "$source_settings" "$target_settings" "$allowed_json" <<'PY'
-import json
-import os
-import re
-import sys
-
-source_settings, target_settings, allowed_json = sys.argv[1:4]
-allowed_data = json.loads(allowed_json)
-strict_codex = allowed_data is None
-allowed = set(allowed_data or [])
-
-with open(source_settings, "r", encoding="utf-8") as f:
-    settings = json.load(f)
-
-profiled_hooks = {}
-for event, groups in (settings.get("hooks") or {}).items():
-    if not isinstance(groups, list):
-        groups = [groups]
-
-    kept_groups = []
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-
-        hooks = group.get("hooks") or []
-        if not isinstance(hooks, list):
-            hooks = [hooks]
-
-        kept_hooks = []
-        for hook in hooks:
-            if not isinstance(hook, dict):
-                continue
-            command = str(hook.get("command") or "")
-            first_shell_token = re.sub(r"\s+", " ", command.strip()).split(" ")[0] if command.strip() else ""
-            hook_name = os.path.basename(first_shell_token)
-            if (strict_codex and hook_name != "skill-router.sh") or hook_name in allowed:
-                kept_hooks.append(hook)
-
-        if kept_hooks:
-            kept_group = dict(group)
-            kept_group["hooks"] = kept_hooks
-            kept_groups.append(kept_group)
-
-    if kept_groups:
-        profiled_hooks[event] = kept_groups
-
-settings["hooks"] = profiled_hooks
-with open(target_settings, "w", encoding="utf-8") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-PY
+    rmdir "$hooks_target/workflow-phase-gates.d" "$hooks_target/workflow-guard.d" 2>/dev/null || true
 }
 
-rewrite_codex_hook_commands_for_target() {
-    local settings_file="$1"
-    local command_dir="$2"
-    [[ -f "$settings_file" ]] || return 0
-
-    if command -v jq >/dev/null 2>&1; then
-        jq --arg command_dir "$command_dir" '
-            .hooks = ((.hooks // {}) | with_entries(
-                .value = ((.value | if type == "array" then . else [.] end) | map(
-                    .hooks = ((.hooks // []) | map(
-                        if ((.command // "") | test("^\\$HOME/\\.codex/hooks/assistant/")) then
-                            .command = ((.command // "") | sub("^\\$HOME/\\.codex/hooks/assistant"; $command_dir))
-                        else
-                            .
-                        end
-                    ))
-                ))
-            ))
-        ' "$settings_file" > "${settings_file}.tmp" && mv "${settings_file}.tmp" "$settings_file"
-        return 0
-    fi
-
-    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to rewrite Codex hook command paths"
-    python3 - "$settings_file" "$command_dir" <<'PY'
-import json
-import sys
-
-settings_file, command_dir = sys.argv[1:3]
-with open(settings_file, "r", encoding="utf-8") as f:
-    settings = json.load(f)
-for groups in (settings.get("hooks") or {}).values():
-    if not isinstance(groups, list):
-        groups = [groups]
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        hooks = group.get("hooks") or []
-        if not isinstance(hooks, list):
-            hooks = [hooks]
-        for hook in hooks:
-            if not isinstance(hook, dict):
-                continue
-            command = str(hook.get("command") or "")
-            prefix = "$HOME/.codex/hooks/assistant"
-            if command.startswith(prefix):
-                hook["command"] = command_dir + command[len(prefix):]
-with open(settings_file, "w", encoding="utf-8") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-PY
-}
-
-merge_profiled_hooks_settings_python() {
-    local existing_settings="$1"
-    local profiled_settings="$2"
-    local target_settings="$3"
-    local agent="$4"
-    local hooks_target="$5"
-    local output_kind="$6"
-    local codex_supports_compaction_hooks="${7:-true}"
-    local historical_entrypoints
-    local cleanup_helpers
-
-    historical_entrypoints="$(codex_historical_hook_entrypoints)"
-    cleanup_helpers="$(framework_hook_cleanup_helpers)"
-
-    command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to merge hook settings"
-    python3 - "$existing_settings" "$profiled_settings" "$target_settings" "$agent" "$hooks_target" "$output_kind" "$codex_supports_compaction_hooks" "$FRAMEWORK_DIR/hooks/scripts" "$historical_entrypoints" "$cleanup_helpers" <<'PY'
-import json
-import os
-import re
-import sys
-
-(
-    existing_path,
-    profiled_path,
-    target_path,
-    agent,
-    hooks_target,
-    output_kind,
-    codex_supports_compaction,
-    framework_hooks_dir,
-    historical_entrypoints_text,
-    cleanup_helpers_text,
-) = sys.argv[1:11]
-historical_entrypoints = set(historical_entrypoints_text.splitlines())
-cleanup_helpers = set(cleanup_helpers_text.splitlines())
-
-def load_json(path, default):
-    if not path or not os.path.exists(path):
-        return default
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
-def as_list(value):
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
-
-def first_shell_token(command):
-    command = str(command or "").strip()
-    if not command:
-        return ""
-    return re.sub(r"\s+", " ", command).split(" ")[0]
-
-def is_assistant_hook(command):
-    token = first_shell_token(command)
-    if not token:
-        return False
-    agent_home_root = f"$HOME/.{agent}/hooks/assistant"
-    return any(
-        token == f"{agent_home_root}/{name}"
-        or token == f"{hooks_target}/{name}"
-        or token == f"{framework_hooks_dir}/{name}"
-        for name in historical_entrypoints
-    ) or any(
-        token == f"{framework_hooks_dir}/{name}"
-        for name in cleanup_helpers
-    )
-
-def remove_assistant_hooks(hooks_obj):
-    cleaned = {}
-    for event, groups in (hooks_obj or {}).items():
-        kept_groups = []
-        for group in as_list(groups):
-            if not isinstance(group, dict):
-                continue
-            kept_hooks = []
-            for hook in as_list(group.get("hooks")):
-                if isinstance(hook, dict) and not is_assistant_hook(hook.get("command")):
-                    kept_hooks.append(hook)
-            if kept_hooks:
-                kept_group = dict(group)
-                kept_group["hooks"] = kept_hooks
-                kept_groups.append(kept_group)
-        if kept_groups:
-            cleaned[event] = kept_groups
-    return cleaned
-
-def unique_commands(hooks):
-    seen = set()
-    out = []
-    for hook in hooks:
-        if not isinstance(hook, dict):
-            continue
-        command = hook.get("command") or ""
-        if not command:
-            out.append(hook)
-        elif command not in seen:
-            seen.add(command)
-            out.append(hook)
-    return out
-
-def merge_matcher_groups(groups):
-    matcher_indexes = {}
-    out = []
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        normalized = dict(group)
-        normalized["hooks"] = unique_commands(as_list(normalized.get("hooks")))
-        if not normalized["hooks"]:
-            continue
-        matcher = normalized.get("matcher") or ""
-        if matcher not in matcher_indexes:
-            matcher_indexes[matcher] = len(out)
-            out.append(normalized)
-        else:
-            idx = matcher_indexes[matcher]
-            out[idx]["hooks"] = unique_commands(out[idx].get("hooks", []) + normalized["hooks"])
-    return out
-
-def merge_hooks(existing_hooks, new_hooks):
-    merged = {}
-    for key in sorted(set((existing_hooks or {}).keys()) | set((new_hooks or {}).keys())):
-        groups = as_list((existing_hooks or {}).get(key)) + as_list((new_hooks or {}).get(key))
-        merged_groups = merge_matcher_groups(groups)
-        if merged_groups:
-            merged[key] = merged_groups
-    return merged
-
-existing = load_json(existing_path, {})
-profiled = load_json(profiled_path, {})
-existing_hooks = remove_assistant_hooks((existing or {}).get("hooks") or {})
-new_hooks = (profiled or {}).get("hooks") or {}
-if output_kind == "codex" and codex_supports_compaction != "true":
-    new_hooks = {k: v for k, v in new_hooks.items() if k not in {"PreCompact", "PostCompact"}}
-merged_hooks = merge_hooks(existing_hooks, new_hooks)
-
-if output_kind == "codex":
-    output = {"hooks": merged_hooks}
-else:
-    output = dict(existing or {})
-    output["hooks"] = merged_hooks
-
-with open(f"{target_path}.tmp", "w", encoding="utf-8") as f:
-    json.dump(output, f, indent=2)
-    f.write("\n")
-os.replace(f"{target_path}.tmp", target_path)
-PY
-}
-
-migrate_codex_native_hook_profile() {
-    local hooks_file="$1"
-    local hooks_target="$2"
-    local cached_hook
-    local historical_entrypoints
-    local cleanup_helpers
-
-    historical_entrypoints="$(codex_historical_hook_entrypoints)"
-    cleanup_helpers="$(framework_hook_cleanup_helpers)"
+write_legacy_framework_hook_shims() {
+    local hooks_target="$1"
+    local entrypoint
 
     mkdir -p "$hooks_target"
+    while IFS= read -r entrypoint; do
+        [[ -n "$entrypoint" ]] || continue
+        printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            '# Assistant Framework retired-hook compatibility shim.' \
+            'exit 0' > "$hooks_target/$entrypoint"
+        chmod +x "$hooks_target/$entrypoint"
+    done < <(legacy_framework_hook_entrypoints)
+}
 
-    if [[ -f "$hooks_file" ]]; then
+cleanup_legacy_framework_hooks() {
+    local settings_file="$1"
+    local hooks_target="$2"
+    local agent="$3"
+    local framework_hooks_dir="$FRAMEWORK_DIR/hooks/scripts"
+    local entrypoints helpers known_names
+    local legacy_detected=false
+    local removed_count=0
+    local python_result=""
+    local temp_settings=""
+
+    entrypoints="$(legacy_framework_hook_entrypoints)"
+    helpers="$(legacy_framework_hook_helpers)"
+    known_names="$(printf '%s\n%s\n' "$entrypoints" "$helpers")"
+
+    if legacy_framework_hook_files_exist "$hooks_target"; then
+        legacy_detected=true
+    fi
+
+    if [[ -f "$settings_file" ]]; then
         if command -v jq >/dev/null 2>&1; then
-            if ! jq \
-                --arg hooks_target "$hooks_target" \
-                --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
-                --arg historical_entrypoints "$historical_entrypoints" \
-                --arg cleanup_helpers "$cleanup_helpers" '
-                def assistant_framework_codex_hook_names:
-                    $historical_entrypoints | split("\n") | map(select(length > 0));
-                def assistant_framework_cleanup_helper_names:
-                    $cleanup_helpers | split("\n") | map(select(length > 0));
-                def first_shell_token:
-                    (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-                def assistant_framework_codex_hook_command:
-                    (. // "") as $command
-                    | ($command | first_shell_token) as $token
-                    | (any(assistant_framework_codex_hook_names[]; . as $hook_name |
-                        $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
-                        or $token == ($hooks_target + "/" + $hook_name)
-                        or $token == ($framework_hooks_dir + "/" + $hook_name)
-                    )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
-                        $token == ($framework_hooks_dir + "/" + $helper_name)
-                    ));
-                .hooks = (
-                    (.hooks // {})
-                    | with_entries(
-                        .value = (
-                            (.value | if type == "array" then . else [.] end)
-                            | map(
-                                if type == "object" then
-                                    .hooks = (
-                                        (.hooks // [] | if type == "array" then . else [.] end)
-                                        | map(select(
-                                            type != "object"
-                                            or (((.command // "") | assistant_framework_codex_hook_command) | not)
-                                        ))
+            if ! jq -e 'type == "object" and ((.hooks? // {}) | type == "object")' "$settings_file" >/dev/null 2>&1; then
+                info "WARNING: Invalid settings JSON in $settings_file; preserved unchanged while stale hook files were neutralized."
+            else
+                removed_count="$(jq -r \
+                    --arg agent "$agent" \
+                    --arg hooks_target "$hooks_target" \
+                    --arg framework_hooks_dir "$framework_hooks_dir" \
+                    --arg known_names "$known_names" '
+                    def as_array: if type == "array" then . else [.] end;
+                    def first_shell_token:
+                        if type != "string" then ""
+                        else (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "")
+                        end;
+                    ($known_names | split("\n") | map(select(length > 0))) as $known
+                    | (.hooks // {})
+                    | [
+                        to_entries[]?.value
+                        | as_array[]?
+                        | select(type == "object")
+                        | (.hooks // [] | as_array[]?)
+                        | select(type == "object")
+                        | .command?
+                        | first_shell_token as $token
+                        | select(any($known[]; . as $name |
+                            $token == ("$HOME/." + $agent + "/hooks/assistant/" + $name)
+                            or $token == ($hooks_target + "/" + $name)
+                            or $token == ($framework_hooks_dir + "/" + $name)
+                        ))
+                    ] | length
+                ' "$settings_file")"
+
+                if (( removed_count > 0 )); then
+                    legacy_detected=true
+                    temp_settings="$(metadata_preserving_temp "$settings_file")" \
+                        || fail "Failed to create a metadata-preserving temporary file beside $settings_file"
+                    if ! jq \
+                        --arg agent "$agent" \
+                        --arg hooks_target "$hooks_target" \
+                        --arg framework_hooks_dir "$framework_hooks_dir" \
+                        --arg known_names "$known_names" '
+                        def as_array: if type == "array" then . else [.] end;
+                        def first_shell_token:
+                            if type != "string" then ""
+                            else (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "")
+                            end;
+                        def assistant_framework_command:
+                            (. // "") | first_shell_token as $token
+                            | ($known_names | split("\n") | map(select(length > 0))) as $known
+                            | any($known[]; . as $name |
+                                $token == ("$HOME/." + $agent + "/hooks/assistant/" + $name)
+                                or $token == ($hooks_target + "/" + $name)
+                                or $token == ($framework_hooks_dir + "/" + $name)
+                            );
+                        .hooks = (
+                            (.hooks // {})
+                            | with_entries(
+                                .value = (
+                                    (.value | as_array)
+                                    | map(
+                                        if type == "object" then
+                                            .hooks = (
+                                                (.hooks // [] | as_array)
+                                                | map(select(
+                                                    type != "object"
+                                                    or (((.command // "") | assistant_framework_command) | not)
+                                                ))
+                                            )
+                                        else . end
                                     )
-                                else
-                                    .
-                                end
+                                    | map(select(type != "object" or ((.hooks // []) | length > 0)))
+                                )
                             )
-                            | map(select(type != "object" or ((.hooks // []) | length > 0)))
+                            | with_entries(select((.value // []) | length > 0))
                         )
-                    )
-                    | with_entries(select((.value // []) | length > 0))
-                )
-            ' "$hooks_file" > "${hooks_file}.tmp"; then
-                rm -f "${hooks_file}.tmp"
-                fail "Failed to remove Assistant Framework commands from $hooks_file"
+                    ' "$settings_file" > "$temp_settings"; then
+                        rm -f "$temp_settings"
+                        fail "Failed to remove retired Assistant Framework commands from $settings_file"
+                    fi
+                    mv "$temp_settings" "$settings_file"
+                fi
             fi
-            mv "${hooks_file}.tmp" "$hooks_file"
-        else
-            command -v python3 >/dev/null 2>&1 || fail "jq or python3 is required to migrate Codex hooks"
-            python3 - "$hooks_file" "$hooks_target" "$FRAMEWORK_DIR/hooks/scripts" "$historical_entrypoints" "$cleanup_helpers" <<'PY'
+        elif command -v python3 >/dev/null 2>&1; then
+            python_result="$(python3 - "$settings_file" "$agent" "$hooks_target" "$framework_hooks_dir" "$known_names" <<'PY'
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 
-hooks_file, hooks_target, framework_hooks_dir, historical_entrypoints_text, cleanup_helpers_text = sys.argv[1:6]
-historical_entrypoints = set(historical_entrypoints_text.splitlines())
-cleanup_helpers = set(cleanup_helpers_text.splitlines())
+settings_file, agent, hooks_target, framework_hooks_dir, known_names_text = sys.argv[1:6]
+known_names = set(known_names_text.splitlines())
 
 def as_list(value):
     if value is None:
@@ -585,38 +307,54 @@ def as_list(value):
     return value if isinstance(value, list) else [value]
 
 def first_shell_token(command):
-    command = str(command or "").strip()
+    if not isinstance(command, str):
+        return ""
+    command = command.strip()
     if not command:
         return ""
     return re.sub(r"\s+", " ", command).split(" ")[0]
 
-def is_assistant_hook(command):
+def is_framework_command(command):
     token = first_shell_token(command)
     return any(
-        token == f"$HOME/.codex/hooks/assistant/{name}"
+        token == f"$HOME/.{agent}/hooks/assistant/{name}"
         or token == f"{hooks_target}/{name}"
         or token == f"{framework_hooks_dir}/{name}"
-        for name in historical_entrypoints
-    ) or any(
-        token == f"{framework_hooks_dir}/{name}"
-        for name in cleanup_helpers
+        for name in known_names
     )
 
-with open(hooks_file, "r", encoding="utf-8") as f:
-    output = json.load(f)
+try:
+    with open(settings_file, "r", encoding="utf-8") as stream:
+        output = json.load(stream)
+except Exception:
+    print("INVALID")
+    raise SystemExit(0)
 
+if not isinstance(output, dict):
+    print("INVALID")
+    raise SystemExit(0)
+
+hooks_object = output.get("hooks", {})
+if hooks_object is None:
+    hooks_object = {}
+elif not isinstance(hooks_object, dict):
+    print("INVALID")
+    raise SystemExit(0)
+
+removed = 0
 cleaned_hooks = {}
-for event, groups in (output.get("hooks") or {}).items():
+for event, groups in hooks_object.items():
     kept_groups = []
     for group in as_list(groups):
         if not isinstance(group, dict):
             kept_groups.append(group)
             continue
-        kept_hooks = [
-            hook
-            for hook in as_list(group.get("hooks"))
-            if not isinstance(hook, dict) or not is_assistant_hook(hook.get("command"))
-        ]
+        kept_hooks = []
+        for hook in as_list(group.get("hooks")):
+            if isinstance(hook, dict) and is_framework_command(hook.get("command")):
+                removed += 1
+            else:
+                kept_hooks.append(hook)
         if kept_hooks:
             kept_group = dict(group)
             kept_group["hooks"] = kept_hooks
@@ -624,26 +362,39 @@ for event, groups in (output.get("hooks") or {}).items():
     if kept_groups:
         cleaned_hooks[event] = kept_groups
 
-output["hooks"] = cleaned_hooks
-with open(f"{hooks_file}.tmp", "w", encoding="utf-8") as f:
-    json.dump(output, f, indent=2)
-    f.write("\n")
-os.replace(f"{hooks_file}.tmp", hooks_file)
+if removed:
+    output["hooks"] = cleaned_hooks
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=os.path.dirname(settings_file),
+        prefix=".assistant-framework-retire.",
+        delete=False,
+    ) as stream:
+        temp_file = stream.name
+        json.dump(output, stream, indent=2)
+        stream.write("\n")
+    os.chmod(temp_file, stat.S_IMODE(os.stat(settings_file).st_mode))
+    os.replace(temp_file, settings_file)
+
+print(removed)
 PY
+)"
+            if [[ "$python_result" == "INVALID" ]]; then
+                info "WARNING: Invalid settings JSON in $settings_file; preserved unchanged while stale hook files were neutralized."
+            elif [[ "$python_result" =~ ^[0-9]+$ ]] && (( python_result > 0 )); then
+                legacy_detected=true
+            fi
+        else
+            info "WARNING: Cannot inspect $settings_file without jq or python3; preserved unchanged."
         fi
     fi
 
-    # A running Codex process can retain hook commands from before reinstall.
-    # Keep only these known cached framework entrypoints as silent executable
-    # shims; arbitrary user scripts in the same directory remain untouched.
-    while IFS= read -r cached_hook; do
-        [[ -n "$cached_hook" ]] || continue
-        printf '%s\n' \
-            '#!/usr/bin/env bash' \
-            '# Assistant Framework native-profile migration shim.' \
-            'exit 0' > "$hooks_target/$cached_hook"
-        chmod +x "$hooks_target/$cached_hook"
-    done < <(codex_historical_hook_entrypoints)
+    if [[ "$legacy_detected" == "true" ]]; then
+        remove_legacy_framework_hook_helpers "$hooks_target"
+        write_legacy_framework_hook_shims "$hooks_target"
+        ok "Retired hook registrations removed for $agent; cached entrypoints replaced with inert shims"
+    fi
 }
 
 plugin_profile_line() {
@@ -1016,140 +767,6 @@ PY
     fi
 }
 
-ensure_codex_hooks_feature_flag() {
-    local config_file="$1"
-    local tmp_file
-    local existing_mode=""
-
-    if [[ ! -f "$config_file" ]]; then
-        mkdir -p "$(dirname "$config_file")"
-        cat > "$config_file" <<'TOML'
-# Codex CLI configuration — managed by Assistant Framework installer
-[features]
-hooks = true
-TOML
-        ok "Created $config_file with hooks enabled"
-        return 0
-    fi
-
-    case "$(uname -s)" in
-        Darwin|FreeBSD)
-            existing_mode="$(stat -f "%Lp" "$config_file" 2>/dev/null || true)"
-            ;;
-        *)
-            existing_mode="$(stat -c "%a" "$config_file" 2>/dev/null || true)"
-            ;;
-    esac
-
-    tmp_file="${config_file}.tmp"
-    if ! awk '
-        function is_section(line) {
-            return line ~ /^[[:space:]]*\[[^]]+\][[:space:]]*($|#)/
-        }
-
-        function is_features_section(line) {
-            return line ~ /^[[:space:]]*\[features\][[:space:]]*($|#)/
-        }
-
-        function flush_features_hook() {
-            if (in_features && !saw_hooks) {
-                print "hooks = true"
-                saw_hooks = 1
-            }
-        }
-
-        BEGIN {
-            in_features = 0
-            saw_features = 0
-            saw_hooks = 0
-        }
-
-        {
-            if (is_section($0)) {
-                flush_features_hook()
-                in_features = is_features_section($0)
-                if (in_features) {
-                    saw_features = 1
-                    saw_hooks = 0
-                }
-                print
-                next
-            }
-
-            if (in_features && $0 ~ /^[[:space:]]*codex_hooks[[:space:]]*=/) {
-                next
-            }
-
-            if (in_features && $0 ~ /^[[:space:]]*hooks[[:space:]]*=/) {
-                if (!saw_hooks) {
-                    print "hooks = true"
-                    saw_hooks = 1
-                }
-                next
-            }
-
-            print
-        }
-
-        END {
-            flush_features_hook()
-            if (!saw_features) {
-                if (NR > 0) {
-                    print ""
-                }
-                print "[features]"
-                print "hooks = true"
-            }
-        }
-    ' "$config_file" > "$tmp_file"; then
-        rm -f "$tmp_file"
-        info "WARNING: Failed to update hooks feature flag in $config_file"
-        return 1
-    fi
-
-    if cmp -s "$config_file" "$tmp_file"; then
-        rm -f "$tmp_file"
-        info "hooks already enabled in $config_file"
-        return 0
-    fi
-
-    if [[ -n "$existing_mode" ]]; then
-        chmod "$existing_mode" "$tmp_file" 2>/dev/null || true
-    fi
-    if mv "$tmp_file" "$config_file"; then
-        ok "Enabled hooks in $config_file"
-    else
-        rm -f "$tmp_file"
-        info "WARNING: Failed to update hooks feature flag in $config_file"
-        return 1
-    fi
-}
-
-codex_cli_supports_compaction_hooks() {
-    local version_line version_parts major minor patch
-
-    if ! command -v codex >/dev/null 2>&1; then
-        # If Codex is not on PATH during install, avoid stripping latest hook
-        # support from the framework template. The user's eventual CLI will
-        # validate the config when it runs.
-        return 0
-    fi
-
-    version_line=$(codex --version 2>/dev/null || true)
-    version_parts=$(printf '%s\n' "$version_line" | sed -nE 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p' | head -1)
-    [[ -n "$version_parts" ]] || return 0
-
-    read -r major minor patch <<< "$version_parts"
-    if (( major > 0 )); then
-        return 0
-    fi
-    if (( minor >= 129 )); then
-        return 0
-    fi
-
-    return 1
-}
-
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -1159,8 +776,6 @@ codex_cli_supports_compaction_hooks() {
 FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
 GRAPH_SEED="$FRAMEWORK_DIR/graph-seed.jsonl"
-HOOKS_SOURCE="$FRAMEWORK_DIR/hooks"
-
 [[ -d "$SKILLS_SOURCE" ]] || fail "Skills directory not found at $SKILLS_SOURCE"
 
 # Auto-discover first-class release skills: assistant-* directories containing SKILL.md.
@@ -1170,24 +785,6 @@ while IFS= read -r skill_md; do
     SKILLS+=("$skill_name")
 done < <(find "$SKILLS_SOURCE" -maxdepth 2 -path "$SKILLS_SOURCE/assistant-*/SKILL.md" -type f | sort)
 command -v rsync >/dev/null 2>&1 || fail "rsync is required but not installed. Install with: apt install rsync / dnf install rsync / brew install rsync"
-
-# ── Test hooks (if requested) ────────────────────────────────────────────────
-
-if $TEST_HOOKS; then
-    if $DRY_RUN; then
-        info "[dry-run] Would run hook integration tests"
-        exit 0
-    fi
-    TEST_SCRIPT="$FRAMEWORK_DIR/tests/test-hooks.sh"
-    if [[ -f "$TEST_SCRIPT" ]]; then
-        echo "Running hook integration tests..."
-        echo ""
-        bash "$TEST_SCRIPT"
-        exit $?
-    else
-        fail "Test script not found at $TEST_SCRIPT"
-    fi
-fi
 
 # Determine target base
 if [[ "$AGENT" == "codex" ]]; then
@@ -1213,15 +810,8 @@ if [[ -n "$PLUGIN_PROFILE" ]]; then
     apply_plugin_profile "$PLUGIN_PROFILE"
 fi
 
-HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 SETTINGS_FILE="$AGENT_HOME/settings.json"
-CODEX_HOOK_COMMAND_DIR=""
-if [[ "$AGENT" == "codex" ]]; then
-    # Codex hook command strings are displayed/reviewed by /hooks before they run.
-    # Use concrete script paths so registration/executable checks do not depend on
-    # whether the hook browser expands shell variables in command tokens.
-    CODEX_HOOK_COMMAND_DIR="$HOOKS_TARGET"
-fi
+HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
@@ -1232,8 +822,6 @@ if [[ -n "$PLUGIN_PROFILE" ]]; then
     fi
 fi
 echo "  Skills target: $SKILLS_TARGET"
-echo "  Hooks target: $HOOKS_TARGET"
-echo "  Hook profile: $HOOK_PROFILE"
 echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
 
@@ -1468,12 +1056,14 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
         # Clean up stale mcpServers from settings.json (wrong location from older installs)
         if [[ -f "$SETTINGS_FILE" ]] && command -v jq &>/dev/null; then
             if jq -e '.mcpServers["memory-graph"]' "$SETTINGS_FILE" &>/dev/null; then
-                if jq 'del(.mcpServers["memory-graph"]) | if .mcpServers == {} then del(.mcpServers) else . end' \
-                    "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
-                    && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"; then
+                SETTINGS_TEMP="$(metadata_preserving_temp "$SETTINGS_FILE")" || SETTINGS_TEMP=""
+                if [[ -n "$SETTINGS_TEMP" ]] \
+                    && jq 'del(.mcpServers["memory-graph"]) | if .mcpServers == {} then del(.mcpServers) else . end' \
+                        "$SETTINGS_FILE" > "$SETTINGS_TEMP" \
+                    && mv "$SETTINGS_TEMP" "$SETTINGS_FILE"; then
                     info "Cleaned up stale MCP config from $SETTINGS_FILE (moved to correct location)"
                 else
-                    rm -f "${SETTINGS_FILE}.tmp"
+                    [[ -n "${SETTINGS_TEMP:-}" ]] && rm -f "$SETTINGS_TEMP"
                 fi
             fi
         fi
@@ -1496,13 +1086,15 @@ if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[
             if jq -e '.mcpServers["memory-graph"]' "$SETTINGS_FILE" &>/dev/null; then
                 info "MCP server memory-graph already registered in $SETTINGS_FILE"
             else
-                if jq --arg cmd "$MCP_COMMAND" --arg dir "$MCP_MEMORY_DIR" \
+                SETTINGS_TEMP="$(metadata_preserving_temp "$SETTINGS_FILE")" || SETTINGS_TEMP=""
+                if [[ -n "$SETTINGS_TEMP" ]] \
+                    && jq --arg cmd "$MCP_COMMAND" --arg dir "$MCP_MEMORY_DIR" \
                     '.mcpServers["memory-graph"] = {"command": $cmd, "args": ["--memory-dir", $dir]}' \
-                    "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
-                    && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"; then
+                    "$SETTINGS_FILE" > "$SETTINGS_TEMP" \
+                    && mv "$SETTINGS_TEMP" "$SETTINGS_FILE"; then
                     ok "MCP server memory-graph registered in $SETTINGS_FILE"
                 else
-                    rm -f "${SETTINGS_FILE}.tmp"
+                    [[ -n "${SETTINGS_TEMP:-}" ]] && rm -f "$SETTINGS_TEMP"
                     info "WARNING: Failed to register MCP server in $SETTINGS_FILE"
                 fi
             fi
@@ -1590,16 +1182,6 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
         ok "Execution policy rules -> $RULES_TARGET/ (${#rules_files[@]} rules)"
     fi
 
-    # Ensure the Codex hooks feature flag is enabled only when a non-none hook profile is installed.
-    # The legacy codex_hooks key is deprecated in favor of hooks.
-    if $INSTALL_HOOKS; then
-        CODEX_CONFIG="$AGENT_HOME/config.toml"
-        if $DRY_RUN; then
-            dry "Ensure hooks = true in $CODEX_CONFIG"
-        else
-            ensure_codex_hooks_feature_flag "$CODEX_CONFIG"
-        fi
-    fi
 fi
 
 if [[ "$AGENT" == "claude" && -d "$AGENTS_SOURCE/claude" ]]; then
@@ -1626,357 +1208,22 @@ if [[ "$AGENT" == "claude" && -d "$AGENTS_SOURCE/claude" ]]; then
     fi
 fi
 
-# ── Install hooks ─────────────────────────────────────────────────────────
+# ── Retire framework hook registrations (compatibility release) ────────────
 
-if [[ "$AGENT" == "codex" && "$HOOK_PROFILE" == "none" ]]; then
-    echo ""
-    if $DRY_RUN; then
-        dry "Remove Assistant Framework commands from $AGENT_HOME/hooks.json while preserving custom hooks"
-        dry "Install silent migration shims for cached framework hook entrypoints in $HOOKS_TARGET/"
-    else
-        migrate_codex_native_hook_profile "$AGENT_HOME/hooks.json" "$HOOKS_TARGET"
-        ok "Codex native hook profile -> framework commands removed; custom hooks preserved"
-    fi
+# Remove this cleanup block and the deprecated --no-hooks parser branch after
+# one released version has shipped with hook retirement. Until then, clean only
+# exact Assistant Framework registrations and leave unrelated hook support alone.
+if [[ "$AGENT" == "codex" ]]; then
+    LEGACY_HOOK_SETTINGS_FILE="$AGENT_HOME/hooks.json"
+else
+    LEGACY_HOOK_SETTINGS_FILE="$SETTINGS_FILE"
 fi
 
-if $INSTALL_HOOKS; then
-    echo ""
-
-    # Determine which settings template to use
-    HOOKS_SETTINGS=""
-    CODEX_SUPPORTS_COMPACTION_HOOKS=true
-    case "$AGENT" in
-        claude)  HOOKS_SETTINGS="$HOOKS_SOURCE/claude-settings.json" ;;
-        gemini)  HOOKS_SETTINGS="$HOOKS_SOURCE/gemini-settings.json" ;;
-        codex)
-            # Codex CLI has experimental hooks support (hooks feature flag).
-            # Hooks are read from hooks.json (not settings.json).
-            HOOKS_SETTINGS="$HOOKS_SOURCE/codex-settings.json"
-            CODEX_HOOKS=true
-            if ! codex_cli_supports_compaction_hooks; then
-                CODEX_SUPPORTS_COMPACTION_HOOKS=false
-            fi
-            ;;
-    esac
-
-    if [[ -n "$HOOKS_SETTINGS" && -f "$HOOKS_SETTINGS" ]]; then
-        PROFILED_HOOKS_SETTINGS="$(mktemp)"
-        write_profiled_hooks_settings "$HOOKS_SETTINGS" "$PROFILED_HOOKS_SETTINGS"
-        if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
-            rewrite_codex_hook_commands_for_target "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOK_COMMAND_DIR"
-        fi
-        trap 'rm -f "$PROFILED_HOOKS_SETTINGS"' EXIT
-        if $DRY_RUN; then
-            dry "Hook profile: $HOOK_PROFILE"
-            dry "Copy selected hook scripts to $HOOKS_TARGET/"
-            if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
-                dry "Merge hook configuration into $AGENT_HOME/hooks.json"
-            else
-                dry "Merge hook configuration into $SETTINGS_FILE"
-            fi
-        else
-            # Copy hook scripts
-            mkdir -p "$HOOKS_TARGET"
-            if compgen -G "$HOOKS_SOURCE/scripts/*.sh" >/dev/null; then
-                for hook_script in "$HOOKS_SOURCE/scripts/"*.sh; do
-                    hook_name="$(basename "$hook_script")"
-                    if ! hook_selected_for_profile "$hook_name"; then
-                        continue
-                    fi
-                    # Post-tool diagnostic hooks are intentionally no longer
-                    # copied. Profile selection decides whether workflow-guard
-                    # is part of the installed tool-use hooks.
-                    case "$hook_name" in
-                        post-tool-context.sh|tool-failure-advisor.sh) continue ;;
-                    esac
-                    # Codex hooks: SessionStart, UserPromptSubmit, Stop,
-                    # SubagentStart/SubagentStop, PreToolUse, PreCompact, and PostCompact.
-                    if [[ "$AGENT" == "codex" ]]; then
-                        case "$hook_name" in
-                            session-start.sh|skill-router.sh|stop-review.sh|harness-gate.sh|learning-signals.sh|workflow-enforcer.sh|workflow-guard.sh|subagent-monitor.sh|pre-compress.sh|post-compact.sh|task-journal-resolver.sh|workflow-phase-gates.sh|hook-runtime.sh) ;;  # supported + shared helper dependencies
-                            *) continue ;;  # skip unsupported hooks
-                        esac
-                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                            case "$hook_name" in
-                                pre-compress.sh|post-compact.sh) continue ;;
-                            esac
-                        fi
-                    fi
-                    # subagent-monitor.sh is Claude/Codex-only; post-compact.sh has no Gemini event.
-                    if [[ "$AGENT" == "gemini" ]]; then
-                        case "$hook_name" in
-                            subagent-monitor.sh) continue ;;
-                        esac
-                    fi
-                    if [[ "$AGENT" == "gemini" && "$hook_name" == "post-compact.sh" ]]; then
-                        continue
-                    fi
-                    # task-completed.sh is Claude-only (Gemini has no TaskCompleted event)
-                    if [[ "$AGENT" == "gemini" && "$hook_name" == "task-completed.sh" ]]; then
-                        continue
-                    fi
-                    cp "$hook_script" "$HOOKS_TARGET/"
-                done
-                if hook_selected_for_profile "workflow-phase-gates.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-phase-gates.d" ]]; then
-                    mkdir -p "$HOOKS_TARGET/workflow-phase-gates.d"
-                    cp "$HOOKS_SOURCE/scripts/workflow-phase-gates.d/"*.sh "$HOOKS_TARGET/workflow-phase-gates.d/"
-                fi
-                if hook_selected_for_profile "workflow-guard.sh" && [[ -d "$HOOKS_SOURCE/scripts/workflow-guard.d" ]]; then
-                    mkdir -p "$HOOKS_TARGET/workflow-guard.d"
-                    cp "$HOOKS_SOURCE/scripts/workflow-guard.d/"*.sh "$HOOKS_TARGET/workflow-guard.d/"
-                fi
-                # chmod only if files were actually copied
-                if compgen -G "$HOOKS_TARGET/*.sh" >/dev/null; then
-                    chmod +x "$HOOKS_TARGET/"*.sh
-                fi
-                # Keep no-op shims at legacy post-tool hook paths so existing
-                # running agent processes with cached hook commands do not fail
-                # with command-not-found after reinstall.
-                for legacy_hook in post-tool-context.sh tool-failure-advisor.sh; do
-                    printf '%s\n' \
-                        '#!/usr/bin/env bash' \
-                        '# Legacy Assistant Framework post-tool hook shim.' \
-                        '# Post-tool hooks are no longer registered by default.' \
-                        'exit 0' > "$HOOKS_TARGET/$legacy_hook"
-                    chmod +x "$HOOKS_TARGET/$legacy_hook"
-                done
-                for installed_hook in "$HOOKS_TARGET/"*.sh; do
-                    [[ -e "$installed_hook" ]] || continue
-                    installed_hook_name="$(basename "$installed_hook")"
-                    case "$installed_hook_name" in
-                        post-tool-context.sh|tool-failure-advisor.sh) continue ;;
-                    esac
-                    if ! hook_selected_for_profile "$installed_hook_name"; then
-                        rm -f "$installed_hook"
-                        continue
-                    fi
-                    if [[ "$AGENT" == "codex" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                        case "$installed_hook_name" in
-                            pre-compress.sh|post-compact.sh) rm -f "$installed_hook" ;;
-                        esac
-                    fi
-                done
-                ok "Hook scripts -> $HOOKS_TARGET/ ($HOOK_PROFILE profile)"
-            else
-                info "No hook scripts found in $HOOKS_SOURCE/scripts/"
-            fi
-
-            # Codex: write hooks.json (separate file, not settings.json)
-            if [[ "${CODEX_HOOKS:-}" == "true" ]]; then
-                CODEX_HOOKS_FILE="$AGENT_HOME/hooks.json"
-                if [[ -f "$CODEX_HOOKS_FILE" ]]; then
-                    if command -v jq &>/dev/null; then
-                        # Merge with existing hooks.json
-                        existing_hooks=$(jq \
-                            --arg hooks_target "$HOOKS_TARGET" \
-                            --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
-                            --arg historical_entrypoints "$(codex_historical_hook_entrypoints)" \
-                            --arg cleanup_helpers "$(framework_hook_cleanup_helpers)" '
-                        def assistant_framework_codex_hook_names:
-                            $historical_entrypoints | split("\n") | map(select(length > 0));
-                        def assistant_framework_cleanup_helper_names:
-                            $cleanup_helpers | split("\n") | map(select(length > 0));
-                        def first_shell_token:
-                            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-                        def assistant_framework_codex_hook_command:
-                            (. // "") as $command
-                            | ($command | first_shell_token) as $token
-                            | (any(assistant_framework_codex_hook_names[]; . as $hook_name |
-                                $token == ("$HOME/.codex/hooks/assistant/" + $hook_name)
-                                or $token == ($hooks_target + "/" + $hook_name)
-                                or $token == ($framework_hooks_dir + "/" + $hook_name)
-                            )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
-                                $token == ($framework_hooks_dir + "/" + $helper_name)
-                            ));
-                        (.hooks // {})
-                        | with_entries(
-                            .value = (
-                                (.value | if type == "array" then . else [.] end)
-                                | map(
-                                    .hooks = (
-                                        (.hooks // [])
-                                        | map(select(((.command // "") | assistant_framework_codex_hook_command) | not))
-                                    )
-                                )
-                                | map(select((.hooks // []) | length > 0))
-                            )
-                        )
-                        | with_entries(select((.value // []) | length > 0))
-                    ' "$CODEX_HOOKS_FILE" 2>/dev/null || echo '{}')
-                    new_hooks=$(jq '.hooks' "$PROFILED_HOOKS_SETTINGS")
-                    if [[ "${CODEX_HOOKS:-}" == "true" && "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                        new_hooks=$(printf '%s\n' "$new_hooks" | jq 'del(.PreCompact, .PostCompact)')
-                        info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
-                    fi
-                    merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
-                        def arrayify:
-                            if type == "array" then . else [.] end;
-                        def unique_commands:
-                            reduce .[] as $hook ({seen: {}, out: []};
-                                ($hook.command? // "") as $command
-                                | if $command == "" then
-                                    .out += [$hook]
-                                elif .seen[$command] then
-                                    .
-                                else
-                                    .seen[$command] = true | .out += [$hook]
-                                end
-                            ) | .out;
-                        def merge_matcher_groups:
-                            reduce .[] as $group ({seen: {}, out: []};
-                                ($group | .hooks = ((.hooks // []) | arrayify | unique_commands)) as $normalized
-                                | ($normalized.matcher // "") as $matcher
-                                | if (($normalized.hooks // []) | length) == 0 then
-                                    .
-                                elif .seen[$matcher] == null then
-                                    .seen[$matcher] = (.out | length) | .out += [$normalized]
-                                else
-                                    .out[.seen[$matcher]].hooks = ((.out[.seen[$matcher]].hooks + $normalized.hooks) | unique_commands)
-                                end
-                            ) | .out;
-                        ($a | keys) + ($b | keys) | unique | map(
-                            . as $k |
-                            {key: $k, value: ([
-                                ($a[$k] // [] | if type == "array" then . else [.] end),
-                                ($b[$k] // [] | if type == "array" then . else [.] end)
-                            ] | add | merge_matcher_groups)}
-                        ) | from_entries
-                    ')
-                    if jq -n --argjson hooks "$merged" '{hooks: $hooks}' > "${CODEX_HOOKS_FILE}.tmp" \
-                        && mv "${CODEX_HOOKS_FILE}.tmp" "$CODEX_HOOKS_FILE"; then
-                        ok "Hooks merged into $CODEX_HOOKS_FILE"
-                    else
-                        rm -f "${CODEX_HOOKS_FILE}.tmp"
-                        info "WARNING: Failed to merge hooks into $CODEX_HOOKS_FILE"
-                    fi
-                    else
-                        merge_profiled_hooks_settings_python "$CODEX_HOOKS_FILE" "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE" "$AGENT" "$HOOKS_TARGET" "codex" "$CODEX_SUPPORTS_COMPACTION_HOOKS"
-                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                            info "NOTE: Codex CLI < 0.129.0 detected — skipping PreCompact/PostCompact registration. Update Codex CLI to enable compaction hooks."
-                        fi
-                        ok "Hooks merged into $CODEX_HOOKS_FILE"
-                    fi
-                else
-                    if command -v jq &>/dev/null; then
-                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                            jq '{hooks: (.hooks | del(.PreCompact, .PostCompact))}' "$PROFILED_HOOKS_SETTINGS" > "$CODEX_HOOKS_FILE"
-                            ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
-                        else
-                            cp "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE"
-                            ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
-                        fi
-                    else
-                        merge_profiled_hooks_settings_python "" "$PROFILED_HOOKS_SETTINGS" "$CODEX_HOOKS_FILE" "$AGENT" "$HOOKS_TARGET" "codex" "$CODEX_SUPPORTS_COMPACTION_HOOKS"
-                        if [[ "$CODEX_SUPPORTS_COMPACTION_HOOKS" != "true" ]]; then
-                            ok "Created $CODEX_HOOKS_FILE (Codex CLI < 0.129.0: compaction hooks skipped)"
-                        else
-                            ok "Created $CODEX_HOOKS_FILE (requires hooks feature flag)"
-                        fi
-                    fi
-                fi
-                info "NOTE: Enable experimental hooks in ~/.codex/config.toml:"
-                info "  [features]"
-                info "  hooks = true"
-            # Claude/Gemini: merge hooks into settings.json
-            elif [[ -f "$SETTINGS_FILE" ]]; then
-                # Settings exists — merge hooks key
-                if command -v jq &>/dev/null; then
-                    # Use jq to merge (preserves existing settings)
-                    existing_hooks=$(jq \
-                        --arg agent "$AGENT" \
-                        --arg hooks_target "$HOOKS_TARGET" \
-                        --arg framework_hooks_dir "$FRAMEWORK_DIR/hooks/scripts" \
-                        --arg historical_entrypoints "$(codex_historical_hook_entrypoints)" \
-                        --arg cleanup_helpers "$(framework_hook_cleanup_helpers)" '
-                        def assistant_framework_hook_names:
-                            $historical_entrypoints | split("\n") | map(select(length > 0));
-                        def assistant_framework_cleanup_helper_names:
-                            $cleanup_helpers | split("\n") | map(select(length > 0));
-                        def first_shell_token:
-                            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-                        def assistant_framework_hook_command:
-                            (. // "") as $command
-                            | ($command | first_shell_token) as $token
-                            | (any(assistant_framework_hook_names[]; . as $hook_name |
-                                $token == ("$HOME/." + $agent + "/hooks/assistant/" + $hook_name)
-                                or $token == ($hooks_target + "/" + $hook_name)
-                                or $token == ($framework_hooks_dir + "/" + $hook_name)
-                            )) or (any(assistant_framework_cleanup_helper_names[]; . as $helper_name |
-                                $token == ($framework_hooks_dir + "/" + $helper_name)
-                            ));
-                        (.hooks // {})
-                        | with_entries(
-                            .value = (
-                                (.value | if type == "array" then . else [.] end)
-                                | map(
-                                    .hooks = (
-                                        (.hooks // [])
-                                        | map(select(((.command // "") | assistant_framework_hook_command) | not))
-                                    )
-                                )
-                                | map(select((.hooks // []) | length > 0))
-                            )
-                        )
-                        | with_entries(select((.value // []) | length > 0))
-                    ' "$SETTINGS_FILE" 2>/dev/null || echo '{}')
-                    new_hooks=$(jq '.hooks' "$PROFILED_HOOKS_SETTINGS")
-
-                    # Array-aware merge: concatenate arrays per event key, merge
-                    # matcher groups, and deduplicate hooks by command. This
-                    # preserves custom hooks while refreshing framework-owned
-                    # registrations from the template.
-                    merged=$(jq -n --argjson a "$existing_hooks" --argjson b "$new_hooks" '
-                        def arrayify:
-                            if type == "array" then . else [.] end;
-                        def unique_commands:
-                            reduce .[] as $hook ({seen: {}, out: []};
-                                ($hook.command? // "") as $command
-                                | if $command == "" then
-                                    .out += [$hook]
-                                elif .seen[$command] then
-                                    .
-                                else
-                                    .seen[$command] = true | .out += [$hook]
-                                end
-                            ) | .out;
-                        def merge_matcher_groups:
-                            reduce .[] as $group ({seen: {}, out: []};
-                                ($group | .hooks = ((.hooks // []) | arrayify | unique_commands)) as $normalized
-                                | ($normalized.matcher // "") as $matcher
-                                | if (($normalized.hooks // []) | length) == 0 then
-                                    .
-                                elif .seen[$matcher] == null then
-                                    .seen[$matcher] = (.out | length) | .out += [$normalized]
-                                else
-                                    .out[.seen[$matcher]].hooks = ((.out[.seen[$matcher]].hooks + $normalized.hooks) | unique_commands)
-                                end
-                            ) | .out;
-                        ($a | keys) + ($b | keys) | unique | map(
-                            . as $k |
-                            {key: $k, value: ([
-                                ($a[$k] // [] | if type == "array" then . else [.] end),
-                                ($b[$k] // [] | if type == "array" then . else [.] end)
-                            ] | add | merge_matcher_groups)}
-                        ) | from_entries
-                    ')
-                    if jq --argjson hooks "$merged" '.hooks = $hooks' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
-                        && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"; then
-                        ok "Hooks merged into existing $SETTINGS_FILE"
-                    else
-                        rm -f "${SETTINGS_FILE}.tmp"
-                        info "WARNING: Failed to merge hooks into $SETTINGS_FILE"
-                    fi
-                else
-                    merge_profiled_hooks_settings_python "$SETTINGS_FILE" "$PROFILED_HOOKS_SETTINGS" "$SETTINGS_FILE" "$AGENT" "$HOOKS_TARGET" "settings"
-                    ok "Hooks merged into existing $SETTINGS_FILE"
-                fi
-            else
-                # No settings — copy hook settings as new file
-                cp "$PROFILED_HOOKS_SETTINGS" "$SETTINGS_FILE"
-                ok "Created $SETTINGS_FILE with hook configuration"
-            fi
-        fi
-    fi
+if $DRY_RUN; then
+    dry "Remove retired Assistant Framework hook registrations from $LEGACY_HOOK_SETTINGS_FILE when present"
+    dry "Neutralize cached framework entrypoints only when legacy hook state exists"
+else
+    cleanup_legacy_framework_hooks "$LEGACY_HOOK_SETTINGS_FILE" "$HOOKS_TARGET" "$AGENT"
 fi
 
 # ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
@@ -1994,11 +1241,11 @@ if [[ "$AGENT" == "codex" ]]; then
     AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
 # AGENTS.md — Codex Agent Instructions
 
-Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase. The compatibility \`skill-router.sh\` hook is not needed for native Codex routing.
+Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
 
 ## Development workflow
 
-- Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan before project source, test, documentation, configuration, or hook edits begin.
+- Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan before project source, test, documentation, configuration, or installer edits begin.
 - Resolve material unknowns before planning. State safe defaults when local evidence makes the path clear.
 - The orchestrator owns framework state files such as \`.codex/task.md\`, \`.codex/context-map.md\`, \`.codex/session.md\`, and \`.codex/working-buffer.md\`. Preserve user-authored project files and existing dirty work.
 - Delegation consent is required only before an actual subagent spawn. Do not ask during preparation merely because agents might be useful. Ask once immediately before the first spawn unless the user already authorized that scope. Continue safe non-spawn work while authorization is unresolved.
@@ -2131,35 +1378,6 @@ if [[ "$AGENT" == "claude" && ${#md_files[@]} -gt 0 ]]; then
         echo "  $(basename "$md" .md)"
     done
 fi
-if $INSTALL_HOOKS; then
-    echo ""
-    echo "Hooks: $HOOKS_TARGET/"
-    echo "  Profile: $HOOK_PROFILE"
-    if [[ "$AGENT" == "codex" ]]; then
-        case "$HOOK_PROFILE" in
-            minimal)
-                if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-                    echo "  (Codex: SessionStart, UserPromptSubmit, PreCompact, PostCompact — low-friction context hooks)"
-                    echo "  Automation: skill-router + session-start + compaction context helpers"
-                else
-                    echo "  (Codex: SessionStart, UserPromptSubmit — low-friction context hooks)"
-                    echo "  Automation: skill-router + session-start"
-                    echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
-                fi
-                ;;
-            workflow|strict)
-                if [[ "${CODEX_SUPPORTS_COMPACTION_HOOKS:-true}" == "true" ]]; then
-                    echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse, PreCompact, PostCompact — 8 events, consolidated stop gate)"
-                    echo "  Workflow/delegation: workflow-enforcer + subagent-monitor + workflow-guard + stop-review + compaction"
-                else
-                    echo "  (Codex: SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop, PreToolUse — 6 events, consolidated stop gate)"
-                    echo "  Workflow/delegation: workflow-enforcer + subagent-monitor + workflow-guard + stop-review"
-                    echo "  Compaction hooks require Codex CLI 0.129.0 or newer."
-                fi
-                ;;
-        esac
-    fi
-fi
 if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
     echo ""
     echo "Execution rules: $AGENT_HOME/rules/"
@@ -2173,5 +1391,4 @@ if [[ -n "$SINGLE_SKILL" ]]; then
     echo "To install all skills: ./install.sh --agent $AGENT"
 else
     echo "To install a single skill: ./install.sh --agent $AGENT --skill <name>"
-    echo "To skip hooks: ./install.sh --agent $AGENT --no-hooks"
 fi

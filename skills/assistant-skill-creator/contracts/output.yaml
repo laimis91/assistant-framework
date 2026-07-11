@@ -58,7 +58,7 @@ artifacts:
   - name: policy_safety_summary
     type: string
     required: true
-    description: "How the skill handles memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples"
+    description: "How the skill handles memory, metrics, automation, subagents, state paths, external tools, and sensitive examples"
     validation: "Must state either 'none used' or describe the optional/configurable fallback for each runtime/tooling assumption"
     on_fail: "Add policy gates or fallback behavior before finalizing the skill"
 

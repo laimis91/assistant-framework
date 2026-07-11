@@ -45,7 +45,7 @@ file centralizes decision boundaries that cut across phase details while
   `controller_intensity=standard`, `harness_capable=false`, and
   `qa_evaluation_mode=not_required`. It requires an approved plan, Build
   verification, and independent review, but no harness or QA ceremony by size.
-- `strict`: select only for high/critical risk, strict hook profile,
+- `strict`: select only for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
   explicit harness/QA criteria, or explicit strict control.
 - Do not infer `strict`, `harness_capable=true`, or required QA from

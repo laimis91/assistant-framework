@@ -69,7 +69,7 @@
       "title": "Compressed request produces structured brief",
       "category": "structured_brief",
       "purpose": "Checks that a compressed request is converted into an actionable brief with assumptions and a recommended default.",
-      "prompt": "This might be two separate asks: refactor the memory hook and write a research note, but I don't want a huge process. Help me turn it into something actionable.",
+      "prompt": "This might be two separate asks: refactor the memory capture automation and write a research note, but I don't want a huge process. Help me turn it into something actionable.",
       "setup_context": [
         "The assistant-clarify skill instructions are active.",
         "The user asks for help structuring the work rather than immediate implementation.",

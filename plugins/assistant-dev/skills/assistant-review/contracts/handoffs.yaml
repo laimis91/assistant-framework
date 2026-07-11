@@ -208,7 +208,7 @@ handoffs:
         required: false
         default: false
         description: "Whether Reviewer must apply the Semantic Contract Review Checklist for skill/workflow/framework changes"
-        notes: "Set true for changes under skills/, plugin-local skill copies, contracts, evals, prompts, hooks/generated instructions that drive agent behavior, or named-method adaptations."
+        notes: "Set true for changes under skills/, plugin-local skill copies, contracts, evals, prompts, automation/generated instructions that drive agent behavior, or named-method adaptations."
 
       - name: behavioral_contract_review_required
         type: boolean
@@ -402,7 +402,7 @@ handoffs:
           - name: mirror_surface_sync
             type: string
             required: true
-            description: "Whether root/plugin/generated/docs/hook surfaces that can drive behavior are synced or not applicable"
+            description: "Whether root/plugin/generated/docs/automation surfaces that can drive behavior are synced or not applicable"
 
       - name: principle_checks
         type: object

@@ -63,7 +63,7 @@ Entity types:
 3. If a configured session file exists → read it as session state; do not promote its contents to memory without filtering.
 4. If a configured working buffer exists → read it, then **clear** its contents if policy allows.
 
-Hooks do not inject rule bodies directly. Use the configured memory query/search tools to retrieve rules, preferences, and prior lessons when available.
+Rule bodies are retrieved on demand. Use the configured memory query/search tools to retrieve rules, preferences, and prior lessons when available.
 
 ## Recording Memory
 

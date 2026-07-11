@@ -110,7 +110,7 @@ if jq -e '
     and ([.cases[].id] | contains([
       "ambiguous-prompt-clarify-or-default-deterministically",
       "compaction-resume-reads-task-state-first",
-      "codex-role-constraints-without-subagentstart",
+      "codex-role-constraints-native",
       "clear-medium-task-zero-clarification-questions",
       "ambiguous-risky-task-blocks-before-plan",
       "executable-task-packet-before-build",
@@ -140,7 +140,7 @@ if jq -e '
     and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
     and case_category("worker-status-packet-required"; "subagent_handoffs")
     and case_category("subagent-authorization-denied-direct-fallback"; "subagent_authorization")
-    and case_category("codex-role-constraints-without-subagentstart"; "role_constraints")
+    and case_category("codex-role-constraints-native"; "role_constraints")
 ' "$eval_fixture" >/dev/null; then
     pass
 else
@@ -185,7 +185,7 @@ for term in \
     "separate spec review and quality review gates" \
     "structured worker status packets from subagents" \
     "subagent authorization denial direct fallback" \
-    "Codex role constraints without SubagentStart reinforcement"; do
+    "Native Codex role constraints without extra runtime reinforcement"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/README.md"; then
         missing_eval_readme_terms+=("$term")
     fi
@@ -243,7 +243,7 @@ list_output="$("$eval_runner" --list)"
 list_count="$(printf '%s\n' "$list_output" | grep -c .)"
 if [[ "$list_count" -eq "$case_count" ]] \
     && printf '%s\n' "$list_output" | grep -Fq $'small-fix-stays-lightweight\tworkflow_sizing\tSmall fix should stay lightweight' \
-    && printf '%s\n' "$list_output" | grep -Fq $'codex-role-constraints-without-subagentstart\trole_constraints\tCodex should honor role constraints without SubagentStart'; then
+    && printf '%s\n' "$list_output" | grep -Fq $'codex-role-constraints-native\trole_constraints\tCodex should honor native role constraints'; then
     pass
 else
     fail "eval runner --list did not include expected case rows"

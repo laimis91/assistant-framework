@@ -22,21 +22,23 @@ if [[ -x "$context_report" ]]; then
 fi
 if printf '%s\n' "$context_help" | grep -Fq -- "--agent AGENT" \
     && printf '%s\n' "$context_help" | grep -Fq -- "codex only" \
-    && printf '%s\n' "$context_help" | grep -Fq -- "--hook-profile PROFILE" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--skill SKILL" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--format json" \
-    && printf '%s\n' "$context_help" | grep -Fq -- "--baseline FILE"; then
+    && printf '%s\n' "$context_help" | grep -Fq -- "--baseline FILE" \
+    && ! printf '%s\n' "$context_help" | grep -Fq -- "hook-profile"; then
     pass
 else
-    fail "context budget reporter help is missing an agent, hook profile, skill, JSON, or baseline option"
+    fail "context budget reporter help is missing a required option or still documents hook profiles"
 fi
 
 test_start "eval README documents the reproducible context budget command"
 if grep -Fq -- "tools/context-budget-report.sh" "$eval_readme" \
-    && grep -Fq -- "--agent codex --hook-profile none --skill assistant-workflow --format json" "$eval_readme"; then
+    && grep -Fq -- "--agent codex --skill assistant-workflow --format json" "$eval_readme" \
+    && ! grep -Fq -- "hook-output semantics" "$eval_readme" \
+    && ! grep -Fq -- "hook-benchmark" "$eval_readme"; then
     pass
 else
-    fail "docs/evals/README.md does not document the native Codex context budget command"
+    fail "docs/evals/README.md does not document the hookless native Codex context budget command"
 fi
 
 report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-home.XXXXXX")"
@@ -44,8 +46,8 @@ report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-report.XXXXXX")"
 report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-report-error.XXXXXX")"
 baseline_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-baseline.XXXXXX")"
 comparison_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-comparison.XXXXXX")"
-profile_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-profile.XXXXXX")"
-profile_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-profile-error.XXXXXX")"
+failure_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-failure.XXXXXX")"
+failure_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-failure-error.XXXXXX")"
 claude_report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-claude-home.XXXXXX")"
 claude_report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-claude-report.XXXXXX")"
 claude_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-claude-error.XXXXXX")"
@@ -59,8 +61,8 @@ p0p4_register_cleanup \
     "$report_error" \
     "$baseline_report" \
     "$comparison_output" \
-    "$profile_output" \
-    "$profile_error" \
+    "$failure_output" \
+    "$failure_error" \
     "$claude_report_home" \
     "$claude_report_output" \
     "$claude_report_error" \
@@ -79,23 +81,6 @@ case "${CONTEXT_BUDGET_TEST_BASH_MODE:-}" in
             exit 97
         fi
         ;;
-    benchmark-failure)
-        if [[ "${1:-}" == */tools/hooks/benchmark-hook-output.sh ]]; then
-            echo "induced hook benchmark failure" >&2
-            exit 98
-        fi
-        ;;
-    benchmark-no-match)
-        if [[ "${1:-}" == */tools/hooks/benchmark-hook-output.sh ]]; then
-            printf '%s\n' \
-                '# Hook Output Benchmarks' \
-                '' \
-                '| hook_name | scenario | stdout_bytes | stdout_words | stderr_bytes | exit_code | first_blocker_or_action |' \
-                '|---|---|---:|---:|---:|---:|---|' \
-                '| unrelated-hook | induced no-match row | 20 | 4 | 0 | 0 | none |'
-            exit 0
-        fi
-        ;;
 esac
 
 exec /bin/bash "$@"
@@ -107,16 +92,16 @@ if HOME="$report_home" \
     OPENAI_API_KEY="secret-fixture-value" \
     "$context_report" \
         --agent codex \
-        --hook-profile none \
         --skill assistant-workflow \
         --format json \
         >"$report_output" 2>"$report_error" \
     && jq -e '
-        .schema_version == "1.0"
+        .schema_version == "2.0"
         and .agent == "codex"
-        and .hook_profile == "none"
         and .skill == "assistant-workflow"
         and (.inventory_mode == "isolated_install" or .inventory_mode == "source_equivalent")
+        and (has("hook_profile") | not)
+        and (.components | has("framework_hooks") | not)
     ' "$report_output" >/dev/null; then
     pass
 else
@@ -127,7 +112,6 @@ test_start "context reporter rejects unsupported non-Codex agents clearly"
 if HOME="$claude_report_home" \
     "$context_report" \
         --agent claude \
-        --hook-profile none \
         --skill assistant-workflow \
         --format json \
         </dev/null >"$claude_report_output" 2>"$claude_report_error"; then
@@ -143,16 +127,16 @@ test_start "Codex none context report supports a valid skill without contracts i
 if HOME="$no_index_report_home" \
     "$context_report" \
         --agent codex \
-        --hook-profile none \
         --skill assistant-clarify \
         --format json \
         </dev/null >"$no_index_report_output" 2>"$no_index_report_error" \
     && jq -e '
-        .schema_version == "1.0"
+        .schema_version == "2.0"
         and .agent == "codex"
-        and .hook_profile == "none"
         and .skill == "assistant-clarify"
         and .inventory_mode == "isolated_install"
+        and (has("hook_profile") | not)
+        and (.components | has("framework_hooks") | not)
         and ([
           .components.project_agents.words,
           .components.project_agents.bytes,
@@ -167,9 +151,6 @@ if HOME="$no_index_report_home" \
           .components.selected_skill_initial.bytes,
           .components.selected_skill_entry_boundary.words,
           .components.selected_skill_entry_boundary.bytes,
-          .components.framework_hooks.command_count,
-          .components.framework_hooks.output_words,
-          .components.framework_hooks.output_bytes,
           .totals.initial_words,
           .totals.initial_bytes,
           .totals.entry_boundary_words,
@@ -200,10 +181,7 @@ if jq -e '
       .components.selected_skill_initial.words,
       .components.selected_skill_initial.bytes,
       .components.selected_skill_entry_boundary.words,
-      .components.selected_skill_entry_boundary.bytes,
-      .components.framework_hooks.command_count,
-      .components.framework_hooks.output_words,
-      .components.framework_hooks.output_bytes
+      .components.selected_skill_entry_boundary.bytes
     ]
     | all(.[]; type == "number" and . >= 0)
   ' "$report_output" >/dev/null \
@@ -219,14 +197,12 @@ if jq -e '
       .components.project_agents.words
       + .components.generated_global_agents.words
       + .components.generated_memory_protocol.words
-      + .components.native_skill_catalog_descriptions.words
-      + .components.framework_hooks.output_words;
+      + .components.native_skill_catalog_descriptions.words;
     def standing_bytes:
       .components.project_agents.bytes
       + .components.generated_global_agents.bytes
       + .components.generated_memory_protocol.bytes
-      + .components.native_skill_catalog_descriptions.bytes
-      + .components.framework_hooks.output_bytes;
+      + .components.native_skill_catalog_descriptions.bytes;
     .totals.initial_words == (standing_words + .components.selected_skill_initial.words)
     and .totals.initial_bytes == (standing_bytes + .components.selected_skill_initial.bytes)
     and .totals.entry_boundary_words == (standing_words + .components.selected_skill_entry_boundary.words)
@@ -239,77 +215,19 @@ else
     fail "context report initial/entry totals do not equal their component sums"
 fi
 
-test_start "native none profile reports zero framework hook commands and output"
-if jq -e '
-    .components.framework_hooks.command_count == 0
-    and .components.framework_hooks.output_words == 0
-    and .components.framework_hooks.output_bytes == 0
-  ' "$report_output" >/dev/null; then
+test_start "context reporter rejects the retired hook profile option"
+if "$context_report" \
+    --agent codex \
+    --hook-profile none \
+    --skill assistant-workflow \
+    --format json \
+    >"$failure_output" 2>"$failure_error"; then
+    fail "context reporter unexpectedly accepted the retired --hook-profile option"
+elif [[ ! -s "$failure_output" ]] \
+    && grep -Fq -- "Unknown option: --hook-profile" "$failure_error"; then
     pass
 else
-    fail "native Codex none profile included a framework hook command or output footprint"
-fi
-
-for hook_profile in minimal workflow; do
-    test_start "Codex $hook_profile profile reports registered commands and measured hook output"
-    if HOME="$report_home" \
-        OPENAI_API_KEY="secret-fixture-value" \
-        "$context_report" \
-            --agent codex \
-            --hook-profile "$hook_profile" \
-            --skill assistant-workflow \
-            --format json \
-            >"$profile_output" 2>"$profile_error" \
-        && jq -e --arg hook_profile "$hook_profile" '
-            .hook_profile == $hook_profile
-            and .inventory_mode == "isolated_install"
-            and .components.framework_hooks.command_count > 0
-            and .components.framework_hooks.output_words > 0
-            and .components.framework_hooks.output_bytes > 0
-        ' "$profile_output" >/dev/null \
-        && ! grep -Fq "secret-fixture-value" "$profile_output" \
-        && ! grep -Fq "secret-fixture-value" "$profile_error"; then
-        pass
-    else
-        fail "Codex $hook_profile profile did not match registered .sh commands to nonzero benchmark rows"
-    fi
-done
-
-test_start "non-empty hook profile fails clearly when the hook benchmark fails"
-if PATH="$bash_interceptor_dir:$PATH" \
-    CONTEXT_BUDGET_TEST_BASH_MODE="benchmark-failure" \
-    HOME="$report_home" \
-    "$context_report" \
-        --agent codex \
-        --hook-profile minimal \
-        --skill assistant-workflow \
-        --format json \
-        >"$profile_output" 2>"$profile_error"; then
-    fail "context report converted a failed non-empty hook benchmark into a zero measurement"
-elif grep -Eqi 'benchmark.*fail|fail.*benchmark' "$profile_error" \
-    && ! jq -e '.inventory_mode == "source_equivalent"' "$profile_output" >/dev/null 2>&1; then
-    pass
-else
-    fail "failed non-empty hook benchmark did not exit nonzero with a clear benchmark error"
-fi
-
-test_start "non-empty hook profile fails clearly when no benchmark rows match registered hooks"
-if PATH="$bash_interceptor_dir:$PATH" \
-    CONTEXT_BUDGET_TEST_BASH_MODE="benchmark-no-match" \
-    HOME="$report_home" \
-    "$context_report" \
-        --agent codex \
-        --hook-profile minimal \
-        --skill assistant-workflow \
-        --format json \
-        >"$profile_output" 2>"$profile_error"; then
-    fail "context report converted unmatched non-empty hook registrations into a zero measurement"
-elif grep -Eqi 'benchmark' "$profile_error" \
-    && grep -Eqi 'match|row|registered|hook' "$profile_error" \
-    && ! jq -e '.inventory_mode == "source_equivalent"' "$profile_output" >/dev/null 2>&1; then
-    pass
-else
-    fail "unmatched non-empty hook benchmark did not exit nonzero with a clear matching error"
+    fail "retired --hook-profile option was not rejected clearly"
 fi
 
 test_start "isolated install failure exits nonzero instead of emitting source-equivalent JSON"
@@ -318,13 +236,12 @@ if PATH="$bash_interceptor_dir:$PATH" \
     HOME="$report_home" \
     "$context_report" \
         --agent codex \
-        --hook-profile none \
         --skill assistant-workflow \
         --format json \
-        >"$profile_output" 2>"$profile_error"; then
+        >"$failure_output" 2>"$failure_error"; then
     fail "context report accepted an induced install.sh failure"
-elif grep -Eqi 'install.*fail|fail.*install' "$profile_error" \
-    && ! jq -e '.inventory_mode == "source_equivalent"' "$profile_output" >/dev/null 2>&1; then
+elif grep -Eqi 'install.*fail|fail.*install' "$failure_error" \
+    && ! jq -e '.inventory_mode == "source_equivalent"' "$failure_output" >/dev/null 2>&1; then
     pass
 else
     fail "install.sh failure did not exit nonzero with a clear error and without source-equivalent JSON"
@@ -344,7 +261,6 @@ if [[ -s "$report_output" ]] \
         OPENAI_API_KEY="secret-fixture-value" \
         "$context_report" \
             --agent codex \
-            --hook-profile none \
             --skill assistant-workflow \
             --format json \
             --baseline "$baseline_report" \

@@ -6,7 +6,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 test_start "canonical workflow phase lists do not inject standalone TEST/VERIFY phases"
 if rg -n "TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST|BUILD -> TEST -> VERIFY|TEST -> VERIFY" \
     "$FRAMEWORK_DIR/install.sh" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" >/tmp/p0p4-stale-phases.out; then
@@ -162,7 +161,7 @@ test_start "workflow discovery maps behaviorally relevant references"
 missing_reference_mapping_terms=()
 for term in \
     "references_checked" \
-    "caller, consumer, test, docs, contract, config, mirror, hook, runtime" \
+    "caller, consumer, test, docs, contract, config, mirror, runtime" \
     "candidate_scope_scan"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
         missing_reference_mapping_terms+=("handoffs.yaml: $term")
@@ -171,7 +170,7 @@ done
 for term in \
     "D8A" \
     "context map includes references_checked" \
-    "behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, hooks, and runtime surfaces"; do
+    "behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_reference_mapping_terms+=("phase-gates.yaml: $term")
     fi
@@ -432,13 +431,6 @@ for term in \
     "orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
         missing_state_terms+=("handoffs.yaml: $term")
-    fi
-done
-for term in \
-    "This framework-owned state artifact may be written directly by the orchestrator" \
-    "workflow-guard.sh"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/hooks/scripts/pre-compress.sh" "$FRAMEWORK_DIR/hooks/scripts/workflow-guard.sh"; then
-        missing_state_terms+=("hooks: $term")
     fi
 done
 if ! grep -Fq ".codex/" "$FRAMEWORK_DIR/.gitignore"; then

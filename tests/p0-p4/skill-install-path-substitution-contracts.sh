@@ -61,7 +61,7 @@ cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/evals/cases.json" <<
   }
 ]
 EVAL_FIXTURE
-if HOME="$INSTALL_HOME" bash "$FIXTURE_FRAMEWORK/install.sh" --agent codex --skill path-substitution-contract --no-hooks >/tmp/p0p4-install-subst.out 2>/tmp/p0p4-install-subst.err; then
+if HOME="$INSTALL_HOME" bash "$FIXTURE_FRAMEWORK/install.sh" --agent codex --skill path-substitution-contract >/tmp/p0p4-install-subst.out 2>/tmp/p0p4-install-subst.err; then
     installed_skill="$INSTALL_HOME/.codex/skills/path-substitution-contract"
     installed_root="$installed_skill/SKILL.md"
     installed_contract="$installed_skill/contracts/output.yaml"

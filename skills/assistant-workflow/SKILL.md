@@ -53,6 +53,10 @@ Selectors resolve by unique id plus canonical path, exact section, key, and expl
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
+Migration note: `contracts/handoffs.yaml` v2 removes the retired lifecycle-script
+reference kind. Use `runtime` for executable integrations and identify generic automation
+in descriptive evidence fields.
+
 ## Visible Checkpoints
 
 Phase markers are required only for `controller_intensity=strict`, explicit
