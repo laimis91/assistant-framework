@@ -90,6 +90,6 @@ Use this checklist when reviewing changes to skills, workflow docs, contracts, e
 
 6. **Mirror surfaces**
    - Root skill and plugin-local copies must be synced.
-   - Generated installer/global instruction templates, hooks, docs, references, and eval contract tests must be updated when they can drive the old behavior.
+   - Generated installer/global instruction templates, automation, docs, references, and eval contract tests must be updated when they can drive the old behavior.
 
 Treat missing inherited artifacts, template-contract drift, evals that pass incomplete outputs, method-signature drift, high-stakes recommendation guard gaps, or mirror-surface drift as must-fix or should-fix depending on release risk.

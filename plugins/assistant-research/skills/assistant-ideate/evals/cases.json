@@ -18,7 +18,7 @@
       "title": "Quick improvement scan uses light mode",
       "category": "adaptive_ideation_depth",
       "purpose": "Checks that a broad what-else request gets several ranked options without deep-mode scoring ceremony.",
-      "prompt": "What else could improve skill activation precision without adding more hooks?",
+      "prompt": "What else could improve native skill activation precision without adding more standing instructions?",
       "setup_context": [
         "The assistant-ideate skill instructions are active.",
         "The user asks for a quick improvement scan, not a comprehensive brainstorm.",

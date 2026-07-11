@@ -23,7 +23,7 @@ fields:
     description: "Category of work — drives which task-category gate packs and prompt packs load"
     validation: "Must be one of the enum values"
     on_missing: infer
-    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'rewrite/port' -> rewrite, 'migrate/migration' -> migration, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'infra/deploy/hook/install' -> infra, 'security/auth/PII/payment/input validation' -> security, 'docs/readme/document/changelog' -> docs, 'spike/explore/investigate' -> spike, else -> feature"
+    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'rewrite/port' -> rewrite, 'migrate/migration' -> migration, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'infra/deploy/lifecycle/install' -> infra, 'security/auth/PII/payment/input validation' -> security, 'docs/readme/document/changelog' -> docs, 'spike/explore/investigate' -> spike, else -> feature"
 
   - name: risk_tier
     type: enum
@@ -69,7 +69,7 @@ fields:
     validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
     default: not_applicable
     on_missing: infer
-    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, hooks, contracts, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
+    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
 
   - name: subagent_authorization_scope
     type: string[]
@@ -162,7 +162,7 @@ fields:
       Use light for small low-risk localized work. Use standard for ordinary medium+
       source-changing work, including delegated work, when harness_capable == false
       and qa_evaluation_mode == not_required. Use strict only for high/critical risk,
-      hook_profile == strict, harness_capable == true, qa_evaluation_mode == required,
+      harness_capable == true, qa_evaluation_mode == required,
       explicit harness/QA acceptance work, or trace/replay-ready work. Do not infer
       strict from size=medium+ or delegation alone.
 

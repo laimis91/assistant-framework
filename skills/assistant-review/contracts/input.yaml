@@ -248,7 +248,7 @@ fields:
     description: "Dominant kind of material under review; skill_or_workflow triggers semantic contract review"
     on_missing: infer
     infer_from: >
-      Changes under skills/, plugins/*/skills/, contracts/, evals/, prompts, hooks that inject workflow behavior,
+      Changes under skills/, plugins/*/skills/, contracts/, evals/, prompts, automation that drives workflow behavior,
       generated instruction templates, agent-framework docs, or named-method adaptations → skill_or_workflow.
       Application source changes → code. Documentation-only changes → docs. Config-only changes → config.
       Multiple categories → mixed.

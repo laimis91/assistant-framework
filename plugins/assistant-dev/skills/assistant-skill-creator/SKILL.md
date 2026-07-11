@@ -27,7 +27,7 @@ safe fallback behavior, and offline validation.
 
 - Keep root `SKILL.md` concise and move detail to on-demand references.
 - Analysis and Utility skills do not gain subagent handoffs.
-- Memory, metrics, hooks, subagents, external tools, and state paths stay
+- Memory, metrics, automation, subagents, external tools, and state paths stay
   optional/configurable and policy-gated unless the skill explicitly owns them.
 - Keep examples agent-agnostic and free of secrets, private endpoints, customer
   data, and workplace-specific confidential details.

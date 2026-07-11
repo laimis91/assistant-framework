@@ -344,20 +344,20 @@ Separation of concerns at the agent level.
 
 ---
 
-## Automated Hooks
+## Native Orchestration
 
-**Six lifecycle hooks fire automatically. Zero manual steps.**
+**Provider-native capabilities plus portable framework contracts.**
 
-| Hook | When | What |
+| Layer | Owner | What |
 |---|---|---|
-| **Session Start** | New session | Injects memory, task state, reflexion tools |
-| **Skill Router** | Every prompt | Routes to correct skill automatically |
-| **Pre-Compress** | Before compaction | Saves state before context is lost |
-| **Post-Compact** | After compaction | Re-injects task journal and rules |
-| **Stop Review** | Agent tries to stop | Blocks until review is complete |
-| **Session End** | Session closes | Prompts for reflexion capture |
+| **Skill discovery** | Provider runtime | Selects installed skills from metadata and instructions |
+| **Permissions** | Provider runtime | Owns command and file-operation approvals |
+| **Subagents** | Provider runtime | Spawns configured specialist roles |
+| **Compaction** | Provider runtime | Manages context lifecycle and continuation |
+| **Contracts** | Assistant Framework | Defines phase, handoff, and completion evidence |
+| **Evals + review** | Assistant Framework | Checks conformance and catches material defects |
 
-**The stop-review hook is structural enforcement** — the agent physically cannot finish a task without completing the review cycle.
+Native capabilities stay native; Assistant Framework adds portable workflow discipline without a separate lifecycle layer.
 
 ---
 
@@ -384,12 +384,12 @@ Separation of concerns at the agent level.
 |---|---|
 | Skills | 11 |
 | MCP tools | 13 |
-| Lifecycle hooks | 6 |
+| Contract levels | 4 |
 | Specialized agents | 6 |
 | Thinking tools | 6 |
 | Diagram types | 7 |
 | Doc generation modes | 6 |
-| Tests passing | 65 + 26 hook tests |
+| Tests passing | Contract suites plus 65 memory-graph tests |
 | External dependencies | 1 (Microsoft.Data.Sqlite) |
 | Lines of YAML config | 0 (auto-discovered) |
 | Marketplace imports | 0 (100% built in-house) |
@@ -442,7 +442,7 @@ cd assistant-framework
 ./install.sh --agent claude
 ```
 
-That's it. Skills auto-trigger. Hooks auto-fire. Memory accumulates.
+That's it. Skills route natively. Contracts guide execution. Memory stays on demand.
 
 The framework gets smarter every time you use it.
 

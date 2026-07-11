@@ -22,8 +22,8 @@ harness-capable.
 - Typed artifact refs:
   - artifact_id: [stable task-local id]
     artifact_type: [done_contract | harness_recipe | harness_run_state | trace_ledger | replay_packet | pivot_restart_decision | changed_files | verification_evidence | plan_deviation | task_packet | context_map | test_result | review_result | qa_evaluation_result]
-    producer: [role/subagent/hook/task packet]
-    consumer: [role/subagent/hook/phase]
+    producer: [role/subagent/automation/task packet]
+    consumer: [role/subagent/automation/phase]
     location_ref: [typed location/ref pointer]
     schema_or_contract: [contract/template/required fields]
     validation_status: [pending | valid | invalid | stale | not_applicable]

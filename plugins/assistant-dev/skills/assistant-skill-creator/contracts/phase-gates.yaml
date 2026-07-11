@@ -59,7 +59,7 @@ gates:
         on_fail: "Present the design to the user and wait for approval, or record why the small-edit exception applies"
       - id: SD6
         check: "Policy/runtime assumptions are explicit, optional/configurable, and have fallback behavior"
-        on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, hooks, subagents, state paths, external tools, and sensitive examples"
+        on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, automation, subagents, state paths, external tools, and sensitive examples"
 
 
   - phase: VERIFIED_DISTILLATION

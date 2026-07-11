@@ -5,56 +5,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-framework_hook_names=(
-    session-start.sh
-    skill-router.sh
-    learning-signals.sh
-    workflow-enforcer.sh
-    workflow-guard.sh
-    stop-review.sh
-    subagent-monitor.sh
-    pre-compress.sh
-    post-compact.sh
-)
-
-count_framework_hook_commands() {
-    local hooks_file="$1"
-
-    if [[ ! -f "$hooks_file" ]]; then
-        printf '0\n'
-        return 0
-    fi
-
-    jq -r '
-        def first_shell_token:
-            (gsub("^\\s+"; "") | gsub("\\s+"; " ") | split(" ") | .[0] // "");
-        def framework_hook_name:
-            [
-                "session-start.sh",
-                "skill-router.sh",
-                "learning-signals.sh",
-                "workflow-enforcer.sh",
-                "workflow-guard.sh",
-                "stop-review.sh",
-                "subagent-monitor.sh",
-                "pre-compress.sh",
-                "post-compact.sh",
-                "task-completed.sh",
-                "task-journal-resolver.sh",
-                "workflow-phase-gates.sh",
-                "harness-gate.sh",
-                "post-tool-context.sh",
-                "tool-failure-advisor.sh"
-            ];
-        [
-            .. | objects | .command? // empty
-            | first_shell_token
-            | split("/") | last
-            | select(. as $name | any(framework_hook_name[]; . == $name))
-        ] | length
-    ' "$hooks_file"
-}
-
 marker_block_words() {
     local file="$1"
     local start_marker="$2"
@@ -248,143 +198,32 @@ else
     fail "standing guidance contract failed (${#standing_guidance_failures[@]}): ${standing_guidance_failures[*]}"
 fi
 
-test_start "fresh Codex default is native and registers zero framework hook commands"
+test_start "fresh Codex default installs native assets without hook runtime state"
 CODEX_NATIVE_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$CODEX_NATIVE_HOME"
 if HOME="$CODEX_NATIVE_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow \
     >/tmp/p0p4-sol-native-default.out 2>/tmp/p0p4-sol-native-default.err; then
-    native_hook_count="$(count_framework_hook_commands "$CODEX_NATIVE_HOME/.codex/hooks.json")"
-    if [[ "$native_hook_count" == "0" ]] \
-        && ! grep -Fq 'hooks = true' "$CODEX_NATIVE_HOME/.codex/config.toml"; then
+    if [[ -f "$CODEX_NATIVE_HOME/.codex/skills/assistant-workflow/SKILL.md" ]] \
+        && [[ -f "$CODEX_NATIVE_HOME/.codex/skills/assistant-workflow/contracts/index.yaml" ]] \
+        && [[ ! -e "$CODEX_NATIVE_HOME/.codex/hooks.json" ]] \
+        && [[ ! -d "$CODEX_NATIVE_HOME/.codex/hooks/assistant" ]] \
+        && ! grep -Fq 'hooks = true' "$CODEX_NATIVE_HOME/.codex/config.toml" 2>/dev/null; then
         pass
     else
-        fail "Codex default must register zero Assistant Framework hook commands and must not enable hooks; found $native_hook_count commands"
+        fail "Codex default must install native workflow assets without creating hook configuration, shims, or enabling hooks"
     fi
 else
     fail "fresh Codex default install failed; see /tmp/p0p4-sol-native-default.err"
 fi
 
-test_start "explicit Codex workflow and strict profiles retain enforcement stacks"
-CODEX_WORKFLOW_HOME="$(mktemp -d)"
-CODEX_STRICT_HOME="$(mktemp -d)"
-p0p4_register_cleanup "$CODEX_WORKFLOW_HOME" "$CODEX_STRICT_HOME"
-profile_failure=""
-for profile in workflow strict; do
-    if [[ "$profile" == "workflow" ]]; then
-        profile_home="$CODEX_WORKFLOW_HOME"
-    else
-        profile_home="$CODEX_STRICT_HOME"
-    fi
-    if ! HOME="$profile_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --hook-profile "$profile" \
-        >"/tmp/p0p4-sol-native-$profile.out" 2>"/tmp/p0p4-sol-native-$profile.err"; then
-        profile_failure="$profile install failed"
-        break
-    fi
-    if ! jq -e --arg command_dir "$profile_home/.codex/hooks/assistant" '
-        {
-            router: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/skill-router.sh"))),
-            enforcer: ([.hooks.UserPromptSubmit[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-enforcer.sh"))),
-            guard: ([.hooks.PreToolUse[]?.hooks[]?.command?] | any(. == ($command_dir + "/workflow-guard.sh"))),
-            review: ([.hooks.Stop[]?.hooks[]?.command?] | any(. == ($command_dir + "/stop-review.sh"))),
-            subagents: ([.hooks.SubagentStart[]?.hooks[]?.command?] | any(. == ($command_dir + "/subagent-monitor.sh")))
-        }
-        | (.router | not) and .enforcer and .guard and .review and .subagents
-    ' "$profile_home/.codex/hooks.json" >/dev/null; then
-        profile_failure="$profile profile is missing its enforcement stack"
-        break
-    fi
-done
-if [[ -z "$profile_failure" ]]; then
-    pass
-else
-    fail "$profile_failure"
-fi
-
-test_start "native Codex reinstall prunes framework commands, preserves custom hooks, and leaves inert cached entrypoints"
-CODEX_MIGRATION_HOME="$(mktemp -d)"
-p0p4_register_cleanup "$CODEX_MIGRATION_HOME"
-mkdir -p "$CODEX_MIGRATION_HOME/.codex/hooks/assistant"
-cat > "$CODEX_MIGRATION_HOME/.codex/hooks.json" <<'JSON'
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {"matcher":"","hooks":[
-        {"type":"command","command":"$HOME/.codex/hooks/assistant/skill-router.sh"},
-        {"type":"command","command":"/tmp/user-codex-prompt-hook.sh"}
-      ]}
-    ],
-    "PreToolUse": [
-      {"matcher":"","hooks":[
-        {"type":"command","command":"$HOME/.codex/hooks/assistant/workflow-guard.sh"},
-        {"type":"command","command":"/tmp/user-codex-pretool-hook.sh"}
-      ]}
-    ]
-  }
-}
-JSON
-for framework_hook in "${framework_hook_names[@]}"; do
-    printf '%s\n' '#!/usr/bin/env bash' 'echo stale-framework-output' > "$CODEX_MIGRATION_HOME/.codex/hooks/assistant/$framework_hook"
-    chmod +x "$CODEX_MIGRATION_HOME/.codex/hooks/assistant/$framework_hook"
-done
-if HOME="$CODEX_MIGRATION_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow \
-    >/tmp/p0p4-sol-native-migration.out 2>/tmp/p0p4-sol-native-migration.err; then
-    migration_failures=()
-    migration_hook_count="$(count_framework_hook_commands "$CODEX_MIGRATION_HOME/.codex/hooks.json")"
-    if [[ "$migration_hook_count" != "0" ]]; then
-        migration_failures+=("$migration_hook_count framework commands remain")
-    fi
-    if ! jq -e '
-        [.. | objects | .command? // empty] as $commands
-        | ($commands | any(. == "/tmp/user-codex-prompt-hook.sh"))
-          and ($commands | any(. == "/tmp/user-codex-pretool-hook.sh"))
-    ' "$CODEX_MIGRATION_HOME/.codex/hooks.json" >/dev/null; then
-        migration_failures+=("custom hooks were not preserved")
-    fi
-    for framework_hook in "${framework_hook_names[@]}"; do
-        cached_entrypoint="$CODEX_MIGRATION_HOME/.codex/hooks/assistant/$framework_hook"
-        if [[ ! -x "$cached_entrypoint" ]]; then
-            migration_failures+=("missing executable shim $framework_hook")
-            continue
-        fi
-        shim_output="$(HOME="$CODEX_MIGRATION_HOME" CODEX_PROJECT_DIR="$FRAMEWORK_DIR" bash "$cached_entrypoint" <<< '{}' 2>/dev/null || true)"
-        if [[ -n "$shim_output" ]]; then
-            migration_failures+=("$framework_hook shim is not silent")
-        fi
-    done
-    if [[ "${#migration_failures[@]}" -eq 0 ]]; then
-        pass
-    else
-        fail "native reinstall migration failed: ${migration_failures[*]}"
-    fi
-else
-    fail "native Codex reinstall failed; see /tmp/p0p4-sol-native-migration.err"
-fi
-
-test_start "Codex execution-policy rules install independently from hooks"
+test_start "Codex execution-policy rules remain installed on the native path"
 if [[ -f "$CODEX_NATIVE_HOME/.codex/rules/workflow.rules" ]] \
     && cmp -s "$FRAMEWORK_DIR/codex-rules/workflow.rules" "$CODEX_NATIVE_HOME/.codex/rules/workflow.rules" \
-    && [[ "$(count_framework_hook_commands "$CODEX_NATIVE_HOME/.codex/hooks.json")" == "0" ]]; then
+    && [[ ! -e "$CODEX_NATIVE_HOME/.codex/hooks.json" ]] \
+    && [[ ! -d "$CODEX_NATIVE_HOME/.codex/hooks/assistant" ]]; then
     pass
 else
-    fail "native Codex install must retain workflow.rules without registering framework hooks"
-fi
-
-test_start "compatibility skill router selects one primary skill for overlapping prompts"
-ROUTER_HOME="$(mktemp -d)"
-p0p4_register_cleanup "$ROUTER_HOME"
-mkdir -p "$ROUTER_HOME/.claude/skills/assistant-workflow" "$ROUTER_HOME/.claude/skills/assistant-review"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$ROUTER_HOME/.claude/skills/assistant-workflow/SKILL.md"
-cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$ROUTER_HOME/.claude/skills/assistant-review/SKILL.md"
-router_output="$({ printf '%s\n' '{"prompt":"Fix the review findings, then implement the changes."}' \
-    | HOME="$ROUTER_HOME" CLAUDE_PROJECT_DIR="$FRAMEWORK_DIR" bash "$FRAMEWORK_DIR/hooks/scripts/skill-router.sh"; } 2>/dev/null || true)"
-router_match_count="$(printf '%s\n' "$router_output" | awk -F'SKILL MATCH \\(' '{count += NF - 1} END {print count + 0}')"
-if [[ "$router_match_count" == "1" ]] \
-    && [[ "$router_output" == *"SKILL MATCH (1/1)"* ]] \
-    && [[ "$router_output" == *"assistant-review"* ]] \
-    && [[ "$router_output" != *"assistant-workflow"* ]]; then
-    pass
-else
-    fail "overlap must select only highest-priority assistant-review; matches=$router_match_count output='$router_output'"
+    fail "native Codex install must retain workflow.rules without creating hook runtime state"
 fi
 
 test_start "workflow and review contract indexes define authoritative selector-bounded load sets"

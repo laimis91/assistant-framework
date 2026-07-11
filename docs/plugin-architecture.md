@@ -80,7 +80,7 @@ As plugin scaffolding expands, each plugin should define equivalent metadata for
 
 - Codex: `.codex-plugin/plugin.json`
 - Claude: plugin manifest with skill discovery metadata
-- Shared: plugin name, version, description, owned skills, optional hooks, and optional MCP servers
+- Shared: plugin name, version, description, owned skills, optional agents, and optional MCP servers
 
 Manifests must be generated from the ownership map or guarded against it, so skill ownership cannot drift between docs, tests, and installer behavior.
 

@@ -30,9 +30,9 @@ Use this reference when a task has large review/research material, many files, l
 
 ## Pattern retrieval before edits
 
-Before editing a framework skill, contract, eval, hook, or workflow surface, retrieve local patterns first:
+Before editing a framework skill, contract, eval, runtime integration, or workflow surface, retrieve local patterns first:
 
-1. Search for similar skills/contracts/evals/hooks in the repo.
+1. Search for similar skills, contracts, evals, and runtime integrations in the repo.
 2. Pick one canonical pattern and one counterexample/edge case when available.
 3. Record the source paths or exact search queries used as patterns in the plan or task packet; placeholders such as `[paths/queries]` do not satisfy the gate.
 4. Adapt the pattern; do not copy stale placeholders or unrelated requirements.

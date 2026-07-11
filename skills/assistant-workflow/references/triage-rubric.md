@@ -23,7 +23,7 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 | Size | Use when |
 |---|---|
 | `small` | One localized change, clear behavior, low risk, existing verification path, no public contract/data/security impact. |
-| `medium` | A feature, bugfix, refactor, endpoint, hook, or contract change spanning several files or one boundary. |
+| `medium` | A feature, bugfix, refactor, endpoint, runtime integration, or contract change spanning several files or one boundary. |
 | `large` | Cross-module/layer work, public API/config/data behavior, weak baseline tests, or high uncertainty. |
 | `mega` | Rewrite, migration, port, legacy-to-new-structure work, 10+ files across layers, or behavior parity across subsystems. |
 
@@ -35,7 +35,7 @@ Escalate size when risk exceeds file count. Auth, PII, payments, destructive dat
 |---|---|
 | `light` | Small low-risk localized work can use compact guidance and validation. |
 | `standard` | Ordinary medium+ source-changing work, including delegated work, when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
-| `strict` | High/critical risk, `hook_profile == strict`, `harness_capable=true`, `qa_evaluation_mode=required`, or explicit trace/replay/harness/QA criteria. |
+| `strict` | High/critical risk, `harness_capable=true`, `qa_evaluation_mode=required`, or explicit trace/replay/harness/QA criteria. |
 
 Do not infer `strict` from `size=medium+` or delegation alone. `standard` keeps ordinary medium non-harness work out of Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, and QA defaults.
 
@@ -46,7 +46,7 @@ Before finalizing Triage, run a quick read-only scan to avoid classifying from t
 Record:
 - `likely_touched_paths`: exact paths when known, otherwise directories/modules.
 - `symbols_or_terms_searched`: names, commands, or search terms checked.
-- `adjacent_surfaces`: tests, docs, contracts, config, generated mirrors, hooks, or APIs that may need Discover coverage.
+- `adjacent_surfaces`: tests, docs, contracts, config, generated mirrors, runtime integrations, or APIs that may need Discover coverage.
 - `confidence`: `low`, `medium`, or `high`.
 - `unknowns`: remaining scope/risk questions for Discover.
 

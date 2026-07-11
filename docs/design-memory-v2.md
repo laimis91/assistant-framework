@@ -76,25 +76,25 @@ The current memory system relies on markdown files + a simple .NET graph index. 
 | `memory_consolidate` | Trigger manual consolidation: merge related memories, prune duplicates, update staleness. |
 | `memory_stats` | Dashboard: total memories, by type, staleness distribution, most/least accessed. |
 
-## Auto-Capture Pipeline
+## Capture Pipeline
 
-### What gets auto-captured (via hooks)
+### What gets captured
 
 | Event | What's Captured | How |
 |---|---|---|
-| Task completion | Approach, outcome, duration, tools used | `session-end` hook calls `memory_reflect` |
-| User correction | The correction + context | `post-correction` hook calls `memory_save` with type=correction |
+| Task completion | Approach, outcome, duration, tools used | Agent calls `memory_reflect` when reflection is useful |
+| User correction | The correction + context | Agent calls `memory_save` with type=correction when the correction is durable |
 | Architecture decision | Decision, rationale, alternatives | When Plan phase completes, extract decisions |
 | New pattern discovered | Pattern description, where seen | When Review phase finds recurring patterns |
 | Error resolved | Error, root cause, fix | When a failed build/test is resolved |
 
-### Auto-capture flow
+### Capture flow
 
 ```
-Conversation events
+User request or agent review
     │
     ▼
-Hook detects capture-worthy event
+Agent identifies a durable, capture-worthy lesson
     │
     ▼
 Extract structured data (type, content, tags, project)

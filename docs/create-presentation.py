@@ -235,7 +235,7 @@ for i, (rnd, conf, desc, clr) in enumerate(rounds):
 features = [
     "Fresh reviewer each round — stale context weakens reviews",
     "Previously-fixed list prevents re-reporting same issues",
-    "Stop hook structurally prevents finishing without review",
+    "Completion contracts require review evidence before handoff",
 ]
 add_bullet_list(slide, 1.2, 6.2, 11, 1.2, features, 14, MED_GRAY, Pt(4))
 
@@ -391,35 +391,34 @@ add_text_box(slide, 1.3, 6.3, 10.7, 0.6,
              15, LIGHT_GRAY, False, PP_ALIGN.CENTER)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 10: Automated Hooks
+# SLIDE 10: Native Orchestration
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_dark_bg(slide)
 
-add_text_box(slide, 1, 0.6, 11, 0.8, "AUTOMATED HOOKS", 14, ACCENT, True)
-add_text_box(slide, 1, 1.1, 11, 0.7, "Six lifecycle hooks. Zero manual steps.", 28, WHITE, True)
+add_text_box(slide, 1, 0.6, 11, 0.8, "NATIVE ORCHESTRATION", 14, ACCENT, True)
+add_text_box(slide, 1, 1.1, 11, 0.7, "Provider-native capabilities. Framework contracts.", 28, WHITE, True)
 add_accent_line(slide, 1, 1.9, 3)
 
-hooks = [
-    ("Session Start", "New session begins", "Injects memory, task state, reflexion tools"),
-    ("Skill Router", "Every user prompt", "Auto-routes to the correct skill"),
-    ("Pre-Compress", "Before compaction", "Saves state before context is lost"),
-    ("Post-Compact", "After compaction", "Re-injects task journal and rules"),
-    ("Stop Review", "Agent tries to finish", "BLOCKS until review cycle is complete"),
-    ("Session End", "Session closes", "Prompts for reflexion + memory capture"),
+native_layers = [
+    ("Skill Discovery", "Provider runtime", "Selects installed skills from metadata and instructions"),
+    ("Permissions", "Provider runtime", "Owns command and file-operation approvals"),
+    ("Subagents", "Provider runtime", "Spawns configured specialist roles"),
+    ("Compaction", "Provider runtime", "Manages context lifecycle and continuation"),
+    ("Contracts", "Framework", "Defines phase, handoff, and completion evidence"),
+    ("Evals + Review", "Framework", "Checks conformance and catches material defects"),
 ]
 
-for i, (name, when, what) in enumerate(hooks):
+for i, (name, when, what) in enumerate(native_layers):
     y = 2.4 + i * 0.7
-    name_color = RED_ACCENT if name == "Stop Review" else ACCENT
-    add_text_box(slide, 1.2, y, 2.5, 0.5, name, 15, name_color, True)
+    add_text_box(slide, 1.2, y, 2.5, 0.5, name, 15, ACCENT, True)
     add_text_box(slide, 3.8, y, 3, 0.5, when, 14, MED_GRAY)
     add_text_box(slide, 7, y, 5.5, 0.5, what, 14, LIGHT_GRAY)
 
-add_card(slide, 1, 6.3, 11.3, 0.7, RGBColor(0x3A, 0x1A, 0x1A))
+add_card(slide, 1, 6.3, 11.3, 0.7, RGBColor(0x1A, 0x1A, 0x3E))
 add_text_box(slide, 1.3, 6.35, 10.7, 0.6,
-             "The stop-review hook is structural enforcement — the agent physically cannot finish without review.",
-             15, RED_ACCENT, True)
+             "Native capabilities stay native; the framework adds portable workflow discipline.",
+             15, ACCENT, True)
 
 # ═══════════════════════════════════════════════════════════════
 # SLIDE 11: What Makes This Different
@@ -458,7 +457,7 @@ add_accent_line(slide, 1, 1.3, 3)
 numbers = [
     ("11", "Skills"),
     ("13", "MCP Tools"),
-    ("6", "Lifecycle Hooks"),
+    ("4", "Contract Levels"),
     ("6", "Specialized Agents"),
     ("7", "Diagram Types"),
     ("6", "Doc Modes"),
@@ -490,7 +489,7 @@ add_text_box(slide, 1, 3.5, 11.3, 1.5,
              28, WHITE, False, PP_ALIGN.CENTER)
 
 add_text_box(slide, 1, 5.8, 11.3, 1,
-             "git clone <repo> && ./install.sh --agent claude\n\nThat's it. Skills auto-trigger. Hooks auto-fire. Memory accumulates.",
+             "git clone <repo> && ./install.sh --agent claude\n\nThat's it. Skills route natively. Contracts guide execution. Memory stays on demand.",
              16, MED_GRAY, False, PP_ALIGN.CENTER)
 
 # ═══════════════════════════════════════════════════════════════

@@ -19,7 +19,7 @@ under common operating conditions:
 - separate spec review and quality review gates
 - structured worker status packets from subagents
 - subagent authorization denial direct fallback
-- Codex role constraints without SubagentStart reinforcement
+- Native Codex role constraints without extra runtime reinforcement
 - Done Contract debate and Harness Recipe before Build
 - trace/replay artifacts and typed artifact refs for harness recovery
 - separate Code Reviewer and QA Evaluator evidence
@@ -115,26 +115,24 @@ error messages are deliberately omitted from aggregate output.
 ### Installed context budget
 
 Generate the reproducible native Codex inventory used alongside trace results.
-The reporter is intentionally Codex-only until equivalent installed-context and
-hook-output semantics are defined and tested for other agents:
+The reporter is intentionally Codex-only until equivalent installed-context
+semantics are defined and tested for other agents:
 
 ```bash
-tools/context-budget-report.sh --agent codex --hook-profile none --skill assistant-workflow --format json
+tools/context-budget-report.sh --agent codex --skill assistant-workflow --format json
 ```
 
 The reporter requires a successful isolated temporary install and emits counts,
-not instruction text. Installation or non-empty hook-benchmark failures stop the
-report instead of emitting partial or zero-filled inventory. `project_agents`
-measures the repository `AGENTS.md`.
+not instruction text. Installation failures stop the report instead of emitting
+partial or zero-filled inventory. `project_agents` measures the repository
+`AGENTS.md`.
 `generated_global_agents` and `generated_memory_protocol` separately measure
 their installer-owned marker blocks. `native_skill_catalog_descriptions`
 measures the first-class `assistant-*` description catalog. The selected
 skill's initial boundary is `SKILL.md` plus `contracts/index.yaml` when present;
 its entry boundary adds references declared for the `entry` load set and only
-the contract items selected there. Hook command count comes from the isolated
-registration, while hook output counts use locally reproducible benchmark
-scenarios for registered framework hooks. The `none` profile therefore reports
-zero hook commands and zero hook output.
+the contract items selected there. Schema 2.0 reports only native instruction
+components; totals exclude retired lifecycle registrations and their output.
 
 Pass a prior JSON report with `--baseline FILE` to add current-minus-baseline
 absolute and percentage deltas. A zero baseline produces a `null` percentage.

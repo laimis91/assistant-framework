@@ -3,7 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "README avoids stale release skill, hook, and memory wording"
+test_start "README avoids stale release, routing, and memory wording"
 if rg -n 'Twelve|one or all eleven|Codex not yet supported|13 MCP tool implementations|14 MCP tools|generates project memory|generate project memory|\.claude/memory\.md|\.codex/memory\.md' \
     "$FRAMEWORK_DIR/README.md" >/tmp/p0p4-docs-drift-stale-readme.out; then
     fail "README contains stale framework wording; see /tmp/p0p4-docs-drift-stale-readme.out"

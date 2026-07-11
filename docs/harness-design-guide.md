@@ -239,12 +239,11 @@ The current enforcement path is:
 - Workflow contracts require Done Contract and Harness Recipe before Build.
 - Task journal templates carry Harness Run State, Trace Ledger, Replay Packet,
   Pivot/Restart Decision, and Artifact Reference Ledger sections.
-- `workflow-enforcer.sh` and `workflow-phase-gates.sh` surface
-  `Prompt-time runtime gate warnings` for
-  `BUILDING/VERIFYING/REVIEWING/DOCUMENTING`.
-- `stop-review.sh` is the consolidated strict stop gate for plan approval,
-  review, rubric/score, metrics, and final-result completion.
-- `harness-gate.sh` remains only a legacy compatibility/reference script.
+- The orchestrator evaluates the applicable phase-gate assertions at each
+  transition and records the evidence in the task journal or carried-forward
+  completion packet.
+- Independent review verifies plan approval, review, rubric/score, and final
+  result completion before handoff. Metrics remain optional and non-blocking.
 
 ---
 
@@ -262,5 +261,5 @@ The current enforcement path is:
 | Review rubric and score tracking | `skills/assistant-review/references/{review-rubric,score-tracking}.md` |
 | Code Reviewer agents | `agents/{claude,codex}/code-reviewer.*` |
 | QA Evaluator agents | `agents/{claude,codex}/qa-evaluator.*` |
-| Runtime hooks | `hooks/scripts/{workflow-enforcer,workflow-phase-gates,stop-review}.sh` |
+| Framework contract tests | `tests/test-p0-p4-contracts.sh` |
 | Contract design guide | `docs/skill-contract-design-guide.md` |

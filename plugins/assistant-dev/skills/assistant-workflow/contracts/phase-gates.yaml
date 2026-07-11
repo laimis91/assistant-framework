@@ -7,14 +7,14 @@
 # phase before transitioning. Exact phase markers are conditional on strict
 # intensity, explicit project policy, or user request.
 # If an exit assertion fails, the agent MUST resolve it before proceeding.
-# `guidance_assertions` are non-blocking reminders unless `strict_only` policy,
-# strict hooks, or explicit project policy opts into stricter enforcement.
+# `guidance_assertions` are non-blocking reminders unless `strict_only` policy
+# or explicit project policy opts into stricter enforcement.
 #
 # Gate severity is tiered to avoid turning every useful reminder into a hard
 # blocker. `exit_assertions` are blockers because missing them has caused real
 # failures. `guidance_assertions` are recommended checks that should shape the
-# work, but they do not by themselves block progress unless strict hooks or
-# project policy opt into stricter enforcement.
+# work, but they do not by themselves block progress unless project policy opts
+# into stricter enforcement.
 
 schema_version: "1.0"
 contract: phase-gates
@@ -27,7 +27,7 @@ checkpoint_policy:
 gate_tiers:
   blocker: "Prevents phase transition; missing evidence would make the workflow unsafe or unverifiable."
   guidance: "Preferred discipline; record or follow when useful, but do not ask ritual questions or block low-risk progress solely for this item."
-  strict_only: "Enforced only when hook_profile == strict or project policy explicitly requests full harness enforcement."
+  strict_only: "Enforced only when controller_intensity == strict or project policy explicitly requests full harness enforcement."
 # controller_intensity maps onto these gate_tiers: light keeps low-risk guidance
 # compact, standard uses normal medium blockers/review without harness/QA
 # defaults, and strict may enforce strict_only gates when independent criteria apply.
@@ -59,7 +59,7 @@ gates:
         on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
 
       - id: T_CONTROLLER_INTENSITY
-        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; strict is selected only for high/critical risk, hook_profile == strict, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria"
+        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; strict is selected only for high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria"
         on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
@@ -85,7 +85,7 @@ gates:
 
       - id: T10
         check: "candidate_scope_scan is populated from a quick read-only scan before finalizing Triage, with likely touched paths, symbols/search terms checked, adjacent surfaces, confidence, and unknowns"
-        on_fail: "Search the locally available target files, likely modules, symbols, nearby tests, docs, contracts, config, generated mirrors, hooks, or runtime surfaces; record candidate_scope_scan before entering Discover or explicitly mark not applicable with reason for tiny prompt-only tasks."
+        on_fail: "Search the locally available target files, likely modules, symbols, nearby tests, docs, contracts, config, generated mirrors, or runtime surfaces; record candidate_scope_scan before entering Discover or explicitly mark not applicable with reason for tiny prompt-only tasks."
 
     guidance_assertions:
 
@@ -159,7 +159,7 @@ gates:
         on_fail: "Produce a context map using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: D8A
-        check: "For medium+ tasks: context map includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, hooks, and runtime surfaces, or explicit not-applicable/deferred reasons"
+        check: "For medium+ tasks: context map includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces, or explicit not-applicable/deferred reasons"
         condition: "size in [medium, large, mega]"
         on_fail: "Re-dispatch Code Mapper or complete direct-fallback mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
 
@@ -281,8 +281,8 @@ gates:
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
       - id: P_PATTERN_RETRIEVAL
-        check: "When editing framework skills, contracts, evals, hooks, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical pattern path used, and counterexample/edge case path checked or explicit no-pattern rationale"
-        condition: "task touches framework skills, contracts, evals, hooks, templates, or workflow patterns"
+        check: "When editing framework skills, contracts, evals, runtime integrations, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical pattern path used, and counterexample/edge case path checked or explicit no-pattern rationale"
+        condition: "task touches framework skills, contracts, evals, runtime integrations, templates, or workflow patterns"
         on_fail: "Search local repo for similar patterns and record Pattern Retrieval before implementation; placeholders such as [paths/queries] or N/A without rationale do not satisfy this gate"
 
       - id: P9
@@ -529,13 +529,13 @@ gates:
         severity: strict_only
         check: "For medium+ tasks: rubric scores present in Quality Review entries (Rubric: and Weighted: lines)"
         condition: "size in [medium, large, mega]"
-        on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
+        on_fail: "Re-run quality review with rubric_required=true per references/review-rubric.md and enforce the result before completion."
 
       - id: R7
         severity: strict_only
         check: "For medium+ tasks: final rubric weighted score >= 4.0 (PASS completion threshold)"
         condition: "size in [medium, large, mega]"
-        on_fail: "Weighted score below 4.0 — the review result is REFINE or PIVOT, not PASS. Fix lowest-scoring dimensions and re-review. If a local hook is configured/policy-allowed it may enforce this structurally; otherwise enforce manually before completion."
+        on_fail: "Weighted score below 4.0 — the review result is REFINE or PIVOT, not PASS. Fix lowest-scoring dimensions and re-review before completion."
 
   # ─────────────────────────────────────────────
   # DOCUMENT → COMPLETE

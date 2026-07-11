@@ -5,21 +5,9 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-workflow_phase_gate_runtime_files=("$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh")
-for module_file in "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.d/"*.sh; do
-    [[ -e "$module_file" ]] && workflow_phase_gate_runtime_files+=("$module_file")
-done
 review_cap_runtime_term_present() {
     local file="$1"
     local term="$2"
-    local runtime_file
-    if [[ "$file" == "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh" ]]; then
-        for runtime_file in "${workflow_phase_gate_runtime_files[@]}"; do
-            [[ -f "$runtime_file" ]] || continue
-            grep -Fq "$term" "$runtime_file" && return 0
-        done
-        return 1
-    fi
 
     [[ -f "$file" ]] && grep -Fq "$term" "$file"
 }
@@ -42,10 +30,6 @@ active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md"
-    "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh"
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh"
-    "${workflow_phase_gate_runtime_files[@]}"
-    "$FRAMEWORK_DIR/install.sh"
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml"
     "$FRAMEWORK_DIR/agents/codex/reviewer.toml"
     "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"
@@ -105,7 +89,7 @@ else
     fail "assistant-review 10-round cap terms missing: ${missing_review_cap_terms[*]}"
 fi
 
-test_start "workflow hooks and prompts use 10-round review cap"
+test_start "workflow contracts and prompts use 10-round review cap"
 missing_runtime_cap_terms=()
 for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::validation: \">= 1 and <= 10\"" \
@@ -117,28 +101,18 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::up to 10 rounds" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::Round N of 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md::Round 8-10: 90%+" \
-    "$FRAMEWORK_DIR/hooks/scripts/stop-review.sh::compact_stop_reason()" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::review_gate:missing_review_round) printf '%s\n' '- Round: N of 10'" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::review_gate:round_overflow) printf '%s\n' '- Round: N of 10 with N between 1 and 10'" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-enforcer.sh::max 10 rounds" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::max_round\" -ne 10" \
-    "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh::round\" -gt 10" \
     "$FRAMEWORK_DIR/docs/harness-design-guide.md::while round <= 10:" \
     "$FRAMEWORK_DIR/docs/harness-design-guide.md::| 10 | Terminal report"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if ! review_cap_runtime_term_present "$file" "$term"; then
-        if [[ "$file" == "$FRAMEWORK_DIR/hooks/scripts/workflow-phase-gates.sh" ]]; then
-            missing_runtime_cap_terms+=("hooks/scripts/workflow-phase-gates.sh or workflow-phase-gates.d/*.sh: $term")
-        else
-            missing_runtime_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
+        missing_runtime_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
 if [[ "${#missing_runtime_cap_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow/runtime 10-round cap terms missing: ${missing_runtime_cap_terms[*]}"
+    fail "workflow contract/prompt 10-round cap terms missing: ${missing_runtime_cap_terms[*]}"
 fi
 
 test_start "code-reviewer and reviewer compatibility prompts preserve role split with 10-round terminal guidance"

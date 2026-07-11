@@ -31,9 +31,10 @@ Future tasks: Recall relevant lessons before planning
 
 ## Components
 
-### 1. Post-Task Reflexion (automatic via hook)
+### 1. Post-Task Reflexion (conditional and explicit)
 
-After every task completion (when `--- WORKFLOW COMPLETE ---` or session ends with work done):
+After a task with a concrete reusable lesson, or when the user requests a
+retrospective, the agent can record:
 
 ```markdown
 ## Reflexion Entry
@@ -117,21 +118,6 @@ By category:
 This data feeds back into planning: if the agent historically underestimates complexity for a project type, it should bump estimates up.
 
 ## Implementation
-
-### Hook: `post-task-reflect.sh`
-
-Fires on session end or workflow completion. Generates a reflexion prompt:
-
-```bash
-# Injected into agent context at session end
-echo "Before ending, complete a reflexion entry for this session."
-echo "Call memory_reflect with:"
-echo "  - task: brief description"
-echo "  - went_well: what worked"
-echo "  - went_wrong: what didn't"
-echo "  - lessons: actionable rules for future"
-echo "  - confidence: plan_accuracy (1-5), estimate_accuracy (1-5)"
-```
 
 ### Memory MCP Tool: `memory_reflect`
 

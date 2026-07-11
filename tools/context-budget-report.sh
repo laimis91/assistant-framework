@@ -7,7 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 AGENT=""
-HOOK_PROFILE=""
 SKILL=""
 OUTPUT_FORMAT="json"
 BASELINE=""
@@ -16,7 +15,7 @@ INVENTORY_MODE="isolated_install"
 usage() {
     cat <<'EOF'
 Usage:
-  context-budget-report.sh --agent AGENT --hook-profile PROFILE --skill SKILL --format json [--baseline FILE]
+  context-budget-report.sh --agent AGENT --skill SKILL --format json [--baseline FILE]
 
 Create a local, content-free inventory of framework instruction load. The
 report never includes prompt bodies, instruction bodies, responses, credentials,
@@ -24,7 +23,6 @@ or environment values.
 
 Options:
   --agent AGENT            target agent; currently codex only
-  --hook-profile PROFILE   none, minimal, workflow, or strict
   --skill SKILL            selected skill name, such as assistant-workflow
   --format json            emit the versioned JSON report
   --baseline FILE          add current-minus-baseline absolute/percent deltas
@@ -218,80 +216,11 @@ build_selected_boundaries() {
     done < <(collect_entry_index_rows "$index_file")
 }
 
-framework_hook_commands() {
-    local settings_file="$1"
-    # A native/no-hooks install legitimately has no settings file. Treat that
-    # as an empty registration while still letting jq reject malformed files
-    # that do exist.
-    [[ -f "$settings_file" ]] || return 0
-    jq -r '
-      def framework_names: [
-        "session-start", "skill-router", "learning-signals",
-        "workflow-enforcer", "workflow-guard", "stop-review",
-        "subagent-monitor", "pre-compress", "post-compact",
-        "task-completed", "session-end", "task-journal-resolver",
-        "workflow-phase-gates", "harness-gate", "post-tool-context",
-        "tool-failure-advisor"
-      ];
-      .. | objects | .command? // empty
-      | gsub("^\\s+"; "") | split(" ")[0] | split("/") | last
-      | sub("\\.sh$"; "")
-      | select(. as $name | any(framework_names[]; . == $name))
-    ' "$settings_file"
-}
-
-measure_profile_hook_output() {
-    local hook_names_file="$1"
-    local output_file="$2"
-    local benchmark="$REPO_ROOT/tools/hooks/benchmark-hook-output.sh"
-    local benchmark_result="$WORK_ROOT/hook-benchmark.md"
-    local benchmark_error="$WORK_ROOT/hook-benchmark.err"
-    local benchmark_measurement="$WORK_ROOT/hook-benchmark-measurement.txt"
-    local measured_words measured_bytes matched_rows
-
-    printf '0 0\n' >"$output_file"
-    # No registered framework hooks means a valid zero-output profile.
-    [[ -s "$hook_names_file" ]] || return 0
-    [[ -x "$benchmark" ]] || die "Hook output benchmark is missing or not executable: $benchmark"
-    if ! bash "$benchmark" >"$benchmark_result" 2>"$benchmark_error"; then
-        die "Hook output benchmark failed for registered framework hooks."
-    fi
-    awk -F'|' -v names_file="$hook_names_file" '
-      BEGIN {
-        while ((getline name < names_file) > 0) selected[name] = 1
-      }
-      function trim(value) {
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-        return value
-      }
-      /^\|/ {
-        hook = trim($2)
-        bytes = trim($4)
-        words = trim($5)
-        if (selected[hook] && bytes ~ /^[0-9]+$/ && words ~ /^[0-9]+$/) {
-          total_bytes += bytes
-          total_words += words
-          matched_rows += 1
-        }
-      }
-      END { print total_words + 0, total_bytes + 0, matched_rows + 0 }
-    ' "$benchmark_result" >"$benchmark_measurement"
-    read -r measured_words measured_bytes matched_rows <"$benchmark_measurement"
-    if [[ "$matched_rows" -eq 0 ]]; then
-        die "Hook output benchmark produced no rows matching registered framework hooks."
-    fi
-    printf '%s %s\n' "$measured_words" "$measured_bytes" >"$output_file"
-}
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --agent)
             [[ $# -ge 2 ]] || die "Missing value for --agent."
             AGENT="$2"; shift 2
-            ;;
-        --hook-profile)
-            [[ $# -ge 2 ]] || die "Missing value for --hook-profile."
-            HOOK_PROFILE="$2"; shift 2
             ;;
         --skill)
             [[ $# -ge 2 ]] || die "Missing value for --skill."
@@ -316,8 +245,6 @@ done
 
 require_command jq
 [[ "$AGENT" == "codex" ]] || die "--agent currently supports codex only."
-[[ "$HOOK_PROFILE" == "none" || "$HOOK_PROFILE" == "minimal" || "$HOOK_PROFILE" == "workflow" || "$HOOK_PROFILE" == "strict" ]] \
-    || die "--hook-profile must be none, minimal, workflow, or strict."
 [[ -n "$SKILL" ]] || die "--skill is required."
 [[ "$SKILL" != */* && "$SKILL" != .* ]] || die "--skill must be a skill name, not a path."
 [[ "$OUTPUT_FORMAT" == "json" ]] || die "Only --format json is supported."
@@ -337,14 +264,12 @@ if ! HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" \
     bash "$REPO_ROOT/install.sh" \
         --agent "$AGENT" \
         --skill "$SKILL" \
-        --hook-profile "$HOOK_PROFILE" \
         >"$WORK_ROOT/install.out" 2>"$WORK_ROOT/install.err"; then
     die "Isolated framework install failed; context inventory was not emitted."
 fi
 
 PROJECT_AGENTS_FILE="$REPO_ROOT/AGENTS.md"
 GLOBAL_INSTRUCTIONS_FILE="$INSTALL_HOME/.codex/AGENTS.md"
-SETTINGS_FILE="$INSTALL_HOME/.codex/hooks.json"
 
 GLOBAL_AGENTS_BLOCK="$WORK_ROOT/generated-global-agents.md"
 MEMORY_BLOCK="$WORK_ROOT/generated-memory-protocol.md"
@@ -365,12 +290,6 @@ SELECTED_INITIAL_FILE="$WORK_ROOT/selected-skill-initial.txt"
 SELECTED_ENTRY_FILE="$WORK_ROOT/selected-skill-entry-boundary.txt"
 build_selected_boundaries "$SOURCE_SKILL_DIR" "$SELECTED_INITIAL_FILE" "$SELECTED_ENTRY_FILE"
 
-HOOK_NAMES_FILE="$WORK_ROOT/framework-hook-names.txt"
-framework_hook_commands "$SETTINGS_FILE" >"$HOOK_NAMES_FILE"
-HOOK_COMMAND_COUNT="$(wc -l <"$HOOK_NAMES_FILE" | tr -d ' ')"
-HOOK_OUTPUT_MEASURE="$WORK_ROOT/hook-output-measure.txt"
-measure_profile_hook_output "$HOOK_NAMES_FILE" "$HOOK_OUTPUT_MEASURE"
-
 read -r PROJECT_WORDS PROJECT_BYTES < <(measure_file "$PROJECT_AGENTS_FILE")
 read -r GLOBAL_WORDS GLOBAL_BYTES < <(measure_file "$GLOBAL_AGENTS_BLOCK")
 read -r MEMORY_WORDS MEMORY_BYTES < <(measure_file "$MEMORY_BLOCK")
@@ -378,10 +297,9 @@ read -r CATALOG_WORDS CATALOG_BYTES < <(measure_file "$CATALOG_FILE")
 CATALOG_CHARACTERS="$(wc -m <"$CATALOG_FILE" | tr -d ' ')"
 read -r INITIAL_WORDS INITIAL_BYTES < <(measure_file "$SELECTED_INITIAL_FILE")
 read -r ENTRY_WORDS ENTRY_BYTES < <(measure_file "$SELECTED_ENTRY_FILE")
-read -r HOOK_OUTPUT_WORDS HOOK_OUTPUT_BYTES <"$HOOK_OUTPUT_MEASURE"
 
-STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + MEMORY_WORDS + CATALOG_WORDS + HOOK_OUTPUT_WORDS))
-STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + MEMORY_BYTES + CATALOG_BYTES + HOOK_OUTPUT_BYTES))
+STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + MEMORY_WORDS + CATALOG_WORDS))
+STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + MEMORY_BYTES + CATALOG_BYTES))
 TOTAL_INITIAL_WORDS=$((STANDING_WORDS + INITIAL_WORDS))
 TOTAL_INITIAL_BYTES=$((STANDING_BYTES + INITIAL_BYTES))
 TOTAL_ENTRY_WORDS=$((STANDING_WORDS + ENTRY_WORDS))
@@ -390,7 +308,6 @@ TOTAL_ENTRY_BYTES=$((STANDING_BYTES + ENTRY_BYTES))
 REPORT_FILE="$WORK_ROOT/report.json"
 jq -n \
     --arg agent "$AGENT" \
-    --arg hook_profile "$HOOK_PROFILE" \
     --arg skill "$SKILL" \
     --arg inventory_mode "$INVENTORY_MODE" \
     --argjson project_words "$PROJECT_WORDS" \
@@ -406,17 +323,13 @@ jq -n \
     --argjson initial_bytes "$INITIAL_BYTES" \
     --argjson entry_words "$ENTRY_WORDS" \
     --argjson entry_bytes "$ENTRY_BYTES" \
-    --argjson hook_commands "$HOOK_COMMAND_COUNT" \
-    --argjson hook_words "$HOOK_OUTPUT_WORDS" \
-    --argjson hook_bytes "$HOOK_OUTPUT_BYTES" \
     --argjson total_initial_words "$TOTAL_INITIAL_WORDS" \
     --argjson total_initial_bytes "$TOTAL_INITIAL_BYTES" \
     --argjson total_entry_words "$TOTAL_ENTRY_WORDS" \
     --argjson total_entry_bytes "$TOTAL_ENTRY_BYTES" '
     {
-      schema_version: "1.0",
+      schema_version: "2.0",
       agent: $agent,
-      hook_profile: $hook_profile,
       skill: $skill,
       inventory_mode: $inventory_mode,
       components: {
@@ -429,12 +342,7 @@ jq -n \
           characters: $catalog_characters
         },
         selected_skill_initial: {words: $initial_words, bytes: $initial_bytes},
-        selected_skill_entry_boundary: {words: $entry_words, bytes: $entry_bytes},
-        framework_hooks: {
-          command_count: $hook_commands,
-          output_words: $hook_words,
-          output_bytes: $hook_bytes
-        }
+        selected_skill_entry_boundary: {words: $entry_words, bytes: $entry_bytes}
       },
       totals: {
         initial_words: $total_initial_words,

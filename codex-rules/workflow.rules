@@ -6,7 +6,7 @@
 # Precedence: forbidden > prompt > allow (most restrictive wins)
 #
 # Install location: ~/.codex/rules/workflow.rules
-# Rules are independent of lifecycle hook profiles and require no hooks feature flag.
+# Rules install independently from the skill and agent runtime.
 
 # ── Git safety ──────────────────────────────────────────────────────────────
 

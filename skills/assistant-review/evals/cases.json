@@ -225,7 +225,7 @@
         "Checks eval machine expectations for both new behavior and inherited base contract artifacts.",
         "Checks whether the external named method's defining loop is preserved by a testable artifact.",
         "Checks high-stakes recommendation guardrails for finance/trading/legal/medical/safety-critical recommendations.",
-        "Checks root and plugin-local copies plus generated/docs/hook surfaces that can drive behavior.",
+        "Checks root and plugin-local copies plus generated/docs/automation surfaces that can drive behavior.",
         "Reports semantic findings using the normal finding format with Evidence, Impact, Recommendation, and Confidence, or explicitly states no concrete risk found for each checklist area.",
         "Cites concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and plugin-local copies when assessing semantic contract risk.",
         "Attempts to falsify the new eval by considering whether a plausible incomplete response could pass machine expectations without satisfying the base contract."

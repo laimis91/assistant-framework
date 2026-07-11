@@ -65,7 +65,7 @@ Pivot/Restart Decision. The base task journal keeps compact refs and
 
 | Seq | Timestamp/Order | Event Type | Actor | Summary | Artifact Refs |
 |-----|-----------------|------------|-------|---------|---------------|
-| 1 | [timestamp or ordered marker] | [agent_event/decision/verification/plan_deviation/pivot_restart/artifact_ref/blocker/recovery] | [role/subagent/user/hook] | [event, decision, command/result, deviation, blocker, pivot/restart, or recovery] | [file/section/dispatch id/command ref] |
+| 1 | [timestamp or ordered marker] | [agent_event/decision/verification/plan_deviation/pivot_restart/artifact_ref/blocker/recovery] | [role/subagent/user/automation] | [event, decision, command/result, deviation, blocker, pivot/restart, or recovery] | [file/section/dispatch id/command ref] |
 
 ## Replay Packet
 
@@ -116,7 +116,7 @@ typed producer/consumer records, not ad hoc strings]
 
 | Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
 |-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
-| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/pivot_restart_decision/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role/subagent/hook] | [role/subagent/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
+| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/pivot_restart_decision/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role/subagent/automation] | [role/subagent/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
 
 ## QA Evaluation Log
 

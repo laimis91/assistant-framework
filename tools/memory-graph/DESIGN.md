@@ -158,7 +158,7 @@ Output: {
 }
 ```
 
-This is what the session-start hook would call to inject relevant context.
+Agents call this on demand to retrieve relevant context.
 
 ### 2. `memory_search` — Find entities by text
 
@@ -298,9 +298,11 @@ command = "~/.codex/tools/memory-graph/memory-graph"
 args = ["--memory-dir", "~/.codex/memory"]
 ```
 
-### Session-start hook enhancement
+### On-demand context retrieval
 
-The existing `session-start.sh` hook could call `memory_context` with the current project path to auto-inject relevant graph context at session start — replacing the current "read all memory files" approach with targeted context retrieval.
+The active agent can call `memory_context` with the current project path when
+prior context is relevant. This replaces broad eager memory loading with
+targeted retrieval.
 
 ## CLI Arguments
 
@@ -377,4 +379,4 @@ v2 adds one NuGet dependency: `Microsoft.Data.Sqlite` (8.0.x). This is a lightwe
 - **Semantic similarity**: Embed observations and search by meaning (requires external model)
 - **Project auto-detection**: Scan `~/Developer/Projects/` and auto-register projects
 - **Cross-agent sync**: If Claude and Codex share the same memory directory, the graph serves both
-- **Auto-capture hooks**: Automatically record reflexions/decisions from conversation events
+- **Agent-assisted capture**: Record reflexions and decisions from explicit user requests or evidence-backed review
