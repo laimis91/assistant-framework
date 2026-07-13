@@ -104,6 +104,21 @@ else
         || promotion_failures+=("Windows workflow does not run PowerShell 7")
     grep -Eq -- 'tests[\\/]windows[\\/]installer-contracts\.ps1' "$workflow" \
         || promotion_failures+=("Windows workflow does not run the native installer suite")
+    for windows_job in windows-powershell-51 powershell-7; do
+        job_block="$(awk -v header="  ${windows_job}:" '
+            $0 == header { in_job = 1; next }
+            in_job && /^  [^[:space:]]/ { exit }
+            in_job { print }
+        ' "$workflow")"
+        [[ "$(grep -Ec -- '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' <<<"$job_block")" -eq 1 ]] \
+            || promotion_failures+=("Windows job $windows_job does not use checkout@v5 exactly once")
+        [[ "$(grep -Ec -- '^[[:space:]]+uses: actions/checkout@' <<<"$job_block")" -eq 1 ]] \
+            || promotion_failures+=("Windows job $windows_job contains an additional checkout action version")
+        [[ "$(grep -Ec -- '^[[:space:]]+uses: actions/setup-dotnet@v5[[:space:]]*$' <<<"$job_block")" -eq 1 ]] \
+            || promotion_failures+=("Windows job $windows_job does not use setup-dotnet@v5 exactly once")
+        [[ "$(grep -Ec -- '^[[:space:]]+uses: actions/setup-dotnet@' <<<"$job_block")" -eq 1 ]] \
+            || promotion_failures+=("Windows job $windows_job contains an additional setup-dotnet action version")
+    done
     grep -Eq -- '^  pull_request:[[:space:]]*$' "$workflow" \
         || promotion_failures+=("Windows workflow does not validate pull requests")
     push_branches="$(awk '
