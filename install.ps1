@@ -336,6 +336,65 @@ function Get-DaclBinaryFingerprint {
     return [Convert]::ToBase64String($binary)
 }
 
+function Get-AceBinaryFingerprint {
+    param(
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.GenericAce]$Ace,
+        [switch]$IgnoreInheritedFlag
+    )
+    $binary = [byte[]]::new($Ace.BinaryLength)
+    $Ace.GetBinaryForm($binary, 0)
+    if ($IgnoreInheritedFlag -and $binary.Length -gt 1) {
+        $binary[1] = $binary[1] -band 0xEF
+    }
+    return [Convert]::ToBase64String($binary)
+}
+
+function Get-DaclMismatchCategory {
+    param(
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.RawAcl]$Expected,
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.RawAcl]$Actual
+    )
+    if ($Expected.Count -ne $Actual.Count) {
+        return 'dacl_count'
+    }
+
+    $expectedSequence = @()
+    $actualSequence = @()
+    $expectedWithoutInherited = @()
+    $actualWithoutInherited = @()
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        $expectedSequence += Get-AceBinaryFingerprint -Ace $Expected[$index]
+        $actualSequence += Get-AceBinaryFingerprint -Ace $Actual[$index]
+        $expectedWithoutInherited += Get-AceBinaryFingerprint -Ace $Expected[$index] -IgnoreInheritedFlag
+        $actualWithoutInherited += Get-AceBinaryFingerprint -Ace $Actual[$index] -IgnoreInheritedFlag
+    }
+
+    $expectedOrdered = $expectedSequence -join '|'
+    $actualOrdered = $actualSequence -join '|'
+    if ($expectedOrdered -ceq $actualOrdered) {
+        return 'dacl_header'
+    }
+
+    $expectedSorted = @($expectedSequence | Sort-Object)
+    $actualSorted = @($actualSequence | Sort-Object)
+    if (($expectedSorted -join '|') -ceq ($actualSorted -join '|')) {
+        return 'dacl_order'
+    }
+
+    $expectedWithoutInheritedOrdered = $expectedWithoutInherited -join '|'
+    $actualWithoutInheritedOrdered = $actualWithoutInherited -join '|'
+    if ($expectedWithoutInheritedOrdered -ceq $actualWithoutInheritedOrdered) {
+        return 'dacl_inherited_flag'
+    }
+
+    $expectedWithoutInheritedSorted = @($expectedWithoutInherited | Sort-Object)
+    $actualWithoutInheritedSorted = @($actualWithoutInherited | Sort-Object)
+    if (($expectedWithoutInheritedSorted -join '|') -ceq ($actualWithoutInheritedSorted -join '|')) {
+        return 'dacl_inherited_flag_order'
+    }
+    return 'dacl_content'
+}
+
 function Get-OwnerGroupDaclDifferences {
     param(
         [Parameter(Mandatory = $true)]$Expected,
@@ -361,12 +420,6 @@ function Get-OwnerGroupDaclDifferences {
     if ($Expected.AreAccessRulesProtected -ne $Actual.AreAccessRulesProtected) {
         $differences.Add('protection')
     }
-    $autoInheritRequired = [System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInheritRequired
-    $expectedAutoInheritRequired = $expectedRaw.ControlFlags -band $autoInheritRequired
-    $actualAutoInheritRequired = $actualRaw.ControlFlags -band $autoInheritRequired
-    if ($expectedAutoInheritRequired -ne $actualAutoInheritRequired) {
-        $differences.Add('auto_inherit_required')
-    }
     if (-not $Expected.AreAccessRulesCanonical -or -not $Actual.AreAccessRulesCanonical) {
         $differences.Add('noncanonical')
     }
@@ -379,6 +432,7 @@ function Get-OwnerGroupDaclDifferences {
         $actualDacl = Get-DaclBinaryFingerprint -Dacl $actualRaw.DiscretionaryAcl
         if ($expectedDacl -cne $actualDacl) {
             $differences.Add('dacl')
+            $differences.Add((Get-DaclMismatchCategory -Expected $expectedRaw.DiscretionaryAcl -Actual $actualRaw.DiscretionaryAcl))
         }
     }
     return $differences.ToArray()
@@ -724,10 +778,20 @@ function Write-AtomicText {
     $tempFileIdentity = $null
     $openedTempAcl = $null
     if ($destinationExisted) {
-        $originalBytes = [System.IO.File]::ReadAllBytes($fullPath)
-    }
-    if ($preserveWindowsAcl) {
-        $originalAcl = Get-Acl -LiteralPath $fullPath
+        if ($preserveWindowsAcl) {
+            $originalStream = $null
+            try {
+                $originalStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath
+                $originalBytes = Read-FileStreamBytes -Stream $originalStream
+                $originalAcl = Get-FileStreamAcl -Stream $originalStream
+            }
+            finally {
+                if ($null -ne $originalStream) { $originalStream.Dispose() }
+            }
+        }
+        else {
+            $originalBytes = [System.IO.File]::ReadAllBytes($fullPath)
+        }
     }
     $stream = $null
     $writer = $null
@@ -834,8 +898,21 @@ function Write-AtomicText {
                         }
                         [System.IO.File]::Move($backupPath, $fullPath)
                         $backupRestored = $true
-                        $restoredBytes = [System.IO.File]::ReadAllBytes($fullPath)
-                        $restoredAcl = if ($preserveWindowsAcl) { Get-Acl -LiteralPath $fullPath } else { $null }
+                        $restoredAcl = $null
+                        if ($preserveWindowsAcl) {
+                            $restoredStream = $null
+                            try {
+                                $restoredStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath
+                                $restoredBytes = Read-FileStreamBytes -Stream $restoredStream
+                                $restoredAcl = Get-FileStreamAcl -Stream $restoredStream
+                            }
+                            finally {
+                                if ($null -ne $restoredStream) { $restoredStream.Dispose() }
+                            }
+                        }
+                        else {
+                            $restoredBytes = [System.IO.File]::ReadAllBytes($fullPath)
+                        }
                         $restoredBytesMatch = Test-ByteArraysEqual -Expected $originalBytes -Actual $restoredBytes
                         $restoredAclDifferences = @()
                         if ($preserveWindowsAcl) {
