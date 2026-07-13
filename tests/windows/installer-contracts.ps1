@@ -1128,45 +1128,82 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'Codex clean install uses split native destinations and structured MCP arguments' {
+    Invoke-Contract 'Codex clean install preserves hostile paths in exact structured MCP arguments' {
         Use-IsolatedEnvironment 'codex clean structured arguments' {
             param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root "Codex Home [active] & semi; (quote')"
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+            $hostileCodexHome = Join-Path $root "Codex Home [active] & semi; (quote')"
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $hostileCodexHome, 'Process')
             $result = Invoke-Installer -Arguments @('-Agent', 'CoDeX', '-Skill', 'assistant-workflow', '-NoHooks')
             Assert-Equal 0 $result.ExitCode "Codex clean install failed: $($result.Output)"
 
             $skillRoot = Join-Path $isolatedUserProfile '.agents\skills\assistant-workflow'
             Assert-True (Test-Path -LiteralPath (Join-Path $skillRoot 'SKILL.md') -PathType Leaf) 'Codex skill was not installed under USERPROFILE\.agents\skills'
-            Assert-False (Test-Path -LiteralPath (Join-Path $codexHome 'skills\assistant-workflow')) 'Codex skill was incorrectly installed under CODEX_HOME\skills'
-            Assert-True (Test-Path -LiteralPath (Join-Path $codexHome 'rules\workflow.rules') -PathType Leaf) 'Codex execution rules are missing'
-            Assert-True (Test-Path -LiteralPath (Join-Path $codexHome 'agents') -PathType Container) 'Codex agent definitions are missing'
-            Assert-True (Test-Path -LiteralPath (Join-Path $codexHome 'memory\graph.jsonl') -PathType Leaf) 'First-install graph seed is missing'
+            Assert-False (Test-Path -LiteralPath (Join-Path $hostileCodexHome 'skills\assistant-workflow')) 'Codex skill was incorrectly installed under CODEX_HOME\skills'
+            Assert-True (Test-Path -LiteralPath (Join-Path $hostileCodexHome 'rules\workflow.rules') -PathType Leaf) 'Codex execution rules are missing'
+            Assert-True (Test-Path -LiteralPath (Join-Path $hostileCodexHome 'agents') -PathType Container) 'Codex agent definitions are missing'
+            Assert-True (Test-Path -LiteralPath (Join-Path $hostileCodexHome 'memory\graph.jsonl') -PathType Leaf) 'First-install graph seed is missing'
 
-            $launcher = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-            $memory = Join-Path $codexHome 'memory'
-            $config = [System.IO.File]::ReadAllText((Join-Path $codexHome 'config.toml'))
-            Assert-Contains $config '[mcp_servers.memory-graph]' 'Codex Memory Graph table is missing'
-            Assert-Contains $config '"-NoProfile"' 'MCP args omit -NoProfile'
-            Assert-Contains $config '"-File"' 'MCP args omit structured -File'
-            Assert-Contains $config ($launcher | ConvertTo-Json -Compress) 'MCP args omit the literal launcher path'
-            Assert-Contains $config ($memory | ConvertTo-Json -Compress) 'MCP args omit the literal memory path'
+            $hostileLauncher = Join-Path $hostileCodexHome 'tools\memory-graph\run-memory-graph.ps1'
+            $hostileMemory = Join-Path $hostileCodexHome 'memory'
+            Assert-True (Test-Path -LiteralPath $hostileLauncher -PathType Leaf) 'Memory Graph launcher was not installed under the hostile CODEX_HOME'
+            $config = [System.IO.File]::ReadAllText((Join-Path $hostileCodexHome 'config.toml'))
+            $canonicalHeaders = [regex]::Matches($config, '(?m)^\[mcp_servers\.memory-graph\]\r?$')
+            Assert-Equal 1 $canonicalHeaders.Count 'Canonical Codex Memory Graph table is not unique'
+            $expectedArguments = @(
+                '"-NoProfile"',
+                '"-File"',
+                ($hostileLauncher | ConvertTo-Json -Compress),
+                '"--memory-dir"',
+                ($hostileMemory | ConvertTo-Json -Compress)
+            )
+            $serverBlockStart = $canonicalHeaders[0].Index
+            $nextTable = [regex]::new('(?m)^\[').Match($config, ($serverBlockStart + $canonicalHeaders[0].Length))
+            $serverBlockLength = if ($nextTable.Success) { $nextTable.Index - $serverBlockStart } else { $config.Length - $serverBlockStart }
+            $serverBlock = $config.Substring($serverBlockStart, $serverBlockLength)
+            $expectedArgsLine = 'args = [' + ($expectedArguments -join ', ') + ']'
+            $exactArgsLines = [regex]::Matches($serverBlock, ('(?m)^' + [regex]::Escape($expectedArgsLine) + '\r?$'))
+            Assert-Equal 1 $exactArgsLines.Count 'Canonical Codex Memory Graph table does not contain exactly the expected structured argument array'
             Assert-NotContains $config 'ExecutionPolicy' 'MCP config weakens execution policy'
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
-
-            $launcherFirst = Invoke-PowerShellFile -LiteralPath $launcher -Arguments @('-h')
-            Assert-Equal 0 $launcherFirst.ExitCode "Installed Memory Graph launcher failed: $($launcherFirst.Output)"
-            $publishedDll = Join-Path (Split-Path -Parent $launcher) '.publish\MemoryGraph.dll'
-            Assert-True (Test-Path -LiteralPath $publishedDll -PathType Leaf) 'Memory Graph launcher did not create its private build cache'
-            $firstPublishedTimestamp = (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc
-            Start-Sleep -Milliseconds 1100
-            $launcherSecond = Invoke-PowerShellFile -LiteralPath $launcher -Arguments @('-h')
-            Assert-Equal 0 $launcherSecond.ExitCode "Cached Memory Graph launcher failed: $($launcherSecond.Output)"
-            Assert-Equal $firstPublishedTimestamp (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc 'Unchanged Memory Graph sources rebuilt instead of reusing the cache'
+            Assert-NotContains $config 'Invoke-Expression' 'MCP config introduces evaluated command text'
 
             foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh')) {
-                Assert-False (Test-Path -LiteralPath (Join-Path (Join-Path $codexHome 'tools') $excluded)) "Source-only tool was installed: $excluded"
+                Assert-False (Test-Path -LiteralPath (Join-Path (Join-Path $hostileCodexHome 'tools') $excluded)) "Source-only tool was installed: $excluded"
             }
+        }
+    }
+
+    Invoke-Contract 'installed Memory Graph launcher builds forwards help and reuses its cache from a supported path' {
+        Use-IsolatedEnvironment 'codex memory launcher runtime' {
+            param($root, $isolatedUserProfile)
+            # CoreCLR does not guarantee execution from every Windows-valid
+            # metacharacter path. This independently verifies the installed
+            # launcher's runtime and cache behavior from a supported path.
+            $runtimeCodexHome = Join-Path $root 'Codex Launcher Runtime Home'
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $runtimeCodexHome, 'Process')
+            $runtimeInstall = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks')
+            Assert-Equal 0 $runtimeInstall.ExitCode "Codex launcher-runtime install failed: $($runtimeInstall.Output)"
+            $runtimeLauncher = Join-Path $runtimeCodexHome 'tools\memory-graph\run-memory-graph.ps1'
+            Assert-True (Test-Path -LiteralPath $runtimeLauncher -PathType Leaf) 'Runtime Memory Graph launcher was not installed'
+
+            $launcherFirst = Invoke-PowerShellFile -LiteralPath $runtimeLauncher -Arguments @('-h')
+            Assert-Equal 0 $launcherFirst.ExitCode "Installed Memory Graph launcher failed: $($launcherFirst.Output)"
+            Assert-Contains $launcherFirst.Output 'Usage: memory-graph [OPTIONS]' 'Installed Memory Graph launcher did not forward help output'
+            Assert-Contains $launcherFirst.Output '[memory-graph] Building...' 'First installed Memory Graph launch did not build its cache'
+            $publishedDll = Join-Path (Split-Path -Parent $runtimeLauncher) '.publish\MemoryGraph.dll'
+            Assert-True (Test-Path -LiteralPath $publishedDll -PathType Leaf) 'Memory Graph launcher did not create its private build cache'
+            $publishParent = Split-Path -Parent $runtimeLauncher
+            $publishDebris = @(Get-ChildItem -LiteralPath $publishParent -Directory -Force | Where-Object {
+                $_.Name -like '.publish.stage-*' -or $_.Name -like '.publish.backup-*'
+            })
+            Assert-Equal 0 $publishDebris.Count 'Memory Graph launcher left stage or backup publish debris'
+            $firstPublishedTimestamp = (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc
+            Start-Sleep -Milliseconds 1100
+            $launcherSecond = Invoke-PowerShellFile -LiteralPath $runtimeLauncher -Arguments @('-h')
+            Assert-Equal 0 $launcherSecond.ExitCode "Cached Memory Graph launcher failed: $($launcherSecond.Output)"
+            Assert-Contains $launcherSecond.Output 'Usage: memory-graph [OPTIONS]' 'Cached Memory Graph launcher did not forward help output'
+            Assert-NotContains $launcherSecond.Output '[memory-graph] Building...' 'Cached Memory Graph launcher rebuilt instead of reusing the cache'
+            Assert-Equal $firstPublishedTimestamp (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc 'Unchanged Memory Graph sources rebuilt instead of reusing the cache'
         }
     }
 
@@ -1376,8 +1413,14 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-Equal 'deep-value' $deepCursor.sentinel 'Deep custom JSON data was truncated'
             Assert-Equal 'keep-command' $updated.mcpServers.customServer.command 'Unrelated MCP server was lost'
             Assert-True ($updated.mcpServers.'memory-graph'.args -is [System.Array]) 'Memory Graph args are not a JSON array'
-            Assert-True (@($updated.mcpServers.'memory-graph'.args) -contains '-File') 'Memory Graph args omit -File'
-            Assert-False (@($updated.mcpServers.'memory-graph'.args) -contains '-Command') 'Memory Graph args use -Command'
+            $expectedJsonArguments = @(
+                '-NoProfile',
+                '-File',
+                (Join-Path $isolatedUserProfile '.claude\tools\memory-graph\run-memory-graph.ps1'),
+                '--memory-dir',
+                (Join-Path $isolatedUserProfile '.claude\memory')
+            )
+            Assert-Equal $expectedJsonArguments @($updated.mcpServers.'memory-graph'.args) 'Memory Graph JSON args are not the exact ordered structured argument array'
 
             $updatedSettings = Read-JsonFile -LiteralPath $settingsFile
             Assert-Equal 'keep-setting' $updatedSettings.customSetting 'Claude settings custom property was lost'
