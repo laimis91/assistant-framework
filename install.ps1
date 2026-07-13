@@ -503,6 +503,50 @@ function Get-FileStreamAcl {
     return $extensionMethod.Invoke($null, [object[]]@($Stream))
 }
 
+function Set-FileStreamAcl {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.FileSecurity]$Acl
+    )
+
+    $instanceMethod = $Stream.GetType().GetMethod(
+        'SetAccessControl',
+        [Type[]]@([System.Security.AccessControl.FileSecurity])
+    )
+    if ($null -ne $instanceMethod) {
+        [void]$instanceMethod.Invoke($Stream, [object[]]@($Acl))
+        return
+    }
+    $extensionType = Get-FileSystemAclExtensionsType
+    if ($null -eq $extensionType) {
+        throw 'File-system ACL APIs are unavailable on this Windows runtime.'
+    }
+    $extensionMethod = $extensionType.GetMethod(
+        'SetAccessControl',
+        [Type[]]@([System.IO.FileStream], [System.Security.AccessControl.FileSecurity])
+    )
+    if ($null -eq $extensionMethod) {
+        throw 'Compatible FileSystemAclExtensions.SetAccessControl API was not found.'
+    }
+    [void]$extensionMethod.Invoke($null, [object[]]@($Stream, $Acl))
+}
+
+function New-BinaryDaclFileSecurity {
+    param([Parameter(Mandatory = $true)][System.Security.AccessControl.FileSecurity]$ReferenceAcl)
+
+    $binary = $ReferenceAcl.GetSecurityDescriptorBinaryForm()
+    $rawDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($binary, 0)
+    if ($null -eq $rawDescriptor.DiscretionaryAcl) {
+        throw 'Cannot safely preserve a null DACL during atomic replacement.'
+    }
+    $daclOnly = New-Object -TypeName System.Security.AccessControl.FileSecurity
+    $daclOnly.SetSecurityDescriptorBinaryForm(
+        $binary,
+        [System.Security.AccessControl.AccessControlSections]::Access
+    )
+    return $daclOnly
+}
+
 function Initialize-WindowsFileIdentityInterop {
     if ($null -ne ('AssistantFrameworkInstaller.NativeFileIdentity' -as [Type])) { return }
     Add-Type -TypeDefinition @'
@@ -518,6 +562,7 @@ namespace AssistantFrameworkInstaller
         private const uint GenericRead = 0x80000000u;
         private const uint GenericWrite = 0x40000000u;
         private const uint ReadControl = 0x00020000u;
+        private const uint WriteDac = 0x00040000u;
         private const uint CreateNew = 1u;
         private const uint OpenExisting = 3u;
         private const uint FileAttributeNormal = 0x00000080u;
@@ -567,6 +612,11 @@ namespace AssistantFrameworkInstaller
             return OpenChecked(path, GenericRead | ReadControl, OpenExisting);
         }
 
+        public static SafeFileHandle OpenReadWriteDaclExclusive(string path)
+        {
+            return OpenChecked(path, GenericRead | ReadControl | WriteDac, OpenExisting);
+        }
+
         private static SafeFileHandle OpenChecked(string path, uint access, uint disposition)
         {
             SafeFileHandle handle = CreateFileW(
@@ -598,6 +648,16 @@ namespace AssistantFrameworkInstaller
                 information.VolumeSerialNumber,
                 information.FileIndexHigh,
                 information.FileIndexLow);
+        }
+
+        public static uint GetLinkCount(SafeFileHandle handle)
+        {
+            ByHandleFileInformation information;
+            if (!GetFileInformationByHandle(handle, out information))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            return information.NumberOfLinks;
         }
     }
 }
@@ -647,10 +707,23 @@ function Open-WindowsFileSecurityStream {
     return New-FileStreamFromSafeFileHandle -SafeFileHandle $handle -FileAccess ([System.IO.FileAccess]::Read)
 }
 
+function Open-WindowsFileDaclWriteStream {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    Initialize-WindowsFileIdentityInterop
+    $handle = [AssistantFrameworkInstaller.NativeFileIdentity]::OpenReadWriteDaclExclusive($LiteralPath)
+    return New-FileStreamFromSafeFileHandle -SafeFileHandle $handle -FileAccess ([System.IO.FileAccess]::Read)
+}
+
 function Get-WindowsFileIdentity {
     param([Parameter(Mandatory = $true)]$SafeFileHandle)
     Initialize-WindowsFileIdentityInterop
     return [AssistantFrameworkInstaller.NativeFileIdentity]::GetIdentity($SafeFileHandle)
+}
+
+function Get-WindowsFileLinkCount {
+    param([Parameter(Mandatory = $true)]$SafeFileHandle)
+    Initialize-WindowsFileIdentityInterop
+    return [AssistantFrameworkInstaller.NativeFileIdentity]::GetLinkCount($SafeFileHandle)
 }
 
 function Test-WindowsFileIdentityEqual {
@@ -784,6 +857,10 @@ function Write-AtomicText {
                 $originalStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath
                 $originalBytes = Read-FileStreamBytes -Stream $originalStream
                 $originalAcl = Get-FileStreamAcl -Stream $originalStream
+                $originalAclIssues = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $originalAcl)
+                if ($originalAclIssues.Count -gt 0) {
+                    throw "Cannot safely preserve the existing DACL for $LiteralPath. Difference categories: $($originalAclIssues -join ', ')"
+                }
             }
             finally {
                 if ($null -ne $originalStream) { $originalStream.Dispose() }
@@ -850,7 +927,7 @@ function Write-AtomicText {
                 if ($preserveWindowsAcl) {
                     $committedStream = $null
                     try {
-                        $committedStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath
+                        $committedStream = Open-WindowsFileDaclWriteStream -LiteralPath $fullPath
                         $committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle
                         $identityMatches = Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity
                         if (-not $identityMatches) {
@@ -860,8 +937,29 @@ function Write-AtomicText {
                         if (-not (Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes)) {
                             throw "Atomic replacement content verification failed for $LiteralPath"
                         }
+                        $committedLinkCount = Get-WindowsFileLinkCount -SafeFileHandle $committedStream.SafeFileHandle
+                        if ($committedLinkCount -ne 1) {
+                            throw "Atomic replacement link-count verification failed for $LiteralPath"
+                        }
                         $committedAcl = Get-FileStreamAcl -Stream $committedStream
-                        $aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $committedAcl)
+                        $committedAclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $committedAcl)
+                        if ($committedAclDifferences.Count -gt 0) {
+                            $hasNonRepairableDifference =
+                                $committedAclDifferences -contains 'owner' -or
+                                $committedAclDifferences -contains 'group' -or
+                                $committedAclDifferences -contains 'noncanonical' -or
+                                $committedAclDifferences -contains 'null_dacl'
+                            $hasRepairableDifference =
+                                $committedAclDifferences -contains 'dacl' -or
+                                $committedAclDifferences -contains 'protection'
+                            if ($hasNonRepairableDifference -or -not $hasRepairableDifference) {
+                                throw "Atomic replacement owner, group, and DACL verification failed for $LiteralPath. Difference categories: $($committedAclDifferences -join ', ')"
+                            }
+                            $originalDacl = New-BinaryDaclFileSecurity -ReferenceAcl $originalAcl
+                            Set-FileStreamAcl -Stream $committedStream -Acl $originalDacl
+                        }
+                        $appliedAcl = Get-FileStreamAcl -Stream $committedStream
+                        $aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $appliedAcl)
                         if ($aclDifferences.Count -gt 0) {
                             throw "Atomic replacement owner, group, and DACL verification failed for $LiteralPath. Difference categories: $($aclDifferences -join ', ')"
                         }
