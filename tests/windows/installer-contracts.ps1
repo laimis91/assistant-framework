@@ -207,25 +207,37 @@ function Invoke-PowerShellFile {
 function Get-TreeFingerprint {
     param([string]$LiteralPath)
     $root = [System.IO.Path]::GetFullPath($LiteralPath).TrimEnd([char[]]@('\', '/'))
+    $ignoredRuntimeDirectories = @()
     $ignoredRuntimeFiles = @()
     if (-not [string]::IsNullOrWhiteSpace($script:ActiveIsolatedUserProfile)) {
+        $ignoredRuntimeDirectories = @(
+            'AppData',
+            'AppData/Local',
+            'AppData/Local/Microsoft',
+            'AppData/Local/Microsoft/PowerShell',
+            'AppData/Local/Microsoft/Windows',
+            'AppData/Local/Microsoft/Windows/PowerShell'
+        ) | ForEach-Object {
+            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile $_))
+        }
         $ignoredRuntimeFiles = @(
-            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile 'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive')),
-            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile 'AppData/Local/Microsoft/Windows/PowerShell/StartupProfileData-NonInteractive'))
-        )
+            'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive',
+            'AppData/Local/Microsoft/Windows/PowerShell/StartupProfileData-NonInteractive'
+        ) | ForEach-Object {
+            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile $_))
+        }
     }
     $rows = New-Object System.Collections.Generic.List[string]
     foreach ($item in @(Get-ChildItem -LiteralPath $root -Force -Recurse | Sort-Object FullName)) {
-        if (-not $item.PSIsContainer) {
-            $isIgnoredRuntimeFile = $false
-            foreach ($ignoredRuntimeFile in $ignoredRuntimeFiles) {
-                if ([string]::Equals($item.FullName, $ignoredRuntimeFile, [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $isIgnoredRuntimeFile = $true
-                    break
-                }
+        $isIgnoredRuntimeEntry = $false
+        $ignoredRuntimeEntriesForType = if ($item.PSIsContainer) { $ignoredRuntimeDirectories } else { $ignoredRuntimeFiles }
+        foreach ($ignoredRuntimeEntry in $ignoredRuntimeEntriesForType) {
+            if ([string]::Equals($item.FullName, $ignoredRuntimeEntry, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isIgnoredRuntimeEntry = $true
+                break
             }
-            if ($isIgnoredRuntimeFile) { continue }
         }
+        if ($isIgnoredRuntimeEntry) { continue }
         $relative = $item.FullName.Substring($root.Length).TrimStart([char[]]@('\', '/'))
         if ($item.PSIsContainer) {
             $rows.Add('D|' + $relative)
@@ -285,68 +297,152 @@ try {
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
     }
 
-    Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through ACL application and content write' {
+    Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through private DACL creation and content write' {
         $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
-        $helperStart = $installer.IndexOf('function Set-EquivalentFileStreamDacl', [System.StringComparison]::Ordinal)
+        $helperStart = $installer.IndexOf('function New-PrivateFileSecurity', [System.StringComparison]::Ordinal)
         $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
         $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
-        Assert-True ($helperStart -ge 0 -and $helperStart -lt $functionStart) 'Equivalent ACL helper was not found before Write-AtomicText'
+        Assert-True ($helperStart -ge 0 -and $helperStart -lt $functionStart) 'Private temporary-file ACL helper was not found before Write-AtomicText'
         Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
         $aclSupportBody = $installer.Substring(0, $functionStart)
         $helperBody = $installer.Substring($helperStart, $functionStart - $helperStart)
         $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
-        Assert-Contains $aclSupportBody 'GetSecurityDescriptorSddlForm' 'Equivalent ACL support does not scope comparison to owner, group, and DACL'
-        Assert-Contains $aclSupportBody 'SetSecurityDescriptorSddlForm' 'Equivalent ACL support does not copy owner, group, and DACL through a fresh FileSecurity object'
-        Assert-NotContains $aclSupportBody 'AddAccessRule' 'Equivalent ACL support reassembles access rules instead of preserving their section-scoped SDDL'
-        Assert-Contains $aclSupportBody '[System.IO.FileStream]' 'Equivalent ACL support does not accept an identity-bound FileStream'
-        Assert-Contains $aclSupportBody 'FileSystemAclExtensions' 'Equivalent ACL support lacks the PowerShell 7 FileStream ACL compatibility path'
-        Assert-Contains $aclSupportBody 'GetAccessControl' 'Equivalent ACL support cannot read owner, group, and DACL from the open file handle'
+        Assert-Contains $helperBody 'SetAccessRuleProtection($true, $false)' 'Temporary-file DACL is not protected from inherited access'
+        Assert-Contains $helperBody '[System.Security.AccessControl.FileSystemRights]::FullControl' 'Temporary-file DACL does not grant the installing user full control'
+        Assert-Contains $helperBody '[System.Security.Principal.WindowsIdentity]::GetCurrent().User' 'Temporary-file DACL is not scoped to the installing user'
+        Assert-Contains $helperBody '$rules.Count -ne 1' 'Temporary-file DACL verification does not reject additional access rules'
+        Assert-Contains $helperBody '-not $rule.IsInherited' 'Temporary-file DACL verification permits inherited access'
         Assert-Contains $aclSupportBody 'New-SecuredCreateNewStream' 'Atomic replacement lacks a cross-runtime secure-create helper'
         Assert-Contains $aclSupportBody 'FileSystemAclExtensions' 'Atomic replacement lacks the modern .NET secure-create path'
-        Assert-NotContains $helperBody 'security descriptor' 'Equivalent ACL helper overstates its contract as preserving a complete security descriptor, including SACL data'
-        Assert-Contains $helperBody 'owner, group, and DACL' 'Equivalent ACL helper diagnostic does not explicitly scope fidelity to owner, group, and DACL'
+        Assert-Contains $aclSupportBody '[System.IO.FileInfo]::new($LiteralPath)' 'PowerShell 7 secure creation can pass a wrapped PSObject to the reflected FileInfo parameter'
+        Assert-Contains $aclSupportBody '[object[]]::new(7)' 'PowerShell 7 secure creation does not build a raw typed reflection argument array'
         $createIndex = $aclSupportBody.IndexOf('[System.IO.FileMode]::CreateNew', [System.StringComparison]::Ordinal)
         $secureCreateIndex = $functionBody.IndexOf('New-SecuredCreateNewStream', [System.StringComparison]::Ordinal)
         $aclIndex = $functionBody.IndexOf('Get-FileStreamAcl -Stream $stream', $secureCreateIndex, [System.StringComparison]::Ordinal)
         $writeIndex = $functionBody.IndexOf('$writer.Write($Content)', [System.StringComparison]::Ordinal)
         $closeIndex = $functionBody.IndexOf('$stream.Dispose()', $writeIndex, [System.StringComparison]::Ordinal)
-        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
-        $verifyIndex = $functionBody.IndexOf('Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl', $replaceIndex, [System.StringComparison]::Ordinal)
+        $metadataPolicyIndex = $functionBody.IndexOf('$ignoreMetadataErrors = -not $preserveWindowsAcl', [System.StringComparison]::Ordinal)
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $ignoreMetadataErrors)', [System.StringComparison]::Ordinal)
+        $verifyIndex = $functionBody.IndexOf('$committedAcl = Get-FileStreamAcl -Stream $committedStream', $replaceIndex, [System.StringComparison]::Ordinal)
         Assert-True ($createIndex -ge 0 -and $secureCreateIndex -ge 0) 'Atomic replacement does not create its secured temporary file exclusively'
-        Assert-True ($aclIndex -gt $secureCreateIndex) 'Atomic replacement does not verify owner, group, and DACL through the exclusive CreateNew handle'
+        Assert-True ($aclIndex -gt $secureCreateIndex) 'Atomic replacement does not verify the private DACL through the exclusive CreateNew handle'
         Assert-True ($writeIndex -ge 0) 'Atomic replacement content write was not found'
         $identityBoundWindow = $functionBody.Substring($secureCreateIndex, ($writeIndex + '$writer.Write($Content)'.Length) - $secureCreateIndex)
         Assert-NotContains $identityBoundWindow '$stream.Dispose()' 'Atomic replacement closes the exclusive CreateNew handle before its content write'
         Assert-NotContains $identityBoundWindow '[System.IO.FileMode]::Open' 'Atomic replacement reopens the temporary path before its content write'
         Assert-True ($closeIndex -gt $writeIndex) 'Atomic replacement does not close its identity-bound handle after the content write'
-        Assert-True ($replaceIndex -gt $writeIndex) 'Atomic replacement commit was not found after the content write'
-        Assert-True ($verifyIndex -gt $replaceIndex) 'Atomic replacement does not verify and normalize owner, group, and DACL before deleting the rollback backup'
+        Assert-True ($metadataPolicyIndex -gt $writeIndex -and $replaceIndex -gt $metadataPolicyIndex) 'Atomic replacement does not fail closed on Windows ACL merge errors'
+        Assert-True ($verifyIndex -gt $replaceIndex) 'Atomic replacement does not verify owner, group, and DACL before deleting the rollback backup'
         Assert-True ($secureCreateIndex -lt $aclIndex -and $aclIndex -lt $writeIndex -and $writeIndex -lt $closeIndex) 'Atomic replacement does not create, verify, write, and close one identity-bound temporary handle in the required order'
     }
 
-    Invoke-Contract 'existing destination verifies identity before handle-bound DACL normalization' {
+    Invoke-Contract 'existing destination verifies identity bytes and owner group DACL without post-commit ACL mutation' {
         $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
         $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
         $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
         Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
         $supportBody = $installer.Substring(0, $functionStart)
         $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
-        Assert-Contains $supportBody 'function Set-FileStreamAcl' 'Existing-destination DACL normalization lacks a handle-bound ACL setter'
-        Assert-Contains $supportBody 'SetAccessControl' 'Existing-destination DACL normalization lacks cross-runtime FileStream ACL application'
-        Assert-Contains $supportBody 'Open-WindowsFileSecurityStream' 'Existing-destination commit lacks an exclusive READ_CONTROL and WRITE_DAC handle'
-        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
+        Assert-Contains $supportBody 'Open-WindowsFileSecurityStream' 'Existing-destination commit lacks an exclusive read and READ_CONTROL verification handle'
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $ignoreMetadataErrors)', [System.StringComparison]::Ordinal)
         $reopenIndex = $functionBody.IndexOf('$committedStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath', $replaceIndex, [System.StringComparison]::Ordinal)
         $identityIndex = $functionBody.IndexOf('$committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle', $reopenIndex, [System.StringComparison]::Ordinal)
         $identityVerifyIndex = $functionBody.IndexOf('Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity', $identityIndex, [System.StringComparison]::Ordinal)
-        $daclSetIndex = $functionBody.IndexOf('Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl', $identityVerifyIndex, [System.StringComparison]::Ordinal)
         $bytesIndex = $functionBody.IndexOf('$committedBytes = Read-FileStreamBytes -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
+        $aclReadIndex = $functionBody.IndexOf('$committedAcl = Get-FileStreamAcl -Stream $committedStream', $identityVerifyIndex, [System.StringComparison]::Ordinal)
+        $aclVerifyIndex = $functionBody.IndexOf('Get-OwnerGroupDaclSddl -Acl $committedAcl', $aclReadIndex, [System.StringComparison]::Ordinal)
         $closeIndex = $functionBody.IndexOf('$committedStream.Dispose()', $reopenIndex, [System.StringComparison]::Ordinal)
         Assert-True ($reopenIndex -gt $replaceIndex) 'Existing destination is not reopened exclusively immediately after replacement'
         Assert-True ($identityIndex -gt $reopenIndex -and $identityVerifyIndex -gt $identityIndex) 'Existing destination does not compare committed identity with the created temp before mutation'
-        Assert-True ($daclSetIndex -gt $identityVerifyIndex) 'Existing destination can normalize a substituted hard link before verifying identity'
         Assert-True ($bytesIndex -gt $reopenIndex -and $bytesIndex -lt $closeIndex) 'Existing destination bytes are not verified through the same exclusive committed handle'
-        Assert-True ($closeIndex -gt $daclSetIndex) 'Existing destination closes its committed handle before DACL normalization and verification finish'
+        Assert-True ($aclReadIndex -gt $identityVerifyIndex -and $aclVerifyIndex -gt $aclReadIndex -and $closeIndex -gt $aclVerifyIndex) 'Existing destination owner, group, and DACL are not verified through the identity-bound committed handle'
+        Assert-NotContains $functionBody 'Set-EquivalentFileStreamDacl -Stream $committedStream' 'Existing destination mutates its ACL after commit instead of failing closed and rolling back'
+        Assert-NotContains $functionBody 'Set-FileStreamAcl -Stream $committedStream' 'Existing destination performs post-commit ACL mutation'
         Assert-NotContains $functionBody 'Set-EquivalentFileAcl -LiteralPath $fullPath' 'Existing destination still performs path-based ACL mutation after the temp handle closes'
+    }
+
+    Invoke-Contract 'Windows secure create applies exactly one private current-user ACE through the open handle' {
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            Skip-Contract -Name 'Windows secure create applies exactly one private current-user ACE through the open handle' -Reason 'native Windows secure-create ACL verification requires Windows'
+            return
+        }
+        Use-IsolatedEnvironment 'private secure create' {
+            param($root, $isolatedUserProfile)
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            Assert-Equal 0 @($errors).Count "PowerShell parser errors prevented private secure-create verification: $(@($errors) -join '; ')"
+            $functionSource = @(
+                $ast.FindAll({
+                    param($node)
+                    return $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+                }, $true) | ForEach-Object { $_.Extent.Text }
+            ) -join "`r`n`r`n"
+            $runnerPath = Join-Path $root 'private secure create runner.ps1'
+            $runnerSource = @'
+#requires -Version 5.1
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+
+__INSTALLER_FUNCTIONS__
+
+function Assert-PrivateAclInvariant {
+    param([Parameter(Mandatory = $true)]$Acl)
+    if (-not $Acl.AreAccessRulesProtected) {
+        throw 'Private secure-create DACL is not protected.'
+    }
+    $rules = @($Acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    if ($rules.Count -ne 1) {
+        throw "Private secure-create DACL has $($rules.Count) access rules instead of exactly one."
+    }
+    $rule = $rules[0]
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    if ($rule.IdentityReference -ne $currentUser -or
+        $rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow -or
+        $rule.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl -or
+        $rule.InheritanceFlags -ne [System.Security.AccessControl.InheritanceFlags]::None -or
+        $rule.PropagationFlags -ne [System.Security.AccessControl.PropagationFlags]::None -or
+        $rule.IsInherited) {
+        throw 'Private secure-create DACL is not one explicit current-user FullControl allow rule.'
+    }
+}
+
+$path = $env:ASSISTANT_FRAMEWORK_PRIVATE_CREATE_TARGET
+$privateFileSecurity = New-PrivateFileSecurity
+Assert-PrivateAclInvariant -Acl $privateFileSecurity
+$stream = $null
+try {
+    $stream = New-SecuredCreateNewStream -LiteralPath $path -FileSecurity $privateFileSecurity
+    if ($stream -isnot [System.IO.FileStream]) {
+        throw "Secure-create returned an unexpected type: $($stream.GetType().FullName)"
+    }
+    Assert-PrivateAclInvariant -Acl (Get-FileStreamAcl -Stream $stream)
+    $stream.WriteByte(65)
+    $stream.Flush($true)
+}
+finally {
+    if ($null -ne $stream) { $stream.Dispose() }
+}
+if ([System.IO.File]::ReadAllBytes($path).Length -ne 1) {
+    throw 'Secure-created stream was not writable through the original handle.'
+}
+[System.IO.File]::Delete($path)
+'private secure create passed'
+'@
+            $runnerSource = $runnerSource.Replace('__INSTALLER_FUNCTIONS__', $functionSource)
+            [System.IO.File]::WriteAllText($runnerPath, $runnerSource, (New-Object System.Text.UTF8Encoding($false)))
+            $target = Join-Path $root 'private secure create target.txt'
+            $savedTarget = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_PRIVATE_CREATE_TARGET', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_PRIVATE_CREATE_TARGET', $target, 'Process')
+                $result = Invoke-PowerShellFile -LiteralPath $runnerPath
+                Assert-Equal 0 $result.ExitCode "Private secure-create runner failed: $($result.Output)"
+                Assert-False (Test-Path -LiteralPath $target) 'Private secure-create runner left its probe file behind'
+            }
+            finally {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_PRIVATE_CREATE_TARGET', $savedTarget, 'Process')
+            }
+        }
     }
 
     Invoke-Contract 'Windows first-install atomic commit verifies stable identity bytes and owner group DACL through one destination handle' {
@@ -365,7 +461,7 @@ try {
 
         $createIndex = $functionBody.IndexOf('[System.IO.FileMode]::CreateNew', [System.StringComparison]::Ordinal)
         $captureIdentityIndex = $functionBody.IndexOf('$tempFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $stream.SafeFileHandle', $createIndex, [System.StringComparison]::Ordinal)
-        $captureAclIndex = $functionBody.IndexOf('$tempAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-FileStreamAcl -Stream $stream)', $createIndex, [System.StringComparison]::Ordinal)
+        $captureAclIndex = $functionBody.IndexOf('$openedTempAcl = Get-FileStreamAcl -Stream $stream', $createIndex, [System.StringComparison]::Ordinal)
         $closeIndex = $functionBody.IndexOf('$stream = $null', $createIndex, [System.StringComparison]::Ordinal)
         $moveIndex = $functionBody.IndexOf('[System.IO.File]::Move($tempPath, $fullPath)', $closeIndex, [System.StringComparison]::Ordinal)
         $reopenIndex = $functionBody.IndexOf('$committedStream = Open-WindowsFileReadStream -LiteralPath $fullPath', $moveIndex, [System.StringComparison]::Ordinal)
@@ -450,7 +546,7 @@ if ($debris.Count -ne 0) {
         $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
         Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
         $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
-        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $ignoreMetadataErrors)', [System.StringComparison]::Ordinal)
         $rollbackStart = $functionBody.IndexOf('catch {', $replaceIndex, [System.StringComparison]::Ordinal)
         $rollbackEnd = $functionBody.IndexOf('throw $replacementError', $rollbackStart, [System.StringComparison]::Ordinal)
         Assert-True ($replaceIndex -ge 0 -and $rollbackStart -gt $replaceIndex -and $rollbackEnd -gt $rollbackStart) 'Atomic replacement rollback boundary was not found'
@@ -522,21 +618,22 @@ Set-Acl -LiteralPath $target -AclObject $fixtureAcl
 $originalBytes = [System.IO.File]::ReadAllBytes($target)
 $originalAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-Acl -LiteralPath $target)
 
-function Set-EquivalentFileStreamDacl {
-    param(
-        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
-        [Parameter(Mandatory = $true)]$ReferenceAcl
-    )
-    $mutatedAcl = Get-FileStreamAcl -Stream $Stream
-    $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
-    $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $builtInUsers,
-        [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
-        [System.Security.AccessControl.AccessControlType]::Allow
-    )
-    [void]$mutatedAcl.AddAccessRule($readRule)
-    Set-FileStreamAcl -Stream $Stream -Acl $mutatedAcl
-    throw 'injected post-replace owner-group-DACL failure'
+$script:OriginalGetFileStreamAcl = ${function:Get-FileStreamAcl}
+$script:FileStreamAclReadCount = 0
+function Get-FileStreamAcl {
+    param([Parameter(Mandatory = $true)][System.IO.FileStream]$Stream)
+    $script:FileStreamAclReadCount++
+    $acl = & $script:OriginalGetFileStreamAcl -Stream $Stream
+    if ($script:FileStreamAclReadCount -eq 2) {
+        $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+        $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $builtInUsers,
+            [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        [void]$acl.AddAccessRule($readRule)
+    }
+    return $acl
 }
 
 $caught = $null
@@ -546,8 +643,11 @@ try {
 catch {
     $caught = $_.Exception.Message
 }
-if ($caught -notlike '*injected post-replace owner-group-DACL failure*') {
+if ($caught -notlike '*Atomic replacement owner, group, and DACL verification failed*') {
     throw "Atomic write did not surface the injected failure: $caught"
+}
+if ($script:FileStreamAclReadCount -ne 2) {
+    throw "Atomic write did not inject the ACL mismatch on the committed verification read. ACL reads: $script:FileStreamAclReadCount"
 }
 $restoredBytes = [System.IO.File]::ReadAllBytes($target)
 if ([Convert]::ToBase64String($restoredBytes) -cne [Convert]::ToBase64String($originalBytes)) {
@@ -626,13 +726,6 @@ __INSTALLER_FUNCTIONS__
 
 $target = $env:ASSISTANT_FRAMEWORK_ATOMIC_DIAGNOSTIC_TARGET
 [System.IO.File]::WriteAllText($target, "original diagnostic bytes`r`n", $script:Utf8NoBom)
-function Set-EquivalentFileStreamDacl {
-    param(
-        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
-        [Parameter(Mandatory = $true)]$ReferenceAcl
-    )
-    throw 'injected post-replace failure before rollback diagnostic verification'
-}
 function Test-ByteArraysEqual {
     param(
         [AllowNull()][byte[]]$Expected,
@@ -696,26 +789,34 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 (Join-Path $isolatedUserProfile 'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive'),
                 (Join-Path $isolatedUserProfile 'AppData/Local/Microsoft/Windows/PowerShell/StartupProfileData-NonInteractive')
             )
-            foreach ($runtimePath in $runtimePaths) {
-                [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtimePath))
-                [System.IO.File]::WriteAllText($runtimePath, 'runtime-before')
-            }
             $lookalike = $runtimePaths[0] + '.installer-owned'
-            [System.IO.File]::WriteAllText($lookalike, 'lookalike-before')
             $sentinel = Join-Path $root 'installer-owned-sentinel.txt'
             [System.IO.File]::WriteAllText($sentinel, 'sentinel-before')
 
             $before = Get-TreeFingerprint -LiteralPath $root
             foreach ($runtimePath in $runtimePaths) {
+                [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtimePath))
+                [System.IO.File]::WriteAllText($runtimePath, 'runtime-before')
+            }
+            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache creation changed the installer fingerprint'
+
+            [System.IO.File]::WriteAllText($lookalike, 'lookalike-before')
+            $withLookalike = Get-TreeFingerprint -LiteralPath $root
+            foreach ($runtimePath in $runtimePaths) {
                 [System.IO.File]::WriteAllText($runtimePath, 'runtime-after')
             }
-            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache churn changed the installer fingerprint'
+            Assert-Equal $withLookalike (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache churn changed the installer fingerprint'
 
+            [System.IO.File]::Delete($runtimePaths[1])
+            [void][System.IO.Directory]::CreateDirectory($runtimePaths[1])
+            Assert-False ($withLookalike -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored a wrong-type directory at an exact runtime file path'
+            [System.IO.Directory]::Delete($runtimePaths[1])
+            [System.IO.File]::WriteAllText($runtimePaths[1], 'runtime-after')
             [System.IO.File]::WriteAllText($lookalike, 'lookalike-after')
-            Assert-False ($before -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an adjacent lookalike runtime artifact'
+            Assert-False ($withLookalike -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an adjacent lookalike runtime artifact'
             [System.IO.File]::WriteAllText($lookalike, 'lookalike-before')
             [System.IO.File]::WriteAllText($sentinel, 'sentinel-after')
-            Assert-False ($before -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an installer-owned sentinel mutation'
+            Assert-False ($withLookalike -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an installer-owned sentinel mutation'
         }
     }
 

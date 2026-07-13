@@ -329,18 +329,34 @@ function Get-OwnerGroupDaclSddl {
     return $Acl.GetSecurityDescriptorSddlForm((Get-OwnerGroupDaclSections))
 }
 
-function Copy-OwnerGroupDacl {
-    param([Parameter(Mandatory = $true)]$ReferenceAcl)
+function New-PrivateFileSecurity {
+    $privateAcl = New-Object -TypeName System.Security.AccessControl.FileSecurity
+    $privateAcl.SetAccessRuleProtection($true, $false)
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $fullControl = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList @(
+        $currentUser,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow
+    )
+    [void]$privateAcl.AddAccessRule($fullControl)
+    return $privateAcl
+}
 
-    $sections = Get-OwnerGroupDaclSections
-    $sddl = Get-OwnerGroupDaclSddl -Acl $ReferenceAcl
-    $rawDescriptor = New-Object -TypeName System.Security.AccessControl.RawSecurityDescriptor -ArgumentList @($sddl)
-    if ($null -eq $rawDescriptor.DiscretionaryAcl) {
-        throw 'Cannot safely preserve a null DACL during atomic replacement.'
-    }
-    $copy = New-Object -TypeName System.Security.AccessControl.FileSecurity
-    $copy.SetSecurityDescriptorSddlForm($sddl, $sections)
-    return $copy
+function Test-PrivateFileSecurity {
+    param(
+        [Parameter(Mandatory = $true)]$Acl,
+        [Parameter(Mandatory = $true)][System.Security.Principal.SecurityIdentifier]$CurrentUser
+    )
+    if (-not $Acl.AreAccessRulesProtected) { return $false }
+    $rules = @($Acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    if ($rules.Count -ne 1) { return $false }
+    $rule = $rules[0]
+    return $rule.IdentityReference -eq $CurrentUser -and
+        $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+        $rule.FileSystemRights -eq [System.Security.AccessControl.FileSystemRights]::FullControl -and
+        $rule.InheritanceFlags -eq [System.Security.AccessControl.InheritanceFlags]::None -and
+        $rule.PropagationFlags -eq [System.Security.AccessControl.PropagationFlags]::None -and
+        -not $rule.IsInherited
 }
 
 function Get-FileSystemAclExtensionsType {
@@ -378,33 +394,6 @@ function Get-FileStreamAcl {
     return $extensionMethod.Invoke($null, [object[]]@($Stream))
 }
 
-function Set-FileStreamAcl {
-    param(
-        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
-        [Parameter(Mandatory = $true)][System.Security.AccessControl.FileSecurity]$Acl
-    )
-    $instanceMethod = $Stream.GetType().GetMethod(
-        'SetAccessControl',
-        [Type[]]@([System.Security.AccessControl.FileSecurity])
-    )
-    if ($null -ne $instanceMethod) {
-        [void]$instanceMethod.Invoke($Stream, [object[]]@($Acl))
-        return
-    }
-    $extensionType = Get-FileSystemAclExtensionsType
-    if ($null -eq $extensionType) {
-        throw 'File-system ACL APIs are unavailable on this Windows runtime.'
-    }
-    $extensionMethod = $extensionType.GetMethod(
-        'SetAccessControl',
-        [Type[]]@([System.IO.FileStream], [System.Security.AccessControl.FileSecurity])
-    )
-    if ($null -eq $extensionMethod) {
-        throw 'Compatible FileSystemAclExtensions.SetAccessControl API was not found.'
-    }
-    [void]$extensionMethod.Invoke($null, [object[]]@($Stream, $Acl))
-}
-
 function Initialize-WindowsFileIdentityInterop {
     if ($null -ne ('AssistantFrameworkInstaller.NativeFileIdentity' -as [Type])) { return }
     Add-Type -TypeDefinition @'
@@ -420,7 +409,6 @@ namespace AssistantFrameworkInstaller
         private const uint GenericRead = 0x80000000u;
         private const uint GenericWrite = 0x40000000u;
         private const uint ReadControl = 0x00020000u;
-        private const uint WriteDac = 0x00040000u;
         private const uint CreateNew = 1u;
         private const uint OpenExisting = 3u;
         private const uint FileAttributeNormal = 0x00000080u;
@@ -467,7 +455,7 @@ namespace AssistantFrameworkInstaller
 
         public static SafeFileHandle OpenReadSecurityExclusive(string path)
         {
-            return OpenChecked(path, GenericRead | ReadControl | WriteDac, OpenExisting);
+            return OpenChecked(path, GenericRead | ReadControl, OpenExisting);
         }
 
         private static SafeFileHandle OpenChecked(string path, uint access, uint disposition)
@@ -629,15 +617,16 @@ function New-SecuredCreateNewStream {
     if ($createMethod.Count -ne 1) {
         throw 'Compatible FileSystemAclExtensions.Create API was not found.'
     }
-    return $createMethod[0].Invoke($null, [object[]]@(
-        (New-Object -TypeName System.IO.FileInfo -ArgumentList @($LiteralPath)),
-        [System.IO.FileMode]::CreateNew,
-        $rights,
-        [System.IO.FileShare]::None,
-        4096,
-        [System.IO.FileOptions]::None,
-        $FileSecurity
-    ))
+    $fileInfo = [System.IO.FileInfo]::new($LiteralPath)
+    $arguments = [object[]]::new(7)
+    $arguments[0] = $fileInfo
+    $arguments[1] = [System.IO.FileMode]::CreateNew
+    $arguments[2] = $rights
+    $arguments[3] = [System.IO.FileShare]::None
+    $arguments[4] = 4096
+    $arguments[5] = [System.IO.FileOptions]::None
+    $arguments[6] = $FileSecurity
+    return $createMethod[0].Invoke($null, $arguments)
 }
 
 function Test-ByteArraysEqual {
@@ -652,63 +641,6 @@ function Test-ByteArraysEqual {
         if ($Expected[$index] -ne $Actual[$index]) { return $false }
     }
     return $true
-}
-
-function Get-OwnerGroupSddl {
-    param([Parameter(Mandatory = $true)]$Acl)
-    $sections = [System.Security.AccessControl.AccessControlSections](
-        [System.Security.AccessControl.AccessControlSections]::Owner -bor
-        [System.Security.AccessControl.AccessControlSections]::Group
-    )
-    return $Acl.GetSecurityDescriptorSddlForm($sections)
-}
-
-function Copy-Dacl {
-    param([Parameter(Mandatory = $true)]$ReferenceAcl)
-    $sections = [System.Security.AccessControl.AccessControlSections]::Access
-    $sddl = $ReferenceAcl.GetSecurityDescriptorSddlForm($sections)
-    $rawDescriptor = New-Object -TypeName System.Security.AccessControl.RawSecurityDescriptor -ArgumentList @($sddl)
-    if ($null -eq $rawDescriptor.DiscretionaryAcl) {
-        throw 'Cannot safely preserve a null DACL during atomic replacement.'
-    }
-    $copy = New-Object -TypeName System.Security.AccessControl.FileSecurity
-    $copy.SetSecurityDescriptorSddlForm($sddl, $sections)
-    return $copy
-}
-
-function Set-EquivalentFileStreamDacl {
-    param(
-        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
-        [Parameter(Mandatory = $true)]$ReferenceAcl
-    )
-
-    $expectedSddl = Get-OwnerGroupDaclSddl -Acl $ReferenceAcl
-    $currentAcl = Get-FileStreamAcl -Stream $Stream
-    if (-not [string]::Equals(
-        (Get-OwnerGroupSddl -Acl $currentAcl),
-        (Get-OwnerGroupSddl -Acl $ReferenceAcl),
-        [System.StringComparison]::Ordinal
-    )) {
-        throw "Could not preserve the file owner and group for $($Stream.Name)"
-    }
-    if ([string]::Equals(
-        (Get-OwnerGroupDaclSddl -Acl $currentAcl),
-        $expectedSddl,
-        [System.StringComparison]::Ordinal
-    )) {
-        return
-    }
-
-    $equivalentDacl = Copy-Dacl -ReferenceAcl $ReferenceAcl
-    Set-FileStreamAcl -Stream $Stream -Acl $equivalentDacl
-    $appliedAcl = Get-FileStreamAcl -Stream $Stream
-    if (-not [string]::Equals(
-        (Get-OwnerGroupDaclSddl -Acl $appliedAcl),
-        $expectedSddl,
-        [System.StringComparison]::Ordinal
-    )) {
-        throw "Could not preserve the file owner, group, and DACL for $($Stream.Name)"
-    }
 }
 
 function Write-AtomicText {
@@ -746,8 +678,8 @@ function Write-AtomicText {
     $writer = $null
     try {
         if ($preserveWindowsAcl) {
-            $tempAcl = Copy-OwnerGroupDacl -ReferenceAcl $originalAcl
-            $stream = New-SecuredCreateNewStream -LiteralPath $tempPath -FileSecurity $tempAcl
+            $privateFileSecurity = New-PrivateFileSecurity
+            $stream = New-SecuredCreateNewStream -LiteralPath $tempPath -FileSecurity $privateFileSecurity
         }
         elseif ($isWindowsHost) {
             $stream = New-WindowsDefaultCreateNewStream -LiteralPath $tempPath
@@ -762,13 +694,13 @@ function Write-AtomicText {
         }
         if ($isWindowsHost) {
             $tempFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $stream.SafeFileHandle
-            $tempAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-FileStreamAcl -Stream $stream)
-            if ($preserveWindowsAcl -and -not [string]::Equals(
-                $tempAccessSddl,
-                (Get-OwnerGroupDaclSddl -Acl $originalAcl),
-                [System.StringComparison]::Ordinal
-            )) {
-                throw "Could not secure the temporary file owner, group, and DACL for $LiteralPath"
+            $openedTempAcl = Get-FileStreamAcl -Stream $stream
+            $tempAccessSddl = Get-OwnerGroupDaclSddl -Acl $openedTempAcl
+            if ($preserveWindowsAcl) {
+                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+                if (-not (Test-PrivateFileSecurity -Acl $openedTempAcl -CurrentUser $currentUser)) {
+                    throw "Could not secure the temporary file with a private DACL for $LiteralPath"
+                }
             }
         }
         $writer = New-Object -TypeName System.IO.StreamWriter -ArgumentList @($stream, $script:Utf8NoBom)
@@ -795,7 +727,8 @@ function Write-AtomicText {
                 throw "Atomic backup path unexpectedly exists: $backupPath"
             }
             try {
-                [System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)
+                $ignoreMetadataErrors = -not $preserveWindowsAcl
+                [System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $ignoreMetadataErrors)
                 if ($preserveWindowsAcl) {
                     $committedStream = $null
                     try {
@@ -809,7 +742,15 @@ function Write-AtomicText {
                         if (-not (Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes)) {
                             throw "Atomic replacement content verification failed for $LiteralPath"
                         }
-                        Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl
+                        $committedAcl = Get-FileStreamAcl -Stream $committedStream
+                        $committedAclMatches = [string]::Equals(
+                            (Get-OwnerGroupDaclSddl -Acl $committedAcl),
+                            (Get-OwnerGroupDaclSddl -Acl $originalAcl),
+                            [System.StringComparison]::Ordinal
+                        )
+                        if (-not $committedAclMatches) {
+                            throw "Atomic replacement owner, group, and DACL verification failed for $LiteralPath"
+                        }
                     }
                     finally {
                         if ($null -ne $committedStream) { $committedStream.Dispose() }
