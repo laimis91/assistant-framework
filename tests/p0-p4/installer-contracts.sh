@@ -601,18 +601,31 @@ else
     fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
 fi
 
-test_start "installer includes eval fixture used by installed eval runner"
+test_start "clean install keeps legacy offline evals but excludes source-only promotion evaluators"
 INSTALL_HOME_EIGHT="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_EIGHT"
+mkdir -p "$INSTALL_HOME_EIGHT/.codex/tools/evals/lib"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
 if HOME="$INSTALL_HOME_EIGHT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-evals.out 2>/tmp/p0p4-install-evals.err; then
     installed_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-framework-instruction-evals.sh"
     installed_fixture="$INSTALL_HOME_EIGHT/.codex/docs/evals/framework-instruction-cases.json"
+    installed_codex_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
+    installed_finalizer="$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
+    installed_evidence_lib="$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+    installed_context_reporter="$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
     if [[ -x "$installed_runner" ]] \
         && [[ -f "$installed_fixture" ]] \
+        && [[ ! -e "$installed_codex_runner" ]] \
+        && [[ ! -e "$installed_finalizer" ]] \
+        && [[ ! -e "$installed_evidence_lib" ]] \
+        && [[ ! -e "$installed_context_reporter" ]] \
         && HOME="$INSTALL_HOME_EIGHT" "$installed_runner" --validate-fixture >/tmp/p0p4-installed-eval-runner.out 2>/tmp/p0p4-installed-eval-runner.err; then
         pass
     else
-        fail "installed eval runner must validate the installed fixture; see /tmp/p0p4-installed-eval-runner.err"
+        fail "clean install must omit source-only promotion evaluators while preserving the legacy offline runner and fixture"
     fi
 else
     fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"

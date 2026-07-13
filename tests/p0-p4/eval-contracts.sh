@@ -6,6 +6,38 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 eval_runner="$FRAMEWORK_DIR/tools/evals/run-framework-instruction-evals.sh"
 eval_fixture="$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"
 trace_schema="$FRAMEWORK_DIR/docs/evals/framework-instruction-trace-result.schema.json"
+comparison_program="$FRAMEWORK_DIR/tools/evals/lib/framework-comparison.jq"
+codex_eval_runner="$FRAMEWORK_DIR/tools/evals/run-codex-framework-evals.sh"
+semantic_finalizer="$FRAMEWORK_DIR/tools/evals/finalize-workflow-kernel-review.sh"
+semantic_verdict_schema="$FRAMEWORK_DIR/docs/evals/framework-semantic-review-verdict.schema.json"
+promotion_decision_schema="$FRAMEWORK_DIR/docs/evals/framework-promotion-decision.schema.json"
+workflow_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
+eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+
+test_sha256_stream() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum | awk '{print $1}'
+    else shasum -a 256 | awk '{print $1}'; fi
+}
+
+test_trace_set_sha256() {
+    local directory="$1" inventory="" file name digest
+    while IFS= read -r file; do
+        name="$(basename "$file")"
+        digest="$(test_sha256_stream <"$file")"
+        inventory+="$name $digest"$'\n'
+    done < <(find "$directory" -maxdepth 1 -type f -name '*.json' -print | LC_ALL=C sort)
+    printf '%s' "$inventory" | test_sha256_stream
+}
+
+test_hash_directory() {
+    local directory="$1" inventory="" file relative digest
+    while IFS= read -r file; do
+        relative="${file#"$directory"/}"
+        digest="$(test_sha256_stream <"$file")"
+        inventory+="$relative $digest"$'\n'
+    done < <(find "$directory" -type f -print | LC_ALL=C sort)
+    printf '%s' "$inventory" | test_sha256_stream
+}
 
 write_completed_trace() {
     local path="$1"
@@ -16,7 +48,7 @@ write_completed_trace() {
     local output_tokens="$6"
     local latency_ms="$7"
     local tool_calls="$8"
-    local unnecessary_questions="$9"
+    local question_mark_count_proxy="$9"
     local time_to_first_useful_action_ms="${10}"
     local rework_count="${11}"
     local acceptance_passed="${12}"
@@ -29,7 +61,7 @@ write_completed_trace() {
         --argjson output_tokens "$output_tokens" \
         --argjson latency_ms "$latency_ms" \
         --argjson tool_calls "$tool_calls" \
-        --argjson unnecessary_questions "$unnecessary_questions" \
+        --argjson question_mark_count_proxy "$question_mark_count_proxy" \
         --argjson time_to_first_useful_action_ms "$time_to_first_useful_action_ms" \
         --argjson rework_count "$rework_count" \
         --argjson acceptance_passed "$acceptance_passed" '
@@ -45,10 +77,55 @@ write_completed_trace() {
             output_tokens: $output_tokens,
             latency_ms: $latency_ms,
             tool_calls: $tool_calls,
-            unnecessary_questions: $unnecessary_questions,
+            question_mark_count_proxy: $question_mark_count_proxy,
             time_to_first_useful_action_ms: $time_to_first_useful_action_ms,
             rework_count: $rework_count,
-            acceptance_passed: $acceptance_passed
+            acceptance_passed: $acceptance_passed,
+            acceptance_items_passed: (if $acceptance_passed then 1 else 0 end),
+            acceptance_items_total: 1
+          },
+          provenance: {
+            fixture_sha256: ("0" * 64),
+            case_sha256: ("1" * 64),
+            instruction_sha256: ("2" * 64),
+            grader_sha256: ("3" * 64),
+            cli_version: "codex-cli test",
+            requested_model: "gpt-5.6-sol",
+            runtime_model_attestation: "not_exposed_by_codex_jsonl",
+            model_selection_evidence: "explicit_model_argument_only",
+            requested_model_catalog_entry_sha256: null,
+            codex_executable_sha256: null,
+            adapter_version: "eval-contract-test"
+          },
+          execution: {
+            exit_code: 0,
+            raw_artifacts_retained: false,
+            metric_methods: {
+              time_to_first_useful_action_ms: "completion_latency_upper_bound",
+              question_mark_count_proxy: "question_mark_count_proxy",
+              rework_count: "additional_file_change_events_proxy"
+            },
+            verifier: {
+              status: (if $acceptance_passed then "passed" else "failed" end),
+              required_missing: (if $acceptance_passed then 0 else 1 end),
+              missing_required_ids: (if $acceptance_passed then [] else ["required-001"] end),
+              forbidden_hits: 0,
+              forbidden_hit_ids: [],
+              fail_signal_hits: 0,
+              fail_signal_hit_ids: [],
+              acceptance_items_passed: (if $acceptance_passed then 1 else 0 end),
+              acceptance_items_total: 1,
+              seeded_defects_detected: 0,
+              seeded_defects_total: 0,
+              seeded_defect_missed_ids: [],
+              false_positive_marker_hits: 0,
+              false_positive_marker_hit_ids: [],
+              forbidden_command_hits: 0,
+              workspace_status: "not_applicable",
+              workspace_exit_code: 0,
+              workspace_failure_ids: [],
+              scope_deviations: 0
+            }
           }
         }
     ' >"$path"
@@ -352,7 +429,7 @@ if [[ -f "$trace_schema" ]] \
           "output_tokens",
           "latency_ms",
           "tool_calls",
-          "unnecessary_questions",
+          "question_mark_count_proxy",
           "time_to_first_useful_action_ms",
           "rework_count",
           "acceptance_passed"
@@ -372,7 +449,7 @@ if [[ -f "$trace_schema" ]] \
           "input_tokens",
           "output_tokens",
           "tool_calls",
-          "unnecessary_questions",
+          "question_mark_count_proxy",
           "rework_count"
         ][];
           . as $metric
@@ -457,6 +534,173 @@ else
     fail "eval runner rejected valid completed or adapter_unavailable trace results"
 fi
 
+test_start "completed trace imports require provenance and execution evidence"
+completed_evidence_contract_failure=0
+for field in provenance execution; do
+    rm -f "$trace_invalid_dir"/*.json
+    jq --arg field "$field" 'del(.[$field])' \
+        "$trace_valid_dir/completed.json" >"$trace_invalid_dir/missing-$field.json"
+    if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error" \
+        || ! grep -Fq "missing-$field.json" "$trace_error" \
+        || ! grep -Fqi "$field" "$trace_error"; then
+        completed_evidence_contract_failure=1
+        break
+    fi
+done
+if [[ "$completed_evidence_contract_failure" -eq 0 ]]; then
+    pass
+else
+    fail "completed trace import accepted missing $field evidence"
+fi
+
+test_start "completed trace execution evidence rejects nonzero not-run omitted and acceptance-mismatched states"
+completed_execution_contract_failure=0
+for mutation in nonzero not-run missing-methods missing-retention acceptance-mismatch; do
+    rm -f "$trace_invalid_dir"/*.json
+    case "$mutation" in
+        nonzero)
+            jq '.run_id = "run-invalid-nonzero" | .execution.exit_code = 9' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            expected_error="exit_code must be 0"
+            ;;
+        not-run)
+            jq '.run_id = "run-invalid-not-run" | .execution.verifier.status = "not_run"' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            expected_error="verifier.status must be passed or failed"
+            ;;
+        missing-methods)
+            jq '.run_id = "run-invalid-missing-methods" | del(.execution.metric_methods)' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            expected_error="requires exact metric_methods"
+            ;;
+        missing-retention)
+            jq '.run_id = "run-invalid-missing-retention" | del(.execution.raw_artifacts_retained)' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            expected_error="requires raw_artifacts_retained=false"
+            ;;
+        acceptance-mismatch)
+            jq '.run_id = "run-invalid-acceptance-mismatch" | .execution.verifier.status = "failed"' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            expected_error="acceptance_passed does not match verifier.status"
+            ;;
+    esac
+    if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error" \
+        || ! grep -Fq "$expected_error" "$trace_error"; then
+        completed_execution_contract_failure=1
+        break
+    fi
+done
+if [[ "$completed_execution_contract_failure" -eq 0 ]]; then
+    pass
+else
+    fail "completed trace validation accepted or misreported the $mutation state"
+fi
+
+test_start "completed traces require workspace diagnostics and acceptance item totals"
+completed_verifier_field_failure=0
+for path in \
+    metrics.acceptance_items_passed \
+    metrics.acceptance_items_total \
+    execution.verifier.acceptance_items_passed \
+    execution.verifier.acceptance_items_total \
+    execution.verifier.workspace_failure_ids; do
+    rm -f "$trace_invalid_dir"/*.json
+    jq --arg path "$path" 'delpaths([($path | split("."))])' \
+        "$trace_valid_dir/completed.json" >"$trace_invalid_dir/missing-current-field.json"
+    if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error" \
+        || ! grep -Fq "${path##*.}" "$trace_error"; then
+        completed_verifier_field_failure=1
+        break
+    fi
+done
+if [[ "$completed_verifier_field_failure" -eq 0 ]]; then
+    pass
+else
+    fail "completed trace accepted missing current verifier evidence: $path"
+fi
+
+test_start "workspace status and failure ids cannot contradict each other"
+workspace_parity_failure=0
+for mutation in passed-with-id not-applicable-with-id failed-without-id; do
+    rm -f "$trace_invalid_dir"/*.json
+    case "$mutation" in
+        passed-with-id)
+            jq '.execution.verifier.workspace_status = "passed"
+                | .execution.verifier.workspace_failure_ids = ["workspace-001"]' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            ;;
+        not-applicable-with-id)
+            jq '.execution.verifier.workspace_status = "not_applicable"
+                | .execution.verifier.workspace_failure_ids = ["workspace-001"]' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            ;;
+        failed-without-id)
+            jq '.metrics.acceptance_passed = false
+                | .metrics.acceptance_items_passed = 0
+                | .execution.verifier.status = "failed"
+                | .execution.verifier.required_missing = 1
+                | .execution.verifier.missing_required_ids = ["required-001"]
+                | .execution.verifier.acceptance_items_passed = 0
+                | .execution.verifier.workspace_status = "failed"
+                | .execution.verifier.workspace_exit_code = 1
+                | .execution.verifier.workspace_failure_ids = []' \
+                "$trace_valid_dir/completed.json" >"$trace_invalid_dir/$mutation.json"
+            ;;
+    esac
+    if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error" \
+        || ! grep -Fq "workspace_status does not match workspace_failure_ids" "$trace_error"; then
+        workspace_parity_failure=1
+        break
+    fi
+done
+if [[ "$workspace_parity_failure" -eq 0 ]]; then
+    pass
+else
+    fail "trace validation accepted contradictory workspace evidence: $mutation"
+fi
+
+test_start "acceptance item passed counts cannot exceed totals"
+acceptance_count_failure=0
+for location in metrics execution.verifier; do
+    rm -f "$trace_invalid_dir"/*.json
+    jq --arg location "$location" '
+      if $location == "metrics" then
+        .metrics.acceptance_items_passed = 2 | .metrics.acceptance_items_total = 1
+      else
+        .execution.verifier.acceptance_items_passed = 2 | .execution.verifier.acceptance_items_total = 1
+      end
+    ' "$trace_valid_dir/completed.json" >"$trace_invalid_dir/invalid-acceptance-count.json"
+    if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error" \
+        || ! grep -Fq "acceptance_items_passed exceeds acceptance_items_total" "$trace_error"; then
+        acceptance_count_failure=1
+        break
+    fi
+done
+if [[ "$acceptance_count_failure" -eq 0 ]]; then
+    pass
+else
+    fail "trace validation accepted acceptance passed greater than total in $location"
+fi
+
+test_start "trace schema publishes current verifier required and workspace parity rules"
+if jq -e '
+    (.properties.metrics.required | contains(["acceptance_items_passed", "acceptance_items_total"]))
+    and any(.properties.execution.properties.verifier.allOf[];
+      (.then.required // []) | contains([
+        "acceptance_items_passed", "acceptance_items_total", "workspace_status", "workspace_exit_code", "workspace_failure_ids"
+      ]))
+    and any(.properties.execution.properties.verifier.allOf[];
+      .if.properties.workspace_status.enum == ["passed", "not_applicable"]
+      and .then.properties.workspace_failure_ids.maxItems == 0)
+    and any(.properties.execution.properties.verifier.allOf[];
+      .if.properties.workspace_status.const == "failed"
+      and .then.properties.workspace_failure_ids.minItems == 1)
+  ' "$trace_schema" >/dev/null; then
+    pass
+else
+    fail "published trace schema omits current verifier evidence or workspace parity"
+fi
+
 test_start "eval runner rejects a trace missing required run identity with a clear error"
 rm -f "$trace_invalid_dir"/*.json
 jq 'del(.model)' "$trace_valid_dir/completed.json" >"$trace_invalid_dir/missing-model.json"
@@ -489,9 +733,11 @@ for metric in \
     output_tokens \
     latency_ms \
     tool_calls \
-    unnecessary_questions \
+    question_mark_count_proxy \
     time_to_first_useful_action_ms \
     rework_count \
+    acceptance_items_passed \
+    acceptance_items_total \
     acceptance_passed; do
     rm -f "$trace_invalid_dir"/*.json
     jq --arg metric "$metric" 'del(.metrics[$metric])' \
@@ -528,7 +774,7 @@ for metric in \
     input_tokens \
     output_tokens \
     tool_calls \
-    unnecessary_questions \
+    question_mark_count_proxy \
     rework_count; do
     rm -f "$trace_invalid_dir"/*.json
     jq --arg metric "$metric" '.metrics[$metric] = 1.5' \
@@ -601,13 +847,13 @@ write_adapter_unavailable_trace \
     "run-c-baseline" \
     "review-loop-continues-after-findings" \
     "baseline" \
-    "secret-fixture-value raw prompt body must not enter aggregate output"
+    "The local adapter is not configured."
 write_adapter_unavailable_trace \
     "$trace_compare_dir/c-candidate.json" \
     "run-c-candidate" \
     "review-loop-continues-after-findings" \
     "candidate" \
-    "Adapter unavailable for the candidate."
+    "The local adapter is not configured."
 
 test_start "trace comparison emits deterministic paired JSON summaries and deltas"
 if "$eval_runner" --compare-traces "$trace_compare_dir" >"$trace_compare_output" 2>"$trace_error" \
@@ -627,8 +873,8 @@ if "$eval_runner" --compare-traces "$trace_compare_dir" >"$trace_compare_output"
         and .variants.candidate.metrics.input_tokens.mean == 1150
         and .deltas.input_tokens.absolute == -350
         and ((.deltas.input_tokens.percent + 23.3333333333) | fabs < 0.0001)
-        and .deltas.unnecessary_questions.absolute == 0
-        and .deltas.unnecessary_questions.percent == null
+        and .deltas.question_mark_count_proxy.absolute == 0
+        and .deltas.question_mark_count_proxy.percent == null
         and .deltas.acceptance_rate.absolute == 0.5
         and .deltas.acceptance_rate.percent == 100
         and (.adapter_unavailable_runs | length == 2)
@@ -646,6 +892,257 @@ if "$eval_runner" --compare-traces "$trace_compare_dir" >"$trace_compare_output"
     pass
 else
     fail "trace comparison was non-deterministic or missing paired summaries, deltas, acceptance rates, unavailable separation, or redaction"
+fi
+
+test_start "framework comparison separates failure scopes and question-mark proxy semantics"
+framework_compare_dir="$(mktemp -d "${TMPDIR:-/tmp}/framework-comparison-traces.XXXXXX")"
+framework_compare_output="$(mktemp "${TMPDIR:-/tmp}/framework-comparison-output.XXXXXX")"
+p0p4_register_cleanup "$framework_compare_dir" "$framework_compare_output"
+for spec in \
+    'pair-a 1 case-a baseline true 0 not_applicable 0' \
+    'pair-a 1 case-a candidate false 0 not_applicable 0' \
+    'pair-b 2 case-a baseline false 0 failed 1' \
+    'pair-b 2 case-a candidate false 0 failed 1' \
+    'pair-c 1 case-b baseline false 0 not_applicable 0' \
+    'pair-c 1 case-b candidate false 0 not_applicable 0' \
+    'pair-d 1 case-c baseline true 0 not_applicable 0' \
+    'pair-d 1 case-c candidate true 1 not_applicable 0'; do
+    read -r pair_id trial_index case_id variant accepted question_marks workspace_status workspace_exit_code <<<"$spec"
+    trace_path="$framework_compare_dir/$pair_id-$variant.json"
+    write_completed_trace "$trace_path" "$pair_id-$variant" "small-fix-stays-lightweight" "$variant" 100 10 20 1 "$question_marks" 20 0 "$accepted"
+    jq \
+      --arg pair_id "$pair_id" \
+      --arg case_id "$case_id" \
+      --arg workspace_status "$workspace_status" \
+      --argjson trial_index "$trial_index" \
+      --argjson workspace_exit_code "$workspace_exit_code" '
+      .pair_id = $pair_id
+      | .trial_index = $trial_index
+      | .case_id = $case_id
+      | .provenance.seed_workspace_sha256 = ("4" * 64)
+      | .metrics += {
+          seeded_defects_detected:0,
+          seeded_defects_total:0,
+          false_positive_marker_hits:0,
+          scope_deviations:0,
+          verifier_exit_code:$workspace_exit_code
+        }
+      | .execution.verifier.workspace_status = $workspace_status
+      | .execution.verifier.workspace_exit_code = $workspace_exit_code
+    ' "$trace_path" >"$trace_path.tmp"
+    mv "$trace_path.tmp" "$trace_path"
+done
+jq -s \
+    --argjson manifest '{}' \
+    --arg candidate_manifest_sha256 "$(printf '0%.0s' {1..64})" \
+    -f "$comparison_program" "$framework_compare_dir/"*.json >"$framework_compare_output"
+if jq -e '
+      .promotion_gate_results.must_pass_pairwise_regressions == 1
+      and .promotion_gate_results.candidate_must_pass_failed_runs == 3
+      and .promotion_gate_results.candidate_must_pass_failed_cases == 2
+      and .promotion_gate_results.shared_must_pass_failed_runs == 2
+      and .promotion_gate_results.shared_must_pass_failed_cases == 2
+      and .variants.baseline.metrics.overall_verifier_failures == 2
+      and .variants.candidate.metrics.overall_verifier_failures == 3
+      and .variants.baseline.metrics.workspace_verifier_failures == 1
+      and .variants.candidate.metrics.workspace_verifier_failures == 1
+      and .variants.baseline.metrics.question_mark_count_proxy_mean == 0
+      and .variants.candidate.metrics.question_mark_count_proxy_mean == 0.25
+      and .promotion_gate_results.question_mark_count_proxy_not_higher == false
+      and .promotion_gate_results.overall_verifier_failures_not_higher == false
+      and .promotion_gate_results.workspace_verifier_failures_not_higher == true
+      and (.variants.baseline.metrics | has("unnecessary_questions_mean") | not)
+      and (.variants.baseline.metrics | has("verifier_failures") | not)
+      and (.promotion_gate_results | has("unnecessary_questions_not_higher") | not)
+      and (.promotion_gate_results | has("verifier_failures_not_higher") | not)
+    ' "$framework_compare_output" >/dev/null; then
+    pass
+else
+    fail "framework comparison conflated failed runs and cases, shared and pairwise failures, verifier scopes, or question-mark proxy semantics"
+fi
+
+test_start "framework comparison excludes every complete-pair provenance mismatch"
+provenance_mismatch_dir="$(mktemp -d "${TMPDIR:-/tmp}/framework-provenance-mismatch.XXXXXX")"
+provenance_mismatch_output="$(mktemp "${TMPDIR:-/tmp}/framework-provenance-mismatch-output.XXXXXX")"
+p0p4_register_cleanup "$provenance_mismatch_dir" "$provenance_mismatch_output"
+for field in fixture_sha256 case_sha256 grader_sha256 seed_workspace_sha256 adapter_version cli_version; do
+    pair_id="mismatch-${field//_/-}"
+    for variant in baseline candidate; do
+        trace_path="$provenance_mismatch_dir/$pair_id-$variant.json"
+        cp "$framework_compare_dir/pair-d-$variant.json" "$trace_path"
+        jq --arg pair_id "$pair_id" --arg field "$field" --arg variant "$variant" '
+          .pair_id = $pair_id
+          | .run_id = ($pair_id + "-" + $variant)
+          | if $variant == "candidate" then
+              if $field == "adapter_version" then .provenance.adapter_version = "mismatched-adapter"
+              elif $field == "cli_version" then .provenance.cli_version = "mismatched-cli"
+              else .provenance[$field] = ("f" * 64)
+              end
+            else . end
+        ' "$trace_path" >"$trace_path.tmp"
+        mv "$trace_path.tmp" "$trace_path"
+    done
+done
+jq -s --argjson manifest '{}' --arg candidate_manifest_sha256 "$(printf '0%.0s' {1..64})" \
+    -f "$comparison_program" "$provenance_mismatch_dir/"*.json >"$provenance_mismatch_output"
+if jq -e '
+      .complete_pairs == 0
+      and .excluded_incomplete_pairs == 6
+      and (.incomplete_pairs | length == 6)
+      and all(.incomplete_pairs[]; .exclusion_reason == "provenance_mismatch")
+    ' "$provenance_mismatch_output" >/dev/null; then
+    pass
+else
+    fail "comparison aggregated a pair with mismatched fixture case grader seed adapter or CLI provenance"
+fi
+
+test_start "finalizer binds the full trace snapshot and current trace identities"
+binding_root="$(mktemp -d "${TMPDIR:-/tmp}/finalizer-trace-binding.XXXXXX")"
+binding_results="$binding_root/results"
+binding_traces="$binding_results/traces"
+binding_template="$binding_root/verdict-template.json"
+binding_plan="$binding_results/run-plan.json"
+p0p4_register_cleanup "$binding_root"
+mkdir -p "$binding_traces"
+case_hash="$(jq -cS '.cases[] | select(.id == "small-fix-stays-lightweight")' "$eval_fixture" | test_sha256_stream)"
+grader_contract_hash="$(jq -cS '.cases[] | select(.id == "small-fix-stays-lightweight") | {fail_signals,machine_expectations,semantic_review}' "$eval_fixture" | test_sha256_stream)"
+grader_runner_hash="$(test_sha256_stream <"$codex_eval_runner")"
+grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%s\n' "$grader_contract_hash" "$grader_runner_hash" | test_sha256_stream)"
+for variant in baseline candidate; do
+    if [[ "$variant" == baseline ]]; then instruction_hash="$(printf '2%.0s' {1..64})"; else instruction_hash="$(printf '3%.0s' {1..64})"; fi
+    jq -n --arg variant "$variant" --arg instruction_hash "$instruction_hash" \
+      --arg case_hash "$case_hash" --arg grader_hash "$grader_hash" '
+      {pair_id:"identity-pair",trial_index:1,case_id:"small-fix-stays-lightweight",model:"test-model",variant:$variant,
+       provenance:{fixture_sha256:("1"*64),case_sha256:$case_hash,grader_sha256:$grader_hash,
+         instruction_sha256:$instruction_hash,seed_workspace_sha256:("4"*64),requested_model:"test-model",
+         runtime_model_attestation:"not_exposed_by_codex_jsonl",model_selection_evidence:"explicit_model_argument_only",
+         requested_model_catalog_entry_sha256:null,codex_executable_sha256:null,
+         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v5"}}' \
+      >"$binding_traces/identity-pair-$variant.json"
+done
+jq -n '{planned_runs:2,fixture_sha256:("1"*64),requested_model:"test-model",cli_version:"codex-cli test",
+  requested_model_catalog_entry_sha256:null,codex_executable_sha256:null,runs:[
+  {pair_id:"identity-pair",case_id:"small-fix-stays-lightweight",trial_index:1,variant:"baseline",instruction_sha256:("2"*64)},
+  {pair_id:"identity-pair",case_id:"small-fix-stays-lightweight",trial_index:1,variant:"candidate",instruction_sha256:("3"*64)}]}' >"$binding_plan"
+jq -n '{schema_version:"1.0",review_kind:"workflow_kernel_semantic_false_positive",
+  scope:{data_classification:"synthetic",case_category:"seeded_review",case_ids:["seeded-code-review-regressions"],synthetic_fixture_ref:"docs/evals/fixtures/seeded-code-review-regressions",synthetic_fixture_sha256:("0"*64),raw_artifacts_retained:false},
+  bindings:{run_plan_sha256:("0"*64),comparison_sha256:("0"*64),fixture_sha256:("0"*64),candidate_manifest_sha256:("0"*64),baseline_instruction_sha256:("0"*64),candidate_instruction_sha256:("0"*64)},
+  reviewability:{status:"ready",reason_codes:[]},pairs:[{pair_id:"seeded-pair",case_id:"seeded-code-review-regressions",pair_sha256:("0"*64),candidate:{findings:[]}}],diagnostics:[]}' >"$binding_results/semantic-review-packet.json"
+expected_trace_set_sha="$(test_trace_set_sha256 "$binding_traces")"
+identity_ok=false
+if (export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; validate_plan_trace_contract "$binding_plan" "$binding_traces"); then identity_ok=true; fi
+cp "$binding_traces/identity-pair-candidate.json" "$binding_root/candidate-valid.json"
+stale_trace_rejected=false
+jq --arg stale_hash "$grader_contract_hash" '
+  .provenance.grader_sha256 = $stale_hash
+  | .provenance.adapter_version = "codex-framework-eval-v2"
+' "$binding_root/candidate-valid.json" >"$binding_traces/identity-pair-candidate.json"
+if (export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; ! validate_plan_trace_contract "$binding_plan" "$binding_traces"); then
+    stale_trace_rejected=true
+fi
+identity_rejection_ok=true
+for identity_field in case grader adapter; do
+    case "$identity_field" in
+        case) jq '.provenance.case_sha256 = ("f"*64)' "$binding_root/candidate-valid.json" >"$binding_traces/identity-pair-candidate.json" ;;
+        grader) jq '.provenance.grader_sha256 = ("f"*64)' "$binding_root/candidate-valid.json" >"$binding_traces/identity-pair-candidate.json" ;;
+        adapter) jq '.provenance.adapter_version = "stale-adapter"' "$binding_root/candidate-valid.json" >"$binding_traces/identity-pair-candidate.json" ;;
+    esac
+    if (export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; validate_plan_trace_contract "$binding_plan" "$binding_traces"); then
+        identity_rejection_ok=false
+        break
+    fi
+done
+cp "$binding_root/candidate-valid.json" "$binding_traces/identity-pair-candidate.json"
+actual_trace_set_sha="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; trace_set_sha256 "$binding_traces")"
+if [[ "$actual_trace_set_sha" == "$expected_trace_set_sha" ]] \
+    && jq -e '.properties.bindings.required | index("trace_set_sha256") != null' "$semantic_verdict_schema" >/dev/null \
+    && jq -e '.properties.bindings.required | index("context_budget_evidence_sha256") != null' "$semantic_verdict_schema" >/dev/null \
+    && jq -e '.properties.bindings.required | index("trace_set_sha256") != null' "$promotion_decision_schema" >/dev/null \
+    && jq -e '.properties.bindings.required | index("context_budget_evidence_sha256") != null' "$promotion_decision_schema" >/dev/null \
+    && [[ "$identity_ok" == true && "$identity_rejection_ok" == true && "$stale_trace_rejected" == true ]]; then
+    pass
+else
+    fail "finalizer did not bind every trace or reject stale case grader and adapter identities"
+fi
+
+test_start "finalizer hashes the same Codex materialization as the eval runner"
+materialization_root="$(mktemp -d "${TMPDIR:-/tmp}/finalizer-materialization.XXXXXX")"
+materialization_overlay="$materialization_root/overlay/SKILL.md"
+materialization_expected="$materialization_root/expected"
+p0p4_register_cleanup "$materialization_root"
+mkdir -p "$(dirname "$materialization_overlay")" "$materialization_expected"
+printf '%s\n' 'state directory: {agent_state_dir}' >"$materialization_overlay"
+while IFS= read -r entry; do
+    cp -R "$entry" "$materialization_expected/"
+done < <(find "$FRAMEWORK_DIR/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
+cp "$materialization_overlay" "$materialization_expected/SKILL.md"
+if [[ -f "$materialization_expected/agents/codex.conf" ]]; then
+    cp "$materialization_expected/agents/codex.conf" "$materialization_expected/agent.conf"
+fi
+while IFS= read -r instruction_file; do
+    sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
+    rm -f "${instruction_file}.bak"
+done < <(find "$materialization_expected" -type f \( \
+    -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
+    -o -name '*.conf' -o -name '*.toml' \))
+expected_materialization_hash="$(test_hash_directory "$materialization_expected")"
+actual_materialization_hash="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; materialized_candidate_hash "$materialization_overlay")"
+if [[ "$actual_materialization_hash" == "$expected_materialization_hash" ]] \
+    && cmp -s "$materialization_expected/agent.conf" "$materialization_expected/agents/codex.conf" \
+    && ! grep -R -Fq '{agent_state_dir}' "$materialization_expected"; then
+    pass
+else
+    fail "finalizer did not mirror the runner's Codex preset and agent-state substitution before hashing"
+fi
+
+test_start "question-mark proxy naming is explicit across manifest comparison and docs"
+if jq -e '.promotion_gates.question_mark_count_proxy_must_not_increase == true and (.promotion_gates | has("unnecessary_questions_must_not_increase") | not)' "$workflow_kernel_manifest" >/dev/null \
+    && grep -Fq 'question_mark_count_proxy_not_higher' "$comparison_program" \
+    && grep -Fq 'question-mark-count proxy' "$eval_readme"; then
+    pass
+else
+    fail "promotion surfaces still present the question-mark proxy as semantic unnecessary-question evidence"
+fi
+
+test_start "trace contract rejects the ambiguous legacy unnecessary_questions field"
+legacy_metric_trace="$trace_invalid_dir/legacy-unnecessary-questions.json"
+rm -f "$trace_invalid_dir"/*.json
+jq '
+  .metrics.unnecessary_questions = .metrics.question_mark_count_proxy
+  | .execution.metric_methods.unnecessary_questions = "question_mark_count_proxy"
+' "$trace_valid_dir/completed.json" >"$legacy_metric_trace"
+if "$eval_runner" --validate-traces "$trace_invalid_dir" >"$trace_output" 2>"$trace_error"; then
+    fail "trace validator accepted the ambiguous legacy unnecessary_questions field"
+elif grep -Fq 'unnecessary_questions' "$trace_error" \
+    && jq -e '
+      (.properties.metrics.required | index("question_mark_count_proxy") != null)
+      and (.properties.metrics.properties | has("question_mark_count_proxy"))
+      and (.properties.metrics.properties | has("unnecessary_questions") | not)
+      and (.properties.execution.properties.metric_methods.required | index("question_mark_count_proxy") != null)
+      and (.properties.execution.properties.metric_methods.properties | has("unnecessary_questions") | not)
+    ' "$trace_schema" >/dev/null; then
+    pass
+else
+    fail "trace schema and validator did not converge on the explicit question_mark_count_proxy field"
+fi
+
+test_start "stale-journal workspace predicates expose bounded diagnostic ids"
+if grep -Fq 'workspace_failure_ids' "$codex_eval_runner" \
+    && grep -Fq 'workspace-001' "$codex_eval_runner" \
+    && grep -Fq 'workspace-002' "$codex_eval_runner" \
+    && grep -Fq 'workspace-003' "$codex_eval_runner" \
+    && jq -e '
+      .properties.execution.properties.verifier.properties.workspace_failure_ids
+      | .type == "array"
+        and .maxItems == 999
+        and .uniqueItems == true
+        and .items.pattern == "^workspace-[0-9]{3}$"
+    ' "$trace_schema" >/dev/null \
+    && grep -Fq '"workspace_failure_ids"' "$eval_runner" \
+    && grep -Fq 'bounded_ids("workspace_failure_ids"; "^workspace-[0-9]{3}$")' "$eval_runner"; then
+    pass
+else
+    fail "stale-journal workspace failures are not traceable through bounded verifier ids"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

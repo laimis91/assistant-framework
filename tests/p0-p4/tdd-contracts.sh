@@ -11,7 +11,7 @@ for file in \
     for term in \
         "In TDD-active tasks, require RED evidence in the task packet/handoff before changing production code" \
         'If missing, return `NEEDS_CONTEXT` and make no production changes' \
-        "Do not write tests unless the handoff explicitly assigns Code Writer test ownership"; do
+        "The selected lane is authoritative: bounded_executor owns the focused"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_terms+=("$file: $term")
         fi
@@ -43,14 +43,15 @@ else
     fail "Builder/Tester prompts missing TDD ownership evidence terms: ${missing_builder_tester_terms[*]}"
 fi
 
-test_start "workflow build worker protocol documents Builder RED Code Writer GREEN Builder verification"
+test_start "workflow build worker protocol preserves RED GREEN verification in both execution lanes"
 missing_tdd_phase_terms=()
 build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
     "## TDD Sandwich" \
-    "Builder/Tester RED: write one failing behaviour test, run it, verify right failure reason, and return RED evidence." \
-    "Code Writer GREEN: implement minimal production code only after RED evidence is present." \
-    "Builder/Tester VERIFY/REFACTOR-SAFETY: run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures."; do
+    "bounded_executor" \
+    "valid RED evidence must exist before production code" \
+    "separated_workers" \
+    "Builder/Tester owns RED, Code Writer owns GREEN"; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
@@ -77,7 +78,7 @@ for file_and_term in \
     "$workflow_plan::tdd_applies: [true/false]" \
     "$workflow_plan::TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason" \
     "$build_worker_ref::Workflow sets TDD active by default for behavior changes, bugfixes with RED-ready reproduction/root-cause evidence, and interface-affecting refactors" \
-    "$build_worker_ref::When \`tdd_mode=true\` or \`tdd_applies=true\`, use the TDD sandwich per step" \
+    "$build_worker_ref::When \`tdd_mode=true\` or \`tdd_applies=true\`, preserve the behavior boundary" \
     "$workflow_skill::Behavior changes default tests-first or carry explicit validation in the same Build step."; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
@@ -94,13 +95,14 @@ fi
 test_start "TDD skill documents orchestrated ownership and required RED evidence"
 missing_tdd_skill_terms=()
 for term in \
-    "Builder/Tester owns RED" \
-    "Code Writer owns GREEN" \
-    "Builder/Tester owns verification and refactor-safety" \
+    "bounded executor owns RED, GREEN, focused verification, and refactor safety" \
+    "Builder/Tester owns RED, Code Writer owns GREEN" \
+    "Builder/Tester owns verification/refactor-safety" \
     "Required RED evidence before production implementation:" \
     "Test file and test name" \
     "Why the failure proves the intended missing behaviour" \
-    'If TDD is active and RED evidence is missing, Code Writer must return `NEEDS_CONTEXT` and make no production changes.'; do
+    'If TDD is active and RED evidence is missing, the selected production owner' \
+    'must return `NEEDS_CONTEXT` and make no production changes.'; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md"; then
         missing_tdd_skill_terms+=("$term")
     fi

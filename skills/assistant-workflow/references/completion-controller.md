@@ -4,6 +4,11 @@ Internal reference for adaptive completion, manual verification, learning,
 metrics, memory, reflexion, and final distillation. Load after Review. Manual
 verification may still be pending only when `manual_verification_mode=required`.
 
+For medium+ work, load `references/final-handoff.md` and complete its
+reconstructable developer handoff. Requirement evidence comes from
+`references/requirement-acceptance-map.md`; every accepted requirement is
+passed or explicitly excluded with approval.
+
 ## Document Paths
 
 ### Light path
@@ -135,4 +140,6 @@ explicit project policy, or a user request. When required, print:
 ```
 
 Otherwise, finish with a concise natural completion update that includes the
-required output evidence without exact marker ceremony.
+required output evidence without exact marker ceremony. Medium+ concision does
+not permit dropping architecture decisions, requirement evidence, developer
+test scenarios, limitations, or rollback notes from the final handoff.

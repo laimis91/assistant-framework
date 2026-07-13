@@ -67,7 +67,7 @@ Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mo
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
 5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field only when the question is admissible. Admissible means the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
-6. Restate requirements in 1-3 sentences after clarification is resolved
+6. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, or small work promoted by ambiguity, risk, or multiple material requirements, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
 7. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 8. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
@@ -119,7 +119,7 @@ A slice is not a layer, folder, module, broad feature bucket, setup step, or bro
 
 **Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
-For medium+ tasks, produce Architect-level slice boundaries based on the context map, requirements, risk tier, required gate packs, and the Context Budget note. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform direct fallback with equivalent criteria and evidence. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
+For medium+ tasks, produce Architect-level slice boundaries based on the context map, Requirement Acceptance Map, risk tier, required gate packs, and the Context Budget note. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform direct fallback with equivalent criteria and evidence. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
 Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
@@ -281,9 +281,11 @@ ref is missing, stop Build and return to Plan or repair state using
 `references/harness-controller.md` and `references/harness-runtime-artifacts.md`.
 
 For medium+ tasks with slices, execute one slice at a time from the approved task
-packet. Print `>> Slice [S]/[total]: [slice_id] [name]`, run the
-Code Writer -> Builder/Tester loop, verify each acceptance criterion, record
-slice ledger evidence, and mark the slice `VERIFIED` before advancing.
+packet. Print `>> Slice [S]/[total]: [slice_id] [name]`. In
+`bounded_executor`, the bounded executor owns edit, RED, GREEN, and focused
+verification. In `separated_workers`, run Code Writer then Builder/Tester.
+Verify each acceptance criterion, record lane-matched slice ledger evidence,
+and mark the slice `VERIFIED` before advancing.
 
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
@@ -350,7 +352,8 @@ Print: `--- PHASE: REVIEW COMPLETE ---`
 
 Print: `--- PHASE: DOCUMENT ---`
 
-Load `references/completion-controller.md`. It owns small/full Document paths,
+Load `references/completion-controller.md` and, for medium+ work,
+`references/final-handoff.md`. They own small/full Document paths,
 Learning Controller fields, optional reflexion/memory behavior, metrics JSON
 format, final harness refresh, and Verified Skill Distillation routing.
 

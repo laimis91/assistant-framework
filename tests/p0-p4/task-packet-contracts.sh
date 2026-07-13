@@ -745,8 +745,8 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
     "skills/assistant-workflow/contracts/output.yaml|subagent_authorization_scope"
     "skills/assistant-workflow/contracts/output.yaml|- name: subagent_evidence"
-    "skills/assistant-workflow/contracts/output.yaml|not_applicable is invalid for source-changing Build tasks"
-    "skills/assistant-workflow/contracts/output.yaml|per-slice dispatch evidence"
+    "skills/assistant-workflow/contracts/output.yaml|Evidence matches build_execution_lane"
+    "skills/assistant-workflow/contracts/output.yaml|per_slice_dispatch_evidence"
     "skills/assistant-workflow/contracts/output.yaml|authorization_denied, subagents_unavailable, or policy_disallowed"
     "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_AUTH"
     "skills/assistant-workflow/contracts/phase-gates.yaml|explicit user authorization is obtained before any phase that requires subagents continues"
@@ -765,7 +765,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/subagent-roles.md|Spawn the code-writer agent"
     "skills/assistant-workflow/references/subagent-roles.md|do not look for a visible Claude-style \`Agent\` tool"
     "skills/assistant-workflow/references/subagent-roles.md|optional limits; absence of those settings is not proof that subagents are unavailable"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Strict evidence gate"
+    "skills/assistant-workflow/references/subagent-dispatch.md|Evidence gate for standard/strict work"
     "skills/assistant-workflow/references/task-journal-template.md|Agent Dispatch Log"
     "skills/assistant-workflow/references/task-journal-template.md|Code Mapper dispatch"
     "skills/assistant-workflow/references/task-journal-template.md|Reviewer dispatch"
@@ -1594,7 +1594,7 @@ while [[ $# -gt 0 ]]; do
             shift
             prompt_content="${1:-}"
             ;;
-        --cwd)
+        -C|--cd|--cwd)
             shift
             cwd_arg="${1:-}"
             ;;
@@ -1795,7 +1795,7 @@ while [[ $# -gt 0 ]]; do
             shift
             prompt_content="${1:-}"
             ;;
-        --cwd)
+        -C|--cd|--cwd)
             shift
             cwd_arg="${1:-}"
             ;;

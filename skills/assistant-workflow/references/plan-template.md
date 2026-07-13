@@ -37,9 +37,10 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
+- Requirement ids: [R# ids from the Requirement Acceptance Map]
 - Behavior / acceptance criteria:
-  - [binary observable behavior]
-  - [binary observable behavior]
+  - [R#] [binary observable behavior]
+  - [R#] [binary observable behavior]
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
@@ -86,6 +87,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - name:
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
+- requirement_ids:
 - acceptance_criteria:
 - files_to_create:
 - files_to_modify:
@@ -106,6 +108,13 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ```markdown
 ## Goal
 - [1-3 sentence restated requirement from Discovery]
+
+## Requirement Acceptance Map
+- Intended outcome: [one outcome]
+- Assumptions/defaults: [explicit inferred decisions]
+- Open material questions: [none before approval]
+- Non-goals: [exclusions]
+- Entries: [requirement_id -> acceptance criterion -> verification method -> evidence pending -> manual scenario or N/A]
 
 ## Triage result
 - Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]

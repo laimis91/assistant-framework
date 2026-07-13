@@ -316,9 +316,13 @@ trace_validation_errors() {
 
     jq -r --slurpfile fixture "$FIXTURE" '
       def nonempty_string: type == "string" and length > 0;
-      def allowed_top: ["schema_version", "run_id", "case_id", "model", "variant", "status", "metrics", "error"];
-      def allowed_metrics: ["input_tokens", "output_tokens", "latency_ms", "tool_calls", "unnecessary_questions", "time_to_first_useful_action_ms", "rework_count", "acceptance_passed"];
+      def sha256_string: type == "string" and test("^[0-9a-f]{64}$");
+      def allowed_top: ["schema_version", "run_id", "pair_id", "trial_index", "case_id", "model", "variant", "status", "metrics", "error", "provenance", "execution"];
+      def allowed_metrics: ["input_tokens", "output_tokens", "latency_ms", "tool_calls", "question_mark_count_proxy", "time_to_first_useful_action_ms", "rework_count", "acceptance_passed", "acceptance_items_passed", "acceptance_items_total", "seeded_defects_detected", "seeded_defects_total", "false_positive_marker_hits", "forbidden_command_hits", "scope_deviations", "verifier_exit_code"];
       def allowed_error: ["code", "message"];
+      def allowed_provenance: ["fixture_sha256", "case_sha256", "instruction_sha256", "grader_sha256", "seed_workspace_sha256", "cli_version", "requested_model", "runtime_model_attestation", "model_selection_evidence", "requested_model_catalog_entry_sha256", "codex_executable_sha256", "adapter_version"];
+      def allowed_execution: ["exit_code", "verifier", "metric_methods", "raw_artifacts_retained", "semantic_checkpoint_sha256"];
+      def allowed_verifier: ["status", "required_missing", "missing_required_ids", "forbidden_hits", "forbidden_hit_ids", "fail_signal_hits", "fail_signal_hit_ids", "acceptance_items_passed", "acceptance_items_total", "seeded_defects_detected", "seeded_defects_total", "seeded_defect_missed_ids", "false_positive_marker_hits", "false_positive_marker_hit_ids", "forbidden_command_hits", "workspace_status", "workspace_exit_code", "workspace_failure_ids", "scope_deviations"];
       def unknown($allowed): keys_unsorted - $allowed;
       def require_string($field):
         if has($field) and (.[$field] | nonempty_string) then empty
@@ -335,6 +339,11 @@ trace_validation_errors() {
               "missing or invalid nonnegative integer metric " + $field
             else empty end
         else "missing or invalid nonnegative integer metric " + $field end;
+      def bounded_ids($field; $pattern):
+        if has($field)
+           and (.[$field] | type == "array" and length <= 999 and length == (unique | length)
+             and all(.[]; type == "string" and test($pattern)))
+        then empty else "missing or invalid bounded verifier IDs " + $field end;
 
       if type != "object" then
         "trace root must be an object"
@@ -342,6 +351,11 @@ trace_validation_errors() {
         (unknown(allowed_top)[]? | "additional top-level field is not allowed: " + .),
         (if .schema_version == "1.0" then empty else "schema_version must be 1.0" end),
         require_string("run_id"),
+        (if has("pair_id") then require_string("pair_id") else empty end),
+        (if has("trial_index") then
+          (if (.trial_index | type == "number" and . >= 1 and . == floor) then empty
+           else "trial_index must be a positive integer" end)
+         else empty end),
         require_string("case_id"),
         (if (.case_id | nonempty_string) then
           .case_id as $case_id
@@ -349,10 +363,129 @@ trace_validation_errors() {
             else "case_id is not declared in the eval fixture: " + $case_id end
          else empty end),
         require_string("model"),
+        (if has("provenance") and (.provenance | type) == "object" and (.provenance.requested_model | nonempty_string) then
+           (if .model == .provenance.requested_model then empty else "model must equal provenance.requested_model" end)
+         else empty end),
         (if .variant == "baseline" or .variant == "candidate" then empty
          else "variant must be baseline or candidate" end),
         (if .status == "completed" or .status == "adapter_unavailable" then empty
          else "status must be completed or adapter_unavailable" end),
+        (if .status == "completed" then
+           (if has("provenance") then empty else "completed trace requires provenance" end),
+           (if has("execution") then empty else "completed trace requires execution" end),
+           (if .execution.exit_code == 0 then empty else "completed trace execution.exit_code must be 0" end),
+           (if .execution.verifier.status == "passed" or .execution.verifier.status == "failed"
+            then empty else "completed trace verifier.status must be passed or failed" end),
+           (if .execution | has("metric_methods") then empty else "completed trace requires exact metric_methods" end),
+           (if (.execution | has("raw_artifacts_retained")) and .execution.raw_artifacts_retained == false
+            then empty else "completed trace requires raw_artifacts_retained=false" end),
+           (if (.metrics.acceptance_passed == true and .execution.verifier.status == "passed")
+                or (.metrics.acceptance_passed == false and .execution.verifier.status == "failed")
+            then empty else "completed trace acceptance_passed does not match verifier.status" end),
+           (if .metrics.acceptance_items_passed == .execution.verifier.acceptance_items_passed
+                and .metrics.acceptance_items_total == .execution.verifier.acceptance_items_total
+            then empty else "completed trace metric acceptance item counts do not match verifier counts" end)
+         else empty end),
+        (if has("provenance") then
+          (if (.provenance | type) == "object" then
+            (.provenance | unknown(allowed_provenance)[]? | "additional provenance field is not allowed: " + .),
+            (if (.provenance.fixture_sha256 | sha256_string) then empty else "provenance.fixture_sha256 must be a lowercase SHA-256" end),
+            (if (.provenance.case_sha256 | sha256_string) then empty else "provenance.case_sha256 must be a lowercase SHA-256" end),
+            (if (.provenance.instruction_sha256 | sha256_string) then empty else "provenance.instruction_sha256 must be a lowercase SHA-256" end),
+            (if (.provenance.grader_sha256 | sha256_string) then empty else "provenance.grader_sha256 must be a lowercase SHA-256" end),
+            (if (.provenance | has("seed_workspace_sha256")) then
+               (if (.provenance.seed_workspace_sha256 | sha256_string) then empty else "provenance.seed_workspace_sha256 must be a lowercase SHA-256" end)
+             else empty end),
+            (.provenance | require_string("cli_version")),
+            (.provenance | require_string("requested_model")),
+            (if .provenance.runtime_model_attestation == "not_exposed_by_codex_jsonl" then empty else "provenance.runtime_model_attestation must disclose unavailable runtime telemetry" end),
+            (if .provenance.model_selection_evidence == "catalog_entry_and_explicit_model_argument"
+                 or .provenance.model_selection_evidence == "explicit_model_argument_only"
+             then empty else "provenance.model_selection_evidence is invalid" end),
+            (if .provenance.requested_model_catalog_entry_sha256 == null
+                 or (.provenance.requested_model_catalog_entry_sha256 | sha256_string)
+             then empty else "provenance.requested_model_catalog_entry_sha256 must be null or a lowercase SHA-256" end),
+            (if .provenance.codex_executable_sha256 == null
+                 or (.provenance.codex_executable_sha256 | sha256_string)
+             then empty else "provenance.codex_executable_sha256 must be null or a lowercase SHA-256" end),
+            (if .provenance.model_selection_evidence == "catalog_entry_and_explicit_model_argument" then
+               (if (.provenance.requested_model_catalog_entry_sha256 | sha256_string)
+                    and (.provenance.codex_executable_sha256 | sha256_string)
+                then empty else "model-selection evidence hashes are inconsistent with catalog attestation" end)
+             elif .provenance.model_selection_evidence == "explicit_model_argument_only" then
+               (if .provenance.requested_model_catalog_entry_sha256 == null
+                then empty else "model-selection evidence hashes are inconsistent with argument-only selection" end)
+             else empty end),
+            (if (.provenance | has("resolved_model")) then "provenance.resolved_model is unsupported because Codex JSONL does not expose runtime resolution" else empty end),
+            (.provenance | require_string("adapter_version"))
+           else "provenance must be an object" end)
+         else empty end),
+        (if has("execution") then
+          (if (.execution | type) == "object" then
+            (.execution | unknown(allowed_execution)[]? | "additional execution field is not allowed: " + .),
+            (if (.execution | has("semantic_checkpoint_sha256")) then
+               (if (.execution.semantic_checkpoint_sha256 | sha256_string) then empty else "execution.semantic_checkpoint_sha256 must be a lowercase SHA-256" end)
+             else empty end),
+            (if (.execution.exit_code | type == "number" and . >= 0 and . == floor) then empty
+             else "execution.exit_code must be a nonnegative integer" end),
+            (if (.execution.verifier | type) == "object" then
+              (.execution.verifier | unknown(allowed_verifier)[]? | "additional verifier field is not allowed: " + .),
+              (if (.execution.verifier.status == "passed" or .execution.verifier.status == "failed" or .execution.verifier.status == "not_run") then empty
+               else "execution.verifier.status is invalid" end),
+              (.execution.verifier | if has("required_missing") then require_integer("required_missing") else empty end),
+              (.execution.verifier | if has("missing_required_ids") then bounded_ids("missing_required_ids"; "^required-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("forbidden_hits") then require_integer("forbidden_hits") else empty end),
+              (.execution.verifier | if has("forbidden_hit_ids") then bounded_ids("forbidden_hit_ids"; "^forbidden-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("fail_signal_hits") then require_integer("fail_signal_hits") else empty end),
+              (.execution.verifier | if has("fail_signal_hit_ids") then bounded_ids("fail_signal_hit_ids"; "^fail-signal-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("acceptance_items_passed") then require_integer("acceptance_items_passed") else empty end),
+              (.execution.verifier | if has("acceptance_items_total") then require_integer("acceptance_items_total") else empty end),
+              (.execution.verifier | if has("seeded_defects_detected") then require_integer("seeded_defects_detected") else empty end),
+              (.execution.verifier | if has("seeded_defects_total") then require_integer("seeded_defects_total") else empty end),
+              (.execution.verifier | if has("seeded_defect_missed_ids") then bounded_ids("seeded_defect_missed_ids"; "^seeded-defect-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("false_positive_marker_hits") then require_integer("false_positive_marker_hits") else empty end),
+              (.execution.verifier | if has("false_positive_marker_hit_ids") then bounded_ids("false_positive_marker_hit_ids"; "^false-positive-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("forbidden_command_hits") then require_integer("forbidden_command_hits") else empty end),
+              (.execution.verifier | if has("workspace_exit_code") then require_integer("workspace_exit_code") else empty end),
+              (.execution.verifier | if has("workspace_failure_ids") then bounded_ids("workspace_failure_ids"; "^workspace-[0-9]{3}$") else empty end),
+              (.execution.verifier | if has("scope_deviations") then require_integer("scope_deviations") else empty end),
+              (.execution.verifier.workspace_status as $workspace_status
+               | if (.execution.verifier | has("workspace_status")) and (["passed", "failed", "not_applicable"] | index($workspace_status)) == null
+                 then "execution.verifier.workspace_status is invalid" else empty end),
+              (if .execution.verifier.status == "passed" or .execution.verifier.status == "failed" then
+                 (.execution.verifier | bounded_ids("missing_required_ids"; "^required-[0-9]{3}$")),
+                 (.execution.verifier | bounded_ids("forbidden_hit_ids"; "^forbidden-[0-9]{3}$")),
+                 (.execution.verifier | bounded_ids("fail_signal_hit_ids"; "^fail-signal-[0-9]{3}$")),
+                 (.execution.verifier | bounded_ids("seeded_defect_missed_ids"; "^seeded-defect-[0-9]{3}$")),
+                 (.execution.verifier | bounded_ids("false_positive_marker_hit_ids"; "^false-positive-[0-9]{3}$")),
+                 (.execution.verifier | bounded_ids("workspace_failure_ids"; "^workspace-[0-9]{3}$")),
+                 (.execution.verifier | require_integer("acceptance_items_passed")),
+                 (.execution.verifier | require_integer("acceptance_items_total")),
+                 (if .execution.verifier | has("workspace_status") then empty else "completed trace verifier requires workspace_status" end),
+                 (.execution.verifier | require_integer("workspace_exit_code")),
+                 (if .execution.verifier.required_missing == (.execution.verifier.missing_required_ids | length) then empty else "required_missing count does not match missing_required_ids" end),
+                 (if .execution.verifier.forbidden_hits == (.execution.verifier.forbidden_hit_ids | length) then empty else "forbidden_hits count does not match forbidden_hit_ids" end),
+                 (if .execution.verifier.fail_signal_hits == (.execution.verifier.fail_signal_hit_ids | length) then empty else "fail_signal_hits count does not match fail_signal_hit_ids" end),
+                 (if .execution.verifier.seeded_defects_detected == (.execution.verifier.seeded_defects_total - (.execution.verifier.seeded_defect_missed_ids | length)) then empty else "seeded defect count does not match seeded_defect_missed_ids" end),
+                 (if .execution.verifier.false_positive_marker_hits == (.execution.verifier.false_positive_marker_hit_ids | length) then empty else "false_positive_marker_hits count does not match false_positive_marker_hit_ids" end),
+                 (if .execution.verifier.acceptance_items_passed <= .execution.verifier.acceptance_items_total then empty else "acceptance_items_passed exceeds acceptance_items_total" end),
+                 (if ((.execution.verifier.workspace_status == "failed") == ((.execution.verifier.workspace_failure_ids | length) > 0))
+                  then empty else "workspace_status does not match workspace_failure_ids" end)
+               else empty end)
+             else "execution.verifier must be an object" end),
+            (if (.execution | has("metric_methods")) then
+              (if (.execution.metric_methods | type) == "object"
+                   and (.execution.metric_methods | keys_unsorted | sort) == ["question_mark_count_proxy", "rework_count", "time_to_first_useful_action_ms"]
+                   and .execution.metric_methods.time_to_first_useful_action_ms == "completion_latency_upper_bound"
+                   and .execution.metric_methods.question_mark_count_proxy == "question_mark_count_proxy"
+                   and .execution.metric_methods.rework_count == "additional_file_change_events_proxy"
+               then empty else "execution.metric_methods does not match the published proxy contract" end)
+             else empty end),
+            (if (.execution | has("raw_artifacts_retained")) and .execution.raw_artifacts_retained != false then
+              "execution.raw_artifacts_retained must be false"
+             else empty end)
+           else "execution must be an object" end)
+         else empty end),
         (if .status == "completed" then
           (if has("error") then "completed trace must not contain error" else empty end),
           (if (.metrics | type) == "object" then
@@ -361,18 +494,69 @@ trace_validation_errors() {
             (.metrics | require_integer("output_tokens")),
             (.metrics | require_number("latency_ms")),
             (.metrics | require_integer("tool_calls")),
-            (.metrics | require_integer("unnecessary_questions")),
+            (.metrics | require_integer("question_mark_count_proxy")),
             (.metrics | require_number("time_to_first_useful_action_ms")),
             (.metrics | require_integer("rework_count")),
             (if .metrics | has("acceptance_passed") and (.acceptance_passed | type == "boolean")
-             then empty else "missing or invalid boolean metric acceptance_passed" end)
+             then empty else "missing or invalid boolean metric acceptance_passed" end),
+            (.metrics | require_integer("acceptance_items_passed")),
+            (.metrics | require_integer("acceptance_items_total")),
+            (if .metrics.acceptance_items_passed <= .metrics.acceptance_items_total then empty else "acceptance_items_passed exceeds acceptance_items_total" end),
+            (.metrics | if has("seeded_defects_detected") then require_integer("seeded_defects_detected") else empty end),
+            (.metrics | if has("seeded_defects_total") then require_integer("seeded_defects_total") else empty end),
+            (.metrics | if has("false_positive_marker_hits") then require_integer("false_positive_marker_hits") else empty end),
+            (.metrics | if has("forbidden_command_hits") then require_integer("forbidden_command_hits") else empty end),
+            (.metrics | if has("scope_deviations") then require_integer("scope_deviations") else empty end),
+            (.metrics | if has("verifier_exit_code") then require_integer("verifier_exit_code") else empty end)
            else "completed trace requires metrics object" end)
          elif .status == "adapter_unavailable" then
           (if has("metrics") then "adapter_unavailable trace must not contain metrics" else empty end),
           (if (.error | type) == "object" then
             (.error | unknown(allowed_error)[]? | "additional error field is not allowed: " + .),
             (if .error.code | nonempty_string then empty else "missing or invalid error.code" end),
-            (if .error.message | nonempty_string then empty else "missing or invalid error.message" end)
+            (.error.code as $error_code | if ([
+                  "adapter_not_configured",
+                  "codex_not_found",
+                  "codex_exit_nonzero",
+                  "codex_reported_failure",
+                  "local_execution_restricted",
+                  "model_unavailable",
+                  "authentication_failed",
+                  "quota_or_rate_limited",
+                  "network_unavailable",
+                  "configuration_error",
+                  "cli_usage_error",
+                  "unknown_event_shape",
+                  "missing_usage",
+                  "missing_final_output",
+                  "execution_timed_out",
+                  "evaluation_time_cap_reached"
+                ] | index($error_code)) != null
+             then empty else "error.code is not in the bounded vocabulary" end),
+            (if .error.message | nonempty_string then empty else "missing or invalid error.message" end),
+            (if (.error.code | nonempty_string) and (.error.message | nonempty_string) then
+              (.error.code as $error_code
+               | .error.message as $error_message
+               | if ({
+                  "adapter_not_configured": "The local adapter is not configured.",
+                  "codex_not_found": "Codex executable is unavailable.",
+                  "codex_exit_nonzero": "Codex exited non-zero without a recognized structured failure class.",
+                  "codex_reported_failure": "Codex reported a structured execution failure.",
+                  "local_execution_restricted": "Local execution restrictions prevented Codex startup.",
+                  "model_unavailable": "Requested model is unavailable or inaccessible.",
+                  "authentication_failed": "Codex authentication failed.",
+                  "quota_or_rate_limited": "Codex quota or rate limit prevented execution.",
+                  "network_unavailable": "Codex could not reach the model service.",
+                  "configuration_error": "Codex configuration prevented execution.",
+                  "cli_usage_error": "Codex rejected the adapter command shape.",
+                  "unknown_event_shape": "Codex JSONL contained an unknown event shape.",
+                  "missing_usage": "Codex JSONL did not contain completed token usage.",
+                  "missing_final_output": "Codex did not produce a final response.",
+                  "execution_timed_out": "Codex exceeded the bounded per-run timeout.",
+                  "evaluation_time_cap_reached": "The bounded total evaluation time cap was reached."
+                  }[$error_code] == $error_message)
+                 then empty else "error.message does not match bounded message for error.code" end)
+             else empty end)
            else "adapter_unavailable trace requires error object with error.code and error.message" end)
          else empty end)
       end
@@ -465,7 +649,7 @@ compare_trace_directory() {
               output_tokens: metric_summary($runs; "output_tokens"),
               latency_ms: metric_summary($runs; "latency_ms"),
               tool_calls: metric_summary($runs; "tool_calls"),
-              unnecessary_questions: metric_summary($runs; "unnecessary_questions"),
+              question_mark_count_proxy: metric_summary($runs; "question_mark_count_proxy"),
               time_to_first_useful_action_ms: metric_summary($runs; "time_to_first_useful_action_ms"),
               rework_count: metric_summary($runs; "rework_count")
             }
@@ -502,7 +686,7 @@ compare_trace_directory() {
             output_tokens: delta($baseline.metrics.output_tokens.mean; $candidate.metrics.output_tokens.mean),
             latency_ms: delta($baseline.metrics.latency_ms.mean; $candidate.metrics.latency_ms.mean),
             tool_calls: delta($baseline.metrics.tool_calls.mean; $candidate.metrics.tool_calls.mean),
-            unnecessary_questions: delta($baseline.metrics.unnecessary_questions.mean; $candidate.metrics.unnecessary_questions.mean),
+            question_mark_count_proxy: delta($baseline.metrics.question_mark_count_proxy.mean; $candidate.metrics.question_mark_count_proxy.mean),
             time_to_first_useful_action_ms: delta($baseline.metrics.time_to_first_useful_action_ms.mean; $candidate.metrics.time_to_first_useful_action_ms.mean),
             rework_count: delta($baseline.metrics.rework_count.mean; $candidate.metrics.rework_count.mean),
             acceptance_rate: delta($baseline.acceptance.rate; $candidate.acceptance.rate)

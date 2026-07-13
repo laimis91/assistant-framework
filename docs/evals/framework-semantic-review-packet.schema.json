@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "framework-semantic-review-packet.schema.json",
+  "title": "Assistant Framework Synthetic Semantic Review Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "review_kind", "scope", "bindings", "reviewability", "pairs", "diagnostics"],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "severity", "source", "line", "claim_code", "normalized_claim", "review_summary"],
+      "properties": {
+        "finding_id": {"type": "string", "pattern": "^(baseline|candidate)-[0-9]{2}$"},
+        "severity": {"enum": ["P0", "P1", "P2", "P3"]},
+        "source": {"enum": ["REQUIREMENTS.md", "src/order.js", "tests/order.test.js"]},
+        "line": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "claim_code": {
+          "enum": [
+            "missing_preferred_discount",
+            "mutates_input_order",
+            "negative_quantity_not_rejected",
+            "test_has_no_behavioral_assertion",
+            "unrelated_authentication_issue",
+            "unrelated_database_migration_issue"
+          ]
+        },
+        "normalized_claim": {
+          "enum": [
+            "Preferred-customer discount is absent.",
+            "Calculation mutates the input order.",
+            "Negative quantity is not rejected.",
+            "The test has no behavioral assertion.",
+            "An authentication issue was claimed.",
+            "A database migration issue was claimed."
+          ]
+        },
+        "review_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^[\\u0020-\\u002E\\u0030-\\u005B\\u005D-\\u007E]+$"
+        }
+      }
+    },
+    "variant_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trace_sha256", "findings"],
+      "properties": {
+        "trace_sha256": {"$ref": "#/$defs/sha256"},
+        "findings": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/finding"}}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pair_id", "case_id", "trial_index", "variant", "status", "reason_code", "case_sha256", "grader_sha256", "seed_workspace_sha256", "trace_sha256", "classified_claim_codes", "finding_failures", "diagnostic_sha256"],
+      "properties": {
+        "pair_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+        "case_id": {"const": "seeded-code-review-regressions"},
+        "trial_index": {"type": "integer", "minimum": 1, "maximum": 20},
+        "variant": {"enum": ["baseline", "candidate"]},
+        "status": {"enum": ["ready", "blocked"]},
+        "reason_code": {
+          "enum": ["paired_variant_blocked", "malformed_finding_payload", "unsafe_finding_content", "unclassified_finding"]
+        },
+        "case_sha256": {"$ref": "#/$defs/sha256"},
+        "grader_sha256": {"$ref": "#/$defs/sha256"},
+        "seed_workspace_sha256": {"$ref": "#/$defs/sha256"},
+        "trace_sha256": {"$ref": "#/$defs/sha256"},
+        "classified_claim_codes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/finding/properties/claim_code"}
+        },
+        "finding_failures": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["finding_id", "reason_code"],
+            "properties": {
+              "finding_id": {"type": "string", "pattern": "^(baseline|candidate)-[0-9]{2}$"},
+              "reason_code": {"enum": ["no_claim_rule_match", "multiple_claim_rule_matches"]}
+            }
+          }
+        },
+        "diagnostic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "review_kind": {"const": "workflow_kernel_semantic_false_positive"},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data_classification", "case_category", "case_ids", "synthetic_fixture_ref", "synthetic_fixture_sha256", "raw_artifacts_retained"],
+      "properties": {
+        "data_classification": {"const": "synthetic"},
+        "case_category": {"const": "seeded_review"},
+        "case_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"const": "seeded-code-review-regressions"}
+        },
+        "synthetic_fixture_ref": {"const": "docs/evals/fixtures/seeded-code-review-regressions"},
+        "synthetic_fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_artifacts_retained": {"const": false}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_plan_sha256", "comparison_sha256", "fixture_sha256", "candidate_manifest_sha256", "baseline_instruction_sha256", "candidate_instruction_sha256", "context_budget_evidence_sha256"],
+      "properties": {
+        "run_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "baseline_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "context_budget_evidence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_codes"],
+      "properties": {
+        "status": {"enum": ["ready", "blocked"]},
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "malformed_finding_payload",
+              "unsafe_finding_content",
+              "unclassified_finding",
+              "missing_or_incomplete_seeded_pair",
+              "fixture_hash_mismatch",
+              "missing_synthetic_seeded_review_scope"
+            ]
+          }
+        }
+      }
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "case_id", "trial_index", "case_sha256", "grader_sha256", "seed_workspace_sha256", "bindings", "baseline", "candidate", "pair_sha256"],
+        "properties": {
+          "pair_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+          "case_id": {"const": "seeded-code-review-regressions"},
+          "trial_index": {"type": "integer", "minimum": 1, "maximum": 20},
+          "case_sha256": {"$ref": "#/$defs/sha256"},
+          "grader_sha256": {"$ref": "#/$defs/sha256"},
+          "seed_workspace_sha256": {"$ref": "#/$defs/sha256"},
+          "bindings": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["candidate_manifest_sha256", "baseline_instruction_sha256", "candidate_instruction_sha256"],
+            "properties": {
+              "candidate_manifest_sha256": {"$ref": "#/$defs/sha256"},
+              "baseline_instruction_sha256": {"$ref": "#/$defs/sha256"},
+              "candidate_instruction_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          },
+          "baseline": {"$ref": "#/$defs/variant_evidence"},
+          "candidate": {"$ref": "#/$defs/variant_evidence"},
+          "pair_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {"$ref": "#/$defs/diagnostic"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"reviewability": {"properties": {"status": {"const": "ready"}}}}},
+      "then": {
+        "properties": {
+          "reviewability": {"properties": {"reason_codes": {"maxItems": 0}}},
+          "pairs": {"minItems": 1},
+          "diagnostics": {"maxItems": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "reviewability": {"properties": {"reason_codes": {"minItems": 1}}},
+          "pairs": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

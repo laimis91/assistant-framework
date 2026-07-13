@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Standard/strict development work that changes project artifacts includes Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Separated role names remain Code Writer, Builder/Tester, and Code Reviewer. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
     default: []
     on_missing: skip
 
@@ -130,11 +130,93 @@ fields:
   - name: acceptance_criteria
     type: string[]
     required: false
-    description: "Explicit success criteria from user or decomposed from an idea"
+    description: "Compatibility list of atomic success criteria derived from requirement_acceptance_map when present"
     validation: "Each criterion is atomic, binary (pass/fail), and testable (8-12 words)"
     default: []
     on_missing: skip
-    notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
+    notes: "Do not create criteria independently when requirement_acceptance_map exists. Vague requests are clarified or safely defaulted, then mapped through references/requirement-acceptance-map.md."
+
+  - name: requirement_acceptance_map
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion"
+    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
+    on_missing: fail
+    object_fields:
+      - name: intended_outcome
+        type: string
+        required: true
+        description: "One concise accepted outcome"
+        on_missing: fail
+      - name: assumptions_and_defaults
+        type: string[]
+        required: true
+        description: "Explicit inferred choices; may be empty"
+        on_missing: fail
+      - name: open_material_questions
+        type: string[]
+        required: true
+        description: "Empty before Plan unless unresolved questions block progress"
+        on_missing: fail
+      - name: non_goals
+        type: string[]
+        required: true
+        description: "Explicit exclusions; may be empty"
+        on_missing: fail
+      - name: entries
+        type: object[]
+        required: true
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: requirement_id
+            type: string
+            required: true
+            description: "Stable identifier unique within the task"
+            on_missing: fail
+          - name: source
+            type: string
+            required: true
+            description: "User request, accepted default, policy, or local contract source"
+            on_missing: fail
+          - name: requirement
+            type: string
+            required: true
+            description: "Atomic accepted requirement"
+            on_missing: fail
+          - name: acceptance_criterion
+            type: string
+            required: true
+            description: "Binary pass/fail criterion proving the requirement"
+            on_missing: fail
+          - name: verification_method
+            type: string
+            required: true
+            description: "Test, command, inspection, review, or manual verification method"
+            on_missing: fail
+          - name: evidence_ref
+            type: string
+            required: true
+            description: "Pending marker or stable verification evidence reference"
+            on_missing: fail
+          - name: manual_scenario_or_na
+            type: string
+            required: true
+            description: "Developer test scenario or explicit N/A with reason"
+            on_missing: fail
+          - name: status
+            type: enum
+            required: true
+            enum_values: [pending, passed, failed, approved_exclusion]
+            description: "Current traceability status"
+            on_missing: fail
+          - name: exclusion_reason
+            type: string
+            required: conditional
+            condition: "status == approved_exclusion"
+            description: "User-approved reason the requirement is excluded"
+            on_missing: fail
 
   - name: harness_capable
     type: boolean
@@ -149,6 +231,16 @@ fields:
       domain-scored, UI/visual/product/UX/docs/DX-facing, or already has an accepted Done Contract
       or Harness Recipe. Do not infer true from size=medium+, delegation alone, or ordinary
       source-changing workflow tasks.
+
+  - name: build_execution_lane
+    type: enum
+    required: false
+    enum_values: [inline_direct, bounded_executor, separated_workers]
+    description: "Ownership shape for the Build edit/test loop"
+    default: bounded_executor
+    on_missing: infer
+    infer_from: "light localized work -> inline_direct; ordinary medium standard-risk work -> bounded_executor; high/critical risk, broad or noisy verification, environment-heavy validation, independent TDD evidence, or explicit separation -> separated_workers"
+    validation: "Size alone does not require separated_workers. bounded_executor still records valid RED before production code, focused GREEN/regression verification, and independent Code Reviewer evidence."
 
   - name: controller_intensity
     type: enum

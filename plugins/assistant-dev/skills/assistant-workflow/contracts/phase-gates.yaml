@@ -71,11 +71,11 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
 
       - id: T7
-        check: "required_agents or fallback execution roles are populated from controller intensity, task size/type/risk, and subagent policy; standard/strict source-changing work includes Code Writer, Builder/Tester, and Code Reviewer, while light low-risk work may execute inline/direct with fresh review evidence"
-        on_fail: "Select workflow agents for standard/strict work, or record the light inline/direct path with relevant validation and fresh review evidence."
+        check: "build_execution_lane and required_agents/fallback roles are populated from risk and verification shape: inline_direct for light localized work; bounded_executor plus independent Code Reviewer for ordinary medium standard-risk work; separated_workers with Code Writer, Builder/Tester, and Code Reviewer only for high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        on_fail: "Select the smallest safe build_execution_lane and matching roles; do not require separated workers from size alone."
 
       - id: T_QA_EVALUATOR
-        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to Code Writer, Builder/Tester, and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
+        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to the selected Build lane roles and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
         condition: "qa_evaluation_mode == required"
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
@@ -110,6 +110,11 @@ gates:
       - id: D1
         check: "Requirements restated in 1-3 sentences"
         on_fail: "Write a requirements summary before proceeding"
+
+      - id: D_REQUIREMENT_ACCEPTANCE_MAP
+        check: "For medium+ work, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Load references/requirement-acceptance-map.md, map every accepted requirement, resolve material questions, and do not decompose from an untraceable criteria list"
 
       - id: D1A
         check: "Discovery confirms or updates task_type, risk_tier, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
@@ -281,7 +286,7 @@ gates:
         on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
 
       - id: P_PATTERN_RETRIEVAL
-        check: "When editing framework skills, contracts, evals, runtime integrations, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical pattern path used, and counterexample/edge case path checked or explicit no-pattern rationale"
+        check: "When editing framework skills, contracts, evals, runtime integrations, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical repository pattern used, and counterexample/edge case checked or no-pattern rationale. If a concrete design force remains and an external library is explicitly configured, load references/design-pattern-retrieval.md; otherwise not_configured continues without asking."
         condition: "task touches framework skills, contracts, evals, runtime integrations, templates, or workflow patterns"
         on_fail: "Search local repo for similar patterns and record Pattern Retrieval before implementation; placeholders such as [paths/queries] or N/A without rationale do not satisfy this gate"
 
@@ -418,14 +423,14 @@ gates:
         on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing Build tasks: subagent_execution_mode is not not_applicable, required_agents includes Code Writer, Builder/Tester, and Code Reviewer, and the task journal Agent Dispatch Log records strict delegated dispatch/result evidence or explicit direct fallback role-equivalent evidence; Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded"
+        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's focused RED, GREEN, and verification evidence plus independent Code Reviewer evidence; build_execution_lane == separated_workers records Code Writer, Builder/Tester, and Code Reviewer evidence"
         condition: "controller_intensity in [standard, strict]"
         on_fail: "Update the Agent Dispatch Log before leaving Build. Light work may instead record inline/direct validation plus fresh review evidence."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
-        check: "For medium+ delegated tasks with slices: per-slice dispatch evidence is recorded before the slice is marked VERIFIED"
+        check: "For medium+ delegated tasks with slices: per-slice evidence matches build_execution_lane before the slice is marked VERIFIED; Builder/Tester is required only when build_execution_lane == separated_workers"
         condition: "size in [medium, large, mega] and subagent_execution_mode == delegated"
-        on_fail: "Add per-slice Code Writer and Builder/Tester dispatch/result evidence to the Agent Dispatch Log or slice ledger before proceeding."
+        on_fail: "Repair evidence according to build_execution_lane: bounded_executor records executor RED/GREEN/verification plus independent review; separated_workers records Code Writer and Builder/Tester dispatch/results plus independent review."
 
       - id: B13
         check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
@@ -446,19 +451,19 @@ gates:
 
       - id: B9
         severity: blocker
-        check: "Implementation was performed by Code Writer subagent when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
+        check: "Implementation was performed by the selected bounded executor or separated Code Writer when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
         condition: "controller_intensity in [standard, strict]"
         on_fail: "Record Code Writer dispatch/result evidence or Code Writer direct fallback evidence before Review"
 
       - id: B10
         severity: blocker
-        check: "Build/test/validation was performed by Builder/Tester subagent when subagent_execution_mode=delegated, or directly in fallback mode with equivalent command/result evidence"
-        condition: "controller_intensity in [standard, strict]"
-        on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review"
+        check: "When build_execution_lane == separated_workers, build/test/validation was performed by Builder/Tester subagent when delegated or directly in fallback mode with equivalent command/result evidence"
+        condition: "controller_intensity in [standard, strict] and build_execution_lane == separated_workers"
+        on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review; bounded_executor instead records focused verification in B_SUBAGENT_EVIDENCE"
 
       - id: B11
         severity: blocker
-        check: "For medium+ tasks with subagent_execution_mode=delegated: Code Writer and Builder/Tester were dispatched per slice; otherwise direct fallback processed slices sequentially with equivalent evidence"
+        check: "For medium+ delegated tasks, the selected lane owner was dispatched per slice and independent Code Reviewer evidence follows integration; separated_workers additionally dispatches Builder/Tester"
         condition: "size in [medium, large, mega]"
         on_fail: "Prefer slice-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
 
@@ -505,8 +510,13 @@ gates:
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
-        check: "Verification summary is written with: changed files, test/validation coverage, review result, manual validation steps when applicable, known limitations"
-        on_fail: "Write verification summary in the configured task journal, output contract, or equivalent carried-forward state"
+        check: "Verification summary and final_handoff are written with changed behavior/areas, architecture decisions and rationale, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual test scenarios or explicit N/A, compatibility/regression surfaces, known limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
+        on_fail: "Load references/final-handoff.md and write the reconstructable handoff in the configured task journal, output contract, or equivalent carried-forward state"
+
+      - id: R_REQUIREMENT_COVERAGE
+        check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Use references/requirement-acceptance-map.md to run missing verification, repair failed behavior, or obtain explicit approval for an exclusion; do not infer coverage from aggregate test success"
 
       - id: R3A
         check: "For bugfixes, review material includes reproduction/root-cause evidence or an explicit not_applicable/blocker rationale, and verifies that regression coverage follows from that evidence"
@@ -533,9 +543,9 @@ gates:
 
       - id: R7
         severity: strict_only
-        check: "For medium+ tasks: final rubric weighted score >= 4.0 (PASS completion threshold)"
+        check: "For medium+ tasks: final rubric score and evidence-backed residual risks are recorded; completion follows actual findings and applicable gates"
         condition: "size in [medium, large, mega]"
-        on_fail: "Weighted score below 4.0 — the review result is REFINE or PIVOT, not PASS. Fix lowest-scoring dimensions and re-review before completion."
+        on_fail: "Record the score and residual risk. A score below 4.0 records residual risk but does not by itself authorize fixes or another review round; continue only for an evidence-backed finding or allowed additional_round_reason."
 
   # ─────────────────────────────────────────────
   # DOCUMENT → COMPLETE
@@ -568,6 +578,11 @@ gates:
         check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
         on_fail: "Do not print workflow complete until all document assertions pass"
 
+      - id: DOC_FINAL_HANDOFF
+        check: "For medium+ tasks final_handoff exists and every accepted requirement_id is linked to passed evidence or an approved exclusion"
+        condition: "size in [medium, large, mega]"
+        on_fail: "Load references/final-handoff.md and references/requirement-acceptance-map.md, complete the handoff and traceability evidence, then re-run Document gates"
+
       - id: DOC4
         check: "If no task journal/equivalent state exists, or explicit non-standard handoff is requested: context_handoff_packet preserves pinned context, summarizes compressible context, prunes stale/unsafe residue, and names the exact next action"
         on_fail: "Create or repair the context_handoff_packet using references/context-handoff-templates.md before ending the session"
@@ -584,6 +599,11 @@ gates:
 # These must hold true throughout the entire workflow, not just at gates.
 # ─────────────────────────────────────────────
 invariants:
+  - id: INV_TASK_STATE_FRESHNESS
+    check: "Persisted task state is treated as a claim and reconciled against the newest user request and current repository evidence before its next action is used; only classification=active may resume"
+    scope: all_phases
+    on_fail: "Load references/task-state-reconciliation.md, classify active/stale/superseded/completed, repair the state, and discard its unchecked next action"
+
   - id: INV1
     check: "Constraints list is never reduced — only grows. Removing a constraint requires explicit user instruction."
     scope: all_phases

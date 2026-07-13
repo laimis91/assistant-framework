@@ -631,6 +631,23 @@ cleanup_installed_tool_build_artifacts() {
     fi
 }
 
+remove_source_only_promotion_tools() {
+    local tools_target="$1" relative_path
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        if $DRY_RUN; then
+            dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
+        else
+            rm -f "$tools_target/$relative_path"
+        fi
+    done <<'EOF'
+context-budget-report.sh
+evals/run-codex-framework-evals.sh
+evals/finalize-workflow-kernel-review.sh
+evals/lib/context-budget-evidence.sh
+EOF
+}
+
 register_codex_memory_graph_mcp() {
     local config_file="$1"
     local mcp_command="$2"
@@ -949,6 +966,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     if $DRY_RUN; then
         dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
+        remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
     else
         mkdir -p "$TOOLS_TARGET"
@@ -957,7 +975,12 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='.publish' \
             --exclude='bin' \
             --exclude='obj' \
+            --exclude='/context-budget-report.sh' \
+            --exclude='/evals/run-codex-framework-evals.sh' \
+            --exclude='/evals/finalize-workflow-kernel-review.sh' \
+            --exclude='/evals/lib/context-budget-evidence.sh' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
+        remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
 
         # Make scripts executable

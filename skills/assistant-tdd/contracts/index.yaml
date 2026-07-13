@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [activation_reason, behaviors, debugging_evidence, test_framework, exceptions]
+        names: [execution_lane, activation_reason, behaviors, debugging_evidence, test_framework, exceptions]
     budget_words: 1500
   current_phase:
     selectors:

@@ -206,7 +206,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::Stop before speculative edits" \
     "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::assistant-tdd" \
     "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::Do not write production code before RED evidence exists" \
-    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::Code Writer must return \`NEEDS_CONTEXT\`" \
+    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::selected production owner" \
     "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::Every URL presented is verified or omitted" \
     "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::candidate mechanisms with evidence" \
     "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::five_lens_briefing" \

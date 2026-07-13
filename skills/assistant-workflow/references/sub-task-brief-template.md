@@ -158,8 +158,8 @@ Each agent gets a brief as its prompt. Requires well-defined contracts and an in
 Brief files use `briefs/slice-<N>-<slice_id>.md`.
 
 ```bash
-codex exec "$(cat 'briefs/slice-<N>-<slice_id>.md')" --cwd .
-codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" --cwd .
+codex exec "$(cat 'briefs/slice-<N>-<slice_id>.md')" -C .
+codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" -C .
 ```
 
 ## Decomposition rules

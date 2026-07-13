@@ -1,6 +1,6 @@
 # Subagent Dispatch — Roles and Rules
 
-Use specialized agents when the active tool policy and user authorization allow delegation. Each role has constrained access: code-reviewer, qa-evaluator, and reviewer cannot edit files, and code-writer does not run tests. When subagents are unavailable, denied, or policy-disallowed, keep the same role responsibilities as direct fallback evidence instead of pretending delegation happened.
+Use specialized agents when the active tool policy and user authorization allow delegation. Each role has constrained access: code-reviewer, qa-evaluator, and reviewer cannot edit files. Code Writer may act as a bounded edit/test executor when that lane is selected. When subagents are unavailable, denied, or policy-disallowed, keep the same selected-lane responsibilities as direct fallback evidence instead of pretending delegation happened.
 
 For full role prompts, read `references/subagent-roles.md`.
 
@@ -54,8 +54,8 @@ role separation, verification evidence, and review evidence.
 - **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Output is compact enough to paste into other agents' prompts. Runs first on medium+ tasks.
 - **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Understands WHY, not just WHERE.
 - **Architect** — Designs implementation blueprints: files to create/modify, interfaces, data flows, build sequence, test plan. Does not write code.
-- **Code Writer** — Implements code following the plan. Does not run builds or tests. Does not review. Focuses purely on clean, convention-matching implementation.
-- **Builder/Tester** — Builds the project, writes tests, runs tests, absorbs noisy output. Returns concise results ("build passed, 2 tests failed: X, Y") not full logs.
+- **Code Writer / bounded executor** — Implements the packet. In `bounded_executor`, also writes focused tests and runs focused verification; never performs independent review.
+- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Builds, writes tests, runs suites, and absorbs noisy output without modifying production code.
 - **Code Reviewer** — Canonical independent code review with confidence-based filtering. Finds bugs, security issues, architecture violations, test coverage gaps, and structural code issues. Does not edit files.
 - **Reviewer** — Compatibility route for existing handoffs that still say `Reviewer`; use only when `code-reviewer` is unavailable or a legacy prompt/handoff requires the old name.
 - **QA Evaluator** — Independent QA acceptance evaluation after build/test and code-review evidence. Checks acceptance criteria, Done Contract, verification evidence, scoped UI/visual/product/UX/docs/DX/domain quality, score progression, and final result. Does not replace Code Reviewer.
@@ -77,8 +77,8 @@ its compact validation plus fresh-review evidence instead.
 | **DECOMPOSE** | Architect | Medium+ | Analyzes problem boundaries and proposes strict slice manifest |
 | **PLAN** | Architect | Large+ | Designs full implementation blueprint from slice manifest |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
-| **BUILD** | Code Writer | Standard/strict | Implements code following the plan |
-| **BUILD** | Builder/Tester | Standard/strict | Builds, runs tests, returns concise results |
+| **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation; also focused RED/GREEN/verification in bounded lane |
+| **BUILD** | Builder/Tester | `build_execution_lane=separated_workers` | Independent RED/build/test verification for triggered split work |
 | **REVIEW** | Code Reviewer, or Reviewer compatibility | Standard/strict | Independent code review via `assistant-review` skill |
 | **REVIEW** | QA Evaluator | `qa_evaluation_mode=required` only | Independent acceptance QA via `assistant-review` QA loop |
 | **DOCUMENT** | — (Orchestrator direct) | All sizes | Documentation generation is orchestrator's synthesis work |
@@ -90,8 +90,8 @@ its compact validation plus fresh-review evidence instead.
 | Size | Agents used | Flow |
 |---|---|---|
 | **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; promote out of light when risk/harness/QA criteria apply |
-| **Small standard/strict** | Code Writer → Builder/Tester → Code Reviewer | Sequential, minimal (no Decompose); Reviewer may be used only as compatibility; QA only when required |
-| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Mapper feeds Architect, slices feed Writer; Reviewer may be used only as compatibility |
+| **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
+| **Medium** | Code Mapper → Architect (decompose) → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only when separated_workers triggers |
 | **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer may be used only as compatibility |
 | **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration |
 
@@ -102,16 +102,18 @@ its compact validation plus fresh-review evidence instead.
   fresh self-review evidence. `subagent_execution_mode=not_applicable` is valid
   for this lane. Security, high-risk, harness-capable, required-QA, or otherwise
   promoted work cannot use this exception.
-- **Standard/strict minimum**: Code Writer → Builder/Tester → Code Reviewer
-  responsibilities. `reviewer` remains valid compatibility routing for existing
+- **Standard ordinary-medium minimum**: bounded executor → Code Reviewer.
+  **Separated-workers minimum**: Code Writer → Builder/Tester → Code Reviewer.
+  `reviewer` remains valid compatibility routing for existing
   handoffs, but new dispatches should use `code-reviewer` for code defects,
   security, architecture, test coverage, and structural code issues. In
   delegated mode these are subagents; in direct fallback they are explicitly
-  recorded role-equivalent steps. Standard/strict source-changing work infers
-  these roles; `not_applicable` is invalid for its Build tasks.
-- **Strict evidence gate for standard/strict work**: delegated mode is not complete until the
-  task journal Agent Dispatch Log records Code Writer dispatch/result,
-  Builder/Tester dispatch/result, and Code Reviewer dispatch/result evidence,
+  recorded role-equivalent steps. Size alone does not select separated workers;
+  `not_applicable` is invalid for standard/strict Build tasks.
+- **Evidence gate for standard/strict work**: delegated mode is not complete until the
+  task journal records selected-lane dispatch/result/verification evidence and
+  Code Reviewer dispatch/result evidence. Builder/Tester evidence is required
+  only for `separated_workers`,
   or Reviewer dispatch/result evidence when compatibility routing is used.
   Medium+ delegated slice work also records per-slice dispatch evidence before
   each slice is marked verified. Delegated evidence must correspond to a real

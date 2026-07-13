@@ -1,5 +1,10 @@
 # Artifact-First Output Contract
 
+An explicit user or repository artifact schema is a closed-world external
+contract. Preserve its exact path, keys, types, identifiers, commands, statuses,
+and supplied literals; omit undeclared fields. Keep workflow-internal maps and
+handoff evidence separate unless the external schema requests them.
+
 Use this before planning and building. A task is not ready for implementation until the deliverable is concrete enough to verify.
 
 Avoid vague outputs such as "make it work", "write a report", or "improve the workflow". Name the artifact first, then plan backward from how it will be validated.
@@ -12,6 +17,7 @@ Artifact Contract:
 - Required files or deliverables: [exact paths or named external artifacts]
 - Output format/schema: [markdown/json/yaml/csv/pdf/etc.]
 - Acceptance criteria: [binary user-visible checks]
+- Requirement ids: [stable ids from the Requirement Acceptance Map]
 - Verification command or method: [command, inspection, manual validation, or review gate]
 - Expected success signal: [exact passing output, created file, PR URL, green test, approved review]
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
@@ -22,6 +28,8 @@ Artifact Contract:
 
 - Put the artifact contract before task packets.
 - Every medium+ task packet must map to at least one required artifact or acceptance criterion.
+- Every planned artifact or criterion must reference accepted requirement ids.
+  Update `references/requirement-acceptance-map.md` first when scope changes.
 - If the artifact is a PR, include branch name, files in scope, validation commands, and review gates.
 - If the artifact is a report/dataset/chart, include format, source policy, and completeness checks.
 - If the artifact is code/config, include file paths and runnable verification.

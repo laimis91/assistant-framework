@@ -48,14 +48,14 @@ named canonical contract; do not load every contract at entry.
 assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
 task packets and role dispatch, but specialist gates are authoritative.
 
-When workflow delegates:
+When workflow delegates, ownership follows `execution_lane` without weakening
+the phase boundary:
 
-- **Builder/Tester owns RED**: write one failing behavior test, run it, and prove
-  the failure is for the intended reason.
-- **Code Writer owns GREEN**: implement the minimal production change after RED
-  evidence is present.
-- **Builder/Tester owns verification and refactor-safety**: run the targeted
-  test, relevant suite, and regression checks; request production fixes when needed.
+- In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
+- In `separated_workers`, Builder/Tester owns RED, Code Writer owns GREEN, and
+  Builder/Tester owns verification/refactor-safety. Use this lane for explicit
+  independent RED evidence, high-risk work, or broad/noisy/environment-heavy
+  verification.
 
 Required RED evidence before production implementation:
 
@@ -64,7 +64,8 @@ Required RED evidence before production implementation:
 - Failure summary
 - Why the failure proves the intended missing behaviour
 
-If TDD is active and RED evidence is missing, Code Writer must return `NEEDS_CONTEXT` and make no production changes.
+If TDD is active and RED evidence is missing, the selected production owner
+must return `NEEDS_CONTEXT` and make no production changes.
 
 ## Cycle
 

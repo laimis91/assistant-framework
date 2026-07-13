@@ -16,7 +16,7 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 10. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
 11. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 12. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-13. **Review Automation** — Autonomous review/fix/re-review loop with confidence thresholds
+13. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
 14. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
 15. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
 16. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
@@ -63,6 +63,72 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 
 For one compatibility release, a normal install also retires older Assistant Framework lifecycle registrations safely. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. Invalid JSON is warned about and left unchanged. Restart the agent after migrating an older install. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
 
+### Native Windows installation
+
+Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7 and requires the .NET 8 SDK so the Memory Graph server can build on first use.
+
+Install the complete release inventory for one agent:
+
+```powershell
+.\install.ps1 -Agent codex
+.\install.ps1 -Agent claude
+.\install.ps1 -Agent gemini
+```
+
+On the first Claude or Gemini install, add `-AcceptMemoryProtocol` if you want the installer to append the Assistant Framework memory instructions. Without it, the installer still installs the framework and tells you that the protocol was not added.
+
+```powershell
+.\install.ps1 -Agent claude -AcceptMemoryProtocol
+.\install.ps1 -Agent gemini -AcceptMemoryProtocol
+```
+
+The same entry point supports a single skill, a focused profile, and a non-mutating preview:
+
+```powershell
+.\install.ps1 -Agent claude -Skill assistant-thinking -AcceptMemoryProtocol
+.\install.ps1 -Agent codex -Plugin assistant-dev
+.\install.ps1 -Agent codex -DryRun
+```
+
+After pulling an update, reinstall by running the selected install command again:
+
+```powershell
+.\install.ps1 -Agent codex
+```
+
+Installer-owned directories are mirrored, while existing memory data, unrelated agent configuration, and user-authored instruction content are preserved. Restart the selected agent after updating an older installation.
+
+Windows destinations are:
+
+| Agent | Skills | Configuration, tools, and memory |
+|---|---|---|
+| Codex | `%USERPROFILE%\.agents\skills\assistant-*` | `CODEX_HOME` when set; otherwise `%USERPROFILE%\.codex` |
+| Claude Code | `%USERPROFILE%\.claude\skills\assistant-*` | `%USERPROFILE%\.claude` and `%USERPROFILE%\.claude.json` |
+| Gemini CLI | `%USERPROFILE%\.gemini\skills\assistant-*` | `%USERPROFILE%\.gemini` |
+
+The Windows installer itself does not require administrator access, create symlinks, download dependencies, or change PowerShell execution policy. On the first Memory Graph launch, `dotnet publish` can restore the project's declared NuGet packages when they are not already cached; the machine's normal NuGet sources and network policy apply. If Windows marks the checked-out script as downloaded and blocks it, review the file and remove only that file's download mark:
+
+```powershell
+Unblock-File -LiteralPath .\install.ps1
+```
+
+Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy Bypass`. The native installer and Memory Graph launcher are PowerShell scripts; the repository's remaining Bash-only maintenance and eval helpers still require Git Bash or WSL.
+
+#### Windows manual verification
+
+1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
+2. Run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
+3. Resolve the Codex configuration root and confirm its Memory Graph launcher and configuration exist:
+
+   ```powershell
+   $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+   Test-Path -LiteralPath (Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1')
+   Test-Path -LiteralPath (Join-Path $codexHome 'config.toml')
+   ```
+
+4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1`.
+5. Restart the selected agent and call `memory_context`, or inspect its MCP status, to verify that Memory Graph starts successfully.
+
 ## Skills
 
 Only tracked `assistant-*` directories are first-class release skills.
@@ -105,7 +171,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Autonomous code review loop: review, fix, re-review until clean or the loop reaches its cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: audits use one pass; review-fix work normally uses one review plus one fresh post-fix re-review. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -244,6 +310,68 @@ skills: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assis
 Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
+
+### Optional Design-Pattern Library
+
+The metadata-first `tools/patterns/pattern-library.sh` adapter can search a
+private local collection without making it a company or repository dependency.
+Configuration is deliberately opt-in and is never discovered automatically.
+
+To configure it on one workstation:
+
+1. Create a private configuration file outside this repository. A conventional
+   location is `~/.config/assistant-framework/pattern-libraries.json`:
+
+   ```json
+   {
+     "schema_version": "1.0",
+     "libraries": [
+       {
+         "id": "design-patterns",
+         "root": "/path/to/design-pattern-examples"
+       }
+     ]
+   }
+   ```
+
+   Replace the example root with an existing directory that is not a symlink.
+   Absolute roots are supported. Relative roots are resolved from the configuration file's directory.
+   They are not resolved from the current working directory.
+   The config supports only `schema_version`, `libraries`, `id`, and `root`.
+
+2. Make the config path explicit in personal or project instructions so the
+   workflow is allowed to use it. Do not put the library root itself in shared
+   instructions. For Codex, a compact entry in `~/.codex/AGENTS.md` is:
+
+   ```markdown
+   ## Personal pattern library
+
+   For optional design-pattern retrieval, use the explicit config at
+   `~/.config/assistant-framework/pattern-libraries.json`.
+   ```
+
+3. Restrict the private config and validate it with the installed adapter:
+
+   ```bash
+   chmod 700 ~/.config/assistant-framework
+   chmod 600 ~/.config/assistant-framework/pattern-libraries.json
+   ~/.codex/tools/patterns/pattern-library.sh validate-config \
+     --config ~/.config/assistant-framework/pattern-libraries.json
+   ~/.codex/tools/patterns/pattern-library.sh search \
+     --config ~/.config/assistant-framework/pattern-libraries.json \
+     --query "factory"
+   ```
+
+   A valid configuration returns `status: configured`; search returns metadata
+   only and at most three results by default. No prebuilt index is required.
+   When using another installed agent, use that agent's tools directory instead
+   of `~/.codex/tools/`.
+
+See `docs/pattern-library.md` for index creation, bounded result limits, and the
+safe explicit `show` command.
+
+The dated eight-priority architecture, verification, and manual-testing handoff
+is in `docs/assistant-framework-priority-handoff-2026-07-12.md`.
 
 ## Structure
 

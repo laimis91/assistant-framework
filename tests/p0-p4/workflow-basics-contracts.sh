@@ -130,7 +130,7 @@ for term in \
     "risk_tier is set" \
     "controller_intensity is set" \
     "required_gates includes common gates" \
-    "required_agents or fallback execution roles are populated" \
+    "build_execution_lane and required_agents/fallback roles are populated" \
     "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized" \
     "candidate_scope_scan is populated from a quick read-only scan"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then

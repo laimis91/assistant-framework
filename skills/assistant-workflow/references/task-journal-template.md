@@ -1,6 +1,6 @@
 # Task Journal Template
 
-Write to `{agent_state_dir}/task.md` in the project root when a local state directory is configured and policy allows. If none is safe, keep the same content in the response/plan packet. This framework-owned ignored artifact is the task source of truth, survives compression/continuation when persisted, and may be updated by the orchestrator.
+Write to `{agent_state_dir}/task.md` in the project root when a local state directory is configured and policy allows. If none is safe, keep the same content in the response/plan packet. This framework-owned ignored artifact is a freshness-checked persisted claim that survives compression/continuation when reconciled, and may be updated by the orchestrator. Before using it, load `references/task-state-reconciliation.md` and compare it with the newest user request and current repository evidence.
 
 ## When to create
 - When `workflow_state_mode=journal`: during Discover before the first wait,
@@ -24,10 +24,18 @@ Write to `{agent_state_dir}/task.md` in the project root when a local state dire
 ## Task: [1-sentence description]
 Created: [stable task identity, e.g. ISO timestamp created once]
 Status: DISCOVERING | DECOMPOSING | PLANNING | BUILDING [step N/M] | REVIEWING | DOCUMENTING | DONE
+Task state: active | stale | superseded | completed
+Repository root: [absolute or stable workspace root, or unavailable with reason]
+Recorded branch: [branch or N/A]
+Recorded baseline / HEAD: [commit ids or N/A]
+Latest user-goal reference: [latest request/correction identity]
+Last reconciled: [time/result/reason/evidence]
+Last verified milestone: [milestone plus evidence ref, or none]
 Triaged as: [small | medium | large | mega]
 Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
+Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
 Manual verification mode: [not_required | optional | required]
 Learning capture mode: [auto | not_required | required]
@@ -61,7 +69,8 @@ Plan approval: [yes/no + date]
 
 ## Agent Dispatch Log
 [subagent evidence required by completion gates]
-- Required roles: Code Writer, Builder/Tester, Code Reviewer; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
+- Required roles: bounded executor + Code Reviewer for ordinary medium; Code Writer + Builder/Tester + Code Reviewer for separated_workers; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
+- Build execution lane: [inline_direct | bounded_executor | separated_workers]
 - Execution mode: delegated | direct_fallback | not_applicable
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
@@ -70,11 +79,11 @@ Plan approval: [yes/no + date]
 - Explorer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Architect dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Code Writer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
-- Builder/Tester dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Builder/Tester dispatch/result/direct evidence: [delegated refs | direct evidence | N/A when bounded_executor]
 - Code Reviewer dispatch/result/direct evidence: [delegated refs | Code Reviewer direct evidence | Reviewer legacy compatibility | N/A]
 - Reviewer dispatch/result/direct evidence: [compatibility refs/direct evidence when used | N/A]
 - QA Evaluator dispatch/result/direct evidence: [delegated QA refs | direct evidence | N/A when not required]
-- Per-slice dispatch evidence: [medium+ delegated slice_id -> Code Writer + Builder/Tester refs; otherwise N/A: reason]
+- Per-slice dispatch evidence: [slice_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
 
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
@@ -83,6 +92,9 @@ Plan approval: [yes/no + date]
 
 ## Plan
 [paste approved plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths]
+
+## Requirement Acceptance Map
+[paste or reference the canonical map from `references/requirement-acceptance-map.md`; every accepted requirement id must end passed or approved_exclusion]
 
 ## Key Decisions
 - [decision]: [why] (Step N)
@@ -202,7 +214,7 @@ do not start the next slice until the current one is `VERIFIED`
   - [x] [file:line] — [issue] → [fix applied or "deferred"]
 - Re-test: PASS
 
-[...repeat until clean or max rounds reached...]
+[Round 3+ only when `additional_round_reason` records new changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis; a low score alone is insufficient.]
 [Note: On test failure, skip this entry — write only "- Result: HAS_REMAINING_ITEMS" to Final result]
 
 ### QA Evaluation
@@ -254,14 +266,14 @@ do not start the next slice until the current one is `VERIFIED`
 
 ## Lifecycle
 
-1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline.
+1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** caps are maximums, not quotas. Waiting state stays `DISCOVERING`; explicit answers clear unresolved topics, while explicit `defaults` also sets `Clarification defaults applied: true`.
 4. **Decompose/Plan** persists the slice manifest for medium+ work, captures approval, then updates `Plan approval`.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, and Slice Verification Ledger before the next slice.
-6. **Review** runs Spec Review, then Quality Review, fixing/re-testing/re-reviewing until clean or routed by Pivot/Restart; fill Final Result.
+6. **Review** runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result.
 7. **Document/Handoff** fills Verification Summary, conditional Manual Verification Result, Review Notes, and Learning Controller only when its mode/evidence activates.
-8. **Done** sets `Status: DONE`, records only evidence-backed durable lessons when allowed, and leaves the ignored state file unless cleanup is requested.
+8. **Done** sets `Status: DONE` and `Task state: completed`, records only evidence-backed durable lessons when allowed, and leaves the ignored state file unless cleanup is requested.
 
 ## Rules
 
@@ -270,6 +282,6 @@ do not start the next slice until the current one is `VERIFIED`
 - Constraints are checked before each Build step
 - Producer roles update Artifact Reference Ledger entries in `references/task-journal-harness-appendix.md` when they create or move artifacts; Consumer roles validate `schema_or_contract` and update `validation_status` before using them
 - Pivot/Restart Decisions are append-only recovery records. If the selected action changes scope, files, behavior, risk, verification, or acceptance criteria, record `reapproval_required: true` and wait for approval before continuing.
-- On context continuation: read the configured task journal FIRST when it exists, before any other action
+- On context continuation: read the configured task journal first without acting on it, then reconcile it against the newest user request and current repository evidence using `references/task-state-reconciliation.md`; resume only a reconciled active journal
 - Never delete constraints unless the user explicitly removes them
 - The Replay Packet in `references/task-journal-harness-appendix.md` replaces context-handoff templates during active harness work

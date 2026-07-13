@@ -141,10 +141,13 @@ when `workflow_state_mode=journal`, or in the inline completion packet:
 - Code Review result: clean, issues fixed, or remaining should-fix items
 - QA Evaluation result when required: accepted, accepted with concerns,
   rejected, or blocked
-- Manual test instructions only when `manual_verification_mode` is optional or required
+- For medium+ work, the complete developer `final_handoff` from
+  `references/final-handoff.md`, including manual scenarios or
+  `N/A — automated verification is sufficient`
 - Known limitations
 
 Wait for manual verification only when `manual_verification_mode=required`.
+Developer test instructions are documentation and do not create that wait.
 This mode is limited to an explicit request, subjective/UI acceptance, external
 effects, destructive/migration work, or inadequate automated verification.
 Record the trigger and result evidence, then continue. With `optional`, present

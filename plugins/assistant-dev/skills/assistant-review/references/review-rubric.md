@@ -94,9 +94,11 @@ Example: correctness=4, quality=4, architecture=3, security=5, coverage=3
 
 | Weighted Score | Action | What Happens |
 |---|---|---|
-| **4.0+** | **PASS** | Exit clean. Ship it. Minor nits noted but not blocking. |
-| **3.0–3.9** | **REFINE** | Continue loop. Reviewer provides specific feedback per dimension. Generator iterates on lowest-scoring dimensions. |
-| **< 3.0** | **PIVOT** | Current approach has fundamental issues. Flag to orchestrator. Consider whether the implementation strategy needs to change, not just the code. |
+| **4.0+** | **PASS** | Supports the findings-based exit. Minor nits remain non-blocking. |
+| **3.0–3.9** | **REFINE** | Prioritizes existing evidence-backed findings. If none exist, record the score as residual risk and exit with the bounded claim. |
+| **< 3.0** | **PIVOT** | Flag the evidence and strategy concern to the orchestrator. Another review pass still needs an allowed new-evidence reason. |
+
+A score below threshold alone does not authorize round 3 or later. Rubric scores calibrate focus and residual risk; they do not manufacture findings, prove correctness, or justify repeated review without new evidence.
 
 ### Threshold adjustment by round
 

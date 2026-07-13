@@ -43,8 +43,10 @@ file centralizes decision boundaries that cut across phase details while
   triggered.
 - `standard`: ordinary medium+ source-changing work defaults to
   `controller_intensity=standard`, `harness_capable=false`, and
-  `qa_evaluation_mode=not_required`. It requires an approved plan, Build
-  verification, and independent review, but no harness or QA ceremony by size.
+  `qa_evaluation_mode=not_required`. It uses
+  `build_execution_lane=bounded_executor`: one edit/test owner plus independent
+  Code Reviewer. It requires an approved plan, Build verification, and
+  independent review, but no harness, split-worker, or QA ceremony by size.
 - `strict`: select only for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
   explicit harness/QA criteria, or explicit strict control.
@@ -67,6 +69,10 @@ gates.
 
 ## State, Verification, and Learning Defaults
 
+- Before using persisted state, load `references/task-state-reconciliation.md`.
+  Compare the newest user request and current repository identity/evidence,
+  classify the state as `active`, `stale`, `superseded`, or `completed`, and
+  use the recorded next action only when the state is reconciled active.
 - Use `workflow_state_mode=inline` unless state must survive clarification,
   delegation, compaction/cross-session continuation, explicit persistence, or
   strict/harness/required-QA execution. Medium+ size alone does not force a task
@@ -82,6 +88,10 @@ gates.
 
 ## Move Forward, Step Back, or Replan
 
+- After clarification, create the stable Requirement Acceptance Map for
+  medium+, or small work promoted by ambiguity, risk, or multiple material
+  requirements. Otherwise keep compact `acceptance_criteria`. Decomposition,
+  task packets, review, and completion consume ids only when the map applies.
 - Move forward when required inputs are resolved, the current phase gate is
   satisfied, standard/strict medium+ plans are approved before Build, and the
   next action stays inside approved scope.
@@ -113,9 +123,12 @@ gates.
 
 ## Subagent, Review, and QA Separation
 
-- For standard/strict work, Code Mapper maps context, Code Writer implements, Builder/Tester verifies, and
-  Code Reviewer reviews code quality, defects, security, architecture, and test
-  coverage.
+- For ordinary medium standard work, Code Mapper maps context, one bounded
+  executor owns focused RED/GREEN/edit/test work, and an independent reviewer
+  is assigned. Code Reviewer reviews code quality, defects, security, architecture, and test coverage.
+- Use separated Code Writer and Builder/Tester only for high/critical risk,
+  broad/noisy/environment-heavy verification, explicit independent TDD
+  evidence, or explicit separation.
 - Light work implements directly, runs relevant automated validation/tests, and
   performs a fresh self-review without worker or independent-review dispatch
   evidence. Any security, high-risk, harness, or QA trigger promotes the work out

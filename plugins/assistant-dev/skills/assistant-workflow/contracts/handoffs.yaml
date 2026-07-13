@@ -346,6 +346,10 @@ handoffs:
         type: string
         required: true
         description: "Restated requirements from Discover phase"
+      - name: requirement_acceptance_map
+        type: string
+        required: true
+        description: "Stable requirement ids, criteria, verification methods, manual scenarios/N/A, assumptions, and non-goals from Discover"
       - name: context_map
         type: string
         required: true
@@ -433,6 +437,11 @@ handoffs:
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
             description: "The kind of deliverable produced by this slice"
+          - name: requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Accepted requirement ids advanced by this slice"
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -512,6 +521,10 @@ handoffs:
         type: string
         required: true
         description: "Restated requirements from Discover phase"
+      - name: requirement_acceptance_map
+        type: string
+        required: true
+        description: "Approved traceability spine; task packets and slice criteria must reference these requirement ids"
       - name: context_map
         type: string
         required: true
@@ -556,6 +569,10 @@ handoffs:
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -657,6 +674,11 @@ handoffs:
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
             description: "The approved slice deliverable type"
+          - name: requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Requirement Acceptance Map ids implemented by this packet"
           - name: files
             type: string[]
             required: false
@@ -834,6 +856,11 @@ handoffs:
     to: CodeWriter
     phase: BUILD
     context_fields:
+      - name: build_execution_lane
+        type: enum
+        required: true
+        enum_values: [bounded_executor, separated_workers]
+        description: "bounded_executor owns focused RED/GREEN/edit/test; separated_workers consumes BuilderTester RED evidence and returns GREEN for independent verification"
       - name: plan
         type: string
         required: true
@@ -866,6 +893,10 @@ handoffs:
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1148,6 +1179,11 @@ handoffs:
     to: BuilderTester
     phase: BUILD
     context_fields:
+      - name: build_execution_lane
+        type: enum
+        required: true
+        enum_values: [separated_workers]
+        description: "BuilderTester is dispatched only for the separated verification lane"
       - name: changed_files
         type: string[]
         required: true
@@ -1358,6 +1394,11 @@ handoffs:
     to: Reviewer
     phase: REVIEW
     context_fields:
+      - name: requirement_acceptance_map
+        type: string
+        required: conditional
+        condition: "review is workflow-composed or an accepted requirement set is available"
+        description: "Stable requirement ids, criteria, and expected evidence used for spec and regression review"
       - name: review_material_snapshot
         type: object
         required: true

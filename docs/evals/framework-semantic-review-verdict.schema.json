@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "framework-semantic-review-verdict.schema.json",
+  "title": "Assistant Framework Human Semantic Review Verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "review_kind", "reviewer", "reviewed_at", "bindings", "pair_verdicts", "overall_verdict"],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "review_kind": {"const": "workflow_kernel_semantic_false_positive"},
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "attestation"],
+      "properties": {
+        "kind": {"const": "human"},
+        "attestation": {"const": "reviewed_all_candidate_findings_against_synthetic_fixture"}
+      }
+    },
+    "reviewed_at": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_packet_sha256", "comparison_sha256", "candidate_manifest_sha256", "baseline_instruction_sha256", "candidate_instruction_sha256", "context_budget_evidence_sha256", "trace_set_sha256", "pair_sha256"],
+      "properties": {
+        "review_packet_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "baseline_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "context_budget_evidence_sha256": {"$ref": "#/$defs/sha256"},
+        "trace_set_sha256": {"$ref": "#/$defs/sha256"},
+        "pair_sha256": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}}
+      }
+    },
+    "pair_verdicts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "pair_sha256", "candidate_findings", "verdict"],
+        "properties": {
+          "pair_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+          "pair_sha256": {"$ref": "#/$defs/sha256"},
+          "candidate_findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["finding_id", "verdict", "reason_code"],
+              "properties": {
+                "finding_id": {"type": "string", "pattern": "^candidate-[0-9]{2}$"},
+                "verdict": {"enum": ["supported", "false_positive", "unverifiable"]},
+                "reason_code": {"enum": ["supported_by_synthetic_fixture", "not_supported_by_synthetic_fixture", "insufficient_packet_evidence"]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"verdict": {"const": "supported"}}},
+                  "then": {"properties": {"reason_code": {"const": "supported_by_synthetic_fixture"}}}
+                },
+                {
+                  "if": {"properties": {"verdict": {"const": "false_positive"}}},
+                  "then": {"properties": {"reason_code": {"const": "not_supported_by_synthetic_fixture"}}}
+                },
+                {
+                  "if": {"properties": {"verdict": {"const": "unverifiable"}}},
+                  "then": {"properties": {"reason_code": {"const": "insufficient_packet_evidence"}}}
+                }
+              ]
+            }
+          },
+          "verdict": {"enum": ["approved", "rejected"]}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"verdict": {"const": "approved"}}},
+            "then": {"properties": {"candidate_findings": {"items": {"properties": {"verdict": {"const": "supported"}}}}}}
+          },
+          {
+            "if": {"properties": {"verdict": {"const": "rejected"}}},
+            "then": {"properties": {"candidate_findings": {"contains": {"properties": {"verdict": {"enum": ["false_positive", "unverifiable"]}}}, "minContains": 1}}}
+          }
+        ]
+      }
+    },
+    "overall_verdict": {"enum": ["approved", "rejected"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"overall_verdict": {"const": "approved"}}},
+      "then": {"properties": {"pair_verdicts": {"items": {"properties": {"verdict": {"const": "approved"}}}}}}
+    },
+    {
+      "if": {"properties": {"overall_verdict": {"const": "rejected"}}},
+      "then": {"properties": {"pair_verdicts": {"contains": {"properties": {"verdict": {"const": "rejected"}}}, "minContains": 1}}}
+    }
+  ]
+}

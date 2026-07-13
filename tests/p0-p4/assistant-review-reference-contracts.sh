@@ -99,7 +99,7 @@ else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
 fi
 
-test_start "assistant-review blocks medium rubric clean exits below pass threshold"
+test_start "assistant-review does not use rubric score alone to force round 3 or stronger claims"
 review_threshold_failures=()
 
 for file_and_forbidden in \
@@ -114,11 +114,15 @@ for file_and_forbidden in \
 done
 
 for file_and_term in \
-    "$review_loop::PASS (weighted >= 4.0) AND no must-fix AND no should-fix -> EXIT CLEAN" \
-    "$review_loop::REFINE (weighted below 4.0 but not PIVOT), including zero findings -> continue to step 3" \
-    "$review_loop::Medium+ CLEAN and ISSUES_FIXED require weighted >= 4.0" \
-    "$review_phase_gates::EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0" \
-    "$review_rubric::| 4-10 | 4.0+ | 3.25"; do
+    "$review_loop::A score below the rubric threshold alone is insufficient to start round 3 or later." \
+    "$review_loop::additional_round_reason" \
+    "$review_phase_gates::Score below threshold alone is insufficient" \
+    "$review_phase_gates::changed_files" \
+    "$review_phase_gates::unresolved_finding" \
+    "$review_phase_gates::validation_failure" \
+    "$review_phase_gates::regression_or_drift" \
+    "$review_phase_gates::changed_hypothesis" \
+    "$review_rubric::A score below threshold alone does not authorize round 3 or later."; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
@@ -129,7 +133,67 @@ done
 if [[ "${#review_threshold_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-review medium rubric clean-exit threshold contract drifted: ${review_threshold_failures[*]}"
+    fail "assistant-review additional-round and evidence-bounded claim contract drifted: ${review_threshold_failures[*]}"
+fi
+
+test_start "assistant-review defaults to one audit pass and at most one post-fix re-review"
+review_round_policy_failures=()
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+
+for file_and_term in \
+    "$review_skill::Audit mode stops after one review pass." \
+    "$review_skill::initial review, fixes and validation, then one fresh re-review" \
+    "$review_loop::Audit mode exits after round 1" \
+    "$review_loop::The normal review-fix path is round 1 review, fixes and validation, then one fresh round 2 re-review." \
+    "$review_loop::Round 3+ requires a recorded" \
+    "$review_handoffs::- name: additional_round_reason" \
+    "$review_handoffs::condition: \"round >= 3\"" \
+    "$review_output::- name: additional_round_reasons" \
+    "$review_output::condition: \"rounds >= 3\"" \
+    "$review_evals::bounded-review-default-rounds" \
+    "$review_evals::audit-one-pass" \
+    "$review_evals::additional_round_reason"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        review_round_policy_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#review_round_policy_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review default round policy is incomplete: ${review_round_policy_failures[*]}"
+fi
+
+test_start "assistant-review final no-finding claim is evidence-bounded and role-separated"
+review_claim_failures=()
+bounded_claim="No material findings within the reviewed scope and available evidence"
+
+for file_and_term in \
+    "$review_skill::$bounded_claim" \
+    "$review_loop::$bounded_claim" \
+    "$review_output::- name: evidence_bounded_claim" \
+    "$review_output::$bounded_claim" \
+    "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml::$bounded_claim" \
+    "$FRAMEWORK_DIR/agents/claude/code-reviewer.md::$bounded_claim" \
+    "$review_skill::QA evaluation separate from code review" \
+    "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml::Do not replace the separate QA Evaluator" \
+    "$FRAMEWORK_DIR/agents/claude/code-reviewer.md::Do not replace the separate QA Evaluator" \
+    "$review_evals::evidence-bounded-review-claim" \
+    "$review_evals::$bounded_claim"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        review_claim_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#review_claim_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review evidence-bounded claim or reviewer/QA role split is incomplete: ${review_claim_failures[*]}"
 fi
 
 test_start "assistant-review phase-gate IDs are unique"
@@ -157,6 +221,19 @@ if [[ "${#phase_gate_id_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review phase-gate IDs must be unique: ${phase_gate_id_failures[*]}"
+fi
+
+test_start "review scores and finding counts calibrate without manufacturing work"
+workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+if ! grep -Fq 'final rubric weighted score >= 4.0' "$workflow_gates" \
+    && ! grep -Fq 'Fix lowest-scoring dimensions and re-review' "$workflow_gates" \
+    && p0p4_contains_text "$workflow_gates" "A score below 4.0 records residual risk but does not by itself authorize fixes or another review round" \
+    && ! grep -Fq 'Each round finds fewer or equal issues than the previous round' "$review_gates" \
+    && p0p4_contains_text "$review_gates" "Never suppress a new evidence-backed finding to preserve a monotonic count"; then
+    pass
+else
+    fail "score or issue-count gates still bias review toward churn or suppressed findings"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -7,6 +7,7 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 context_report="$FRAMEWORK_DIR/tools/context-budget-report.sh"
 eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+context_evidence_lib="$FRAMEWORK_DIR/tools/evals/lib/context-budget-evidence.sh"
 
 test_start "context budget reporter exists and is executable"
 if [[ -x "$context_report" ]]; then
@@ -25,6 +26,7 @@ if printf '%s\n' "$context_help" | grep -Fq -- "--agent AGENT" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--skill SKILL" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--format json" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--baseline FILE" \
+    && printf '%s\n' "$context_help" | grep -Fq -- "--skill-overlay FILE" \
     && ! printf '%s\n' "$context_help" | grep -Fq -- "hook-profile"; then
     pass
 else
@@ -34,6 +36,7 @@ fi
 test_start "eval README documents the reproducible context budget command"
 if grep -Fq -- "tools/context-budget-report.sh" "$eval_readme" \
     && grep -Fq -- "--agent codex --skill assistant-workflow --format json" "$eval_readme" \
+    && grep -Fq -- "source-repository-only" "$eval_readme" \
     && ! grep -Fq -- "hook-output semantics" "$eval_readme" \
     && ! grep -Fq -- "hook-benchmark" "$eval_readme"; then
     pass
@@ -55,6 +58,8 @@ no_index_report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-no-index-home.
 no_index_report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-report.XXXXXX")"
 no_index_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-error.XXXXXX")"
 bash_interceptor_dir="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-bash-interceptor.XXXXXX")"
+overlay_skill="$(mktemp "${TMPDIR:-/tmp}/context-budget-overlay.XXXXXX")"
+overlay_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-overlay-report.XXXXXX")"
 p0p4_register_cleanup \
     "$report_home" \
     "$report_output" \
@@ -69,7 +74,18 @@ p0p4_register_cleanup \
     "$no_index_report_home" \
     "$no_index_report_output" \
     "$no_index_report_error" \
-    "$bash_interceptor_dir"
+    "$bash_interceptor_dir" \
+    "$overlay_skill" \
+    "$overlay_report"
+
+cat >"$overlay_skill" <<'EOF'
+---
+name: assistant-workflow
+description: "Overlay fixture"
+---
+# Small overlay
+Use canonical contracts.
+EOF
 
 cat >"$bash_interceptor_dir/bash" <<'EOF'
 #!/bin/bash
@@ -282,6 +298,77 @@ if [[ -s "$report_output" ]] \
     pass
 else
     fail "context report baseline comparison is missing correct absolute/percentage deltas or leaked a secret"
+fi
+
+test_start "context reporter measures a root overlay while keeping canonical contracts"
+if HOME="$report_home" \
+    "$context_report" \
+        --agent codex \
+        --skill assistant-workflow \
+        --skill-overlay "$overlay_skill" \
+        --format json \
+        >"$overlay_report" 2>"$report_error" \
+    && jq -e --slurpfile canonical "$report_output" '
+        .overlay_applied == true
+        and .components.selected_skill_initial.words < $canonical[0].components.selected_skill_initial.words
+        and .components.selected_skill_entry_boundary.words < $canonical[0].components.selected_skill_entry_boundary.words
+        and .components.project_agents.words == $canonical[0].components.project_agents.words
+        and .components.native_skill_catalog_descriptions.words == $canonical[0].components.native_skill_catalog_descriptions.words
+    ' "$overlay_report" >/dev/null; then
+    pass
+else
+    fail "skill overlay did not replace only the selected root measurement"
+fi
+
+test_start "workflow kernel candidate meets the static promotion budget"
+kernel_skill="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
+kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
+if HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-workflow \
+        --skill-overlay "$kernel_skill" --format json >"$overlay_report" 2>"$report_error" \
+    && jq -e --slurpfile baseline "$report_output" --slurpfile candidate "$overlay_report" '
+        .status == "candidate"
+        and .promotion_gates.selected_initial_words_max == 1000
+        and .promotion_gates.selected_entry_words_max == 2600
+        and .promotion_gates.standing_context_growth_allowed == false
+        and .static_measurement.baseline_selected_initial_words == $baseline[0].components.selected_skill_initial.words
+        and .static_measurement.candidate_selected_initial_words == $candidate[0].components.selected_skill_initial.words
+        and .static_measurement.selected_initial_word_delta == ($candidate[0].components.selected_skill_initial.words - $baseline[0].components.selected_skill_initial.words)
+        and .static_measurement.baseline_total_initial_words == $baseline[0].totals.initial_words
+        and .static_measurement.candidate_total_initial_words == $candidate[0].totals.initial_words
+        and .static_measurement.baseline_selected_entry_words == $baseline[0].components.selected_skill_entry_boundary.words
+        and .static_measurement.candidate_selected_entry_words == $candidate[0].components.selected_skill_entry_boundary.words
+        and .static_measurement.selected_entry_word_delta == ($candidate[0].components.selected_skill_entry_boundary.words - $baseline[0].components.selected_skill_entry_boundary.words)
+        and .static_measurement.candidate_selected_initial_words <= .promotion_gates.selected_initial_words_max
+        and .static_measurement.candidate_selected_entry_words <= .promotion_gates.selected_entry_words_max
+        and .static_measurement.standing_context_growth == 0
+        and $candidate[0].components.project_agents == $baseline[0].components.project_agents
+        and $candidate[0].components.generated_global_agents == $baseline[0].components.generated_global_agents
+        and $candidate[0].components.generated_memory_protocol == $baseline[0].components.generated_memory_protocol
+        and $candidate[0].components.native_skill_catalog_descriptions == $baseline[0].components.native_skill_catalog_descriptions
+    ' "$kernel_manifest" >/dev/null; then
+    pass
+else
+    fail "workflow kernel candidate exceeds its static budget or lacks promotion evidence"
+fi
+
+test_start "context evidence structure is generic while promotion policy rejects standing growth"
+standing_evidence="$(mktemp "${TMPDIR:-/tmp}/standing-context-evidence.XXXXXX")"
+p0p4_register_cleanup "$standing_evidence"
+jq -cnS '{
+  schema_version:"1.0",reporter_sha256:("a"*64),
+  baseline_instruction_sha256:("b"*64),candidate_instruction_sha256:("c"*64),
+  policy_caps:{selected_initial_words_max:1000,selected_entry_words_max:2600,standing_context_growth_allowed:false},
+  baseline:{selected_initial_words:800,selected_entry_words:2000,total_initial_words:900,total_entry_words:2100,standing_initial_words:100,standing_entry_words:100},
+  candidate:{selected_initial_words:700,selected_entry_words:1900,total_initial_words:801,total_entry_words:2001,standing_initial_words:101,standing_entry_words:101},
+  deltas:{selected_initial_words:-100,selected_entry_words:-100,standing_initial_words:1,standing_entry_words:1}
+}' >"$standing_evidence"
+if (source "$context_evidence_lib"; \
+    context_budget_validate_evidence_structure "$standing_evidence" \
+    && ! context_budget_validate_promotion_policy "$standing_evidence"); then
+    pass
+else
+    fail "structural evidence validation and workflow-kernel promotion policy were not separated"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
