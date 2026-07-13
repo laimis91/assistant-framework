@@ -2074,6 +2074,10 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         Use-IsolatedEnvironment 'managed file hard link' {
             param($root, $isolatedUserProfile)
             $codexHome = Join-Path $root 'Codex Hard Link Home'
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+            $warmup = Invoke-Installer -Arguments @('-Help')
+            Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
+            Assert-False ([System.IO.Directory]::Exists($codexHome)) 'PowerShell warm-up created the configured Codex home'
             $agentsTarget = Join-Path $codexHome 'agents'
             [void][System.IO.Directory]::CreateDirectory($agentsTarget)
             $externalSentinel = Join-Path $root 'external-agent-sentinel.toml'
@@ -2087,7 +2091,6 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             try {
                 [void](New-Item -ItemType Junction -Path $managedFile -Target $externalDirectory -ErrorAction Stop)
                 $junctionCreated = $true
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
                 $before = Get-TreeFingerprint -LiteralPath $root
                 $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
                 Assert-True ($dryRun.ExitCode -ne 0) 'Dry-run accepted a reparse-point managed file destination'
