@@ -62,6 +62,39 @@ function Assert-NotContains {
     if ($null -ne $Text -and $Text.Contains($Unexpected)) { throw $Message }
 }
 
+function Get-TestDaclBinaryFingerprint {
+    param([Parameter(Mandatory = $true)][System.Security.AccessControl.RawAcl]$Dacl)
+    $binary = [byte[]]::new($Dacl.BinaryLength)
+    $Dacl.GetBinaryForm($binary, 0)
+    return [Convert]::ToBase64String($binary)
+}
+
+function Assert-OwnerGroupDaclEquivalent {
+    param(
+        [Parameter(Mandatory = $true)]$Expected,
+        [Parameter(Mandatory = $true)]$Actual,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+    $expectedBinary = $Expected.GetSecurityDescriptorBinaryForm()
+    $actualBinary = $Actual.GetSecurityDescriptorBinaryForm()
+    $expectedRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new($expectedBinary, 0)
+    $actualRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new($actualBinary, 0)
+    Assert-True ($null -ne $expectedRaw.DiscretionaryAcl -and $null -ne $actualRaw.DiscretionaryAcl) "${Message}: null DACL fidelity cannot be established"
+    $expectedOwner = if ($null -eq $expectedRaw.Owner) { $null } else { $expectedRaw.Owner.Value }
+    $actualOwner = if ($null -eq $actualRaw.Owner) { $null } else { $actualRaw.Owner.Value }
+    Assert-True ([string]::Equals($expectedOwner, $actualOwner, [System.StringComparison]::Ordinal)) "${Message}: owner changed"
+    $expectedGroup = if ($null -eq $expectedRaw.Group) { $null } else { $expectedRaw.Group.Value }
+    $actualGroup = if ($null -eq $actualRaw.Group) { $null } else { $actualRaw.Group.Value }
+    Assert-True ([string]::Equals($expectedGroup, $actualGroup, [System.StringComparison]::Ordinal)) "${Message}: group changed"
+    Assert-True ($Expected.AreAccessRulesProtected -eq $Actual.AreAccessRulesProtected) "${Message}: DACL protection changed"
+    $autoInheritRequired = [System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInheritRequired
+    Assert-True (($expectedRaw.ControlFlags -band $autoInheritRequired) -eq ($actualRaw.ControlFlags -band $autoInheritRequired)) "${Message}: DACL auto-inherit-required state changed"
+    Assert-True ($Expected.AreAccessRulesCanonical -and $Actual.AreAccessRulesCanonical) "${Message}: noncanonical DACL could not be compared safely"
+    $expectedDacl = Get-TestDaclBinaryFingerprint -Dacl $expectedRaw.DiscretionaryAcl
+    $actualDacl = Get-TestDaclBinaryFingerprint -Dacl $actualRaw.DiscretionaryAcl
+    Assert-True ($expectedDacl -ceq $actualDacl) "${Message}: ordered DACL bytes changed"
+}
+
 function Get-LiteralCount {
     param([string]$Text, [string]$Needle)
     return [regex]::Matches($Text, [regex]::Escape($Needle)).Count
@@ -344,18 +377,30 @@ try {
         $supportBody = $installer.Substring(0, $functionStart)
         $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
         Assert-Contains $supportBody 'Open-WindowsFileSecurityStream' 'Existing-destination commit lacks an exclusive read and READ_CONTROL verification handle'
+        Assert-Contains $supportBody 'function Get-OwnerGroupDaclDifferences' 'Existing-destination commit lacks bounded semantic owner, group, and DACL comparison'
+        Assert-Contains $supportBody 'AreAccessRulesProtected' 'Existing-destination DACL comparison does not preserve inheritance protection'
+        Assert-Contains $supportBody 'auto_inherit_required' 'Existing-destination DACL comparison does not preserve automatic inheritance propagation requirements'
+        Assert-Contains $supportBody 'AreAccessRulesCanonical' 'Existing-destination DACL comparison does not fail closed for noncanonical rules'
+        Assert-Contains $supportBody '$Dacl.GetBinaryForm($binary, 0)' 'Existing-destination DACL comparison does not preserve ordered complete ACE bytes'
+        $comparatorStart = $supportBody.IndexOf('function Get-OwnerGroupDaclDifferences', [System.StringComparison]::Ordinal)
+        $comparatorEnd = $supportBody.IndexOf('function New-PrivateFileSecurity', $comparatorStart, [System.StringComparison]::Ordinal)
+        $comparatorBody = $supportBody.Substring($comparatorStart, $comparatorEnd - $comparatorStart)
+        Assert-Contains $comparatorBody 'GetSecurityDescriptorBinaryForm()' 'Existing-destination DACL comparison does not begin from the complete binary security descriptor'
+        Assert-Contains $comparatorBody '[System.Security.AccessControl.RawSecurityDescriptor]::new($expectedBinary, 0)' 'Existing-destination DACL comparison does not parse the binary descriptor without normalization'
+        Assert-NotContains $comparatorBody 'GetSecurityDescriptorSddlForm' 'Existing-destination DACL comparison round-trips through SDDL and may lose opaque ACE data'
+        Assert-NotContains $comparatorBody 'Get-OwnerGroupDaclSddl' 'Existing-destination DACL comparison reintroduced the lossy SDDL helper'
         $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $ignoreMetadataErrors)', [System.StringComparison]::Ordinal)
         $reopenIndex = $functionBody.IndexOf('$committedStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath', $replaceIndex, [System.StringComparison]::Ordinal)
         $identityIndex = $functionBody.IndexOf('$committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle', $reopenIndex, [System.StringComparison]::Ordinal)
         $identityVerifyIndex = $functionBody.IndexOf('Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity', $identityIndex, [System.StringComparison]::Ordinal)
         $bytesIndex = $functionBody.IndexOf('$committedBytes = Read-FileStreamBytes -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
         $aclReadIndex = $functionBody.IndexOf('$committedAcl = Get-FileStreamAcl -Stream $committedStream', $identityVerifyIndex, [System.StringComparison]::Ordinal)
-        $aclVerifyIndex = $functionBody.IndexOf('Get-OwnerGroupDaclSddl -Acl $committedAcl', $aclReadIndex, [System.StringComparison]::Ordinal)
+        $aclVerifyIndex = $functionBody.IndexOf('$aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $committedAcl)', $aclReadIndex, [System.StringComparison]::Ordinal)
         $closeIndex = $functionBody.IndexOf('$committedStream.Dispose()', $reopenIndex, [System.StringComparison]::Ordinal)
         Assert-True ($reopenIndex -gt $replaceIndex) 'Existing destination is not reopened exclusively immediately after replacement'
         Assert-True ($identityIndex -gt $reopenIndex -and $identityVerifyIndex -gt $identityIndex) 'Existing destination does not compare committed identity with the created temp before mutation'
         Assert-True ($bytesIndex -gt $reopenIndex -and $bytesIndex -lt $closeIndex) 'Existing destination bytes are not verified through the same exclusive committed handle'
-        Assert-True ($aclReadIndex -gt $identityVerifyIndex -and $aclVerifyIndex -gt $aclReadIndex -and $closeIndex -gt $aclVerifyIndex) 'Existing destination owner, group, and DACL are not verified through the identity-bound committed handle'
+        Assert-True ($aclReadIndex -gt $identityVerifyIndex -and $aclVerifyIndex -gt $aclReadIndex -and $closeIndex -gt $aclVerifyIndex) 'Existing destination owner, group, DACL protection, and effective rules are not verified through the identity-bound committed handle'
         Assert-NotContains $functionBody 'Set-EquivalentFileStreamDacl -Stream $committedStream' 'Existing destination mutates its ACL after commit instead of failing closed and rolling back'
         Assert-NotContains $functionBody 'Set-FileStreamAcl -Stream $committedStream' 'Existing destination performs post-commit ACL mutation'
         Assert-NotContains $functionBody 'Set-EquivalentFileAcl -LiteralPath $fullPath' 'Existing destination still performs path-based ACL mutation after the temp handle closes'
@@ -406,6 +451,135 @@ function Assert-PrivateAclInvariant {
         throw 'Private secure-create DACL is not one explicit current-user FullControl allow rule.'
     }
 }
+
+function New-SddlFileSecurity {
+    param([Parameter(Mandatory = $true)][string]$Sddl)
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetSecurityDescriptorSddlForm($Sddl, (Get-OwnerGroupDaclSections))
+    return $acl
+}
+
+function New-RawDaclFileSecurity {
+    param(
+        [AllowNull()][System.Security.AccessControl.RawAcl]$Dacl,
+        [System.Security.AccessControl.ControlFlags]$AdditionalControlFlags = [System.Security.AccessControl.ControlFlags]::None
+    )
+    $controlFlags = $AdditionalControlFlags
+    if ($null -ne $Dacl) {
+        $controlFlags = [System.Security.AccessControl.ControlFlags]::DiscretionaryAclPresent -bor $controlFlags
+    }
+    $descriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+        $controlFlags,
+        $currentUser,
+        $currentUser,
+        $null,
+        $Dacl
+    )
+    $binary = [byte[]]::new($descriptor.BinaryLength)
+    $descriptor.GetBinaryForm($binary, 0)
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetSecurityDescriptorBinaryForm($binary, (Get-OwnerGroupDaclSections))
+    return $acl
+}
+
+function Assert-AclDifferenceCategory {
+    param(
+        [Parameter(Mandatory = $true)]$Expected,
+        [Parameter(Mandatory = $true)]$Actual,
+        [Parameter(Mandatory = $true)][string]$Category
+    )
+    $differences = @(Get-OwnerGroupDaclDifferences -Expected $Expected -Actual $Actual)
+    if ($differences -notcontains $Category) {
+        throw "ACL comparator did not report ${Category}. Categories: $($differences -join ', ')"
+    }
+}
+
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$currentSid = $currentUser.Value
+$alternateOwner = if ($currentSid -cne 'S-1-5-18') { 'S-1-5-18' } else { 'S-1-5-32-544' }
+$alternateGroup = if ($currentSid -cne 'S-1-5-32-545') { 'S-1-5-32-545' } else { 'S-1-5-32-544' }
+$descriptorPrefix = 'O:' + $currentSid + 'G:' + $currentSid
+$fullControlAce = '(A;;FA;;;' + $currentSid + ')'
+$controlFlagDacl = [System.Security.AccessControl.RawAcl]::new([byte]2, 1)
+$controlFlagDacl.InsertAce(0, [System.Security.AccessControl.CommonAce]::new(
+    [System.Security.AccessControl.AceFlags]::None,
+    [System.Security.AccessControl.AceQualifier]::AccessAllowed,
+    [int][System.Security.AccessControl.FileSystemRights]::FullControl,
+    $currentUser,
+    $false,
+    $null
+))
+$expectedAcl = New-RawDaclFileSecurity -Dacl $controlFlagDacl -AdditionalControlFlags ([System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInherited)
+$controlFlagVariant = New-RawDaclFileSecurity -Dacl $controlFlagDacl
+$expectedControlBinary = [Convert]::ToBase64String($expectedAcl.GetSecurityDescriptorBinaryForm())
+$actualControlBinary = [Convert]::ToBase64String($controlFlagVariant.GetSecurityDescriptorBinaryForm())
+if ($expectedControlBinary -ceq $actualControlBinary) {
+    throw 'Benign auto-inheritance bookkeeping fixture did not produce distinct binary descriptors.'
+}
+if (@(Get-OwnerGroupDaclDifferences -Expected $expectedAcl -Actual $controlFlagVariant).Count -ne 0) {
+    throw 'ACL comparator rejected an otherwise identical DACL because of benign auto-inheritance bookkeeping.'
+}
+$autoInheritRequiredVariant = New-RawDaclFileSecurity -Dacl $controlFlagDacl -AdditionalControlFlags ([System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInheritRequired)
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $autoInheritRequiredVariant -Category 'auto_inherit_required'
+$nullDaclVariant = New-RawDaclFileSecurity -Dacl $null
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $nullDaclVariant -Category 'null_dacl'
+$ownerVariant = New-SddlFileSecurity -Sddl ('O:' + $alternateOwner + 'G:' + $currentSid + 'D:' + $fullControlAce)
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $ownerVariant -Category 'owner'
+$groupVariant = New-SddlFileSecurity -Sddl ('O:' + $currentSid + 'G:' + $alternateGroup + 'D:' + $fullControlAce)
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $groupVariant -Category 'group'
+$protectedVariant = New-SddlFileSecurity -Sddl ($descriptorPrefix + 'D:P' + $fullControlAce)
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $protectedVariant -Category 'protection'
+$rightsVariant = New-SddlFileSecurity -Sddl ($descriptorPrefix + 'D:(A;;FR;;;' + $currentSid + ')')
+Assert-AclDifferenceCategory -Expected $controlFlagVariant -Actual $rightsVariant -Category 'dacl'
+
+$callbackAclA = [System.Security.AccessControl.RawAcl]::new([byte]2, 1)
+$callbackAclB = [System.Security.AccessControl.RawAcl]::new([byte]2, 1)
+$callbackAclA.InsertAce(0, [System.Security.AccessControl.CommonAce]::new(
+    [System.Security.AccessControl.AceFlags]::None,
+    [System.Security.AccessControl.AceQualifier]::AccessAllowed,
+    1,
+    $currentUser,
+    $true,
+    [byte[]]@(1, 2, 3, 4)
+))
+$callbackAclB.InsertAce(0, [System.Security.AccessControl.CommonAce]::new(
+    [System.Security.AccessControl.AceFlags]::None,
+    [System.Security.AccessControl.AceQualifier]::AccessAllowed,
+    1,
+    $currentUser,
+    $true,
+    [byte[]]@(1, 2, 3, 5)
+))
+$callbackSecurityA = New-RawDaclFileSecurity -Dacl $callbackAclA
+$callbackSecurityB = New-RawDaclFileSecurity -Dacl $callbackAclB
+Assert-AclDifferenceCategory -Expected $callbackSecurityA -Actual $callbackSecurityB -Category 'dacl'
+
+$builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+$inheritedCurrentUserAce = [System.Security.AccessControl.CommonAce]::new(
+    [System.Security.AccessControl.AceFlags]::Inherited,
+    [System.Security.AccessControl.AceQualifier]::AccessAllowed,
+    1,
+    $currentUser,
+    $false,
+    $null
+)
+$inheritedUsersAce = [System.Security.AccessControl.CommonAce]::new(
+    [System.Security.AccessControl.AceFlags]::Inherited,
+    [System.Security.AccessControl.AceQualifier]::AccessAllowed,
+    2,
+    $builtInUsers,
+    $false,
+    $null
+)
+$orderedAcl = [System.Security.AccessControl.RawAcl]::new([byte]2, 2)
+$orderedAcl.InsertAce(0, $inheritedCurrentUserAce)
+$orderedAcl.InsertAce(1, $inheritedUsersAce)
+$reorderedAcl = [System.Security.AccessControl.RawAcl]::new([byte]2, 2)
+$reorderedAcl.InsertAce(0, $inheritedUsersAce)
+$reorderedAcl.InsertAce(1, $inheritedCurrentUserAce)
+$orderedSecurity = New-RawDaclFileSecurity -Dacl $orderedAcl
+$reorderedSecurity = New-RawDaclFileSecurity -Dacl $reorderedAcl
+Assert-AclDifferenceCategory -Expected $orderedSecurity -Actual $reorderedSecurity -Category 'dacl'
 
 $path = $env:ASSISTANT_FRAMEWORK_PRIVATE_CREATE_TARGET
 $privateFileSecurity = New-PrivateFileSecurity
@@ -469,6 +643,7 @@ if ([System.IO.File]::ReadAllBytes($path).Length -ne 1) {
         $identityVerifyIndex = $functionBody.IndexOf('Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity', $committedIdentityIndex, [System.StringComparison]::Ordinal)
         $bytesReadIndex = $functionBody.IndexOf('$committedBytes = Read-FileStreamBytes -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
         $aclReadIndex = $functionBody.IndexOf('$committedAcl = Get-FileStreamAcl -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
+        $aclVerifyIndex = $functionBody.IndexOf('$aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $openedTempAcl -Actual $committedAcl)', $aclReadIndex, [System.StringComparison]::Ordinal)
         $committedCloseIndex = $functionBody.IndexOf('$committedStream.Dispose()', $reopenIndex, [System.StringComparison]::Ordinal)
 
         Assert-True ($captureIdentityIndex -gt $createIndex -and $captureIdentityIndex -lt $closeIndex) 'First-install atomic write does not capture the created temporary file identity through its still-open handle'
@@ -477,8 +652,8 @@ if ([System.IO.File]::ReadAllBytes($path).Length -ne 1) {
         Assert-True ($reopenIndex -gt $moveIndex) 'First-install atomic write does not reopen the committed destination exclusively after its move'
         Assert-True ($committedIdentityIndex -gt $reopenIndex -and $identityVerifyIndex -gt $committedIdentityIndex) 'First-install atomic write does not verify that the committed destination is the same Windows file object created through the temporary handle'
         Assert-True ($bytesReadIndex -gt $reopenIndex -and $bytesReadIndex -lt $committedCloseIndex) 'First-install atomic write does not verify exact bytes through the exclusive committed-destination handle'
-        Assert-True ($aclReadIndex -gt $reopenIndex -and $aclReadIndex -lt $committedCloseIndex) 'First-install atomic write does not verify owner, group, and DACL through the exclusive committed-destination handle'
-        Assert-Contains $functionBody '$tempAccessSddl' 'First-install atomic write does not retain the created file owner, group, and DACL for committed-handle comparison'
+        Assert-True ($aclReadIndex -gt $reopenIndex -and $aclVerifyIndex -gt $aclReadIndex -and $aclVerifyIndex -lt $committedCloseIndex) 'First-install atomic write does not verify complete binary owner, group, and DACL semantics through the exclusive committed-destination handle'
+        Assert-NotContains $functionBody '$tempAccessSddl' 'First-install atomic write still retains a lossy SDDL representation for committed-handle comparison'
         Assert-True ($committedCloseIndex -gt $identityVerifyIndex -and $committedCloseIndex -gt $bytesReadIndex -and $committedCloseIndex -gt $aclReadIndex) 'First-install atomic write closes the committed-destination handle before all identity, byte, and owner/group/DACL checks finish'
 
         if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
@@ -556,6 +731,7 @@ if ($debris.Count -ne 0) {
         Assert-Contains $rollbackBody '[System.IO.File]::Move($backupPath, $fullPath)' 'Atomic rollback does not restore the original backup file by metadata-preserving move'
         Assert-Contains $rollbackBody '$restoredBytes' 'Atomic rollback does not read back restored bytes before cleanup'
         Assert-Contains $rollbackBody '$restoredAcl' 'Atomic rollback does not read back restored owner, group, and DACL before cleanup'
+        Assert-Contains $rollbackBody 'Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $restoredAcl' 'Atomic rollback verifies owner, group, and DACL through a lossy representation instead of the binary comparator'
         $byteVerifyIndex = $rollbackBody.IndexOf('$restoredBytes', [System.StringComparison]::Ordinal)
         $aclVerifyIndex = $rollbackBody.IndexOf('$restoredAcl', [System.StringComparison]::Ordinal)
         $recoveryDeleteIndex = $rollbackBody.IndexOf('[System.IO.File]::Delete($rollbackDiscard)', [System.StringComparison]::Ordinal)
@@ -1034,8 +1210,8 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 )
                 [void]$protectedConfigAcl.AddAccessRule($readRule)
                 Set-Acl -LiteralPath $configFile -AclObject $protectedConfigAcl
-                $agentsAclBefore = (Get-Acl -LiteralPath $agentsFile).Sddl
-                $configAclBefore = (Get-Acl -LiteralPath $configFile).Sddl
+                $agentsAclBefore = Get-Acl -LiteralPath $agentsFile
+                $configAclBefore = Get-Acl -LiteralPath $configFile
                 Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'Restrictive config ACL fixture is not protected'
                 Assert-True (@((Get-Acl -LiteralPath $configFile).GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier])).Count -ge 2) 'Restrictive config owner/group/DACL fixture lacks multiple explicit access rules'
                 [Environment]::SetEnvironmentVariable('OS', 'spoofed-by-contract', 'Process')
@@ -1050,8 +1226,8 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_AGENTS_MD_START') 'Codex guidance start marker is duplicated'
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Memory protocol start marker is duplicated'
             if ($isWindowsHost) {
-                Assert-Equal $agentsAclBefore (Get-Acl -LiteralPath $agentsFile).Sddl 'AGENTS.md owner, group, or DACL changed during atomic replacement'
-                Assert-Equal $configAclBefore (Get-Acl -LiteralPath $configFile).Sddl 'config.toml owner, group, or DACL changed during atomic replacement'
+                Assert-OwnerGroupDaclEquivalent -Expected $agentsAclBefore -Actual (Get-Acl -LiteralPath $agentsFile) -Message 'AGENTS.md owner, group, DACL protection, or effective rules changed during atomic replacement'
+                Assert-OwnerGroupDaclEquivalent -Expected $configAclBefore -Actual (Get-Acl -LiteralPath $configFile) -Message 'config.toml owner, group, DACL protection, or effective rules changed during atomic replacement'
                 Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'config.toml DACL lost inheritance protection during atomic replacement'
             }
 

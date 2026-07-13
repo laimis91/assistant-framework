@@ -329,6 +329,61 @@ function Get-OwnerGroupDaclSddl {
     return $Acl.GetSecurityDescriptorSddlForm((Get-OwnerGroupDaclSections))
 }
 
+function Get-DaclBinaryFingerprint {
+    param([Parameter(Mandatory = $true)][System.Security.AccessControl.RawAcl]$Dacl)
+    $binary = [byte[]]::new($Dacl.BinaryLength)
+    $Dacl.GetBinaryForm($binary, 0)
+    return [Convert]::ToBase64String($binary)
+}
+
+function Get-OwnerGroupDaclDifferences {
+    param(
+        [Parameter(Mandatory = $true)]$Expected,
+        [Parameter(Mandatory = $true)]$Actual
+    )
+
+    $differences = New-Object System.Collections.Generic.List[string]
+    $expectedBinary = $Expected.GetSecurityDescriptorBinaryForm()
+    $actualBinary = $Actual.GetSecurityDescriptorBinaryForm()
+    $expectedRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new($expectedBinary, 0)
+    $actualRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new($actualBinary, 0)
+
+    $expectedOwner = if ($null -eq $expectedRaw.Owner) { $null } else { $expectedRaw.Owner.Value }
+    $actualOwner = if ($null -eq $actualRaw.Owner) { $null } else { $actualRaw.Owner.Value }
+    if (-not [string]::Equals($expectedOwner, $actualOwner, [System.StringComparison]::Ordinal)) {
+        $differences.Add('owner')
+    }
+    $expectedGroup = if ($null -eq $expectedRaw.Group) { $null } else { $expectedRaw.Group.Value }
+    $actualGroup = if ($null -eq $actualRaw.Group) { $null } else { $actualRaw.Group.Value }
+    if (-not [string]::Equals($expectedGroup, $actualGroup, [System.StringComparison]::Ordinal)) {
+        $differences.Add('group')
+    }
+    if ($Expected.AreAccessRulesProtected -ne $Actual.AreAccessRulesProtected) {
+        $differences.Add('protection')
+    }
+    $autoInheritRequired = [System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInheritRequired
+    $expectedAutoInheritRequired = $expectedRaw.ControlFlags -band $autoInheritRequired
+    $actualAutoInheritRequired = $actualRaw.ControlFlags -band $autoInheritRequired
+    if ($expectedAutoInheritRequired -ne $actualAutoInheritRequired) {
+        $differences.Add('auto_inherit_required')
+    }
+    if (-not $Expected.AreAccessRulesCanonical -or -not $Actual.AreAccessRulesCanonical) {
+        $differences.Add('noncanonical')
+    }
+
+    if ($null -eq $expectedRaw.DiscretionaryAcl -or $null -eq $actualRaw.DiscretionaryAcl) {
+        $differences.Add('null_dacl')
+    }
+    else {
+        $expectedDacl = Get-DaclBinaryFingerprint -Dacl $expectedRaw.DiscretionaryAcl
+        $actualDacl = Get-DaclBinaryFingerprint -Dacl $actualRaw.DiscretionaryAcl
+        if ($expectedDacl -cne $actualDacl) {
+            $differences.Add('dacl')
+        }
+    }
+    return $differences.ToArray()
+}
+
 function New-PrivateFileSecurity {
     $privateAcl = New-Object -TypeName System.Security.AccessControl.FileSecurity
     $privateAcl.SetAccessRuleProtection($true, $false)
@@ -667,7 +722,7 @@ function Write-AtomicText {
     $preserveWindowsAcl = $destinationExisted -and $isWindowsHost
     $expectedBytes = $script:Utf8NoBom.GetBytes($Content)
     $tempFileIdentity = $null
-    $tempAccessSddl = $null
+    $openedTempAcl = $null
     if ($destinationExisted) {
         $originalBytes = [System.IO.File]::ReadAllBytes($fullPath)
     }
@@ -695,7 +750,6 @@ function Write-AtomicText {
         if ($isWindowsHost) {
             $tempFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $stream.SafeFileHandle
             $openedTempAcl = Get-FileStreamAcl -Stream $stream
-            $tempAccessSddl = Get-OwnerGroupDaclSddl -Acl $openedTempAcl
             if ($preserveWindowsAcl) {
                 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
                 if (-not (Test-PrivateFileSecurity -Acl $openedTempAcl -CurrentUser $currentUser)) {
@@ -743,13 +797,9 @@ function Write-AtomicText {
                             throw "Atomic replacement content verification failed for $LiteralPath"
                         }
                         $committedAcl = Get-FileStreamAcl -Stream $committedStream
-                        $committedAclMatches = [string]::Equals(
-                            (Get-OwnerGroupDaclSddl -Acl $committedAcl),
-                            (Get-OwnerGroupDaclSddl -Acl $originalAcl),
-                            [System.StringComparison]::Ordinal
-                        )
-                        if (-not $committedAclMatches) {
-                            throw "Atomic replacement owner, group, and DACL verification failed for $LiteralPath"
+                        $aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $committedAcl)
+                        if ($aclDifferences.Count -gt 0) {
+                            throw "Atomic replacement owner, group, and DACL verification failed for $LiteralPath. Difference categories: $($aclDifferences -join ', ')"
                         }
                     }
                     finally {
@@ -787,13 +837,12 @@ function Write-AtomicText {
                         $restoredBytes = [System.IO.File]::ReadAllBytes($fullPath)
                         $restoredAcl = if ($preserveWindowsAcl) { Get-Acl -LiteralPath $fullPath } else { $null }
                         $restoredBytesMatch = Test-ByteArraysEqual -Expected $originalBytes -Actual $restoredBytes
-                        $restoredAclMatches = -not $preserveWindowsAcl -or [string]::Equals(
-                            (Get-OwnerGroupDaclSddl -Acl $restoredAcl),
-                            (Get-OwnerGroupDaclSddl -Acl $originalAcl),
-                            [System.StringComparison]::Ordinal
-                        )
-                        if (-not $restoredBytesMatch -or -not $restoredAclMatches) {
-                            throw 'Atomic rollback could not verify the restored bytes, owner, group, and DACL.'
+                        $restoredAclDifferences = @()
+                        if ($preserveWindowsAcl) {
+                            $restoredAclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual $restoredAcl)
+                        }
+                        if (-not $restoredBytesMatch -or $restoredAclDifferences.Count -gt 0) {
+                            throw "Atomic rollback could not verify the restored bytes, owner, group, and DACL. Difference categories: $($restoredAclDifferences -join ', ')"
                         }
                         $rollbackVerified = $true
                         if ($discardContainsFailedReplacement -and (Test-Path -LiteralPath $rollbackDiscard -PathType Leaf)) {
@@ -861,13 +910,9 @@ function Write-AtomicText {
                     $committedAcl = Get-FileStreamAcl -Stream $committedStream
                     $identityMatches = Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity
                     $bytesMatch = Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes
-                    $accessMatches = [string]::Equals(
-                        $tempAccessSddl,
-                        (Get-OwnerGroupDaclSddl -Acl $committedAcl),
-                        [System.StringComparison]::Ordinal
-                    )
-                    if (-not $identityMatches -or -not $bytesMatch -or -not $accessMatches) {
-                        throw "First-install commit verification failed for $LiteralPath. The destination was retained for inspection."
+                    $aclDifferences = @(Get-OwnerGroupDaclDifferences -Expected $openedTempAcl -Actual $committedAcl)
+                    if (-not $identityMatches -or -not $bytesMatch -or $aclDifferences.Count -gt 0) {
+                        throw "First-install commit verification failed for $LiteralPath. Difference categories: $($aclDifferences -join ', '). The destination was retained for inspection."
                     }
                 }
                 finally {
