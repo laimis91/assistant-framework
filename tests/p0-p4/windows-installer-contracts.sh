@@ -104,6 +104,22 @@ else
         || promotion_failures+=("Windows workflow does not run PowerShell 7")
     grep -Eq -- 'tests[\\/]windows[\\/]installer-contracts\.ps1' "$workflow" \
         || promotion_failures+=("Windows workflow does not run the native installer suite")
+    grep -Eq -- '^  pull_request:[[:space:]]*$' "$workflow" \
+        || promotion_failures+=("Windows workflow does not validate pull requests")
+    push_branches="$(awk '
+        $0 == "  push:" { in_push = 1; next }
+        in_push && /^[^[:space:]]/ { exit }
+        in_push && $0 ~ /^    branches:[[:space:]]*$/ { in_branches = 1; next }
+        in_branches && $0 ~ /^    [^[:space:]]/ { exit }
+        in_branches && $0 ~ /^      -[[:space:]]+/ {
+            branch = $0
+            sub(/^      -[[:space:]]+/, "", branch)
+            sub(/[[:space:]]+$/, "", branch)
+            print branch
+        }
+    ' "$workflow")"
+    [[ "$push_branches" == "main" ]] \
+        || promotion_failures+=("Windows workflow push validation is not restricted exactly to main")
     grep -Fq -- "- 'install.sh'" "$workflow" \
         || promotion_failures+=("Windows workflow does not react to Unix installer parity changes")
     grep -Fq -- "- 'docs/plugin-architecture.md'" "$workflow" \

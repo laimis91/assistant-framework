@@ -19,6 +19,8 @@ on:
       - 'tests/p0-p4/windows-installer-contracts.sh'
       - 'tools/**'
   push:
+    branches:
+      - main
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'README.md'

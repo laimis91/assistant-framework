@@ -119,6 +119,27 @@ function Skip-Contract {
     Write-Host "SKIP: ${Name}: $Reason"
 }
 
+function Remove-TestDirectoryJunction {
+    param(
+        [Parameter(Mandatory = $true)][string]$JunctionPath,
+        [Parameter(Mandatory = $true)][string]$ExternalTarget
+    )
+    if (-not [System.IO.Directory]::Exists($JunctionPath)) {
+        throw "Test junction disappeared before cleanup: $JunctionPath"
+    }
+    $attributes = [System.IO.File]::GetAttributes($JunctionPath)
+    if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) {
+        throw "Refusing to clean a test junction that is not a reparse point: $JunctionPath"
+    }
+    [System.IO.Directory]::Delete($JunctionPath, $false)
+    if ([System.IO.Directory]::Exists($JunctionPath)) {
+        throw "Test junction cleanup did not remove the link entry: $JunctionPath"
+    }
+    if (-not [System.IO.Directory]::Exists($ExternalTarget)) {
+        throw "Test junction cleanup removed the external target: $ExternalTarget"
+    }
+}
+
 function Restore-ProcessEnvironment {
     param([hashtable]$Saved)
     foreach ($name in $Saved.Keys) {
@@ -262,26 +283,44 @@ function Get-TreeFingerprint {
         }
     }
     $rows = New-Object System.Collections.Generic.List[string]
-    foreach ($item in @(Get-ChildItem -LiteralPath $root -Force -Recurse | Sort-Object FullName)) {
-        $isIgnoredRuntimeEntry = $false
-        $ignoredRuntimeEntriesForType = if ($item.PSIsContainer) { $ignoredRuntimeDirectories } else { $ignoredRuntimeFiles }
-        foreach ($ignoredRuntimeEntry in $ignoredRuntimeEntriesForType) {
-            if ([string]::Equals($item.FullName, $ignoredRuntimeEntry, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $isIgnoredRuntimeEntry = $true
-                break
+    $pendingDirectories = New-Object 'System.Collections.Generic.Stack[string]'
+    $pendingDirectories.Push($root)
+    while ($pendingDirectories.Count -gt 0) {
+        $currentDirectory = $pendingDirectories.Pop()
+        $directoryInfo = New-Object System.IO.DirectoryInfo($currentDirectory)
+        foreach ($item in @($directoryInfo.GetFileSystemInfos() | Sort-Object FullName)) {
+            $isDirectory = ($item.Attributes -band [System.IO.FileAttributes]::Directory) -ne 0
+            $isReparsePoint = ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0
+            $relative = $item.FullName.Substring($root.Length).TrimStart([char[]]@('\', '/'))
+            if ($isReparsePoint) {
+                # Record the link entry without asking the PowerShell provider
+                # to recurse into or hash through its external target.
+                $linkKind = if ($isDirectory) { 'D' } else { 'F' }
+                $rows.Add('L|' + $relative + '|' + $linkKind + '|' + [int]$item.Attributes)
+                continue
             }
-        }
-        if ($isIgnoredRuntimeEntry) { continue }
-        $relative = $item.FullName.Substring($root.Length).TrimStart([char[]]@('\', '/'))
-        if ($item.PSIsContainer) {
-            $rows.Add('D|' + $relative)
-        }
-        else {
-            $hash = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
-            $rows.Add('F|' + $relative + '|' + $item.Length + '|' + $hash)
+
+            $isIgnoredRuntimeEntry = $false
+            $ignoredRuntimeEntriesForType = if ($isDirectory) { $ignoredRuntimeDirectories } else { $ignoredRuntimeFiles }
+            foreach ($ignoredRuntimeEntry in $ignoredRuntimeEntriesForType) {
+                if ([string]::Equals($item.FullName, $ignoredRuntimeEntry, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $isIgnoredRuntimeEntry = $true
+                    break
+                }
+            }
+            if (-not $isIgnoredRuntimeEntry) {
+                if ($isDirectory) {
+                    $rows.Add('D|' + $relative)
+                }
+                else {
+                    $hash = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
+                    $rows.Add('F|' + $relative + '|' + $item.Length + '|' + $hash)
+                }
+            }
+            if ($isDirectory) { $pendingDirectories.Push($item.FullName) }
         }
     }
-    return ($rows -join "`n")
+    return (@($rows | Sort-Object) -join "`n")
 }
 
 function Read-JsonFile {
@@ -1898,9 +1937,11 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $sentinel = Join-Path $external 'sentinel.txt'
             [System.IO.File]::WriteAllText($sentinel, 'external-data')
             $junction = Join-Path $isolatedUserProfile '.agents'
+            $junctionCreated = $false
             try {
                 try {
                     [void](New-Item -ItemType Junction -Path $junction -Target $external -ErrorAction Stop)
+                    $junctionCreated = $true
                 }
                 catch {
                     Skip-Contract -Name 'managed targets reject ancestor junctions without touching the external tree' -Reason "junction creation unavailable: $($_.Exception.Message)"
@@ -1914,14 +1955,17 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-False (Test-Path -LiteralPath (Join-Path $external 'skills\assistant-workflow')) 'Installer copied managed files through junction'
             }
             finally {
-                if (Test-Path -LiteralPath $junction) { Remove-Item -LiteralPath $junction -Force }
+                if ($junctionCreated) { Remove-TestDirectoryJunction -JunctionPath $junction -ExternalTarget $external }
             }
+            Assert-Equal 'external-data' ([System.IO.File]::ReadAllText($sentinel)) 'Junction cleanup changed the external sentinel content'
 
             $managedTarget = Join-Path $isolatedUserProfile '.agents\skills\assistant-workflow'
             [void][System.IO.Directory]::CreateDirectory($managedTarget)
             $nestedJunction = Join-Path $managedTarget 'external-link'
+            $nestedJunctionCreated = $false
             try {
                 [void](New-Item -ItemType Junction -Path $nestedJunction -Target $external -ErrorAction Stop)
+                $nestedJunctionCreated = $true
                 $codexHome = Join-Path $root 'Codex Dry Run Junction Home'
                 [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
                 $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
@@ -1929,16 +1973,19 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-Equal 'external-data' ([System.IO.File]::ReadAllText($sentinel)) 'Dry-run changed external sentinel content through junction'
             }
             finally {
-                if (Test-Path -LiteralPath $nestedJunction) { Remove-Item -LiteralPath $nestedJunction -Force }
+                if ($nestedJunctionCreated) { Remove-TestDirectoryJunction -JunctionPath $nestedJunction -ExternalTarget $external }
             }
+            Assert-Equal 'external-data' ([System.IO.File]::ReadAllText($sentinel)) 'Nested junction cleanup changed the external sentinel content'
 
             $preflightHome = Join-Path $root 'Codex User File Preflight Home'
             [void][System.IO.Directory]::CreateDirectory($preflightHome)
             foreach ($relativeLeaf in @('config.toml', 'AGENTS.md', 'hooks.json', 'memory\graph.jsonl')) {
                 $leafJunction = Join-Path $preflightHome $relativeLeaf
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $leafJunction))
+                $leafJunctionCreated = $false
                 try {
                     [void](New-Item -ItemType Junction -Path $leafJunction -Target $external -ErrorAction Stop)
+                    $leafJunctionCreated = $true
                     [Environment]::SetEnvironmentVariable('CODEX_HOME', $preflightHome, 'Process')
                     $before = Get-TreeFingerprint -LiteralPath $root
                     $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
@@ -1950,8 +1997,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                     Assert-Equal 'external-data' ([System.IO.File]::ReadAllText($sentinel)) "External sentinel changed through $relativeLeaf"
                 }
                 finally {
-                    if (Test-Path -LiteralPath $leafJunction) { Remove-Item -LiteralPath $leafJunction -Force }
+                    if ($leafJunctionCreated) { Remove-TestDirectoryJunction -JunctionPath $leafJunction -ExternalTarget $external }
                 }
+                Assert-Equal 'external-data' ([System.IO.File]::ReadAllText($sentinel)) "User-file junction cleanup changed the external sentinel content for $relativeLeaf"
             }
         }
     }
@@ -1975,9 +2023,11 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $settingsBytes = [System.Text.Encoding]::UTF8.GetBytes('{"hooks":{"CustomEvent":[{"hooks":[{"type":"command","command":"$HOME/.codex/hooks/assistant/session-start.sh --retire"}]}]}}')
             [System.IO.File]::WriteAllBytes($settingsFile, $settingsBytes)
             $junction = Join-Path $hooksTarget 'workflow-guard.d'
+            $junctionCreated = $false
             try {
                 try {
                     [void](New-Item -ItemType Junction -Path $junction -Target $external -ErrorAction Stop)
+                    $junctionCreated = $true
                 }
                 catch {
                     Skip-Contract -Name 'legacy hook cleanup rejects nested junctions before settings or external mutation' -Reason "junction creation unavailable: $($_.Exception.Message)"
@@ -1994,8 +2044,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-Equal $settingsBytes ([System.IO.File]::ReadAllBytes($settingsFile)) 'Legacy hook settings changed before junction rejection'
             }
             finally {
-                if (Test-Path -LiteralPath $junction) { Remove-Item -LiteralPath $junction -Force }
+                if ($junctionCreated) { Remove-TestDirectoryJunction -JunctionPath $junction -ExternalTarget $external }
             }
+            Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($externalSentinel)) 'Legacy-hook junction cleanup changed the external sentinel bytes'
 
 
             $wrongType = Join-Path $hooksTarget 'session-start.sh'
@@ -2010,7 +2061,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Installer mutated before rejecting a wrong-type legacy hook file'
             }
             finally {
-                if (Test-Path -LiteralPath $wrongType) { Remove-Item -LiteralPath $wrongType -Force }
+                if ([System.IO.Directory]::Exists($wrongType)) { [System.IO.Directory]::Delete($wrongType, $false) }
             }
         }
     }
@@ -2032,8 +2083,10 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $externalDirectory = Join-Path $root 'external-agent-directory'
             [void][System.IO.Directory]::CreateDirectory($externalDirectory)
             [System.IO.File]::WriteAllText((Join-Path $externalDirectory 'sentinel.txt'), 'external-agent-data')
+            $junctionCreated = $false
             try {
                 [void](New-Item -ItemType Junction -Path $managedFile -Target $externalDirectory -ErrorAction Stop)
+                $junctionCreated = $true
                 [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
                 $before = Get-TreeFingerprint -LiteralPath $root
                 $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
@@ -2045,11 +2098,14 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-Equal 'external-agent-data' ([System.IO.File]::ReadAllText((Join-Path $externalDirectory 'sentinel.txt'))) 'Managed file reparse preflight changed external content'
             }
             finally {
-                if (Test-Path -LiteralPath $managedFile) { Remove-Item -LiteralPath $managedFile -Force }
+                if ($junctionCreated) { Remove-TestDirectoryJunction -JunctionPath $managedFile -ExternalTarget $externalDirectory }
             }
+            Assert-Equal 'external-agent-data' ([System.IO.File]::ReadAllText((Join-Path $externalDirectory 'sentinel.txt'))) 'Managed-file junction cleanup changed external content'
+            $hardLinkCreated = $false
             try {
                 try {
                     [void](New-Item -ItemType HardLink -Path $managedFile -Target $externalSentinel -ErrorAction Stop)
+                    $hardLinkCreated = $true
                 }
                 catch {
                     Skip-Contract -Name 'managed file replacement does not write through external hard links' -Reason "hard-link creation unavailable: $($_.Exception.Message)"
@@ -2062,8 +2118,10 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 Assert-False ([Convert]::ToBase64String($sentinelBytes) -eq [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($managedFile))) 'Managed artifact hard-link entry was not replaced'
             }
             finally {
-                if (Test-Path -LiteralPath $managedFile) { Remove-Item -LiteralPath $managedFile -Force }
+                if ($hardLinkCreated -and [System.IO.File]::Exists($managedFile)) { [System.IO.File]::Delete($managedFile) }
             }
+            Assert-False ([System.IO.File]::Exists($managedFile)) 'Managed hard-link cleanup did not remove the managed link entry'
+            Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($externalSentinel)) 'Managed hard-link cleanup changed the external target bytes'
         }
     }
 
