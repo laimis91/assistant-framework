@@ -41,6 +41,7 @@ source "$P0P4_SUITE_DIR/docs-drift-contracts.sh"
 source "$P0P4_SUITE_DIR/harness-docs-evals-contracts.sh"
 source "$P0P4_SUITE_DIR/eval-contracts.sh"
 source "$P0P4_SUITE_DIR/codex-behavioral-eval-contracts.sh"
+source "$P0P4_SUITE_DIR/codex-agent-config-contracts.sh"
 source "$P0P4_SUITE_DIR/context-budget-report-contracts.sh"
 source "$P0P4_SUITE_DIR/pattern-library-contracts.sh"
 
