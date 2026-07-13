@@ -210,7 +210,10 @@ function Invoke-Installer {
 }
 
 function Invoke-PowerShellFile {
-    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    param(
+        [Parameter(Mandatory = $true)][string]$LiteralPath,
+        [string[]]$Arguments = @()
+    )
     $savedErrorActionPreference = $ErrorActionPreference
     $nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
     $hasNativePreference = $null -ne $nativePreferenceVariable
@@ -220,7 +223,7 @@ function Invoke-PowerShellFile {
         if ($hasNativePreference) {
             Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Local
         }
-        $output = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $LiteralPath 2>&1)
+        $output = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $LiteralPath @Arguments 2>&1)
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -1126,9 +1129,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
     }
 
     Invoke-Contract 'Codex clean install uses split native destinations and structured MCP arguments' {
-        Use-IsolatedEnvironment "codex clean [special] & semi; (quote')" {
+        Use-IsolatedEnvironment 'codex clean structured arguments' {
             param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Codex Home [active]'
+            $codexHome = Join-Path $root "Codex Home [active] & semi; (quote')"
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
             $result = Invoke-Installer -Arguments @('-Agent', 'CoDeX', '-Skill', 'assistant-workflow', '-NoHooks')
             Assert-Equal 0 $result.ExitCode "Codex clean install failed: $($result.Output)"
@@ -1151,16 +1154,14 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-NotContains $config 'ExecutionPolicy' 'MCP config weakens execution policy'
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
 
-            $launcherFirstOutput = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $launcher '-h' 2>&1)
-            $launcherFirstExit = $LASTEXITCODE
-            Assert-Equal 0 $launcherFirstExit "Installed Memory Graph launcher failed: $($launcherFirstOutput | Out-String)"
+            $launcherFirst = Invoke-PowerShellFile -LiteralPath $launcher -Arguments @('-h')
+            Assert-Equal 0 $launcherFirst.ExitCode "Installed Memory Graph launcher failed: $($launcherFirst.Output)"
             $publishedDll = Join-Path (Split-Path -Parent $launcher) '.publish\MemoryGraph.dll'
             Assert-True (Test-Path -LiteralPath $publishedDll -PathType Leaf) 'Memory Graph launcher did not create its private build cache'
             $firstPublishedTimestamp = (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc
             Start-Sleep -Milliseconds 1100
-            $launcherSecondOutput = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $launcher '-h' 2>&1)
-            $launcherSecondExit = $LASTEXITCODE
-            Assert-Equal 0 $launcherSecondExit "Cached Memory Graph launcher failed: $($launcherSecondOutput | Out-String)"
+            $launcherSecond = Invoke-PowerShellFile -LiteralPath $launcher -Arguments @('-h')
+            Assert-Equal 0 $launcherSecond.ExitCode "Cached Memory Graph launcher failed: $($launcherSecond.Output)"
             Assert-Equal $firstPublishedTimestamp (Get-Item -LiteralPath $publishedDll).LastWriteTimeUtc 'Unchanged Memory Graph sources rebuilt instead of reusing the cache'
 
             foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh')) {
