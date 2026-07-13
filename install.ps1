@@ -316,6 +316,401 @@ function Ensure-Directory {
     Assert-NoReparseTraversal -LiteralPath $LiteralPath -Purpose 'directory creation'
 }
 
+function Get-OwnerGroupDaclSections {
+    return [System.Security.AccessControl.AccessControlSections](
+        [System.Security.AccessControl.AccessControlSections]::Owner -bor
+        [System.Security.AccessControl.AccessControlSections]::Group -bor
+        [System.Security.AccessControl.AccessControlSections]::Access
+    )
+}
+
+function Get-OwnerGroupDaclSddl {
+    param([Parameter(Mandatory = $true)]$Acl)
+    return $Acl.GetSecurityDescriptorSddlForm((Get-OwnerGroupDaclSections))
+}
+
+function Copy-OwnerGroupDacl {
+    param([Parameter(Mandatory = $true)]$ReferenceAcl)
+
+    $sections = Get-OwnerGroupDaclSections
+    $sddl = Get-OwnerGroupDaclSddl -Acl $ReferenceAcl
+    $rawDescriptor = New-Object -TypeName System.Security.AccessControl.RawSecurityDescriptor -ArgumentList @($sddl)
+    if ($null -eq $rawDescriptor.DiscretionaryAcl) {
+        throw 'Cannot safely preserve a null DACL during atomic replacement.'
+    }
+    $copy = New-Object -TypeName System.Security.AccessControl.FileSecurity
+    $copy.SetSecurityDescriptorSddlForm($sddl, $sections)
+    return $copy
+}
+
+function Get-FileSystemAclExtensionsType {
+    $extensionType = [Type]::GetType(
+        'System.IO.FileSystemAclExtensions, System.IO.FileSystem.AccessControl',
+        $false
+    )
+    if ($null -eq $extensionType) {
+        try {
+            $assembly = [Reflection.Assembly]::Load('System.IO.FileSystem.AccessControl')
+            $extensionType = $assembly.GetType('System.IO.FileSystemAclExtensions', $false)
+        }
+        catch {
+            $extensionType = $null
+        }
+    }
+    return $extensionType
+}
+
+function Get-FileStreamAcl {
+    param([Parameter(Mandatory = $true)][System.IO.FileStream]$Stream)
+
+    $instanceMethod = $Stream.GetType().GetMethod('GetAccessControl', [Type[]]@())
+    if ($null -ne $instanceMethod) {
+        return $instanceMethod.Invoke($Stream, @())
+    }
+    $extensionType = Get-FileSystemAclExtensionsType
+    if ($null -eq $extensionType) {
+        throw 'File-system ACL APIs are unavailable on this Windows runtime.'
+    }
+    $extensionMethod = $extensionType.GetMethod('GetAccessControl', [Type[]]@([System.IO.FileStream]))
+    if ($null -eq $extensionMethod) {
+        throw 'Compatible FileSystemAclExtensions.GetAccessControl API was not found.'
+    }
+    return $extensionMethod.Invoke($null, [object[]]@($Stream))
+}
+
+function Set-FileStreamAcl {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.FileSecurity]$Acl
+    )
+    $instanceMethod = $Stream.GetType().GetMethod(
+        'SetAccessControl',
+        [Type[]]@([System.Security.AccessControl.FileSecurity])
+    )
+    if ($null -ne $instanceMethod) {
+        [void]$instanceMethod.Invoke($Stream, [object[]]@($Acl))
+        return
+    }
+    $extensionType = Get-FileSystemAclExtensionsType
+    if ($null -eq $extensionType) {
+        throw 'File-system ACL APIs are unavailable on this Windows runtime.'
+    }
+    $extensionMethod = $extensionType.GetMethod(
+        'SetAccessControl',
+        [Type[]]@([System.IO.FileStream], [System.Security.AccessControl.FileSecurity])
+    )
+    if ($null -eq $extensionMethod) {
+        throw 'Compatible FileSystemAclExtensions.SetAccessControl API was not found.'
+    }
+    [void]$extensionMethod.Invoke($null, [object[]]@($Stream, $Acl))
+}
+
+function Initialize-WindowsFileIdentityInterop {
+    if ($null -ne ('AssistantFrameworkInstaller.NativeFileIdentity' -as [Type])) { return }
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+namespace AssistantFrameworkInstaller
+{
+    public static class NativeFileIdentity
+    {
+        private const uint GenericRead = 0x80000000u;
+        private const uint GenericWrite = 0x40000000u;
+        private const uint ReadControl = 0x00020000u;
+        private const uint WriteDac = 0x00040000u;
+        private const uint CreateNew = 1u;
+        private const uint OpenExisting = 3u;
+        private const uint FileAttributeNormal = 0x00000080u;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ByHandleFileInformation
+        {
+            public uint FileAttributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+            public uint VolumeSerialNumber;
+            public uint FileSizeHigh;
+            public uint FileSizeLow;
+            public uint NumberOfLinks;
+            public uint FileIndexHigh;
+            public uint FileIndexLow;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern SafeFileHandle CreateFileW(
+            string fileName,
+            uint desiredAccess,
+            uint shareMode,
+            IntPtr securityAttributes,
+            uint creationDisposition,
+            uint flagsAndAttributes,
+            IntPtr templateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetFileInformationByHandle(
+            SafeFileHandle file,
+            out ByHandleFileInformation information);
+
+        public static SafeFileHandle CreateNewReadWrite(string path)
+        {
+            return OpenChecked(path, GenericRead | GenericWrite | ReadControl, CreateNew);
+        }
+
+        public static SafeFileHandle OpenReadExclusive(string path)
+        {
+            return OpenChecked(path, GenericRead | ReadControl, OpenExisting);
+        }
+
+        public static SafeFileHandle OpenReadSecurityExclusive(string path)
+        {
+            return OpenChecked(path, GenericRead | ReadControl | WriteDac, OpenExisting);
+        }
+
+        private static SafeFileHandle OpenChecked(string path, uint access, uint disposition)
+        {
+            SafeFileHandle handle = CreateFileW(
+                path,
+                access,
+                0u,
+                IntPtr.Zero,
+                disposition,
+                FileAttributeNormal,
+                IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                int error = Marshal.GetLastWin32Error();
+                handle.Dispose();
+                throw new Win32Exception(error);
+            }
+            return handle;
+        }
+
+        public static string GetIdentity(SafeFileHandle handle)
+        {
+            ByHandleFileInformation information;
+            if (!GetFileInformationByHandle(handle, out information))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            return String.Format(
+                "{0:X8}:{1:X8}:{2:X8}",
+                information.VolumeSerialNumber,
+                information.FileIndexHigh,
+                information.FileIndexLow);
+        }
+    }
+}
+'@
+}
+
+function New-FileStreamFromSafeFileHandle {
+    param(
+        [Parameter(Mandatory = $true)]$SafeFileHandle,
+        [Parameter(Mandatory = $true)][System.IO.FileAccess]$FileAccess
+    )
+    $constructor = [System.IO.FileStream].GetConstructor([Type[]]@(
+        [Microsoft.Win32.SafeHandles.SafeFileHandle],
+        [System.IO.FileAccess]
+    ))
+    if ($null -eq $constructor) {
+        $SafeFileHandle.Dispose()
+        throw 'Compatible SafeFileHandle FileStream constructor was not found.'
+    }
+    try {
+        return $constructor.Invoke([object[]]@($SafeFileHandle, $FileAccess))
+    }
+    catch {
+        $SafeFileHandle.Dispose()
+        throw
+    }
+}
+
+function New-WindowsDefaultCreateNewStream {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    Initialize-WindowsFileIdentityInterop
+    $handle = [AssistantFrameworkInstaller.NativeFileIdentity]::CreateNewReadWrite($LiteralPath)
+    return New-FileStreamFromSafeFileHandle -SafeFileHandle $handle -FileAccess ([System.IO.FileAccess]::ReadWrite)
+}
+
+function Open-WindowsFileReadStream {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    Initialize-WindowsFileIdentityInterop
+    $handle = [AssistantFrameworkInstaller.NativeFileIdentity]::OpenReadExclusive($LiteralPath)
+    return New-FileStreamFromSafeFileHandle -SafeFileHandle $handle -FileAccess ([System.IO.FileAccess]::Read)
+}
+
+function Open-WindowsFileSecurityStream {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    Initialize-WindowsFileIdentityInterop
+    $handle = [AssistantFrameworkInstaller.NativeFileIdentity]::OpenReadSecurityExclusive($LiteralPath)
+    return New-FileStreamFromSafeFileHandle -SafeFileHandle $handle -FileAccess ([System.IO.FileAccess]::Read)
+}
+
+function Get-WindowsFileIdentity {
+    param([Parameter(Mandatory = $true)]$SafeFileHandle)
+    Initialize-WindowsFileIdentityInterop
+    return [AssistantFrameworkInstaller.NativeFileIdentity]::GetIdentity($SafeFileHandle)
+}
+
+function Test-WindowsFileIdentityEqual {
+    param(
+        [Parameter(Mandatory = $true)][string]$Expected,
+        [Parameter(Mandatory = $true)][string]$Actual
+    )
+    return [string]::Equals($Expected, $Actual, [System.StringComparison]::Ordinal)
+}
+
+function Read-FileStreamBytes {
+    param([Parameter(Mandatory = $true)][System.IO.FileStream]$Stream)
+    $memory = New-Object System.IO.MemoryStream
+    try {
+        $Stream.CopyTo($memory)
+        return ,$memory.ToArray()
+    }
+    finally {
+        $memory.Dispose()
+    }
+}
+
+function New-SecuredCreateNewStream {
+    param(
+        [Parameter(Mandatory = $true)][string]$LiteralPath,
+        [Parameter(Mandatory = $true)][System.Security.AccessControl.FileSecurity]$FileSecurity
+    )
+
+    $rights = [System.Security.AccessControl.FileSystemRights](
+        [System.Security.AccessControl.FileSystemRights]::ReadData -bor
+        [System.Security.AccessControl.FileSystemRights]::WriteData -bor
+        [System.Security.AccessControl.FileSystemRights]::ReadPermissions -bor
+        [System.Security.AccessControl.FileSystemRights]::Synchronize
+    )
+    $constructorTypes = [Type[]]@(
+        [string],
+        [System.IO.FileMode],
+        [System.Security.AccessControl.FileSystemRights],
+        [System.IO.FileShare],
+        [int],
+        [System.IO.FileOptions],
+        [System.Security.AccessControl.FileSecurity]
+    )
+    $constructor = [System.IO.FileStream].GetConstructor($constructorTypes)
+    if ($null -ne $constructor) {
+        return $constructor.Invoke([object[]]@(
+            $LiteralPath,
+            [System.IO.FileMode]::CreateNew,
+            $rights,
+            [System.IO.FileShare]::None,
+            4096,
+            [System.IO.FileOptions]::None,
+            $FileSecurity
+        ))
+    }
+
+    $extensionType = Get-FileSystemAclExtensionsType
+    if ($null -eq $extensionType) {
+        throw 'File-system ACL APIs are unavailable on this Windows runtime.'
+    }
+    $createMethod = @($extensionType.GetMethods() | Where-Object {
+        if ($_.Name -ne 'Create') { return $false }
+        $parameters = $_.GetParameters()
+        return $parameters.Count -eq 7 -and
+            $parameters[0].ParameterType -eq [System.IO.FileInfo] -and
+            $parameters[1].ParameterType -eq [System.IO.FileMode] -and
+            $parameters[2].ParameterType -eq [System.Security.AccessControl.FileSystemRights] -and
+            $parameters[3].ParameterType -eq [System.IO.FileShare] -and
+            $parameters[4].ParameterType -eq [int] -and
+            $parameters[5].ParameterType -eq [System.IO.FileOptions] -and
+            $parameters[6].ParameterType -eq [System.Security.AccessControl.FileSecurity]
+    } | Select-Object -First 1)
+    if ($createMethod.Count -ne 1) {
+        throw 'Compatible FileSystemAclExtensions.Create API was not found.'
+    }
+    return $createMethod[0].Invoke($null, [object[]]@(
+        (New-Object -TypeName System.IO.FileInfo -ArgumentList @($LiteralPath)),
+        [System.IO.FileMode]::CreateNew,
+        $rights,
+        [System.IO.FileShare]::None,
+        4096,
+        [System.IO.FileOptions]::None,
+        $FileSecurity
+    ))
+}
+
+function Test-ByteArraysEqual {
+    param(
+        [AllowNull()][byte[]]$Expected,
+        [AllowNull()][byte[]]$Actual
+    )
+    if ($null -eq $Expected -or $null -eq $Actual -or $Expected.Length -ne $Actual.Length) {
+        return $false
+    }
+    for ($index = 0; $index -lt $Expected.Length; $index++) {
+        if ($Expected[$index] -ne $Actual[$index]) { return $false }
+    }
+    return $true
+}
+
+function Get-OwnerGroupSddl {
+    param([Parameter(Mandatory = $true)]$Acl)
+    $sections = [System.Security.AccessControl.AccessControlSections](
+        [System.Security.AccessControl.AccessControlSections]::Owner -bor
+        [System.Security.AccessControl.AccessControlSections]::Group
+    )
+    return $Acl.GetSecurityDescriptorSddlForm($sections)
+}
+
+function Copy-Dacl {
+    param([Parameter(Mandatory = $true)]$ReferenceAcl)
+    $sections = [System.Security.AccessControl.AccessControlSections]::Access
+    $sddl = $ReferenceAcl.GetSecurityDescriptorSddlForm($sections)
+    $rawDescriptor = New-Object -TypeName System.Security.AccessControl.RawSecurityDescriptor -ArgumentList @($sddl)
+    if ($null -eq $rawDescriptor.DiscretionaryAcl) {
+        throw 'Cannot safely preserve a null DACL during atomic replacement.'
+    }
+    $copy = New-Object -TypeName System.Security.AccessControl.FileSecurity
+    $copy.SetSecurityDescriptorSddlForm($sddl, $sections)
+    return $copy
+}
+
+function Set-EquivalentFileStreamDacl {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)]$ReferenceAcl
+    )
+
+    $expectedSddl = Get-OwnerGroupDaclSddl -Acl $ReferenceAcl
+    $currentAcl = Get-FileStreamAcl -Stream $Stream
+    if (-not [string]::Equals(
+        (Get-OwnerGroupSddl -Acl $currentAcl),
+        (Get-OwnerGroupSddl -Acl $ReferenceAcl),
+        [System.StringComparison]::Ordinal
+    )) {
+        throw "Could not preserve the file owner and group for $($Stream.Name)"
+    }
+    if ([string]::Equals(
+        (Get-OwnerGroupDaclSddl -Acl $currentAcl),
+        $expectedSddl,
+        [System.StringComparison]::Ordinal
+    )) {
+        return
+    }
+
+    $equivalentDacl = Copy-Dacl -ReferenceAcl $ReferenceAcl
+    Set-FileStreamAcl -Stream $Stream -Acl $equivalentDacl
+    $appliedAcl = Get-FileStreamAcl -Stream $Stream
+    if (-not [string]::Equals(
+        (Get-OwnerGroupDaclSddl -Acl $appliedAcl),
+        $expectedSddl,
+        [System.StringComparison]::Ordinal
+    )) {
+        throw "Could not preserve the file owner, group, and DACL for $($Stream.Name)"
+    }
+}
+
 function Write-AtomicText {
     param(
         [Parameter(Mandatory = $true)][string]$LiteralPath,
@@ -333,36 +728,49 @@ function Write-AtomicText {
     $tempPath = Join-Path $parent ('.assistant-framework-' + [Guid]::NewGuid().ToString('N') + '.tmp')
     $backupPath = Join-Path $parent ('.assistant-framework-' + [Guid]::NewGuid().ToString('N') + '.bak')
     $originalAcl = $null
+    $originalBytes = $null
     $retainBackupOnFailure = $false
     $destinationExisted = Test-Path -LiteralPath $fullPath -PathType Leaf
-    $preserveWindowsAcl = $destinationExisted -and (Test-IsWindowsHost)
+    $isWindowsHost = Test-IsWindowsHost
+    $preserveWindowsAcl = $destinationExisted -and $isWindowsHost
+    $expectedBytes = $script:Utf8NoBom.GetBytes($Content)
+    $tempFileIdentity = $null
+    $tempAccessSddl = $null
+    if ($destinationExisted) {
+        $originalBytes = [System.IO.File]::ReadAllBytes($fullPath)
+    }
     if ($preserveWindowsAcl) {
         $originalAcl = Get-Acl -LiteralPath $fullPath
     }
     $stream = $null
     $writer = $null
     try {
-        $stream = [System.IO.File]::Open(
-            $tempPath,
-            [System.IO.FileMode]::CreateNew,
-            [System.IO.FileAccess]::Write,
-            [System.IO.FileShare]::None
-        )
-        $stream.Dispose()
-        $stream = $null
         if ($preserveWindowsAcl) {
-            Set-Acl -LiteralPath $tempPath -AclObject $originalAcl
+            $tempAcl = Copy-OwnerGroupDacl -ReferenceAcl $originalAcl
+            $stream = New-SecuredCreateNewStream -LiteralPath $tempPath -FileSecurity $tempAcl
         }
-        $tempItem = Get-Item -LiteralPath $tempPath -Force
-        if (($tempItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or $tempItem.Length -ne 0) {
-            throw "Temporary file changed before secured content write for $LiteralPath"
+        elseif ($isWindowsHost) {
+            $stream = New-WindowsDefaultCreateNewStream -LiteralPath $tempPath
         }
-        $stream = [System.IO.File]::Open(
-            $tempPath,
-            [System.IO.FileMode]::Open,
-            [System.IO.FileAccess]::Write,
-            [System.IO.FileShare]::None
-        )
+        else {
+            $stream = [System.IO.File]::Open(
+                $tempPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::None
+            )
+        }
+        if ($isWindowsHost) {
+            $tempFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $stream.SafeFileHandle
+            $tempAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-FileStreamAcl -Stream $stream)
+            if ($preserveWindowsAcl -and -not [string]::Equals(
+                $tempAccessSddl,
+                (Get-OwnerGroupDaclSddl -Acl $originalAcl),
+                [System.StringComparison]::Ordinal
+            )) {
+                throw "Could not secure the temporary file owner, group, and DACL for $LiteralPath"
+            }
+        }
         $writer = New-Object -TypeName System.IO.StreamWriter -ArgumentList @($stream, $script:Utf8NoBom)
         $writer.Write($Content)
         $writer.Flush()
@@ -388,27 +796,111 @@ function Write-AtomicText {
             }
             try {
                 [System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)
+                if ($preserveWindowsAcl) {
+                    $committedStream = $null
+                    try {
+                        $committedStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath
+                        $committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle
+                        $identityMatches = Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity
+                        if (-not $identityMatches) {
+                            throw "Atomic replacement identity verification failed for $LiteralPath"
+                        }
+                        $committedBytes = Read-FileStreamBytes -Stream $committedStream
+                        if (-not (Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes)) {
+                            throw "Atomic replacement content verification failed for $LiteralPath"
+                        }
+                        Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl
+                    }
+                    finally {
+                        if ($null -ne $committedStream) { $committedStream.Dispose() }
+                    }
+                }
+                else {
+                    $committedBytes = [System.IO.File]::ReadAllBytes($fullPath)
+                    if (-not (Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes)) {
+                        throw "Atomic replacement content verification failed for $LiteralPath"
+                    }
+                }
             }
             catch {
                 $replacementError = $_
                 if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
                     $retainBackupOnFailure = $true
                     Assert-NoReparseTraversal -LiteralPath $backupPath -Purpose 'atomic rollback backup'
-                    if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
-                        $rollbackDiscard = Join-Path $parent ('.assistant-framework-' + [Guid]::NewGuid().ToString('N') + '.rollback')
-                        try {
-                            [System.IO.File]::Replace($backupPath, $fullPath, $rollbackDiscard, $true)
-                        }
-                        finally {
-                            if (Test-Path -LiteralPath $rollbackDiscard -PathType Leaf) {
-                                [System.IO.File]::Delete($rollbackDiscard)
+                    $rollbackDiscard = $null
+                    $discardContainsFailedReplacement = $false
+                    $backupRestored = $false
+                    $rollbackVerified = $false
+                    try {
+                        if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
+                            $rollbackDiscard = Join-Path $parent ('.assistant-framework-' + [Guid]::NewGuid().ToString('N') + '.rollback')
+                            Assert-NoReparseTraversal -LiteralPath $rollbackDiscard -Purpose 'atomic rollback discard'
+                            if (Test-Path -LiteralPath $rollbackDiscard) {
+                                throw "Atomic rollback discard unexpectedly exists: $rollbackDiscard"
                             }
+                            [System.IO.File]::Move($fullPath, $rollbackDiscard)
+                            $discardContainsFailedReplacement = $true
+                        }
+                        [System.IO.File]::Move($backupPath, $fullPath)
+                        $backupRestored = $true
+                        $restoredBytes = [System.IO.File]::ReadAllBytes($fullPath)
+                        $restoredAcl = if ($preserveWindowsAcl) { Get-Acl -LiteralPath $fullPath } else { $null }
+                        $restoredBytesMatch = Test-ByteArraysEqual -Expected $originalBytes -Actual $restoredBytes
+                        $restoredAclMatches = -not $preserveWindowsAcl -or [string]::Equals(
+                            (Get-OwnerGroupDaclSddl -Acl $restoredAcl),
+                            (Get-OwnerGroupDaclSddl -Acl $originalAcl),
+                            [System.StringComparison]::Ordinal
+                        )
+                        if (-not $restoredBytesMatch -or -not $restoredAclMatches) {
+                            throw 'Atomic rollback could not verify the restored bytes, owner, group, and DACL.'
+                        }
+                        $rollbackVerified = $true
+                        if ($discardContainsFailedReplacement -and (Test-Path -LiteralPath $rollbackDiscard -PathType Leaf)) {
+                            [System.IO.File]::Delete($rollbackDiscard)
                         }
                         $retainBackupOnFailure = $false
                     }
-                    else {
-                        [System.IO.File]::Move($backupPath, $fullPath)
-                        $retainBackupOnFailure = $false
+                    catch {
+                        $rollbackError = $_
+                        if (-not $backupRestored -and
+                            (Test-Path -LiteralPath $backupPath -PathType Leaf) -and
+                            $discardContainsFailedReplacement -and
+                            -not (Test-Path -LiteralPath $fullPath)) {
+                            try {
+                                [System.IO.File]::Move($rollbackDiscard, $fullPath)
+                                $discardContainsFailedReplacement = $false
+                            }
+                            catch {
+                                # Leave both recovery files in place for manual recovery.
+                            }
+                        }
+                        $recoveryLocations = New-Object System.Collections.Generic.List[string]
+                        if ($backupRestored -and (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+                            $restorationState = if ($rollbackVerified) { 'Verified restored destination' } else { 'Unverified restored destination' }
+                            $recoveryLocations.Add("${restorationState}: $fullPath")
+                        }
+                        elseif (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+                            $recoveryLocations.Add("Original backup: $backupPath")
+                        }
+                        if (-not $backupRestored -and (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+                            $recoveryLocations.Add("Current destination: $fullPath")
+                        }
+                        if ($null -ne $rollbackDiscard -and (Test-Path -LiteralPath $rollbackDiscard -PathType Leaf)) {
+                            $recoveryLocations.Add("Failed replacement: $rollbackDiscard")
+                        }
+                        $recoverySummary = if ($recoveryLocations.Count -gt 0) {
+                            $recoveryLocations -join '; '
+                        }
+                        else {
+                            'No recovery path could be confirmed.'
+                        }
+                        $diagnosticState = if ($rollbackVerified) {
+                            'The original was restored and verified, but failed-replacement cleanup did not complete.'
+                        }
+                        else {
+                            'Rollback could not be verified.'
+                        }
+                        throw "Atomic replacement failed for $LiteralPath. $diagnosticState $recoverySummary. Replacement error: $($replacementError.Exception.Message). Rollback or cleanup error: $($rollbackError.Exception.Message)"
                     }
                 }
                 throw $replacementError
@@ -419,6 +911,28 @@ function Write-AtomicText {
         }
         else {
             [System.IO.File]::Move($tempPath, $fullPath)
+            if ($isWindowsHost) {
+                $committedStream = $null
+                try {
+                    $committedStream = Open-WindowsFileReadStream -LiteralPath $fullPath
+                    $committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle
+                    $committedBytes = Read-FileStreamBytes -Stream $committedStream
+                    $committedAcl = Get-FileStreamAcl -Stream $committedStream
+                    $identityMatches = Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity
+                    $bytesMatch = Test-ByteArraysEqual -Expected $expectedBytes -Actual $committedBytes
+                    $accessMatches = [string]::Equals(
+                        $tempAccessSddl,
+                        (Get-OwnerGroupDaclSddl -Acl $committedAcl),
+                        [System.StringComparison]::Ordinal
+                    )
+                    if (-not $identityMatches -or -not $bytesMatch -or -not $accessMatches) {
+                        throw "First-install commit verification failed for $LiteralPath. The destination was retained for inspection."
+                    }
+                }
+                finally {
+                    if ($null -ne $committedStream) { $committedStream.Dispose() }
+                }
+            }
         }
     }
     finally {

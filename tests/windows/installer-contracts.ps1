@@ -20,6 +20,7 @@ $ErrorActionPreference = 'Stop'
 $script:Passed = 0
 $script:Failed = 0
 $script:Skipped = 0
+$script:ActiveIsolatedUserProfile = $null
 $script:FrameworkRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $script:InstallerPath = Join-Path $script:FrameworkRoot 'install.ps1'
 $script:MemoryLauncherPath = Join-Path $script:FrameworkRoot 'tools\memory-graph\run-memory-graph.ps1'
@@ -98,6 +99,7 @@ function Use-IsolatedEnvironment {
     param([string]$Name, [scriptblock]$Body)
     $root = Join-Path $script:SuiteRoot $Name
     $isolatedUserProfile = Join-Path $root 'User Profile [isolated]'
+    $savedActiveIsolatedUserProfile = $script:ActiveIsolatedUserProfile
     [void][System.IO.Directory]::CreateDirectory($isolatedUserProfile)
     $saved = @{
         USERPROFILE = [Environment]::GetEnvironmentVariable('USERPROFILE', 'Process')
@@ -118,6 +120,7 @@ function Use-IsolatedEnvironment {
         OS = [Environment]::GetEnvironmentVariable('OS', 'Process')
     }
     try {
+        $script:ActiveIsolatedUserProfile = $isolatedUserProfile
         $hostRuntimeRoot = Join-Path $script:SuiteRoot '_child-powershell-runtime'
         [void][System.IO.Directory]::CreateDirectory($hostRuntimeRoot)
         [Environment]::SetEnvironmentVariable('USERPROFILE', $isolatedUserProfile, 'Process')
@@ -141,6 +144,7 @@ function Use-IsolatedEnvironment {
         & $Body $root $isolatedUserProfile
     }
     finally {
+        $script:ActiveIsolatedUserProfile = $savedActiveIsolatedUserProfile
         Restore-ProcessEnvironment -Saved $saved
     }
 }
@@ -148,8 +152,52 @@ function Use-IsolatedEnvironment {
 function Invoke-Installer {
     param([string[]]$Arguments)
     $allArguments = @('-NoLogo', '-NoProfile', '-File', $script:InstallerPath) + @($Arguments)
-    $output = @(& $script:PowerShellExecutable @allArguments 2>&1)
-    $exitCode = $LASTEXITCODE
+    $savedErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $hasNativePreference = $null -ne $nativePreferenceVariable
+    if ($hasNativePreference) {
+        $savedNativePreference = $nativePreferenceVariable.Value
+    }
+    try {
+        $ErrorActionPreference = 'Continue'
+        if ($hasNativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Local
+        }
+        $output = @(& $script:PowerShellExecutable @allArguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+        if ($hasNativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $savedNativePreference -Scope Local
+        }
+    }
+    return (New-Object PSObject -Property @{
+        ExitCode = $exitCode
+        Output = ($output | Out-String)
+    })
+}
+
+function Invoke-PowerShellFile {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    $savedErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $hasNativePreference = $null -ne $nativePreferenceVariable
+    if ($hasNativePreference) { $savedNativePreference = $nativePreferenceVariable.Value }
+    try {
+        $ErrorActionPreference = 'Continue'
+        if ($hasNativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Local
+        }
+        $output = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $LiteralPath 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+        if ($hasNativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $savedNativePreference -Scope Local
+        }
+    }
     return (New-Object PSObject -Property @{
         ExitCode = $exitCode
         Output = ($output | Out-String)
@@ -159,8 +207,25 @@ function Invoke-Installer {
 function Get-TreeFingerprint {
     param([string]$LiteralPath)
     $root = [System.IO.Path]::GetFullPath($LiteralPath).TrimEnd([char[]]@('\', '/'))
+    $ignoredRuntimeFiles = @()
+    if (-not [string]::IsNullOrWhiteSpace($script:ActiveIsolatedUserProfile)) {
+        $ignoredRuntimeFiles = @(
+            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile 'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive')),
+            [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile 'AppData/Local/Microsoft/Windows/PowerShell/StartupProfileData-NonInteractive'))
+        )
+    }
     $rows = New-Object System.Collections.Generic.List[string]
     foreach ($item in @(Get-ChildItem -LiteralPath $root -Force -Recurse | Sort-Object FullName)) {
+        if (-not $item.PSIsContainer) {
+            $isIgnoredRuntimeFile = $false
+            foreach ($ignoredRuntimeFile in $ignoredRuntimeFiles) {
+                if ([string]::Equals($item.FullName, $ignoredRuntimeFile, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $isIgnoredRuntimeFile = $true
+                    break
+                }
+            }
+            if ($isIgnoredRuntimeFile) { continue }
+        }
         $relative = $item.FullName.Substring($root.Length).TrimStart([char[]]@('\', '/'))
         if ($item.PSIsContainer) {
             $rows.Add('D|' + $relative)
@@ -220,23 +285,438 @@ try {
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
     }
 
-    Invoke-Contract 'atomic replacement applies an existing ACL before temporary content is written' {
+    Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through ACL application and content write' {
+        $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
+        $helperStart = $installer.IndexOf('function Set-EquivalentFileStreamDacl', [System.StringComparison]::Ordinal)
+        $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
+        $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
+        Assert-True ($helperStart -ge 0 -and $helperStart -lt $functionStart) 'Equivalent ACL helper was not found before Write-AtomicText'
+        Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
+        $aclSupportBody = $installer.Substring(0, $functionStart)
+        $helperBody = $installer.Substring($helperStart, $functionStart - $helperStart)
+        $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
+        Assert-Contains $aclSupportBody 'GetSecurityDescriptorSddlForm' 'Equivalent ACL support does not scope comparison to owner, group, and DACL'
+        Assert-Contains $aclSupportBody 'SetSecurityDescriptorSddlForm' 'Equivalent ACL support does not copy owner, group, and DACL through a fresh FileSecurity object'
+        Assert-NotContains $aclSupportBody 'AddAccessRule' 'Equivalent ACL support reassembles access rules instead of preserving their section-scoped SDDL'
+        Assert-Contains $aclSupportBody '[System.IO.FileStream]' 'Equivalent ACL support does not accept an identity-bound FileStream'
+        Assert-Contains $aclSupportBody 'FileSystemAclExtensions' 'Equivalent ACL support lacks the PowerShell 7 FileStream ACL compatibility path'
+        Assert-Contains $aclSupportBody 'GetAccessControl' 'Equivalent ACL support cannot read owner, group, and DACL from the open file handle'
+        Assert-Contains $aclSupportBody 'New-SecuredCreateNewStream' 'Atomic replacement lacks a cross-runtime secure-create helper'
+        Assert-Contains $aclSupportBody 'FileSystemAclExtensions' 'Atomic replacement lacks the modern .NET secure-create path'
+        Assert-NotContains $helperBody 'security descriptor' 'Equivalent ACL helper overstates its contract as preserving a complete security descriptor, including SACL data'
+        Assert-Contains $helperBody 'owner, group, and DACL' 'Equivalent ACL helper diagnostic does not explicitly scope fidelity to owner, group, and DACL'
+        $createIndex = $aclSupportBody.IndexOf('[System.IO.FileMode]::CreateNew', [System.StringComparison]::Ordinal)
+        $secureCreateIndex = $functionBody.IndexOf('New-SecuredCreateNewStream', [System.StringComparison]::Ordinal)
+        $aclIndex = $functionBody.IndexOf('Get-FileStreamAcl -Stream $stream', $secureCreateIndex, [System.StringComparison]::Ordinal)
+        $writeIndex = $functionBody.IndexOf('$writer.Write($Content)', [System.StringComparison]::Ordinal)
+        $closeIndex = $functionBody.IndexOf('$stream.Dispose()', $writeIndex, [System.StringComparison]::Ordinal)
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
+        $verifyIndex = $functionBody.IndexOf('Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl', $replaceIndex, [System.StringComparison]::Ordinal)
+        Assert-True ($createIndex -ge 0 -and $secureCreateIndex -ge 0) 'Atomic replacement does not create its secured temporary file exclusively'
+        Assert-True ($aclIndex -gt $secureCreateIndex) 'Atomic replacement does not verify owner, group, and DACL through the exclusive CreateNew handle'
+        Assert-True ($writeIndex -ge 0) 'Atomic replacement content write was not found'
+        $identityBoundWindow = $functionBody.Substring($secureCreateIndex, ($writeIndex + '$writer.Write($Content)'.Length) - $secureCreateIndex)
+        Assert-NotContains $identityBoundWindow '$stream.Dispose()' 'Atomic replacement closes the exclusive CreateNew handle before its content write'
+        Assert-NotContains $identityBoundWindow '[System.IO.FileMode]::Open' 'Atomic replacement reopens the temporary path before its content write'
+        Assert-True ($closeIndex -gt $writeIndex) 'Atomic replacement does not close its identity-bound handle after the content write'
+        Assert-True ($replaceIndex -gt $writeIndex) 'Atomic replacement commit was not found after the content write'
+        Assert-True ($verifyIndex -gt $replaceIndex) 'Atomic replacement does not verify and normalize owner, group, and DACL before deleting the rollback backup'
+        Assert-True ($secureCreateIndex -lt $aclIndex -and $aclIndex -lt $writeIndex -and $writeIndex -lt $closeIndex) 'Atomic replacement does not create, verify, write, and close one identity-bound temporary handle in the required order'
+    }
+
+    Invoke-Contract 'existing destination verifies identity before handle-bound DACL normalization' {
+        $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
+        $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
+        $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
+        Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
+        $supportBody = $installer.Substring(0, $functionStart)
+        $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
+        Assert-Contains $supportBody 'function Set-FileStreamAcl' 'Existing-destination DACL normalization lacks a handle-bound ACL setter'
+        Assert-Contains $supportBody 'SetAccessControl' 'Existing-destination DACL normalization lacks cross-runtime FileStream ACL application'
+        Assert-Contains $supportBody 'Open-WindowsFileSecurityStream' 'Existing-destination commit lacks an exclusive READ_CONTROL and WRITE_DAC handle'
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
+        $reopenIndex = $functionBody.IndexOf('$committedStream = Open-WindowsFileSecurityStream -LiteralPath $fullPath', $replaceIndex, [System.StringComparison]::Ordinal)
+        $identityIndex = $functionBody.IndexOf('$committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle', $reopenIndex, [System.StringComparison]::Ordinal)
+        $identityVerifyIndex = $functionBody.IndexOf('Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity', $identityIndex, [System.StringComparison]::Ordinal)
+        $daclSetIndex = $functionBody.IndexOf('Set-EquivalentFileStreamDacl -Stream $committedStream -ReferenceAcl $originalAcl', $identityVerifyIndex, [System.StringComparison]::Ordinal)
+        $bytesIndex = $functionBody.IndexOf('$committedBytes = Read-FileStreamBytes -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
+        $closeIndex = $functionBody.IndexOf('$committedStream.Dispose()', $reopenIndex, [System.StringComparison]::Ordinal)
+        Assert-True ($reopenIndex -gt $replaceIndex) 'Existing destination is not reopened exclusively immediately after replacement'
+        Assert-True ($identityIndex -gt $reopenIndex -and $identityVerifyIndex -gt $identityIndex) 'Existing destination does not compare committed identity with the created temp before mutation'
+        Assert-True ($daclSetIndex -gt $identityVerifyIndex) 'Existing destination can normalize a substituted hard link before verifying identity'
+        Assert-True ($bytesIndex -gt $reopenIndex -and $bytesIndex -lt $closeIndex) 'Existing destination bytes are not verified through the same exclusive committed handle'
+        Assert-True ($closeIndex -gt $daclSetIndex) 'Existing destination closes its committed handle before DACL normalization and verification finish'
+        Assert-NotContains $functionBody 'Set-EquivalentFileAcl -LiteralPath $fullPath' 'Existing destination still performs path-based ACL mutation after the temp handle closes'
+    }
+
+    Invoke-Contract 'Windows first-install atomic commit verifies stable identity bytes and owner group DACL through one destination handle' {
+        $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
+        $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
+        $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
+        Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
+        $identitySupportBody = $installer.Substring(0, $functionStart)
+        $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
+
+        Assert-Contains $identitySupportBody 'CreateFileW' 'Windows file identity support does not reopen the committed destination without following a substituted path entry'
+        Assert-Contains $identitySupportBody 'GetFileInformationByHandle' 'Windows file identity support does not query stable volume and file-index identity from an open handle'
+        Assert-Contains $identitySupportBody 'Microsoft.Win32.SafeHandles.SafeFileHandle' 'Windows file identity support does not own native handles safely across PowerShell 5.1 and PowerShell 7'
+        Assert-Contains $identitySupportBody 'const uint' 'Windows file identity P/Invoke declarations do not keep their native constants dependency-free and immutable'
+        Assert-Contains $identitySupportBody 'Add-Type -TypeDefinition' 'Windows file identity support is not compiled from a dependency-free constant P/Invoke bridge'
+
+        $createIndex = $functionBody.IndexOf('[System.IO.FileMode]::CreateNew', [System.StringComparison]::Ordinal)
+        $captureIdentityIndex = $functionBody.IndexOf('$tempFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $stream.SafeFileHandle', $createIndex, [System.StringComparison]::Ordinal)
+        $captureAclIndex = $functionBody.IndexOf('$tempAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-FileStreamAcl -Stream $stream)', $createIndex, [System.StringComparison]::Ordinal)
+        $closeIndex = $functionBody.IndexOf('$stream = $null', $createIndex, [System.StringComparison]::Ordinal)
+        $moveIndex = $functionBody.IndexOf('[System.IO.File]::Move($tempPath, $fullPath)', $closeIndex, [System.StringComparison]::Ordinal)
+        $reopenIndex = $functionBody.IndexOf('$committedStream = Open-WindowsFileReadStream -LiteralPath $fullPath', $moveIndex, [System.StringComparison]::Ordinal)
+        $committedIdentityIndex = $functionBody.IndexOf('$committedFileIdentity = Get-WindowsFileIdentity -SafeFileHandle $committedStream.SafeFileHandle', $reopenIndex, [System.StringComparison]::Ordinal)
+        $identityVerifyIndex = $functionBody.IndexOf('Test-WindowsFileIdentityEqual -Expected $tempFileIdentity -Actual $committedFileIdentity', $committedIdentityIndex, [System.StringComparison]::Ordinal)
+        $bytesReadIndex = $functionBody.IndexOf('$committedBytes = Read-FileStreamBytes -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
+        $aclReadIndex = $functionBody.IndexOf('$committedAcl = Get-FileStreamAcl -Stream $committedStream', $reopenIndex, [System.StringComparison]::Ordinal)
+        $committedCloseIndex = $functionBody.IndexOf('$committedStream.Dispose()', $reopenIndex, [System.StringComparison]::Ordinal)
+
+        Assert-True ($captureIdentityIndex -gt $createIndex -and $captureIdentityIndex -lt $closeIndex) 'First-install atomic write does not capture the created temporary file identity through its still-open handle'
+        Assert-True ($captureAclIndex -gt $createIndex -and $captureAclIndex -lt $closeIndex) 'First-install atomic write does not capture the created temporary file owner, group, and DACL through its still-open handle'
+        Assert-True ($moveIndex -gt $closeIndex) 'First-install atomic write does not move the verified temporary file into the destination after closing its write handle'
+        Assert-True ($reopenIndex -gt $moveIndex) 'First-install atomic write does not reopen the committed destination exclusively after its move'
+        Assert-True ($committedIdentityIndex -gt $reopenIndex -and $identityVerifyIndex -gt $committedIdentityIndex) 'First-install atomic write does not verify that the committed destination is the same Windows file object created through the temporary handle'
+        Assert-True ($bytesReadIndex -gt $reopenIndex -and $bytesReadIndex -lt $committedCloseIndex) 'First-install atomic write does not verify exact bytes through the exclusive committed-destination handle'
+        Assert-True ($aclReadIndex -gt $reopenIndex -and $aclReadIndex -lt $committedCloseIndex) 'First-install atomic write does not verify owner, group, and DACL through the exclusive committed-destination handle'
+        Assert-Contains $functionBody '$tempAccessSddl' 'First-install atomic write does not retain the created file owner, group, and DACL for committed-handle comparison'
+        Assert-True ($committedCloseIndex -gt $identityVerifyIndex -and $committedCloseIndex -gt $bytesReadIndex -and $committedCloseIndex -gt $aclReadIndex) 'First-install atomic write closes the committed-destination handle before all identity, byte, and owner/group/DACL checks finish'
+
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            Skip-Contract -Name 'Windows first-install atomic commit verifies stable identity bytes and owner group DACL through one destination handle' -Reason 'native first-install identity verification requires Windows'
+            return
+        }
+        Use-IsolatedEnvironment 'atomic first install normal path' {
+            param($root, $isolatedUserProfile)
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            Assert-Equal 0 @($errors).Count "PowerShell parser errors prevented first-install atomic verification: $(@($errors) -join '; ')"
+            $functionSource = @(
+                $ast.FindAll({
+                    param($node)
+                    return $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+                }, $true) | ForEach-Object { $_.Extent.Text }
+            ) -join "`r`n`r`n"
+            $runnerPath = Join-Path $root 'atomic first install runner.ps1'
+            $runnerSource = @'
+#requires -Version 5.1
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+__INSTALLER_FUNCTIONS__
+
+$target = $env:ASSISTANT_FRAMEWORK_ATOMIC_FIRST_INSTALL_TARGET
+$reference = Join-Path (Split-Path -Parent $target) 'first-install-reference.txt'
+[System.IO.File]::WriteAllText($reference, 'reference', $script:Utf8NoBom)
+$referenceAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-Acl -LiteralPath $reference)
+$expectedContent = "first-install bytes`r`n"
+Write-AtomicText -LiteralPath $target -Content $expectedContent
+if ([System.IO.File]::ReadAllText($target) -cne $expectedContent) {
+    throw 'First-install atomic write did not commit the exact requested bytes.'
+}
+$committedAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-Acl -LiteralPath $target)
+if ($committedAccessSddl -cne $referenceAccessSddl) {
+    throw "First-install atomic write changed inherited owner, group, or DACL.`nExpected: $referenceAccessSddl`nActual: $committedAccessSddl"
+}
+$debris = @(Get-ChildItem -LiteralPath (Split-Path -Parent $target) -Force | Where-Object { $_.Name -like '.assistant-framework-*' })
+if ($debris.Count -ne 0) {
+    throw "First-install atomic write left temporary debris: $($debris.Name -join ', ')"
+}
+'atomic first-install normal path passed'
+'@
+            $runnerSource = $runnerSource.Replace('__INSTALLER_FUNCTIONS__', $functionSource)
+            [System.IO.File]::WriteAllText($runnerPath, $runnerSource, (New-Object System.Text.UTF8Encoding($false)))
+            $target = Join-Path $root 'atomic first install target.txt'
+            $savedTarget = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FIRST_INSTALL_TARGET', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FIRST_INSTALL_TARGET', $target, 'Process')
+                $result = Invoke-PowerShellFile -LiteralPath $runnerPath
+                Assert-Equal 0 $result.ExitCode "First-install atomic normal-path runner failed: $($result.Output)"
+            }
+            finally {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FIRST_INSTALL_TARGET', $savedTarget, 'Process')
+            }
+        }
+    }
+
+    Invoke-Contract 'atomic rollback restores and verifies original bytes and owner group DACL before recovery cleanup' {
         $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
         $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
         $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
         Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
         $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
-        $createIndex = $functionBody.IndexOf('[System.IO.FileMode]::CreateNew', [System.StringComparison]::Ordinal)
-        $closeIndex = $functionBody.IndexOf('$stream.Dispose()', $createIndex, [System.StringComparison]::Ordinal)
-        $aclIndex = $functionBody.IndexOf('Set-Acl -LiteralPath $tempPath -AclObject $originalAcl', [System.StringComparison]::Ordinal)
-        $reopenIndex = $functionBody.IndexOf('[System.IO.FileMode]::Open', $aclIndex, [System.StringComparison]::Ordinal)
-        $writeIndex = $functionBody.IndexOf('$writer.Write($Content)', [System.StringComparison]::Ordinal)
-        Assert-True ($createIndex -ge 0) 'Atomic replacement does not create its temporary file exclusively'
-        Assert-True ($closeIndex -gt $createIndex) 'Atomic replacement does not close its CreateNew handle before applying the ACL'
-        Assert-True ($aclIndex -ge 0) 'Atomic replacement does not apply the existing ACL to its temporary file'
-        Assert-True ($reopenIndex -gt $aclIndex) 'Atomic replacement does not reopen its secured temporary file for content'
-        Assert-True ($writeIndex -ge 0) 'Atomic replacement content write was not found'
-        Assert-True ($createIndex -lt $closeIndex -and $closeIndex -lt $aclIndex -and $aclIndex -lt $reopenIndex -and $reopenIndex -lt $writeIndex) 'Atomic replacement does not create, secure, reopen, and write its temporary file in the required order'
+        $replaceIndex = $functionBody.IndexOf('[System.IO.File]::Replace($tempPath, $fullPath, $backupPath, $true)', [System.StringComparison]::Ordinal)
+        $rollbackStart = $functionBody.IndexOf('catch {', $replaceIndex, [System.StringComparison]::Ordinal)
+        $rollbackEnd = $functionBody.IndexOf('throw $replacementError', $rollbackStart, [System.StringComparison]::Ordinal)
+        Assert-True ($replaceIndex -ge 0 -and $rollbackStart -gt $replaceIndex -and $rollbackEnd -gt $rollbackStart) 'Atomic replacement rollback boundary was not found'
+        $rollbackBody = $functionBody.Substring($rollbackStart, $rollbackEnd - $rollbackStart)
+        Assert-Contains $functionBody '$originalBytes' 'Atomic replacement does not retain the original bytes for rollback verification'
+        Assert-NotContains $rollbackBody '[System.IO.File]::Replace($backupPath, $fullPath' 'Atomic rollback merges failed destination metadata into the original backup'
+        Assert-Contains $rollbackBody '[System.IO.File]::Move($backupPath, $fullPath)' 'Atomic rollback does not restore the original backup file by metadata-preserving move'
+        Assert-Contains $rollbackBody '$restoredBytes' 'Atomic rollback does not read back restored bytes before cleanup'
+        Assert-Contains $rollbackBody '$restoredAcl' 'Atomic rollback does not read back restored owner, group, and DACL before cleanup'
+        $byteVerifyIndex = $rollbackBody.IndexOf('$restoredBytes', [System.StringComparison]::Ordinal)
+        $aclVerifyIndex = $rollbackBody.IndexOf('$restoredAcl', [System.StringComparison]::Ordinal)
+        $recoveryDeleteIndex = $rollbackBody.IndexOf('[System.IO.File]::Delete($rollbackDiscard)', [System.StringComparison]::Ordinal)
+        $releaseBackupIndex = $rollbackBody.IndexOf('$retainBackupOnFailure = $false', [System.StringComparison]::Ordinal)
+        Assert-True ($byteVerifyIndex -ge 0 -and $aclVerifyIndex -ge 0) 'Atomic rollback restoration verification is incomplete'
+        Assert-True ($recoveryDeleteIndex -gt $byteVerifyIndex -and $recoveryDeleteIndex -gt $aclVerifyIndex) 'Atomic rollback deletes recovery material before restoration verification'
+        Assert-True ($releaseBackupIndex -gt $byteVerifyIndex -and $releaseBackupIndex -gt $aclVerifyIndex) 'Atomic rollback releases its recovery backup before restoration verification'
+        Assert-Contains $rollbackBody '$recoveryLocations' 'Atomic rollback failure diagnostics do not track recovery locations by state'
+        Assert-Contains $rollbackBody '$backupRestored' 'Atomic rollback failure diagnostics do not distinguish a consumed backup from an unverified restored destination'
+        Assert-Contains $rollbackBody '$rollbackVerified' 'Atomic rollback diagnostics do not distinguish verified restoration from failed verification or cleanup'
+        Assert-Contains $rollbackBody '$diagnosticState = if ($rollbackVerified)' 'Atomic rollback diagnostics do not branch on verified restoration before cleanup failure'
+        Assert-Contains $rollbackBody 'The original was restored and verified, but failed-replacement cleanup did not complete.' 'Atomic rollback cleanup failure is mislabeled as restoration-verification failure'
+        Assert-Contains $rollbackBody 'Replacement error: $($replacementError.Exception.Message)' 'Atomic rollback diagnostics omit the original replacement failure'
+        Assert-Contains $rollbackBody 'Test-Path -LiteralPath $fullPath' 'Atomic rollback diagnostics can report a destination that does not exist'
+        Assert-Contains $rollbackBody 'Test-Path -LiteralPath $backupPath' 'Atomic rollback diagnostics can report a backup that does not exist'
+        Assert-Contains $rollbackBody 'Test-Path -LiteralPath $rollbackDiscard' 'Atomic rollback diagnostics can report a failed-replacement artifact that does not exist'
+    }
+
+    Invoke-Contract 'post-replace ACL failure restores original bytes and owner group DACL on Windows' {
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            Skip-Contract -Name 'post-replace ACL failure restores original bytes and owner group DACL on Windows' -Reason 'native Windows ACL fault injection requires Windows'
+            return
+        }
+        Use-IsolatedEnvironment 'atomic rollback fault injection' {
+            param($root, $isolatedUserProfile)
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            Assert-Equal 0 @($errors).Count "PowerShell parser errors prevented atomic rollback fault injection: $(@($errors) -join '; ')"
+            $functionSource = @(
+                $ast.FindAll({
+                    param($node)
+                    return $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+                }, $true) | ForEach-Object { $_.Extent.Text }
+            ) -join "`r`n`r`n"
+            $runnerPath = Join-Path $root 'atomic rollback fault runner.ps1'
+            $runnerSource = @'
+#requires -Version 5.1
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+__INSTALLER_FUNCTIONS__
+
+$target = $env:ASSISTANT_FRAMEWORK_ATOMIC_FAULT_TARGET
+[System.IO.File]::WriteAllText($target, "original bytes`r`n", $script:Utf8NoBom)
+$fixtureAcl = Get-Acl -LiteralPath $target
+$fixtureAcl.SetAccessRuleProtection($true, $false)
+foreach ($rule in @($fixtureAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) {
+    [void]$fixtureAcl.RemoveAccessRuleSpecific($rule)
+}
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$fullControl = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $currentUser,
+    [System.Security.AccessControl.FileSystemRights]::FullControl,
+    [System.Security.AccessControl.AccessControlType]::Allow
+)
+[void]$fixtureAcl.AddAccessRule($fullControl)
+Set-Acl -LiteralPath $target -AclObject $fixtureAcl
+$originalBytes = [System.IO.File]::ReadAllBytes($target)
+$originalAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-Acl -LiteralPath $target)
+
+function Set-EquivalentFileStreamDacl {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)]$ReferenceAcl
+    )
+    $mutatedAcl = Get-FileStreamAcl -Stream $Stream
+    $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+    $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $builtInUsers,
+        [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+        [System.Security.AccessControl.AccessControlType]::Allow
+    )
+    [void]$mutatedAcl.AddAccessRule($readRule)
+    Set-FileStreamAcl -Stream $Stream -Acl $mutatedAcl
+    throw 'injected post-replace owner-group-DACL failure'
+}
+
+$caught = $null
+try {
+    Write-AtomicText -LiteralPath $target -Content "replacement bytes`r`n"
+}
+catch {
+    $caught = $_.Exception.Message
+}
+if ($caught -notlike '*injected post-replace owner-group-DACL failure*') {
+    throw "Atomic write did not surface the injected failure: $caught"
+}
+$restoredBytes = [System.IO.File]::ReadAllBytes($target)
+if ([Convert]::ToBase64String($restoredBytes) -cne [Convert]::ToBase64String($originalBytes)) {
+    throw 'Atomic rollback did not restore the original bytes.'
+}
+$restoredAccessSddl = Get-OwnerGroupDaclSddl -Acl (Get-Acl -LiteralPath $target)
+if ($restoredAccessSddl -cne $originalAccessSddl) {
+    throw "Atomic rollback did not restore owner, group, and DACL.`nExpected: $originalAccessSddl`nActual: $restoredAccessSddl"
+}
+$debris = @(Get-ChildItem -LiteralPath (Split-Path -Parent $target) -Force | Where-Object { $_.Name -like '.assistant-framework-*' })
+if ($debris.Count -ne 0) {
+    throw "Atomic rollback left recovery debris: $($debris.Name -join ', ')"
+}
+'atomic rollback fault injection passed'
+'@
+            $runnerSource = $runnerSource.Replace('__INSTALLER_FUNCTIONS__', $functionSource)
+            [System.IO.File]::WriteAllText($runnerPath, $runnerSource, (New-Object System.Text.UTF8Encoding($false)))
+            $target = Join-Path $root 'atomic rollback target.txt'
+            $savedFaultTarget = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FAULT_TARGET', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FAULT_TARGET', $target, 'Process')
+                $savedErrorActionPreference = $ErrorActionPreference
+                $nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+                $hasNativePreference = $null -ne $nativePreferenceVariable
+                if ($hasNativePreference) { $savedNativePreference = $nativePreferenceVariable.Value }
+                try {
+                    $ErrorActionPreference = 'Continue'
+                    if ($hasNativePreference) { Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Local }
+                    $output = @(& $script:PowerShellExecutable -NoLogo -NoProfile -File $runnerPath 2>&1)
+                    $exitCode = $LASTEXITCODE
+                }
+                finally {
+                    $ErrorActionPreference = $savedErrorActionPreference
+                    if ($hasNativePreference) { Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $savedNativePreference -Scope Local }
+                }
+                Assert-Equal 0 $exitCode "Atomic rollback fault-injection runner failed: $($output | Out-String)"
+            }
+            finally {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_FAULT_TARGET', $savedFaultTarget, 'Process')
+            }
+        }
+    }
+
+    Invoke-Contract 'rollback verification failure reports only recovery paths that still exist' {
+        $installer = [System.IO.File]::ReadAllText($script:InstallerPath)
+        $functionStart = $installer.IndexOf('function Write-AtomicText', [System.StringComparison]::Ordinal)
+        $functionEnd = $installer.IndexOf('function Clear-ManagedDirectory', $functionStart, [System.StringComparison]::Ordinal)
+        Assert-True ($functionStart -ge 0 -and $functionEnd -gt $functionStart) 'Write-AtomicText function boundary was not found'
+        $functionBody = $installer.Substring($functionStart, $functionEnd - $functionStart)
+        Assert-NotContains $functionBody 'Original backup: $backupPath. Failed replacement: $rollbackDiscard.' 'Atomic rollback diagnostics unconditionally report backup and failed-replacement paths after those paths may have moved or disappeared'
+
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            Skip-Contract -Name 'rollback verification failure reports only recovery paths that still exist' -Reason 'native rollback verification fault injection requires Windows'
+            return
+        }
+        Use-IsolatedEnvironment 'atomic rollback diagnostic fault injection' {
+            param($root, $isolatedUserProfile)
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            Assert-Equal 0 @($errors).Count "PowerShell parser errors prevented rollback diagnostic fault injection: $(@($errors) -join '; ')"
+            $functionSource = @(
+                $ast.FindAll({
+                    param($node)
+                    return $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+                }, $true) | ForEach-Object { $_.Extent.Text }
+            ) -join "`r`n`r`n"
+            $runnerPath = Join-Path $root 'atomic rollback diagnostic runner.ps1'
+            $runnerSource = @'
+#requires -Version 5.1
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+__INSTALLER_FUNCTIONS__
+
+$target = $env:ASSISTANT_FRAMEWORK_ATOMIC_DIAGNOSTIC_TARGET
+[System.IO.File]::WriteAllText($target, "original diagnostic bytes`r`n", $script:Utf8NoBom)
+function Set-EquivalentFileStreamDacl {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)]$ReferenceAcl
+    )
+    throw 'injected post-replace failure before rollback diagnostic verification'
+}
+function Test-ByteArraysEqual {
+    param(
+        [AllowNull()][byte[]]$Expected,
+        [AllowNull()][byte[]]$Actual
+    )
+    return $false
+}
+
+$caught = $null
+try {
+    Write-AtomicText -LiteralPath $target -Content "replacement diagnostic bytes`r`n"
+}
+catch {
+    $caught = $_.Exception.Message
+}
+if ([string]::IsNullOrWhiteSpace($caught)) {
+    throw 'Atomic write did not surface the injected rollback verification failure.'
+}
+if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+    throw 'Rollback diagnostic fault injection did not leave the restored original at the destination.'
+}
+$parent = Split-Path -Parent $target
+$backups = @(Get-ChildItem -LiteralPath $parent -Force | Where-Object { $_.Name -like '.assistant-framework-*.bak' })
+$failedReplacements = @(Get-ChildItem -LiteralPath $parent -Force | Where-Object { $_.Name -like '.assistant-framework-*.rollback' })
+if ($backups.Count -ne 0) {
+    throw "Rollback diagnostic fixture expected the backup to have moved to the destination, but found: $($backups.FullName -join ', ')"
+}
+if ($failedReplacements.Count -ne 1) {
+    throw "Rollback diagnostic fixture expected one failed-replacement recovery file, but found $($failedReplacements.Count)."
+}
+if (-not $caught.Contains($target)) {
+    throw "Rollback failure diagnostic omitted the existing restored destination: $caught"
+}
+if ($caught -match '\.assistant-framework-[0-9a-f]+\.bak') {
+    throw "Rollback failure diagnostic reported a backup path that no longer exists: $caught"
+}
+if (-not $caught.Contains($failedReplacements[0].FullName)) {
+    throw "Rollback failure diagnostic omitted the existing failed-replacement recovery path: $caught"
+}
+'atomic rollback diagnostics passed'
+'@
+            $runnerSource = $runnerSource.Replace('__INSTALLER_FUNCTIONS__', $functionSource)
+            [System.IO.File]::WriteAllText($runnerPath, $runnerSource, (New-Object System.Text.UTF8Encoding($false)))
+            $target = Join-Path $root 'atomic rollback diagnostic target.txt'
+            $savedTarget = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_DIAGNOSTIC_TARGET', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_DIAGNOSTIC_TARGET', $target, 'Process')
+                $result = Invoke-PowerShellFile -LiteralPath $runnerPath
+                Assert-Equal 0 $result.ExitCode "Atomic rollback diagnostic runner failed: $($result.Output)"
+            }
+            finally {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_ATOMIC_DIAGNOSTIC_TARGET', $savedTarget, 'Process')
+            }
+        }
+    }
+
+    Invoke-Contract 'tree fingerprints ignore only PowerShell startup cache churn' {
+        Use-IsolatedEnvironment 'fingerprint runtime artifact' {
+            param($root, $isolatedUserProfile)
+            $runtimePaths = @(
+                (Join-Path $isolatedUserProfile 'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive'),
+                (Join-Path $isolatedUserProfile 'AppData/Local/Microsoft/Windows/PowerShell/StartupProfileData-NonInteractive')
+            )
+            foreach ($runtimePath in $runtimePaths) {
+                [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtimePath))
+                [System.IO.File]::WriteAllText($runtimePath, 'runtime-before')
+            }
+            $lookalike = $runtimePaths[0] + '.installer-owned'
+            [System.IO.File]::WriteAllText($lookalike, 'lookalike-before')
+            $sentinel = Join-Path $root 'installer-owned-sentinel.txt'
+            [System.IO.File]::WriteAllText($sentinel, 'sentinel-before')
+
+            $before = Get-TreeFingerprint -LiteralPath $root
+            foreach ($runtimePath in $runtimePaths) {
+                [System.IO.File]::WriteAllText($runtimePath, 'runtime-after')
+            }
+            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache churn changed the installer fingerprint'
+
+            [System.IO.File]::WriteAllText($lookalike, 'lookalike-after')
+            Assert-False ($before -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an adjacent lookalike runtime artifact'
+            [System.IO.File]::WriteAllText($lookalike, 'lookalike-before')
+            [System.IO.File]::WriteAllText($sentinel, 'sentinel-after')
+            Assert-False ($before -eq (Get-TreeFingerprint -LiteralPath $root)) 'Fingerprint ignored an installer-owned sentinel mutation'
+        }
     }
 
     Invoke-Contract 'CLI validates help, agent, skill, and plugin combinations' {
@@ -246,8 +726,26 @@ try {
             Assert-Equal 0 $help.ExitCode 'Help should succeed without -Agent'
             Assert-Contains $help.Output '-Agent <claude|codex|gemini>' 'Help omits supported agents'
 
+            $errorActionPreferenceBefore = $ErrorActionPreference
+            $nativePreferenceBefore = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+            $nativePreferenceExistedBefore = $null -ne $nativePreferenceBefore
+            if ($nativePreferenceExistedBefore) { $nativePreferenceValueBefore = $nativePreferenceBefore.Value }
             $missing = Invoke-Installer -Arguments @()
             Assert-True ($missing.ExitCode -ne 0) 'Missing -Agent should fail'
+            Assert-Contains $missing.Output 'Missing -Agent' 'Missing -Agent stderr was not returned as structured installer output'
+            Assert-Equal $errorActionPreferenceBefore $ErrorActionPreference 'Invoke-Installer did not restore ErrorActionPreference after an expected child failure'
+            $nativePreferenceAfter = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+            Assert-Equal $nativePreferenceExistedBefore ($null -ne $nativePreferenceAfter) 'Invoke-Installer changed whether PSNativeCommandUseErrorActionPreference exists'
+            if ($nativePreferenceExistedBefore) {
+                Assert-Equal $nativePreferenceValueBefore $nativePreferenceAfter.Value 'Invoke-Installer did not restore PSNativeCommandUseErrorActionPreference after an expected child failure'
+            }
+            $harnessSource = [System.IO.File]::ReadAllText($PSCommandPath)
+            $invokeStart = $harnessSource.IndexOf('function Invoke-Installer', [System.StringComparison]::Ordinal)
+            $invokeEnd = $harnessSource.IndexOf('function Get-TreeFingerprint', $invokeStart, [System.StringComparison]::Ordinal)
+            Assert-True ($invokeStart -ge 0 -and $invokeEnd -gt $invokeStart) 'Invoke-Installer function boundary was not found'
+            $invokeBody = $harnessSource.Substring($invokeStart, $invokeEnd - $invokeStart)
+            Assert-Contains $invokeBody '$ErrorActionPreference = $savedErrorActionPreference' 'Invoke-Installer lacks explicit ErrorActionPreference restoration'
+            Assert-Contains $invokeBody 'PSNativeCommandUseErrorActionPreference -Value $savedNativePreference' 'Invoke-Installer lacks explicit native-error preference restoration when that preference exists'
             $unknown = Invoke-Installer -Arguments @('-Agent', 'other')
             Assert-True ($unknown.ExitCode -ne 0) 'Unknown agent should fail'
             $unknownSkill = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-not-real')
@@ -415,8 +913,30 @@ try {
             $configAclBefore = $null
             $isWindowsHost = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
             if ($isWindowsHost) {
+                $protectedConfigAcl = Get-Acl -LiteralPath $configFile
+                $protectedConfigAcl.SetAccessRuleProtection($true, $false)
+                foreach ($rule in @($protectedConfigAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) {
+                    [void]$protectedConfigAcl.RemoveAccessRuleSpecific($rule)
+                }
+                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+                $currentUserRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $currentUser,
+                    [System.Security.AccessControl.FileSystemRights]::FullControl,
+                    [System.Security.AccessControl.AccessControlType]::Allow
+                )
+                [void]$protectedConfigAcl.AddAccessRule($currentUserRule)
+                $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+                $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $builtInUsers,
+                    [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+                    [System.Security.AccessControl.AccessControlType]::Allow
+                )
+                [void]$protectedConfigAcl.AddAccessRule($readRule)
+                Set-Acl -LiteralPath $configFile -AclObject $protectedConfigAcl
                 $agentsAclBefore = (Get-Acl -LiteralPath $agentsFile).Sddl
                 $configAclBefore = (Get-Acl -LiteralPath $configFile).Sddl
+                Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'Restrictive config ACL fixture is not protected'
+                Assert-True (@((Get-Acl -LiteralPath $configFile).GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier])).Count -ge 2) 'Restrictive config owner/group/DACL fixture lacks multiple explicit access rules'
                 [Environment]::SetEnvironmentVariable('OS', 'spoofed-by-contract', 'Process')
             }
 
@@ -429,8 +949,9 @@ try {
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_AGENTS_MD_START') 'Codex guidance start marker is duplicated'
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Memory protocol start marker is duplicated'
             if ($isWindowsHost) {
-                Assert-Equal $agentsAclBefore (Get-Acl -LiteralPath $agentsFile).Sddl 'AGENTS.md ACL changed during atomic replacement'
-                Assert-Equal $configAclBefore (Get-Acl -LiteralPath $configFile).Sddl 'config.toml ACL changed during atomic replacement'
+                Assert-Equal $agentsAclBefore (Get-Acl -LiteralPath $agentsFile).Sddl 'AGENTS.md owner, group, or DACL changed during atomic replacement'
+                Assert-Equal $configAclBefore (Get-Acl -LiteralPath $configFile).Sddl 'config.toml owner, group, or DACL changed during atomic replacement'
+                Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'config.toml DACL lost inheritance protection during atomic replacement'
             }
 
             $config = [System.IO.File]::ReadAllText($configFile)
