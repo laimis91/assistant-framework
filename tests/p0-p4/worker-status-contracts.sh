@@ -19,17 +19,16 @@ for status in \
 done
 for term in \
     "worker_status_protocol:" \
-    "CodeMapper, Explorer, Architect, CodeWriter, BuilderTester, and Reviewer returns include a compact status packet" \
-    "status is required on CodeMapper, Explorer, Architect, CodeWriter, BuilderTester, and Reviewer returns." \
-    "evidence is required for CodeMapper, Explorer, Architect, CodeWriter, and Reviewer returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION." \
+    "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet" \
+    "status is required on CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns." \
+    "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION." \
     "verification.evidence is required for BuilderTester returns." \
     "deviation_details is required for Architect and CodeWriter returns with DEVIATED." \
-    "CodeMapper, Explorer, and Reviewer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED." \
+    "CodeMapper and Explorer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED." \
     "Architect and CodeWriter status values also include DEVIATED." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
     "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur." \
-    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence." \
-    "findings is required for Reviewer returns."; do
+    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_worker_status_terms+=("$term")
     fi
@@ -294,10 +293,14 @@ else
     fail "Builder/Tester status packet schema/prompts missing terms: ${missing_builder_status_terms[*]}"
 fi
 
-test_start "Reviewer handoffs preserve findings verdict and require status evidence"
+test_start "assistant-review solely owns Reviewer handoff status and evidence"
 missing_reviewer_status_terms=()
+workflow_handoffs="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
+if grep -Fq -- '- name: orchestrator_to_reviewer' "$workflow_handoffs" \
+    || grep -Fq -- '- name: orchestrator_to_qa_evaluator' "$workflow_handoffs"; then
+    missing_reviewer_status_terms+=("assistant-workflow must not duplicate Reviewer or QAEvaluator handoffs")
+fi
 for file_and_handoff in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml:orchestrator_to_reviewer" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml:orchestrator_to_reviewer"; do
     file="${file_and_handoff%%:*}"
     handoff="${file_and_handoff##*:}"

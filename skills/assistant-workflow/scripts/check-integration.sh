@@ -1,69 +1,88 @@
 #!/usr/bin/env bash
-# check-integration.sh — Validates integration readiness after all slices complete.
-#
-# Checks that all slice branches exist, have commits, can merge without
-# conflicts, and that build + tests pass after merge.
-#
-# Usage:
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration --build-cmd "dotnet build" --test-cmd "dotnet test"
-#   ./scripts/check-integration.sh --integration-branch feature/add-notifications/integration --dry-run
-#
-# Prerequisites: git, and optionally the build/test toolchain for the project
+# check-integration.sh — Validate slice integration in an isolated detached worktree.
+# Validates that all slice branches are ready for integration.
 
 set -euo pipefail
 
-# ── Defaults ──────────────────────────────────────────────────────────────────
-
 INTEGRATION_BRANCH=""
-BUILD_CMD=""
-TEST_CMD=""
+BUILD_ARGV=()
+TEST_ARGV=()
 DRY_RUN=false
-SKIP_BUILD=false
-
-# ── Parse args ────────────────────────────────────────────────────────────────
+SKIP_VALIDATION_REASON=""
+REPO=""
+TEMP_ROOT=""
+TEMP_WORKTREE=""
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Validates that all slice branches are ready for integration.
+Validates that feature/<task>/slice-* branches integrate cleanly without
+mutating the caller's branch or worktree.
+Expected branches like feature/<task>/slice-<slice_id> for
+feature/<task>/integration.
 
 Options:
-  --integration-branch NAME    Integration branch (e.g. feature/add-notifications/integration)
-  --build-cmd CMD              Build command (auto-detected if not set)
-  --test-cmd CMD               Test command (auto-detected if not set)
-  --skip-build                 Skip build and test checks (branch checks only)
-  --dry-run                    Show what would be checked without merging
+  --integration-branch NAME    Integration branch, feature/<task>/integration
+  --build-arg ARG              One literal build argv item; repeat in argv order
+  --test-arg ARG               One literal test argv item; repeat in argv order
+  --skip-validation REASON     Explicit branch-only result with a nonblank reason
+  --dry-run                    Inspect branch state without merge/readiness verdict
   -h, --help                   Show this help
 
-Checks performed:
-  1. Integration branch exists
-  2. All slice branches exist and have commits beyond integration
-  3. No merge conflicts (dry-run merge of each branch)
-  4. Build passes after merge
-  5. Tests pass after merge
-
-Example:
+Examples:
   $(basename "$0") --integration-branch feature/add-notifications/integration
-  $(basename "$0") --integration-branch feature/add-notifications/integration --build-cmd "npm run build" --test-cmd "npm test"
+  $(basename "$0") --integration-branch feature/add-notifications/integration \
+    --build-arg npm --build-arg run --build-arg build \
+    --test-arg npm --test-arg test
 EOF
     exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --integration-branch) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; INTEGRATION_BRANCH="$2"; shift 2 ;;
-        --build-cmd)          [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; BUILD_CMD="$2"; shift 2 ;;
-        --test-cmd)           [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; TEST_CMD="$2"; shift 2 ;;
-        --skip-build)         SKIP_BUILD=true; shift ;;
-        --dry-run)            DRY_RUN=true; shift ;;
-        -h|--help)            usage ;;
-        *)                    echo "Unknown option: $1"; usage ;;
+        --integration-branch)
+            [[ $# -ge 2 ]] || { echo "Missing value for $1" >&2; exit 1; }
+            INTEGRATION_BRANCH="$2"
+            shift 2
+            ;;
+        --build-arg)
+            [[ $# -ge 2 && -n "$2" ]] || { echo "--build-arg requires one nonempty literal argv item" >&2; exit 1; }
+            BUILD_ARGV+=("$2")
+            shift 2
+            ;;
+        --test-arg)
+            [[ $# -ge 2 && -n "$2" ]] || { echo "--test-arg requires one nonempty literal argv item" >&2; exit 1; }
+            TEST_ARGV+=("$2")
+            shift 2
+            ;;
+        --skip-validation)
+            [[ $# -ge 2 ]] || { echo "Missing value for $1" >&2; exit 1; }
+            SKIP_VALIDATION_REASON="$2"
+            [[ -n "${SKIP_VALIDATION_REASON//[[:space:]]/}" ]] || { echo "--skip-validation requires a nonblank reason" >&2; exit 1; }
+            shift 2
+            ;;
+        --build-cmd|--test-cmd)
+            echo "$1 shell-form strings are no longer supported; use repeatable --build-arg/--test-arg argv items" >&2
+            exit 1
+            ;;
+        --skip-build)
+            echo "--skip-build is no longer supported; use --skip-validation REASON" >&2
+            exit 1
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
     esac
 done
-
-# ── Validate ──────────────────────────────────────────────────────────────────
 
 log_error() { echo "❌ $1" >&2; }
 info()      { echo "ℹ️  $1"; }
@@ -72,272 +91,227 @@ warn()      { echo "⚠️  $1"; }
 check()     { echo "🔍 $1"; }
 
 command -v git >/dev/null 2>&1 || { log_error "git is required."; exit 1; }
-
 [[ -n "$INTEGRATION_BRANCH" ]] || { log_error "Missing --integration-branch."; exit 1; }
-if [[ "$INTEGRATION_BRANCH" != */integration ]]; then
-    log_error "Integration branch must use feature/<task>/integration so slice branches can use feature/<task>/slice-<slice_id> without git ref conflicts."
+if [[ "$INTEGRATION_BRANCH" != feature/*/integration ]]; then
+    log_error "Integration branch must use feature/<task>/integration."
     exit 1
 fi
 
-# ── Auto-detect build/test commands ───────────────────────────────────────────
+REPO=$(git rev-parse --show-toplevel 2>/dev/null) || { log_error "Run inside a git repository."; exit 1; }
+CALLER_STATUS=$(git -C "$REPO" status --porcelain --untracked-files=all 2>/dev/null) \
+    || { log_error "Could not inspect caller worktree status."; exit 1; }
+if [[ -n "$CALLER_STATUS" ]]; then
+    log_error "Caller working tree is dirty or has uncommitted files. Commit, stash, or remove them before integration validation; no state was changed."
+    exit 1
+fi
 
-detect_commands() {
-    if [[ -z "$BUILD_CMD" ]]; then
-        if ls *.sln >/dev/null 2>&1; then
-            BUILD_CMD="dotnet build"
-        elif [[ -f "package.json" ]]; then
-            BUILD_CMD="npm run build"
-        elif [[ -f "platformio.ini" ]]; then
-            BUILD_CMD="pio run"
-        elif [[ -f "Makefile" ]]; then
-            BUILD_CMD="make"
-        else
-            BUILD_CMD=""
-        fi
-    fi
+if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$INTEGRATION_BRANCH"; then
+    log_error "Integration branch not found: $INTEGRATION_BRANCH"
+    exit 1
+fi
 
-    if [[ -z "$TEST_CMD" ]]; then
-        if ls *.sln >/dev/null 2>&1; then
-            TEST_CMD="dotnet test"
-        elif [[ -f "package.json" ]]; then
-            TEST_CMD="npm test"
-        elif [[ -f "platformio.ini" ]]; then
-            TEST_CMD="pio test"
-        elif [[ -f "Makefile" ]]; then
-            TEST_CMD="make test"
-        else
-            TEST_CMD=""
-        fi
-    fi
-}
+TASK_BRANCH_PREFIX="${INTEGRATION_BRANCH%/integration}"
+BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-"
+SUB_BRANCHES=()
+while IFS= read -r ref; do
+    branch="${ref#refs/heads/}"
+    [[ "$branch" == "$INTEGRATION_BRANCH" ]] || SUB_BRANCHES+=("$branch")
+done < <(git -C "$REPO" for-each-ref --format='%(refname)' "refs/heads/${BRANCH_PREFIX}*")
 
-# ── State tracking ────────────────────────────────────────────────────────────
+if [[ ${#SUB_BRANCHES[@]} -eq 0 ]]; then
+    log_error "No slice branches found matching ${BRANCH_PREFIX}*"
+    exit 1
+fi
 
 PASS=0
 FAIL_COUNT=0
 WARN_COUNT=0
 RESULTS=()
+record_pass() { PASS=$((PASS + 1)); RESULTS+=("✅ $1"); ok "$1"; }
+record_fail() { FAIL_COUNT=$((FAIL_COUNT + 1)); RESULTS+=("❌ $1"); log_error "$1"; }
+record_warn() { WARN_COUNT=$((WARN_COUNT + 1)); RESULTS+=("⚠️  $1"); warn "$1"; }
 
-record_pass()  { PASS=$((PASS + 1)); RESULTS+=("✅ $1"); ok "$1"; }
-record_fail()  { FAIL_COUNT=$((FAIL_COUNT + 1)); RESULTS+=("❌ $1"); log_error "$1"; }
-record_warn()  { WARN_COUNT=$((WARN_COUNT + 1)); RESULTS+=("⚠️  $1"); warn "$1"; }
-
-# ── Check 1: Integration branch exists ────────────────────────────────────────
-
-check "Integration branch exists: $INTEGRATION_BRANCH"
-
-if git show-ref --verify --quiet "refs/heads/$INTEGRATION_BRANCH"; then
-    record_pass "Integration branch exists: $INTEGRATION_BRANCH"
-else
-    record_fail "Integration branch not found: $INTEGRATION_BRANCH"
-    echo ""
-    log_error "Cannot continue without integration branch."
-    exit 1
-fi
-
-# ── Discover slice branches ──────────────────────────────────────────────────
-
-# Slice branches are feature/<task>/slice-<slice_id> for integration branch feature/<task>/integration.
-TASK_BRANCH_PREFIX="${INTEGRATION_BRANCH%/integration}"
-BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-"
-SUB_BRANCHES=()
-
-while IFS= read -r ref; do
-    branch="${ref#refs/heads/}"
-    [[ "$branch" == "$INTEGRATION_BRANCH" ]] && continue
-    SUB_BRANCHES+=("$branch")
-done < <(git for-each-ref --format='%(refname)' "refs/heads/${BRANCH_PREFIX}*")
-
-if [[ ${#SUB_BRANCHES[@]} -eq 0 ]]; then
-    record_fail "No slice branches found matching ${BRANCH_PREFIX}*"
-    echo ""
-    log_error "Expected branches like ${BRANCH_PREFIX}<slice_id>."
-    exit 1
-fi
-
+record_pass "Integration branch exists: $INTEGRATION_BRANCH"
 info "Found ${#SUB_BRANCHES[@]} slice branch(es):"
-for b in "${SUB_BRANCHES[@]}"; do
-    echo "  - $b"
+for branch in "${SUB_BRANCHES[@]}"; do
+    echo "  - $branch"
 done
 echo ""
 
-# ── Check 2: Each slice branch has commits ──────────────────────────────────
-
 check "Slice branches have commits beyond integration branch..."
-
 for branch in "${SUB_BRANCHES[@]}"; do
-    COMMITS_AHEAD=$(git rev-list --count "$INTEGRATION_BRANCH".."$branch" 2>/dev/null || echo "0")
-    COMMITS_BEHIND=$(git rev-list --count "$branch".."$INTEGRATION_BRANCH" 2>/dev/null || echo "0")
+    COMMITS_AHEAD=$(git -C "$REPO" rev-list --count "$INTEGRATION_BRANCH..$branch" 2>/dev/null || printf '0')
+    COMMITS_BEHIND=$(git -C "$REPO" rev-list --count "$branch..$INTEGRATION_BRANCH" 2>/dev/null || printf '0')
     if [[ "$COMMITS_AHEAD" -gt 0 ]]; then
         record_pass "$branch: $COMMITS_AHEAD commit(s) ahead"
-    elif [[ "$COMMITS_BEHIND" -gt 0 ]] && git merge-base --is-ancestor "$branch" "$INTEGRATION_BRANCH"; then
+    elif [[ "$COMMITS_BEHIND" -gt 0 ]] && git -C "$REPO" merge-base --is-ancestor "$branch" "$INTEGRATION_BRANCH"; then
         record_pass "$branch: already merged into integration branch ($COMMITS_BEHIND commit(s) behind)"
     else
         record_fail "$branch: no commits ahead of integration branch. Empty slice branches are not integration-ready; commit slice output or evidence before integration."
     fi
 done
-echo ""
 
-# ── Check 3: No merge conflicts (dry-run merge) ──────────────────────────────
+display_argv() {
+    local item
+    local rendered=""
+    for item in "$@"; do
+        rendered+="$(printf '%q' "$item") "
+    done
+    printf '%s\n' "${rendered% }"
+}
 
-check "Merge conflict check (dry-run)..."
+candidate_is_unchanged() {
+    local expected_head="$1"
+    local current_head current_status
 
-# Save current branch to restore later
-ORIGINAL_BRANCH=$(git branch --show-current)
-TEMP_BRANCH=""
+    current_head=$(git -C "$TEMP_WORKTREE" rev-parse HEAD 2>/dev/null || printf 'unreadable')
+    current_status=$(git -C "$TEMP_WORKTREE" status --porcelain --untracked-files=all 2>/dev/null || printf 'status-unreadable')
+    [[ "$current_head" == "$expected_head" && -z "$current_status" ]]
+}
 
-# Cleanup trap: restore branch and remove temp branch on unexpected exit
-cleanup_git() {
-    if [[ -n "$TEMP_BRANCH" ]]; then
-        git merge --abort 2>/dev/null || true
-        git checkout "$ORIGINAL_BRANCH" 2>/dev/null || git checkout "$INTEGRATION_BRANCH" 2>/dev/null || true
-        git branch -D "$TEMP_BRANCH" 2>/dev/null || true
+detect_commands() {
+    local root="$1"
+    if [[ ${#BUILD_ARGV[@]} -eq 0 ]]; then
+        if compgen -G "$root/*.sln" >/dev/null 2>&1; then
+            BUILD_ARGV=(dotnet build)
+        elif [[ -f "$root/package.json" ]]; then
+            BUILD_ARGV=(npm run build)
+        elif [[ -f "$root/platformio.ini" ]]; then
+            BUILD_ARGV=(pio run)
+        elif [[ -f "$root/Makefile" ]]; then
+            BUILD_ARGV=(make)
+        fi
+    fi
+    if [[ ${#TEST_ARGV[@]} -eq 0 ]]; then
+        if compgen -G "$root/*.sln" >/dev/null 2>&1; then
+            TEST_ARGV=(dotnet test)
+        elif [[ -f "$root/package.json" ]]; then
+            TEST_ARGV=(npm test)
+        elif [[ -f "$root/platformio.ini" ]]; then
+            TEST_ARGV=(pio test)
+        elif [[ -f "$root/Makefile" ]]; then
+            TEST_ARGV=(make test)
+        fi
     fi
 }
-trap cleanup_git EXIT
 
-# Create a temporary branch for merge testing
-TEMP_BRANCH="__integration-check-$(date +%s)"
+cleanup_isolated_worktree() {
+    if [[ -n "$TEMP_WORKTREE" && -d "$TEMP_WORKTREE" ]]; then
+        git -C "$TEMP_WORKTREE" merge --abort >/dev/null 2>&1 || true
+        if [[ -z "$(git -C "$TEMP_WORKTREE" status --porcelain --untracked-files=all 2>/dev/null || printf 'status-failed')" ]]; then
+            if ! git -C "$REPO" worktree remove "$TEMP_WORKTREE" >/dev/null 2>&1; then
+                warn "Could not remove isolated integration worktree without force; preserving for recovery: $TEMP_WORKTREE"
+                return
+            fi
+        else
+            warn "Isolated integration worktree is not clean; preserving for recovery: $TEMP_WORKTREE"
+            return
+        fi
+    fi
+    [[ -z "$TEMP_ROOT" ]] || rmdir "$TEMP_ROOT" 2>/dev/null || true
+}
+trap cleanup_isolated_worktree EXIT
 
 if $DRY_RUN; then
-    info "[dry-run] Would create temp branch $TEMP_BRANCH from $INTEGRATION_BRANCH and test-merge each slice branch."
+    detect_commands "$REPO"
+    info "[dry-run] Would create a unique detached worktree at $INTEGRATION_BRANCH and merge ${#SUB_BRANCHES[@]} slice branch(es)."
+    info "[dry-run] Build argv: $(if [[ ${#BUILD_ARGV[@]} -gt 0 ]]; then display_argv "${BUILD_ARGV[@]}"; else printf '(not detected)'; fi)"
+    info "[dry-run] Test argv: $(if [[ ${#TEST_ARGV[@]} -gt 0 ]]; then display_argv "${TEST_ARGV[@]}"; else printf '(not detected)'; fi)"
 else
-    git checkout "$INTEGRATION_BRANCH" --quiet
-    git checkout -b "$TEMP_BRANCH" --quiet
+    TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/workflow-integration-check.XXXXXX")
+    TEMP_WORKTREE="$TEMP_ROOT/worktree"
+    git -C "$REPO" worktree add --detach "$TEMP_WORKTREE" "$INTEGRATION_BRANCH" --quiet
 
-    for branch in "${SUB_BRANCHES[@]}"; do
-        if git merge --no-commit --no-ff "$branch" --quiet 2>/dev/null; then
-            record_pass "Merge $branch: no conflicts"
-            git merge --abort 2>/dev/null || git reset --hard HEAD --quiet
-        else
-            record_fail "Merge $branch: CONFLICTS DETECTED"
-            git merge --abort 2>/dev/null || git reset --hard HEAD --quiet
-        fi
-    done
-
-    # Also test merging all at once
-    echo ""
-    check "Full merge test (all branches into integration)..."
-    git reset --hard "$INTEGRATION_BRANCH" --quiet
-
-    ALL_MERGE_OK=true
-    for branch in "${SUB_BRANCHES[@]}"; do
-        if ! git merge --no-commit --no-ff "$branch" --quiet 2>/dev/null; then
-            ALL_MERGE_OK=false
-            record_fail "Sequential merge breaks at: $branch"
-            git merge --abort 2>/dev/null || git reset --hard HEAD --quiet
-            break
-        fi
-    done
-
-    if $ALL_MERGE_OK; then
-        record_pass "All branches merge cleanly together"
+    if [[ $FAIL_COUNT -eq 0 ]]; then
+        check "Cumulative isolated merge check..."
+        for branch in "${SUB_BRANCHES[@]}"; do
+            if git -C "$TEMP_WORKTREE" merge-base --is-ancestor "$branch" HEAD; then
+                record_pass "Merge $branch: already present"
+            elif git -C "$TEMP_WORKTREE" merge --no-ff --no-edit "$branch" --quiet 2>/dev/null; then
+                record_pass "Merge $branch: no conflicts"
+            else
+                record_fail "Merge $branch: CONFLICTS DETECTED"
+                git -C "$TEMP_WORKTREE" merge --abort >/dev/null 2>&1 || true
+                break
+            fi
+        done
     fi
 
-    # Clean up: restore original branch, delete temp
-    git reset --hard HEAD --quiet 2>/dev/null || true
-    git checkout "$ORIGINAL_BRANCH" --quiet 2>/dev/null || git checkout "$INTEGRATION_BRANCH" --quiet
-    git branch -D "$TEMP_BRANCH" --quiet 2>/dev/null || true
-fi
-echo ""
-
-# ── Check 4 & 5: Build and test (on merged result) ───────────────────────────
-
-if $SKIP_BUILD; then
-    info "Skipping build and test checks (--skip-build)."
-elif $DRY_RUN; then
-    detect_commands
-    info "[dry-run] Would run build: ${BUILD_CMD:-'(not detected)'}"
-    info "[dry-run] Would run tests: ${TEST_CMD:-'(not detected)'}"
-else
-    detect_commands
-
-    # Create a temp merge to test build
-    git checkout "$INTEGRATION_BRANCH" --quiet
-    TEMP_BRANCH="__integration-build-$(date +%s)"
-    git checkout -b "$TEMP_BRANCH" --quiet
-
-    # Merge all slice branches
-    ALL_MERGED=true
-    for branch in "${SUB_BRANCHES[@]}"; do
-        if ! git merge --no-ff "$branch" --quiet -m "Integration check: merge $branch" 2>/dev/null; then
-            record_fail "Cannot merge all branches for build test."
-            ALL_MERGED=false
-            git merge --abort 2>/dev/null || true
-            break
-        fi
-    done
-
-    if $ALL_MERGED; then
-        # Check 4: Build
-        if [[ -n "$BUILD_CMD" ]]; then
-            check "Build: $BUILD_CMD"
-            read -ra build_arr <<< "$BUILD_CMD"
-            if "${build_arr[@]}" >/dev/null 2>&1; then
-                record_pass "Build passes after merge"
-            else
-                record_fail "Build fails after merge: $BUILD_CMD"
-            fi
-        else
-            record_warn "No build command detected — skipping build check."
-        fi
-
-        # Check 5: Tests
-        if [[ -n "$TEST_CMD" ]]; then
-            check "Tests: $TEST_CMD"
-            read -ra test_arr <<< "$TEST_CMD"
-            if "${test_arr[@]}" >/dev/null 2>&1; then
-                record_pass "Tests pass after merge"
-            else
-                record_fail "Tests fail after merge: $TEST_CMD"
-            fi
-        else
-            record_warn "No test command detected — skipping test check."
+    if [[ $FAIL_COUNT -eq 0 ]]; then
+        CANDIDATE_HEAD=$(git -C "$TEMP_WORKTREE" rev-parse HEAD 2>/dev/null || true)
+        if [[ -z "$CANDIDATE_HEAD" ]] || ! candidate_is_unchanged "$CANDIDATE_HEAD"; then
+            record_fail "Cumulative merge candidate is not clean and immutable before validation"
         fi
     fi
 
-    # Clean up
-    git checkout "$ORIGINAL_BRANCH" --quiet 2>/dev/null || git checkout "$INTEGRATION_BRANCH" --quiet
-    git branch -D "$TEMP_BRANCH" --quiet 2>/dev/null || true
+    if [[ $FAIL_COUNT -eq 0 ]]; then
+        if [[ -n "$SKIP_VALIDATION_REASON" ]]; then
+            info "Skipping validation (--skip-validation): $SKIP_VALIDATION_REASON"
+        else
+            detect_commands "$TEMP_WORKTREE"
+            if [[ ${#BUILD_ARGV[@]} -eq 0 && ${#TEST_ARGV[@]} -eq 0 ]]; then
+                record_fail "No validation command argv detected. Supply repeatable --build-arg/--test-arg values or use --skip-validation REASON for an explicit branch-only check."
+            else
+                if [[ ${#BUILD_ARGV[@]} -gt 0 ]]; then
+                    check "Build argv: $(display_argv "${BUILD_ARGV[@]}")"
+                    if (cd "$TEMP_WORKTREE" && "${BUILD_ARGV[@]}") >/dev/null 2>&1; then
+                        record_pass "Build passes after isolated merge"
+                    else
+                        record_fail "Build fails after isolated merge"
+                    fi
+                    if ! candidate_is_unchanged "$CANDIDATE_HEAD"; then
+                        record_fail "Build validation mutated the cumulative merge candidate HEAD or files"
+                    fi
+                else
+                    record_warn "No build argv detected — test validation is the available readiness evidence."
+                fi
+                if [[ ${#TEST_ARGV[@]} -gt 0 ]]; then
+                    check "Test argv: $(display_argv "${TEST_ARGV[@]}")"
+                    if (cd "$TEMP_WORKTREE" && "${TEST_ARGV[@]}") >/dev/null 2>&1; then
+                        record_pass "Tests pass after isolated merge"
+                    else
+                        record_fail "Tests fail after isolated merge"
+                    fi
+                    if ! candidate_is_unchanged "$CANDIDATE_HEAD"; then
+                        record_fail "Test validation mutated the cumulative merge candidate HEAD or files"
+                    fi
+                else
+                    record_warn "No test argv detected — build validation is the available readiness evidence."
+                fi
+            fi
+        fi
+    fi
 fi
 
-# All git temp branch work is done — clear the cleanup trap
-TEMP_BRANCH=""
+cleanup_isolated_worktree
+TEMP_WORKTREE=""
+TEMP_ROOT=""
 trap - EXIT
-
-# ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📋 Integration Check Results"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-for r in "${RESULTS[@]}"; do
-    echo "  $r"
+for result in "${RESULTS[@]}"; do
+    echo "  $result"
 done
 echo ""
 echo "  Passed: $PASS | Failed: $FAIL_COUNT | Warnings: $WARN_COUNT"
 echo ""
 
-if [[ $FAIL_COUNT -gt 0 ]]; then
+if $DRY_RUN; then
+    echo "DRY-RUN complete — no readiness verdict was produced."
+    [[ $FAIL_COUNT -eq 0 ]]
+elif [[ $FAIL_COUNT -gt 0 ]]; then
     echo "🚫 NOT READY for integration. Fix failures above first."
     exit 1
+elif [[ -n "$SKIP_VALIDATION_REASON" ]]; then
+    echo "ℹ️  BRANCH-ONLY result — validation explicitly skipped: $SKIP_VALIDATION_REASON"
+    exit 0
 elif [[ $WARN_COUNT -gt 0 ]]; then
     echo "⚠️  READY with warnings. Review warnings before merging."
-    echo ""
-    echo "📌 To merge:"
-    echo "  git checkout $INTEGRATION_BRANCH"
-    for branch in "${SUB_BRANCHES[@]}"; do
-        echo "  git merge --no-ff $branch"
-    done
     exit 0
 else
     echo "✅ READY for integration."
-    echo ""
-    echo "📌 To merge:"
-    echo "  git checkout $INTEGRATION_BRANCH"
-    for branch in "${SUB_BRANCHES[@]}"; do
-        echo "  git merge --no-ff $branch"
-    done
     exit 0
 fi

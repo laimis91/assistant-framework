@@ -191,6 +191,12 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
     if [[ "${FAKE_WRONG_SMALL_EDIT:-false}" == "true" ]]; then
         printf '%s\n' 'This fixture contains the wrong change.' >"$workspace/docs/usage.md"
     fi
+    mkdir -p "$workspace/.assistant-eval"
+    small_plan_mode=none
+    if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        small_plan_mode="${FAKE_SMALL_PLAN_MODE:-none}"
+    fi
+    printf '%s\n' "{\"schema_version\":\"1.0\",\"task_size\":\"trivial\",\"plan_mode\":\"$small_plan_mode\"}" >"$workspace/.assistant-eval/workflow-decision.json"
 fi
 if [[ -f "$workspace/.agents/skills/assistant-workflow/contracts/index.yaml" ]] \
     && [[ -f "$workspace/.agents/skills/assistant-workflow/references/phases.md" ]]; then
@@ -273,10 +279,85 @@ if [[ -f "$workspace/TASK_REQUIREMENTS.md" ]]; then
         printf '%s\n' '{"schema_version":"1.0","assumptions":{"default_limit":20},"requirements":[{"id":"R1","source_requirement":"created_at_descending","acceptance_criterion":{"binary":true,"text":"newest first"},"verification":{"method":"contract test","evidence_ref":"search contract"},"manual_scenario":"verify descending order","approved_exclusion":false},{"id":"R2","source_requirement":"json_array","acceptance_criterion":{"binary":true,"text":"JSON array response"},"verification":{"method":"contract test","evidence_ref":"response shape"},"manual_scenario":"inspect JSON array response","approved_exclusion":false},{"id":"R3","source_requirement":"case_insensitive","acceptance_criterion":{"binary":true,"text":"mixed case matches"},"verification":{"method":"contract test","evidence_ref":"mixed-case fixture"},"manual_scenario":"search mixed case","approved_exclusion":false}]}' >"$workspace/.assistant-eval/requirement-map.json"
     fi
 fi
+end_to_end_mode=valid
 if [[ -f "$workspace/CHANGE_SUMMARY.md" ]] && [[ -f "$workspace/VERIFICATION.md" ]]; then
     printf '%s\n' 'handoff-fixture-present' >>"$capture_dir/call-$call_id.fixtures"
     if [[ "${FAKE_STRUCTURED_ARTIFACTS:-true}" == "true" ]]; then
         mkdir -p "$workspace/.assistant-eval"
+        if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+            end_to_end_mode="${FAKE_END_TO_END_MODE:-valid}"
+        fi
+        cat >"$workspace/src/search-policy.js" <<'FAKE_SOURCE'
+'use strict';
+class SearchPolicy {
+    compare(left, right) {
+        const timestampDifference = Date.parse(right.created_at) - Date.parse(left.created_at);
+        return timestampDifference || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    }
+    limit(requestedLimit) { return requestedLimit === undefined ? 20 : requestedLimit; }
+}
+module.exports = { SearchPolicy };
+FAKE_SOURCE
+        pre_repair_source_hash="$(git -C "$workspace" hash-object --no-filters src/search-policy.js)"
+        case "$end_to_end_mode" in
+            valid|skip_failed_review|first_review_passes|skip_revalidation|fresh_review_fails|early_handoff|false_review_finding|spoof_review_commands)
+                cat >"$workspace/src/search-policy.js" <<'FAKE_SOURCE'
+'use strict';
+const LOCALE_FOLDING_LIMITATION = 'locale-specific case folding remains out of scope';
+class SearchPolicy {
+    compare(left, right) {
+        const timestampDifference = Date.parse(right.created_at) - Date.parse(left.created_at);
+        return timestampDifference || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    }
+    limit(requestedLimit) { return requestedLimit === undefined ? 20 : requestedLimit; }
+}
+module.exports = { LOCALE_FOLDING_LIMITATION, SearchPolicy };
+FAKE_SOURCE
+                ;;
+            skip_repair|no_op_repair)
+                cat >"$workspace/src/search-policy.js" <<'FAKE_SOURCE'
+'use strict';
+class SearchPolicy {
+    compare(left, right) {
+        const timestampDifference = Date.parse(right.created_at) - Date.parse(left.created_at);
+        return timestampDifference || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    }
+    limit(requestedLimit) { return requestedLimit === undefined ? 20 : requestedLimit; }
+}
+module.exports = { SearchPolicy };
+FAKE_SOURCE
+                ;;
+            *)
+                printf 'unsupported FAKE_END_TO_END_MODE: %s\n' "$end_to_end_mode" >&2
+                exit 2
+                ;;
+        esac
+        post_repair_source_hash="$(git -C "$workspace" hash-object --no-filters src/search-policy.js)"
+        if [[ "$end_to_end_mode" == "false_review_finding" ]]; then
+            pre_repair_source_hash="$post_repair_source_hash"
+        fi
+        printf '%s\n' '2' >"$workspace/.assistant-eval/test-pass-count"
+        printf '%s\n' '1' >"$workspace/.assistant-eval/review-attempt"
+        case "$end_to_end_mode" in
+            skip_failed_review)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"passed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"completed\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+            skip_repair)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"pending\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":true,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+            skip_revalidation)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"completed\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"pending\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+            false_review_finding)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":false,\"repair\":\"completed\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+            no_op_repair)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"completed\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":true,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+            valid|first_review_passes|fresh_review_fails|early_handoff|spoof_review_commands)
+                printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"completed\",\"post_repair_source_hash\":\"$post_repair_source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >"$workspace/.assistant-eval/review-evidence.json"
+                ;;
+        esac
         handoff_claim_mode="${FAKE_HANDOFF_CLAIM_MODE:-exact}"
         if [[ "$handoff_claim_mode" == "paraphrase" ]]; then
             printf '%s\n' '{"schema_version":"1.0","changed_behavior":"search endpoint ordering and response shape","architecture_decision":"SearchPolicy","rationale":"avoid mutable global state","rejected_alternatives":["global singleton"],"requirement_evidence":[{"requirement_id":"R1","command":"bash tests/search-contracts.sh","status":"passed"}],"manual_scenarios":["mixed-case search without a limit"],"regression_surfaces":["search endpoint ordering","response shape"],"limitations":["locale folding"],"rollback":"Turn off search_policy_v2","review_claim":"Within the reviewed scope, no material findings were found using the available evidence."}' >"$workspace/.assistant-eval/final-handoff.json"
@@ -454,6 +535,44 @@ else
 fi
 printf '%s\n' '{"type":"turn.started"}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
+if [[ -f "$workspace/tests/review-contracts.sh" ]]; then
+    focused_test_command='bash tests/search-contracts.sh'
+    trusted_review_command='bash tests/review-contracts.sh'
+    if [[ "$end_to_end_mode" == "spoof_review_commands" ]]; then
+        focused_test_command='cat tests/search-contracts.sh'
+        trusted_review_command='cat tests/review-contracts.sh'
+    fi
+    printf '%s\n' '{"type":"item.completed","item":{"id":"workflow-implementation","type":"file_change","changes":[{"path":"src/search-policy.js","kind":"update"}]}}'
+    printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"workflow-focused-test\",\"type\":\"command_execution\",\"command\":\"$focused_test_command\",\"exit_code\":0,\"status\":\"completed\",\"aggregated_output\":\"Focused test PASS\"}}"
+    if [[ "$end_to_end_mode" != "skip_failed_review" ]]; then
+        first_review_exit_code=1
+        first_review_output='Must-fix: export LOCALE_FOLDING_LIMITATION from src/search-policy.js so the policy boundary is explicit.'
+        if [[ "$end_to_end_mode" == "first_review_passes" ]]; then
+            first_review_exit_code=0
+            first_review_output='Trusted review PASS: no material findings within the reviewed scope and available evidence.'
+        fi
+        printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"workflow-first-review\",\"type\":\"command_execution\",\"command\":\"$trusted_review_command\",\"exit_code\":${first_review_exit_code},\"status\":\"completed\",\"aggregated_output\":\"${first_review_output}\"}}"
+    fi
+    if [[ "$end_to_end_mode" != "skip_repair" ]]; then
+        printf '%s\n' '{"type":"item.completed","item":{"id":"workflow-repair","type":"file_change","changes":[{"path":"src/search-policy.js","kind":"update"}]}}'
+    fi
+    if [[ "$end_to_end_mode" != "skip_revalidation" ]]; then
+        printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"workflow-revalidation\",\"type\":\"command_execution\",\"command\":\"$focused_test_command\",\"exit_code\":0,\"status\":\"completed\",\"aggregated_output\":\"Focused revalidation PASS\"}}"
+    fi
+    if [[ "$end_to_end_mode" == "early_handoff" ]]; then
+        printf '%s\n' '{"type":"item.completed","item":{"id":"workflow-early-handoff","type":"file_change","changes":[{"path":".assistant-eval/final-handoff.json","kind":"add"}]}}'
+    fi
+    fresh_review_exit_code=0
+    fresh_review_output='Trusted review PASS: no material findings within the reviewed scope and available evidence.'
+    if [[ "$end_to_end_mode" == "fresh_review_fails" ]]; then
+        fresh_review_exit_code=1
+        fresh_review_output='Must-fix remains: LOCALE_FOLDING_LIMITATION is missing.'
+    fi
+    printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"workflow-fresh-review\",\"type\":\"command_execution\",\"command\":\"$trusted_review_command\",\"exit_code\":${fresh_review_exit_code},\"status\":\"completed\",\"aggregated_output\":\"${fresh_review_output}\"}}"
+    if [[ "$end_to_end_mode" != "early_handoff" ]]; then
+        printf '%s\n' '{"type":"item.completed","item":{"id":"workflow-handoff","type":"file_change","changes":[{"path":".assistant-eval/final-handoff.json","kind":"add"}]}}'
+    fi
+fi
 if [[ "${FAKE_RUN_FORBIDDEN_TEST:-false}" == "true" ]]; then
     printf '%s\n' '{"type":"item.completed","item":{"id":"item-test","type":"command_execution","command":"/bin/bash -lc '\''npm test'\''"}}'
 fi
@@ -583,7 +702,7 @@ actual_cap_output="$fixture_root/actual-cap-output"
 actual_cap_error="$fixture_root/actual-cap-error.txt"
 cp -R "$candidate" "$actual_cap_candidate"
 rm -f "$actual_cap_candidate/manifest.json"
-for _ in $(seq 1 100); do printf 'budgetword ' >>"$actual_cap_candidate/SKILL.md"; done
+for _ in $(seq 1 3000); do printf 'budgetword ' >>"$actual_cap_candidate/SKILL.md"; done
 printf '\n' >>"$actual_cap_candidate/SKILL.md"
 rm -f "$capture"/*
 if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
@@ -1437,6 +1556,45 @@ else
     fail "structured workflow artifacts were ignored, lexically graded, unbounded, or retained"
 fi
 
+test_start "ordered workflow verifier rejects every missing repair-loop stage"
+ordered_workflow_negative_ok=true
+for workflow_spec in \
+    'skip_failed_review workspace-011' \
+    'first_review_passes workspace-011' \
+    'skip_repair workspace-012' \
+    'skip_revalidation workspace-013' \
+    'fresh_review_fails workspace-014' \
+    'early_handoff workspace-014' \
+    'false_review_finding workspace-011' \
+    'no_op_repair workspace-012' \
+    'spoof_review_commands workspace-011'; do
+    read -r workflow_mode expected_workspace_id <<<"$workflow_spec"
+    workflow_output="$fixture_root/ordered-workflow-$workflow_mode-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_END_TO_END_MODE="$workflow_mode" \
+        "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases medium-final-handoff-is-reconstructable --repeats 1 \
+        --output "$workflow_output" --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e --arg expected "$expected_workspace_id" '
+          all(.[] | select(.variant == "baseline");
+            .metrics.acceptance_passed == true
+            and .execution.verifier.workspace_status == "passed"
+            and .execution.verifier.workspace_failure_ids == [])
+          and all(.[] | select(.variant == "candidate");
+            .metrics.acceptance_passed == false
+            and .execution.verifier.workspace_status == "failed"
+            and (.execution.verifier.workspace_failure_ids | index($expected)) != null)
+        ' "$workflow_output/traces/"*.json >/dev/null; then
+        ordered_workflow_negative_ok=false
+    fi
+done
+if [[ "$ordered_workflow_negative_ok" == true ]]; then
+    pass
+else
+    fail "ordered workflow omissions were accepted or reported without their stable workspace failure id"
+fi
+
 test_start "handoff grading uses anchored bounded grammars for rollback and review claims"
 handoff_paraphrase_output="$fixture_root/handoff-paraphrase-output"
 handoff_absolute_output="$fixture_root/handoff-absolute-output"
@@ -1704,11 +1862,13 @@ small_concise_output="$fixture_root/small-concise-output"
 small_broad_output="$fixture_root/small-broad-output"
 small_scope_output="$fixture_root/small-scope-output"
 small_wrong_output="$fixture_root/small-wrong-output"
+small_plan_mode_output="$fixture_root/small-plan-mode-output"
 rm -f "$capture"/*
 small_concise_ok=false
 small_broad_ok=false
 small_scope_ok=false
 small_wrong_ok=false
+small_plan_mode_ok=false
 if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true "$runner" --execute \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$small_concise_output" \
@@ -1752,10 +1912,25 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true FAKE_WRONG_SMALL_ED
     )' "$small_wrong_output/traces/"*.json >/dev/null; then
     small_wrong_ok=true
 fi
-if [[ "$small_concise_ok" == true && "$small_broad_ok" == true && "$small_scope_ok" == true && "$small_wrong_ok" == true ]]; then
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true FAKE_SMALL_PLAN_MODE=inline "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$small_plan_mode_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e '
+      all(.[] | select(.variant == "baseline");
+        .metrics.acceptance_passed == true and .execution.verifier.workspace_status == "passed")
+      and all(.[] | select(.variant == "candidate");
+        .metrics.acceptance_passed == false
+        and .execution.verifier.workspace_status == "failed"
+        and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+    ' "$small_plan_mode_output/traces/"*.json >/dev/null; then
+    small_plan_mode_ok=true
+fi
+if [[ "$small_concise_ok" == true && "$small_broad_ok" == true && "$small_scope_ok" == true && "$small_wrong_ok" == true && "$small_plan_mode_ok" == true ]]; then
     pass
 else
-    fail "small-fix grader required ritual words or accepted broad/out-of-scope behavior"
+    fail "small-fix grader required ritual words or accepted broad/out-of-scope/plan_mode behavior"
 fi
 
 test_start "seeded review case reports defect recall and false positives"

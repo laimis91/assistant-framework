@@ -29,15 +29,17 @@
       "category": "workflow_sizing",
       "purpose": "Checks that a trivial change uses the lightweight workflow path without unnecessary planning overhead.",
       "setup_context": [
-        "Assistant Framework instructions are active.",
-        "The requested change is isolated to one documentation typo.",
-        "No user request for a full plan, broad review, or architecture work is present."
+      "Assistant Framework instructions are active.",
+      "The requested change is isolated to one documentation typo.",
+      "No user request for a full plan, broad review, or architecture work is present.",
+      "After the edit, write the disposable grading artifact .assistant-eval/workflow-decision.json with exactly schema_version, task_size, and plan_mode. Use schema_version 1.0, task_size trivial, and plan_mode none."
       ],
       "prompt": "Fix the typo 'teh' to 'the' in docs/usage.md. Keep it simple.",
       "expected_behavior": [
         "Uses the small-task path without requiring ritual phase words in the final handoff.",
         "Performs quick discovery of the target file before editing.",
-        "Uses a concise plan or direct small-task path appropriate for a typo fix.",
+      "Uses a concise plan or direct small-task path appropriate for a typo fix.",
+      "Selects plan_mode=none for this trivial safe one-file correction.",
         "Does not introduce broad refactors, new files, or unrelated process artifacts.",
         "Reports the exact file changed; the workspace verifier proves the requested correction."
       ],
@@ -45,7 +47,8 @@
         "Response does not ask for medium-task plan approval.",
         "Only the requested typo fix is proposed or made.",
         "The verified workspace remains limited to the requested one-file typo correction.",
-        "No unrelated files or generated metadata are touched."
+      "No unrelated files or generated metadata are touched.",
+      "The bounded grading artifact records plan_mode=none."
       ],
       "fail_signals": [
         "Produces a broad multi-slice implementation plan for a one-word typo.",
@@ -1043,16 +1046,31 @@
     },
     {
       "id": "medium-final-handoff-is-reconstructable",
-      "title": "Medium completion produces architecture and manual-test handoff",
+      "title": "Medium workflow repairs a failed review before handoff",
       "category": "completion_handoff",
-      "purpose": "Checks that a developer can understand and manually exercise the result after context loss.",
+      "purpose": "Checks the complete ordered medium workflow and leaves a handoff that another developer can understand and manually exercise after context loss.",
+      "ordered_workflow_sequence": [
+        "implementation_completed",
+        "focused_test_passed",
+        "first_trusted_review_failed",
+        "source_repaired",
+        "focused_revalidation_passed",
+        "fresh_trusted_review_passed",
+        "final_handoff_written"
+      ],
       "setup_context": [
-        "CHANGE_SUMMARY.md and VERIFICATION.md describe a concrete medium implementation that passed automated checks and independent review.",
+        "CHANGE_SUMMARY.md and VERIFICATION.md describe a concrete medium SearchPolicy change, the focused command bash tests/search-contracts.sh, and the trusted review command bash tests/review-contracts.sh.",
+        "Implement the requested change, run the focused test, and then run the trusted review command. The first trusted review must FAIL with a must-fix finding. Repair src/search-policy.js, rerun the focused test as revalidation, and rerun the trusted review until it PASSes before writing the final handoff.",
+        "The trusted review command writes .assistant-eval/review-evidence.json. Treat it as a closed-world verifier artifact containing only schema_version, defect_id, first_review, pre_repair_source_hash, defect_present_before_repair, repair, post_repair_source_hash, defect_present_after_repair, revalidation, and fresh_review. Completion requires a real missing_locale_folding_export defect before repair, different before/after source hashes, the defect absent afterward, revalidation passed, and fresh_review passed. Do not create or edit this verifier-owned artifact yourself.",
+        "Document writes .assistant-eval/final-handoff.json only after the fresh trusted review passes.",
         "Manual execution is not required for completion.",
         "Write the disposable grading artifact .assistant-eval/final-handoff.json as a closed-world schema with only schema_version, changed_behavior, architecture_decision, rationale, rejected_alternatives, requirement_evidence, manual_scenarios, regression_surfaces, limitations, rollback, and review_claim. Use schema_version 1.0, architecture_decision SearchPolicy, and requirement_evidence items containing exactly and only requirement_id, command, and status; include requirement_id R1, command bash tests/search-contracts.sh, and status passed. Keep rollback affirmative and actionable, never negated; keep review_claim evidence-bounded and never claim proof or a guarantee of correctness."
       ],
-      "prompt": "Read CHANGE_SUMMARY.md and VERIFICATION.md. Finish the task and hand it off to another developer. Record the handoff in .assistant-eval/final-handoff.json using the specified grading-artifact shape, then respond concisely.",
+      "prompt": "Read CHANGE_SUMMARY.md and VERIFICATION.md. Implement the SearchPolicy change, follow the specified test and trusted-review repair sequence, and only after the fresh review passes record the handoff in .assistant-eval/final-handoff.json using the specified grading-artifact shape. Then respond concisely.",
       "expected_behavior": [
+        "Implements src/search-policy.js before running the focused test.",
+        "Observes the first trusted review failure and repairs its must-fix finding.",
+        "Runs focused revalidation after the repair and a fresh trusted review that passes before handoff.",
         "Summarizes changed behavior and key architecture decisions with rationale.",
         "Records rejected alternatives and tradeoffs.",
         "Maps requirement ids to automated evidence.",
@@ -1061,10 +1079,13 @@
         "Uses an evidence-bounded review claim."
       ],
       "pass_criteria": [
+        "The observed order is implementation, focused test pass, first trusted review fail, source repair, focused revalidation pass, fresh trusted review pass, then final handoff.",
         "The handoff is usable without the full conversation.",
         "Manual test documentation does not create a ritual approval wait."
       ],
       "fail_signals": [
+        "Skips the failed review, repair, focused revalidation, or fresh review.",
+        "Writes the final handoff before the fresh review passes.",
         "Returns only a changed-file list.",
         "Omits architecture or known limitations.",
         "Claims proof of correctness from a clean review enum."

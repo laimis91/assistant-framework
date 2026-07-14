@@ -1,8 +1,10 @@
 # Final Handoff
 
-For medium+ work, produce a reconstructable developer handoff after validation
-and review. Keep it concise, but include enough evidence for another developer
-to understand the design and test the result without reading the full session.
+During Document, produce the sole `final_handoff` artifact for medium+ work
+after validation and review. Review provides its result/evidence but does not
+create this artifact. Keep it concise, but include enough evidence for another
+developer to understand the design and test the result without reading the full
+session.
 
 ## Required sections
 

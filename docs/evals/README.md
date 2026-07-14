@@ -10,7 +10,8 @@ under common operating conditions:
 
 - lightweight handling for small fixes
 - plan-before-build behavior for medium features
-- multi-round review behavior after findings
+- complete implementation -> focused test -> failed trusted review -> repair ->
+  focused revalidation -> fresh trusted review -> handoff behavior
 - deterministic clarification for ambiguous prompts
 - task-state recovery after context compaction
 - TDD RED-before-GREEN handoff behavior
@@ -163,6 +164,25 @@ Skill-local `evals/` directories are excluded from materialized variants, and
 only the native `.agents/skills/assistant-workflow` copy is exposed. Seeded Git
 baselines make unexpected created, changed, or deleted paths measurable;
 review-only cases fail verification on any workspace edit.
+The `medium-final-handoff-is-reconstructable` case also seeds an incomplete
+`SearchPolicy`, a focused contract command, and a trusted review command. The
+review command owns a closed-world `.assistant-eval/review-evidence.json` with
+only `schema_version`, `defect_id`, `first_review`,
+`pre_repair_source_hash`, `defect_present_before_repair`, `repair`,
+`post_repair_source_hash`, `defect_present_after_repair`, `revalidation`, and
+`fresh_review`. The workspace verifier bounds and validates that artifact,
+requires distinct before/after hashes plus a real seeded defect before repair
+and its absence afterward, and checks the temporary JSONL event order. Trusted
+test and review evidence must use an exact accepted command form; substrings or
+commands padded with unrelated operations do not count. The grader also checks
+focused-test exit codes, the expected nonzero first-review result with its
+bounded must-fix marker, and the zero-exit fresh-review PASS marker before raw
+storage is deleted. Stable
+failure IDs distinguish a missing failed review (`workspace-011`), repair
+(`workspace-012`), revalidation (`workspace-013`), and fresh-review-before-
+handoff boundary (`workspace-014`). The fake adapter exercises the valid path
+and each omission; it is deterministic contract coverage, not live-model
+evidence.
 Because `--execute` may use network access and model quota, obtain the applicable
 approval before running it in personal or company environments.
 On macOS, real Codex execution must run host-side, including an explicitly
@@ -377,6 +397,10 @@ Use the exact `smoke_cases` and `pilot_cases` declared in the variant manifest.
 The smoke uses one repeat (four runs total). Only after valid/redaction-safe
 traces, expand to the six-case three-repeat pilot (36 runs), sequentially and
 with the approved time/quota cap.
+Authorization is invocation-bound: a replacement smoke, pilot, or retry that
+would make new model calls needs fresh explicit authorization for its exact call
+count. Prior authorization and a human verdict do not authorize a new 36-call
+execution.
 
 GPT-5.6-Terra represents the common simple-task smoke profile. Pin it explicitly
 when generating and executing the reviewed four-run smoke plan.
@@ -391,6 +415,18 @@ tools/evals/run-codex-framework-evals.sh --execute \
   --repeats 1 \
   --output /tmp/codex-framework-kernel-terra-smoke
 ```
+
+### Current evidence boundary
+
+The committed ordered-workflow fixture and runner changed the case and grader
+hashes. Any earlier Terra snapshot is therefore historical evidence only and
+cannot establish current behavioral promotion. Do not describe the architecture
+as currently Terra-validated unless a newly authorized exact pilot completes
+36/36 runs and 18/18 pairs against the current source, every automatic gate
+passes, the bounded human semantic verdict covers the current packet, and the
+finalizer writes `behavioral_promotion_eligible=true`. Repository contract tests
+can validate the framework mechanics without consuming model quota, but they do
+not substitute for that live promotion record.
 
 ### Source-only context budget
 

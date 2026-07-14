@@ -4,7 +4,7 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 
 ## What it does
 
-1. **Structured Workflow** — TRIAGE > DISCOVER > PLAN > BUILD & TEST > DOCUMENT with approval gates and two-stage review
+1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
 3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
@@ -134,7 +134,56 @@ Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy
 Only tracked `assistant-*` directories are first-class release skills.
 
 ### assistant-workflow
-Core development pipeline: idea-to-action decomposition, triage, discover, plan, build & test, verify, document.
+Core development pipeline: idea-to-action decomposition, discover, proportional planning, build and verification, independent review, bounded repair, and evidence-backed documentation.
+
+The architecture is an adaptive loop implemented through native skill routing;
+there is no installed lifecycle engine. Its conceptual states map to the public
+workflow like this:
+
+| Conceptual state | Public phase | Observable responsibility |
+|---|---|---|
+| ORIENT, RESOLVE | Discover | Inspect the request, repository, policy, and current task state; apply and record deterministic safe defaults, and ask only material questions with no safe default. |
+| PLAN? | Optional Plan | Select `plan_mode`: `none`, `inline`, or `approval_required`. |
+| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run focused tests, and host-verify argv-array commands before marking evidence verified. |
+| REVIEW | Review | Independently check requirements, regressions, quality, security, and QA evidence. |
+| REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
+| HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
+
+`plan_mode=none` is limited to small, local, reversible, high-confidence work
+with known scope. `inline` records a short plan without an approval wait.
+`approval_required` applies to medium-or-larger work and to risk, policy, or
+public-impact changes. Build owns implementation, tests, host verification, and
+a bounded repair loop: at most three attempts, a no-progress limit of two, and
+recorded failure signatures and progress before pivoting or reporting a block.
+Build repair is implementation/verification-failure recovery. Review-fix work
+for review findings stays within the bounded `assistant-review` loop and records
+its own revalidation before a fresh review result.
+Review owns independent acceptance evidence and fresh post-repair assessment;
+it does not create the handoff. Document is the sole owner of `final_handoff`.
+Integration fails closed when required validation is absent unless an explicit
+skip reason is recorded.
+
+Workflow consumes the canonical assistant-review Reviewer/QAEvaluator schemas
+through validated result references; it does not restate those worker packets.
+Reviewers must return a non-empty `reviewed_scope` alongside findings and
+evidence, so a partial or differently scoped review cannot silently satisfy the
+workflow's acceptance gate. The final handoff summarizes requirement coverage,
+important changed areas, architecture decisions, verification evidence, manual
+test steps, deviations, and remaining risks without claiming checks that did
+not run.
+
+For executable slices, repository verification uses canonical argv arrays and
+is bound to tracked files in the exact clean slice commit. Host verification
+has bounded private logs and a hard process-group timeout; passing commits are
+promoted from an isolated merge candidate with compare-and-swap protection.
+Validation commands must leave the candidate tree unchanged. Parallel worktree
+storage inside the repository must already be gitignored—the runner fails with
+an instruction instead of editing `.gitignore`.
+
+For compression-safe work, the orchestrator keeps concise, root-scoped task and
+session state under `.codex/`. Resume reconciles that journal with the newest
+user request and current repository evidence before continuing; stale state
+never overrides either source.
 
 Loop readiness is conditional. Ordinary day-to-day development, such as taking a work item, prompting once, waiting for implementation, and manually testing the result, stays in the normal workflow. Add `loop_readiness_assessment` only before an explicit repeat, optimization, or experiment loop outside the standard phase gates. Examples include "keep fixing build/test failures until green", "iterate on this interface until the manual checklist passes", or "optimize until a measured target is reached". A loop plan must name the verifier, stop condition, finite max iterations, budget limit, retry/empty-result handling, tool-error handling, low-confidence escalation, rollback/exit action, and harness routing. Loop readiness alone does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness or QA criteria independently apply.
 
@@ -373,10 +422,41 @@ safe explicit `show` command.
 The dated eight-priority architecture, verification, and manual-testing handoff
 is in `docs/assistant-framework-priority-handoff-2026-07-12.md`.
 
+### Architecture verification status
+
+The local P0-P4 contracts cover the adaptive-loop mapping, compression-safe
+state, clarification and plan selection, bounded Build repair, independent
+Review, Document-only handoff ownership, and the end-to-end ordered repair
+fixture:
+
+```bash
+./tests/test-p0-p4-contracts.sh
+```
+
+The end-to-end fixture checks the observable order: implementation, focused
+test pass, an exact trusted review invocation finding the seeded defect, repair,
+focused revalidation pass, a fresh exact review pass, then final handoff. Its
+closed-world verifier artifact binds the finding and repair to different source
+hashes and records that the defect existed before repair and is absent after
+repair. The runner accepts only exact trusted command forms and inspects
+temporary Codex JSONL events before deleting them.
+
+These deterministic repository checks validate the framework mechanics; they
+do not by themselves prove current model behavior or hosted Windows behavior.
+The previously recorded Terra snapshot predates the changed fixture and grader
+and remains historical, non-promoting evidence. A new live promotion claim
+requires fresh authorization for the exact four-call smoke and, if it passes,
+separate authorization for the six-case, three-repeat, two-variant pilot
+(36 calls / 18 pairs). Every automatic and human gate in
+`docs/evals/README.md` must pass. Native Windows PowerShell 5.1 and 7 remain an
+external CI/manual verification boundary until those environments run the
+committed Windows contracts.
+
 ## Structure
 
 ```
 install.sh                         <- Top-level installer (skills + migration cleanup + memory)
+install.ps1                        <- Native Windows PowerShell 5.1/7 installer
 version.txt                        <- Framework version
 graph-seed.jsonl                   <- Default knowledge graph seed data
 
@@ -472,6 +552,7 @@ tools/
   evals/
     run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
+    run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
   cognitive-complexity/             <- Roslyn-based complexity analyzer
   memory-graph/
     DESIGN.md                      <- Architecture and data model
@@ -485,6 +566,7 @@ tools/
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
+  windows/installer-contracts.ps1  <- Isolated native Windows installer contracts
 
 ```
 

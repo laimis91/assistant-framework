@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-review
 
@@ -158,6 +158,11 @@ artifacts:
     description: "The single summary presented to the user after the loop completes"
     validation: "Must include rounds (1-10), result, the evidence-bounded no-finding claim when applicable, additional-round evidence when rounds >= 3, fixed_items, remaining_items when applicable, and nits before presenting review results"
     object_fields:
+      - name: reviewed_scope
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Files, diffs, task packets, slices, or content boundaries actually inspected across the completed review"
       - name: rounds
         type: int
         required: true

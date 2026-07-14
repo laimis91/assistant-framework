@@ -19,7 +19,7 @@ risk.
 
 ## Success Criteria
 
-- Run the proportional phase path: Discover -> optional Decompose -> Plan ->
+- Run the proportional phase path: Discover -> optional Decompose -> optional Plan ->
   optional Design -> Build -> Review -> Document. Scale phases; do not omit
   their applicable gates.
 - Reconcile persisted state against the newest user request and current
@@ -31,8 +31,9 @@ risk.
 - For medium+, create stable requirement ids with binary criteria and
   verification methods; small work keeps compact acceptance unless promoted by
   ambiguity, risk, or multiple material requirements.
-- Medium+ Build waits for explicit plan approval. Small low-risk work uses an
-  inline plan and proceeds unless risk or ambiguity requires a wait.
+- Select `plan_mode`: trivial safe work uses `none`, bounded small work may use
+  `inline`, and medium+, risky, destructive, or scope-shaping work uses
+  `approval_required` and waits before Build.
 - Behavior changes use valid RED -> minimal GREEN -> refactor-safe verification,
   or record an approved non-behavior exception.
 - Ordinary medium work uses one bounded edit/test executor plus independent
@@ -40,6 +41,8 @@ risk.
   noisy, environment-heavy, or explicitly independent verification requires it.
 - Complete applicable Spec, quality, security, and QA routes. QA is required
   only by its explicit acceptance triggers.
+- Build repair owns implementation/verification failures; Review owns review-fix
+  and fresh re-review. Document is the sole owner of `final_handoff`.
 - Medium+ output follows `references/final-handoff.md`; every accepted
   requirement has passed evidence or an approved exclusion.
 
@@ -72,14 +75,20 @@ recovery. Load `references/workflow-controller.md` for cross-phase routing and
 `references/phases.md` for phase mechanics. Load other references only when
 their named condition applies.
 
+Migration note: workflow contracts are v3. Required `verification_command`
+values are non-empty argv `string[]`. Workflow-owned Reviewer and QAEvaluator
+packets are retired; assistant-review v2 is the canonical owner, including the
+required non-empty Reviewer `reviewed_scope`, and workflow consumes validated
+`final_summary` / `qa_evaluation_result` references.
+
 ## Execution
 
 1. Triage size, risk, required gates, state mode, execution lane, review/QA
    routing, and delegation authorization from local evidence.
 2. Discover the relevant code and constraints; reconcile state. Create the
    Requirement Acceptance Map when its medium+/promotion condition applies.
-3. For medium+, decompose into independently verifiable slices and obtain plan
-   approval before edits.
+3. Apply `plan_mode`: skip Plan for `none`, keep `inline` concise, and for
+   `approval_required` decompose as needed and obtain approval before edits.
 4. Build tests-first where behavior changes, verify each slice, and record
    deviations instead of improvising scope.
 5. Run Spec Review then independent quality review. Audit normally uses one

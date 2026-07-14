@@ -4,7 +4,7 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: handoffs
 skill: assistant-review
 
@@ -21,6 +21,7 @@ worker_status_protocol:
       meaning: "Cannot proceed because an environment, dependency, permission, or tool issue prevents review."
   packet_rules:
     - "status is required on every Reviewer return."
+    - "reviewed_scope is required and non-empty on every Reviewer return."
     - "findings, summary, and verdict remain required and are not replaced by status."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
@@ -72,7 +73,7 @@ return_validation_bundles:
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
-    validation: "Validate status, round, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -263,6 +264,12 @@ handoffs:
         required: true
         description: "Echo back the round number for tracking"
         validation: ">= 1 and <= 10"
+
+      - name: reviewed_scope
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Files, diffs, task packets, slices, or content boundaries actually inspected in this review round"
 
       - name: findings
         type: object[]

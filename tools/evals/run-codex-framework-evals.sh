@@ -1425,9 +1425,14 @@ path_allowed_for_case() {
     local path="$2"
     case "$case_id:$path" in
         small-fix-stays-lightweight:docs/usage.md) return 0 ;;
+        small-fix-stays-lightweight:.assistant-eval/workflow-decision.json) return 0 ;;
         stale-journal-yields-to-current-evidence:.codex/task.md) return 0 ;;
         requirements-map-through-completion:.assistant-eval/requirement-map.json) return 0 ;;
         ordinary-medium-bounded-executor:.assistant-eval/execution-decision.json) return 0 ;;
+        medium-final-handoff-is-reconstructable:src/search-policy.js) return 0 ;;
+        medium-final-handoff-is-reconstructable:.assistant-eval/test-pass-count) return 0 ;;
+        medium-final-handoff-is-reconstructable:.assistant-eval/review-attempt) return 0 ;;
+        medium-final-handoff-is-reconstructable:.assistant-eval/review-evidence.json) return 0 ;;
         medium-final-handoff-is-reconstructable:.assistant-eval/final-handoff.json) return 0 ;;
         codex-role-constraints-native:docs/evals/framework-instruction-cases.json) return 0 ;;
         codex-role-constraints-native:docs/evals/README.md) return 0 ;;
@@ -1491,9 +1496,88 @@ workspace_json_check() {
     fi
 }
 
+ordered_workflow_event_evidence() {
+    local jsonl="$1"
+
+    jq -cs '
+      def command_text:
+        (.item.command // .item.command_line // .item.text // "" | tostring);
+      def command_output:
+        (.item.aggregated_output // .item.output // .item.text // "" | tostring);
+      def changed_paths:
+        ([.item.path?] + [(.item.changes // [])[]?.path?])
+        | map(select(type == "string"));
+      def is_exact_trusted_command($script):
+        ("bash " + $script) as $expected
+        | (.item.command // .item.command_line // "") as $command
+        | if ($command | type) == "array" then
+            ($command == ["bash", $script])
+            or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+              $command == [., "-lc", $expected])
+          else
+            ($command | tostring) as $text
+            | ($text == $expected)
+              or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+                $text == (. + " -lc \u0027" + $expected + "\u0027")
+                or $text == (. + " -lc \"" + $expected + "\""))
+          end;
+      def is_command($script):
+        .type == "item.completed"
+        and .item.type == "command_execution"
+        and is_exact_trusted_command($script);
+      def is_successful_command($script):
+        is_command($script)
+        and (.item.exit_code | type == "number") and .item.exit_code == 0;
+      def is_expected_failed_review:
+        is_command("tests/review-contracts.sh")
+        and (.item.exit_code | type == "number") and .item.exit_code != 0
+        and (command_output | contains("Must-fix: export LOCALE_FOLDING_LIMITATION"));
+      def is_expected_passing_review:
+        is_command("tests/review-contracts.sh")
+        and (.item.exit_code | type == "number") and .item.exit_code == 0
+        and (command_output | contains("Trusted review PASS"));
+      def changes_path($suffix):
+        .type == "item.completed"
+        and .item.type == "file_change"
+        and any(changed_paths[]?; endswith($suffix));
+
+      . as $events
+      | [range(0; length) | select($events[.] | is_successful_command("tests/search-contracts.sh"))] as $tests
+      | [range(0; length) | select($events[.] | is_expected_failed_review)] as $failed_reviews
+      | [range(0; length) | select($events[.] | is_expected_passing_review)] as $passing_reviews
+      | [range(0; length) | select($events[.] | changes_path("src/search-policy.js"))] as $source_changes
+      | [range(0; length) | select($events[.] | changes_path(".assistant-eval/final-handoff.json"))] as $handoffs
+      | ($tests | length >= 1
+          and ($source_changes | any(. < $tests[0]))) as $implementation_completed
+      | ($implementation_completed
+          and ($failed_reviews | length >= 1)
+          and $tests[0] < $failed_reviews[0]) as $focused_test_passed
+      | $focused_test_passed as $first_trusted_review_failed
+      | ($first_trusted_review_failed
+          and ($tests | length >= 2)
+          and ($source_changes | any(. > $failed_reviews[0] and . < $tests[1]))) as $source_repaired
+      | ($source_repaired
+          and ($passing_reviews | length >= 1)
+          and $tests[1] < $passing_reviews[0]) as $focused_revalidation_passed
+      | $focused_revalidation_passed as $fresh_trusted_review_passed
+      | ($fresh_trusted_review_passed
+          and ($handoffs | any(. > $passing_reviews[0]))) as $final_handoff_written
+      | {
+          implementation_completed: $implementation_completed,
+          focused_test_passed: $focused_test_passed,
+          first_trusted_review_failed: $first_trusted_review_failed,
+          source_repaired: $source_repaired,
+          focused_revalidation_passed: $focused_revalidation_passed,
+          fresh_trusted_review_passed: $fresh_trusted_review_passed,
+          final_handoff_written: $final_handoff_written
+        }
+    ' "$jsonl"
+}
+
 verify_workspace() {
     local case_id="$1"
     local workspace="$2"
+    local jsonl="$3"
     local status="not_applicable"
     local exit_code=0
     local scope_deviations=0 changed_path
@@ -1501,7 +1585,7 @@ verify_workspace() {
     local workspace_acceptance_items_total=0
     local workspace_acceptance_items_passed=0
     local workspace_artifact_safe=false
-    local artifact
+    local artifact review_artifact event_evidence final_source_hash=""
 
     while IFS= read -r changed_path; do
         [[ -n "$changed_path" ]] || continue
@@ -1520,6 +1604,14 @@ verify_workspace() {
             else
                 workspace_record_check "workspace-001" true
             fi
+            artifact="$workspace/.assistant-eval/workflow-decision.json"
+            workspace_artifact_preflight "$workspace" "$artifact" "workspace-002"
+            workspace_json_check "$artifact" "workspace-002" '
+              type == "object"
+              and (keys | sort) == ["plan_mode", "schema_version", "task_size"]
+              and .schema_version == "1.0"
+              and .task_size == "trivial"
+              and .plan_mode == "none"'
             ;;
         codex-role-constraints-native)
             status="passed"
@@ -1656,6 +1748,59 @@ verify_workspace() {
             workspace_json_check "$artifact" "workspace-010" '
               (.review_claim | ascii_downcase
                 | test("^(no material findings( were found)? within (the )?reviewed scope (and|using) (the )?available evidence|within (the )?reviewed scope,? no material findings( were found)? using (the )?available evidence)[.]?$"))'
+            review_artifact="$workspace/.assistant-eval/review-evidence.json"
+            workspace_artifact_preflight "$workspace" "$review_artifact" "workspace-011"
+            event_evidence="$(ordered_workflow_event_evidence "$jsonl")"
+            final_source_hash="$(git -C "$workspace" hash-object --no-filters src/search-policy.js 2>/dev/null || true)"
+            if [[ "$workspace_artifact_safe" == "true" ]] \
+                && jq -e '
+                  type == "object"
+                  and (keys | sort) == ["defect_id", "defect_present_after_repair", "defect_present_before_repair", "first_review", "fresh_review", "post_repair_source_hash", "pre_repair_source_hash", "repair", "revalidation", "schema_version"]
+                  and .schema_version == "1.0"
+                  and .first_review == "failed"
+                  and .defect_id == "missing_locale_folding_export"
+                  and .defect_present_before_repair == true
+                  and (.pre_repair_source_hash | test("^[0-9a-f]{40,64}$"))
+                ' "$review_artifact" >/dev/null 2>&1 \
+                && jq -e '
+                  .implementation_completed == true
+                  and .focused_test_passed == true
+                  and .first_trusted_review_failed == true
+                ' <<<"$event_evidence" >/dev/null 2>&1; then
+                workspace_record_check "workspace-011" true
+            else
+                workspace_record_check "workspace-011" false
+            fi
+            if [[ "$workspace_artifact_safe" == "true" ]] \
+                && jq -e --arg final_source_hash "$final_source_hash" '
+                  .repair == "completed"
+                  and .defect_present_after_repair == false
+                  and (.post_repair_source_hash | test("^[0-9a-f]{40,64}$"))
+                  and .pre_repair_source_hash != .post_repair_source_hash
+                  and .post_repair_source_hash == $final_source_hash
+                ' "$review_artifact" >/dev/null 2>&1 \
+                && jq -e '.source_repaired == true' <<<"$event_evidence" >/dev/null 2>&1; then
+                workspace_record_check "workspace-012" true
+            else
+                workspace_record_check "workspace-012" false
+            fi
+            if [[ "$workspace_artifact_safe" == "true" ]] \
+                && jq -e '.revalidation == "passed"' "$review_artifact" >/dev/null 2>&1 \
+                && jq -e '.focused_revalidation_passed == true' <<<"$event_evidence" >/dev/null 2>&1; then
+                workspace_record_check "workspace-013" true
+            else
+                workspace_record_check "workspace-013" false
+            fi
+            if [[ "$workspace_artifact_safe" == "true" ]] \
+                && jq -e '.fresh_review == "passed"' "$review_artifact" >/dev/null 2>&1 \
+                && jq -e '
+                  .fresh_trusted_review_passed == true
+                  and .final_handoff_written == true
+                ' <<<"$event_evidence" >/dev/null 2>&1; then
+                workspace_record_check "workspace-014" true
+            else
+                workspace_record_check "workspace-014" false
+            fi
             ;;
     esac
 
@@ -1736,20 +1881,110 @@ seed_case_workspace() {
 EOF
             ;;
         medium-final-handoff-is-reconstructable)
+            mkdir -p "$workspace/src" "$workspace/tests"
             cat >"$workspace/CHANGE_SUMMARY.md" <<'EOF'
-# Completed search change
-- Introduced SearchPolicy as an injected comparison policy instead of global mutable sorting state.
-- Rejected a global singleton because it would couple tests and concurrent requests.
+# Requested search change
+- Implement SearchPolicy as an injected comparison policy instead of global mutable sorting state.
+- Sort newest created_at first and use case-insensitive names as the deterministic tie-breaker.
+- Keep the response shape unchanged and default an omitted limit to 20.
+- Reject a global singleton because it would couple tests and concurrent requests.
 - Compatibility surface: search endpoint ordering and response shape.
 - Rollback: disable the search_policy_v2 feature flag.
 EOF
             cat >"$workspace/VERIFICATION.md" <<'EOF'
-# Verification evidence
-- bash tests/search-contracts.sh -> passed
-- Independent review: no material findings within reviewed scope and available evidence.
+# Verification plan
+- Focused test: bash tests/search-contracts.sh
+- Trusted review: bash tests/review-contracts.sh
 - Manual scenario: search for mixed-case text, omit limit, verify newest-first JSON with at most 20 results.
 - Known limitation: locale-specific case folding is not covered.
 EOF
+            cat >"$workspace/src/search-policy.js" <<'EOF'
+'use strict';
+
+class SearchPolicy {
+    compare(_left, _right) {
+        throw new Error('TODO: implement SearchPolicy comparison');
+    }
+
+    limit(requestedLimit) {
+        return requestedLimit;
+    }
+}
+
+module.exports = { SearchPolicy };
+EOF
+            cat >"$workspace/tests/search-contracts.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+node <<'NODE'
+const assert = require('node:assert/strict');
+const { SearchPolicy } = require('./src/search-policy');
+
+const policy = new SearchPolicy();
+const rows = [
+  { name: 'Zulu', created_at: '2026-01-01T00:00:00Z' },
+  { name: 'beta', created_at: '2026-02-01T00:00:00Z' },
+  { name: 'Alpha', created_at: '2026-02-01T00:00:00Z' }
+];
+
+assert.deepEqual(rows.slice().sort((left, right) => policy.compare(left, right)), [rows[2], rows[1], rows[0]]);
+assert.equal(policy.limit(undefined), 20);
+assert.equal(policy.limit(7), 7);
+NODE
+
+mkdir -p .assistant-eval
+test_pass_count=0
+if [[ -f .assistant-eval/test-pass-count ]]; then
+    read -r test_pass_count <.assistant-eval/test-pass-count
+fi
+printf '%s\n' "$((test_pass_count + 1))" >.assistant-eval/test-pass-count
+EOF
+            cat >"$workspace/tests/review-contracts.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p .assistant-eval
+test_pass_count=0
+if [[ -f .assistant-eval/test-pass-count ]]; then
+    read -r test_pass_count <.assistant-eval/test-pass-count
+fi
+if [[ "$test_pass_count" -lt 1 ]]; then
+    printf '%s\n' 'Trusted review requires a passing focused test first.' >&2
+    exit 1
+fi
+
+source_hash="$(git hash-object --no-filters src/search-policy.js)"
+if [[ ! -f .assistant-eval/review-attempt ]]; then
+    printf '%s\n' '1' >.assistant-eval/review-attempt
+    if grep -Fq 'LOCALE_FOLDING_LIMITATION' src/search-policy.js; then
+        printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"passed\",\"pre_repair_source_hash\":\"$source_hash\",\"defect_present_before_repair\":false,\"repair\":\"not_required\",\"post_repair_source_hash\":\"$source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"pending\",\"fresh_review\":\"pending\"}" >.assistant-eval/review-evidence.json
+        printf '%s\n' 'Trusted review PASS: no material findings within the reviewed scope and available evidence.'
+        exit 0
+    fi
+    printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$source_hash\",\"defect_present_before_repair\":true,\"repair\":\"pending\",\"post_repair_source_hash\":\"\",\"defect_present_after_repair\":true,\"revalidation\":\"pending\",\"fresh_review\":\"pending\"}" >.assistant-eval/review-evidence.json
+    printf '%s\n' 'Must-fix: export LOCALE_FOLDING_LIMITATION from src/search-policy.js so the policy boundary is explicit.' >&2
+    exit 1
+fi
+
+if ! grep -Fq 'LOCALE_FOLDING_LIMITATION' src/search-policy.js; then
+    printf '%s\n' 'Must-fix remains: LOCALE_FOLDING_LIMITATION is missing.' >&2
+    exit 1
+fi
+pre_repair_source_hash="$(jq -r '.pre_repair_source_hash' .assistant-eval/review-evidence.json)"
+if [[ "$pre_repair_source_hash" == "$source_hash" ]]; then
+    printf '%s\n' 'Trusted review rejects a no-op repair: source hash did not change.' >&2
+    exit 1
+fi
+if [[ "$test_pass_count" -lt 2 ]]; then
+    printf '%s\n' 'Trusted review requires focused revalidation after the repair.' >&2
+    exit 1
+fi
+
+printf '%s\n' "{\"schema_version\":\"1.0\",\"defect_id\":\"missing_locale_folding_export\",\"first_review\":\"failed\",\"pre_repair_source_hash\":\"$pre_repair_source_hash\",\"defect_present_before_repair\":true,\"repair\":\"completed\",\"post_repair_source_hash\":\"$source_hash\",\"defect_present_after_repair\":false,\"revalidation\":\"passed\",\"fresh_review\":\"passed\"}" >.assistant-eval/review-evidence.json
+printf '%s\n' 'Trusted review PASS: no material findings within the reviewed scope and available evidence.'
+EOF
+            chmod +x "$workspace/tests/search-contracts.sh" "$workspace/tests/review-contracts.sh"
             ;;
         clear-medium-task-zero-clarification-questions)
             mkdir -p "$workspace/tests/p0-p4"
@@ -1909,7 +2144,7 @@ execute_one_run() {
         ] | length' "$jsonl")"
     fi
     response_verifier="$(grade_response "$case_id" "$final_output" "$semantic_extract_path")"
-    workspace_verifier="$(verify_workspace "$case_id" "$workspace")"
+    workspace_verifier="$(verify_workspace "$case_id" "$workspace" "$jsonl")"
     verifier="$(jq -cn \
         --argjson response "$response_verifier" \
         --argjson workspace "$workspace_verifier" \

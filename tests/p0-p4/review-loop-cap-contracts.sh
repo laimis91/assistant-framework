@@ -89,12 +89,11 @@ else
     fail "assistant-review 10-round cap terms missing: ${missing_review_cap_terms[*]}"
 fi
 
-test_start "workflow contracts and prompts use 10-round review cap"
+test_start "workflow routes the canonical assistant-review 10-round cap without duplicating schemas"
 missing_runtime_cap_terms=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::validation: \">= 1 and <= 10\"" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::Current review round number (1-10)" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::Round 8-10: 90" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::assistant-review/contracts/output.yaml#final_summary" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::contract_ref: assistant-review/contracts/handoffs.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::max 10 rounds" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 1 of 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 2 of 10" \

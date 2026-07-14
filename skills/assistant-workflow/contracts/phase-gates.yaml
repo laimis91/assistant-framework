@@ -16,13 +16,13 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "1.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-workflow
 
 checkpoint_policy:
   exact_markers_required_when: "controller_intensity == strict, explicit project policy requires markers, or the user requests exact phase markers"
-  otherwise: "Use concise natural progress updates while still following every logical phase and applicable gate."
+  otherwise: "Use concise natural progress updates while still following every applicable logical phase and gate."
 
 gate_tiers:
   blocker: "Prevents phase transition; missing evidence would make the workflow unsafe or unverifiable."
@@ -63,8 +63,12 @@ gates:
         on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
-        check: "workflow_state_mode is inline or journal, manual_verification_mode is not_required, optional, or required, and learning_capture_mode is auto, not_required, or required; each mode has a concrete trigger/default reason"
-        on_fail: "Infer and record the three additive modes from the input contract before continuing; do not infer journal, manual verification, or learning ceremony from size alone."
+        check: "plan_mode is none, inline, or approval_required; workflow_state_mode is inline or journal; manual_verification_mode is not_required, optional, or required; and learning_capture_mode is auto, not_required, or required; each mode has a concrete trigger/default reason"
+        on_fail: "Infer and record plan_mode plus the three additive completion modes from the input contract before continuing; do not infer journal, manual verification, or learning ceremony from size alone."
+
+      - id: T_PLAN_MODE
+        check: "plan_mode=none is used only for trivial localized reversible low-risk work with an obvious path and verification; inline is used only for bounded small no-approval work; approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests"
+        on_fail: "Promote plan_mode to inline or approval_required. Do not skip Plan when size, risk, uncertainty, policy, or user intent requires it."
 
       - id: T6
         check: "required_gates includes common gates plus every applicable task-category gate pack"
@@ -121,12 +125,16 @@ gates:
         on_fail: "Re-triage with code/context evidence before proceeding"
 
       - id: D2
-        check: "clarification_status is ready and every implementation-shaping field is explicit, explicitly defaulted, or no longer unresolved"
-        on_fail: "Persist unresolved clarification topics for every unresolved implementation-shaping field, ask structured clarification questions, and wait for explicit answers or `defaults`."
+        check: "clarification_status is ready and every implementation-shaping field is explicit, automatically resolved by a recorded deterministic safe default, accepted from a displayed recommendation, or no longer unresolved"
+        on_fail: "Apply and record any deterministic safe default immediately. Persist only topics with no safe default, ask admissible structured questions, and wait for explicit answers; `defaults` is accepted only as shorthand for the displayed recommendations."
 
       - id: D3
-        check: "clarification_defaults_applied is explicit (true/false) and unresolved clarification topics are empty before Discover completes"
-        on_fail: "Update the saved clarification state so clarification_defaults_applied is explicit true/false and unresolved topics are cleared before continuing"
+        check: "clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale; unresolved clarification topics are empty before Discover completes"
+        on_fail: "Repair clarification_defaults and its applied flag, record source/rationale for each safe default, and clear only resolved topics before continuing"
+
+      - id: D3A
+        check: "Every deterministic safe default is applied and recorded without asking or waiting for user confirmation"
+        on_fail: "Apply the safe default immediately, record topic/value/source/rationale, set clarification_defaults_applied=true, and remove any ritual confirmation wait."
 
       - id: D4
         check: "If Discover prints a clarification wait for any task size: task journal exists before the wait when local state artifacts are configured/policy-allowed, or equivalent clarification state is included in the response before the wait"
@@ -230,6 +238,7 @@ gates:
   - phase: PLAN
     checkpoint_start: "--- PHASE: PLAN ---"
     checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved medium+ plans; --- PHASE: PLAN COMPLETE --- for no-wait small plans"
+    condition: "plan_mode != none"
     exit_assertions:
 
       - id: P_ARTIFACT_CONTRACT
@@ -264,12 +273,12 @@ gates:
         on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
 
       - id: P4
-        check: "For medium+ tasks, user explicitly said 'approved' or 'approved with changes' to the plan, including the slice manifest. For small tasks, the inline plan was printed and either no-wait eligibility was recorded or approval was requested for risk/ambiguity."
-        on_fail: "For medium+ tasks, present the full plan including slice manifest and wait for approval. For small tasks, record why the inline plan can proceed without waiting or request approval when risk/ambiguity requires it."
+        check: "When plan_mode=approval_required, the user explicitly approved the plan and slice manifest when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
+        on_fail: "Wait for approval when plan_mode=approval_required. For inline mode, record why the compact plan can proceed without waiting. If none was selected incorrectly, return to Triage and promote plan_mode."
 
       - id: P5
-        check: "Plan tier matches task size (inline for small, standard for medium, full for large/mega)"
-        on_fail: "Upgrade or downgrade plan tier to match size"
+        check: "Plan tier matches plan_mode and task size: compact for inline, standard for approval-required medium, and full for approval-required large/mega"
+        on_fail: "Upgrade or downgrade plan_mode and tier to match size, risk, uncertainty, and approval policy"
 
       - id: P6
         check: "For large/mega tasks: Security and Operability sections are populated"
@@ -392,6 +401,11 @@ gates:
         check: "When Code Writer returns NEEDS_CONTEXT, BLOCKED, or DEVIATED because of an unexpected blocker: blocker_type and blocker_evidence are recorded, the orchestrator routes recovery to debugging, explorer, architect, candidate_search, replan, restart, user clarification, environment fix, or permission request, and Code Writer is not asked to improvise through legacy blockers blindly"
         on_fail: "Pause Build, classify the blocker, update Harness Run State/Trace Ledger/Replay Packet when harness-capable, create pivot_restart_decision when restart/pivot/replan is selected, and obtain reapproval before continuing if scope, files, behavior, risk, verification, or acceptance criteria change"
 
+      - id: B_ORDINARY_REPAIR_BOUNDS
+        check: "When ordinary non-harness Build retries an implementation or verification failure: build_repair_state records attempt, max_attempts=3, no_progress_count, no_progress_limit=2, normalized failure_signatures, progress_evidence, plan_version, cumulative_attempt_count, status, terminal_route when terminal, and evidence_ref. Two consecutive attempts with a matching failure_signature and no measurable progress are stagnation. Worker/context/session changes do not reset the cumulative count; attempt 3 or no-progress count 2 ends through pivot_restart_decision or blocked."
+        condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
+        on_fail: "Stop same-scope repair. Route an unknown-cause failure through assistant-debugging; otherwise reconstruct build_repair_state, then route to replan/restart through pivot_restart_decision or return blocked. Never start a fourth attempt or continue after two no-progress attempts."
+
       - id: B2
         check: "Build command succeeded (exit code 0 or equivalent success)"
         on_fail: "Fix build errors. Do not enter Review with a broken build."
@@ -423,14 +437,14 @@ gates:
         on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's focused RED, GREEN, and verification evidence plus independent Code Reviewer evidence; build_execution_lane == separated_workers records Code Writer, Builder/Tester, and Code Reviewer evidence"
+        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's focused RED, GREEN, and verification evidence plus changed-file evidence; build_execution_lane == separated_workers records Code Writer and Builder/Tester implementation/verification evidence"
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Update the Agent Dispatch Log before leaving Build. Light work may instead record inline/direct validation plus fresh review evidence."
+        on_fail: "Update the selected-lane implementation and verification portion of the Agent Dispatch Log before leaving Build. Light work may instead record inline/direct validation."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "For medium+ delegated tasks with slices: per-slice evidence matches build_execution_lane before the slice is marked VERIFIED; Builder/Tester is required only when build_execution_lane == separated_workers"
         condition: "size in [medium, large, mega] and subagent_execution_mode == delegated"
-        on_fail: "Repair evidence according to build_execution_lane: bounded_executor records executor RED/GREEN/verification plus independent review; separated_workers records Code Writer and Builder/Tester dispatch/results plus independent review."
+        on_fail: "Repair evidence according to build_execution_lane: bounded_executor records executor RED/GREEN/verification; separated_workers records Code Writer and Builder/Tester dispatch/results."
 
       - id: B13
         check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
@@ -463,7 +477,7 @@ gates:
 
       - id: B11
         severity: blocker
-        check: "For medium+ delegated tasks, the selected lane owner was dispatched per slice and independent Code Reviewer evidence follows integration; separated_workers additionally dispatches Builder/Tester"
+        check: "For medium+ delegated tasks, the selected Build lane owner was dispatched per slice; separated_workers additionally dispatches Builder/Tester"
         condition: "size in [medium, large, mega]"
         on_fail: "Prefer slice-level execution when it reduces risk; do not block direct sequential work with equivalent verification"
 
@@ -486,9 +500,9 @@ gates:
         on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
-        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts (not manual review)"
+        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs"
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Load and follow assistant-review SKILL.md and contracts. Do not manually dispatch reviewers."
+        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow."
 
       - id: R_LIGHT_FRESH_REVIEW
         check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence"
@@ -496,22 +510,23 @@ gates:
         on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
-        check: "Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence"
+        check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
         condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
-        on_fail: "Update the Review Log, output contract, or carried-forward review state with distinct Code Reviewer/Reviewer and QA Evaluator entries. Do not collapse QA evaluation into code review."
+        on_fail: "Run the Review-owned assistant-review lane after Build, validate its canonical outputs, and populate review_result refs plus subagent_evidence.code_reviewer_evidence. Keep QA Evaluator entries separate."
 
       - id: R_QA_EVALUATION
-        check: "When qa_evaluation_mode is required: QAEvaluator runs after build/test evidence and Code Reviewer or Reviewer compatibility result, returns final_verdict/result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence"
+        check: "When qa_evaluation_mode is required: assistant-review owns QAEvaluator dispatch and return validation after build/test and Code Reviewer evidence; workflow records validated canonical qa_evaluation_result and qa_evaluation_delegation_path refs"
         condition: "qa_evaluation_mode == required"
-        on_fail: "Load assistant-review references/qa-evaluation-loop.md, dispatch QAEvaluator or record direct-fallback QA evidence, and do not complete Review until QA result is present or blocked with open_questions. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists, require selected_domain_rubrics and domain_quality_scores; otherwise reject invented rubric scoring."
+        on_fail: "Load and follow assistant-review QA contracts. assistant-review owns QAEvaluator dispatch and return validation; do not complete Review until workflow holds validated canonical QA result refs or assistant-review reports a canonical blocked result."
 
       - id: R_PIVOT_RESTART_DECISION
         check: "Review or QA STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric/domain action pivot records an orchestrator-owned pivot_restart_decision before another fix, review, QA, or build dispatch; round 10 remains terminal and never creates round 11 behavior"
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
-        check: "Verification summary and final_handoff are written with changed behavior/areas, architecture decisions and rationale, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual test scenarios or explicit N/A, compatibility/regression surfaces, known limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
-        on_fail: "Load references/final-handoff.md and write the reconstructable handoff in the configured task journal, output contract, or equivalent carried-forward state"
+        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, and validation_status=validated; developer handoff creation remains in Document"
+        condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
+        on_fail: "Complete assistant-review, validate its canonical result and delegation-path artifacts, record workflow refs, then continue to Document for developer handoff creation"
 
       - id: R_REQUIREMENT_COVERAGE
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
@@ -610,9 +625,9 @@ invariants:
     on_fail: "Print '>> CONSTRAINT REMOVED — review with user before proceeding' and restore the removed constraint"
 
   - id: INV2
-    check: "No phase is skipped that the size-to-phases mapping requires"
+    check: "No required phase is skipped; Plan runs exactly when plan_mode is inline or approval_required and is omitted only when plan_mode=none eligibility remains true"
     scope: all_phases
-    on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing' and execute the skipped phase"
+    on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing', or return to Triage and correct plan_mode before proceeding"
 
   - id: INV3
     check: "When controller_intensity is strict, explicit project policy requires markers, or the user requests exact markers, every executed phase prints its start checkpoint before work and its end checkpoint after assertions pass"
@@ -634,3 +649,8 @@ invariants:
     check: "controller_intensity == standard with harness_capable=false and qa_evaluation_mode=not_required does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation"
     scope: all_phases
     on_fail: "Remove accidental strict/harness/QA requirements, or re-triage with explicit independent criteria before promoting controller_intensity to strict."
+
+  - id: INV_BUILD_REPAIR_BOUNDED
+    check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
+    scope: all_phases
+    on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."

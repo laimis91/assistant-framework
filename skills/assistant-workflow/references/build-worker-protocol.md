@@ -27,7 +27,8 @@ Select `build_execution_lane` before dispatch:
 
 - `bounded_executor` is the default for ordinary medium standard-risk work.
   One Code Writer/bounded executor owns the focused RED, GREEN, edit, test, and
-  refactor-safety loop; independent Code Reviewer evidence remains required.
+  refactor-safety loop during Build. Independent review is dispatched only
+  after Build enters Review.
 - `separated_workers` is used for high or critical risk, broad or noisy
   verification, environment-heavy validation, an explicit independent TDD
   evidence requirement, or explicit role separation. It uses Code Writer,
@@ -59,24 +60,22 @@ For standard/strict work, Direct fallback mode
 Do not pretend delegation happened. Record `subagent_policy_state`,
 `subagent_execution_mode`, `build_execution_lane`, the explicit direct fallback
 reason, matching bounded/separated evidence, independent Code Reviewer
-evidence, and QA Evaluator evidence when QA is required.
+evidence during Review, and QA Evaluator evidence when QA is required.
 
-## Standard/Strict Evidence Gate
+## Standard/Strict Phase Evidence Gates
 
-Before standard/strict Build/Review can complete, the task journal Agent
-Dispatch Log or equivalent carried-forward state must contain:
+Before standard/strict Build can complete, the task journal Agent Dispatch Log
+or equivalent carried-forward state contains only the selected Build-lane
+evidence:
 
 - `bounded executor dispatch/result` plus focused RED/GREEN/verification
   evidence when `build_execution_lane=bounded_executor`, or `Code Writer` and
   `Builder/Tester` dispatch/results when `separated_workers`
-- `Code Reviewer dispatch` and `Code Reviewer result`, or `Reviewer dispatch`
-  and `Reviewer result` only for compatibility routing
-- `QA Evaluator dispatch` and `QA Evaluator result` when
-  `qa_evaluation_mode=required`
 
-Direct fallback records equivalent selected-lane evidence plus
-`Code Reviewer direct evidence`, and `QA Evaluator direct evidence` when QA is
-required. `subagent_execution_mode=not_applicable` is invalid for
+After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
+Reviewer compatibility), `review_result`, and QA Evaluator evidence when QA is
+required. Direct fallback follows the same phase split. Review evidence cannot
+be used to satisfy a Build exit. `subagent_execution_mode=not_applicable` is invalid for
 standard/strict source-changing Build. Silent fallback is invalid; Silent
 fallback cannot complete.
 
@@ -85,9 +84,10 @@ marked `VERIFIED`.
 
 ## Build Loop
 
-For light work, implement the inline plan directly, run relevant automated
-validation/tests, and record the changed scope plus results in the inline
-packet. Then perform the compact fresh self-review. Do not create worker or
+For light work, implement the carried Discover scope/criteria or the inline plan
+when `plan_mode=inline`, run relevant automated validation/tests, and record the
+changed scope plus results in the inline packet. Then perform the compact fresh
+self-review. Do not create worker or
 independent-review dispatch evidence solely to satisfy the light lane.
 
 For medium+ tasks with slices, execute one slice at a time. Each slice is the
@@ -117,6 +117,32 @@ route verification through the selected build_execution_lane: the bounded
 executor retries and verifies its focused loop; separated workers dispatch Code
 Writer and then Builder/Tester; direct fallback performs the same selected-lane
 responsibilities.
+
+### Ordinary Build repair controller
+
+For ordinary non-harness same-scope repair, initialize and persist
+`build_repair_state` before the second implementation attempt:
+
+- `attempt` and `cumulative_attempt_count` (the cumulative same-scope count)
+- fixed `max_attempts: 3`
+- `no_progress_count` and fixed `no_progress_limit: 2`
+- normalized `failure_signatures`
+- concrete `progress_evidence`
+- stable `plan_version`
+- status and evidence reference
+
+One initial attempt plus at most two repairs is the complete three-attempt
+budget. Redispatch, context reset, compaction, handoff, or cross-session resume
+must not reset `cumulative_attempt_count` for the same plan version. Increment no-progress when the
+same normalized signature remains and no check newly passes, no failing scope
+shrinks, and no new evidence isolates the cause. Reset it only for measurable
+evidence-backed progress.
+
+At attempt 3, or when `no_progress_count` reaches 2, do not patch again. Set
+status to `terminal_pivot` or `blocked`, record `terminal_route`, and route to debugging, replan, restart
+with reapproval, user input, or environment recovery through
+`pivot_restart_decision` when applicable. A changed plan version starts a new
+path only after required reapproval; it must not disguise a same-scope retry.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
@@ -187,7 +213,9 @@ Review phase after Build completes.
 After implementation for a slice is done, verify the slice against its
 Decompose criteria before moving on:
 
-1. In `bounded_executor`, the executor runs the slice verification command and
+1. In `bounded_executor`, the executor executes the slice verification argv
+   directly, with item 0 as the executable and each remaining item as one
+   literal argument; never reconstruct a shell command. Then run
    relevant focused checks. Dispatch Builder/Tester only when
    `build_execution_lane=separated_workers`; direct fallback performs the same
    selected-lane verification responsibility.

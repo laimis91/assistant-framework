@@ -4,12 +4,13 @@ Use this during `--- PHASE: TRIAGE ---` before choosing phases. Triage produces 
 
 ## Required Triage Output
 
-Record these fields in the task journal for medium+ tasks and in the inline plan for small tasks:
+Record these fields in the task journal for medium+ tasks and in the inline completion packet for small tasks:
 
 - `Task type`: `feature`, `bugfix`, `refactor`, `migration`, `rewrite`, `config`, `infra`, `security`, `docs`, or `spike`
 - `Risk tier`: `low`, `moderate`, `high`, or `critical`
 - `Triaged as`: `small`, `medium`, `large`, or `mega`
 - `Controller intensity`: `light`, `standard`, or `strict`
+- `Plan mode`: `none`, `inline`, or `approval_required`
 - `Required agents`: the roles required by size and risk
 - `Subagent policy state`: `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, or `policy_disallowed`
 - `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
@@ -28,6 +29,16 @@ Record these fields in the task journal for medium+ tasks and in the inline plan
 | `mega` | Rewrite, migration, port, legacy-to-new-structure work, 10+ files across layers, or behavior parity across subsystems. |
 
 Escalate size when risk exceeds file count. Auth, PII, payments, destructive data changes, public API changes, or behavior-preserving legacy migration are at least `large` unless discovery proves they are isolated and fully covered.
+
+## Plan Mode Rules
+
+| Mode | Use when |
+|---|---|
+| `none` | Trivial, localized, reversible, low-risk work has one obvious path, known files and verification, no material ambiguity, and no public contract/data/security/destructive/policy concern. |
+| `inline` | Bounded small work benefits from a compact multi-step plan but has no approval trigger. |
+| `approval_required` | Medium+ work, high/critical risk, destructive effects, public contract/data/security changes, material architecture/scope choices, repository policy, or an explicit approval request. |
+
+If Discover invalidates `none` or `inline` eligibility, re-triage before Build.
 
 ## Controller Intensity Rules
 

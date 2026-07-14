@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "1.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-workflow
 
@@ -242,6 +242,16 @@ fields:
     infer_from: "light localized work -> inline_direct; ordinary medium standard-risk work -> bounded_executor; high/critical risk, broad or noisy verification, environment-heavy validation, independent TDD evidence, or explicit separation -> separated_workers"
     validation: "Size alone does not require separated_workers. bounded_executor still records valid RED before production code, focused GREEN/regression verification, and independent Code Reviewer evidence."
 
+  - name: plan_mode
+    type: enum
+    required: false
+    enum_values: [none, inline, approval_required]
+    description: "Whether this task skips a separate Plan phase, records a compact no-wait plan, or waits for explicit plan approval"
+    validation: "none is allowed only for trivial, localized, reversible, low-risk work with one obvious implementation path, known files, known verification, no material ambiguity, and no public contract/data/security/destructive effect. inline is limited to bounded small work with no approval trigger. approval_required is mandatory for medium+, high/critical risk, destructive work, public contract/data/security changes, material architecture or scope choices, repository policy, or an explicit user request."
+    default: none
+    on_missing: infer
+    infer_from: "Use approval_required for medium+ or any approval trigger. Use inline for small work that benefits from multiple recorded steps but has no approval trigger. Use none only when the next safe edit and verification are obvious after Discover."
+
   - name: controller_intensity
     type: enum
     required: false
@@ -408,11 +418,34 @@ fields:
   - name: clarification_defaults_applied
     type: boolean
     required: true
-    description: "Whether any unresolved clarification topic was resolved by an explicit `defaults` reply during Discover"
-    validation: "Must be explicit true or false. May be true only after the workflow prints the applied defaults and the user explicitly replies `defaults`."
+    description: "Whether Discover automatically applied at least one deterministic safe default and recorded its source and rationale without asking"
+    validation: "Must be true when clarification_defaults contains one or more automatically applied safe defaults and false when it is empty. Safe-default application never waits for a user reply. An explicit `defaults` reply remains compatibility shorthand for accepting displayed recommendations on questions that had no deterministic safe default; it is recorded as a user answer, not an automatically applied safe default."
     default: false
     on_missing: skip
-    notes: "Never infer this from follow-up wording or continuation text."
+    notes: "Do not set true merely because a user replied `defaults`; tie it to clarification_defaults evidence."
+
+  - name: clarification_defaults
+    type: object[]
+    required: true
+    description: "Deterministic safe defaults applied automatically during Discover"
+    validation: "Each entry records one implementation-shaping topic, chosen value, discoverable source, and concrete rationale. Empty only when no safe default was applied."
+    default: []
+    on_missing: skip
+    object_fields:
+      - name: topic
+        type: string
+        required: true
+      - name: value
+        type: string
+        required: true
+      - name: source
+        type: string
+        required: true
+        description: "User instruction, repository evidence, active policy, or stable local convention supporting the default"
+      - name: rationale
+        type: string
+        required: true
+        description: "Why this value is safe, reversible, and does not materially change scope"
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.
@@ -420,5 +453,5 @@ fields:
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
 # 5. Clarification question caps are maximums, not quotas. Never ask a ritual question just because a task is medium+.
-# 6. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
+# 6. Apply deterministic safe defaults immediately, record source/rationale, and set clarification_defaults_applied=true. If clarification_status=needs_clarification, carry only topics with no safe default into Discover and stop for explicit answers; `defaults` remains an acceptance shorthand for displayed recommendations.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

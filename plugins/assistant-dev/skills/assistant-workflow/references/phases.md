@@ -14,7 +14,7 @@ controller reference owns decision boundaries and ordinary workflow defaults.
 Phase markers are required only for `controller_intensity=strict`, explicit
 project policy, or a user request. For light and standard work, translate every
 `Print:` checkpoint example below into a concise natural progress update while
-still executing every logical phase and applicable gate. Non-checkpoint wait,
+still executing every applicable logical phase and gate. Non-checkpoint wait,
 deviation, dispatch, and verification signals remain explicit when applicable.
 
 ## Phase: Discover
@@ -66,9 +66,9 @@ Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mo
    - Observability in place? (logging, telemetry, health checks)
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
-5. Ask structured clarification Q&A with recommendations for any unresolved implementation-shaping field only when the question is admissible. Admissible means the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
+5. For each unresolved implementation-shaping field, apply and record a deterministic safe default without asking when repository evidence, policy, or a stable local convention makes one available. Record topic, value, source, and rationale; set `Clarification defaults applied: true`. Ask structured clarification Q&A only when the question is admissible: the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
 6. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, or small work promoted by ambiguity, risk, or multiple material requirements, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
-7. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
+7. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 8. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
 **Clarification format:**
@@ -77,28 +77,28 @@ Need to know
 1. [Question]?
    Why needed: [correctness/scope/behavior/security/verification impact]
    Risk if guessed: [what could break]
-   Safe default: [default, or "none"]
+   Safe default: none
    a) [Option]  b) [Option]  c) [Option]
    --> Recommendation: b because [reason]
 
-Reply with: "1b 2a" or "defaults".
+Reply with: "1b 2a" or "defaults" (`defaults` accepts the displayed recommendations).
 ```
 
 **Clarification state rules:**
 - For any task entering clarification wait, if no task journal/state packet exists yet, create one when local state artifacts are configured and policy-allowed; otherwise include the same state in the response before printing clarification questions or the clarification wait message.
 - Question caps are maximums, not quotas. Small tasks usually ask 0-1 questions; medium tasks may ask 0-4; large/mega tasks may ask more only when each question is admissible. A well-specified medium+ task can and should record `Clarification questions asked: 0`.
-- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, `Clarification defaults applied: false`, `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification question cap: N`, `Clarification admissibility: needs_clarification`, and list each unresolved implementation-shaping topic.
+- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, preserve the existing `Clarification defaults applied` value and recorded default entries, set `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification question cap: N`, `Clarification admissibility: needs_clarification`, and list only topics with no deterministic safe default.
 - Print: `>> WAITING: Clarification answers required`
 - Stop after the wait message. Do not continue into Decompose or Plan while clarification is pending.
 - On resume, accept only:
   - explicit question/option answers covering the open question ids (example: `1b 2a`)
   - explicit `defaults`
 - Do not infer answers from free-form continuation text.
-- Every implementation-shaping field that is still unresolved must appear in `Unresolved clarification topics` until it is answered or explicitly defaulted.
+- Every implementation-shaping field that is still unresolved must appear in `Unresolved clarification topics` until it is answered or a displayed recommendation is explicitly accepted.
 - Treat clarification as pending whenever unresolved clarification topics are non-empty, even if `Clarification status` was previously recorded as `ready`.
-- If the reply is `defaults`, print the defaults being applied, set `Clarification defaults applied: true`, clear the unresolved topics list, and set `Clarification status: ready`.
-- If the reply is explicit answers, record the chosen options, set `Clarification defaults applied: false`, clear the unresolved topics list, and set `Clarification status: ready`.
-- If no questions are needed, record `Clarification status: ready`, `Clarification confidence: high`, `Clarification questions asked: 0`, `Clarification admissibility: not_applicable`, and explain briefly what code/context made the task clear.
+- If the reply is `defaults`, record it as explicit compatibility acceptance of the displayed recommendations, not as an automatically applied safe default. Preserve `Clarification defaults applied` based only on recorded deterministic safe defaults, clear the answered topics, and set `Clarification status: ready`.
+- If the reply is explicit answers, record the chosen options, preserve `Clarification defaults applied` based on recorded safe defaults, clear the answered topics, and set `Clarification status: ready`.
+- If no questions are needed, record `Clarification status: ready`, `Clarification defaults applied: true` when safe defaults were recorded (otherwise false), `Clarification confidence: high`, `Clarification questions asked: 0`, `Clarification admissibility: not_applicable`, and explain what code/context or defaults made the task clear.
 
 **Rules:**
 - No commands, edits, or plans that depend on unknowns
@@ -150,7 +150,7 @@ Print: `>> Direct fallback Architect responsibility → strict slice decompositi
 - **Files to test:** [exact test paths or verification targets]
 - **Enabling changes included:** [setup, contracts, wiring, or "none"]
 - **Depends on:** [slice ids, or "none"]
-- **Verification command:** [exact command or inspection method]
+- **Verification command:** `["executable", "arg1", "arg2"]` (canonical argv; one literal argument per item, no shell parsing)
 - **Expected success signal:** [specific passing output, file, or review signal]
 - **Evidence to record:** [ledger/eval/test/review artifacts]
 - **Deviation rollback rule:** [what to do if scope/files/behavior differ]
@@ -184,6 +184,11 @@ Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 
 ## Phase: Plan
 
+**Run condition:** `plan_mode` is `inline` or `approval_required`. When
+`plan_mode=none`, Discover carries the obvious file scope, constraints,
+acceptance check, and verification argv directly into Build; do not create a
+Plan checkpoint or `plan_document`.
+
 Print: `--- PHASE: PLAN ---`
 
 **Goal:** Concrete, reviewable implementation plan.
@@ -193,12 +198,12 @@ For large tasks, produce an Architect-level implementation blueprint from existi
 Print: `>> Dispatching Architect` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_mode=direct_fallback`)
 
-**Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit or explicitly defaulted.
+**Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation.
 
 Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
-- Small: inline plan (goal, files, risks, tests). Do not wait for approval unless risk, ambiguity, user instruction, or a scope-changing decision makes approval necessary.
-- Medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra)
-- Large/Mega: full plan (all sections including Security and Operability)
+- `inline`: compact small plan (goal, files, risks, tests); do not wait.
+- `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
+- `approval_required` large/mega: full plan (all sections including Security and Operability).
 
 1. Research codebase: modules, patterns, entrypoints
 2. Evaluate architecture (see `playbooks/*.md` for project-type rules)
@@ -209,7 +214,7 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 7. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
 8. Write ordered implementation steps with file paths
 9. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-10. Carry `Task type`, `Risk tier`, `Controller intensity`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+10. Carry `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
 11. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/slice criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
 12. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
@@ -222,9 +227,9 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 
 ### Approval gate
 
-For small tasks, print the inline plan and continue directly to Build unless the task has unresolved ambiguity, user-requested approval, destructive operations, or scope-changing choices.
+For `plan_mode=inline`, print the inline plan and continue directly to Build. If ambiguity, user-requested approval, destructive operations, public contract/data/security impact, or scope-changing choices appear, return to Triage and promote to `approval_required`.
 
-For medium+ tasks, print: `>> WAITING: Plan approval required`
+For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`
 
 Present the plan and WAIT:
 ```
@@ -234,7 +239,7 @@ Review the plan:
 - Questions -- I'll address before proceeding
 ```
 
-Print: `--- PHASE: PLAN COMPLETE (approved) ---` for approved medium+ plans, or `--- PHASE: PLAN COMPLETE ---` for no-wait small plans.
+Print: `--- PHASE: PLAN COMPLETE (approved) ---` for approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for inline plans.
 
 ## Phase: Design (UI/UX only, skip for backend)
 
@@ -257,8 +262,9 @@ Print: `--- PHASE: BUILD ---`
 
 When `workflow_state_mode=journal`, create the task journal using
 `references/task-journal-template.md` and keep it current through Build. When
-`workflow_state_mode=inline`, keep the approved plan and evidence in the active
-packet without creating a journal. For cross-session handoffs when no task
+`workflow_state_mode=inline`, keep carried Discover scope/criteria, any
+applicable plan, and evidence in the active packet without creating a journal.
+For cross-session handoffs when no task
 journal exists, use `references/context-handoff-templates.md` and its context
 engineering contract: preserve pinned context exactly, summarize compressible
 logs/reasoning, prune stale or unsafe residue, and end with the exact next
@@ -269,7 +275,9 @@ Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay 
 Load `references/build-worker-protocol.md` for source-changing Build work. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
 evidence, the TDD sandwich, Code Writer unexpected blockers, and per-slice
-verification. Silent fallback cannot complete.
+verification. It also owns the ordinary bounded repair state with three total
+same-scope attempts and a two-attempt no-progress limit. Silent fallback cannot
+complete.
 
 For medium+ harness-capable work, confirm the task journal or carried-forward
 plan has compact refs for an accepted Done Contract, selected Harness Recipe,
@@ -338,12 +346,14 @@ For standard/strict work, run the stages in order:
    and require Spec Review PASS before quality review.
 2. Print `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`;
    load and follow `assistant-review` SKILL.md and contracts. Add Code Reviewer
-   to `Required agents` before Stage 2; use `Reviewer` only as compatibility
-   routing.
+   to `Required agents` before Stage 2; assistant-review solely owns Reviewer
+   and QAEvaluator packet schemas and any Reviewer compatibility routing.
 3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
 
-After review, enforce the applicable status gate and write the Verification
-Summary. Wait only when `manual_verification_mode=required`; optional manual
+After review, enforce the applicable status gate and write `review_result` as
+validated canonical assistant-review result/delegation refs plus the
+Verification Summary. Review owns independent reviewer evidence; it does
+not create the developer handoff. Wait only when `manual_verification_mode=required`; optional manual
 steps do not block and `not_required` proceeds directly to Document.
 
 Print: `--- PHASE: REVIEW COMPLETE ---`
@@ -355,7 +365,8 @@ Print: `--- PHASE: DOCUMENT ---`
 Load `references/completion-controller.md` and, for medium+ work,
 `references/final-handoff.md`. They own small/full Document paths,
 Learning Controller fields, optional reflexion/memory behavior, metrics JSON
-format, final harness refresh, and Verified Skill Distillation routing.
+format, final harness refresh, the sole developer handoff creation step, and
+Verified Skill Distillation routing.
 
 Use the controller-intensity path and the three completion modes. The Learning
 Controller is required only when `learning_capture_mode=required`, or when

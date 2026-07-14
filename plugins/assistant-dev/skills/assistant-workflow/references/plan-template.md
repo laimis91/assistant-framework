@@ -1,12 +1,13 @@
 # Plan Templates
 
-Three tiers — match ceremony to task size.
+Three tiers — match ceremony to `plan_mode` and task size. `plan_mode=none`
+does not load this template or create a plan artifact.
 
 Harness details live in optional appendices. Base plans keep compact refs only:
 load `references/plan-harness-appendix.md` for harness-capable work, otherwise
 record `N/A: [reason]`.
 
-## Small Tasks — Inline Plan
+## Small Tasks — Inline Plan (`plan_mode=inline`)
 
 No separate plan document needed. Include directly in your response:
 
@@ -57,7 +58,8 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - implementation_notes:
     - [existing pattern to follow, dependency rule, non-goal, or boundary]
 - Verification:
-  - Command: [exact command]
+  - verification_command: ["executable", "arg1", "arg2"]
+  - argv rule: [one literal argument per item; execute directly without shell parsing]
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
@@ -94,7 +96,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - files_to_test:
 - enabling_changes_included:
 - depends_on:
-- verification_command:
+- verification_command: ["executable", "arg1", "arg2"]
 - expected_success_signal:
 - evidence_to_record:
 - deviation_rollback_rule:
@@ -120,6 +122,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
+- Plan mode: [approval_required]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]

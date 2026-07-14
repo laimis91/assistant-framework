@@ -24,6 +24,10 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
+Migration note: assistant-review contracts are v2. Every Reviewer return and
+final summary now requires a non-empty `reviewed_scope` string array so workflow
+v3 can consume the producer packet without deriving or guessing its boundary.
+
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 
 If a selector is missing or invalid, apply `load_full_authoritative_file`: load the full named canonical file, validate the applicable rules, and record any recovery before proceeding.
@@ -38,6 +42,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 - Scope, mode, and review material are resolved before the loop.
 - Findings are severity-ranked with evidence and confidence.
+- Every Reviewer return names the non-empty `reviewed_scope` actually inspected.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
 - Validation and a fresh review follow fixes.
@@ -122,7 +127,7 @@ Present one summary using `contracts/output.yaml`. For no findings, say: "No mat
 
 ## Output
 
-Return rounds/result, evidence-backed findings and fixes, verification, applicable bugfix/agentic/behavioral/semantic checks, required QA result, and residual risk. `contracts/output.yaml` owns the exact schema.
+Return reviewed scope, rounds/result, evidence-backed findings and fixes, verification, applicable bugfix/agentic/behavioral/semantic checks, required QA result, and residual risk. `contracts/output.yaml` owns the exact schema.
 
 ## Stop Rules
 

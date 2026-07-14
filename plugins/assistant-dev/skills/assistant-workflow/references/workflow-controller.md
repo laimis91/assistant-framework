@@ -23,7 +23,7 @@ file centralizes decision boundaries that cut across phase details while
 - Load this reference from `assistant-workflow` when a task needs shared
   workflow routing or default decisions.
 - Use it before phase-specific detail when selecting `controller_intensity`,
-  `workflow_state_mode`, `manual_verification_mode`, `learning_capture_mode`,
+  `plan_mode`, `workflow_state_mode`, `manual_verification_mode`, `learning_capture_mode`,
   `harness_capable`, `qa_evaluation_mode`, movement direction, or review/QA
   ownership.
 - Keep the root `SKILL.md` outcome-shaped. Keep phase mechanics in
@@ -32,6 +32,18 @@ file centralizes decision boundaries that cut across phase details while
   routing decision has already set `harness_capable=true`.
 
 ## Routing Defaults
+
+- `plan_mode=none`: only trivial, localized, reversible, low-risk work with one
+  obvious implementation path, known files and verification, no material
+  ambiguity, and no public contract, data, security, destructive, or policy
+  concern. Discover carries the goal, scope, constraints, and verification
+  directly into Build; there is no plan artifact.
+- `plan_mode=inline`: bounded small work with more than one useful step but no
+  approval trigger. Record the compact plan and continue without waiting.
+- `plan_mode=approval_required`: all medium+ work and any task with high/critical
+  risk, destructive effects, public contract/data/security changes, material
+  architecture or scope choices, repository approval policy, or an explicit
+  user request. Wait for approval before Build.
 
 - `light`: small, low-risk, local work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant
@@ -44,9 +56,11 @@ file centralizes decision boundaries that cut across phase details while
 - `standard`: ordinary medium+ source-changing work defaults to
   `controller_intensity=standard`, `harness_capable=false`, and
   `qa_evaluation_mode=not_required`. It uses
-  `build_execution_lane=bounded_executor`: one edit/test owner plus independent
-  Code Reviewer. It requires an approved plan, Build verification, and
-  independent review, but no harness, split-worker, or QA ceremony by size.
+  `build_execution_lane=bounded_executor`: one edit/test owner during Build.
+  Review then independently dispatches Code Reviewer or records the allowed
+  fresh direct-fallback result. It requires an approved plan, Build
+  verification, and independent review, but no harness, split-worker, or QA
+  ceremony by size.
 - `strict`: select only for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
   explicit harness/QA criteria, or explicit strict control.
@@ -64,10 +78,17 @@ file centralizes decision boundaries that cut across phase details while
 
 Phase checkpoints are required only for `controller_intensity=strict`, explicit
 project policy, or a user request. Light and standard work use concise natural
-progress updates while still following the same logical phases and applicable
+progress updates while still following the same applicable phases and
 gates.
 
 ## State, Verification, and Learning Defaults
+
+- During Discover, apply deterministic safe defaults immediately and record
+  topic, value, source, and rationale with
+  `clarification_defaults_applied=true`; never ask for confirmation of a safe
+  default. Ask only when no safe default exists. A `defaults` reply remains
+  compatibility shorthand for accepting displayed recommendations on questions
+  that actually required a response; it is not automatic-default evidence.
 
 - Before using persisted state, load `references/task-state-reconciliation.md`.
   Compare the newest user request and current repository identity/evidence,
@@ -93,7 +114,7 @@ gates.
   requirements. Otherwise keep compact `acceptance_criteria`. Decomposition,
   task packets, review, and completion consume ids only when the map applies.
 - Move forward when required inputs are resolved, the current phase gate is
-  satisfied, standard/strict medium+ plans are approved before Build, and the
+  satisfied, approval-required plans are approved before Build, and the
   next action stays inside approved scope.
 - Step back to Discover when an implementation-shaping unknown appears that
   affects correctness, scope, behavior, data, public contract, security,
@@ -106,6 +127,12 @@ gates.
 - Replan when the approved packet is stale, a plan deviation changes scope, a
   Code Writer blocker requires `missing_contract` or `stale_plan` recovery, or
   a pivot/restart decision selects replan.
+- Ordinary non-harness Build repair is same-scope and bounded. Persist
+  `build_repair_state` with `max_attempts=3`, `no_progress_limit=2`, normalized
+  failure signatures, progress evidence, plan version,
+  `cumulative_attempt_count`, and terminal `terminal_route`. Redispatch,
+  compaction, or continuation never resets the cumulative same-scope count.
+  Reaching either bound terminates in pivot/replan/debugging or blocked.
 
 ## Harness Boundary
 
@@ -124,8 +151,9 @@ gates.
 ## Subagent, Review, and QA Separation
 
 - For ordinary medium standard work, Code Mapper maps context, one bounded
-  executor owns focused RED/GREEN/edit/test work, and an independent reviewer
-  is assigned. Code Reviewer reviews code quality, defects, security, architecture, and test coverage.
+  executor owns focused RED/GREEN/edit/test work in Build. After Build, Review
+  owns independent Code Reviewer dispatch/result evidence. Code Reviewer
+  reviews code quality, defects, security, architecture, and test coverage.
 - Use separated Code Writer and Builder/Tester only for high/critical risk,
   broad/noisy/environment-heavy verification, explicit independent TDD
   evidence, or explicit separation.

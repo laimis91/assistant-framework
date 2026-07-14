@@ -36,7 +36,7 @@ If you find no new issues above your confidence threshold, say "No new findings.
 
 ## Review process
 
-1. Re-read the approved plan (or lightweight plan for small tasks)
+1. Re-read the approved plan, or the carried Discover scope/criteria when `plan_mode=none`
 2. Diff the changes: `git diff main...HEAD` (or appropriate base branch)
 3. Walk through each checklist section below
 4. Produce the output: issues grouped by severity

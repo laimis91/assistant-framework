@@ -177,7 +177,7 @@ cat >"$single_slice_missing_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Fixture criterion is checked"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["dry-run result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -202,7 +202,7 @@ cat >"$single_slice_valid_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Fixture criterion is checked"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["dry-run result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -254,7 +254,8 @@ git -C "$decompose_branch_repo" init -q
 git -C "$decompose_branch_repo" config user.email "p0p4@example.invalid"
 git -C "$decompose_branch_repo" config user.name "P0 P4"
 printf 'fixture\n' >"$decompose_branch_repo/README.md"
-git -C "$decompose_branch_repo" add README.md
+printf '.worktrees/\n' >"$decompose_branch_repo/.gitignore"
+git -C "$decompose_branch_repo" add README.md .gitignore
 git -C "$decompose_branch_repo" commit -q -m init
 decompose_branch_base="$(git -C "$decompose_branch_repo" branch --show-current)"
 decompose_branch_manifest="$decompose_branch_repo/decomposition.json"
@@ -274,7 +275,7 @@ cat >"$decompose_branch_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Alpha fixture criterion is checked"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["non-dry-run branch result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -290,7 +291,7 @@ cat >"$decompose_branch_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": ["alpha-core"],
       "acceptance_criteria": ["Beta fixture criterion is checked"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["non-dry-run branch result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -298,10 +299,14 @@ cat >"$decompose_branch_manifest" <<'JSON'
   ]
 }
 JSON
-decompose_branch_out="$decompose_branch_repo/decompose.out"
-decompose_branch_err="$decompose_branch_repo/decompose.err"
-decompose_check_out="$decompose_branch_repo/check-integration.out"
-decompose_check_err="$decompose_branch_repo/check-integration.err"
+git -C "$decompose_branch_repo" add decomposition.json
+git -C "$decompose_branch_repo" commit -q -m "add decomposition fixture"
+decompose_runtime_output="$(mktemp -d "${TMPDIR:-/tmp}/workflow-decompose-runtime-output.XXXXXX")"
+p0p4_register_cleanup "$decompose_runtime_output"
+decompose_branch_out="$decompose_runtime_output/decompose.out"
+decompose_branch_err="$decompose_runtime_output/decompose.err"
+decompose_check_out="$decompose_runtime_output/check-integration.out"
+decompose_check_err="$decompose_runtime_output/check-integration.err"
 if ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task branch-safe --input "$decompose_branch_manifest" --base "$decompose_branch_base" >"$decompose_branch_out" 2>"$decompose_branch_err"); then
     fail "decompose.sh non-dry-run branch probe failed: $(tr '\n' ' ' <"$decompose_branch_err")"
 elif ! git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe/integration"; then
@@ -330,7 +335,9 @@ elif ! grep -Fq -- "Integration branch: feature/branch-safe/integration" "$decom
     fail "decompose summary did not record the new integration branch scheme"
 elif ! (cd "$decompose_branch_repo/.worktrees/alpha-core" && printf 'alpha output\n' >alpha.txt && git add alpha.txt && git commit -q -m "alpha output"); then
     fail "decompose branch probe could not create required slice output commit before integration readiness check"
-elif ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/branch-safe/integration --dry-run --skip-build >"$decompose_check_out" 2>"$decompose_check_err"); then
+elif ! (git -C "$decompose_branch_repo" add briefs && git -C "$decompose_branch_repo" commit -q -m "record slice briefs"); then
+    fail "decompose branch probe could not commit generated brief artifacts before clean integration validation"
+elif ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/branch-safe/integration --dry-run --skip-validation "contract fixture" >"$decompose_check_out" 2>"$decompose_check_err"); then
     fail "check-integration.sh did not accept the new integration branch scheme: $(tr '\n' ' ' <"$decompose_check_err")"
 elif ! grep -Fq -- "Found 1 slice branch(es)" "$decompose_check_out"; then
     fail "check-integration.sh did not discover the dependency-free slice branch"
@@ -351,14 +358,18 @@ git -C "$empty_slice_repo" add README.md
 git -C "$empty_slice_repo" commit -q -m init
 git -C "$empty_slice_repo" branch "feature/empty/integration"
 git -C "$empty_slice_repo" branch "feature/empty/slice-noop" "feature/empty/integration"
-empty_slice_out="$empty_slice_repo/check.out"
-empty_slice_err="$empty_slice_repo/check.err"
-if (cd "$empty_slice_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/empty/integration --dry-run --skip-build >"$empty_slice_out" 2>"$empty_slice_err"); then
+empty_slice_output="$(mktemp -d "${TMPDIR:-/tmp}/workflow-empty-slice-output.XXXXXX")"
+p0p4_register_cleanup "$empty_slice_output"
+empty_slice_out="$empty_slice_output/check.out"
+empty_slice_err="$empty_slice_output/check.err"
+if (cd "$empty_slice_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/empty/integration --dry-run --skip-validation "contract fixture" >"$empty_slice_out" 2>"$empty_slice_err"); then
     fail "check-integration.sh accepted an empty slice branch with no commits beyond integration"
 elif ! grep -Fq -- "no commits ahead of integration branch" "$empty_slice_err"; then
     fail "empty slice branch failure did not explain missing commits: $(tr '\n' ' ' <"$empty_slice_err")"
-elif ! grep -Fq -- "NOT READY for integration" "$empty_slice_out"; then
-    fail "empty slice branch failure did not report integration as not ready"
+elif grep -Eq -- "READY for integration|READY with warnings|NOT READY for integration" "$empty_slice_out"; then
+    fail "empty slice branch dry-run emitted a readiness verdict"
+elif ! grep -Fq -- "no readiness verdict" "$empty_slice_out"; then
+    fail "empty slice branch dry-run did not state that no readiness verdict was produced"
 else
     pass
 fi
@@ -379,9 +390,11 @@ git -C "$merged_slice_repo" add alpha.txt
 git -C "$merged_slice_repo" commit -q -m "alpha output"
 git -C "$merged_slice_repo" checkout -q "feature/merged/integration"
 git -C "$merged_slice_repo" merge --no-ff -q -m "merge alpha" "feature/merged/slice-alpha"
-merged_slice_out="$merged_slice_repo/check.out"
-merged_slice_err="$merged_slice_repo/check.err"
-if ! (cd "$merged_slice_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/merged/integration --dry-run --skip-build >"$merged_slice_out" 2>"$merged_slice_err"); then
+merged_slice_output="$(mktemp -d "${TMPDIR:-/tmp}/workflow-merged-slice-output.XXXXXX")"
+p0p4_register_cleanup "$merged_slice_output"
+merged_slice_out="$merged_slice_output/check.out"
+merged_slice_err="$merged_slice_output/check.err"
+if ! (cd "$merged_slice_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/merged/integration --dry-run --skip-validation "contract fixture" >"$merged_slice_out" 2>"$merged_slice_err"); then
     fail "check-integration.sh rejected an already merged slice branch: $(tr '\n' ' ' <"$merged_slice_err")"
 elif ! grep -Fq -- "already merged into integration branch" "$merged_slice_out"; then
     fail "merged slice branch success did not explain already-integrated status"
@@ -421,7 +434,7 @@ cat >"$unsafe_slice_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Bad id is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -437,7 +450,7 @@ cat >"$unsafe_slice_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Safe id is present"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -461,7 +474,7 @@ cat >"$duplicate_slice_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Duplicate one is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -477,7 +490,7 @@ cat >"$duplicate_slice_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Duplicate two is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -501,7 +514,7 @@ cat >"$unknown_dependency_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": [],
       "acceptance_criteria": ["Alpha is declared"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -517,7 +530,7 @@ cat >"$unknown_dependency_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": ["missing-id"],
       "acceptance_criteria": ["Unknown dependency is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -541,7 +554,7 @@ cat >"$self_dependency_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": ["alpha-id"],
       "acceptance_criteria": ["Self dependency is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -566,7 +579,7 @@ cat >"$cycle_dependency_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": ["beta-id"],
       "acceptance_criteria": ["Alpha cycle is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -582,7 +595,7 @@ cat >"$cycle_dependency_manifest" <<'JSON'
       "enabling_changes_included": [],
       "depends_on": ["alpha-id"],
       "acceptance_criteria": ["Beta cycle is rejected"],
-      "verification_command": "true",
+      "verification_command": ["true"],
       "expected_success_signal": "true exits 0",
       "evidence_to_record": ["validation result"],
       "deviation_rollback_rule": "Return DEVIATED rather than widening the slice"
@@ -776,7 +789,8 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
     "skills/assistant-workflow/references/phases.md|add Code Mapper to \`Required agents\`"
     "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
-    "skills/assistant-workflow/references/phases.md|\`Reviewer\` only as compatibility routing"
+    "skills/assistant-workflow/references/phases.md|\`assistant-review\` SKILL.md and contracts"
+    "skills/assistant-workflow/references/phases.md|any Reviewer compatibility routing"
     "skills/assistant-workflow/references/phases.md|subagent_execution_mode=delegated"
     "skills/assistant-workflow/references/build-worker-protocol.md|Direct fallback mode"
     "skills/assistant-workflow/references/build-worker-protocol.md|Silent fallback cannot complete"
@@ -1267,7 +1281,7 @@ for file in \
         "merge_verified_slice_into_integration" \
         "reported DONE/pass evidence" \
         "Created branch:" \
-        "Merged verified slice" \
+        "Promoted verified slice" \
         "Deferred:" \
         "Merge verified slice branches into feature/<task>/integration" \
         "Rerun deferred dependent slices with --verified-slices after prerequisites are merged" \
@@ -1353,7 +1367,8 @@ BRIEF
     cat >>"$brief_file" <<BRIEF
 - acceptance_criteria:
   - [ ] ${slice_id} criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - dry-run result
@@ -1430,7 +1445,8 @@ write_strict_probe_brief() {
   - none
 - acceptance_criteria:
   - [ ] ${slice_id} criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - dry-run result
@@ -1477,7 +1493,8 @@ cat >"$incomplete_briefs/slice-1-incomplete.md" <<BRIEF
   - none
 - acceptance_criteria:
   - [ ] incomplete criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - dry-run result
@@ -1511,7 +1528,8 @@ cat >"$unsafe_dependency_briefs/slice-1-beta.md" <<BRIEF
   - bad/id
 - acceptance_criteria:
   - [ ] beta criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - dry-run result
@@ -1623,6 +1641,10 @@ if [[ "$cwd_arg" == *$'\n'* || "$cwd_arg" == *"Created worktree"* || "$cwd_arg" 
     exit 65
 fi
 
+printf 'fake output for %s\n' "$slice_id" >"$cwd_arg/${slice_id}-marker.txt"
+git -C "$cwd_arg" add "${slice_id}-marker.txt"
+git -C "$cwd_arg" commit -q -m "${slice_id} fake output"
+
 printf '## Slice Status: DONE\n\n### Slice evidence\n- slice_id: %s\n- result: pass\n' "$slice_id"
 
 exit "${FAKE_AGENT_EXIT_CODE:-0}"
@@ -1655,7 +1677,8 @@ write_non_dry_runner_slice_brief() {
   - none
 - acceptance_criteria:
   - [ ] ${slice_id} criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - non-dry-run result
@@ -1675,9 +1698,11 @@ prepare_non_dry_runner_repo() {
     git -C "$repo" config user.email "p0p4@example.invalid"
     git -C "$repo" config user.name "P0 P4"
     printf 'fixture\n' >"$repo/README.md"
-    git -C "$repo" add README.md
+    printf '.worktrees/\n' >"$repo/.gitignore"
+    git -C "$repo" add README.md .gitignore
     git -C "$repo" commit -q -m init
-    git -C "$repo" branch "feature/runner/slice-${branch_slice_id}"
+    git -C "$repo" branch "feature/runner/integration"
+    git -C "$repo" branch "feature/runner/slice-${branch_slice_id}" "feature/runner/integration"
     write_non_dry_runner_slice_brief "$repo" "$slice_id" "$branch_slice_id"
 }
 
@@ -1886,7 +1911,8 @@ BRIEF
     cat >>"$brief_file" <<BRIEF
 - acceptance_criteria:
   - [ ] ${slice_id} criterion passes
-- verification_command: true
+- verification_command:
+  - true
 - expected_success_signal: true exits 0
 - evidence_to_record:
   - semantic result
@@ -1905,7 +1931,8 @@ prepare_semantic_runner_repo() {
     git -C "$repo" config user.email "p0p4@example.invalid"
     git -C "$repo" config user.name "P0 P4"
     printf 'fixture\n' >"$repo/README.md"
-    git -C "$repo" add README.md
+    printf '.worktrees/\n' >"$repo/.gitignore"
+    git -C "$repo" add README.md .gitignore
     git -C "$repo" commit -q -m init
     git -C "$repo" branch "feature/${task}/integration"
 }
@@ -1945,7 +1972,7 @@ elif ! PATH="$semantic_runner_agent_dir:$PATH" FAKE_SEMANTIC_MODE=pass-commit ba
     fail "run-agents.sh rejected DONE/pass semantic reports with committed slice output: $(tr '\n' ' ' <"$semantic_fresh_err")"
 elif ! grep -Fq -- "Agent 2: slice-2-beta" "$semantic_fresh_out"; then
     fail "run-agents.sh did not proceed to dependent beta after alpha DONE/pass verification"
-elif ! grep -Fq -- "Merged verified slice 'alpha' into feature/semantic-fresh/integration" "$semantic_fresh_out"; then
+elif ! grep -Fq -- "Promoted verified slice 'alpha' into feature/semantic-fresh/integration" "$semantic_fresh_out"; then
     fail "run-agents.sh did not merge alpha into integration before launching beta"
 elif ! git -C "$semantic_fresh_repo" show "feature/semantic-fresh/slice-beta:prereq-marker.txt" >/dev/null 2>&1; then
     fail "dependent beta branch was not created from integration containing alpha's committed marker"
@@ -1984,6 +2011,7 @@ prepare_external_prereq_branch() {
 
 prepare_semantic_runner_repo "$external_stale_repo" external-stale
 prepare_external_prereq_branch "$external_stale_repo" external-stale no
+write_semantic_slice_brief "$external_stale_repo" external-stale 1 alpha none
 write_semantic_slice_brief "$external_stale_repo" external-stale 2 beta alpha
 external_stale_out="$external_output_dir/stale.out"
 external_stale_err="$external_output_dir/stale.err"
@@ -1997,6 +2025,7 @@ external_skip_err="$external_output_dir/skip.err"
 
 prepare_semantic_runner_repo "$external_merged_repo" external-merged
 prepare_external_prereq_branch "$external_merged_repo" external-merged yes
+write_semantic_slice_brief "$external_merged_repo" external-merged 1 alpha none
 write_semantic_slice_brief "$external_merged_repo" external-merged 2 beta alpha
 external_merged_out="$external_output_dir/merged.out"
 external_merged_err="$external_output_dir/merged.err"
@@ -2006,6 +2035,7 @@ git -C "$external_stale_branch_repo" branch "feature/external-stale-branch/slice
 mkdir -p "$external_stale_branch_repo/.worktrees"
 git -C "$external_stale_branch_repo" worktree add "$external_stale_branch_repo/.worktrees/beta" "feature/external-stale-branch/slice-beta" --quiet
 prepare_external_prereq_branch "$external_stale_branch_repo" external-stale-branch yes
+write_semantic_slice_brief "$external_stale_branch_repo" external-stale-branch 1 alpha none
 write_semantic_slice_brief "$external_stale_branch_repo" external-stale-branch 2 beta alpha
 external_stale_branch_out="$external_output_dir/stale-branch.out"
 external_stale_branch_err="$external_output_dir/stale-branch.err"
@@ -2024,7 +2054,7 @@ elif grep -Fq -- "Agent 2: slice-2-beta" "$external_skip_out"; then
     fail "--skip-first stale prerequisite launched dependent beta before proof passed"
 elif ! bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$external_merged_repo/briefs" --repo "$external_merged_repo" --verified-slices alpha --dry-run >"$external_merged_out" 2>"$external_merged_err"; then
     fail "run-agents.sh rejected --verified-slices alpha after alpha was merged into integration: $(tr '\n' ' ' <"$external_merged_err")"
-elif ! grep -Fq -- "Agent 1: slice-2-beta" "$external_merged_out"; then
+elif ! grep -Fq -- "Agent 2: slice-2-beta" "$external_merged_out"; then
     fail "run-agents.sh did not launch beta after externally verified alpha proof passed"
 elif ! grep -Fq -- "git branch feature/external-merged/slice-beta feature/external-merged/integration" "$external_merged_err"; then
     fail "run-agents.sh did not create beta branch from integration after external proof passed"
