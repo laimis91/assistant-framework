@@ -21,15 +21,21 @@ context_budget_build_evidence() {
       --slurpfile baseline "$baseline_report" \
       --slurpfile candidate "$candidate_report" '
       def standing_components($report): {
-        project_agents:$report.components.project_agents.words,
-        generated_global_agents:$report.components.generated_global_agents.words,
-        generated_memory_protocol:$report.components.generated_memory_protocol.words,
-        native_skill_catalog_descriptions:$report.components.native_skill_catalog_descriptions.words
+        project_agents:$report.components.project_agents,
+        generated_global_agents:$report.components.generated_global_agents,
+        generated_memory_protocol:$report.components.generated_memory_protocol,
+        native_skill_catalog_descriptions:$report.components.native_skill_catalog_descriptions
       };
-      {
-        baseline:standing_components($baseline[0]),
-        candidate:standing_components($candidate[0])
-      }
+      standing_components($baseline[0]) as $baseline_components
+      | standing_components($candidate[0]) as $candidate_components
+      | {
+          baseline:$baseline_components,
+          candidate_matches_baseline:($candidate_components == $baseline_components)
+        }
+      + if $candidate_components == $baseline_components
+        then {}
+        else {candidate:$candidate_components}
+        end
     ')" || {
         rm -rf "$temporary"
         return 1

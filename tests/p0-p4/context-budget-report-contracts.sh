@@ -259,6 +259,28 @@ else
     fail "context report is missing numeric component fields or exposed a raw secret/prompt field"
 fi
 
+test_start "native skill catalog reports bounded per-skill counts"
+expected_catalog_entry_count="$(find "$FRAMEWORK_DIR/skills" \
+    -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print \
+    | wc -l | tr -d '[:space:]')"
+if jq -e --argjson expected_count "$expected_catalog_entry_count" '
+      .components.native_skill_catalog_descriptions as $catalog
+      | ($catalog.entries | length) == $expected_count
+      and ($catalog.entries | all(
+        (keys_unsorted | sort) == ["bytes", "skill", "words"]
+        and (.skill | test("^assistant-[a-z0-9-]+$"))
+        and (.words | type == "number" and . >= 0 and . == floor)
+        and (.bytes | type == "number" and . >= 0 and . == floor)
+      ))
+      and ([ $catalog.entries[].skill ] | unique | length) == ($catalog.entries | length)
+      and ([ $catalog.entries[].words ] | add) == $catalog.words
+      and ([ $catalog.entries[].bytes ] | add) == $catalog.bytes
+    ' "$report_output" >/dev/null; then
+    pass
+else
+    fail "native skill catalog omitted its content-free per-skill count inventory"
+fi
+
 test_start "context report totals are internally consistent for initial and entry boundaries"
 if jq -e '
     def standing_words:
@@ -499,10 +521,15 @@ jq -n \
     --argjson selected_entry "\$selected_entry" '
     {
       components:{
-        project_agents:{words:254},
-        generated_global_agents:{words:267},
-        generated_memory_protocol:{words:160},
-        native_skill_catalog_descriptions:{words:286},
+        project_agents:{words:254,bytes:2186},
+        generated_global_agents:{words:267,bytes:1900},
+        generated_memory_protocol:{words:160,bytes:1228},
+        native_skill_catalog_descriptions:{
+          words:286,
+          bytes:2101,
+          characters:2101,
+          entries:[{skill:"assistant-example",words:286,bytes:2101}]
+        },
         selected_skill_initial:{words:\$selected_initial},
         selected_skill_entry_boundary:{words:\$selected_entry}
       },
@@ -513,7 +540,7 @@ jq -n \
     }'
 EOF
 chmod +x "$component_reporter"
-expected_components='{"baseline":{"project_agents":254,"generated_global_agents":267,"generated_memory_protocol":160,"native_skill_catalog_descriptions":286},"candidate":{"project_agents":254,"generated_global_agents":267,"generated_memory_protocol":160,"native_skill_catalog_descriptions":286}}'
+expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"generated_global_agents":{"words":267,"bytes":1900},"generated_memory_protocol":{"words":160,"bytes":1228},"native_skill_catalog_descriptions":{"words":286,"bytes":2101,"characters":2101,"entries":[{"skill":"assistant-example","words":286,"bytes":2101}]}},"candidate_matches_baseline":true}'
 if (source "$context_evidence_lib"; \
     hash_file() { printf '%064d\n' 0; }; \
     context_budget_build_evidence \
