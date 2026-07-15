@@ -91,19 +91,26 @@ context_budget_validate_promotion_policy() {
 
 context_budget_validate_manifest() {
     local manifest="$1" evidence="$2"
-    jq -e --slurpfile evidence "$evidence" '
+    local mismatch
+    mismatch="$(jq -c --slurpfile evidence "$evidence" '
       . as $manifest | $evidence[0] as $e
-      | .promotion_gates.selected_initial_words_max == 1000
-      and .promotion_gates.selected_entry_words_max == 2600
-      and .promotion_gates.standing_context_growth_allowed == false
-      and .static_measurement.baseline_selected_initial_words == $e.baseline.selected_initial_words
-      and .static_measurement.candidate_selected_initial_words == $e.candidate.selected_initial_words
-      and .static_measurement.baseline_total_initial_words == $e.baseline.total_initial_words
-      and .static_measurement.candidate_total_initial_words == $e.candidate.total_initial_words
-      and .static_measurement.baseline_selected_entry_words == $e.baseline.selected_entry_words
-      and .static_measurement.candidate_selected_entry_words == $e.candidate.selected_entry_words
-      and .static_measurement.selected_initial_word_delta == $e.deltas.selected_initial_words
-      and .static_measurement.selected_entry_word_delta == $e.deltas.selected_entry_words
-      and .static_measurement.standing_context_growth == $e.deltas.standing_initial_words
-    ' "$manifest" >/dev/null
+      | {
+          selected_initial_words_max:{manifest:.promotion_gates.selected_initial_words_max,evidence:1000},
+          selected_entry_words_max:{manifest:.promotion_gates.selected_entry_words_max,evidence:2600},
+          standing_context_growth_allowed:{manifest:.promotion_gates.standing_context_growth_allowed,evidence:false},
+          baseline_selected_initial_words:{manifest:.static_measurement.baseline_selected_initial_words,evidence:$e.baseline.selected_initial_words},
+          candidate_selected_initial_words:{manifest:.static_measurement.candidate_selected_initial_words,evidence:$e.candidate.selected_initial_words},
+          baseline_total_initial_words:{manifest:.static_measurement.baseline_total_initial_words,evidence:$e.baseline.total_initial_words},
+          candidate_total_initial_words:{manifest:.static_measurement.candidate_total_initial_words,evidence:$e.candidate.total_initial_words},
+          baseline_selected_entry_words:{manifest:.static_measurement.baseline_selected_entry_words,evidence:$e.baseline.selected_entry_words},
+          candidate_selected_entry_words:{manifest:.static_measurement.candidate_selected_entry_words,evidence:$e.candidate.selected_entry_words},
+          selected_initial_word_delta:{manifest:.static_measurement.selected_initial_word_delta,evidence:$e.deltas.selected_initial_words},
+          selected_entry_word_delta:{manifest:.static_measurement.selected_entry_word_delta,evidence:$e.deltas.selected_entry_words},
+          standing_context_growth:{manifest:.static_measurement.standing_context_growth,evidence:$e.deltas.standing_initial_words}
+        }
+      | with_entries(select(.value.manifest != .value.evidence))
+    ' "$manifest")" || return 1
+    [[ "$mismatch" != "{}" ]] || return 0
+    printf 'Context budget manifest mismatch: %s\n' "$mismatch" >&2
+    return 1
 }

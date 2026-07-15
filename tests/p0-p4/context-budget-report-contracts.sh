@@ -379,4 +379,47 @@ else
     fail "structural evidence validation and workflow-kernel promotion policy were not separated"
 fi
 
+test_start "manifest mismatch diagnostics expose expected and actual counts only"
+diagnostic_manifest="$(mktemp "${TMPDIR:-/tmp}/context-budget-diagnostic-manifest.XXXXXX")"
+diagnostic_evidence="$(mktemp "${TMPDIR:-/tmp}/context-budget-diagnostic-evidence.XXXXXX")"
+diagnostic_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-diagnostic-error.XXXXXX")"
+p0p4_register_cleanup "$diagnostic_manifest" "$diagnostic_evidence" "$diagnostic_error"
+jq '.static_measurement.candidate_selected_entry_words += 1' \
+    "$kernel_manifest" >"$diagnostic_manifest"
+jq -cnS --slurpfile manifest "$kernel_manifest" '
+  $manifest[0].static_measurement as $m
+  | {
+      baseline:{
+        selected_initial_words:$m.baseline_selected_initial_words,
+        total_initial_words:$m.baseline_total_initial_words,
+        selected_entry_words:$m.baseline_selected_entry_words
+      },
+      candidate:{
+        selected_initial_words:$m.candidate_selected_initial_words,
+        total_initial_words:$m.candidate_total_initial_words,
+        selected_entry_words:$m.candidate_selected_entry_words
+      },
+      deltas:{
+        selected_initial_words:$m.selected_initial_word_delta,
+        selected_entry_words:$m.selected_entry_word_delta,
+        standing_initial_words:$m.standing_context_growth
+      }
+    }
+' >"$diagnostic_evidence"
+diagnostic_manifest_value="$(jq -r '.static_measurement.candidate_selected_entry_words' "$diagnostic_manifest")"
+diagnostic_evidence_value="$(jq -r '.candidate.selected_entry_words' "$diagnostic_evidence")"
+expected_diagnostic="$(jq -cn \
+    --argjson manifest "$diagnostic_manifest_value" \
+    --argjson evidence "$diagnostic_evidence_value" \
+    '{candidate_selected_entry_words:{manifest:$manifest,evidence:$evidence}}')"
+if (source "$context_evidence_lib"; \
+    context_budget_validate_manifest "$diagnostic_manifest" "$diagnostic_evidence" \
+        2>"$diagnostic_error"); then
+    fail "context budget validator accepted a mismatched candidate entry count"
+elif grep -Fxq -- "Context budget manifest mismatch: $expected_diagnostic" "$diagnostic_error"; then
+    pass
+else
+    fail "context budget mismatch did not emit a count-only expected-versus-actual diagnostic"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
