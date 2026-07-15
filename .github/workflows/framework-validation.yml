@@ -20,11 +20,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+
       - name: Verify runner prerequisites
         run: |
           command -v bash
           command -v git
           command -v jq
+          command -v rg
           command -v rsync
 
       - name: Run aggregate framework contracts

@@ -55,6 +55,35 @@ else
     fail "general CI contract violations: ${framework_validation_failures[*]}"
 fi
 
+test_start "general CI installs and verifies ripgrep before repository contracts"
+ripgrep_setup_failures=()
+if [[ ! -f "$framework_validation_workflow" ]]; then
+    ripgrep_setup_failures+=("missing .github/workflows/framework-validation.yml")
+else
+    ripgrep_update_line="$(grep -nF -- "sudo apt-get update" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    ripgrep_install_line="$(grep -nF -- "sudo apt-get install --yes --no-install-recommends ripgrep" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    ripgrep_verify_line="$(grep -nF -- "command -v rg" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    aggregate_contract_line="$(grep -nF -- "run: ./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+
+    [[ -n "$ripgrep_update_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing apt metadata refresh")
+    [[ -n "$ripgrep_install_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing minimal ripgrep install")
+    [[ -n "$ripgrep_verify_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing rg prerequisite check")
+    [[ -n "$aggregate_contract_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing aggregate contract step")
+
+    if [[ -n "$ripgrep_update_line" && -n "$ripgrep_install_line" && -n "$ripgrep_verify_line" && -n "$aggregate_contract_line" ]]; then
+        if ! (( ripgrep_update_line < ripgrep_install_line
+            && ripgrep_install_line < ripgrep_verify_line
+            && ripgrep_verify_line < aggregate_contract_line )); then
+            ripgrep_setup_failures+=("framework-validation.yml: ripgrep setup and verification must precede aggregate contracts")
+        fi
+    fi
+fi
+if [[ "${#ripgrep_setup_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "general CI ripgrep setup violations: ${ripgrep_setup_failures[*]}"
+fi
+
 if [[ -z "${P0P4_DIRECT_RUN_GUARD:-}" ]]; then
     test_start "top-level P0-P4 suites are directly runnable"
     direct_run_tmp="$(mktemp -d)"
