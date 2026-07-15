@@ -16,6 +16,14 @@ else
     fail "context budget reporter is missing or not executable: $context_report"
 fi
 
+test_start "context budget reporter rejects the non-portable awk quote escape"
+nonportable_quote_trim='gsub(/^[[:space:]\"\047]+|[[:space:]\"\047]+$/, "", value)'
+if grep -Fq -- "$nonportable_quote_trim" "$context_report"; then
+    fail "context budget reporter escapes a double quote inside an awk regex"
+else
+    pass
+fi
+
 test_start "context budget reporter documents required CLI modes"
 context_help=""
 if [[ -x "$context_report" ]]; then

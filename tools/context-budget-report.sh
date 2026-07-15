@@ -177,7 +177,7 @@ append_selected_contract_items() {
         marker = "  - " key ":"
         if (index(line, marker) == 1) {
           value = substr(line, length(marker) + 1)
-          gsub(/^[[:space:]\"\047]+|[[:space:]\"\047]+$/, "", value)
+          gsub(/^[[:space:]"\047]+|[[:space:]"\047]+$/, "", value)
           if (wanted[value]) keep = 1
         }
       }
