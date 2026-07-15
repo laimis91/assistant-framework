@@ -66,6 +66,9 @@ no_index_report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-no-index-home.
 no_index_report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-report.XXXXXX")"
 no_index_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-error.XXXXXX")"
 bash_interceptor_dir="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-bash-interceptor.XXXXXX")"
+wc_interceptor_dir="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-wc-interceptor.XXXXXX")"
+wc_interceptor_marker="$wc_interceptor_dir/word-count-called"
+wc_interceptor_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-wc-report.XXXXXX")"
 overlay_skill="$(mktemp "${TMPDIR:-/tmp}/context-budget-overlay.XXXXXX")"
 overlay_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-overlay-report.XXXXXX")"
 p0p4_register_cleanup \
@@ -83,6 +86,8 @@ p0p4_register_cleanup \
     "$no_index_report_output" \
     "$no_index_report_error" \
     "$bash_interceptor_dir" \
+    "$wc_interceptor_dir" \
+    "$wc_interceptor_report" \
     "$overlay_skill" \
     "$overlay_report"
 
@@ -111,6 +116,19 @@ exec /bin/bash "$@"
 EOF
 chmod +x "$bash_interceptor_dir/bash"
 
+cat >"$wc_interceptor_dir/wc" <<'EOF'
+#!/bin/bash
+
+if [[ "${1:-}" == "-w" ]]; then
+    : >"${CONTEXT_BUDGET_WC_MARKER:?}"
+    printf '999\n'
+    exit 0
+fi
+
+exec /usr/bin/wc "$@"
+EOF
+chmod +x "$wc_interceptor_dir/wc"
+
 test_start "native Codex context report emits isolated machine-readable inventory"
 if HOME="$report_home" \
     OPENAI_API_KEY="secret-fixture-value" \
@@ -130,6 +148,32 @@ if HOME="$report_home" \
     pass
 else
     fail "context reporter did not emit valid JSON identity/inventory metadata for native Codex"
+fi
+
+test_start "context reporter word counts are independent of platform wc"
+rm -f "$wc_interceptor_marker"
+if HOME="$report_home" \
+    PATH="$wc_interceptor_dir:$PATH" \
+    CONTEXT_BUDGET_WC_MARKER="$wc_interceptor_marker" \
+    "$context_report" \
+        --agent codex \
+        --skill assistant-workflow \
+        --format json \
+        >"$wc_interceptor_report" 2>"$report_error" \
+    && [[ ! -e "$wc_interceptor_marker" ]] \
+    && jq -e --slurpfile canonical "$report_output" '
+        .components.project_agents.words == $canonical[0].components.project_agents.words
+        and .components.generated_global_agents.words == $canonical[0].components.generated_global_agents.words
+        and .components.generated_memory_protocol.words == $canonical[0].components.generated_memory_protocol.words
+        and .components.native_skill_catalog_descriptions.words == $canonical[0].components.native_skill_catalog_descriptions.words
+        and .components.selected_skill_initial.words == $canonical[0].components.selected_skill_initial.words
+        and .components.selected_skill_entry_boundary.words == $canonical[0].components.selected_skill_entry_boundary.words
+        and .totals.initial_words == $canonical[0].totals.initial_words
+        and .totals.entry_boundary_words == $canonical[0].totals.entry_boundary_words
+    ' "$wc_interceptor_report" >/dev/null; then
+    pass
+else
+    fail "context reporter word measurements changed with the host wc implementation"
 fi
 
 test_start "context reporter rejects unsupported non-Codex agents clearly"

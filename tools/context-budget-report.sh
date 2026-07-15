@@ -56,7 +56,7 @@ measure_file() {
         return
     fi
     printf '%s %s\n' \
-        "$(wc -w <"$path" | tr -d ' ')" \
+        "$(awk '{ words += NF } END { print words + 0 }' "$path")" \
         "$(wc -c <"$path" | tr -d ' ')"
 }
 
