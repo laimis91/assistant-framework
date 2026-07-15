@@ -466,4 +466,66 @@ else
     fail "context budget mismatch did not emit a count-only expected-versus-actual diagnostic"
 fi
 
+test_start "manifest mismatch diagnostics identify the divergent standing component"
+component_reporter="$(mktemp "${TMPDIR:-/tmp}/context-budget-component-reporter.XXXXXX")"
+component_baseline_overlay="$(mktemp "${TMPDIR:-/tmp}/context-budget-component-baseline.XXXXXX")"
+component_candidate_overlay="$(mktemp "${TMPDIR:-/tmp}/context-budget-component-candidate.XXXXXX")"
+component_evidence="$(mktemp "${TMPDIR:-/tmp}/context-budget-component-evidence.XXXXXX")"
+component_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-component-error.XXXXXX")"
+p0p4_register_cleanup \
+    "$component_reporter" "$component_baseline_overlay" "$component_candidate_overlay" \
+    "$component_evidence" "$component_error"
+cat >"$component_reporter" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+overlay=""
+while [[ \$# -gt 0 ]]; do
+    if [[ "\$1" == "--skill-overlay" ]]; then
+        overlay="\$2"
+        shift 2
+    else
+        shift
+    fi
+done
+if [[ "\$overlay" == "$component_baseline_overlay" ]]; then
+    selected_initial=1676
+    selected_entry=3223
+else
+    selected_initial=978
+    selected_entry=2525
+fi
+jq -n \
+    --argjson selected_initial "\$selected_initial" \
+    --argjson selected_entry "\$selected_entry" '
+    {
+      components:{
+        project_agents:{words:254},
+        generated_global_agents:{words:267},
+        generated_memory_protocol:{words:160},
+        native_skill_catalog_descriptions:{words:286},
+        selected_skill_initial:{words:\$selected_initial},
+        selected_skill_entry_boundary:{words:\$selected_entry}
+      },
+      totals:{
+        initial_words:(\$selected_initial + 967),
+        entry_boundary_words:(\$selected_entry + 967)
+      }
+    }'
+EOF
+chmod +x "$component_reporter"
+expected_components='{"baseline":{"project_agents":254,"generated_global_agents":267,"generated_memory_protocol":160,"native_skill_catalog_descriptions":286},"candidate":{"project_agents":254,"generated_global_agents":267,"generated_memory_protocol":160,"native_skill_catalog_descriptions":286}}'
+if (source "$context_evidence_lib"; \
+    hash_file() { printf '%064d\n' 0; }; \
+    context_budget_build_evidence \
+        "$component_reporter" "$component_baseline_overlay" "$component_candidate_overlay" \
+        "$(printf '%064d' 1)" "$(printf '%064d' 2)" "$component_evidence" \
+    && context_budget_validate_manifest "$kernel_manifest" "$component_evidence" \
+        2>"$component_error"); then
+    fail "context budget validator accepted divergent standing components"
+elif grep -Fxq -- "Context budget standing components: $expected_components" "$component_error"; then
+    pass
+else
+    fail "context budget mismatch did not identify the divergent standing component"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

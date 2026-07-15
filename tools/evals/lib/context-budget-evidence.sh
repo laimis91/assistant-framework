@@ -5,6 +5,7 @@ context_budget_build_evidence() {
     local reporter="$1" baseline_overlay="$2" candidate_overlay="$3"
     local baseline_instruction_hash="$4" candidate_instruction_hash="$5" destination="$6"
     local temporary baseline_report candidate_report
+    CONTEXT_BUDGET_STANDING_COMPONENT_DIAGNOSTIC=""
     [[ -x "$reporter" ]] || return 1
     temporary="$(mktemp -d "${TMPDIR:-/tmp}/framework-context-evidence.XXXXXX")" || return 1
     baseline_report="$temporary/baseline.json"
@@ -16,6 +17,23 @@ context_budget_build_evidence() {
         rm -rf "$temporary"
         return 1
     fi
+    CONTEXT_BUDGET_STANDING_COMPONENT_DIAGNOSTIC="$(jq -cn \
+      --slurpfile baseline "$baseline_report" \
+      --slurpfile candidate "$candidate_report" '
+      def standing_components($report): {
+        project_agents:$report.components.project_agents.words,
+        generated_global_agents:$report.components.generated_global_agents.words,
+        generated_memory_protocol:$report.components.generated_memory_protocol.words,
+        native_skill_catalog_descriptions:$report.components.native_skill_catalog_descriptions.words
+      };
+      {
+        baseline:standing_components($baseline[0]),
+        candidate:standing_components($candidate[0])
+      }
+    ')" || {
+        rm -rf "$temporary"
+        return 1
+    }
     jq -cnS \
       --arg reporter_sha256 "$(hash_file "$reporter")" \
       --arg baseline_instruction_sha256 "$baseline_instruction_hash" \
@@ -112,5 +130,9 @@ context_budget_validate_manifest() {
     ' "$manifest")" || return 1
     [[ "$mismatch" != "{}" ]] || return 0
     printf 'Context budget manifest mismatch: %s\n' "$mismatch" >&2
+    if [[ -n "${CONTEXT_BUDGET_STANDING_COMPONENT_DIAGNOSTIC:-}" ]]; then
+        printf 'Context budget standing components: %s\n' \
+            "$CONTEXT_BUDGET_STANDING_COMPONENT_DIAGNOSTIC" >&2
+    fi
     return 1
 }
