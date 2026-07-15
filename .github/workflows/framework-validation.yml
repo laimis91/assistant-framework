@@ -1,0 +1,61 @@
+name: Framework validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  framework-contracts:
+    name: Framework contracts and installs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify runner prerequisites
+        run: |
+          command -v bash
+          command -v git
+          command -v jq
+          command -v rsync
+
+      - name: Run aggregate framework contracts
+        run: ./tests/test-p0-p4-contracts.sh
+
+      - name: Validate skills
+        run: tools/skills/validate-skills.sh
+
+      - name: Verify generated plugin mirrors
+        run: tools/plugins/sync-plugin-skills.sh --check
+
+      - name: Verify Unix installer dry-runs
+        run: |
+          ./install.sh --agent codex --dry-run
+          ./install.sh --agent claude --dry-run
+          ./install.sh --agent gemini --dry-run
+
+  memory-graph:
+    name: Memory Graph tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run Memory Graph tests
+        run: dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal

@@ -177,7 +177,7 @@ require_terms "harness runtime reference" "$harness_runtime_ref" \
     "## Artifact Reference Ledger" \
     "## Pivot/Restart Controller" \
     "Missing run-state/trace/replay evidence"
-require_terms "workflow controller review QA separation" "$workflow_controller_ref" \
+require_normalized_terms "workflow controller review QA separation" "$workflow_controller_ref" \
     "Code Reviewer and QA Evaluator responsibilities stay separate" \
     "Code Reviewer reviews code quality, defects, security, architecture, and test" \
     "QA Evaluator runs only when \`qa_evaluation_mode=required\`"

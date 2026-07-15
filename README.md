@@ -433,6 +433,11 @@ fixture:
 ./tests/test-p0-p4-contracts.sh
 ```
 
+Pull requests and pushes to `main` also run
+`.github/workflows/framework-validation.yml`, which executes the aggregate
+contracts, skill and generated-mirror checks, all three Unix installer
+dry-runs, and the Memory Graph tests on a hosted Linux runner.
+
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,
 focused revalidation pass, a fresh exact review pass, then final handoff. Its
@@ -442,15 +447,15 @@ repair. The runner accepts only exact trusted command forms and inspects
 temporary Codex JSONL events before deleting them.
 
 These deterministic repository checks validate the framework mechanics; they
-do not by themselves prove current model behavior or hosted Windows behavior.
+do not by themselves prove current model behavior. Hosted Windows PowerShell
+5.1 and PowerShell 7 have both run the committed Windows contracts successfully
+for this architecture; changes to those surfaces must rerun the hosted workflow.
 The previously recorded Terra snapshot predates the changed fixture and grader
 and remains historical, non-promoting evidence. A new live promotion claim
 requires fresh authorization for the exact four-call smoke and, if it passes,
 separate authorization for the six-case, three-repeat, two-variant pilot
 (36 calls / 18 pairs). Every automatic and human gate in
-`docs/evals/README.md` must pass. Native Windows PowerShell 5.1 and 7 remain an
-external CI/manual verification boundary until those environments run the
-committed Windows contracts.
+`docs/evals/README.md` must pass.
 
 ## Structure
 
