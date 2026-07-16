@@ -24,6 +24,31 @@ else
     pass
 fi
 
+test_start "context reporter anchors catalog discovery below the skills root"
+catalog_path_fixture="$(mktemp -d "${TMPDIR:-/tmp}/assistant-framework.XXXXXX")"
+p0p4_register_cleanup "$catalog_path_fixture"
+mkdir -p \
+    "$catalog_path_fixture/skills/assistant-real" \
+    "$catalog_path_fixture/skills/unity-temporary"
+printf '%s\n' '---' 'name: assistant-real' 'description: "Real"' '---' \
+    >"$catalog_path_fixture/skills/assistant-real/SKILL.md"
+printf '%s\n' '---' 'name: unity-temporary' 'description: "Temporary"' '---' \
+    >"$catalog_path_fixture/skills/unity-temporary/SKILL.md"
+unsafe_catalog_match_count="$(find "$catalog_path_fixture/skills" \
+    -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print \
+    | wc -l | tr -d '[:space:]')"
+safe_catalog_matches="$(cd "$catalog_path_fixture" \
+    && find skills -mindepth 2 -maxdepth 2 -type f \
+        -path 'skills/assistant-*/SKILL.md' -print | LC_ALL=C sort)"
+if [[ "$unsafe_catalog_match_count" -eq 2 ]] \
+    && [[ "$safe_catalog_matches" == "skills/assistant-real/SKILL.md" ]] \
+    && ! grep -Fq -- "-path '*/assistant-*/SKILL.md'" "$context_report" \
+    && grep -Fq -- "-path 'skills/assistant-*/SKILL.md'" "$context_report"; then
+    pass
+else
+    fail "context reporter catalog discovery is sensitive to an assistant-prefixed repository path"
+fi
+
 test_start "context budget reporter documents required CLI modes"
 context_help=""
 if [[ -x "$context_report" ]]; then
@@ -257,28 +282,6 @@ if jq -e '
     pass
 else
     fail "context report is missing numeric component fields or exposed a raw secret/prompt field"
-fi
-
-test_start "native skill catalog reports bounded per-skill counts"
-expected_catalog_entry_count="$(find "$FRAMEWORK_DIR/skills" \
-    -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print \
-    | wc -l | tr -d '[:space:]')"
-if jq -e --argjson expected_count "$expected_catalog_entry_count" '
-      .components.native_skill_catalog_descriptions as $catalog
-      | ($catalog.entries | length) == $expected_count
-      and ($catalog.entries | all(
-        (keys_unsorted | sort) == ["bytes", "skill", "words"]
-        and (.skill | test("^assistant-[a-z0-9-]+$"))
-        and (.words | type == "number" and . >= 0 and . == floor)
-        and (.bytes | type == "number" and . >= 0 and . == floor)
-      ))
-      and ([ $catalog.entries[].skill ] | unique | length) == ($catalog.entries | length)
-      and ([ $catalog.entries[].words ] | add) == $catalog.words
-      and ([ $catalog.entries[].bytes ] | add) == $catalog.bytes
-    ' "$report_output" >/dev/null; then
-    pass
-else
-    fail "native skill catalog omitted its content-free per-skill count inventory"
 fi
 
 test_start "context report totals are internally consistent for initial and entry boundaries"
@@ -527,8 +530,7 @@ jq -n \
         native_skill_catalog_descriptions:{
           words:286,
           bytes:2101,
-          characters:2101,
-          entries:[{skill:"assistant-example",words:286,bytes:2101}]
+          characters:2101
         },
         selected_skill_initial:{words:\$selected_initial},
         selected_skill_entry_boundary:{words:\$selected_entry}
@@ -540,7 +542,7 @@ jq -n \
     }'
 EOF
 chmod +x "$component_reporter"
-expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"generated_global_agents":{"words":267,"bytes":1900},"generated_memory_protocol":{"words":160,"bytes":1228},"native_skill_catalog_descriptions":{"words":286,"bytes":2101,"characters":2101,"entries":[{"skill":"assistant-example","words":286,"bytes":2101}]}},"candidate_matches_baseline":true}'
+expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"generated_global_agents":{"words":267,"bytes":1900},"generated_memory_protocol":{"words":160,"bytes":1228},"native_skill_catalog_descriptions":{"words":286,"bytes":2101,"characters":2101}},"candidate_matches_baseline":true}'
 if (source "$context_evidence_lib"; \
     hash_file() { printf '%064d\n' 0; }; \
     context_budget_build_evidence \

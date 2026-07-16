@@ -294,22 +294,14 @@ extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \
     "$MEMORY_BLOCK"
 
 CATALOG_FILE="$WORK_ROOT/native-skill-catalog-descriptions.txt"
-CATALOG_ENTRIES_FILE="$WORK_ROOT/native-skill-catalog-entries.jsonl"
-CATALOG_DESCRIPTION_FILE="$WORK_ROOT/native-skill-catalog-description.txt"
 : >"$CATALOG_FILE"
-: >"$CATALOG_ENTRIES_FILE"
-while IFS= read -r skill_file; do
-    extract_skill_description "$skill_file" >"$CATALOG_DESCRIPTION_FILE"
-    cat "$CATALOG_DESCRIPTION_FILE" >>"$CATALOG_FILE"
-    read -r CATALOG_ENTRY_WORDS CATALOG_ENTRY_BYTES \
-        < <(measure_file "$CATALOG_DESCRIPTION_FILE")
-    jq -cn \
-        --arg skill "$(basename "$(dirname "$skill_file")")" \
-        --argjson words "$CATALOG_ENTRY_WORDS" \
-        --argjson bytes "$CATALOG_ENTRY_BYTES" \
-        '{skill:$skill,words:$words,bytes:$bytes}' >>"$CATALOG_ENTRIES_FILE"
-done < <(find "$REPO_ROOT/skills" -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print | LC_ALL=C sort)
-CATALOG_ENTRIES="$(jq -cs . "$CATALOG_ENTRIES_FILE")"
+while IFS= read -r relative_skill_file; do
+    extract_skill_description "$REPO_ROOT/$relative_skill_file" >>"$CATALOG_FILE"
+done < <(
+    cd "$REPO_ROOT"
+    find skills -mindepth 2 -maxdepth 2 -type f \
+        -path 'skills/assistant-*/SKILL.md' -print | LC_ALL=C sort
+)
 
 SELECTED_INITIAL_FILE="$WORK_ROOT/selected-skill-initial.txt"
 SELECTED_ENTRY_FILE="$WORK_ROOT/selected-skill-entry-boundary.txt"
@@ -353,7 +345,6 @@ jq -n \
     --argjson catalog_words "$CATALOG_WORDS" \
     --argjson catalog_bytes "$CATALOG_BYTES" \
     --argjson catalog_characters "$CATALOG_CHARACTERS" \
-    --argjson catalog_entries "$CATALOG_ENTRIES" \
     --argjson initial_words "$INITIAL_WORDS" \
     --argjson initial_bytes "$INITIAL_BYTES" \
     --argjson entry_words "$ENTRY_WORDS" \
@@ -375,8 +366,7 @@ jq -n \
         native_skill_catalog_descriptions: {
           words: $catalog_words,
           bytes: $catalog_bytes,
-          characters: $catalog_characters,
-          entries: $catalog_entries
+          characters: $catalog_characters
         },
         selected_skill_initial: {words: $initial_words, bytes: $initial_bytes},
         selected_skill_entry_boundary: {words: $entry_words, bytes: $entry_bytes}
