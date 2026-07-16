@@ -1095,6 +1095,7 @@ import sys
 
 jsonl_path, stderr_path, limit_text = sys.argv[1:]
 limit = int(limit_text)
+max_structured_event_nesting = 128
 
 patterns = (
     ("model_unavailable", r"unknown model|model[^\r\n]*(not found|not available|unavailable|unsupported|does not exist|no access)|not have access[^\r\n]*model"),
@@ -1111,6 +1112,28 @@ def read_bounded(path):
             return stream.read(limit)
     except OSError:
         return b""
+
+def exceeds_structured_event_nesting(raw_line):
+    depth = 0
+    in_string = False
+    escaped = False
+    for byte in raw_line:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif byte == 0x5C:
+                escaped = True
+            elif byte == 0x22:
+                in_string = False
+        elif byte == 0x22:
+            in_string = True
+        elif byte in (0x7B, 0x5B):
+            depth += 1
+            if depth > max_structured_event_nesting:
+                return True
+        elif byte in (0x7D, 0x5D):
+            depth = max(0, depth - 1)
+    return False
 
 def strings(value):
     stack = [value]
@@ -1135,6 +1158,8 @@ def main():
     structured_seen = False
     structured_parts = []
     for raw_line in read_bounded(jsonl_path).splitlines():
+        if exceeds_structured_event_nesting(raw_line):
+            continue
         try:
             event = json.loads(raw_line)
         except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, MemoryError):

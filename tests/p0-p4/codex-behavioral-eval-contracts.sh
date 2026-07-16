@@ -179,7 +179,7 @@ if [[ "${FAKE_CODEX_OVERSIZED_FAILURE_STREAM:-false}" == "true" ]]; then
 fi
 
 if [[ "${FAKE_CODEX_DEEP_FAILURE_STREAM:-false}" == "true" ]]; then
-    python3 -c 'print("{\"type\":\"error\",\"error\":" + "[" * 1500 + "\"private-deep-detail\"" + "]" * 1500 + "}")'
+    python3 -c 'print("{\"type\":\"error\",\"error\":" + "[" * 256 + "\"private-deep-detail\"" + "]" * 256 + "}")'
     exit 1
 fi
 
@@ -1146,12 +1146,17 @@ symlink_output="$fixture_root/symlink-output"
 mkdir -p "$symlink_target"
 chmod 755 "$symlink_target"
 ln -s "$symlink_target" "$symlink_output"
+if symlink_target_mode="$(stat -f '%Lp' "$symlink_target" 2>/dev/null)"; then
+    :
+else
+    symlink_target_mode="$(stat -c '%a' "$symlink_target")"
+fi
 if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$symlink_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     && [[ ! -e "$symlink_target/run-plan.json" ]] \
-    && [[ "$(stat -f '%Lp' "$symlink_target" 2>/dev/null || stat -c '%a' "$symlink_target")" == "755" ]]; then
+    && [[ "$symlink_target_mode" == "755" ]]; then
     pass
 else
     fail "fresh output followed a symlink or changed its target"
