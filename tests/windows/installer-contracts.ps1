@@ -1202,6 +1202,8 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $expectedArgsLine = 'args = [' + ($expectedArguments -join ', ') + ']'
             $exactArgsLines = [regex]::Matches($serverBlock, ('(?m)^' + [regex]::Escape($expectedArgsLine) + '\r?$'))
             Assert-Equal 1 $exactArgsLines.Count 'Canonical Codex Memory Graph table does not contain exactly the expected structured argument array'
+            $exactTimeoutLines = [regex]::Matches($serverBlock, '(?m)^startup_timeout_sec = 120\r?$')
+            Assert-Equal 1 $exactTimeoutLines.Count 'Canonical Codex Memory Graph table does not contain exactly one 120-second startup timeout'
             Assert-NotContains $config 'ExecutionPolicy' 'MCP config weakens execution policy'
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
             Assert-NotContains $config 'Invoke-Expression' 'MCP config introduces evaluated command text'
@@ -1212,7 +1214,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'installed Memory Graph launcher builds forwards help and reuses its cache from a supported path' {
+    Invoke-Contract 'installed Memory Graph launcher builds within its configured startup timeout forwards help and reuses its cache from a supported path' {
         Use-IsolatedEnvironment 'codex memory launcher runtime' {
             param($root, $isolatedUserProfile)
             # CoreCLR does not guarantee execution from every Windows-valid
@@ -1225,10 +1227,24 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $runtimeLauncher = Join-Path $runtimeCodexHome 'tools\memory-graph\run-memory-graph.ps1'
             Assert-True (Test-Path -LiteralPath $runtimeLauncher -PathType Leaf) 'Runtime Memory Graph launcher was not installed'
 
+            $runtimeConfig = [System.IO.File]::ReadAllText((Join-Path $runtimeCodexHome 'config.toml'))
+            $runtimeHeader = [regex]::Match($runtimeConfig, '(?m)^\[mcp_servers\.memory-graph\]\r?$')
+            Assert-True $runtimeHeader.Success 'Runtime Codex config lacks the canonical Memory Graph table'
+            $runtimeNextTable = [regex]::new('(?m)^\[').Match($runtimeConfig, ($runtimeHeader.Index + $runtimeHeader.Length))
+            $runtimeServerBlockLength = if ($runtimeNextTable.Success) { $runtimeNextTable.Index - $runtimeHeader.Index } else { $runtimeConfig.Length - $runtimeHeader.Index }
+            $runtimeServerBlock = $runtimeConfig.Substring($runtimeHeader.Index, $runtimeServerBlockLength)
+            $runtimeTimeoutMatches = [regex]::Matches($runtimeServerBlock, '(?m)^startup_timeout_sec = (?<seconds>[1-9][0-9]*)\r?$')
+            Assert-Equal 1 $runtimeTimeoutMatches.Count 'Runtime Codex Memory Graph table does not contain exactly one positive startup timeout'
+            $startupTimeoutSeconds = [int]::Parse($runtimeTimeoutMatches[0].Groups['seconds'].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+            Assert-Equal 120 $startupTimeoutSeconds 'Runtime Codex Memory Graph startup timeout differs from the supported 120-second boundary'
+
+            $launcherFirstTimer = [System.Diagnostics.Stopwatch]::StartNew()
             $launcherFirst = Invoke-PowerShellFile -LiteralPath $runtimeLauncher -Arguments @('-h')
+            $launcherFirstTimer.Stop()
             Assert-Equal 0 $launcherFirst.ExitCode "Installed Memory Graph launcher failed: $($launcherFirst.Output)"
             Assert-Contains $launcherFirst.Output 'Usage: memory-graph [OPTIONS]' 'Installed Memory Graph launcher did not forward help output'
             Assert-Contains $launcherFirst.Output '[memory-graph] Building...' 'First installed Memory Graph launch did not build its cache'
+            Assert-True ($launcherFirstTimer.Elapsed.TotalSeconds -lt $startupTimeoutSeconds) ("Cold Memory Graph launch took {0:N2}s, outside the configured {1}s startup timeout" -f $launcherFirstTimer.Elapsed.TotalSeconds, $startupTimeoutSeconds)
             $publishedDll = Join-Path (Split-Path -Parent $runtimeLauncher) '.publish\MemoryGraph.dll'
             Assert-True (Test-Path -LiteralPath $publishedDll -PathType Leaf) 'Memory Graph launcher did not create its private build cache'
             $publishParent = Split-Path -Parent $runtimeLauncher

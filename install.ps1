@@ -57,6 +57,7 @@ $script:MaxJsonInputBytes = 4 * 1024 * 1024
 $script:MaxJsonIdentityDepth = 64
 $script:MaxJsonIdentityProperties = 10000
 $script:MaxJsonIdentityValues = 10000
+$script:MemoryGraphStartupTimeoutSeconds = 120
 $script:SupportedPluginProfiles = @('assistant-core', 'assistant-research', 'assistant-dev')
 $script:LegacyHookEntrypoints = @(
     'session-start.sh',
@@ -2305,6 +2306,7 @@ function Update-CodexMemoryGraphConfig {
     $lines.Add('[mcp_servers.memory-graph]')
     $lines.Add('command = ' + (Convert-ToTomlString -Value $Command))
     $lines.Add('args = [' + $argumentText + ']')
+    $lines.Add('startup_timeout_sec = ' + $script:MemoryGraphStartupTimeoutSeconds)
     foreach ($tool in $tools) {
         $lines.Add('')
         $lines.Add('[mcp_servers.memory-graph.tools.' + $tool + ']')

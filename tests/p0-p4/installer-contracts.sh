@@ -514,6 +514,7 @@ args = ["--keep"]
 [mcp_servers.memory-graph]
 command = "/stale/memory-graph"
 args = ["--old-memory-dir", "/stale/memory"]
+startup_timeout_sec = 10
 
 [mcp_servers.memory-graph.tools.memory_context]
 approval_mode = "deny"
@@ -534,6 +535,7 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
     config_mode="$(p0p4_file_mode_octal "$config_file")"
     expected_command="command = \"$INSTALL_HOME_NINE/.codex/tools/memory-graph/run-memory-graph.sh\""
     expected_args="args = [\"--memory-dir\", \"$INSTALL_HOME_NINE/.codex/memory\"]"
+    expected_startup_timeout='startup_timeout_sec = 120'
     memory_tools=(
         memory_context
         memory_search
@@ -556,13 +558,15 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
     if [[ "$(count_occurrences "^\\[mcp_servers\\.memory-graph\\]$" "$config_file")" != "1" ]] \
         || ! grep -Fq "$expected_command" "$config_file" \
         || ! grep -Fq "$expected_args" "$config_file" \
+        || [[ "$(count_occurrences "^${expected_startup_timeout}$" "$config_file")" != "1" ]] \
+        || grep -q '^startup_timeout_sec = 10$' "$config_file" \
         || grep -q "/stale/memory-graph" "$config_file" \
         || ! grep -q '^model = "test-model"$' "$config_file" \
         || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
         || ! grep -q '^hooks = false$' "$config_file" \
         || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph command/args to refresh while preserving unrelated config, disabled hooks profile, and file mode"
+        fail "expected stale Codex memory-graph command/args/startup timeout to refresh while preserving unrelated config, disabled hooks profile, and file mode"
     else
         missing_tool=""
         duplicate_tool=""

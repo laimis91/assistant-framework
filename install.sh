@@ -29,6 +29,7 @@ DRY_RUN=false
 SINGLE_SKILL=""
 PLUGIN_PROFILE=""
 FRAMEWORK_DIR=""
+MEMORY_GRAPH_STARTUP_TIMEOUT_SEC=120
 toml_files=()
 
 # Skills are auto-discovered from first-class assistant-* release directories.
@@ -665,17 +666,19 @@ register_codex_memory_graph_mcp() {
         info "Update $config_file manually with [mcp_servers.memory-graph], command/args, and memory tool approval blocks."
         info "  command = \"$mcp_command\""
         info "  args = [\"--memory-dir\", \"$memory_dir\"]"
+        info "  startup_timeout_sec = $MEMORY_GRAPH_STARTUP_TIMEOUT_SEC"
         return 1
     fi
 
-    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" <<'PY'
+    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" "$MEMORY_GRAPH_STARTUP_TIMEOUT_SEC" <<'PY'
 import json
 import os
 import re
 import stat
 import sys
 
-config_file, mcp_command, memory_dir = sys.argv[1:4]
+config_file, mcp_command, memory_dir, startup_timeout_sec = sys.argv[1:5]
+startup_timeout_sec = int(startup_timeout_sec)
 tools = [
     "memory_context",
     "memory_search",
@@ -754,6 +757,7 @@ memory_graph_lines = [
     "[mcp_servers.memory-graph]\n",
     "command = {}\n".format(json.dumps(mcp_command)),
     "args = [\"--memory-dir\", {}]\n".format(json.dumps(memory_dir)),
+    "startup_timeout_sec = {}\n".format(startup_timeout_sec),
 ]
 for tool in tools:
     memory_graph_lines.extend([

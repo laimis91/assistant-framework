@@ -38,6 +38,10 @@ if [[ -f "$installer" ]]; then
         || failures+=("MCP registration does not resolve the current PowerShell executable")
     grep -Fq -- '[Environment]::OSVersion.Platform' "$installer" \
         || failures+=("security decisions do not use the host platform API")
+    grep -Fq -- '$script:MemoryGraphStartupTimeoutSeconds = 120' "$installer" \
+        || failures+=("Codex Memory Graph startup timeout is not pinned to 120 seconds")
+    grep -Fq -- "\$lines.Add('startup_timeout_sec = ' + \$script:MemoryGraphStartupTimeoutSeconds)" "$installer" \
+        || failures+=("Codex Memory Graph table does not emit the configured startup timeout")
     if grep -Fq -- '$env:OS' "$installer"; then
         failures+=("security decisions trust mutable OS environment text")
     fi
@@ -80,6 +84,10 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks dry-run immutability coverage")
     grep -Fq -- 'unbalanced installer markers' "$native_suite" \
         || failures+=("native suite lacks fail-closed marker coverage")
+    grep -Fq -- '[System.Diagnostics.Stopwatch]::StartNew()' "$native_suite" \
+        || failures+=("native suite does not measure the real cold Memory Graph launch boundary")
+    grep -Fq -- 'startup_timeout_sec = 120' "$native_suite" \
+        || failures+=("native suite does not require the installed Memory Graph startup timeout")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then
