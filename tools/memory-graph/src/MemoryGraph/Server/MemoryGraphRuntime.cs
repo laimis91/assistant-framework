@@ -92,6 +92,7 @@ public sealed class MemoryGraphRuntime : IDisposable
         registry.Register(new MemoryPatternTool(memoryStore));
         registry.Register(new MemoryConsolidateTool(memoryStore));
         registry.Register(new MemoryStatsTool(graph, memoryStore));
+        registry.Register(new MemorySignalTool(memoryDir));
         registry.Register(new MemoryTrendTool(memoryStore, memoryDir));
 
         return registry;

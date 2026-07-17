@@ -81,6 +81,10 @@ Required fields:
   saved or updated
 - `No-save rationale`: required when no durable write occurred
 
+For journal mode, run `bash scripts/validate-learning-state.sh <task-journal>`
+after recording the decision. Normal work uses `auto`; `not_required` is valid
+only with a concrete `policy_disallowed:` or `explicit_exclusion:` reason.
+
 ## Reflexion and Memory
 
 Metrics, reflexion, and memory are optional and non-blocking; none is a

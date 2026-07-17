@@ -302,15 +302,16 @@ fields:
     type: enum
     required: false
     enum_values: [auto, not_required, required]
-    description: "Whether Document must run the Learning Controller and consider durable reflexion/memory capture."
-    validation: "required means the user or approved plan explicitly requested learning capture. auto requires the Learning Controller only when concrete lesson-bearing evidence exists in review findings, build/test failures, user corrections, or memory trend signals. not_required skips learning capture."
+    description: "Whether Document must run the Learning Controller and consider durable reflexion/memory capture; journal mode also records the canonical Learning evidence signals ledger."
+    validation: "normal work MUST use auto. required means the user or approved plan explicitly requested learning capture. auto requires the Learning Controller only when concrete lesson-bearing evidence exists in review findings, build/test failures, user corrections, or memory trend signals. not_required is valid only with a policy_disallowed: or explicit_exclusion: reason."
     default: auto
     on_missing: infer
     infer_from: >
       Use required when the user or approved plan explicitly requests reflection, learning, or
       durable memory capture. Use auto for normal work so concrete review findings, build/test
       failures, user corrections, or memory trend signals activate the Learning Controller.
-      Use not_required when policy disallows learning capture or the task is explicitly excluded.
+      Use not_required only when policy disallows learning capture or the task is explicitly excluded,
+      and prefix the concrete rationale with policy_disallowed: or explicit_exclusion:.
 
   - name: qa_evaluation_mode
     type: enum

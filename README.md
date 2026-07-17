@@ -270,7 +270,7 @@ Triggers on: telos, my purpose, why am I doing this, what matters most, my missi
 
 The sole persistence layer for cross-session memory. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" via MCP tools.
 
-**15 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
+**16 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_signal`, `memory_trend`
 
 Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
 
@@ -565,9 +565,9 @@ tools/
     src/MemoryGraph/               <- C# MCP server (stdio, JSON-RPC)
       Graph/                       <- In-memory knowledge graph abstractions + legacy JSONL compatibility
       Storage/                     <- Authoritative SQLite + FTS5 store (graph memory, reflexions, decisions, strategies)
-      Tools/                       <- 15 MCP tool implementations
+      Tools/                       <- 16 MCP tool implementations
       Server/                      <- JSON-RPC message loop
-    tests/MemoryGraph.Tests/       <- 65 xUnit tests
+    tests/MemoryGraph.Tests/       <- xUnit behavior and integration tests
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
@@ -637,10 +637,10 @@ You: "Draw the architecture diagram"
 Diagrams skill: Traces code, maps components and dependencies, outputs Mermaid diagram
 ```
 
-### For self-improvement
+### For evidence-triggered self-improvement
 ```
-[After completing a task]
-Reflexion skill: Captures what worked, what didn't, extracts lessons for future tasks
+[After a task produces concrete lesson-bearing evidence]
+Reflexion skill: Reviews what worked, what failed, and saves only durable lessons
 [Before starting next task]
 Reflexion: Recalls relevant lessons, adjusts plan based on past experience
 ```
@@ -695,5 +695,5 @@ No runtime script changes are needed when adding a skill: add the skill metadata
 - **Thinking tools are tools, not phases** — Use them when needed, not on every task
 - **Memory survives reinstalls** — Data in `~/.{agent}/memory/`, not in skill directories
 - **Learning compounds** — Insights from past work inform future decisions
-- **Self-improving** — Every task makes the next task better through reflexion
+- **Self-improving** — Evidence-backed lessons improve future tasks; routine tasks skip reflection.
 - **Covers weaknesses** — Documentation, diagrams, and onboarding compensate for developer blind spots

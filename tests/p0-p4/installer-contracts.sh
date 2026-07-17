@@ -549,6 +549,7 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
         memory_decide
         memory_pattern
         memory_consolidate
+        memory_signal
         memory_trend
     )
 

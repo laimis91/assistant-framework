@@ -106,6 +106,14 @@ gates.
   required only for explicit `required` mode or concrete review findings,
   build/test failures, user corrections, or memory trend signals. Metrics,
   reflexion, and memory remain optional and non-blocking.
+- When `memory_signal` is available, record one fixed-type signal for each
+  concrete correction, pivot, frustration, or non-routine approval. Pass only
+  `type` and a bounded ASCII project slug; never pass raw user text, prompt
+  content, secrets, PII, or a free-form detail. This prompt-time capture is not
+  a lifecycle hook and does not make routine reflection mandatory.
+- Update the journal's `Learning evidence signals` ledger when concrete
+  review, build/test, correction, or trend evidence appears; use `none` only
+  while no such evidence exists.
 
 ## Move Forward, Step Back, or Replan
 

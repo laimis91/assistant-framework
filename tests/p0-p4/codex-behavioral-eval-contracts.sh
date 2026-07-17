@@ -214,6 +214,32 @@ fi
 if [[ -f "$workspace/.codex/task.md" ]]; then
     printf '%s\n' 'task-state-present' >>"$capture_dir/call-$call_id.fixtures"
 fi
+learning_trace_mode=not_applicable
+if [[ -f "$workspace/.codex/task.md" ]] \
+    && grep -Fq 'Learning evaluation signal:' "$workspace/.codex/task.md"; then
+    printf '%s\n' 'learning-evidence-present' >>"$capture_dir/call-$call_id.fixtures"
+    if [[ ! -e "$workspace/.agents/skills/assistant-reflexion/evals" ]] \
+        && [[ ! -e "$workspace/.agents/skills/assistant-reflexion/.DS_Store" ]]; then
+        printf '%s\n' 'learning-skill-evals-hidden' >>"$capture_dir/call-$call_id.fixtures"
+    fi
+    learning_trace_mode=valid
+    if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        learning_trace_mode="${FAKE_LEARNING_TRACE_MODE:-valid}"
+    fi
+    mkdir -p "$workspace/.assistant-eval"
+    case "$learning_trace_mode" in
+        valid|missing_skill_load|spoof_skill_load)
+            printf '%s\n' '{"schema_version":"1.0","learning_capture_mode":"auto","reflexion_loaded":true,"memory_reflect_status":"backend_unavailable","memory_trend_status":"backend_unavailable","durable_lesson_decision":"backend_unavailable","no_save_rationale":"The isolated evaluation disables user Memory Graph configuration."}' >"$workspace/.assistant-eval/learning-controller.json"
+            ;;
+        invalid_no_save)
+            printf '%s\n' '{"schema_version":"1.0","learning_capture_mode":"auto","reflexion_loaded":true,"memory_reflect_status":"backend_unavailable","memory_trend_status":"backend_unavailable","durable_lesson_decision":"backend_unavailable","no_save_rationale":""}' >"$workspace/.assistant-eval/learning-controller.json"
+            ;;
+        *)
+            printf 'unsupported FAKE_LEARNING_TRACE_MODE: %s\n' "$learning_trace_mode" >&2
+            exit 2
+            ;;
+    esac
+fi
 if [[ -f "$workspace/current-task/README.md" ]] \
     && grep -Fq 'feature/already-merged' "$workspace/.codex/task.md"; then
     printf '%s\n' 'stale-journal-conflict-present' >>"$capture_dir/call-$call_id.fixtures"
@@ -436,6 +462,9 @@ fi
 if [[ -f "$workspace/CHANGE_SUMMARY.md" ]]; then
     response='Architecture: SearchPolicy injection. Rationale: avoid global mutable state. Rejected alternatives: global singleton coupling. Requirement evidence: bash tests/search-contracts.sh passed. Manual scenario: mixed-case search, omitted limit, newest-first JSON. Limitations: locale folding. Rollback: disable search_policy_v2. No material findings within the reviewed scope and available evidence.'
 fi
+if [[ "$learning_trace_mode" != not_applicable ]]; then
+    response='Learning evidence activated Reflexion; the isolated backend is unavailable, so the artifact records an explicit no-save decision.'
+fi
 if [[ "$prompt" == *'Choose the Build and Review roles for this task.'* ]]; then
     response='build_execution_lane=bounded_executor; the same owner runs RED, GREEN, focused verification, and refactor safety; an independent Code Reviewer reviews the result.'
     if [[ "${FAKE_STRUCTURED_ARTIFACTS:-true}" == "true" ]]; then
@@ -578,6 +607,12 @@ if [[ "${FAKE_RUN_FORBIDDEN_TEST:-false}" == "true" ]]; then
 fi
 if [[ -f "$workspace/docs/evals/README.md" ]]; then
     printf '%s\n' '{"type":"item.completed","item":{"id":"item-search","type":"command_execution","command":"/bin/zsh -lc '\''rg \"npm test\" docs/evals'\''"}}'
+fi
+if [[ "$learning_trace_mode" == valid || "$learning_trace_mode" == invalid_no_save ]]; then
+    printf '%s\n' '{"type":"item.completed","item":{"id":"learning-reflexion-load","type":"command_execution","command":"/bin/zsh -lc '\''sed -n 1,240p .agents/skills/assistant-reflexion/SKILL.md'\''","exit_code":0,"status":"completed","aggregated_output":"Reflexion skill loaded"}}'
+fi
+if [[ "$learning_trace_mode" == spoof_skill_load ]]; then
+    printf '%s\n' '{"type":"item.completed","item":{"id":"learning-reflexion-spoof","type":"command_execution","command":"/bin/zsh -lc '\''echo assistant-reflexion/SKILL.md'\''","exit_code":0,"status":"completed","aggregated_output":"assistant-reflexion/SKILL.md"}}'
 fi
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":123,"output_tokens":45}}'
 FAKE
@@ -1506,6 +1541,82 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     pass
 else
     fail "R1 R3 or R7 behavioral cases remained prompt-only or unverifiable"
+fi
+
+test_start "learning eval requires a Reflexion load trace and a valid persistence or no-save decision"
+learning_positive_output="$fixture_root/learning-positive-output"
+learning_missing_load_output="$fixture_root/learning-missing-load-output"
+learning_invalid_no_save_output="$fixture_root/learning-invalid-no-save-output"
+learning_spoof_load_output="$fixture_root/learning-spoof-load-output"
+learning_eval_ok=true
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases learning-evidence-activates-reflexion --repeats 1 \
+    --output "$learning_positive_output" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e 'all(.[].execution.verifier;
+      .status == "passed"
+      and .workspace_status == "passed"
+      and .workspace_failure_ids == []
+      and .acceptance_items_total >= 4
+      and .acceptance_items_passed == .acceptance_items_total)' \
+      "$learning_positive_output/traces/"*.json >/dev/null \
+    || [[ "$(grep -lFx 'learning-evidence-present' "$capture"/*.fixtures | wc -l | tr -d ' ')" -ne 2 ]]; then
+    learning_eval_ok=false
+fi
+
+if [[ "$(grep -lFx 'learning-skill-evals-hidden' "$capture"/*.fixtures | wc -l | tr -d ' ')" -ne 2 ]]; then
+    learning_eval_ok=false
+fi
+
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_LEARNING_TRACE_MODE=missing_skill_load \
+    "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases learning-evidence-activates-reflexion --repeats 1 \
+    --output "$learning_missing_load_output" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e '
+      all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true)
+      and all(.[] | select(.variant == "candidate");
+        .metrics.acceptance_passed == false
+        and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+    ' "$learning_missing_load_output/traces/"*.json >/dev/null; then
+    learning_eval_ok=false
+fi
+
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_LEARNING_TRACE_MODE=invalid_no_save \
+    "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases learning-evidence-activates-reflexion --repeats 1 \
+    --output "$learning_invalid_no_save_output" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e '
+      all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true)
+      and all(.[] | select(.variant == "candidate");
+        .metrics.acceptance_passed == false
+        and (.execution.verifier.workspace_failure_ids | index("workspace-004")) != null)
+    ' "$learning_invalid_no_save_output/traces/"*.json >/dev/null; then
+    learning_eval_ok=false
+fi
+
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_LEARNING_TRACE_MODE=spoof_skill_load \
+    "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases learning-evidence-activates-reflexion --repeats 1 \
+    --output "$learning_spoof_load_output" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e '
+      all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true)
+      and all(.[] | select(.variant == "candidate");
+        .metrics.acceptance_passed == false
+        and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+    ' "$learning_spoof_load_output/traces/"*.json >/dev/null; then
+    learning_eval_ok=false
+fi
+if [[ "$learning_eval_ok" == true ]]; then
+    pass
+else
+    fail "learning evaluation accepted a missing skill load or invalid no-save decision"
 fi
 
 test_start "structured workflow artifacts grade behavior independently of final response wording"

@@ -691,6 +691,7 @@ tools = [
     "memory_decide",
     "memory_pattern",
     "memory_consolidate",
+    "memory_signal",
     "memory_trend",
 ]
 

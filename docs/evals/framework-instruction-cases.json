@@ -1045,6 +1045,39 @@
       }
     },
     {
+      "id": "learning-evidence-activates-reflexion",
+      "title": "Lesson-bearing evidence activates Reflexion",
+      "category": "learning_controller",
+      "purpose": "Checks that a build failure plus user correction activates assistant-reflexion and ends with a bounded durable-write or explicit no-save decision.",
+      "setup_context": [
+        "The active .codex/task.md records learning_capture_mode auto, a build/test failure, and a concrete user correction that invalid manual is not an allowed learning mode.",
+        "Continue the active workflow through its Learning Controller decision. Do not perform unrelated project edits.",
+        "Write the disposable grading artifact .assistant-eval/learning-controller.json with exactly schema_version, learning_capture_mode, reflexion_loaded, memory_reflect_status, memory_trend_status, durable_lesson_decision, and no_save_rationale. Use schema_version 1.0 and learning_capture_mode auto. Set reflexion_loaded true only after actually reading assistant-reflexion/SKILL.md. memory_reflect_status is saved, backend_unavailable, or policy_disallowed. memory_trend_status is checked, backend_unavailable, policy_disallowed, or not_configured. durable_lesson_decision is durable_saved, skipped_not_durable, backend_unavailable, policy_disallowed, or refused_sensitive. If no durable write occurs, give a concise non-sensitive no_save_rationale; otherwise use an empty string."
+      ],
+      "prompt": "Continue the active task from .codex/task.md, resolve the learning evidence, and complete the bounded Learning Controller artifact. Then respond concisely.",
+      "expected_behavior": [
+        "Reads the active task state and detects lesson-bearing failure/correction evidence.",
+        "Loads assistant-reflexion rather than silently skipping learning.",
+        "Calls memory_reflect when a configured backend is available, or records an explicit backend/policy no-save outcome.",
+        "Does not store raw user correction text or invent a lifecycle hook."
+      ],
+      "pass_criteria": [
+        "The JSONL trace proves assistant-reflexion/SKILL.md was read or memory_reflect was called.",
+        "The bounded artifact records either a durable save or a valid explicit no-save decision.",
+        "Workspace changes are limited to the disposable grading artifact."
+      ],
+      "fail_signals": [
+        "Skips Reflexion despite explicit lesson-bearing evidence.",
+        "Claims a save without memory_reflect evidence.",
+        "Uses an invalid manual learning mode.",
+        "Stores raw correction or prompt text."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["learning", "Reflexion", "backend"],
+        "forbidden_substrings": ["learning_capture_mode=manual", "raw correction text", "every task must reflect"]
+      }
+    },
+    {
       "id": "medium-final-handoff-is-reconstructable",
       "title": "Medium workflow repairs a failed review before handoff",
       "category": "completion_handoff",

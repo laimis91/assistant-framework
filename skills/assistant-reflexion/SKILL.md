@@ -76,6 +76,12 @@ Gather:
 
 If `memory_trend` MCP tool is available, call it with the current project name to surface mid-task signals (corrections, approvals, frustrations, pivots) captured during this session. Incorporate these into the self-assessment — they are objective evidence of what worked and what didn't.
 
+When `memory_signal` is available, record one fixed-type signal for a concrete
+correction, pivot, frustration, or non-routine approval. Send only `type` and a
+bounded ASCII project slug. Never send raw user text, prompt content, secrets,
+PII, private endpoints, or free-form detail. The signal supports later trend
+analysis; it does not by itself require a durable reflexion.
+
 For medium+ workflow completion, consume the `### Learning Controller` fields from the task journal or equivalent workflow output. Treat Review Log findings, build/test failures, and user corrections as the highest-value lesson sources. Use routine progress and completed checklist items only as context, never as the lesson itself.
 
 ### Step 2: Self-Assess

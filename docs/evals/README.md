@@ -161,9 +161,16 @@ fixture, and JSONL events. The runtime prompt
 contains only setup context and the user request. Expected behavior, pass
 criteria, fail signals, and machine grading anchors remain hidden from Codex.
 Skill-local `evals/` directories are excluded from materialized variants, and
-only the native `.agents/skills/assistant-workflow` copy is exposed. Seeded Git
-baselines make unexpected created, changed, or deleted paths measurable;
-review-only cases fail verification on any workspace edit.
+the native `.agents/skills/assistant-workflow` copy is exposed. The
+`learning-evidence-activates-reflexion` case additionally exposes the trusted
+canonical `assistant-reflexion` skill and includes those bytes in the seed hash.
+Its verifier requires a real JSONL command event that reads
+`assistant-reflexion/SKILL.md`; it then accepts either a traced successful
+`memory_reflect` save or a bounded explicit backend/policy no-save artifact.
+The fake adapter covers missing-load and invalid-no-save failures, while a real
+`--execute` run remains separate quota-bearing evidence. Seeded Git baselines
+make unexpected created, changed, or deleted paths measurable; review-only
+cases fail verification on any workspace edit.
 The `medium-final-handoff-is-reconstructable` case also seeds an incomplete
 `SearchPolicy`, a focused contract command, and a trusted review command. The
 review command owns a closed-world `.assistant-eval/review-evidence.json` with

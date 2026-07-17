@@ -83,7 +83,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [auto, not_required, required]
-        validation: "auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals"
+        validation: "normal work uses auto; auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals; journal mode records those triggers in Learning evidence signals as none or review_finding, build_test_failure, user_correction, and memory_trend; not_required requires a policy_disallowed: or explicit_exclusion: reason"
       - name: required_gates
         type: string[]
         required: true
@@ -173,7 +173,7 @@ artifacts:
       - name: selection_reason
         type: string
         required: true
-        validation: "Names the concrete plan, state, manual-verification, and learning triggers or states that none apply."
+        validation: "Names the concrete plan, state, manual-verification, and learning triggers or states that none apply. The learning reason uses normal_default:, explicit_request:, approved_plan:, policy_disallowed:, or explicit_exclusion:; not_required accepts only the last two."
 
   - name: phase_checkpoints
     type: string[]

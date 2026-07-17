@@ -41,6 +41,8 @@ Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
 Manual verification mode: [not_required | optional | required]
 Learning capture mode: [auto | not_required | required]
+Learning capture reason: [normal_default: ... | explicit_request: ... | approved_plan: ... | policy_disallowed: ... | explicit_exclusion: ...]
+Learning evidence signals: [none | review_finding | build_test_failure | user_correction | memory_trend; comma-separated]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification defaults:
