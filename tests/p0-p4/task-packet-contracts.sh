@@ -816,6 +816,67 @@ else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
+test_start "workflow delegation fallback requires authorization or evidenced policy block"
+workflow_delegation_proof_failures=()
+workflow_delegation_proof_terms=(
+    "skills/assistant-workflow/contracts/input.yaml|policy_blocking_source"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state == policy_disallowed"
+    "skills/assistant-workflow/contracts/input.yaml|required_agents is non-empty and no explicit delegation approval or denial exists"
+    "skills/assistant-workflow/contracts/input.yaml|Plan approval is not delegation approval"
+    "skills/assistant-workflow/contracts/output.yaml|policy_blocking_source"
+    "skills/assistant-workflow/contracts/output.yaml|policy_disallowed"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|policy_blocking_source"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|does not make policy_disallowed when the active skill requires subagents"
+    "skills/assistant-workflow/references/subagent-dispatch.md|Plan approval is not delegation approval"
+    "skills/assistant-workflow/references/subagent-dispatch.md|policy_blocking_source"
+    "skills/assistant-workflow/references/subagent-dispatch.md|active skill requires subagents"
+    "skills/assistant-workflow/references/task-journal-template.md|Policy blocking source"
+    "skills/assistant-workflow/references/plan-template.md|Policy blocking source"
+    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-missing-delegation-authorization"
+    "skills/assistant-workflow/evals/cases.json|authorization_required"
+    "skills/assistant-workflow/evals/cases.json|plan approval is not delegation approval"
+    "skills/assistant-workflow/evals/cases.json|policy_blocking_source"
+)
+for pair in "${workflow_delegation_proof_terms[@]}"; do
+    IFS='|' read -r root_surface term <<< "$pair"
+    plugin_surface="plugins/assistant-dev/$root_surface"
+    for surface in "$root_surface" "$plugin_surface"; do
+        if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
+            workflow_delegation_proof_failures+=("$surface: file missing")
+        elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
+            workflow_delegation_proof_failures+=("$surface: $term")
+        fi
+    done
+done
+if [[ "${#workflow_delegation_proof_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow delegation fallback must carry authorization or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
+fi
+
+test_start "workflow loads the delegation authorization invariant"
+workflow_authorization_invariant_failures=()
+for surface_and_term in \
+    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_AUTHORIZATION_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_AUTHORIZATION_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|required roles lack a delegation decision" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"; do
+    IFS='|' read -r root_surface term <<< "$surface_and_term"
+    plugin_surface="plugins/assistant-dev/$root_surface"
+    for surface in "$root_surface" "$plugin_surface"; do
+        if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
+            workflow_authorization_invariant_failures+=("$surface: file missing")
+        elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
+            workflow_authorization_invariant_failures+=("$surface: $term")
+        fi
+    done
+done
+if [[ "${#workflow_authorization_invariant_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow must load an authorization-state invariant for every phase: ${workflow_authorization_invariant_failures[*]}"
+fi
+
 test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"
 missing_codex_subagent_doc_terms=()
 for term in \

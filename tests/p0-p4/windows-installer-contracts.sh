@@ -42,6 +42,10 @@ if [[ -f "$installer" ]]; then
         || failures+=("Codex Memory Graph startup timeout is not pinned to 120 seconds")
     grep -Fq -- "\$lines.Add('startup_timeout_sec = ' + \$script:MemoryGraphStartupTimeoutSeconds)" "$installer" \
         || failures+=("Codex Memory Graph table does not emit the configured startup timeout")
+    grep -Fq -- 'Locked-file preflight failed' "$installer" \
+        || failures+=("Codex update files lack a locked-file preflight diagnostic")
+    grep -Fq -- 'Partial installation:' "$installer" \
+        || failures+=("post-mutation failures lack a partial-install diagnostic")
     if grep -Fq -- '$env:OS' "$installer"; then
         failures+=("security decisions trust mutable OS environment text")
     fi
@@ -88,6 +92,10 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite does not measure the real cold Memory Graph launch boundary")
     grep -Fq -- 'startup_timeout_sec = 120' "$native_suite" \
         || failures+=("native suite does not require the installed Memory Graph startup timeout")
+    grep -Fq -- 'locked Codex update files fail preflight before installation changes' "$native_suite" \
+        || failures+=("native suite lacks locked Codex update-file preflight coverage")
+    grep -Fq -- 'late Codex config lock reports a recoverable partial installation' "$native_suite" \
+        || failures+=("native suite lacks late-lock partial-install recovery coverage")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then
@@ -167,6 +175,8 @@ else
         || promotion_failures+=("README lacks a Windows dry-run example")
     grep -Eqi -- 'reinstall|re-run the (same )?command|run the (same )?command again' "$readme" \
         || promotion_failures+=("README does not explain Windows reinstall behavior")
+    grep -Eqi -- 'close Codex App' "$readme" \
+        || promotion_failures+=("README does not tell users to close Codex App before installation")
     grep -Eq -- '\.agents[\\/]skills' "$readme" \
         || promotion_failures+=("README omits the native Codex .agents skills destination")
     grep -Fq -- 'CODEX_HOME' "$readme" \

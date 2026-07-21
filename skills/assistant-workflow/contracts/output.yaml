@@ -96,16 +96,21 @@ artifacts:
         type: enum
         required: true
         enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
-        validation: "Resolved before any subagent dispatch. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or policy_disallowed before Build/Review."
+        validation: "Resolved before any subagent dispatch. When required_agents is non-empty and no delegation decision exists, use authorization_required. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or evidenced policy_disallowed before Build/Review; plan approval alone is not delegation approval."
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning; not_applicable means no subagent role is needed."
+        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning and requires authorization_denied, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed."
       - name: subagent_authorization_scope
         type: string[]
         required: true
         validation: "Empty unless explicit authorization was granted. When populated, names the authorized roles, phases, or actions."
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+        validation: "Non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception permits delegation"
       - name: search_mode
         type: enum
         required: true
@@ -541,6 +546,11 @@ artifacts:
         required: conditional
         condition: "execution_mode == direct_fallback"
         enum_values: [authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "execution_mode == direct_fallback and direct_fallback_reason == policy_disallowed"
+        validation: "Non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception permits delegation"
       - name: direct_fallback_role_evidence
         type: object[]
         required: conditional

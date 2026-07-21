@@ -269,17 +269,43 @@ function Assert-NoSourceTargetOverlap {
     }
 }
 
+function Assert-FileAvailableForExclusiveUpdate {
+    param(
+        [Parameter(Mandatory = $true)][string]$LiteralPath,
+        [Parameter(Mandatory = $true)][string]$Purpose
+    )
+    $probe = $null
+    try {
+        $probe = [System.IO.File]::Open(
+            $LiteralPath,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+    }
+    catch {
+        throw "Locked-file preflight failed for $Purpose at '$LiteralPath'. Close Codex App and rerun the installer. No installation changes were made. Cause: $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $probe) { $probe.Dispose() }
+    }
+}
+
 function Assert-SafeUserFile {
     param(
         [Parameter(Mandatory = $true)][string]$LiteralPath,
         [Parameter(Mandatory = $true)][string]$ManagedRoot,
-        [Parameter(Mandatory = $true)][string]$Purpose
+        [Parameter(Mandatory = $true)][string]$Purpose,
+        [switch]$RequireExclusiveUpdatePreflight
     )
     $safeFile = Assert-SafeManagedChild -LiteralPath $LiteralPath -ManagedRoot $ManagedRoot -Purpose $Purpose
     if (Test-Path -LiteralPath $safeFile) {
         $item = Get-Item -LiteralPath $safeFile -Force
         if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.PSIsContainer) {
             throw "Refusing unsafe $Purpose file: $safeFile"
+        }
+        if ($RequireExclusiveUpdatePreflight) {
+            Assert-FileAvailableForExclusiveUpdate -LiteralPath $safeFile -Purpose $Purpose
         }
         [void](Read-StrictUtf8Text -LiteralPath $safeFile)
     }
@@ -2825,12 +2851,12 @@ function Invoke-AssistantFrameworkInstall {
     $graphSeedSource = Join-Path $script:FrameworkDir 'graph-seed.jsonl'
     [void](Assert-SafeUserFile -LiteralPath $settingsFile -ManagedRoot $agentHome -Purpose 'agent settings')
     [void](Assert-SafeUserFile -LiteralPath $legacySettings -ManagedRoot $agentHome -Purpose 'legacy hook settings')
-    [void](Assert-SafeUserFile -LiteralPath $instructionsFile -ManagedRoot $agentHome -Purpose 'agent instructions')
+    [void](Assert-SafeUserFile -LiteralPath $instructionsFile -ManagedRoot $agentHome -Purpose 'agent instructions' -RequireExclusiveUpdatePreflight:($agentName -eq 'codex'))
     [void](Assert-GraphSeedInstallSafe -GraphSeed $graphSeedSource -MemoryTarget $memoryTarget)
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $settingsFile
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $legacySettings
     if ($agentName -eq 'codex') {
-        $codexConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $agentHome 'config.toml') -ManagedRoot $agentHome -Purpose 'Codex configuration'
+        $codexConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $agentHome 'config.toml') -ManagedRoot $agentHome -Purpose 'Codex configuration' -RequireExclusiveUpdatePreflight
         Assert-CodexMemoryGraphTomlCanBeUpdated -ConfigFile $codexConfigFile
     }
     elseif ($agentName -eq 'claude') {
@@ -2860,55 +2886,62 @@ function Invoke-AssistantFrameworkInstall {
     }
     Assert-LegacyHookCleanupSafe -HooksTarget $hooksTarget
 
-    if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-        Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
-    }
+    $installedAgentFiles = @()
+    try {
+        if (Test-Path -LiteralPath $toolsSource -PathType Container) {
+            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
+        }
 
-    Install-Skills -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget -AgentName $agentName
-    Write-DependencyNotes -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget
+        Install-Skills -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget -AgentName $agentName
+        Write-DependencyNotes -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget
 
-    if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-        Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
-    }
-    if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
-        Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
-    }
+        if (Test-Path -LiteralPath $toolsSource -PathType Container) {
+            Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+        }
+        if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
+            Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
+        }
 
-    $memoryLauncher = Join-Path (Join-Path $toolsTarget 'memory-graph') 'run-memory-graph.ps1'
-    $launcherSource = Join-Path (Join-Path $toolsSource 'memory-graph') 'run-memory-graph.ps1'
-    if ((Test-Path -LiteralPath $memoryLauncher -PathType Leaf) -or ($DryRun -and (Test-Path -LiteralPath $launcherSource -PathType Leaf))) {
-        $powerShellCommand = Get-CurrentPowerShellExecutable
-        $mcpArguments = @('-NoProfile', '-File', $memoryLauncher, '--memory-dir', $memoryTarget)
+        $memoryLauncher = Join-Path (Join-Path $toolsTarget 'memory-graph') 'run-memory-graph.ps1'
+        $launcherSource = Join-Path (Join-Path $toolsSource 'memory-graph') 'run-memory-graph.ps1'
+        if ((Test-Path -LiteralPath $memoryLauncher -PathType Leaf) -or ($DryRun -and (Test-Path -LiteralPath $launcherSource -PathType Leaf))) {
+            $powerShellCommand = Get-CurrentPowerShellExecutable
+            $mcpArguments = @('-NoProfile', '-File', $memoryLauncher, '--memory-dir', $memoryTarget)
+            if ($agentName -eq 'codex') {
+                Update-CodexMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'config.toml') -Command $powerShellCommand -Arguments $mcpArguments
+            }
+            elseif ($agentName -eq 'claude') {
+                Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $script:UserHome '.claude.json') -Command $powerShellCommand -Arguments $mcpArguments
+                Remove-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json')
+            }
+            else {
+                Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json') -Command $powerShellCommand -Arguments $mcpArguments
+            }
+        }
+
+        Install-GraphSeed -GraphSeed $graphSeedSource -MemoryTarget $memoryTarget
+
         if ($agentName -eq 'codex') {
-            Update-CodexMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'config.toml') -Command $powerShellCommand -Arguments $mcpArguments
+            $installedAgentFiles = @(Copy-FlatArtifacts -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'codex') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.toml' -Label 'Codex agent')
+            [void](Copy-FlatArtifacts -Source (Join-Path $script:FrameworkDir 'codex-rules') -Target (Join-Path $agentHome 'rules') -ManagedRoot $agentHome -Filter '*.rules' -Label 'Codex rule')
         }
         elseif ($agentName -eq 'claude') {
-            Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $script:UserHome '.claude.json') -Command $powerShellCommand -Arguments $mcpArguments
-            Remove-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json')
+            $installedAgentFiles = @(Copy-FlatArtifacts -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'claude') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.md' -Label 'Claude agent')
         }
-        else {
-            Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json') -Command $powerShellCommand -Arguments $mcpArguments
+
+        Retire-LegacyHooks -SettingsFile $legacySettings -HooksTarget $hooksTarget -HooksRoot $hooksRoot -AgentName $agentName
+
+        if (Test-InstructionMarkerState -InstructionsFile $instructionsFile) {
+            if ($agentName -eq 'codex') {
+                Update-CodexInstructions -InstructionsFile $instructionsFile
+            }
+            Update-MemoryProtocol -InstructionsFile $instructionsFile -AgentName $agentName
         }
     }
-
-    Install-GraphSeed -GraphSeed $graphSeedSource -MemoryTarget $memoryTarget
-
-    $installedAgentFiles = @()
-    if ($agentName -eq 'codex') {
-        $installedAgentFiles = @(Copy-FlatArtifacts -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'codex') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.toml' -Label 'Codex agent')
-        [void](Copy-FlatArtifacts -Source (Join-Path $script:FrameworkDir 'codex-rules') -Target (Join-Path $agentHome 'rules') -ManagedRoot $agentHome -Filter '*.rules' -Label 'Codex rule')
-    }
-    elseif ($agentName -eq 'claude') {
-        $installedAgentFiles = @(Copy-FlatArtifacts -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'claude') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.md' -Label 'Claude agent')
-    }
-
-    Retire-LegacyHooks -SettingsFile $legacySettings -HooksTarget $hooksTarget -HooksRoot $hooksRoot -AgentName $agentName
-
-    if (Test-InstructionMarkerState -InstructionsFile $instructionsFile) {
-        if ($agentName -eq 'codex') {
-            Update-CodexInstructions -InstructionsFile $instructionsFile
-        }
-        Update-MemoryProtocol -InstructionsFile $instructionsFile -AgentName $agentName
+    catch {
+        if ($DryRun) { throw }
+        $originalCause = $_.Exception.Message
+        throw "Partial installation: some managed Assistant Framework files may already have been updated. Resolve the cause, close Codex App if it is using these files, and rerun the same command; reinstall is safe. Cause: $originalCause"
     }
 
     Write-Host ''

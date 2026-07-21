@@ -13,6 +13,7 @@ Before spawning any subagent, resolve:
 | `subagent_policy_state` | `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, `policy_disallowed` | Whether spawning subagents is allowed for this task and adapter |
 | `subagent_execution_mode` | `delegated`, `direct_fallback`, `not_applicable` | Whether work is executed by subagents, by direct fallback with equivalent evidence, or without any subagent role |
 | `subagent_authorization_scope` | list of roles/phases/actions | What the user explicitly authorized, when authorization was required |
+| `policy_blocking_source` | exact active rule, conditional | Required only for `policy_disallowed`; names the rule and confirms no applicable user, AGENTS, or skill exception |
 
 Light small low-risk localized work uses `subagent_policy_state=not_required`
 and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
@@ -35,6 +36,14 @@ spawn attempt fails or the adapter documentation/configuration proves no subagen
 mechanism exists. If the user declines or policy disallows spawning for
 standard/strict work, use `direct_fallback` and preserve the same phase gates,
 role separation, verification evidence, and review evidence.
+
+Plan approval is not delegation approval. When required roles lack a delegation
+decision, keep `authorization_required` and ask once. `policy_disallowed`
+requires a non-empty `policy_blocking_source` that names the exact active
+blocking rule and confirms no applicable user, AGENTS, or skill exception. A
+conditional policy that says not to spawn unless the user or applicable
+AGENTS/skill asks does not make policy_disallowed when the active skill requires
+subagents.
 
 ## Roles
 

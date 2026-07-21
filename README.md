@@ -67,6 +67,8 @@ For one compatibility release, a normal install also retires older Assistant Fra
 
 Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7 and requires the .NET 8 SDK so the Memory Graph server can build on first use.
 
+Close Codex App before installing or updating Codex so it releases `config.toml` and `AGENTS.md`. The installer checks existing copies of both files before it starts changing managed files. If either file is locked, close Codex App and rerun the same command. If a file becomes unavailable after that check, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
+
 Install the complete release inventory for one agent:
 
 ```powershell
@@ -117,13 +119,16 @@ Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy
 #### Windows manual verification
 
 1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
-2. Run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
-3. Resolve the Codex configuration root and confirm its Memory Graph launcher and configuration exist:
+2. Close Codex App, run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
+3. Resolve the Codex configuration root and confirm its Memory Graph launcher, configuration, and global instructions exist:
 
    ```powershell
    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
    Test-Path -LiteralPath (Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1')
    Test-Path -LiteralPath (Join-Path $codexHome 'config.toml')
+   Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
+   Select-String -LiteralPath (Join-Path $codexHome 'config.toml') -SimpleMatch '[mcp_servers.memory-graph]'
+   Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
    ```
 
 4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1`.

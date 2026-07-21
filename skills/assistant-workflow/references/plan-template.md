@@ -128,6 +128,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
 - Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
+- Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; required only for policy_disallowed]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)

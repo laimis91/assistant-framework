@@ -1484,6 +1484,132 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
+    Invoke-Contract 'locked Codex update files fail preflight before installation changes' {
+        Use-IsolatedEnvironment 'locked codex update files' {
+            param($root, $isolatedUserProfile)
+            foreach ($targetName in @('config.toml', 'AGENTS.md')) {
+                $codexHome = Join-Path $root ('Codex Locked ' + $targetName)
+                [void][System.IO.Directory]::CreateDirectory($codexHome)
+                $configFile = Join-Path $codexHome 'config.toml'
+                $instructionsFile = Join-Path $codexHome 'AGENTS.md'
+                [System.IO.File]::WriteAllText($configFile, "custom = `"keep`"`r`n", (New-Object System.Text.UTF8Encoding($false)))
+                [System.IO.File]::WriteAllText($instructionsFile, "Keep these user instructions.`r`n", (New-Object System.Text.UTF8Encoding($false)))
+                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+
+                $warmup = Invoke-Installer -Arguments @('-Help')
+                Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
+                $before = Get-TreeFingerprint -LiteralPath $root
+                $targetFile = Join-Path $codexHome $targetName
+                $lock = [System.IO.File]::Open(
+                    $targetFile,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::ReadWrite,
+                    [System.IO.FileShare]::None
+                )
+                try {
+                    $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+                }
+                finally {
+                    $lock.Dispose()
+                }
+
+                Assert-True ($result.ExitCode -ne 0) "Locked $targetName install reported success: $($result.Output)"
+                Assert-Contains $result.Output 'Locked-file preflight failed' "Locked $targetName lacked the preflight diagnostic"
+                Assert-Contains $result.Output $targetName "Locked $targetName diagnostic did not name the file"
+                Assert-Contains $result.Output 'Close Codex App' "Locked $targetName diagnostic lacked close guidance"
+                Assert-Contains $result.Output 'rerun' "Locked $targetName diagnostic lacked rerun guidance"
+                Assert-Contains $result.Output 'No installation changes were made' "Locked $targetName diagnostic did not state the pre-mutation guarantee"
+                Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) "Locked $targetName preflight changed the isolated install tree"
+            }
+        }
+    }
+
+    Invoke-Contract 'late Codex config lock reports a recoverable partial installation' {
+        Use-IsolatedEnvironment 'late codex config lock' {
+            param($root, $isolatedUserProfile)
+            $codexHome = Join-Path $root 'Codex Late Lock'
+            [void][System.IO.Directory]::CreateDirectory($codexHome)
+            $configFile = Join-Path $codexHome 'config.toml'
+            $instructionsFile = Join-Path $codexHome 'AGENTS.md'
+            $originalConfig = "custom = `"keep`"`r`n"
+            $originalInstructions = "Keep these user instructions.`r`n"
+            [System.IO.File]::WriteAllText($configFile, $originalConfig, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText($instructionsFile, $originalInstructions, (New-Object System.Text.UTF8Encoding($false)))
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+
+            $installedSkill = Join-Path $isolatedUserProfile '.agents\skills\assistant-workflow\SKILL.md'
+            $lockedSignal = Join-Path $root 'late-lock-acquired.signal'
+            $releaseSignal = Join-Path $root 'late-lock-release.signal'
+            $locker = [System.Management.Automation.PowerShell]::Create()
+            [void]$locker.AddScript({
+                param($SkillPath, $ConfigPath, $LockedSignal, $ReleaseSignal)
+                $deadline = [DateTime]::UtcNow.AddSeconds(30)
+                while (-not [System.IO.File]::Exists($SkillPath) -and [DateTime]::UtcNow -lt $deadline) {
+                    Start-Sleep -Milliseconds 10
+                }
+                if (-not [System.IO.File]::Exists($SkillPath)) {
+                    throw "Timed out waiting for the installer mutation signal: $SkillPath"
+                }
+                $stream = [System.IO.File]::Open(
+                    $ConfigPath,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::ReadWrite,
+                    [System.IO.FileShare]::None
+                )
+                try {
+                    [System.IO.File]::WriteAllText($LockedSignal, 'locked')
+                    while (-not [System.IO.File]::Exists($ReleaseSignal) -and [DateTime]::UtcNow -lt $deadline) {
+                        Start-Sleep -Milliseconds 10
+                    }
+                }
+                finally {
+                    $stream.Dispose()
+                }
+            }).AddArgument($installedSkill).AddArgument($configFile).AddArgument($lockedSignal).AddArgument($releaseSignal)
+            $asyncLock = $locker.BeginInvoke()
+            $lockerFailure = $null
+            try {
+                $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            }
+            finally {
+                [System.IO.File]::WriteAllText($releaseSignal, 'release')
+                try {
+                    [void]$locker.EndInvoke($asyncLock)
+                }
+                catch {
+                    $lockerFailure = $_.Exception.Message
+                }
+                $locker.Dispose()
+            }
+
+            Assert-True ([string]::IsNullOrWhiteSpace($lockerFailure)) "Late-lock coordinator failed: $lockerFailure"
+            Assert-True ([System.IO.File]::Exists($lockedSignal)) 'Late-lock coordinator never acquired the Codex config lock'
+            Assert-True ($result.ExitCode -ne 0) "Late-lock install reported success: $($result.Output)"
+            Assert-Contains $result.Output 'Partial installation:' 'Late-lock failure was not identified as a partial installation'
+            Assert-Contains $result.Output 'some managed Assistant Framework files may already have been updated' 'Late-lock diagnostic did not explain the partial state'
+            Assert-Contains $result.Output 'reinstall is safe' 'Late-lock diagnostic did not identify reinstall as safe'
+            Assert-Contains $result.Output $configFile 'Late-lock diagnostic did not preserve the original file-specific cause'
+            Assert-True ([System.IO.File]::Exists($installedSkill)) 'Late-lock failure did not reproduce a partially installed skill'
+            Assert-True ([System.IO.File]::Exists((Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'))) 'Late-lock failure did not reproduce partially installed tools'
+            Assert-Equal $originalConfig ([System.IO.File]::ReadAllText($configFile)) 'Late-lock failure changed the locked config'
+            Assert-Equal $originalInstructions ([System.IO.File]::ReadAllText($instructionsFile)) 'Late-lock failure changed instructions before recovery'
+            Assert-False ([System.IO.File]::Exists((Join-Path $codexHome 'agents\code-writer.toml'))) 'Late-lock failure continued into Codex agent installation'
+            Assert-False ([System.IO.File]::Exists((Join-Path $codexHome 'rules\workflow.rules'))) 'Late-lock failure continued into Codex rule installation'
+
+            $recovery = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $recovery.ExitCode "Recovery reinstall failed: $($recovery.Output)"
+            $recoveredConfig = [System.IO.File]::ReadAllText($configFile)
+            $recoveredInstructions = [System.IO.File]::ReadAllText($instructionsFile)
+            Assert-Contains $recoveredConfig 'custom = "keep"' 'Recovery reinstall lost unrelated Codex configuration'
+            Assert-Equal 1 (Get-LiteralCount $recoveredConfig '[mcp_servers.memory-graph]') 'Recovery reinstall did not register Memory Graph exactly once'
+            Assert-Contains $recoveredInstructions 'Keep these user instructions.' 'Recovery reinstall lost custom instructions'
+            Assert-Equal 1 (Get-LiteralCount $recoveredInstructions 'ASSISTANT_FRAMEWORK_AGENTS_MD_START') 'Recovery reinstall did not add Codex guidance exactly once'
+            Assert-Equal 1 (Get-LiteralCount $recoveredInstructions 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Recovery reinstall did not add the memory protocol exactly once'
+            Assert-True ([System.IO.File]::Exists((Join-Path $codexHome 'agents\code-writer.toml'))) 'Recovery reinstall did not install Codex agents'
+            Assert-True ([System.IO.File]::Exists((Join-Path $codexHome 'rules\workflow.rules'))) 'Recovery reinstall did not install Codex rules'
+        }
+    }
+
     Invoke-Contract 'invalid duplicate and ambiguous Codex TOML remain byte-identical' {
         Use-IsolatedEnvironment 'toml fail closed' {
             param($root, $isolatedUserProfile)

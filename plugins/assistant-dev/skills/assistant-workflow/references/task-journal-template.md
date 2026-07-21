@@ -64,6 +64,7 @@ Subagent policy state: [not_required | authorization_required | delegation_autho
 Subagent execution mode: [delegated | direct_fallback | not_applicable]
 Subagent authorization scope:
 - [roles/phases/actions covered by user authorization, or none]
+Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; N/A unless policy_disallowed]
 Candidate scope scan:
 - Likely touched paths: [exact paths, directories, modules, or unknown]
 - Symbols or terms searched: [search terms, commands, or none with reason]
@@ -83,6 +84,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - Execution mode: delegated | direct_fallback | not_applicable
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
 - Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
+- Policy blocking source: [exact active rule plus no-applicable-exception confirmation; required when Direct fallback reason is policy_disallowed]
 - Evidence shorthand: delegated refs | role-equivalent direct evidence | N/A only when role not required.
 - Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Explorer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
