@@ -513,11 +513,11 @@ while [[ \$# -gt 0 ]]; do
     fi
 done
 if [[ "\$overlay" == "$component_baseline_overlay" ]]; then
-    selected_initial=1676
-    selected_entry=3223
+    selected_initial=1677
+    selected_entry=3224
 else
-    selected_initial=978
-    selected_entry=2525
+    selected_initial=979
+    selected_entry=2526
 fi
 jq -n \
     --argjson selected_initial "\$selected_initial" \
