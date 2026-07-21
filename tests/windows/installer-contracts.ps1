@@ -201,6 +201,21 @@ function Use-IsolatedEnvironment {
     }
 }
 
+function Convert-ProcessOutputToText {
+    param([object[]]$OutputItems)
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($OutputItems)) {
+        if ($null -eq $item) { continue }
+        if ($item -is [System.Management.Automation.ErrorRecord]) {
+            $lines.Add($item.Exception.Message)
+        }
+        else {
+            $lines.Add([string]$item)
+        }
+    }
+    return ($lines -join [Environment]::NewLine)
+}
+
 function Invoke-Installer {
     param([string[]]$Arguments)
     $allArguments = @('-NoLogo', '-NoProfile', '-File', $script:InstallerPath) + @($Arguments)
@@ -226,7 +241,7 @@ function Invoke-Installer {
     }
     return (New-Object PSObject -Property @{
         ExitCode = $exitCode
-        Output = ($output | Out-String)
+        Output = Convert-ProcessOutputToText -OutputItems $output
     })
 }
 
@@ -255,7 +270,7 @@ function Invoke-PowerShellFile {
     }
     return (New-Object PSObject -Property @{
         ExitCode = $exitCode
-        Output = ($output | Out-String)
+        Output = Convert-ProcessOutputToText -OutputItems $output
     })
 }
 
@@ -368,6 +383,30 @@ try {
         }
         Assert-Contains $combined '-LiteralPath' 'Literal-path operations are not present'
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
+    }
+
+    Invoke-Contract 'child PowerShell output preserves raw long diagnostics across runtimes' {
+        $harnessSource = [System.IO.File]::ReadAllText($PSCommandPath)
+        $invokeInstallerStart = $harnessSource.IndexOf('function Invoke-Installer', [System.StringComparison]::Ordinal)
+        $invokeFileStart = $harnessSource.IndexOf('function Invoke-PowerShellFile', $invokeInstallerStart, [System.StringComparison]::Ordinal)
+        $fingerprintStart = $harnessSource.IndexOf('function Get-TreeFingerprint', $invokeFileStart, [System.StringComparison]::Ordinal)
+        Assert-True ($invokeInstallerStart -ge 0 -and $invokeFileStart -gt $invokeInstallerStart -and $fingerprintStart -gt $invokeFileStart) 'Child PowerShell helper boundaries were not found'
+        $invokeInstallerBody = $harnessSource.Substring($invokeInstallerStart, $invokeFileStart - $invokeInstallerStart)
+        $invokeFileBody = $harnessSource.Substring($invokeFileStart, $fingerprintStart - $invokeFileStart)
+        Assert-NotContains $invokeInstallerBody 'Out-String' 'Invoke-Installer formats redirected native errors instead of preserving their raw messages'
+        Assert-NotContains $invokeFileBody 'Out-String' 'Invoke-PowerShellFile formats redirected native errors instead of preserving their raw messages'
+        Assert-Contains $invokeInstallerBody 'Convert-ProcessOutputToText' 'Invoke-Installer does not use the cross-runtime raw-output normalizer'
+        Assert-Contains $invokeFileBody 'Convert-ProcessOutputToText' 'Invoke-PowerShellFile does not use the cross-runtime raw-output normalizer'
+
+        $expectedError = 'Error: long diagnostic path C:\fixture\' + ('nested path\' * 20) + 'config.toml. No installation changes were made.'
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            [System.IO.IOException]::new($expectedError),
+            'NativeCommandError',
+            [System.Management.Automation.ErrorCategory]::NotSpecified,
+            $null
+        )
+        $actual = Convert-ProcessOutputToText -OutputItems @('stdout marker', $errorRecord)
+        Assert-Equal ('stdout marker' + [Environment]::NewLine + $expectedError) $actual 'Raw-output normalization changed a long native error message'
     }
 
     Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through private DACL creation and content write' {
