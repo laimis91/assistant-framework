@@ -1410,6 +1410,10 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $agents = [System.IO.File]::ReadAllText($agentsFile)
             Assert-Contains $agents 'CUSTOM USER INSTRUCTION' 'Custom Codex instruction was lost'
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_AGENTS_MD_START') 'Codex guidance start marker is duplicated'
+            Assert-Equal 1 (Get-LiteralCount $agents '## Operating stance') 'Codex adaptive operating stance is missing or duplicated'
+            Assert-Contains $agents 'For small, low-risk, localized work, act as a hands-on worker' 'Codex guidance is missing the light-work execution stance'
+            Assert-Contains $agents 'For medium+ or elevated-risk development work, remain the orchestrator' 'Codex guidance is missing the medium-plus orchestration stance'
+            Assert-Contains $agents 'Keep orchestration proportional' 'Codex guidance is missing the proportionality boundary'
             Assert-Equal 1 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Memory protocol start marker is duplicated'
             if ($isWindowsHost) {
                 Assert-OwnerGroupDaclEquivalent -Expected $agentsAclBefore -Actual (Get-Acl -LiteralPath $agentsFile) -Message 'AGENTS.md owner, group, DACL protection, or effective rules changed during atomic replacement'

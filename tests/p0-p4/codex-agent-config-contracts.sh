@@ -161,17 +161,32 @@ else
     fail "reviewer must mirror code-reviewer model/effort and both must say 'Review the work, not the author.'"
 fi
 
-test_start "Installer-managed Codex AGENTS guidance stays free of role configuration"
+test_start "Installer-managed Codex AGENTS guidance keeps one adaptive main stance without subagent role configuration"
 lean_guidance_failures=()
 for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"; do
-    if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort|## Operating stance' "$installer_source"; then
-        lean_guidance_failures+=("${installer_source#$FRAMEWORK_DIR/}: embeds per-role model/stance guidance")
+    installer_label="${installer_source#$FRAMEWORK_DIR/}"
+    if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort' "$installer_source"; then
+        lean_guidance_failures+=("$installer_label: embeds subagent model/effort guidance")
+    fi
+    if [[ "$(grep -Fc -- '## Operating stance' "$installer_source")" != "1" ]]; then
+        lean_guidance_failures+=("$installer_label: expected exactly one adaptive Operating stance heading")
+    fi
+    for stance_anchor in \
+        "For small, low-risk, localized work, act as a hands-on worker" \
+        "For medium+ or elevated-risk development work, remain the orchestrator" \
+        "Keep orchestration proportional"; do
+        if ! grep -Fq -- "$stance_anchor" "$installer_source"; then
+            lean_guidance_failures+=("$installer_label: missing adaptive stance anchor '$stance_anchor'")
+        fi
+    done
+    if grep -Fq -- 'Review the work, not the author.' "$installer_source"; then
+        lean_guidance_failures+=("$installer_label: embeds subagent-specific personality guidance")
     fi
 done
 if [[ "${#lean_guidance_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "Codex AGENTS installer source must stay lean: ${lean_guidance_failures[*]}"
+    fail "Codex AGENTS installer source must keep only the compact main stance: ${lean_guidance_failures[*]}"
 fi
 
 test_start "Codex agent smoke helper is fixed-scope and metadata-only"

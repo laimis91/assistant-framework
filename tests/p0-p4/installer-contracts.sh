@@ -46,11 +46,16 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$agents_file")"
         agents_starts="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$agents_file")"
         agents_ends="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$agents_file")"
+        operating_stances="$(count_occurrences "^## Operating stance$" "$agents_file")"
         if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
+            && [[ "$operating_stances" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
             && grep -Fq "load only the references or contracts relevant to the current phase" "$agents_file" \
+            && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
+            && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
+            && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "Medium and larger changes require an approved plan" "$agents_file" \
             && grep -Fq "Delegation consent is required only before an actual subagent spawn." "$agents_file" \
             && grep -Fq "Continue safe non-spawn work while authorization is unresolved." "$agents_file" \

@@ -1271,6 +1271,12 @@ if [[ "$AGENT" == "codex" ]]; then
 
 Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
 
+## Operating stance
+
+- For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
+- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when authorized.
+- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
+
 ## Development workflow
 
 - Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan before project source, test, documentation, configuration, or installer edits begin.
