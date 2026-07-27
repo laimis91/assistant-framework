@@ -10,12 +10,13 @@ AGENT=""
 SKILL=""
 OUTPUT_FORMAT="json"
 BASELINE=""
+SKILL_OVERLAY=""
 INVENTORY_MODE="isolated_install"
 
 usage() {
     cat <<'EOF'
 Usage:
-  context-budget-report.sh --agent AGENT --skill SKILL --format json [--baseline FILE]
+  context-budget-report.sh --agent AGENT --skill SKILL --format json [--baseline FILE] [--skill-overlay FILE]
 
 Create a local, content-free inventory of framework instruction load. The
 report never includes prompt bodies, instruction bodies, responses, credentials,
@@ -26,6 +27,8 @@ Options:
   --skill SKILL            selected skill name, such as assistant-workflow
   --format json            emit the versioned JSON report
   --baseline FILE          add current-minus-baseline absolute/percent deltas
+  --skill-overlay FILE     replace only the selected root SKILL.md measurement;
+                           canonical contracts/references and standing context stay unchanged
   -h, --help               show this help
 EOF
 }
@@ -53,7 +56,7 @@ measure_file() {
         return
     fi
     printf '%s %s\n' \
-        "$(wc -w <"$path" | tr -d ' ')" \
+        "$(awk '{ words += NF } END { print words + 0 }' "$path")" \
         "$(wc -c <"$path" | tr -d ' ')"
 }
 
@@ -174,7 +177,7 @@ append_selected_contract_items() {
         marker = "  - " key ":"
         if (index(line, marker) == 1) {
           value = substr(line, length(marker) + 1)
-          gsub(/^[[:space:]\"\047]+|[[:space:]\"\047]+$/, "", value)
+          gsub(/^[[:space:]"\047]+|[[:space:]"\047]+$/, "", value)
           if (wanted[value]) keep = 1
         }
       }
@@ -186,10 +189,11 @@ build_selected_boundaries() {
     local skill_dir="$1"
     local initial_file="$2"
     local entry_file="$3"
+    local root_file="${4:-$skill_dir/SKILL.md}"
     local index_file="$skill_dir/contracts/index.yaml"
 
     : >"$initial_file"
-    cat "$skill_dir/SKILL.md" >>"$initial_file"
+    cat "$root_file" >>"$initial_file"
     if [[ -f "$index_file" ]]; then
         cat "$index_file" >>"$initial_file"
     fi
@@ -234,6 +238,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || die "Missing value for --baseline."
             BASELINE="$2"; shift 2
             ;;
+        --skill-overlay)
+            [[ $# -ge 2 ]] || die "Missing value for --skill-overlay."
+            SKILL_OVERLAY="$2"; shift 2
+            ;;
         -h|--help)
             usage; exit 0
             ;;
@@ -250,6 +258,11 @@ require_command jq
 [[ "$OUTPUT_FORMAT" == "json" ]] || die "Only --format json is supported."
 SOURCE_SKILL_DIR="$REPO_ROOT/skills/$SKILL"
 [[ -f "$SOURCE_SKILL_DIR/SKILL.md" ]] || die "Skill not found: $SKILL"
+if [[ -n "$SKILL_OVERLAY" ]]; then
+    [[ -f "$SKILL_OVERLAY" ]] || die "Skill overlay not found: $SKILL_OVERLAY"
+    grep -Eq "^name:[[:space:]]*[\"']?$SKILL[\"']?[[:space:]]*$" "$SKILL_OVERLAY" \
+        || die "Skill overlay name does not match --skill $SKILL."
+fi
 if [[ -n "$BASELINE" ]]; then
     [[ -f "$BASELINE" ]] || die "Baseline file not found: $BASELINE"
     jq empty "$BASELINE" >/dev/null 2>&1 || die "Baseline is not valid JSON: $BASELINE"
@@ -282,13 +295,21 @@ extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \
 
 CATALOG_FILE="$WORK_ROOT/native-skill-catalog-descriptions.txt"
 : >"$CATALOG_FILE"
-while IFS= read -r skill_file; do
-    extract_skill_description "$skill_file" >>"$CATALOG_FILE"
-done < <(find "$REPO_ROOT/skills" -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print | LC_ALL=C sort)
+while IFS= read -r relative_skill_file; do
+    extract_skill_description "$REPO_ROOT/$relative_skill_file" >>"$CATALOG_FILE"
+done < <(
+    cd "$REPO_ROOT"
+    find skills -mindepth 2 -maxdepth 2 -type f \
+        -path 'skills/assistant-*/SKILL.md' -print | LC_ALL=C sort
+)
 
 SELECTED_INITIAL_FILE="$WORK_ROOT/selected-skill-initial.txt"
 SELECTED_ENTRY_FILE="$WORK_ROOT/selected-skill-entry-boundary.txt"
-build_selected_boundaries "$SOURCE_SKILL_DIR" "$SELECTED_INITIAL_FILE" "$SELECTED_ENTRY_FILE"
+SELECTED_ROOT_FILE="$SOURCE_SKILL_DIR/SKILL.md"
+if [[ -n "$SKILL_OVERLAY" ]]; then
+    SELECTED_ROOT_FILE="$SKILL_OVERLAY"
+fi
+build_selected_boundaries "$SOURCE_SKILL_DIR" "$SELECTED_INITIAL_FILE" "$SELECTED_ENTRY_FILE" "$SELECTED_ROOT_FILE"
 
 read -r PROJECT_WORDS PROJECT_BYTES < <(measure_file "$PROJECT_AGENTS_FILE")
 read -r GLOBAL_WORDS GLOBAL_BYTES < <(measure_file "$GLOBAL_AGENTS_BLOCK")
@@ -306,10 +327,15 @@ TOTAL_ENTRY_WORDS=$((STANDING_WORDS + ENTRY_WORDS))
 TOTAL_ENTRY_BYTES=$((STANDING_BYTES + ENTRY_BYTES))
 
 REPORT_FILE="$WORK_ROOT/report.json"
+OVERLAY_APPLIED=false
+if [[ -n "$SKILL_OVERLAY" ]]; then
+    OVERLAY_APPLIED=true
+fi
 jq -n \
     --arg agent "$AGENT" \
     --arg skill "$SKILL" \
     --arg inventory_mode "$INVENTORY_MODE" \
+    --argjson overlay_applied "$OVERLAY_APPLIED" \
     --argjson project_words "$PROJECT_WORDS" \
     --argjson project_bytes "$PROJECT_BYTES" \
     --argjson global_words "$GLOBAL_WORDS" \
@@ -332,6 +358,7 @@ jq -n \
       agent: $agent,
       skill: $skill,
       inventory_mode: $inventory_mode,
+      overlay_applied: $overlay_applied,
       components: {
         project_agents: {words: $project_words, bytes: $project_bytes},
         generated_global_agents: {words: $global_words, bytes: $global_bytes},

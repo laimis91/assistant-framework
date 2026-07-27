@@ -124,14 +124,14 @@ else
     fail "QA evaluator domain-rubric prompt terms missing: ${prompt_failures[*]}"
 fi
 
-test_start "workflow records selected QA domain rubrics separately from review_result"
+test_start "assistant-review solely owns QA domain-rubric result fields"
 workflow_failures=()
 for file_and_term in \
-    "$workflow_dir/contracts/handoffs.yaml::selected_domain_rubrics" \
-    "$workflow_dir/contracts/handoffs.yaml::domain_quality_scores" \
-    "$workflow_dir/contracts/output.yaml::selected_domain_rubrics" \
-    "$workflow_dir/contracts/output.yaml::domain_quality_scores" \
-    "$workflow_dir/contracts/phase-gates.yaml::reject invented rubric scoring" \
+    "$review_dir/contracts/handoffs.yaml::selected_domain_rubrics" \
+    "$review_dir/contracts/handoffs.yaml::domain_quality_scores" \
+    "$review_dir/contracts/output.yaml::selected_domain_rubrics" \
+    "$review_dir/contracts/output.yaml::domain_quality_scores" \
+    "$workflow_dir/contracts/output.yaml::assistant-review/contracts/output.yaml#qa_evaluation_result" \
     "$workflow_dir/references/review-qa-router.md::references/domain-rubrics.md\` only when" \
     "$workflow_dir/references/task-journal-template.md::Selected domain rubrics" \
     "$workflow_dir/references/task-journal-template.md::Domain quality scores" \
@@ -143,10 +143,16 @@ for file_and_term in \
         workflow_failures+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
+if grep -Fq 'selected_domain_rubrics' "$workflow_dir/contracts/handoffs.yaml" \
+    || grep -Fq 'domain_quality_scores' "$workflow_dir/contracts/handoffs.yaml" \
+    || grep -Fq 'selected_domain_rubrics' "$workflow_dir/contracts/output.yaml" \
+    || grep -Fq 'domain_quality_scores' "$workflow_dir/contracts/output.yaml"; then
+    workflow_failures+=("workflow contracts duplicate canonical assistant-review domain-rubric result fields")
+fi
 if [[ "${#workflow_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow domain-rubric recording terms missing: ${workflow_failures[*]}"
+    fail "QA domain-rubric ownership terms missing or duplicated: ${workflow_failures[*]}"
 fi
 
 test_start "assistant-review eval fixture covers conditional domain rubric QA"

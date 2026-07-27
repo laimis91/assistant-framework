@@ -161,6 +161,8 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 - **Recoverable**: Every failure has a defined corrective action
 - **Outcome-shaped**: Root instructions state the goal, success criteria, constraints, output, and stop rules before detailed procedure
 - **Material clarification only**: `on_missing: ask` is reserved for implementation-shaping missing data that cannot be safely inferred or discovered
+- **Freshness-checked durable state**: persisted task or workflow state is a claim that must be reconciled against the newest user intent and current artifact/repository evidence before its next action is trusted
+- **Evidence-bounded completion**: completion and review claims name their reviewed scope, verification evidence, limitations, and exclusions instead of implying proof beyond available evidence
 
 ### Progressive contract loading
 

@@ -18,7 +18,12 @@ public sealed partial class MemoryStore : IDisposable
             Directory.CreateDirectory(dir);
         }
 
-        _db = new SqliteConnection($"Data Source={dbPath}");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath
+        }.ConnectionString;
+
+        _db = new SqliteConnection(connectionString);
         _db.Open();
         EnableForeignKeys();
         InitializeSchema();

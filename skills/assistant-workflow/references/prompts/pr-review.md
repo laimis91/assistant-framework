@@ -4,7 +4,12 @@ Load this during Stage 2 of the review cycle. This is the code quality gate — 
 
 ## When to use
 
-Run this review as part of the autonomous review-fix loop: after all build steps complete and tests pass. The loop runs up to 10 rounds, fixing must-fix and should-fix items each round until clean. You do NOT need to wait for user input between rounds.
+Run this after all build steps complete and tests pass. Audit mode performs one
+pass. Review-fix mode performs the initial review, fixes and validation, then
+one fresh re-review by default. Round 3+ requires an evidence-backed
+`additional_round_reason`; the loop supports up to 10 rounds and 10 remains the
+terminal safety cap. You do not need
+user input between authorized rounds.
 
 For small tasks, do a quick pass through the "must-check" items only. For medium+ tasks, work through the full checklist.
 
@@ -31,7 +36,7 @@ If you find no new issues above your confidence threshold, say "No new findings.
 
 ## Review process
 
-1. Re-read the approved plan (or lightweight plan for small tasks)
+1. Re-read the approved plan, or the carried Discover scope/criteria when `plan_mode=none`
 2. Diff the changes: `git diff main...HEAD` (or appropriate base branch)
 3. Walk through each checklist section below
 4. Produce the output: issues grouped by severity

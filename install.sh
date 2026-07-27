@@ -29,6 +29,7 @@ DRY_RUN=false
 SINGLE_SKILL=""
 PLUGIN_PROFILE=""
 FRAMEWORK_DIR=""
+MEMORY_GRAPH_STARTUP_TIMEOUT_SEC=120
 toml_files=()
 
 # Skills are auto-discovered from first-class assistant-* release directories.
@@ -631,6 +632,23 @@ cleanup_installed_tool_build_artifacts() {
     fi
 }
 
+remove_source_only_promotion_tools() {
+    local tools_target="$1" relative_path
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        if $DRY_RUN; then
+            dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
+        else
+            rm -f "$tools_target/$relative_path"
+        fi
+    done <<'EOF'
+context-budget-report.sh
+evals/run-codex-framework-evals.sh
+evals/finalize-workflow-kernel-review.sh
+evals/lib/context-budget-evidence.sh
+EOF
+}
+
 register_codex_memory_graph_mcp() {
     local config_file="$1"
     local mcp_command="$2"
@@ -648,17 +666,19 @@ register_codex_memory_graph_mcp() {
         info "Update $config_file manually with [mcp_servers.memory-graph], command/args, and memory tool approval blocks."
         info "  command = \"$mcp_command\""
         info "  args = [\"--memory-dir\", \"$memory_dir\"]"
+        info "  startup_timeout_sec = $MEMORY_GRAPH_STARTUP_TIMEOUT_SEC"
         return 1
     fi
 
-    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" <<'PY'
+    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" "$MEMORY_GRAPH_STARTUP_TIMEOUT_SEC" <<'PY'
 import json
 import os
 import re
 import stat
 import sys
 
-config_file, mcp_command, memory_dir = sys.argv[1:4]
+config_file, mcp_command, memory_dir, startup_timeout_sec = sys.argv[1:5]
+startup_timeout_sec = int(startup_timeout_sec)
 tools = [
     "memory_context",
     "memory_search",
@@ -674,6 +694,7 @@ tools = [
     "memory_decide",
     "memory_pattern",
     "memory_consolidate",
+    "memory_signal",
     "memory_trend",
 ]
 
@@ -736,6 +757,7 @@ memory_graph_lines = [
     "[mcp_servers.memory-graph]\n",
     "command = {}\n".format(json.dumps(mcp_command)),
     "args = [\"--memory-dir\", {}]\n".format(json.dumps(memory_dir)),
+    "startup_timeout_sec = {}\n".format(startup_timeout_sec),
 ]
 for tool in tools:
     memory_graph_lines.extend([
@@ -949,6 +971,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     if $DRY_RUN; then
         dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
+        remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
     else
         mkdir -p "$TOOLS_TARGET"
@@ -957,7 +980,12 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='.publish' \
             --exclude='bin' \
             --exclude='obj' \
+            --exclude='/context-budget-report.sh' \
+            --exclude='/evals/run-codex-framework-evals.sh' \
+            --exclude='/evals/finalize-workflow-kernel-review.sh' \
+            --exclude='/evals/lib/context-budget-evidence.sh' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
+        remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
 
         # Make scripts executable
@@ -1242,6 +1270,12 @@ if [[ "$AGENT" == "codex" ]]; then
 # AGENTS.md — Codex Agent Instructions
 
 Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
+
+## Operating stance
+
+- For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
+- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when authorized.
+- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
 ## Development workflow
 

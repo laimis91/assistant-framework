@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "1.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-workflow
 
@@ -47,7 +47,7 @@ fields:
     type: string[]
     required: false
     description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. Standard/strict development work that changes project artifacts includes Code Writer, Builder/Tester, and Code Reviewer responsibilities. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Separated role names remain Code Writer, Builder/Tester, and Code Reviewer. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
     default: []
     on_missing: skip
 
@@ -59,14 +59,14 @@ fields:
     validation: "Must describe the current authorization or availability state before any subagent dispatch occurs"
     default: not_required
     on_missing: infer
-    infer_from: "Use not_required for controller_intensity=light inline/direct work. Use authorization_required for standard/strict development work that needs workflow subagent roles unless the prompt already authorizes them; use delegation_authorized only after explicit approval, authorization_denied when declined, subagents_unavailable only after a real spawn failure, and policy_disallowed when policy forbids spawning."
+    infer_from: "Use not_required for controller_intensity=light inline/direct work. When required_agents is non-empty and no explicit delegation approval or denial exists, use authorization_required for standard/strict development work that needs workflow subagent roles unless the prompt already authorizes them. Plan approval is not delegation approval. Use delegation_authorized only after explicit approval, authorization_denied when declined, subagents_unavailable only after a real spawn failure, and policy_disallowed only when an exact active rule blocks spawning with no applicable user, AGENTS, or skill exception."
 
   - name: subagent_execution_mode
     type: enum
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How role responsibilities will be executed for this task"
-    validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
+    validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
     default: not_applicable
     on_missing: infer
     infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
@@ -78,6 +78,14 @@ fields:
     validation: "Empty when no authorization was needed or granted. Non-empty when subagent_policy_state=delegation_authorized."
     default: []
     on_missing: skip
+
+  - name: policy_blocking_source
+    type: string
+    required: conditional
+    condition: "subagent_policy_state == policy_disallowed"
+    description: "Exact active rule that blocks spawning after confirming no applicable user, AGENTS, or skill exception"
+    validation: "Non-empty; names the blocking rule and confirms why no applicable exception permits delegation. A conditional rule that defers spawning unless the user or applicable AGENTS/skill asks does not make policy_disallowed when the active skill requires subagents."
+    on_missing: fail
 
   - name: scope_hint
     type: enum
@@ -130,11 +138,93 @@ fields:
   - name: acceptance_criteria
     type: string[]
     required: false
-    description: "Explicit success criteria from user or decomposed from an idea"
+    description: "Compatibility list of atomic success criteria derived from requirement_acceptance_map when present"
     validation: "Each criterion is atomic, binary (pass/fail), and testable (8-12 words)"
     default: []
     on_missing: skip
-    notes: "Populated by Idea-to-Action pipeline when input is a vague idea rather than a concrete task"
+    notes: "Do not create criteria independently when requirement_acceptance_map exists. Vague requests are clarified or safely defaulted, then mapped through references/requirement-acceptance-map.md."
+
+  - name: requirement_acceptance_map
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion"
+    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
+    on_missing: fail
+    object_fields:
+      - name: intended_outcome
+        type: string
+        required: true
+        description: "One concise accepted outcome"
+        on_missing: fail
+      - name: assumptions_and_defaults
+        type: string[]
+        required: true
+        description: "Explicit inferred choices; may be empty"
+        on_missing: fail
+      - name: open_material_questions
+        type: string[]
+        required: true
+        description: "Empty before Plan unless unresolved questions block progress"
+        on_missing: fail
+      - name: non_goals
+        type: string[]
+        required: true
+        description: "Explicit exclusions; may be empty"
+        on_missing: fail
+      - name: entries
+        type: object[]
+        required: true
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: requirement_id
+            type: string
+            required: true
+            description: "Stable identifier unique within the task"
+            on_missing: fail
+          - name: source
+            type: string
+            required: true
+            description: "User request, accepted default, policy, or local contract source"
+            on_missing: fail
+          - name: requirement
+            type: string
+            required: true
+            description: "Atomic accepted requirement"
+            on_missing: fail
+          - name: acceptance_criterion
+            type: string
+            required: true
+            description: "Binary pass/fail criterion proving the requirement"
+            on_missing: fail
+          - name: verification_method
+            type: string
+            required: true
+            description: "Test, command, inspection, review, or manual verification method"
+            on_missing: fail
+          - name: evidence_ref
+            type: string
+            required: true
+            description: "Pending marker or stable verification evidence reference"
+            on_missing: fail
+          - name: manual_scenario_or_na
+            type: string
+            required: true
+            description: "Developer test scenario or explicit N/A with reason"
+            on_missing: fail
+          - name: status
+            type: enum
+            required: true
+            enum_values: [pending, passed, failed, approved_exclusion]
+            description: "Current traceability status"
+            on_missing: fail
+          - name: exclusion_reason
+            type: string
+            required: conditional
+            condition: "status == approved_exclusion"
+            description: "User-approved reason the requirement is excluded"
+            on_missing: fail
 
   - name: harness_capable
     type: boolean
@@ -149,6 +239,26 @@ fields:
       domain-scored, UI/visual/product/UX/docs/DX-facing, or already has an accepted Done Contract
       or Harness Recipe. Do not infer true from size=medium+, delegation alone, or ordinary
       source-changing workflow tasks.
+
+  - name: build_execution_lane
+    type: enum
+    required: false
+    enum_values: [inline_direct, bounded_executor, separated_workers]
+    description: "Ownership shape for the Build edit/test loop"
+    default: bounded_executor
+    on_missing: infer
+    infer_from: "light localized work -> inline_direct; ordinary medium standard-risk work -> bounded_executor; high/critical risk, broad or noisy verification, environment-heavy validation, independent TDD evidence, or explicit separation -> separated_workers"
+    validation: "Size alone does not require separated_workers. bounded_executor still records valid RED before production code, focused GREEN/regression verification, and independent Code Reviewer evidence."
+
+  - name: plan_mode
+    type: enum
+    required: false
+    enum_values: [none, inline, approval_required]
+    description: "Whether this task skips a separate Plan phase, records a compact no-wait plan, or waits for explicit plan approval"
+    validation: "none is allowed only for trivial, localized, reversible, low-risk work with one obvious implementation path, known files, known verification, no material ambiguity, and no public contract/data/security/destructive effect. inline is limited to bounded small work with no approval trigger. approval_required is mandatory for medium+, high/critical risk, destructive work, public contract/data/security changes, material architecture or scope choices, repository policy, or an explicit user request."
+    default: none
+    on_missing: infer
+    infer_from: "Use approval_required for medium+ or any approval trigger. Use inline for small work that benefits from multiple recorded steps but has no approval trigger. Use none only when the next safe edit and verification are obvious after Discover."
 
   - name: controller_intensity
     type: enum
@@ -200,15 +310,16 @@ fields:
     type: enum
     required: false
     enum_values: [auto, not_required, required]
-    description: "Whether Document must run the Learning Controller and consider durable reflexion/memory capture."
-    validation: "required means the user or approved plan explicitly requested learning capture. auto requires the Learning Controller only when concrete lesson-bearing evidence exists in review findings, build/test failures, user corrections, or memory trend signals. not_required skips learning capture."
+    description: "Whether Document must run the Learning Controller and consider durable reflexion/memory capture; journal mode also records the canonical Learning evidence signals ledger."
+    validation: "normal work MUST use auto. required means the user or approved plan explicitly requested learning capture. auto requires the Learning Controller only when concrete lesson-bearing evidence exists in review findings, build/test failures, user corrections, or memory trend signals. not_required is valid only with a policy_disallowed: or explicit_exclusion: reason."
     default: auto
     on_missing: infer
     infer_from: >
       Use required when the user or approved plan explicitly requests reflection, learning, or
       durable memory capture. Use auto for normal work so concrete review findings, build/test
       failures, user corrections, or memory trend signals activate the Learning Controller.
-      Use not_required when policy disallows learning capture or the task is explicitly excluded.
+      Use not_required only when policy disallows learning capture or the task is explicitly excluded,
+      and prefix the concrete rationale with policy_disallowed: or explicit_exclusion:.
 
   - name: qa_evaluation_mode
     type: enum
@@ -316,11 +427,34 @@ fields:
   - name: clarification_defaults_applied
     type: boolean
     required: true
-    description: "Whether any unresolved clarification topic was resolved by an explicit `defaults` reply during Discover"
-    validation: "Must be explicit true or false. May be true only after the workflow prints the applied defaults and the user explicitly replies `defaults`."
+    description: "Whether Discover automatically applied at least one deterministic safe default and recorded its source and rationale without asking"
+    validation: "Must be true when clarification_defaults contains one or more automatically applied safe defaults and false when it is empty. Safe-default application never waits for a user reply. An explicit `defaults` reply remains compatibility shorthand for accepting displayed recommendations on questions that had no deterministic safe default; it is recorded as a user answer, not an automatically applied safe default."
     default: false
     on_missing: skip
-    notes: "Never infer this from follow-up wording or continuation text."
+    notes: "Do not set true merely because a user replied `defaults`; tie it to clarification_defaults evidence."
+
+  - name: clarification_defaults
+    type: object[]
+    required: true
+    description: "Deterministic safe defaults applied automatically during Discover"
+    validation: "Each entry records one implementation-shaping topic, chosen value, discoverable source, and concrete rationale. Empty only when no safe default was applied."
+    default: []
+    on_missing: skip
+    object_fields:
+      - name: topic
+        type: string
+        required: true
+      - name: value
+        type: string
+        required: true
+      - name: source
+        type: string
+        required: true
+        description: "User instruction, repository evidence, active policy, or stable local convention supporting the default"
+      - name: rationale
+        type: string
+        required: true
+        description: "Why this value is safe, reversible, and does not materially change scope"
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.
@@ -328,5 +462,5 @@ fields:
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
 # 5. Clarification question caps are maximums, not quotas. Never ask a ritual question just because a task is medium+.
-# 6. If clarification_status=needs_clarification: carry unresolved_clarification_topics into Discover and stop for explicit answers or `defaults`
+# 6. Apply deterministic safe defaults immediately, record source/rationale, and set clarification_defaults_applied=true. If clarification_status=needs_clarification, carry only topics with no safe default into Discover and stop for explicit answers; `defaults` remains an acceptance shorthand for displayed recommendations.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

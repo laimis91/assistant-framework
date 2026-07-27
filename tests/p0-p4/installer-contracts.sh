@@ -46,11 +46,16 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$agents_file")"
         agents_starts="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$agents_file")"
         agents_ends="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$agents_file")"
+        operating_stances="$(count_occurrences "^## Operating stance$" "$agents_file")"
         if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
+            && [[ "$operating_stances" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
             && grep -Fq "load only the references or contracts relevant to the current phase" "$agents_file" \
+            && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
+            && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
+            && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "Medium and larger changes require an approved plan" "$agents_file" \
             && grep -Fq "Delegation consent is required only before an actual subagent spawn." "$agents_file" \
             && grep -Fq "Continue safe non-spawn work while authorization is unresolved." "$agents_file" \
@@ -514,6 +519,7 @@ args = ["--keep"]
 [mcp_servers.memory-graph]
 command = "/stale/memory-graph"
 args = ["--old-memory-dir", "/stale/memory"]
+startup_timeout_sec = 10
 
 [mcp_servers.memory-graph.tools.memory_context]
 approval_mode = "deny"
@@ -534,6 +540,7 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
     config_mode="$(p0p4_file_mode_octal "$config_file")"
     expected_command="command = \"$INSTALL_HOME_NINE/.codex/tools/memory-graph/run-memory-graph.sh\""
     expected_args="args = [\"--memory-dir\", \"$INSTALL_HOME_NINE/.codex/memory\"]"
+    expected_startup_timeout='startup_timeout_sec = 120'
     memory_tools=(
         memory_context
         memory_search
@@ -549,19 +556,22 @@ if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --sk
         memory_decide
         memory_pattern
         memory_consolidate
+        memory_signal
         memory_trend
     )
 
     if [[ "$(count_occurrences "^\\[mcp_servers\\.memory-graph\\]$" "$config_file")" != "1" ]] \
         || ! grep -Fq "$expected_command" "$config_file" \
         || ! grep -Fq "$expected_args" "$config_file" \
+        || [[ "$(count_occurrences "^${expected_startup_timeout}$" "$config_file")" != "1" ]] \
+        || grep -q '^startup_timeout_sec = 10$' "$config_file" \
         || grep -q "/stale/memory-graph" "$config_file" \
         || ! grep -q '^model = "test-model"$' "$config_file" \
         || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
         || ! grep -q '^hooks = false$' "$config_file" \
         || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph command/args to refresh while preserving unrelated config, disabled hooks profile, and file mode"
+        fail "expected stale Codex memory-graph command/args/startup timeout to refresh while preserving unrelated config, disabled hooks profile, and file mode"
     else
         missing_tool=""
         duplicate_tool=""
@@ -601,18 +611,31 @@ else
     fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
 fi
 
-test_start "installer includes eval fixture used by installed eval runner"
+test_start "clean install keeps legacy offline evals but excludes source-only promotion evaluators"
 INSTALL_HOME_EIGHT="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_EIGHT"
+mkdir -p "$INSTALL_HOME_EIGHT/.codex/tools/evals/lib"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
 if HOME="$INSTALL_HOME_EIGHT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-evals.out 2>/tmp/p0p4-install-evals.err; then
     installed_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-framework-instruction-evals.sh"
     installed_fixture="$INSTALL_HOME_EIGHT/.codex/docs/evals/framework-instruction-cases.json"
+    installed_codex_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
+    installed_finalizer="$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
+    installed_evidence_lib="$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+    installed_context_reporter="$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
     if [[ -x "$installed_runner" ]] \
         && [[ -f "$installed_fixture" ]] \
+        && [[ ! -e "$installed_codex_runner" ]] \
+        && [[ ! -e "$installed_finalizer" ]] \
+        && [[ ! -e "$installed_evidence_lib" ]] \
+        && [[ ! -e "$installed_context_reporter" ]] \
         && HOME="$INSTALL_HOME_EIGHT" "$installed_runner" --validate-fixture >/tmp/p0p4-installed-eval-runner.out 2>/tmp/p0p4-installed-eval-runner.err; then
         pass
     else
-        fail "installed eval runner must validate the installed fixture; see /tmp/p0p4-installed-eval-runner.err"
+        fail "clean install must omit source-only promotion evaluators while preserving the legacy offline runner and fixture"
     fi
 else
     fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"

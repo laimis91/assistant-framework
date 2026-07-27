@@ -128,7 +128,9 @@ missing_review_output_terms=()
 for term in \
     "- name: review_result" \
     "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result." \
-    "quality_review_status" \
+    "assistant-review/contracts/output.yaml#final_summary" \
+    "canonical_result_ref" \
+    "validation_status" \
     "- name: spec_review_result" \
     "Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md." \
     "enum_values: [PASS]" \

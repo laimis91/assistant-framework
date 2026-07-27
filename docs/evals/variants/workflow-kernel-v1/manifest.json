@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "variant": "workflow-kernel-v1",
+  "base_skill": "assistant-workflow",
+  "intervention": "Replace only the root SKILL.md while keeping canonical contracts and references unchanged.",
+  "promotion_gates": {
+    "selected_initial_words_max": 1000,
+    "selected_entry_words_max": 2600,
+    "standing_context_growth_allowed": false,
+    "must_pass_case_regressions_allowed": 0,
+    "seeded_defect_recall_must_not_drop": true,
+    "false_positive_marker_hits_must_not_increase": true,
+    "semantic_false_positive_review_required": true,
+    "question_mark_count_proxy_must_not_increase": true,
+    "median_rework_or_tool_calls_max_regression_percent": 20
+  },
+  "semantic_review": {
+    "case_category": "seeded_review",
+    "data_classification": "synthetic",
+    "max_findings_per_run": 8,
+    "unclassified_finding_policy": "block",
+    "raw_response_retained": false
+  },
+  "static_measurement": {
+    "baseline_selected_initial_words": 1677,
+    "candidate_selected_initial_words": 979,
+    "selected_initial_word_delta": -698,
+    "baseline_total_initial_words": 2690,
+    "candidate_total_initial_words": 1992,
+    "baseline_selected_entry_words": 3224,
+    "candidate_selected_entry_words": 2526,
+    "selected_entry_word_delta": -698,
+    "standing_context_growth": 0,
+    "measured_with": "tools/context-budget-report.sh --skill-overlay"
+  },
+  "smoke_cases": [
+    "small-fix-stays-lightweight",
+    "seeded-code-review-regressions"
+  ],
+  "smoke_repeats": 1,
+  "pilot_cases": [
+    "small-fix-stays-lightweight",
+    "stale-journal-yields-to-current-evidence",
+    "requirements-map-through-completion",
+    "ordinary-medium-bounded-executor",
+    "seeded-code-review-regressions",
+    "medium-final-handoff-is-reconstructable"
+  ],
+  "pilot_repeats": 3,
+  "status": "candidate"
+}

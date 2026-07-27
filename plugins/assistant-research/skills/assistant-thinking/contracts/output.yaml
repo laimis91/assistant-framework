@@ -58,7 +58,7 @@ artifacts:
     required: conditional
     condition: "tool_used in [perspectives, stress_test]"
     description: "How independent roles or attack angles were executed"
-    validation: "States subagent_policy_state, subagent_execution_mode, authorization scope when any, and whether roles/angles were delegated or run sequentially in fallback"
+    validation: "States subagent_policy_state, subagent_execution_mode, authorization scope when any, conditional policy_blocking_source, and whether roles/angles were delegated or run sequentially in fallback"
     on_fail: "Record delegated execution or sequential fallback before presenting synthesis; do not imply subagents were used when they were not authorized or available"
     object_fields:
       - name: subagent_policy_state
@@ -72,6 +72,11 @@ artifacts:
       - name: subagent_authorization_scope
         type: string[]
         required: true
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+        validation: "Non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception permits delegation"
       - name: execution_note
         type: string
         required: true

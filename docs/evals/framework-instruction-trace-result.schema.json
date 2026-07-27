@@ -21,13 +21,22 @@
       "type": "string",
       "minLength": 1
     },
+    "pair_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trial_index": {
+      "type": "integer",
+      "minimum": 1
+    },
     "case_id": {
       "type": "string",
       "minLength": 1
     },
     "model": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "Deprecated compatibility alias for provenance.requested_model; strict validation requires equality. It is not runtime-resolved model telemetry."
     },
     "variant": {
       "type": "string",
@@ -51,10 +60,12 @@
         "output_tokens",
         "latency_ms",
         "tool_calls",
-        "unnecessary_questions",
+        "question_mark_count_proxy",
         "time_to_first_useful_action_ms",
         "rework_count",
-        "acceptance_passed"
+        "acceptance_passed",
+        "acceptance_items_passed",
+        "acceptance_items_total"
       ],
       "properties": {
         "input_tokens": {
@@ -73,7 +84,7 @@
           "type": "integer",
           "minimum": 0
         },
-        "unnecessary_questions": {
+        "question_mark_count_proxy": {
           "type": "integer",
           "minimum": 0
         },
@@ -87,6 +98,38 @@
         },
         "acceptance_passed": {
           "type": "boolean"
+        },
+        "acceptance_items_passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "acceptance_items_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seeded_defects_detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seeded_defects_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "false_positive_marker_hits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "forbidden_command_hits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scope_deviations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verifier_exit_code": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -100,11 +143,319 @@
       "properties": {
         "code": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "adapter_not_configured",
+            "codex_not_found",
+            "codex_exit_nonzero",
+            "codex_reported_failure",
+            "local_execution_restricted",
+            "model_unavailable",
+            "authentication_failed",
+            "quota_or_rate_limited",
+            "network_unavailable",
+            "configuration_error",
+            "cli_usage_error",
+            "unknown_event_shape",
+            "missing_usage",
+            "missing_final_output",
+            "execution_timed_out",
+            "evaluation_time_cap_reached"
+          ]
         },
         "message": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "code": { "const": "adapter_not_configured" },
+            "message": { "const": "The local adapter is not configured." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "codex_not_found" },
+            "message": { "const": "Codex executable is unavailable." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "codex_exit_nonzero" },
+            "message": { "const": "Codex exited non-zero without a recognized structured failure class." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "codex_reported_failure" },
+            "message": { "const": "Codex reported a structured execution failure." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "local_execution_restricted" },
+            "message": { "const": "Local execution restrictions prevented Codex startup." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "model_unavailable" },
+            "message": { "const": "Requested model is unavailable or inaccessible." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "authentication_failed" },
+            "message": { "const": "Codex authentication failed." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "quota_or_rate_limited" },
+            "message": { "const": "Codex quota or rate limit prevented execution." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "network_unavailable" },
+            "message": { "const": "Codex could not reach the model service." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "configuration_error" },
+            "message": { "const": "Codex configuration prevented execution." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "cli_usage_error" },
+            "message": { "const": "Codex rejected the adapter command shape." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "unknown_event_shape" },
+            "message": { "const": "Codex JSONL contained an unknown event shape." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "missing_usage" },
+            "message": { "const": "Codex JSONL did not contain completed token usage." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "missing_final_output" },
+            "message": { "const": "Codex did not produce a final response." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "execution_timed_out" },
+            "message": { "const": "Codex exceeded the bounded per-run timeout." }
+          }
+        },
+        {
+          "properties": {
+            "code": { "const": "evaluation_time_cap_reached" },
+            "message": { "const": "The bounded total evaluation time cap was reached." }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_sha256",
+        "case_sha256",
+        "instruction_sha256",
+        "grader_sha256",
+        "cli_version",
+        "requested_model",
+        "runtime_model_attestation",
+        "model_selection_evidence",
+        "requested_model_catalog_entry_sha256",
+        "codex_executable_sha256",
+        "adapter_version"
+      ],
+      "properties": {
+        "fixture_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "case_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "instruction_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "grader_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "seed_workspace_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cli_version": {"type": "string", "minLength": 1},
+        "requested_model": {"type": "string", "minLength": 1},
+        "runtime_model_attestation": {"const": "not_exposed_by_codex_jsonl"},
+        "model_selection_evidence": {
+          "enum": [
+            "catalog_entry_and_explicit_model_argument",
+            "explicit_model_argument_only"
+          ]
+        },
+        "requested_model_catalog_entry_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "codex_executable_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "adapter_version": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "model_selection_evidence": {"const": "catalog_entry_and_explicit_model_argument"}
+            }
+          },
+          "then": {
+            "properties": {
+              "requested_model_catalog_entry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "codex_executable_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "model_selection_evidence": {"const": "explicit_model_argument_only"}
+            }
+          },
+          "then": {
+            "properties": {
+              "requested_model_catalog_entry_sha256": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exit_code", "verifier"],
+      "properties": {
+        "exit_code": {"type": "integer", "minimum": 0},
+        "raw_artifacts_retained": {"const": false},
+        "semantic_checkpoint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "metric_methods": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "time_to_first_useful_action_ms",
+            "question_mark_count_proxy",
+            "rework_count"
+          ],
+          "properties": {
+            "time_to_first_useful_action_ms": {"const": "completion_latency_upper_bound"},
+            "question_mark_count_proxy": {"const": "question_mark_count_proxy"},
+            "rework_count": {"const": "additional_file_change_events_proxy"}
+          }
+        },
+        "verifier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["passed", "failed", "not_run"]},
+            "required_missing": {"type": "integer", "minimum": 0},
+            "missing_required_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^required-[0-9]{3}$"}
+            },
+            "forbidden_hits": {"type": "integer", "minimum": 0},
+            "forbidden_hit_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^forbidden-[0-9]{3}$"}
+            },
+            "fail_signal_hits": {"type": "integer", "minimum": 0},
+            "fail_signal_hit_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^fail-signal-[0-9]{3}$"}
+            },
+            "acceptance_items_passed": {"type": "integer", "minimum": 0},
+            "acceptance_items_total": {"type": "integer", "minimum": 0},
+            "seeded_defects_detected": {"type": "integer", "minimum": 0},
+            "seeded_defects_total": {"type": "integer", "minimum": 0},
+            "seeded_defect_missed_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^seeded-defect-[0-9]{3}$"}
+            },
+            "false_positive_marker_hits": {"type": "integer", "minimum": 0},
+            "false_positive_marker_hit_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^false-positive-[0-9]{3}$"}
+            },
+            "forbidden_command_hits": {"type": "integer", "minimum": 0},
+            "workspace_status": {"enum": ["passed", "failed", "not_applicable"]},
+            "workspace_exit_code": {"type": "integer", "minimum": 0},
+            "workspace_failure_ids": {
+              "type": "array",
+              "maxItems": 999,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^workspace-[0-9]{3}$"}
+            },
+            "scope_deviations": {"type": "integer", "minimum": 0}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"status": {"enum": ["passed", "failed"]}}},
+              "then": {
+                "required": [
+                  "required_missing",
+                  "missing_required_ids",
+                  "forbidden_hits",
+                  "forbidden_hit_ids",
+                  "fail_signal_hits",
+                  "fail_signal_hit_ids",
+                  "acceptance_items_passed",
+                  "acceptance_items_total",
+                  "seeded_defects_detected",
+                  "seeded_defects_total",
+                  "seeded_defect_missed_ids",
+                  "false_positive_marker_hits",
+                  "false_positive_marker_hit_ids",
+                  "workspace_status",
+                  "workspace_exit_code",
+                  "workspace_failure_ids"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": ["workspace_status"],
+                "properties": {"workspace_status": {"enum": ["passed", "not_applicable"]}}
+              },
+              "then": {
+                "properties": {"workspace_failure_ids": {"maxItems": 0}}
+              }
+            },
+            {
+              "if": {
+                "required": ["workspace_status"],
+                "properties": {"workspace_status": {"const": "failed"}}
+              },
+              "then": {
+                "properties": {"workspace_failure_ids": {"minItems": 1}}
+              }
+            }
+          ]
         }
       }
     }
@@ -120,12 +471,54 @@
       },
       "then": {
         "required": [
-          "metrics"
+          "metrics",
+          "provenance",
+          "execution"
         ],
+        "properties": {
+          "execution": {
+            "required": ["exit_code", "verifier", "metric_methods", "raw_artifacts_retained"],
+            "properties": {
+              "exit_code": {"const": 0},
+              "raw_artifacts_retained": {"const": false},
+              "verifier": {
+                "properties": {
+                  "status": {"enum": ["passed", "failed"]}
+                }
+              }
+            }
+          }
+        },
         "not": {
           "required": [
             "error"
           ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "completed"},
+          "metrics": {"properties": {"acceptance_passed": {"const": true}}}
+        }
+      },
+      "then": {
+        "properties": {
+          "execution": {"properties": {"verifier": {"properties": {"status": {"const": "passed"}}}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "completed"},
+          "metrics": {"properties": {"acceptance_passed": {"const": false}}}
+        }
+      },
+      "then": {
+        "properties": {
+          "execution": {"properties": {"verifier": {"properties": {"status": {"const": "failed"}}}}}
         }
       }
     },

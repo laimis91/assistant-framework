@@ -25,15 +25,61 @@ explicitly or approve the bounded request.
 ## Quick verification
 
 ```bash
-# Refresh skills and agent definitions
-./install.sh --agent claude
-./install.sh --agent codex
-./install.sh --agent gemini
+# Validate the source definitions without invoking Codex or requiring auth
+bash tools/smoke-test-codex-agents.sh --check-only
 
-# Verify configured Codex agents
-ls ~/.codex/agents/*.toml
-grep '^name' ~/.codex/agents/*.toml
+# Refresh Codex skills and agent definitions
+./install.sh --agent codex
+
+# Verify the eight installed definitions exactly match the repository sources
+for file in agents/codex/*.toml; do
+  cmp "$file" "${CODEX_HOME:-$HOME/.codex}/agents/${file##*/}"
+done
+
+# Exercise one fixed representative for every unique model/effort combination
+bash tools/smoke-test-codex-agents.sh --live
 ```
+
+`--check-only` validates the fixed source inventory, model/effort matrix, and
+compact operating stances. It does not invoke `codex` and does not require an
+installed Codex home, session history, or authentication. `--live` additionally
+requires `codex`, `jq`, and `git`, an installed configuration identical to the
+repository sources, a working Codex runtime, and writable Codex session
+metadata. It runs each fixed probe in a temporary Git repository and reports
+only expected and observed role/model/effort metadata.
+
+The live smoke intentionally pins its probe parent to Luna/low. The current
+Luna/v1 runtime exposes the `agent_type` spawn field, so the probe can select
+each configured child deterministically and then verify that the child TOML
+overrides the parent's model and effort. This parent pin is a probe mechanism,
+not a recommendation for normal orchestration, and requires no unstable feature
+flags.
+
+Current Sol/Terra v2 runtimes may omit custom-role selection from their reserved
+spawn schema. When a child session has no configured role metadata under those
+runtimes, that is a runtime dispatch limitation rather than evidence that its
+TOML is wrong. In short, this is a runtime limitation, not a TOML mismatch. The
+smoke proves the installed definitions and their child
+tuples through a runtime that can select them; it does not promise every parent
+model/runtime can select custom roles today. This caveat can be retired when
+the newer runtime schema exposes deterministic custom-role selection.
+
+Live failures use three classifications:
+
+- `ENVIRONMENT_FAILURE`: a required command, installed directory, session
+  directory, temporary repository, or Codex execution is unavailable.
+- `RUNTIME_DISPATCH_OR_SCHEMA_FAILURE`: the named subagent was not recorded in
+  the new sessions or the expected metadata path is absent.
+- `CONFIG_MISMATCH`: source and installed TOMLs differ, or the runtime reports a
+  model/effort tuple different from the configured one.
+
+The short operating stances take inspiration from the role clarity in
+[msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents/),
+but they are framework-specific summaries rather than copied prompts. See the
+official Codex documentation for [custom
+agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and the
+[Codex model families and effort
+levels](https://learn.chatgpt.com/docs/models).
 
 For an older installation, rerun the normal installer and restart the agent.
 During the one-release migration window, the installer removes only retired

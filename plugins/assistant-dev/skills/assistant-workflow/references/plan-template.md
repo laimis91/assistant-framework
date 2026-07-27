@@ -1,12 +1,13 @@
 # Plan Templates
 
-Three tiers — match ceremony to task size.
+Three tiers — match ceremony to `plan_mode` and task size. `plan_mode=none`
+does not load this template or create a plan artifact.
 
 Harness details live in optional appendices. Base plans keep compact refs only:
 load `references/plan-harness-appendix.md` for harness-capable work, otherwise
 record `N/A: [reason]`.
 
-## Small Tasks — Inline Plan
+## Small Tasks — Inline Plan (`plan_mode=inline`)
 
 No separate plan document needed. Include directly in your response:
 
@@ -37,9 +38,10 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
+- Requirement ids: [R# ids from the Requirement Acceptance Map]
 - Behavior / acceptance criteria:
-  - [binary observable behavior]
-  - [binary observable behavior]
+  - [R#] [binary observable behavior]
+  - [R#] [binary observable behavior]
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
@@ -56,7 +58,8 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - implementation_notes:
     - [existing pattern to follow, dependency rule, non-goal, or boundary]
 - Verification:
-  - Command: [exact command]
+  - verification_command: ["executable", "arg1", "arg2"]
+  - argv rule: [one literal argument per item; execute directly without shell parsing]
   - Expected success signal: [exit code 0, passing test name, output marker, etc.]
 - Evidence to record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
@@ -86,13 +89,14 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - name:
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
+- requirement_ids:
 - acceptance_criteria:
 - files_to_create:
 - files_to_modify:
 - files_to_test:
 - enabling_changes_included:
 - depends_on:
-- verification_command:
+- verification_command: ["executable", "arg1", "arg2"]
 - expected_success_signal:
 - evidence_to_record:
 - deviation_rollback_rule:
@@ -107,15 +111,24 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ## Goal
 - [1-3 sentence restated requirement from Discovery]
 
+## Requirement Acceptance Map
+- Intended outcome: [one outcome]
+- Assumptions/defaults: [explicit inferred decisions]
+- Open material questions: [none before approval]
+- Non-goals: [exclusions]
+- Entries: [requirement_id -> acceptance criterion -> verification method -> evidence pending -> manual scenario or N/A]
+
 ## Triage result
 - Task type: [feature | bugfix | refactor | migration | rewrite | config | infra | security | docs | spike]
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
+- Plan mode: [approval_required]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
 - Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
+- Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; required only for policy_disallowed]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)

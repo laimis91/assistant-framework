@@ -264,6 +264,32 @@ public sealed class MemoryStoreTests : IDisposable
         Assert.Equal(1, stats.StrategyLessons);
     }
 
+    [Fact]
+    public void Constructor_CreatesAndUsesDatabase_WhenPathContainsConnectionStringDelimiters()
+    {
+        var directoryPath = Path.Combine(
+            Path.GetTempPath(),
+            $"memory test;[path]-{Guid.NewGuid():N}");
+        var databasePath = Path.Combine(directoryPath, "memory; [store].db");
+
+        try
+        {
+            using var store = new MemoryStore(databasePath);
+
+            var id = store.AddDecision(MakeDecision("Path-safe database"));
+
+            Assert.True(id > 0);
+            Assert.True(File.Exists(databasePath));
+        }
+        finally
+        {
+            if (Directory.Exists(directoryPath))
+            {
+                Directory.Delete(directoryPath, recursive: true);
+            }
+        }
+    }
+
     // ── Consolidation tests ─────────────────────────────────────
 
     [Fact]

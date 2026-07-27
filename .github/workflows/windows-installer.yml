@@ -1,0 +1,75 @@
+name: Windows installer
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-installer.yml'
+      - 'README.md'
+      - 'install.sh'
+      - 'install.ps1'
+      - 'memory-protocol.md'
+      - 'graph-seed.jsonl'
+      - 'agents/**'
+      - 'codex-rules/**'
+      - 'docs/evals/**'
+      - 'docs/plugin-architecture.md'
+      - 'plugins/**/.codex-plugin/plugin.json'
+      - 'skills/**'
+      - 'tests/windows/**'
+      - 'tests/p0-p4/windows-installer-contracts.sh'
+      - 'tools/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/windows-installer.yml'
+      - 'README.md'
+      - 'install.sh'
+      - 'install.ps1'
+      - 'memory-protocol.md'
+      - 'graph-seed.jsonl'
+      - 'agents/**'
+      - 'codex-rules/**'
+      - 'docs/evals/**'
+      - 'docs/plugin-architecture.md'
+      - 'plugins/**/.codex-plugin/plugin.json'
+      - 'skills/**'
+      - 'tests/windows/**'
+      - 'tests/p0-p4/windows-installer-contracts.sh'
+      - 'tools/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-powershell-51:
+    name: Windows PowerShell 5.1 contracts
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run Windows PowerShell 5.1 contracts
+        shell: powershell
+        run: .\tests\windows\installer-contracts.ps1 -FailOnSkip
+
+  powershell-7:
+    name: PowerShell 7 contracts
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run PowerShell 7 contracts
+        shell: pwsh
+        run: .\tests\windows\installer-contracts.ps1 -FailOnSkip

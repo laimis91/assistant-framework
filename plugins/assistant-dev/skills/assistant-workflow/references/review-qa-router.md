@@ -3,7 +3,7 @@
 Internal reference for Review routing. Load during Review after Build evidence
 exists. `references/phases.md` keeps the compact Review shell; this file owns
 Spec Review, Code Quality Review, QA Evaluator routing, status gates,
-pivot/round-10 handling, verification summary, and user handoff.
+pivot/round-10 handling, and verification-summary inputs for Document.
 
 ## Review Lane Separation
 
@@ -25,7 +25,8 @@ Spec Review or Code Quality Review. Code Reviewer and QA Evaluator
 responsibilities stay separate.
 
 For `controller_intensity=light`, use the compact lane instead: compare the
-diff with the inline plan/criteria, run a fresh review pass after validation,
+diff with carried Discover scope/criteria and any applicable inline plan, run a
+fresh review pass after validation,
 record PASS plus the reviewed scope/evidence, and fix any findings before
 completion. Light work does not load the full rubric/QA loop unless risk or an
 independent trigger promotes it. This is a fresh self-review and does not
@@ -63,9 +64,10 @@ Print: `>> Spec Review: [PASS / FAIL - found N required fixes]`
 
 Print: `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`
 
-Load and follow `assistant-review` SKILL.md and its contracts. Add Code Reviewer
-to `Required agents` before Stage 2. Use `Reviewer` only as compatibility
-routing for existing/legacy handoffs. Do not implement the review loop inline
+Load and follow `assistant-review` SKILL.md and its contracts. It is the sole
+owner of Reviewer and QAEvaluator worker packet schemas. Add Code Reviewer to
+`Required agents` before Stage 2. Use `Reviewer` only as compatibility routing
+inside assistant-review. Do not implement the review loop inline
 when `subagent_execution_mode=delegated` and a delegated review agent is
 authorized; dispatch Code Reviewer and record `Code Reviewer dispatch` plus
 `Code Reviewer result` evidence, or `Reviewer dispatch` plus `Reviewer result`
@@ -94,21 +96,13 @@ QA required positive triggers: explicit QA/acceptance evaluation request, accept
 
 QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 
-Dispatch `qa-evaluator` in delegated mode, or record direct-fallback QA evidence
-when delegation is denied, unavailable after a real spawn failure, or
-policy-disallowed.
+Load and follow assistant-review's QA loop. assistant-review owns QAEvaluator
+dispatch, direct-fallback policy, input/return validation, and the canonical
+delegation-path/result artifacts; workflow records only validated refs.
 
-The QA Evaluator packet includes Done Contract when present, acceptance
-criteria, verification evidence, code review result, `domain_context` and
-`rubric_refs` when applicable, round 1-10, previously failed acceptance items,
-and `qa_filter_policy`.
-
-QA Evaluator loads assistant-review `references/domain-rubrics.md` only when
-acceptance criteria, Done Contract, domain_context, or explicit rubric_refs
-require subjective/product/UX/docs/DX/UI/domain scoring. It returns
-final_verdict/result, acceptance_findings, qa_scorecard,
-selected_domain_rubrics/domain_quality_scores when scoped, score_progression or
-score_entry, evidence, and open_questions when blocked.
+assistant-review loads `references/domain-rubrics.md` only when its canonical
+QA inputs require subjective/product/UX/docs/DX/UI/domain scoring. The canonical
+QA output schema remains solely in `assistant-review/contracts/output.yaml`.
 
 QA Evaluation focuses on acceptance and final result. It must not report general
 code defects, security issues, architecture concerns, or test coverage gaps
@@ -125,13 +119,19 @@ acceptance items instead of starting round 11.
 Enforce the review cycle before presenting results:
 
 - Review Log or equivalent review result must exist.
-- QA Evaluation result must exist when qa_evaluation_mode=required.
+- Standard/strict `review_result` must record validated refs to assistant-review
+  `final_summary` and `review_delegation_path` plus their exact canonical
+  contract ids; canonical review fields remain owned by assistant-review.
+- Independent Code Reviewer dispatch/result evidence, or allowed fresh
+  direct-fallback evidence, must be created in Review after Build completes.
+- When `qa_evaluation_mode=required`, workflow must record validated refs to
+  assistant-review `qa_evaluation_result` and `qa_evaluation_delegation_path`.
 - Pivot/Restart Decision must exist when Review or QA reported STAGNATION,
   repeated DRIFT, repeated REGRESSION, or pivot action.
 - Final Result must be recorded.
 - The full review cycle must complete before presenting results to the user.
 
-## Verification Summary and Handoff
+## Verification Summary
 
 After final review passes, write the Verification Summary in the task journal
 when `workflow_state_mode=journal`, or in the inline completion packet:
@@ -141,10 +141,12 @@ when `workflow_state_mode=journal`, or in the inline completion packet:
 - Code Review result: clean, issues fixed, or remaining should-fix items
 - QA Evaluation result when required: accepted, accepted with concerns,
   rejected, or blocked
-- Manual test instructions only when `manual_verification_mode` is optional or required
 - Known limitations
+- Do not create `final_handoff` here; Document is its sole owner and consumes
+  the completed Review result and verification summary.
 
 Wait for manual verification only when `manual_verification_mode=required`.
+Developer test instructions are documentation and do not create that wait.
 This mode is limited to an explicit request, subjective/UI acceptance, external
 effects, destructive/migration work, or inadequate automated verification.
 Record the trigger and result evidence, then continue. With `optional`, present

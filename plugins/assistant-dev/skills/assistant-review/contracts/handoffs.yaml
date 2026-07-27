@@ -4,7 +4,7 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: handoffs
 skill: assistant-review
 
@@ -21,6 +21,7 @@ worker_status_protocol:
       meaning: "Cannot proceed because an environment, dependency, permission, or tool issue prevents review."
   packet_rules:
     - "status is required on every Reviewer return."
+    - "reviewed_scope is required and non-empty on every Reviewer return."
     - "findings, summary, and verdict remain required and are not replaced by status."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
@@ -39,7 +40,7 @@ dispatch_context_bundles:
     review_evidence_pointer:
       required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
       validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -72,7 +73,7 @@ return_validation_bundles:
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
-    validation: "Validate status, round, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -160,6 +161,27 @@ handoffs:
         description: "Current review round number (1-10)"
         validation: ">= 1 and <= 10"
 
+      - name: additional_round_reason
+        type: object
+        required: conditional
+        condition: "round >= 3"
+        description: "Why an exceptional third or later review pass is justified by evidence created after the previous review began"
+        validation: "Uses exactly one allowed reason with a concrete new evidence pointer. A score below threshold alone is invalid."
+        object_fields:
+          - name: reason
+            type: enum
+            required: true
+            enum_values: [changed_files, unresolved_finding, validation_failure, regression_or_drift, changed_hypothesis]
+            description: "The new evidence class that justifies another review pass"
+          - name: evidence_ref
+            type: string
+            required: true
+            description: "Concrete pointer to changed files, a finding, failed validation, regression/drift evidence, or a revised hypothesis produced after the previous review began"
+          - name: detail
+            type: string
+            required: true
+            description: "Concise explanation of what changed and why another review pass can discover or verify something new"
+
       - name: previously_fixed
         type: object[]
         required: true
@@ -243,6 +265,12 @@ handoffs:
         description: "Echo back the round number for tracking"
         validation: ">= 1 and <= 10"
 
+      - name: reviewed_scope
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Files, diffs, task packets, slices, or content boundaries actually inspected in this review round"
+
       - name: findings
         type: object[]
         required: true
@@ -292,7 +320,7 @@ handoffs:
         type: string
         required: true
         description: "1-paragraph overall assessment of code quality"
-        validation: "Non-empty. Must reference specific patterns observed, not generic praise."
+        validation: "Non-empty. Must reference specific patterns observed, not generic praise. When no must-fix or should-fix finding exists, use 'No material findings within the reviewed scope and available evidence' rather than presenting clean as proof of correctness."
 
       - name: evidence
         type: object[]
@@ -915,10 +943,11 @@ handoffs:
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
 # 9. If pivot_restart_signal is present, stop the current loop path until the orchestrator records pivot_restart_decision; do not silently continue.
-# 10. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
-# 11. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
-# 12. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
-# 13. If QA round == 10, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 11.
-# 14. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.
-# 15. If no scoped domain rubric applies: verify QAEvaluator did not invent rubrics or penalize domain_quality for missing unscoped evidence.
+# 10. If round >= 3, require additional_round_reason backed by new evidence; score below threshold alone is invalid
+# 11. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
+# 12. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
+# 13. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
+# 14. If QA round == 10, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 11.
+# 15. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.
+# 16. If no scoped domain rubric applies: verify QAEvaluator did not invent rubrics or penalize domain_quality for missing unscoped evidence.
 # ─────────────────────────────────────────────

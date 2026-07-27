@@ -31,7 +31,7 @@
 #         "Invalid notification requests return validation errors",
 #         "Valid notification requests are accepted by the service"
 #       ],
-#       "verification_command": "dotnet test tests/Application.Tests/Application.Tests.csproj --filter NotificationServiceTests",
+#       "verification_command": ["dotnet", "test", "tests/Application.Tests/Application.Tests.csproj", "--filter", "NotificationServiceTests"],
 #       "expected_success_signal": "NotificationServiceTests pass",
 #       "evidence_to_record": ["test command", "passing test count"],
 #       "deviation_rollback_rule": "Return DEVIATED and do not widen files beyond this slice without approval"
@@ -109,6 +109,11 @@ format_lines_csv() {
 # Validate JSON structure
 jq -e '
   def string_array(min): type == "array" and length >= min and all(.[]; type == "string" and length > 0);
+  def canonical_argv: type == "array" and length >= 1 and all(.[];
+    type == "string" and length > 0 and
+    (contains("\n") | not) and (contains("\r") | not) and
+    (test("^\\s|\\s$") | not)
+  );
   (.slice_manifest | type == "array" and length > 0) and
   ((.slice_manifest | length) != 1 or (.single_slice_rationale? | type == "string" and (gsub("\\s"; "") | length > 0))) and
   all(.slice_manifest[];
@@ -122,7 +127,7 @@ jq -e '
     (.enabling_changes_included | string_array(0)) and
     (.depends_on | string_array(0)) and
     (.acceptance_criteria | string_array(1)) and
-    (.verification_command | type == "string" and length > 0) and
+    (.verification_command | canonical_argv) and
     (.expected_success_signal | type == "string" and length > 0) and
     (.evidence_to_record | string_array(1)) and
     (.deviation_rollback_rule | type == "string" and length > 0)
@@ -342,7 +347,7 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
     SLICE_NAME=$(jq -r ".slice_manifest[$i].name" "$INPUT")
     OBSERVABLE_INCREMENT=$(jq -r ".slice_manifest[$i].observable_increment" "$INPUT")
     DELIVERABLE_TYPE=$(jq -r ".slice_manifest[$i].deliverable_type" "$INPUT")
-    VERIFICATION_COMMAND=$(jq -r ".slice_manifest[$i].verification_command" "$INPUT")
+    VERIFICATION_COMMAND=$(slice_array_lines "$i" "verification_command" "  - ")
     EXPECTED_SUCCESS_SIGNAL=$(jq -r ".slice_manifest[$i].expected_success_signal" "$INPUT")
     DEVIATION_ROLLBACK_RULE=$(jq -r ".slice_manifest[$i].deviation_rollback_rule" "$INPUT")
     BRANCH="${SLICE_BRANCH_PREFIX}${SLICE_ID}"
@@ -392,7 +397,8 @@ ${ENABLING_CHANGES}
 ${DEPENDS_LINES}
 - acceptance_criteria:
 ${CRITERIA}
-- verification_command: ${VERIFICATION_COMMAND}
+- verification_command:
+${VERIFICATION_COMMAND}
 - expected_success_signal: ${EXPECTED_SUCCESS_SIGNAL}
 - evidence_to_record:
 ${EVIDENCE}
@@ -431,7 +437,8 @@ End with an explicit slice report. The runner marks the slice VERIFIED only when
 
 ### Slice evidence
 - slice_id: ${SLICE_ID}
-- verification_command: ${VERIFICATION_COMMAND}
+- verification_command:
+${VERIFICATION_COMMAND}
 - expected_success_signal: ${EXPECTED_SUCCESS_SIGNAL}
 - result: pass
 - evidence_recorded: [evidence from evidence_to_record]

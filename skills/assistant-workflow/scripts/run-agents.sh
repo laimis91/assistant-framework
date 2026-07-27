@@ -32,6 +32,12 @@ if [[ -f "$FRAMEWORK_DIR/agent.conf" ]]; then
     source "$FRAMEWORK_DIR/agent.conf"
 fi
 
+# Optional baseline command override. Configuration must preserve argv
+# boundaries instead of supplying a shell command string.
+if ! declare -p BASELINE_TEST_ARGV >/dev/null 2>&1; then
+    BASELINE_TEST_ARGV=()
+fi
+
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
 BRIEFS_DIR="briefs"
@@ -44,6 +50,10 @@ LOG_DIR=""
 WORKTREES_DIR=".worktrees"
 CLEANUP_WORKTREES=false
 VERIFIED_SLICES_CSV=""
+HOST_VERIFY_LOG_MAX_BYTES=65536
+HOST_VERIFY_TIMEOUT_SECONDS="${HOST_VERIFY_TIMEOUT_SECONDS:-900}"
+AGENT_LOG_MAX_BYTES="${AGENT_LOG_MAX_BYTES:-1048576}"
+HOST_VERIFY_ALLOWED_EXECUTABLES="${HOST_VERIFY_ALLOWED_EXECUTABLES:-true false bash sh pwsh powershell powershell.exe cmd.exe dotnet npm pnpm yarn bun cargo go pytest python python3 node ruby perl java mvn gradle make cmake ctest}"
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 
@@ -141,12 +151,17 @@ validate_verified_slice_id() {
 }
 
 command -v git >/dev/null 2>&1 || fail "git is required."
+[[ "$HOST_VERIFY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] \
+    || fail "HOST_VERIFY_TIMEOUT_SECONDS must be a positive integer."
+[[ "$AGENT_LOG_MAX_BYTES" =~ ^[1-9][0-9]*$ && "$AGENT_LOG_MAX_BYTES" -ge 4096 ]] \
+    || fail "AGENT_LOG_MAX_BYTES must be an integer of at least 4096 bytes."
 
 [[ -d "$BRIEFS_DIR" ]] || fail "Briefs directory not found: $BRIEFS_DIR"
 [[ -d "$REPO" ]]       || fail "Repository not found: $REPO"
 
-# Resolve repo to absolute path
-REPO=$(cd "$REPO" && pwd)
+# Resolve repo to one physical absolute path so ownership and ignore checks are
+# not bypassed by platform aliases such as macOS /var -> /private/var.
+REPO=$(cd "$REPO" && pwd -P)
 
 # Load agent preset if switching via --agent flag
 if [[ -f "$FRAMEWORK_DIR/agents/${AGENT}.conf" ]]; then
@@ -239,6 +254,229 @@ get_depends_on_from_brief() {
     get_strict_packet_field_values_from_brief "$brief_file" "depends_on" | awk '$0 != "none" { print }'
 }
 
+strict_packet_list_field_is_canonical() {
+    local brief_file="$1"
+    local field="$2"
+    awk -v field="$field" '
+        $0 ~ "^- " field ":[[:space:]]*$" {
+            occurrences++
+            in_field = 1
+            next
+        }
+        $0 ~ "^- " field ":" {
+            occurrences++
+            invalid = 1
+            in_field = 1
+            next
+        }
+        in_field && /^- [A-Za-z_]+:/ { in_field = 0 }
+        in_field && /^  - / {
+            value = substr($0, 5)
+            if (length(value) == 0 || value ~ /^[[:space:]]/ || value ~ /[[:space:]]$/ || index(value, "\r") > 0) invalid = 1
+            else items++
+            next
+        }
+        in_field && /^[[:space:]]*-/ { invalid = 1; next }
+        in_field && NF == 0 { next }
+        in_field && /^[^[:space:]]/ { invalid = 1; in_field = 0 }
+        END { exit (occurrences == 1 && !invalid && items > 0) ? 0 : 1 }
+    ' "$brief_file"
+}
+
+get_verification_argv_from_brief() {
+    local brief_file="$1"
+    awk '
+        /^- verification_command:[[:space:]]*$/ { in_field = 1; next }
+        in_field && /^- [A-Za-z_]+:/ { exit }
+        in_field && /^  - / { print substr($0, 5); next }
+        in_field && NF == 0 { next }
+        in_field && /^[^[:space:]]/ { exit }
+    ' "$brief_file"
+}
+
+is_shell_control_token() {
+    case "$1" in
+        '|'|'||'|'&&'|';'|'&'|'<'|'>'|'>>'|'<<'|'2>'|'2>>') return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+bare_verification_executable_is_allowed() {
+    local executable="$1"
+    local configured
+    configured=" ${HOST_VERIFY_ALLOWED_EXECUTABLES//,/ } "
+    [[ "$configured" == *" $executable "* ]]
+}
+
+verification_executable_is_repo_relative() {
+    local executable="$1"
+    [[ "$executable" == */* && "$executable" != /* && "$executable" != ../* && "$executable" != */../* && "$executable" != */.. ]]
+}
+
+safe_repo_relative_file_path() {
+    local path="$1"
+    [[ -n "$path" \
+        && "$path" != /* \
+        && ! "$path" =~ ^[A-Za-z]: \
+        && "$path" != .. \
+        && "$path" != ../* \
+        && "$path" != */../* \
+        && "$path" != */.. \
+        && "$path" != *\\* \
+        && "$path" != *$'\t'* ]]
+}
+
+resolve_bare_verification_executable() {
+    local executable="$1"
+    local resolved
+    resolved=$(type -P "$executable" 2>/dev/null || true)
+    [[ -n "$resolved" && "$resolved" == /* && -f "$resolved" && -x "$resolved" ]] || return 1
+    printf '%s\n' "$resolved"
+}
+
+validate_verification_argv_from_brief() {
+    local brief_file="$1"
+    local executable executable_name executable_name_lower arg arg_lower repo_relative candidate
+    local verification_arg_i script_index script_path saw_double_dash
+    local verification_argv=()
+
+    VALIDATED_INTERPRETER_SCRIPT_PATH=""
+    VALIDATED_INTERPRETER_SCRIPT_INDEX="-1"
+
+    if ! strict_packet_list_field_is_canonical "$brief_file" "verification_command"; then
+        fail "Slice brief verification_command must be a non-empty canonical argv list with one literal argv item per indented list entry: $brief_file"
+    fi
+
+    while IFS= read -r arg; do
+        verification_argv[${#verification_argv[@]}]="$arg"
+    done < <(get_verification_argv_from_brief "$brief_file")
+
+    [[ ${#verification_argv[@]} -gt 0 ]] || fail "Slice brief verification_command argv is empty: $brief_file"
+    executable="${verification_argv[0]}"
+    is_shell_control_token "$executable" \
+        && fail "Slice brief verification_command executable '$executable' is a shell control token, not an executable: $brief_file"
+
+    if [[ "$executable" == /* || "$executable" == .. || "$executable" == ../* || "$executable" == */../* || "$executable" == */.. ]]; then
+        fail "Slice brief verification_command executable '$executable' must be an approved bare tool or a repository-relative executable path without absolute or parent traversal segments: $brief_file"
+    fi
+
+    executable_name="${executable##*/}"
+    executable_name_lower="$(printf '%s' "$executable_name" | tr '[:upper:]' '[:lower:]')"
+    for ((verification_arg_i = 1; verification_arg_i < ${#verification_argv[@]}; verification_arg_i++)); do
+        arg="${verification_argv[$verification_arg_i]}"
+        arg_lower="$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]')"
+        case "$executable_name_lower" in
+            sh|bash|dash|zsh|ksh|fish)
+                case "$arg_lower" in
+                    -c|--command|-[a-z]*c[a-z]*)
+                        fail "Slice brief verification_command cannot use shell inline command execution ($executable_name $arg); provide an executable script and literal argv instead: $brief_file"
+                        ;;
+                esac
+                ;;
+            python|python[0-9]*|pypy|pypy[0-9]*|node|ruby|perl)
+                case "$arg_lower" in
+                    -c|-c*|-e|-e*|--eval|--eval=*|-m|--module)
+                        fail "Slice brief verification_command cannot use inline interpreter code ($executable_name $arg); provide an executable file and literal argv instead: $brief_file"
+                        ;;
+                esac
+                ;;
+            pwsh|powershell|powershell.exe|cmd|cmd.exe)
+                case "$arg_lower" in
+                    -c*|-e*|-command|-command:*|-command=*|-encodedcommand|-encodedcommand:*|-encodedcommand=*|/c|/k)
+                        fail "Slice brief verification_command cannot use inline interpreter control argument '$arg'; provide an executable file and literal argv instead: $brief_file"
+                        ;;
+                esac
+                ;;
+        esac
+    done
+
+    case "$executable_name_lower" in
+        env|xargs|find|nohup|nice|command|cmd|cmd.exe)
+            fail "Slice brief verification_command cannot use wrapper or command-spawning executable '$executable_name'; use an approved tool directly or a tracked repository script: $brief_file"
+            ;;
+    esac
+
+    script_index=-1
+    script_path=""
+    saw_double_dash=false
+    case "$executable_name_lower" in
+        sh|bash|dash|zsh|ksh|fish)
+            for ((verification_arg_i = 1; verification_arg_i < ${#verification_argv[@]}; verification_arg_i++)); do
+                arg="${verification_argv[$verification_arg_i]}"
+                if [[ "$arg" == "--" && "$saw_double_dash" == false ]]; then
+                    saw_double_dash=true
+                    continue
+                fi
+                if [[ "$saw_double_dash" == false && "$arg" == -* ]]; then
+                    continue
+                fi
+                script_index="$verification_arg_i"
+                script_path="$arg"
+                break
+            done
+            ;;
+        python|python[0-9]*|pypy|pypy[0-9]*|node|ruby|perl)
+            for ((verification_arg_i = 1; verification_arg_i < ${#verification_argv[@]}; verification_arg_i++)); do
+                arg="${verification_argv[$verification_arg_i]}"
+                if [[ "$arg" == "--" ]]; then
+                    continue
+                fi
+                [[ "$arg" != -* ]] \
+                    || fail "Slice brief verification_command interpreter options before a script are not supported; invoke a tracked repository script with literal argv: $brief_file"
+                script_index="$verification_arg_i"
+                script_path="$arg"
+                break
+            done
+            ;;
+        pwsh|powershell|powershell.exe)
+            for ((verification_arg_i = 1; verification_arg_i < ${#verification_argv[@]}; verification_arg_i++)); do
+                arg="${verification_argv[$verification_arg_i]}"
+                arg_lower="$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]')"
+                if [[ "$arg_lower" == "-file" || "$arg_lower" == "-f" ]]; then
+                    script_index=$((verification_arg_i + 1))
+                    [[ "$script_index" -lt ${#verification_argv[@]} ]] \
+                        || fail "Slice brief verification_command $executable_name $arg requires a tracked repository script operand: $brief_file"
+                    script_path="${verification_argv[$script_index]}"
+                    break
+                fi
+                if [[ "$arg" != -* && "$arg" != /* ]]; then
+                    script_index="$verification_arg_i"
+                    script_path="$arg"
+                    break
+                fi
+            done
+            ;;
+    esac
+
+    case "$executable_name_lower" in
+        sh|bash|dash|zsh|ksh|fish|python|python[0-9]*|pypy|pypy[0-9]*|node|ruby|perl|pwsh|powershell|powershell.exe)
+            [[ "$script_index" -ge 1 && -n "$script_path" ]] \
+                || fail "Slice brief verification_command interpreter '$executable_name' requires a tracked repository script operand: $brief_file"
+            safe_repo_relative_file_path "$script_path" \
+                || fail "Slice brief verification_command interpreter script '$script_path' must be a forward-slash repository-relative path without absolute or parent traversal segments: $brief_file"
+            VALIDATED_INTERPRETER_SCRIPT_PATH="${script_path#./}"
+            VALIDATED_INTERPRETER_SCRIPT_INDEX="$script_index"
+            ;;
+    esac
+
+    if verification_executable_is_repo_relative "$executable"; then
+        repo_relative="${executable#./}"
+        safe_repo_relative_file_path "$repo_relative" \
+            || fail "Slice brief verification_command repository executable '$executable' is not a safe repository-relative path: $brief_file"
+        candidate="$REPO/$repo_relative"
+        [[ ! -L "$candidate" ]] \
+            || fail "Slice brief verification_command repository executable '$executable' must not be a symlink before worker dispatch: $brief_file"
+        return 0
+    fi
+    if [[ "$executable" == */* ]]; then
+        fail "Slice brief verification_command executable '$executable' is not a safe repository-relative path: $brief_file"
+    fi
+    bare_verification_executable_is_allowed "$executable" \
+        || fail "Slice brief verification_command executable '$executable' is not in HOST_VERIFY_ALLOWED_EXECUTABLES; use a tracked repository script or configure the trusted bare-tool allowlist: $brief_file"
+    resolve_bare_verification_executable "$executable" >/dev/null \
+        || fail "Slice brief verification_command executable '$executable' could not be resolved to an executable file before worker dispatch: $brief_file"
+}
+
 validate_strict_slice_brief() {
     local brief_file="$1"
     local field
@@ -264,6 +502,70 @@ validate_strict_slice_brief() {
             fail "Slice brief missing or empty strict packet field '$field': $brief_file"
         fi
     done
+
+    validate_verification_argv_from_brief "$brief_file"
+}
+
+file_identity() {
+    local path="$1"
+    git hash-object --no-filters "$path" 2>/dev/null
+}
+
+bind_repo_file_at_commit() {
+    local worktree="$1"
+    local expected_commit="$2"
+    local repo_relative="$3"
+    local require_executable="$4"
+    local candidate candidate_dir candidate_real worktree_real tracked_entry tracked_mode tracked_type
+
+    candidate="$worktree/$repo_relative"
+    [[ ! -L "$candidate" && -f "$candidate" ]] || return 1
+    if "$require_executable" && [[ ! -x "$candidate" ]]; then
+        return 1
+    fi
+    candidate_dir=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) || return 1
+    worktree_real=$(cd "$worktree" 2>/dev/null && pwd -P) || return 1
+    candidate_real="$candidate_dir/$(basename "$candidate")"
+    [[ "$candidate_real" == "$worktree_real/"* ]] || return 1
+
+    tracked_entry=$(git -C "$worktree" ls-tree "$expected_commit" -- "$repo_relative" 2>/dev/null || true)
+    tracked_mode=$(printf '%s\n' "$tracked_entry" | awk '{ print $1 }')
+    tracked_type=$(printf '%s\n' "$tracked_entry" | awk '{ print $2 }')
+    [[ "$tracked_type" == "blob" ]] || return 1
+    if "$require_executable"; then
+        [[ "$tracked_mode" == "100755" ]] || return 1
+    else
+        [[ "$tracked_mode" == "100644" || "$tracked_mode" == "100755" ]] || return 1
+    fi
+    git -C "$worktree" diff --quiet "$expected_commit" -- "$repo_relative" || return 1
+    git -C "$worktree" diff --cached --quiet "$expected_commit" -- "$repo_relative" || return 1
+
+    BOUND_REPO_FILE_PATH="$candidate_real"
+    BOUND_REPO_FILE_IDENTITY=$(file_identity "$candidate_real") || return 1
+}
+
+snapshot_verification_command() {
+    local brief_file="$1"
+    local executable resolved identity
+    local argv_lines
+
+    argv_lines=$(get_verification_argv_from_brief "$brief_file")
+    executable=$(printf '%s\n' "$argv_lines" | sed -n '1p')
+    if verification_executable_is_repo_relative "$executable"; then
+        resolved="repo:${executable#./}"
+        identity="commit-bound"
+    else
+        resolved=$(resolve_bare_verification_executable "$executable") \
+            || fail "Could not resolve trusted bare verifier '$executable': $brief_file"
+        identity=$(file_identity "$resolved") \
+            || fail "Could not snapshot trusted bare verifier identity for '$executable': $brief_file"
+    fi
+
+    BRIEF_VERIFICATION_ARGV+=("$argv_lines")
+    BRIEF_RESOLVED_EXECUTABLES+=("$resolved")
+    BRIEF_EXECUTABLE_IDENTITIES+=("$identity")
+    BRIEF_INTERPRETER_SCRIPT_PATHS+=("$VALIDATED_INTERPRETER_SCRIPT_PATH")
+    BRIEF_INTERPRETER_SCRIPT_INDEXES+=("$VALIDATED_INTERPRETER_SCRIPT_INDEX")
 }
 
 VERIFIED_SLICES=()
@@ -420,8 +722,14 @@ join_lines_csv() {
 BRIEF_FILES=()
 SLICE_IDS=()
 SLICE_DEPENDS=()
+BRIEF_VERIFICATION_ARGV=()
+BRIEF_RESOLVED_EXECUTABLES=()
+BRIEF_EXECUTABLE_IDENTITIES=()
+BRIEF_INTERPRETER_SCRIPT_PATHS=()
+BRIEF_INTERPRETER_SCRIPT_INDEXES=()
 while IFS= read -r f; do
     validate_strict_slice_brief "$f"
+    snapshot_verification_command "$f"
     slice_id=$(get_slice_id_from_brief "$f")
     validate_slice_id_from_brief "$slice_id" "$f"
     depends_on=$(get_depends_on_from_brief "$f")
@@ -524,43 +832,39 @@ validate_slice_branch_identities() {
 }
 
 prove_external_verified_prerequisites() {
-    local i dep current_id current_branch integration_branch dep_branch
+    local dep dep_index dep_brief dep_branch integration_branch
 
-    for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
-        current_id="${SLICE_IDS[$i]}"
-        while IFS= read -r dep; do
-            [[ -n "$dep" ]] || continue
-            is_external_verified_slice "$dep" || continue
+    [[ ${#EXTERNALLY_VERIFIED_SLICES[@]} -gt 0 ]] || return 0
 
-            current_branch=$(get_branch_from_brief "${BRIEF_FILES[$i]}")
-            [[ -n "$current_branch" ]] || fail "External verified-slice proof failed: slice '$current_id' depends on externally verified '$dep', but '$current_id' brief is missing 'Git branch:'; cannot derive the integration branch."
+    for dep in "${EXTERNALLY_VERIFIED_SLICES[@]}"; do
+        if ! dep_index=$(slice_index_by_id "$dep"); then
+            fail "External verified-slice proof failed: externally verified '$dep' has no matching strict slice brief. Add its brief so the host can re-run the canonical verification_command."
+        fi
 
-            if ! integration_branch=$(derive_integration_branch_from_slice_branch "$current_branch"); then
-                fail "External verified-slice proof failed: slice '$current_id' branch '$current_branch' does not match feature/<task>/slice-<slice_id>; cannot derive the integration branch for prerequisite '$dep'."
-            fi
+        dep_brief="${BRIEF_FILES[$dep_index]}"
+        dep_branch=$(get_branch_from_brief "$dep_brief")
+        if ! integration_branch=$(derive_integration_branch_from_slice_branch "$dep_branch"); then
+            fail "External verified-slice proof failed: prerequisite '$dep' branch '$dep_branch' does not match feature/<task>/slice-<slice_id>."
+        fi
 
-            if ! dep_branch=$(derive_slice_branch_from_integration_branch "$integration_branch" "$dep"); then
-                fail "External verified-slice proof failed: integration branch '$integration_branch' does not match feature/<task>/integration; cannot derive the prerequisite branch for '$dep'."
-            fi
+        if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$integration_branch"; then
+            fail "External verified-slice proof failed: prerequisite '$dep' integration branch '$integration_branch' is missing."
+        fi
+        if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$dep_branch"; then
+            fail "External verified-slice proof failed: prerequisite branch '$dep_branch' is missing."
+        fi
+        if ! git -C "$REPO" merge-base --is-ancestor "$dep_branch" "$integration_branch"; then
+            fail "External verified-slice proof failed: prerequisite branch '$dep_branch' is not merged into integration branch '$integration_branch'."
+        fi
 
-            if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$integration_branch"; then
-                fail "External verified-slice proof failed: slice '$current_id' depends on externally verified '$dep', but integration branch '$integration_branch' is missing. Create '$integration_branch' and merge '$dep_branch' before launching dependents."
-            fi
-
-            if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$dep_branch"; then
-                fail "External verified-slice proof failed: slice '$current_id' depends on externally verified '$dep', but prerequisite branch '$dep_branch' is missing. Create the branch or remove '$dep' from --verified-slices/--skip-first before launching dependents."
-            fi
-
-            if ! git -C "$REPO" merge-base --is-ancestor "$dep_branch" "$integration_branch"; then
-                fail "External verified-slice proof failed: slice '$current_id' depends on externally verified '$dep', but prerequisite branch '$dep_branch' is not merged into integration branch '$integration_branch'. Merge '$dep_branch' into '$integration_branch' or remove the verified claim before launching dependents."
-            fi
-        done <<< "${SLICE_DEPENDS[$i]}"
+        if ! verify_external_slice_on_detached_worktree "$dep_brief" "$dep" "$dep_branch"; then
+            fail "External verified-slice proof failed: host verification failed for prerequisite '$dep'."
+        fi
     done
 }
 
 validate_slice_branch_identities
 validate_dependency_plan
-prove_external_verified_prerequisites
 
 slice_has_dependencies() {
     local depends_on="$1"
@@ -778,8 +1082,8 @@ relative_path_under_worktree() {
     local abs_worktree
 
     [[ -e "$path" ]] || return 1
-    abs_path=$(cd "$path" && pwd)
-    abs_worktree=$(cd "$worktree" && pwd)
+    abs_path=$(cd "$path" && pwd -P)
+    abs_worktree=$(cd "$worktree" && pwd -P)
 
     if [[ "$abs_path" == "$abs_worktree" ]]; then
         printf '.\n'
@@ -806,10 +1110,14 @@ worktree_has_uncommitted_slice_changes() {
     local worktree="$1"
     local rel_briefs=""
     local rel_logs=""
-    local status_line path
+    local status_line path status_output
 
     rel_briefs=$(relative_path_under_worktree "$BRIEFS_DIR" "$worktree" 2>/dev/null || true)
     rel_logs=$(relative_path_under_worktree "$LOG_DIR" "$worktree" 2>/dev/null || true)
+
+    if ! status_output=$(git -C "$worktree" status --porcelain --untracked-files=all 2>/dev/null); then
+        return 0
+    fi
 
     while IFS= read -r status_line; do
         [[ -n "$status_line" ]] || continue
@@ -822,8 +1130,296 @@ worktree_has_uncommitted_slice_changes() {
         fi
 
         return 0
-    done < <(git -C "$worktree" status --porcelain --untracked-files=all)
+    done <<< "$status_output"
 
+    return 1
+}
+
+write_bounded_host_verification_log() {
+    local log_file="$1"
+    local raw_log="$2"
+    local slice_id="$3"
+    local executable="$4"
+    local argument_count="$5"
+    local expected_commit="$6"
+    local after_head="$7"
+    local argv_identity="$8"
+    local exit_code="$9"
+    local timed_out="${10}"
+    local final_tmp
+
+    final_tmp=$(mktemp "$LOG_DIR/.host-verification.XXXXXX") || return 1
+    {
+        printf 'slice_id: %s\n' "$slice_id"
+        printf 'command_executable: %s\n' "$executable"
+        printf 'argument_count: %s\n' "$argument_count"
+        printf 'argv_identity: %s\n' "$argv_identity"
+        printf 'expected_commit: %s\n' "$expected_commit"
+        printf 'head_after: %s\n' "$after_head"
+        printf 'exit_code: %s\n' "$exit_code"
+        printf 'timed_out: %s\n' "$timed_out"
+        printf '%s\n' '--- bounded verifier output ---'
+        tail -c "$((HOST_VERIFY_LOG_MAX_BYTES - 2048))" "$raw_log" 2>/dev/null || true
+    } >"$final_tmp"
+    mv -f "$final_tmp" "$log_file"
+}
+
+run_host_verification() {
+    local brief_file="$1"
+    local brief_index="$2"
+    local slice_id="$3"
+    local worktree="$4"
+    local expected_worktree_commit="$5"
+    local expected_checked_out_branch="$6"
+    local protected_slice_branch="$7"
+    local expected_slice_commit="$8"
+    local integration_branch="$9"
+    local expected_integration_commit="${10}"
+    local log_suffix="${11:-}"
+    local brief_name log_file raw_log before_head after_head exit_code arg
+    local current_branch current_slice_commit current_integration_commit
+    local resolved executable executable_identity_before executable_identity_after
+    local repo_relative interpreter_script_path interpreter_script_index
+    local interpreter_identity_before="" interpreter_identity_after=""
+    local verifier_pid ticks max_ticks timed_out output_blocks argv_identity
+    local verification_argv=()
+
+    brief_name=$(basename "$brief_file" .md)
+    log_file="$LOG_DIR/${brief_name}${log_suffix}.host-verify.log"
+    raw_log=$(mktemp "${TMPDIR:-/tmp}/workflow-host-verification.XXXXXX") \
+        || { warn "Could not create private verifier capture for slice '$slice_id'."; return 1; }
+
+    while IFS= read -r arg; do
+        verification_argv[${#verification_argv[@]}]="$arg"
+    done <<< "${BRIEF_VERIFICATION_ARGV[$brief_index]}"
+    if [[ ${#verification_argv[@]} -eq 0 ]]; then
+        rm -f "$raw_log"
+        warn "Host verification has no snapshotted argv for slice '$slice_id'."
+        return 1
+    fi
+
+    resolved="${BRIEF_RESOLVED_EXECUTABLES[$brief_index]}"
+    if [[ "$resolved" == repo:* ]]; then
+        repo_relative="${resolved#repo:}"
+        if ! bind_repo_file_at_commit "$worktree" "$expected_worktree_commit" "$repo_relative" true; then
+            rm -f "$raw_log"
+            warn "Host verification rejected slice '$slice_id': repository verifier '$repo_relative' must be the tracked executable non-symlink blob in exact commit '$expected_worktree_commit'."
+            return 1
+        fi
+        executable="$BOUND_REPO_FILE_PATH"
+        executable_identity_before="$BOUND_REPO_FILE_IDENTITY"
+    else
+        executable="$resolved"
+        executable_identity_before=$(file_identity "$executable") || true
+        if [[ -z "$executable_identity_before" || "$executable_identity_before" != "${BRIEF_EXECUTABLE_IDENTITIES[$brief_index]}" ]]; then
+            rm -f "$raw_log"
+            warn "Host verification rejected slice '$slice_id': executable identity changed after the pre-dispatch snapshot."
+            return 1
+        fi
+    fi
+    verification_argv[0]="$executable"
+
+    interpreter_script_path="${BRIEF_INTERPRETER_SCRIPT_PATHS[$brief_index]}"
+    interpreter_script_index="${BRIEF_INTERPRETER_SCRIPT_INDEXES[$brief_index]}"
+    if [[ -n "$interpreter_script_path" ]]; then
+        if ! bind_repo_file_at_commit "$worktree" "$expected_worktree_commit" "$interpreter_script_path" false; then
+            rm -f "$raw_log"
+            warn "Host verification rejected slice '$slice_id': interpreter script '$interpreter_script_path' must be a tracked non-symlink repository blob in exact commit '$expected_worktree_commit'."
+            return 1
+        fi
+        verification_argv[$interpreter_script_index]="$BOUND_REPO_FILE_PATH"
+        interpreter_identity_before="$BOUND_REPO_FILE_IDENTITY"
+    fi
+    argv_identity=$(printf '%s\0' "${verification_argv[@]}" | git hash-object --stdin)
+
+    if worktree_has_uncommitted_slice_changes "$worktree"; then
+        rm -f "$raw_log"
+        warn "Host verification refused slice '$slice_id': output is not committed and clean before verification. Status: $(git -C "$worktree" status --porcelain --untracked-files=all 2>/dev/null | tr '\n' ' ')"
+        return 1
+    fi
+    before_head=$(git -C "$worktree" rev-parse HEAD 2>/dev/null) || true
+    if [[ "$before_head" != "$expected_worktree_commit" ]]; then
+        rm -f "$raw_log"
+        warn "Host verification rejected slice '$slice_id': worktree HEAD '$before_head' does not equal expected commit '$expected_worktree_commit'."
+        return 1
+    fi
+    if [[ -n "$expected_checked_out_branch" ]]; then
+        current_branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+        if [[ "$current_branch" != "$expected_checked_out_branch" ]]; then
+            rm -f "$raw_log"
+            warn "Host verification rejected slice '$slice_id': worktree branch '$current_branch' does not match expected branch '$expected_checked_out_branch'."
+            return 1
+        fi
+    fi
+    current_slice_commit=$(git -C "$REPO" rev-parse "$protected_slice_branch^{commit}" 2>/dev/null || true)
+    current_integration_commit=$(git -C "$REPO" rev-parse "$integration_branch^{commit}" 2>/dev/null || true)
+    if [[ "$current_slice_commit" != "$expected_slice_commit" || "$current_integration_commit" != "$expected_integration_commit" ]]; then
+        rm -f "$raw_log"
+        warn "Host verification rejected slice '$slice_id': slice or integration ref changed before verification."
+        return 1
+    fi
+
+    output_blocks=$(( (HOST_VERIFY_LOG_MAX_BYTES + 511) / 512 ))
+    timed_out=false
+    set -m
+    (
+        cd "$worktree"
+        ulimit -f "$output_blocks"
+        exec "${verification_argv[@]}"
+    ) >"$raw_log" 2>&1 &
+    verifier_pid=$!
+    set +m
+    ticks=0
+    max_ticks=$((HOST_VERIFY_TIMEOUT_SECONDS * 10))
+    while kill -0 "$verifier_pid" 2>/dev/null; do
+        if [[ "$ticks" -ge "$max_ticks" ]]; then
+            timed_out=true
+            kill -TERM -- "-$verifier_pid" 2>/dev/null || true
+            # Keep the grace period intentionally short: this path runs only
+            # after the configured deadline has already expired.
+            for _ in 1; do
+                kill -0 -- "-$verifier_pid" 2>/dev/null || break
+                sleep 0.1
+            done
+            kill -KILL -- "-$verifier_pid" 2>/dev/null || true
+            break
+        fi
+        sleep 0.1
+        ticks=$((ticks + 1))
+    done
+    exit_code=0
+    wait "$verifier_pid" || exit_code=$?
+    if $timed_out; then
+        exit_code=124
+    fi
+
+    after_head=$(git -C "$worktree" rev-parse HEAD 2>/dev/null || printf 'unreadable')
+    current_slice_commit=$(git -C "$REPO" rev-parse "$protected_slice_branch^{commit}" 2>/dev/null || printf 'unreadable')
+    current_integration_commit=$(git -C "$REPO" rev-parse "$integration_branch^{commit}" 2>/dev/null || printf 'unreadable')
+    executable_identity_after=$(file_identity "$executable" || printf 'unreadable')
+    if [[ -n "$interpreter_script_path" ]]; then
+        interpreter_identity_after=$(file_identity "${verification_argv[$interpreter_script_index]}" || printf 'unreadable')
+    fi
+    if ! write_bounded_host_verification_log "$log_file" "$raw_log" "$slice_id" "$executable" "$((${#verification_argv[@]} - 1))" "$expected_worktree_commit" "$after_head" "$argv_identity" "$exit_code" "$timed_out"; then
+        rm -f "$raw_log"
+        warn "Host verification rejected slice '$slice_id': bounded evidence log could not be written safely."
+        return 1
+    fi
+    rm -f "$raw_log"
+
+    if [[ "$after_head" != "$expected_worktree_commit" ]]; then
+        warn "Host verification rejected slice '$slice_id': verifier mutated HEAD ($expected_worktree_commit -> $after_head). Evidence: $log_file"
+        return 1
+    fi
+    if [[ "$current_slice_commit" != "$expected_slice_commit" || "$current_integration_commit" != "$expected_integration_commit" ]]; then
+        warn "Host verification rejected slice '$slice_id': verifier mutated a protected slice or integration ref. Evidence: $log_file"
+        return 1
+    fi
+    if [[ "$executable_identity_after" != "$executable_identity_before" ]]; then
+        warn "Host verification rejected slice '$slice_id': verifier executable identity changed during execution. Evidence: $log_file"
+        return 1
+    fi
+    if [[ -n "$interpreter_script_path" && "$interpreter_identity_after" != "$interpreter_identity_before" ]]; then
+        warn "Host verification rejected slice '$slice_id': interpreter script identity changed during execution. Evidence: $log_file"
+        return 1
+    fi
+    if worktree_has_uncommitted_slice_changes "$worktree"; then
+        warn "Host verification rejected slice '$slice_id': verifier mutated the worktree. Evidence: $log_file"
+        return 1
+    fi
+    if $timed_out; then
+        warn "Host verification timed out for slice '$slice_id' after ${HOST_VERIFY_TIMEOUT_SECONDS}s (FAILED_VERIFICATION). Evidence: $log_file"
+        return 1
+    fi
+    if [[ $exit_code -ne 0 ]]; then
+        warn "Host verification command failed for slice '$slice_id' with exit code $exit_code (FAILED_VERIFICATION). Evidence: $log_file"
+        return 1
+    fi
+
+    ok "Host-verified slice '$slice_id' at immutable commit '$expected_worktree_commit' before VERIFIED/merge state. Evidence: $log_file"
+}
+
+LAST_VERIFIED_COMMIT=""
+LAST_VERIFIED_INTEGRATION_COMMIT=""
+
+verify_committed_slice_output() {
+    local brief_file="$1"
+    local brief_index="$2"
+    local slice_id="$3"
+    local branch="$4"
+    local worktree="$5"
+    local integration_branch commit_count slice_commit integration_commit
+
+    if $DRY_RUN; then
+        dry "host verify slice '$slice_id' using snapshotted canonical argv and exact commit before merge/VERIFIED"
+        LAST_VERIFIED_COMMIT="dry-run"
+        LAST_VERIFIED_INTEGRATION_COMMIT="dry-run"
+        return 0
+    fi
+
+    integration_branch=$(derive_integration_branch_from_slice_branch "$branch") || {
+        warn "Host verification could not derive integration branch for slice '$slice_id'."
+        return 1
+    }
+    slice_commit=$(git -C "$REPO" rev-parse "$branch^{commit}" 2>/dev/null) || return 1
+    integration_commit=$(git -C "$REPO" rev-parse "$integration_branch^{commit}" 2>/dev/null) || return 1
+    commit_count=$(git -C "$REPO" rev-list --count "$integration_commit..$slice_commit" 2>/dev/null) || return 1
+    if [[ "$commit_count" -eq 0 ]]; then
+        warn "Host verification refused slice '$slice_id': branch '$branch' has no committed output beyond '$integration_branch'."
+        return 1
+    fi
+
+    if run_host_verification "$brief_file" "$brief_index" "$slice_id" "$worktree" "$slice_commit" "$branch" "$branch" "$slice_commit" "$integration_branch" "$integration_commit"; then
+        LAST_VERIFIED_COMMIT="$slice_commit"
+        LAST_VERIFIED_INTEGRATION_COMMIT="$integration_commit"
+        return 0
+    fi
+    return 1
+}
+
+verify_external_slice_on_detached_worktree() {
+    local brief_file="$1"
+    local slice_id="$2"
+    local branch="$3"
+    local brief_index integration_branch slice_commit integration_commit
+    local temp_root temp_worktree result
+
+    if $DRY_RUN; then
+        dry "host re-verify externally verified slice '$slice_id' on the current snapshotted integration commit"
+        return 0
+    fi
+
+    brief_index=$(slice_index_by_id "$slice_id") || return 1
+    integration_branch=$(derive_integration_branch_from_slice_branch "$branch") || return 1
+    slice_commit=$(git -C "$REPO" rev-parse "$branch^{commit}" 2>/dev/null) || return 1
+    integration_commit=$(git -C "$REPO" rev-parse "$integration_branch^{commit}" 2>/dev/null) || return 1
+    temp_root=$(mktemp -d "${TMPDIR:-/tmp}/workflow-external-verify.XXXXXX")
+    temp_worktree="$temp_root/worktree"
+    if ! git -C "$REPO" worktree add --detach "$temp_worktree" "$integration_commit" --quiet 2>/dev/null; then
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Could not create detached host-verification worktree for externally verified slice '$slice_id'."
+        return 1
+    fi
+
+    result=0
+    run_host_verification "$brief_file" "$brief_index" "$slice_id" "$temp_worktree" "$integration_commit" "" "$branch" "$slice_commit" "$integration_branch" "$integration_commit" ".external" || result=$?
+    git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || result=1
+    rmdir "$temp_root" 2>/dev/null || result=1
+    return "$result"
+}
+
+worktree_for_branch() {
+    local branch="$1"
+    local wanted_ref="refs/heads/$branch"
+    local current_worktree=""
+    local line
+
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *) current_worktree="${line#worktree }" ;;
+            branch\ "$wanted_ref") printf '%s\n' "$current_worktree"; return 0 ;;
+        esac
+    done < <(git -C "$REPO" worktree list --porcelain 2>/dev/null)
     return 1
 }
 
@@ -831,111 +1427,182 @@ merge_verified_slice_into_integration() {
     local slice_id="$1"
     local branch="$2"
     local agent_cwd="$3"
-    local integration_branch
-    local commit_count
+    local verified_commit="$4"
+    local expected_integration_commit="$5"
+    local integration_branch current_slice_commit current_integration_commit
+    local temp_root temp_worktree candidate_commit candidate_parent_one candidate_parent_two
+    local integration_worktree integration_worktree_head integration_worktree_status cleanup_result
 
-    if ! integration_branch=$(derive_integration_branch_from_slice_branch "$branch"); then
+    integration_branch=$(derive_integration_branch_from_slice_branch "$branch") || {
         warn "Slice '$slice_id' branch '$branch' does not match feature/<task>/slice-<slice_id>; cannot derive integration branch."
         return 1
-    fi
+    }
 
     if $DRY_RUN; then
-        dry "git checkout $integration_branch"
-        dry "git merge --no-ff --no-edit $branch"
+        dry "create isolated merge candidate from $expected_integration_commit and $verified_commit"
+        dry "git update-ref refs/heads/$integration_branch <candidate> $expected_integration_commit"
         return 0
     fi
 
-    if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$integration_branch"; then
-        warn "Slice '$slice_id' cannot be marked VERIFIED because integration branch '$integration_branch' does not exist."
+    current_slice_commit=$(git -C "$REPO" rev-parse "$branch^{commit}" 2>/dev/null || true)
+    current_integration_commit=$(git -C "$REPO" rev-parse "$integration_branch^{commit}" 2>/dev/null || true)
+    if [[ "$current_slice_commit" != "$verified_commit" || "$current_integration_commit" != "$expected_integration_commit" ]]; then
+        warn "Slice '$slice_id' cannot be merged because the verified slice or integration ref changed after host verification."
         return 1
     fi
-
     if worktree_has_uncommitted_slice_changes "$agent_cwd"; then
-        warn "Slice '$slice_id' cannot be marked VERIFIED because $agent_cwd has uncommitted changes. Commit or remove them before verification."
+        warn "Slice '$slice_id' cannot be merged because $agent_cwd has uncommitted changes."
         return 1
     fi
 
-    if ! commit_count=$(git -C "$REPO" rev-list --count "$integration_branch..$branch" 2>/dev/null); then
-        warn "Slice '$slice_id' cannot be marked VERIFIED because commits from '$branch' relative to '$integration_branch' could not be inspected."
+    integration_worktree=$(worktree_for_branch "$integration_branch" 2>/dev/null || true)
+    if [[ -n "$integration_worktree" ]]; then
+        integration_worktree_head=$(git -C "$integration_worktree" rev-parse HEAD 2>/dev/null || true)
+        integration_worktree_status=$(git -C "$integration_worktree" status --porcelain --untracked-files=all 2>/dev/null || printf 'status-failed')
+        if [[ "$integration_worktree_head" != "$expected_integration_commit" || -n "$integration_worktree_status" ]]; then
+            warn "Slice '$slice_id' cannot be promoted because the integration worktree is not clean at the exact verified base '$expected_integration_commit'."
+            return 1
+        fi
+    fi
+
+    temp_root=$(mktemp -d "${TMPDIR:-/tmp}/workflow-promotion.XXXXXX") || return 1
+    temp_worktree="$temp_root/worktree"
+    if ! git -C "$REPO" worktree add --detach "$temp_worktree" "$expected_integration_commit" --quiet 2>/dev/null; then
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Slice '$slice_id' could not create an isolated exact-base promotion worktree."
         return 1
     fi
 
-    if [[ "$commit_count" -eq 0 ]]; then
-        warn "Slice '$slice_id' cannot be marked VERIFIED because '$branch' has no commits beyond '$integration_branch'. Commit the slice output before verification."
+    if ! git -C "$temp_worktree" merge --no-ff --no-edit "$verified_commit" --quiet; then
+        git -C "$temp_worktree" merge --abort >/dev/null 2>&1 || true
+        git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || true
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Slice '$slice_id' exact verified commit could not merge cleanly with expected integration base '$expected_integration_commit'."
         return 1
     fi
 
-    if ! git -C "$REPO" checkout "$integration_branch" --quiet; then
-        warn "Slice '$slice_id' cannot be merged because checkout of integration branch '$integration_branch' failed."
+    candidate_commit=$(git -C "$temp_worktree" rev-parse HEAD 2>/dev/null || true)
+    candidate_parent_one=$(git -C "$temp_worktree" rev-parse "$candidate_commit^1" 2>/dev/null || true)
+    candidate_parent_two=$(git -C "$temp_worktree" rev-parse "$candidate_commit^2" 2>/dev/null || true)
+    current_slice_commit=$(git -C "$REPO" rev-parse "$branch^{commit}" 2>/dev/null || true)
+    if [[ "$candidate_parent_one" != "$expected_integration_commit" \
+        || "$candidate_parent_two" != "$verified_commit" \
+        || "$current_slice_commit" != "$verified_commit" ]]; then
+        git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || true
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Slice '$slice_id' promotion candidate was not built from the exact verified integration and slice commits."
         return 1
     fi
 
-    if git -C "$REPO" merge --no-ff --no-edit "$branch" --quiet; then
-        ok "Merged verified slice '$slice_id' into $integration_branch."
-        return 0
+    if ! git -C "$REPO" update-ref "refs/heads/$integration_branch" "$candidate_commit" "$expected_integration_commit"; then
+        git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || true
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Slice '$slice_id' compare-and-swap promotion rejected because integration branch '$integration_branch' changed after verification."
+        return 1
     fi
 
-    git -C "$REPO" merge --abort >/dev/null 2>&1 || true
-    warn "Slice '$slice_id' cannot be marked VERIFIED because merging '$branch' into '$integration_branch' failed. Resolve the merge conflict or rebase the slice branch, then rerun."
-    return 1
+    if [[ -n "$integration_worktree" ]] && ! git -C "$integration_worktree" reset --hard --quiet "$candidate_commit"; then
+        git -C "$REPO" update-ref "refs/heads/$integration_branch" "$expected_integration_commit" "$candidate_commit" >/dev/null 2>&1 || true
+        git -C "$integration_worktree" reset --hard --quiet "$expected_integration_commit" >/dev/null 2>&1 || true
+        git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || true
+        rmdir "$temp_root" 2>/dev/null || true
+        warn "Slice '$slice_id' promotion was rolled back because its clean integration worktree could not be synchronized."
+        return 1
+    fi
+
+    cleanup_result=0
+    git -C "$REPO" worktree remove "$temp_worktree" >/dev/null 2>&1 || cleanup_result=1
+    rmdir "$temp_root" 2>/dev/null || cleanup_result=1
+    if [[ "$cleanup_result" -ne 0 ]]; then
+        warn "Slice '$slice_id' was promoted, but its isolated promotion worktree could not be fully removed: $temp_worktree"
+    fi
+    ok "Promoted verified slice '$slice_id' into $integration_branch using compare-and-swap from '$expected_integration_commit' to exact candidate '$candidate_commit'."
+    return 0
 }
 
 # ── Worktree safety gates ────────────────────────────────────────────────────
 
 verify_worktrees_gitignored() {
-    # Verify the worktrees directory is gitignored (prevents committing worktree contents)
-    if [[ ! -d "$WORKTREES_DIR" ]]; then
-        return 0  # directory doesn't exist yet, will be checked on creation
+    # Fail closed instead of mutating repository policy as a runner side effect.
+    local normalized_path="${WORKTREES_DIR%/}"
+    local worktrees_real=""
+    local parent_path="."
+    local parent_real=""
+    local path_name=""
+    local repo_relative_path=""
+
+    if [[ -d "$normalized_path" ]]; then
+        worktrees_real=$(canonical_dir "$normalized_path") \
+            || fail "Could not canonicalize worktrees directory '$WORKTREES_DIR'."
+    else
+        if [[ "$normalized_path" == */* ]]; then
+            parent_path="${normalized_path%/*}"
+            path_name="${normalized_path##*/}"
+            [[ -n "$parent_path" ]] || parent_path="/"
+        else
+            path_name="$normalized_path"
+        fi
+        parent_real=$(canonical_dir "$parent_path") \
+            || fail "Could not canonicalize parent of worktrees directory '$WORKTREES_DIR'."
+        worktrees_real="${parent_real%/}/$path_name"
     fi
 
-    if ! git -C "$REPO" check-ignore -q "$WORKTREES_DIR" 2>/dev/null; then
-        warn "Worktrees directory '$WORKTREES_DIR' is NOT gitignored!"
-        echo "  Adding to .gitignore to prevent committing worktree contents..."
-        if ! $DRY_RUN; then
-            echo "$WORKTREES_DIR/" >> "$REPO/.gitignore"
-            ok "Added $WORKTREES_DIR/ to .gitignore"
-        else
-            dry "echo '$WORKTREES_DIR/' >> $REPO/.gitignore"
-        fi
+    # External worktree storage cannot be committed through this repository.
+    case "$worktrees_real" in
+        "$REPO"/*) repo_relative_path="${worktrees_real#"$REPO"/}" ;;
+        *) return 0 ;;
+    esac
+
+    if ! git -C "$REPO" check-ignore -q -- "${repo_relative_path%/}/" 2>/dev/null; then
+        fail "Worktrees directory '$WORKTREES_DIR' is not gitignored. Add the path to '$REPO/.gitignore' before using parallel mode, then rerun."
     fi
 }
 
 validate_baseline_tests() {
     # Run tests in the main repo before dispatching agents to establish a green baseline
-    local test_cmd=""
+    local -a test_cmd_arr=()
+    local test_cmd_display=""
+    local arg=""
+    local rendered_arg=""
 
-    # Auto-detect project type and test command
-    if [[ -f "$REPO/package.json" ]]; then
-        test_cmd="npm test"
+    # Prefer an explicit argv array, otherwise auto-detect the project command.
+    if [[ ${#BASELINE_TEST_ARGV[@]} -gt 0 ]]; then
+        test_cmd_arr=("${BASELINE_TEST_ARGV[@]}")
+    elif [[ -f "$REPO/package.json" ]]; then
+        test_cmd_arr=(npm test)
     elif compgen -G "$REPO/*.sln" >/dev/null 2>&1 || compgen -G "$REPO/*.csproj" >/dev/null 2>&1; then
-        test_cmd="dotnet test --tl:on -v:minimal --no-restore"
+        test_cmd_arr=(dotnet test --tl:on -v:minimal --no-restore)
     elif [[ -f "$REPO/Cargo.toml" ]]; then
-        test_cmd="cargo test"
+        test_cmd_arr=(cargo test)
     elif [[ -f "$REPO/go.mod" ]]; then
-        test_cmd="go test ./..."
+        test_cmd_arr=(go test ./...)
     elif [[ -f "$REPO/pyproject.toml" ]] || [[ -f "$REPO/setup.py" ]]; then
-        test_cmd="python -m pytest"
+        test_cmd_arr=(python -m pytest)
     fi
 
-    if [[ -z "$test_cmd" ]]; then
+    if [[ ${#test_cmd_arr[@]} -eq 0 ]]; then
         info "Could not auto-detect test command — skipping baseline validation."
-        info "Tip: set BASELINE_TEST_CMD in agent.conf to enable this check."
+        info "Tip: set BASELINE_TEST_ARGV=(command arg1 arg2) in agent.conf to enable this check."
         return 0
     fi
 
-    # Allow override from agent.conf
-    test_cmd="${BASELINE_TEST_CMD:-$test_cmd}"
+    for arg in "${test_cmd_arr[@]}"; do
+        printf -v rendered_arg '%q' "$arg"
+        if [[ -n "$test_cmd_display" ]]; then
+            test_cmd_display="$test_cmd_display $rendered_arg"
+        else
+            test_cmd_display="$rendered_arg"
+        fi
+    done
 
     echo ""
-    info "Running baseline tests before dispatch: $test_cmd"
+    info "Running baseline tests before dispatch: $test_cmd_display"
     if $DRY_RUN; then
-        dry "cd $REPO && $test_cmd"
+        dry "run baseline argv in '$REPO': $test_cmd_display"
         return 0
     fi
 
     local exit_code=0
-    local test_cmd_arr
-    read -ra test_cmd_arr <<< "$test_cmd"
     (cd "$REPO" && "${test_cmd_arr[@]}") || exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
@@ -948,6 +1615,22 @@ validate_baseline_tests() {
 CREATED_WORKTREES=()
 
 # ── Run a single agent ────────────────────────────────────────────────────────
+
+publish_bounded_agent_log() {
+    local raw_log="$1"
+    local log_file="$2"
+    local final_tmp
+
+    final_tmp=$(mktemp "$LOG_DIR/.agent-output.XXXXXX") || return 1
+    if ! tail -c "$AGENT_LOG_MAX_BYTES" "$raw_log" >"$final_tmp"; then
+        rm -f "$final_tmp"
+        return 1
+    fi
+    if ! mv -f "$final_tmp" "$log_file"; then
+        rm -f "$final_tmp"
+        return 1
+    fi
+}
 
 run_agent() {
     local brief_file="$1"
@@ -973,14 +1656,32 @@ run_agent() {
         return 0
     fi
 
-    # Run the agent using config-driven command
+    # Capture privately with a hard file bound, then atomically publish without
+    # following a pre-existing predictable log symlink.
     local exit_code=0
+    local raw_log output_blocks
+    raw_log=$(mktemp "${TMPDIR:-/tmp}/workflow-agent-output.XXXXXX") \
+        || { warn "Could not create private agent output capture for $brief_name."; return 1; }
+    output_blocks=$(( (AGENT_LOG_MAX_BYTES + 511) / 512 ))
     if [[ -n "$AGENT_CWD_FLAG" ]]; then
-        "$AGENT_CLI_CMD" "$AGENT_PROMPT_ARG" "$brief_content" "$AGENT_CWD_FLAG" "$agent_cwd" > "$log_file" 2>&1 || exit_code=$?
+        (
+            ulimit -f "$output_blocks"
+            exec "$AGENT_CLI_CMD" "$AGENT_PROMPT_ARG" "$brief_content" "$AGENT_CWD_FLAG" "$agent_cwd"
+        ) >"$raw_log" 2>&1 || exit_code=$?
     else
         # Agent without --cwd support: cd into the directory
-        (cd "$agent_cwd" && "$AGENT_CLI_CMD" "$AGENT_PROMPT_ARG" "$brief_content") > "$log_file" 2>&1 || exit_code=$?
+        (
+            cd "$agent_cwd"
+            ulimit -f "$output_blocks"
+            exec "$AGENT_CLI_CMD" "$AGENT_PROMPT_ARG" "$brief_content"
+        ) >"$raw_log" 2>&1 || exit_code=$?
     fi
+    if ! publish_bounded_agent_log "$raw_log" "$log_file"; then
+        rm -f "$raw_log"
+        warn "Agent $index ($brief_name) output could not be published safely: $log_file"
+        return 1
+    fi
+    rm -f "$raw_log"
 
     if [[ $exit_code -eq 0 ]]; then
         ok "Agent $index ($brief_name) completed successfully."
@@ -1061,6 +1762,10 @@ info "Preparing $SELECTED_TOTAL selected slice(s) ($AGENT, $MODE_STR)"
 
 PIDS=()
 PID_BRIEFS=()
+PID_BRIEF_FILES=()
+PID_AGENT_CWDS=()
+PID_SLICE_IDS=()
+PID_BRIEF_INDEXES=()
 FAILED=()
 DEFERRED=()
 
@@ -1075,11 +1780,16 @@ fi
 if $PARALLEL; then
     verify_worktrees_gitignored
 fi
+prove_external_verified_prerequisites
 validate_baseline_tests
 
 for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
     brief="${BRIEF_FILES[$i]}"
     index=$((i + 1))
+    if is_external_verified_slice "${SLICE_IDS[$i]}"; then
+        info "Skipping externally verified slice '${SLICE_IDS[$i]}' after ancestry proof and host re-verification."
+        continue
+    fi
     if $PARALLEL; then
         unresolved_deps=$(parallel_unverified_dependencies "$i" | join_lines_csv)
         if [[ -n "$unresolved_deps" ]]; then
@@ -1092,6 +1802,10 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
     fi
 
     agent_cwd=$(resolve_agent_cwd "$brief" "${SLICE_IDS[$i]}" "${SLICE_DEPENDS[$i]}")
+    if ! $DRY_RUN && [[ -d "$agent_cwd" ]]; then
+        agent_cwd=$(canonical_dir "$agent_cwd") \
+            || fail "Could not canonicalize resolved worktree for slice '${SLICE_IDS[$i]}': $agent_cwd"
+    fi
     LAUNCHED=$((LAUNCHED + 1))
     # Track only NEW worktrees for cleanup (resolve_agent_cwd runs in subshell, can't update parent array)
     if [[ -d "$agent_cwd" && "$agent_cwd" != "$REPO" ]]; then
@@ -1104,10 +1818,18 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
         run_agent "$brief" "$index" "$agent_cwd" "${SLICE_IDS[$i]}" &
         PIDS+=($!)
         PID_BRIEFS+=("$(basename "$brief" .md)")
+        PID_BRIEF_FILES+=("$brief")
+        PID_AGENT_CWDS+=("$agent_cwd")
+        PID_SLICE_IDS+=("${SLICE_IDS[$i]}")
+        PID_BRIEF_INDEXES+=("$i")
     else
         if run_agent "$brief" "$index" "$agent_cwd" "${SLICE_IDS[$i]}"; then
             branch=$(get_branch_from_brief "$brief")
-            if merge_verified_slice_into_integration "${SLICE_IDS[$i]}" "$branch" "$agent_cwd"; then
+            if ! verify_committed_slice_output "$brief" "$i" "${SLICE_IDS[$i]}" "$branch" "$agent_cwd"; then
+                FAILED+=("$(basename "$brief" .md)")
+                warn "Slice '${SLICE_IDS[$i]}' failed host verification; stopping before merge or dependent launch."
+                break
+            elif merge_verified_slice_into_integration "${SLICE_IDS[$i]}" "$branch" "$agent_cwd" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
                 mark_verified_slice "${SLICE_IDS[$i]}"
             else
                 FAILED+=("$(basename "$brief" .md)")
@@ -1129,8 +1851,26 @@ fi
 # Wait for parallel jobs
 if $PARALLEL && [[ ${#PIDS[@]} -gt 0 ]]; then
     info "Waiting for ${#PIDS[@]} parallel agents..."
+    PID_EXIT_CODES=()
     for idx in "${!PIDS[@]}"; do
-        if ! wait "${PIDS[$idx]}"; then
+        if wait "${PIDS[$idx]}"; then
+            PID_EXIT_CODES+=("0")
+        else
+            PID_EXIT_CODES+=("1")
+            FAILED+=("${PID_BRIEFS[$idx]}")
+        fi
+    done
+
+    info "All parallel agents are quiescent; beginning host verification and exact-commit merges."
+    for idx in "${!PIDS[@]}"; do
+        [[ "${PID_EXIT_CODES[$idx]}" -eq 0 ]] || continue
+        branch=$(get_branch_from_brief "${PID_BRIEF_FILES[$idx]}")
+        if ! verify_committed_slice_output "${PID_BRIEF_FILES[$idx]}" "${PID_BRIEF_INDEXES[$idx]}" "${PID_SLICE_IDS[$idx]}" "$branch" "${PID_AGENT_CWDS[$idx]}"; then
+            FAILED+=("${PID_BRIEFS[$idx]}")
+            warn "Parallel slice '${PID_SLICE_IDS[$idx]}' failed host verification; it was not merged or marked VERIFIED."
+        elif merge_verified_slice_into_integration "${PID_SLICE_IDS[$idx]}" "$branch" "${PID_AGENT_CWDS[$idx]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
+            mark_verified_slice "${PID_SLICE_IDS[$idx]}"
+        else
             FAILED+=("${PID_BRIEFS[$idx]}")
         fi
     done
@@ -1140,24 +1880,23 @@ fi
 
 if $PARALLEL && $CLEANUP_WORKTREES && ! $DRY_RUN; then
     echo ""
-    info "Cleaning up worktrees..."
-    for wt in "${CREATED_WORKTREES[@]}"; do
+    info "Cleaning up only clean worktrees created by this invocation..."
+    for wt in "${CREATED_WORKTREES[@]:-}"; do
+        [[ -n "$wt" ]] || continue
         if [[ -d "$wt" ]]; then
-            git -C "$REPO" worktree remove "$wt" --force 2>/dev/null \
-                && ok "Removed worktree: $wt" \
-                || warn "Could not remove worktree: $wt"
+            wt_real=$(canonical_dir "$wt" 2>/dev/null || true)
+            if [[ -z "$wt_real" ]] || ! registered_worktree_matches "$wt_real"; then
+                warn "Refusing cleanup for unregistered or non-canonical worktree path: $wt"
+            elif worktree_has_uncommitted_slice_changes "$wt_real"; then
+                warn "Preserving dirty created worktree for recovery: $wt_real"
+            elif git -C "$REPO" worktree remove "$wt_real" 2>/dev/null; then
+                ok "Removed clean invocation-created worktree: $wt_real"
+            else
+                warn "Could not remove clean invocation-created worktree: $wt_real"
+            fi
         fi
     done
-    # Also try to remove worktrees created by decompose.sh
-    if [[ -d "$WORKTREES_DIR" ]]; then
-        for wt_dir in "$WORKTREES_DIR"/*/; do
-            [[ -d "$wt_dir" ]] || continue
-            git -C "$REPO" worktree remove "$wt_dir" --force 2>/dev/null \
-                && ok "Removed worktree: $wt_dir" \
-                || warn "Could not remove worktree: $wt_dir (may have uncommitted changes)"
-        done
-        rmdir "$WORKTREES_DIR" 2>/dev/null || true
-    fi
+    rmdir "$WORKTREES_DIR" 2>/dev/null || true
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: index
 skill: assistant-review
 
@@ -33,7 +33,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV0, INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
+        names: [INV0, INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9, INV10, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
     budget_words: 12000
   selected_handoff:
     selectors:

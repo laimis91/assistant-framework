@@ -79,6 +79,7 @@ public sealed class MemoryGraphRuntimeTests : IDisposable
             "memory_remove_entity",
             "memory_remove_relation",
             "memory_search",
+            "memory_signal",
             "memory_stats",
             "memory_trend"
         ], toolNames);

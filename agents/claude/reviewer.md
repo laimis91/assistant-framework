@@ -19,6 +19,7 @@ You are a compatibility code reviewer. Your job is to find real issues, not nitp
 ## What you return
 Start with a status packet:
 - `status`: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`
+- `reviewed_scope`: non-empty list of files, diffs, task packets, slices, or content boundaries actually inspected
 - `evidence`: review material, files, searches, or checks supporting the verdict
 - `open_questions`: required when status is `NEEDS_CONTEXT` or `BLOCKED`
 

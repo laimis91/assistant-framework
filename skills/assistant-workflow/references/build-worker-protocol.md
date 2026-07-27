@@ -23,10 +23,20 @@ Reviewer dispatch/direct-fallback evidence. Any security-sensitive, high-risk,
 harness-capable, required-QA, non-localized, or otherwise promoted work uses the
 standard/strict lane and its existing gates.
 
-Standard/strict source-changing Build tasks infer `required_agents` with at
-least Code Writer, Builder/Tester, and Code Reviewer. `reviewer` remains
-compatibility routing for existing or legacy handoffs. Add QA Evaluator only
-when `qa_evaluation_mode=required`.
+Select `build_execution_lane` before dispatch:
+
+- `bounded_executor` is the default for ordinary medium standard-risk work.
+  One Code Writer/bounded executor owns the focused RED, GREEN, edit, test, and
+  refactor-safety loop during Build. Independent review is dispatched only
+  after Build enters Review.
+- `separated_workers` is used for high or critical risk, broad or noisy
+  verification, environment-heavy validation, an explicit independent TDD
+  evidence requirement, or explicit role separation. It uses Code Writer,
+  Builder/Tester, and Code Reviewer.
+
+Task size alone does not select separated workers. `reviewer` remains
+compatibility routing for legacy handoffs. Add QA Evaluator only when
+`qa_evaluation_mode=required`.
 
 Delegated mode (`subagent_execution_mode=delegated`):
 
@@ -36,8 +46,10 @@ Delegated mode (`subagent_execution_mode=delegated`):
   `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and
   `{agent_state_dir}/working-buffer.md`) are the exception only when configured
   and policy-allowed.
-- Project source changes go through Code Writer.
-- Build and verification go through Builder/Tester.
+- In `bounded_executor`, project/test changes and focused verification go
+  through one bounded Code Writer executor.
+- In `separated_workers`, project source changes go through Code Writer and
+  build/verification goes through Builder/Tester.
 - Independent Review goes through Code Reviewer, or Reviewer compatibility only
   for existing/legacy handoffs.
 - QA Evaluator runs only when `qa_evaluation_mode=required`.
@@ -46,26 +58,24 @@ For standard/strict work, Direct fallback mode
 (`subagent_execution_mode=direct_fallback`) is allowed only for
 `authorization_denied`, `subagents_unavailable`, or `policy_disallowed`.
 Do not pretend delegation happened. Record `subagent_policy_state`,
-`subagent_execution_mode`, the explicit direct fallback reason, and equivalent
-Code Writer, Builder/Tester, Code Reviewer, and QA Evaluator evidence when QA is
-required.
+`subagent_execution_mode`, `build_execution_lane`, the explicit direct fallback
+reason, matching bounded/separated evidence, independent Code Reviewer
+evidence during Review, and QA Evaluator evidence when QA is required.
 
-## Standard/Strict Evidence Gate
+## Standard/Strict Phase Evidence Gates
 
-Before standard/strict Build/Review can complete, the task journal Agent
-Dispatch Log or equivalent carried-forward state must contain:
+Before standard/strict Build can complete, the task journal Agent Dispatch Log
+or equivalent carried-forward state contains only the selected Build-lane
+evidence:
 
-- `Code Writer dispatch` and `Code Writer result`
-- `Builder/Tester dispatch` and `Builder/Tester result`
-- `Code Reviewer dispatch` and `Code Reviewer result`, or `Reviewer dispatch`
-  and `Reviewer result` only for compatibility routing
-- `QA Evaluator dispatch` and `QA Evaluator result` when
-  `qa_evaluation_mode=required`
+- `bounded executor dispatch/result` plus focused RED/GREEN/verification
+  evidence when `build_execution_lane=bounded_executor`, or `Code Writer` and
+  `Builder/Tester` dispatch/results when `separated_workers`
 
-Direct fallback records the equivalent direct evidence fields instead:
-`Code Writer direct evidence`, `Builder/Tester direct evidence`,
-`Code Reviewer direct evidence`, and `QA Evaluator direct evidence` when QA is
-required. `subagent_execution_mode=not_applicable` is invalid for
+After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
+Reviewer compatibility), `review_result`, and QA Evaluator evidence when QA is
+required. Direct fallback follows the same phase split. Review evidence cannot
+be used to satisfy a Build exit. `subagent_execution_mode=not_applicable` is invalid for
 standard/strict source-changing Build. Silent fallback is invalid; Silent
 fallback cannot complete.
 
@@ -74,9 +84,10 @@ marked `VERIFIED`.
 
 ## Build Loop
 
-For light work, implement the inline plan directly, run relevant automated
-validation/tests, and record the changed scope plus results in the inline
-packet. Then perform the compact fresh self-review. Do not create worker or
+For light work, implement the carried Discover scope/criteria or the inline plan
+when `plan_mode=inline`, run relevant automated validation/tests, and record the
+changed scope plus results in the inline packet. Then perform the compact fresh
+self-review. Do not create worker or
 independent-review dispatch evidence solely to satisfy the light lane.
 
 For medium+ tasks with slices, execute one slice at a time. Each slice is the
@@ -94,15 +105,44 @@ Before starting a slice:
    next slice while the current slice is unverified.
 4. Check constraints from the task journal against the slice files and criteria.
 
-For each non-TDD step, dispatch Code Writer for one plan step at a time in
-delegated mode, then dispatch Builder/Tester for build and tests. In direct
-fallback, perform the same responsibilities directly and record role-equivalent
-evidence. Tests stay alongside code, not after it.
+For each step, dispatch the selected lane owner for one task packet at a time.
+The bounded executor edits and runs focused verification in the same context.
+Separated workers dispatch Code Writer, then Builder/Tester. In direct fallback,
+perform the same selected-lane responsibilities and record equivalent evidence.
+Tests stay alongside code, not after it.
 
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
-dispatch Code Writer again or perform the Code Writer responsibility directly in
-fallback mode, then verify through Builder/Tester responsibility.
+route verification through the selected build_execution_lane: the bounded
+executor retries and verifies its focused loop; separated workers dispatch Code
+Writer and then Builder/Tester; direct fallback performs the same selected-lane
+responsibilities.
+
+### Ordinary Build repair controller
+
+For ordinary non-harness same-scope repair, initialize and persist
+`build_repair_state` before the second implementation attempt:
+
+- `attempt` and `cumulative_attempt_count` (the cumulative same-scope count)
+- fixed `max_attempts: 3`
+- `no_progress_count` and fixed `no_progress_limit: 2`
+- normalized `failure_signatures`
+- concrete `progress_evidence`
+- stable `plan_version`
+- status and evidence reference
+
+One initial attempt plus at most two repairs is the complete three-attempt
+budget. Redispatch, context reset, compaction, handoff, or cross-session resume
+must not reset `cumulative_attempt_count` for the same plan version. Increment no-progress when the
+same normalized signature remains and no check newly passes, no failing scope
+shrinks, and no new evidence isolates the cause. Reset it only for measurable
+evidence-backed progress.
+
+At attempt 3, or when `no_progress_count` reaches 2, do not patch again. Set
+status to `terminal_pivot` or `blocked`, record `terminal_route`, and route to debugging, replan, restart
+with reapproval, user input, or environment recovery through
+`pivot_restart_decision` when applicable. A changed plan version starts a new
+path only after required reapproval; it must not disguise a same-scope retry.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
@@ -115,19 +155,17 @@ RED-ready reproduction/root-cause evidence, and interface-affecting refactors
 unless a not-feasible exception is recorded. Unknown-cause bugfixes complete
 debugging first, then enter RED once the failure mechanism is understood.
 
-When `tdd_mode=true` or `tdd_applies=true`, use the TDD sandwich per step:
+When `tdd_mode=true` or `tdd_applies=true`, preserve the behavior boundary in
+both lanes: valid RED evidence must exist before production code.
 
-- Builder/Tester RED: write one failing behaviour test, run it, verify right failure reason, and return RED evidence.
-- Code Writer GREEN: implement minimal production code only after RED evidence
-  is present.
-- Builder/Tester VERIFY/REFACTOR-SAFETY: run the targeted test, relevant suite,
-  and regression checks; request Code Writer fixes for production failures.
+- `bounded_executor`: the bounded executor writes/runs RED, records the
+  right-reason failure, implements minimal GREEN, then runs focused and relevant
+  regression verification.
+- `separated_workers`: Builder/Tester owns RED, Code Writer owns GREEN, and
+  Builder/Tester owns verify/refactor-safety.
 
-In direct fallback, preserve those role boundaries in the evidence even when one
-agent performs the work. For bugfixes, the RED test must trace to the original
-reproduction/debugging evidence. If TDD is active and Builder/Tester RED
-evidence is missing, Code Writer returns `NEEDS_CONTEXT` and makes no production
-changes.
+For bugfixes, RED traces to the original reproduction/debugging evidence. A
+missing or wrong-reason RED blocks production edits in either lane.
 
 ## Code Writer Unexpected Blockers
 
@@ -159,7 +197,7 @@ Recovery routing:
   files, behavior, risk, verification, or acceptance criteria change
 - `tool_environment` -> route to Builder/Tester or environment recovery
 - `permission_policy` -> request permission or return BLOCKED
-- `tdd_red_missing` -> return to Builder/Tester RED evidence
+- `tdd_red_missing` -> obtain valid RED evidence from the selected lane owner
 - `other` -> create a conservative recovery route with evidence
 
 Recovery route labels are: debugging, explorer, architect, candidate_search,
@@ -175,9 +213,12 @@ Review phase after Build completes.
 After implementation for a slice is done, verify the slice against its
 Decompose criteria before moving on:
 
-1. Dispatch Builder/Tester in delegated mode, or perform the Builder/Tester
-   responsibility directly in fallback mode, to run the slice verification
-   command and relevant build/test checks from the task packet.
+1. In `bounded_executor`, the executor executes the slice verification argv
+   directly, with item 0 as the executable and each remaining item as one
+   literal argument; never reconstruct a shell command. Then run
+   relevant focused checks. Dispatch Builder/Tester only when
+   `build_execution_lane=separated_workers`; direct fallback performs the same
+   selected-lane verification responsibility.
 2. Check each acceptance criterion from the slice manifest independently; mark
    pass/fail with command, result, or inspection evidence.
 3. Record verification evidence in the task journal slice verification ledger,

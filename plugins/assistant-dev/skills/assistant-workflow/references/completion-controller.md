@@ -4,6 +4,13 @@ Internal reference for adaptive completion, manual verification, learning,
 metrics, memory, reflexion, and final distillation. Load after Review. Manual
 verification may still be pending only when `manual_verification_mode=required`.
 
+Document is the sole owner of `final_handoff`; Review supplies `review_result`
+and verification evidence but does not create the handoff. For medium+ work,
+load `references/final-handoff.md` and complete its reconstructable developer
+handoff. Requirement evidence comes from
+`references/requirement-acceptance-map.md`; every accepted requirement is
+passed or explicitly excluded with approval.
+
 ## Document Paths
 
 ### Light path
@@ -74,6 +81,10 @@ Required fields:
   saved or updated
 - `No-save rationale`: required when no durable write occurred
 
+For journal mode, run `bash scripts/validate-learning-state.sh <task-journal>`
+after recording the decision. Normal work uses `auto`; `not_required` is valid
+only with a concrete `policy_disallowed:` or `explicit_exclusion:` reason.
+
 ## Reflexion and Memory
 
 Metrics, reflexion, and memory are optional and non-blocking; none is a
@@ -135,4 +146,6 @@ explicit project policy, or a user request. When required, print:
 ```
 
 Otherwise, finish with a concise natural completion update that includes the
-required output evidence without exact marker ceremony.
+required output evidence without exact marker ceremony. Medium+ concision does
+not permit dropping architecture decisions, requirement evidence, developer
+test scenarios, limitations, or rollback notes from the final handoff.

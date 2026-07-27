@@ -4,7 +4,7 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 
 ## What it does
 
-1. **Structured Workflow** — TRIAGE > DISCOVER > PLAN > BUILD & TEST > DOCUMENT with approval gates and two-stage review
+1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
 3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
@@ -16,7 +16,7 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 10. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
 11. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 12. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-13. **Review Automation** — Autonomous review/fix/re-review loop with confidence thresholds
+13. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
 14. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
 15. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
 16. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
@@ -63,12 +63,132 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 
 For one compatibility release, a normal install also retires older Assistant Framework lifecycle registrations safely. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. Invalid JSON is warned about and left unchanged. Restart the agent after migrating an older install. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
 
+### Native Windows installation
+
+Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7 and requires the .NET 8 SDK so the Memory Graph server can build on first use.
+
+Close Codex App before installing or updating Codex so it releases `config.toml` and `AGENTS.md`. The installer checks existing copies of both files before it starts changing managed files. If either file is locked, close Codex App and rerun the same command. If a file becomes unavailable after that check, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
+
+Install the complete release inventory for one agent:
+
+```powershell
+.\install.ps1 -Agent codex
+.\install.ps1 -Agent claude
+.\install.ps1 -Agent gemini
+```
+
+On the first Claude or Gemini install, add `-AcceptMemoryProtocol` if you want the installer to append the Assistant Framework memory instructions. Without it, the installer still installs the framework and tells you that the protocol was not added.
+
+```powershell
+.\install.ps1 -Agent claude -AcceptMemoryProtocol
+.\install.ps1 -Agent gemini -AcceptMemoryProtocol
+```
+
+The same entry point supports a single skill, a focused profile, and a non-mutating preview:
+
+```powershell
+.\install.ps1 -Agent claude -Skill assistant-thinking -AcceptMemoryProtocol
+.\install.ps1 -Agent codex -Plugin assistant-dev
+.\install.ps1 -Agent codex -DryRun
+```
+
+After pulling an update, reinstall by running the selected install command again:
+
+```powershell
+.\install.ps1 -Agent codex
+```
+
+Installer-owned directories are mirrored, while existing memory data, unrelated agent configuration, and user-authored instruction content are preserved. Restart the selected agent after updating an older installation.
+
+Windows destinations are:
+
+| Agent | Skills | Configuration, tools, and memory |
+|---|---|---|
+| Codex | `%USERPROFILE%\.agents\skills\assistant-*` | `CODEX_HOME` when set; otherwise `%USERPROFILE%\.codex` |
+| Claude Code | `%USERPROFILE%\.claude\skills\assistant-*` | `%USERPROFILE%\.claude` and `%USERPROFILE%\.claude.json` |
+| Gemini CLI | `%USERPROFILE%\.gemini\skills\assistant-*` | `%USERPROFILE%\.gemini` |
+
+The Windows installer itself does not require administrator access, create symlinks, download dependencies, or change PowerShell execution policy. On the first Memory Graph launch, `dotnet publish` can restore the project's declared NuGet packages when they are not already cached; the machine's normal NuGet sources and network policy apply. If Windows marks the checked-out script as downloaded and blocks it, review the file and remove only that file's download mark:
+
+```powershell
+Unblock-File -LiteralPath .\install.ps1
+```
+
+Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy Bypass`. The native installer and Memory Graph launcher are PowerShell scripts; the repository's remaining Bash-only maintenance and eval helpers still require Git Bash or WSL.
+
+#### Windows manual verification
+
+1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
+2. Close Codex App, run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
+3. Resolve the Codex configuration root and confirm its Memory Graph launcher, configuration, and global instructions exist:
+
+   ```powershell
+   $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+   Test-Path -LiteralPath (Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1')
+   Test-Path -LiteralPath (Join-Path $codexHome 'config.toml')
+   Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
+   Select-String -LiteralPath (Join-Path $codexHome 'config.toml') -SimpleMatch '[mcp_servers.memory-graph]'
+   Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
+   ```
+
+4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1`.
+5. Restart the selected agent and call `memory_context`, or inspect its MCP status, to verify that Memory Graph starts successfully.
+
 ## Skills
 
 Only tracked `assistant-*` directories are first-class release skills.
 
 ### assistant-workflow
-Core development pipeline: idea-to-action decomposition, triage, discover, plan, build & test, verify, document.
+Core development pipeline: idea-to-action decomposition, discover, proportional planning, build and verification, independent review, bounded repair, and evidence-backed documentation.
+
+The architecture is an adaptive loop implemented through native skill routing;
+there is no installed lifecycle engine. Its conceptual states map to the public
+workflow like this:
+
+| Conceptual state | Public phase | Observable responsibility |
+|---|---|---|
+| ORIENT, RESOLVE | Discover | Inspect the request, repository, policy, and current task state; apply and record deterministic safe defaults, and ask only material questions with no safe default. |
+| PLAN? | Optional Plan | Select `plan_mode`: `none`, `inline`, or `approval_required`. |
+| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run focused tests, and host-verify argv-array commands before marking evidence verified. |
+| REVIEW | Review | Independently check requirements, regressions, quality, security, and QA evidence. |
+| REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
+| HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
+
+`plan_mode=none` is limited to small, local, reversible, high-confidence work
+with known scope. `inline` records a short plan without an approval wait.
+`approval_required` applies to medium-or-larger work and to risk, policy, or
+public-impact changes. Build owns implementation, tests, host verification, and
+a bounded repair loop: at most three attempts, a no-progress limit of two, and
+recorded failure signatures and progress before pivoting or reporting a block.
+Build repair is implementation/verification-failure recovery. Review-fix work
+for review findings stays within the bounded `assistant-review` loop and records
+its own revalidation before a fresh review result.
+Review owns independent acceptance evidence and fresh post-repair assessment;
+it does not create the handoff. Document is the sole owner of `final_handoff`.
+Integration fails closed when required validation is absent unless an explicit
+skip reason is recorded.
+
+Workflow consumes the canonical assistant-review Reviewer/QAEvaluator schemas
+through validated result references; it does not restate those worker packets.
+Reviewers must return a non-empty `reviewed_scope` alongside findings and
+evidence, so a partial or differently scoped review cannot silently satisfy the
+workflow's acceptance gate. The final handoff summarizes requirement coverage,
+important changed areas, architecture decisions, verification evidence, manual
+test steps, deviations, and remaining risks without claiming checks that did
+not run.
+
+For executable slices, repository verification uses canonical argv arrays and
+is bound to tracked files in the exact clean slice commit. Host verification
+has bounded private logs and a hard process-group timeout; passing commits are
+promoted from an isolated merge candidate with compare-and-swap protection.
+Validation commands must leave the candidate tree unchanged. Parallel worktree
+storage inside the repository must already be gitignored—the runner fails with
+an instruction instead of editing `.gitignore`.
+
+For compression-safe work, the orchestrator keeps concise, root-scoped task and
+session state under `.codex/`. Resume reconciles that journal with the newest
+user request and current repository evidence before continuing; stale state
+never overrides either source.
 
 Loop readiness is conditional. Ordinary day-to-day development, such as taking a work item, prompting once, waiting for implementation, and manually testing the result, stays in the normal workflow. Add `loop_readiness_assessment` only before an explicit repeat, optimization, or experiment loop outside the standard phase gates. Examples include "keep fixing build/test failures until green", "iterate on this interface until the manual checklist passes", or "optimize until a measured target is reached". A loop plan must name the verifier, stop condition, finite max iterations, budget limit, retry/empty-result handling, tool-error handling, low-confidence escalation, rollback/exit action, and harness routing. Loop readiness alone does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness or QA criteria independently apply.
 
@@ -105,7 +225,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Autonomous code review loop: review, fix, re-review until clean or the loop reaches its cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: audits use one pass; review-fix work normally uses one review plus one fresh post-fix re-review. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -155,7 +275,7 @@ Triggers on: telos, my purpose, why am I doing this, what matters most, my missi
 
 The sole persistence layer for cross-session memory. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" via MCP tools.
 
-**15 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_trend`
+**16 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_signal`, `memory_trend`
 
 Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
 
@@ -245,10 +365,108 @@ Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
 
+### Optional Design-Pattern Library
+
+The metadata-first `tools/patterns/pattern-library.sh` adapter can search a
+private local collection without making it a company or repository dependency.
+Configuration is deliberately opt-in and is never discovered automatically.
+
+To configure it on one workstation:
+
+1. Create a private configuration file outside this repository. A conventional
+   location is `~/.config/assistant-framework/pattern-libraries.json`:
+
+   ```json
+   {
+     "schema_version": "1.0",
+     "libraries": [
+       {
+         "id": "design-patterns",
+         "root": "/path/to/design-pattern-examples"
+       }
+     ]
+   }
+   ```
+
+   Replace the example root with an existing directory that is not a symlink.
+   Absolute roots are supported. Relative roots are resolved from the configuration file's directory.
+   They are not resolved from the current working directory.
+   The config supports only `schema_version`, `libraries`, `id`, and `root`.
+
+2. Make the config path explicit in personal or project instructions so the
+   workflow is allowed to use it. Do not put the library root itself in shared
+   instructions. For Codex, a compact entry in `~/.codex/AGENTS.md` is:
+
+   ```markdown
+   ## Personal pattern library
+
+   For optional design-pattern retrieval, use the explicit config at
+   `~/.config/assistant-framework/pattern-libraries.json`.
+   ```
+
+3. Restrict the private config and validate it with the installed adapter:
+
+   ```bash
+   chmod 700 ~/.config/assistant-framework
+   chmod 600 ~/.config/assistant-framework/pattern-libraries.json
+   ~/.codex/tools/patterns/pattern-library.sh validate-config \
+     --config ~/.config/assistant-framework/pattern-libraries.json
+   ~/.codex/tools/patterns/pattern-library.sh search \
+     --config ~/.config/assistant-framework/pattern-libraries.json \
+     --query "factory"
+   ```
+
+   A valid configuration returns `status: configured`; search returns metadata
+   only and at most three results by default. No prebuilt index is required.
+   When using another installed agent, use that agent's tools directory instead
+   of `~/.codex/tools/`.
+
+See `docs/pattern-library.md` for index creation, bounded result limits, and the
+safe explicit `show` command.
+
+The dated eight-priority architecture, verification, and manual-testing handoff
+is in `docs/assistant-framework-priority-handoff-2026-07-12.md`.
+
+### Architecture verification status
+
+The local P0-P4 contracts cover the adaptive-loop mapping, compression-safe
+state, clarification and plan selection, bounded Build repair, independent
+Review, Document-only handoff ownership, and the end-to-end ordered repair
+fixture:
+
+```bash
+./tests/test-p0-p4-contracts.sh
+```
+
+Pull requests and pushes to `main` also run
+`.github/workflows/framework-validation.yml`, which executes the aggregate
+contracts, skill and generated-mirror checks, all three Unix installer
+dry-runs, and the Memory Graph tests on a hosted Linux runner.
+
+The end-to-end fixture checks the observable order: implementation, focused
+test pass, an exact trusted review invocation finding the seeded defect, repair,
+focused revalidation pass, a fresh exact review pass, then final handoff. Its
+closed-world verifier artifact binds the finding and repair to different source
+hashes and records that the defect existed before repair and is absent after
+repair. The runner accepts only exact trusted command forms and inspects
+temporary Codex JSONL events before deleting them.
+
+These deterministic repository checks validate the framework mechanics; they
+do not by themselves prove current model behavior. Hosted Windows PowerShell
+5.1 and PowerShell 7 have both run the committed Windows contracts successfully
+for this architecture; changes to those surfaces must rerun the hosted workflow.
+The previously recorded Terra snapshot predates the changed fixture and grader
+and remains historical, non-promoting evidence. A new live promotion claim
+requires fresh authorization for the exact four-call smoke and, if it passes,
+separate authorization for the six-case, three-repeat, two-variant pilot
+(36 calls / 18 pairs). Every automatic and human gate in
+`docs/evals/README.md` must pass.
+
 ## Structure
 
 ```
 install.sh                         <- Top-level installer (skills + migration cleanup + memory)
+install.ps1                        <- Native Windows PowerShell 5.1/7 installer
 version.txt                        <- Framework version
 graph-seed.jsonl                   <- Default knowledge graph seed data
 
@@ -344,6 +562,7 @@ tools/
   evals/
     run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
+    run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
   cognitive-complexity/             <- Roslyn-based complexity analyzer
   memory-graph/
     DESIGN.md                      <- Architecture and data model
@@ -351,12 +570,13 @@ tools/
     src/MemoryGraph/               <- C# MCP server (stdio, JSON-RPC)
       Graph/                       <- In-memory knowledge graph abstractions + legacy JSONL compatibility
       Storage/                     <- Authoritative SQLite + FTS5 store (graph memory, reflexions, decisions, strategies)
-      Tools/                       <- 15 MCP tool implementations
+      Tools/                       <- 16 MCP tool implementations
       Server/                      <- JSON-RPC message loop
-    tests/MemoryGraph.Tests/       <- 65 xUnit tests
+    tests/MemoryGraph.Tests/       <- xUnit behavior and integration tests
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
+  windows/installer-contracts.ps1  <- Isolated native Windows installer contracts
 
 ```
 
@@ -422,10 +642,10 @@ You: "Draw the architecture diagram"
 Diagrams skill: Traces code, maps components and dependencies, outputs Mermaid diagram
 ```
 
-### For self-improvement
+### For evidence-triggered self-improvement
 ```
-[After completing a task]
-Reflexion skill: Captures what worked, what didn't, extracts lessons for future tasks
+[After a task produces concrete lesson-bearing evidence]
+Reflexion skill: Reviews what worked, what failed, and saves only durable lessons
 [Before starting next task]
 Reflexion: Recalls relevant lessons, adjusts plan based on past experience
 ```
@@ -480,5 +700,5 @@ No runtime script changes are needed when adding a skill: add the skill metadata
 - **Thinking tools are tools, not phases** — Use them when needed, not on every task
 - **Memory survives reinstalls** — Data in `~/.{agent}/memory/`, not in skill directories
 - **Learning compounds** — Insights from past work inform future decisions
-- **Self-improving** — Every task makes the next task better through reflexion
+- **Self-improving** — Evidence-backed lessons improve future tasks; routine tasks skip reflection.
 - **Covers weaknesses** — Documentation, diagrams, and onboarding compensate for developer blind spots

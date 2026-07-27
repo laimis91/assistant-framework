@@ -27,10 +27,10 @@
       "expected_behavior": [
         "Resolves review scope and captures a non-empty review_material_snapshot.",
         "Defaults mode to review-fix.",
-        "Runs review rounds with confidence thresholds and previously_fixed tracking.",
+        "Runs the initial review with evidence-backed findings and previously_fixed tracking.",
         "Fixes all must-fix and should-fix findings before validation.",
-        "Runs build or test verification before the next round.",
-        "Continues review, fix, validate, and re-review until clean or max 10 rounds."
+        "Runs build or test verification after fixes.",
+        "Runs one fresh re-review after fixes and stops unless new evidence justifies an exceptional round 3+."
       ],
       "pass_criteria": [
         "The response identifies review scope and mode.",
@@ -65,10 +65,124 @@
       }
     },
     {
+      "id": "bounded-review-default-rounds",
+      "title": "Review-fix defaults to one fresh post-fix re-review",
+      "category": "bounded_review_loop",
+      "purpose": "Checks that normal review-fix execution uses an initial review, fixes and validation, then one fresh re-review instead of score-driven repetition.",
+      "prompt": "Review and fix this medium change. The second review has no new must-fix or should-fix finding, but its rubric score is 3.5.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "Round 1 found an actionable issue and the fix passed validation.",
+        "Round 2 has no material finding and no changed file, validation failure, regression/drift, or changed hypothesis after it began."
+      ],
+      "expected_behavior": [
+        "Performs the initial review, fixes and validation, then one fresh re-review.",
+        "Does not start round 3 solely because the rubric score is below threshold.",
+        "Starts round 3+ only with additional_round_reason backed by new evidence from changed_files, unresolved_finding, validation_failure, regression_or_drift, or changed_hypothesis.",
+        "Preserves the hard max 10 rounds and never starts round 11."
+      ],
+      "pass_criteria": [
+        "The response stops after the fresh round 2 re-review in this scenario.",
+        "The response states that score below threshold alone is insufficient for another round.",
+        "The response records the score as residual risk instead of manufacturing a finding."
+      ],
+      "fail_signals": [
+        "Starts round 3 only to raise a rubric score.",
+        "Treats the score as a new code finding.",
+        "Requests or implies round 11."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "fresh re-review",
+          "score below threshold alone",
+          "residual risk"
+        ],
+        "forbidden_substrings": [
+          "round 3 because the score",
+          "score proves a defect",
+          "round 11"
+        ]
+      }
+    },
+    {
+      "id": "audit-one-pass",
+      "title": "Audit mode stops after one pass",
+      "category": "bounded_review_loop",
+      "purpose": "Checks that an explicit findings-only audit performs exactly one review pass without edits or re-review.",
+      "prompt": "Audit these changes and report findings only. Do not fix anything.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review material is non-empty.",
+        "The user explicitly requested audit mode."
+      ],
+      "expected_behavior": [
+        "Runs exactly one evidence-backed review pass.",
+        "Reports findings and residual risk without edits.",
+        "Does not dispatch a second review pass."
+      ],
+      "pass_criteria": [
+        "The response records audit mode and one round.",
+        "The response does not fix findings.",
+        "The response presents one final audit report."
+      ],
+      "fail_signals": [
+        "Edits reviewed files.",
+        "Starts a second review round.",
+        "Asks whether it should fix the findings before reporting."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "audit",
+          "one review pass",
+          "findings"
+        ],
+        "forbidden_substrings": [
+          "second review round",
+          "fixed the findings",
+          "Should I fix"
+        ]
+      }
+    },
+    {
+      "id": "evidence-bounded-review-claim",
+      "title": "No-finding review uses an evidence-bounded claim",
+      "category": "calibrated_review_claim",
+      "purpose": "Checks that compatibility enums do not become absolute proof-of-correctness claims.",
+      "prompt": "Report the result of a completed no-finding code review.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The reviewed scope and evidence are known.",
+        "No must-fix or should-fix finding remains."
+      ],
+      "expected_behavior": [
+        "Uses the user-facing claim: No material findings within the reviewed scope and available evidence.",
+        "May preserve CLEAN as a machine-compatible result enum.",
+        "Does not claim the software is correct, bug-free, regression-free, or proven clean."
+      ],
+      "pass_criteria": [
+        "The response contains the exact evidence-bounded claim.",
+        "The response treats CLEAN as workflow state rather than proof."
+      ],
+      "fail_signals": [
+        "Claims that CLEAN proves correctness.",
+        "Claims that no defects or regressions exist outside the reviewed evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "No material findings within the reviewed scope and available evidence"
+        ],
+        "forbidden_substrings": [
+          "proves correctness",
+          "guaranteed bug-free",
+          "no regressions exist"
+        ]
+      }
+    },
+    {
       "id": "medium-review-requires-rubric",
       "title": "Medium review requires rubric",
       "category": "rubric_and_exit_gate",
-      "purpose": "Checks that medium or larger review scopes require rubric scores, threshold action, and a single final summary after loop exit.",
+      "purpose": "Checks that medium or larger review scopes require rubric scores for calibration without allowing score alone to force another round.",
       "prompt": "Run a fresh review on this medium-sized feature branch. Do not interrupt me with intermediate findings; just finish the loop.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
@@ -77,7 +191,7 @@
       ],
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
-        "Applies a weighted score threshold action such as PASS, REFINE, or PIVOT.",
+        "Applies a weighted score action such as PASS, REFINE, or PIVOT to calibrate focus and residual risk.",
         "Uses evidence-backed finding filtering across rounds 1-10 and treats round 10 as the hard cap.",
         "Buffers intermediate round details and presents one final summary after loop exit.",
         "Includes score progression when multiple rounds occur.",
@@ -85,7 +199,7 @@
       ],
       "pass_criteria": [
         "The response includes rubric dimensions and weighted score.",
-        "The response applies the threshold action to decide exit or refinement.",
+        "The response applies the threshold action to existing evidence without manufacturing work.",
         "The response mentions evidence-backed filtering or round progression.",
         "The response produces a single final summary.",
         "The response does not pause between rounds for approval."
@@ -94,7 +208,8 @@
         "Omits rubric scores for medium scope.",
         "Prints intermediate findings as final results before loop exit.",
         "Asks the user whether to continue between rounds.",
-        "Exits clean while must-fix or should-fix findings remain."
+        "Exits while must-fix or should-fix findings remain without an explicit deferral or terminal report.",
+        "Starts round 3 solely because a rubric score is below threshold."
       ],
       "machine_expectations": {
         "required_substrings": [

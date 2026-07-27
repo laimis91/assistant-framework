@@ -1,9 +1,9 @@
 ---
 name: assistant-workflow
-description: "Run proportional development phases. Use to plan, build, implement, fix, migrate, or refactor project artifacts."
+description: "Run proportional development phases and resume persisted task state. Use to plan, build, implement, fix, migrate, refactor, or continue project artifacts."
 effort: high
 triggers:
-  - pattern: "rewrite|implement|fix|migrate|refactor|build feature|build the|build a|build an|create feature|add feature|(create|make) (a |an |the |new )*(rest |api )?(endpoint|dashboard|screen|page|component|service|tool|app|feature)|idea into (an |a )?(implementation plan|implementation|plan|code|feature)|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
+  - pattern: "rewrite|implement|fix|migrate|refactor|continue|resume|recover|build feature|build the|build a|build an|create feature|add feature|(create|make) (a |an |the |new )*(rest |api )?(endpoint|dashboard|screen|page|component|service|tool|app|feature)|idea into (an |a )?(implementation plan|implementation|plan|code|feature)|how should i approach|break this down|start working on|let.s (build|create|implement|add|make|fix|migrate|refactor|rewrite)|phase [0-9]|code (this|that|it|the|a|an|up)"
     priority: 40
     min_words: 2
     reminder: "This matches assistant-workflow. Read this SKILL.md and contracts/index.yaml first, then load the selector. Triage task size and include tests in Build; do not skip phases."
@@ -19,20 +19,22 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 
 ## Success Criteria
 
-- Core phases run at smallest useful depth; Decompose and Design run only when needed.
-- No phase is skipped; small work scales down and durable state is used only when its mode triggers.
-- Medium+ work has an approved plan before Build; small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- Scale phases to risk; Decompose, Design, and durable state run only when triggered.
+- Before resume, reconcile state with the newest request and repository evidence.
+- If resume reconciliation classifies persisted state as stale, superseded, or completed, update the framework-owned `{agent_state_dir}/task.md` before acting or returning; record the classification and reason, current task identity, and repaired exact next action.
+- `plan_mode` keeps planning proportional: trivial safe work may use `none`, bounded small work may use `inline`, and medium+, risky, destructive, or scope-shaping work uses `approval_required`. When `plan_mode=inline`, small work has an inline plan and proceeds without ceremony unless risk requires approval.
 - `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
 - Review, QA, and security routing apply when triggered.
-- Final output gives changed files, evidence, review status, risks, next steps.
+- Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
 
 ## Constraints
 
-- Do not skip phases; scale them down for small work instead.
+- Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals.
+- Do not skip applicable phases; Plan is inapplicable only when the explicit `plan_mode=none` eligibility gate passes.
 - Do not ask ritual questions when code/context makes the next safe action clear.
 - Ask bounded clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification.
 - Keep scope changes explicit and tied to correctness, security, safety, or verification.
@@ -44,7 +46,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 
 Canonical files stay authoritative; validate applicable rules at enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry. Load only the contract selector applicable to current boundary:
 
-- `entry`: select `task_description`, `task_type`, `scope_hint`, `target_files`, `constraints`, and `acceptance_criteria` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
+- `entry`: load the exact entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
 - `selected_handoff`: `contracts/handoffs.yaml` before dispatch and return validation.
 - `completion`: `contracts/output.yaml` at completion before final exit.
@@ -53,9 +55,14 @@ Selectors resolve by unique id plus canonical path, exact section, key, and expl
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: `contracts/handoffs.yaml` v2 removes the retired lifecycle-script
-reference kind. Use `runtime` for executable integrations and identify generic automation
-in descriptive evidence fields.
+Migration note: the assistant-workflow contract suite is v3. Canonical required
+`verification_command` fields changed from shell-form strings to non-empty argv
+`string[]` values; consumers must execute the array directly without shell parsing.
+Workflow-owned Reviewer and QAEvaluator packets are retired. Review loads
+assistant-review v2, which solely owns those worker handoffs and returns canonical
+`final_summary` / `qa_evaluation_result` artifacts; workflow records validated
+references to them. The canonical Reviewer result requires non-empty `reviewed_scope`.
+Handoff v2's retired lifecycle-script reference kind remains replaced by `runtime`.
 
 ## Visible Checkpoints
 
@@ -95,11 +102,11 @@ These examples are conditional on the exact-marker triggers above.
 Start Triage with a concise progress update. When exact markers are required,
 use `--- PHASE: TRIAGE ---`.
 
-Load `references/triage-rubric.md`. Perform a quick read-only Candidate scope scan, then assess task type, risk tier, size, gates, agents, `controller_intensity`, subagent state, and `search_mode`. For ideas, create binary observable criteria before planning.
+Load `references/triage-rubric.md`. Perform a quick read-only Candidate scope scan, then assess task type, risk tier, size, gates, agents, `controller_intensity`, `plan_mode`, subagent state, and `search_mode`. For ideas, create binary observable criteria before planning.
 
 | Size | Phases |
 |---|---|
-| **Small** | Discover quick -> Plan inline/no-wait unless risk/ambiguity -> Build -> Review -> Document |
+| **Small** | Discover quick -> [Plan] -> Build -> Review -> Document; `plan_mode=none` only for trivial safe work, otherwise inline or approval-required |
 | **Medium** | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
 | **Large** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
 | **Mega** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
@@ -107,7 +114,7 @@ Load `references/triage-rubric.md`. Perform a quick read-only Candidate scope sc
 [Design] = UI only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
-Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | plan=[plan_mode] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
 
 If scope exceeds initial triage during any phase, stop and re-triage. Use `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 
@@ -119,9 +126,9 @@ Load `references/phases.md` for the current phase. Load `references/workflow-con
 |---|---|---|
 | Discover | All | Read repo, resolve unknowns, restate requirements. Medium+: Code Mapper map. Unknown-cause bugfixes: load `assistant-debugging`. |
 | Decompose | Medium+ | Smallest iterable slices with acceptance and verification fields. |
-| Plan | All | Small: inline no-wait plan unless risk/ambiguity requires approval. Medium+: WAIT for approved scope, slices, packets, files, verification, and risks before Build. |
+| Plan | `plan_mode != none` | Inline mode records a compact plan without waiting. Approval-required mode waits for approved scope, slices, packets, files, verification, and risks before Build. |
 | Design | UI only | Direction, mockup, checklist, approval gate. |
-| Build | All | Light may use `workflow_state_mode=inline`, `subagent_policy_state=not_required`, and `subagent_execution_mode=not_applicable` for direct implementation; standard/strict use Code Writer -> Builder/Tester. Tests or relevant validation travel with code. |
+| Build | All | Light may execute directly; ordinary medium uses one bounded edit/test executor; separated Code Writer -> Builder/Tester is conditional for high-risk or broad/noisy/environment-heavy verification. Tests or relevant validation travel with code. |
 | Review | All | Light gets a fresh self-review without worker/reviewer dispatch evidence; standard/strict use Spec Review then independent `assistant-review`; QA only when required. |
 | Document | All | Apply the state/manual/learning modes; metrics, reflexion, and memory are optional/non-blocking. |
 
@@ -145,6 +152,6 @@ Do not use phrases like "should work", "probably fixed", or "looks good" unless 
 ## Stop Rules
 
 - Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
-- Stop before medium+ Build until plan approval.
+- Stop before Build when `plan_mode=approval_required` until plan approval.
 - Stop before final response if build, tests, required review, or output contract evidence is missing.
 - Stop when a plan deviation changes approved scope, files, behavior, risk, verification, or acceptance criteria; record the deviation and get approval before continuing.

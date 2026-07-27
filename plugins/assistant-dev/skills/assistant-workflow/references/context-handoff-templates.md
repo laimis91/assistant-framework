@@ -2,7 +2,7 @@
 
 Use these when continuing work across conversations. Ask the AI to generate the appropriate summary before ending a session.
 
-**Note:** If a task journal (`{agent_state_dir}/task.md` or equivalent carried-forward state) exists, it supersedes these templates during active work — the journal already contains the full task state. Use these templates only when no task journal exists or for non-standard handoff scenarios.
+**Note:** A reconciled active journal (`{agent_state_dir}/task.md` or equivalent carried-forward state) supersedes these templates during active work. Reconcile it first using `task-state-reconciliation.md`; an unchecked, stale, superseded, or completed journal never outranks newer user or repository evidence. Use these templates when no reconciled active journal exists or for non-standard handoff scenarios.
 
 ## Prompt to generate a handoff summary
 
@@ -20,6 +20,7 @@ Every handoff must separate **pinned context** from **compressible context** so 
 ### Pinned context — preserve exactly
 
 - Latest user request and any later corrections that supersede earlier work.
+- Task-state reconciliation result and the user/repository evidence supporting it.
 - Goal, non-goals, acceptance criteria, and risk/safety constraints.
 - Current phase, current branch/PR/state artifact paths, and exact next action.
 - Files changed or intentionally in scope.

@@ -173,17 +173,19 @@ workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 review_qa_router="$workflow_dir/references/review-qa-router.md"
 missing_workflow_terms=()
 for file_and_term in \
-    "$workflow_dir/contracts/handoffs.yaml::to: QAEvaluator" \
-    "$workflow_dir/contracts/handoffs.yaml::Does not replace code-reviewer" \
+    "$workflow_dir/contracts/handoffs.yaml::contract_ref: assistant-review/contracts/handoffs.yaml" \
+    "$workflow_dir/contracts/handoffs.yaml::orchestrator_to_qa_evaluator" \
     "$workflow_dir/contracts/input.yaml::- name: qa_evaluation_mode" \
     "$workflow_dir/contracts/output.yaml::- name: qa_evaluation_result" \
     "$workflow_dir/contracts/output.yaml::QA evaluation does not replace review_result" \
-    "$workflow_dir/contracts/output.yaml::qa_evaluator_evidence" \
+    "$workflow_dir/contracts/output.yaml::assistant-review/contracts/output.yaml#qa_evaluation_result" \
+    "$workflow_dir/contracts/output.yaml::canonical_result_ref" \
     "$workflow_dir/contracts/phase-gates.yaml::R_QA_EVALUATION" \
     "$workflow_dir/contracts/phase-gates.yaml::Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence" \
     "$workflow_dir/contracts/phase-gates.yaml::When qa_evaluation_mode == required: required_agents includes QA Evaluator" \
+    "$workflow_dir/contracts/phase-gates.yaml::assistant-review owns QAEvaluator dispatch and return validation" \
     "$review_qa_router::Stage 3 - QA Evaluation" \
-    "$review_qa_router::QA Evaluation result must exist when qa_evaluation_mode=required." \
+    "$review_qa_router::workflow records only validated refs" \
     "$workflow_dir/references/subagent-dispatch.md::QA Evaluator" \
     "$workflow_dir/references/subagent-dispatch.md::QA evidence gate" \
     "$workflow_dir/references/subagent-roles.md::QA Evaluator dispatch" \
@@ -267,29 +269,31 @@ else
     pass
 fi
 
-test_start "workflow QA Done Contract debate_record contract is mirrored"
-workflow_debate_failures=()
+test_start "workflow delegates QA packet ownership to assistant-review"
+workflow_qa_ownership_failures=()
 for workflow_qa_dir in \
     "$FRAMEWORK_DIR/skills/assistant-workflow" \
     "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"; do
+    if grep -Fq -- '- name: orchestrator_to_qa_evaluator' "$workflow_qa_dir/contracts/handoffs.yaml"; then
+        workflow_qa_ownership_failures+=("${workflow_qa_dir#$FRAMEWORK_DIR/}/contracts/handoffs.yaml: duplicated QAEvaluator handoff")
+    fi
     for file_and_term in \
-        "$workflow_qa_dir/contracts/handoffs.yaml::- name: orchestrator_to_qa_evaluator" \
-        "$workflow_qa_dir/contracts/handoffs.yaml::- name: debate_record" \
-        "$workflow_qa_dir/contracts/handoffs.yaml::pre-build debate/subagent-perspective evidence" \
-        "$workflow_qa_dir/contracts/handoffs.yaml::debate_record with at least two perspectives" \
-        "$workflow_qa_dir/contracts/handoffs.yaml::min_items: 2" \
-        "$workflow_qa_dir/contracts/handoffs.yaml::At least two perspectives; delegated mode uses subagent perspectives when available"; do
+        "$workflow_qa_dir/contracts/handoffs.yaml::delegated_skill_contract_owners:" \
+        "$workflow_qa_dir/contracts/handoffs.yaml::contract_ref: assistant-review/contracts/handoffs.yaml" \
+        "$workflow_qa_dir/contracts/output.yaml::assistant-review/contracts/output.yaml#qa_evaluation_result" \
+        "$workflow_qa_dir/contracts/output.yaml::- name: canonical_result_ref" \
+        "$workflow_qa_dir/contracts/output.yaml::- name: validation_status"; do
         file="${file_and_term%%::*}"
         term="${file_and_term#*::}"
         if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
-            workflow_debate_failures+=("${file#$FRAMEWORK_DIR/}: $term")
+            workflow_qa_ownership_failures+=("${file#$FRAMEWORK_DIR/}: $term")
         fi
     done
 done
-if [[ "${#workflow_debate_failures[@]}" -eq 0 ]]; then
+if [[ "${#workflow_qa_ownership_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow QA Done Contract debate_record contract terms missing or not mirrored: ${workflow_debate_failures[*]}"
+    fail "workflow does not delegate QA schema ownership cleanly: ${workflow_qa_ownership_failures[*]}"
 fi
 
 test_start "code-reviewer remains distinct from QA evaluator"

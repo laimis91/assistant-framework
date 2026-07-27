@@ -90,15 +90,17 @@ another fix/review dispatch and consider:
 
 | Score Delta | Finding Condition | Status | Action |
 |---|---|---|---|
-| +, magnitude ≤ 1.0 | count decreased | **GENUINE** | Continue normally |
-| +, magnitude > 1.0 | count decreased | **SUSPICIOUS** | Log warning, continue |
-| +, any | count same or increased | **DRIFT** | Reset evaluator once; repeated DRIFT triggers pivot_restart_decision |
+| +, magnitude ≤ 1.0 | count decreased | **GENUINE** | Record progress; another round still requires new evidence after round 2 |
+| +, magnitude > 1.0 | count decreased | **SUSPICIOUS** | Log warning; another round still requires new evidence after round 2 |
+| +, any | count same or increased | **DRIFT** | Record regression/drift evidence; repeated DRIFT triggers pivot_restart_decision |
 | − | any | **REGRESSION** | Log; 2+ consecutive regressions trigger pivot_restart_decision |
 | 0 | any, findings > 0 remain, 2+ consecutive rounds | **STAGNATION** | Return pivot_restart_signal and require pivot_restart_decision |
 | 0 | any, findings > 0 remain, 1 round only | **NEUTRAL** | Log, no action yet |
 | 0 | findings == 0 | *(exit as CLEAN)* | Should not reach drift check |
 
 Note: STAGNATION checks absolute finding count (> 0), not finding delta. A score unchanged at 3.5 with findings dropping 5→3→1 across rounds is NEUTRAL (findings still moving), not STAGNATION. STAGNATION triggers when the score plateaus AND findings persist for 2+ consecutive rounds — the loop is churning without measurable progress.
+
+Score movement never authorizes round 3+ by itself. A later round requires `additional_round_reason` backed by changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis created after the previous review began.
 
 ## Task Journal Format
 

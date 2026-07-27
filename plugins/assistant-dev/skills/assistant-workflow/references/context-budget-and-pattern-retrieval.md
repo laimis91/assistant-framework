@@ -37,6 +37,9 @@ Before editing a framework skill, contract, eval, runtime integration, or workfl
 3. Record the source paths or exact search queries used as patterns in the plan or task packet; placeholders such as `[paths/queries]` do not satisfy the gate.
 4. Adapt the pattern; do not copy stale placeholders or unrelated requirements.
 5. If no good pattern exists, state that explicitly and create the smallest new pattern with tests.
+6. Only then, when a concrete design force remains and an external library is
+   explicitly configured, load `references/design-pattern-retrieval.md`.
+   Missing configuration is a silent `not_configured` path.
 
 ## Required context budget note
 

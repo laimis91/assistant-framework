@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "Review code and re-review fixes until clean. Use for explicit code review or the workflow Review phase; QA runs only when required."
+description: "Review code, fix actionable findings, and run one fresh re-review. Use for explicit code review or the workflow Review phase; QA runs only when required."
 effort: high
 triggers:
   - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
@@ -24,20 +24,25 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
+Migration note: assistant-review contracts are v2. Every Reviewer return and
+final summary now requires a non-empty `reviewed_scope` string array so workflow
+v3 can consume the producer packet without deriving or guessing its boundary.
+
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 
 If a selector is missing or invalid, apply `load_full_authoritative_file`: load the full named canonical file, validate the applicable rules, and record any recovery before proceeding.
 
-Run autonomously until clean or the cap, keep intermediate results inside the loop, and present one final result. Required QA follows build/test and code-review evidence.
+Run the bounded review policy, keep intermediate results inside the loop, and present one final evidence-calibrated result. Required QA follows build/test and code-review evidence.
 
 ## Goal
 
-Find evidence-backed defects, regressions, and test gaps; fix them in review-fix mode; and return one policy-safe result. Required QA independently evaluates acceptance, evidence, scoped quality, progression, and readiness.
+Find evidence-backed defects, regressions, and test gaps; fix them in review-fix mode; and return one policy-safe result without implying proof of correctness. Required QA independently evaluates acceptance, evidence, scoped quality, progression, and readiness.
 
 ## Success Criteria
 
 - Scope, mode, and review material are resolved before the loop.
 - Findings are severity-ranked with evidence and confidence.
+- Every Reviewer return names the non-empty `reviewed_scope` actually inspected.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
 - Validation and a fresh review follow fixes.
@@ -112,28 +117,30 @@ Run QA only when `qa_evaluation_mode=required`. The loop routes to `references/q
 
 ## Exit: Present Final Result
 
-After the loop completes, present one summary with rounds, CLEAN/ISSUES_FIXED/HAS_REMAINING_ITEMS, final rubric and score progression when applicable, fixed findings, remaining items, nits, verification, and residual risk. Canonical field ownership remains in `contracts/output.yaml`.
+Present one summary using `contracts/output.yaml`. For no findings, say: "No material findings within the reviewed scope and available evidence." `CLEAN` remains a machine enum, not proof of correctness.
 
 ## Rules
 
 - Keep round results internal and present one final summary.
 - Use a fresh Reviewer bundle each medium+ round; direct fallback uses the same isolated bundle without claiming a subagent dispatch.
 - Previously fixed items are not re-reported; findings remain evidence-backed.
-- A trivial clean review may exit after one round. Otherwise continue until clean, blocked, or round 10 is terminal; never start round 11.
 
 ## Output
 
-Return rounds/result, evidence-backed findings and fixes, verification, applicable bugfix/agentic/behavioral/semantic checks, required QA result, and residual risk. `contracts/output.yaml` owns the exact schema.
+Return reviewed scope, rounds/result, evidence-backed findings and fixes, verification, applicable bugfix/agentic/behavioral/semantic checks, required QA result, and residual risk. `contracts/output.yaml` owns the exact schema.
 
 ## Stop Rules
 
-- In audit mode, stop after the first review round and report findings without edits.
-- In review-fix mode, stop only when clean, blocked, or max rounds is reached.
+- Audit mode stops after one review pass. Report findings without edits.
+- The normal review-fix path is an initial review, fixes and validation, then one fresh re-review; stop after a no-finding pass unless new evidence justifies another round.
+- Before round 3+, require `additional_round_reason` backed by changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis. Score below threshold alone is insufficient.
+- The hard max 10 rounds remains: round 10 is terminal and round 11 never starts.
 - Stop and report a blocker if required review material is unavailable or empty.
 
 ### Drift detection (medium+ scope)
 
-Compare rounds using `references/score-tracking.md`. GENUINE/SUSPICIOUS/NEUTRAL continue with recorded evidence; DRIFT resets fresh context once; REGRESSION and STAGNATION are investigated. Repeated DRIFT/REGRESSION or STAGNATION returns `pivot_restart_signal`; the orchestrator records `pivot_restart_decision` before another pass.
+Compare medium+ rounds using `references/score-tracking.md`. Drift, regression,
+stagnation, or pivot evidence returns `pivot_restart_signal`; the orchestrator records `pivot_restart_decision` and applies the round 3+ evidence gate before another pass.
 
 
 ## Review Finding Rule Distillation

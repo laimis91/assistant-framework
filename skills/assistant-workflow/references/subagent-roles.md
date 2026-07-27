@@ -65,8 +65,8 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Strict slice decomposition, implementation blueprints, design direction |
-| `code-writer` | Strongest / deep reasoning | Write | Build | Implements code following a plan. No builds, no tests, no review |
-| `builder-tester` | Balanced / standard | Write | Build | Builds, writes tests, runs tests. Returns concise summaries, not logs |
+| `code-writer` | Strongest / deep reasoning | Write | Build | Implements the packet; in bounded_executor also writes focused tests and runs focused verification; no independent review |
+| `builder-tester` | Balanced / standard | Write | Build | Conditional separated verifier for broad/noisy/environment-heavy or high-risk validation; no production edits |
 | `code-reviewer` | Strongest / deep reasoning | Read-only | Review | Canonical code review for bugs, security issues, architecture violations, test coverage gaps, and structural problems |
 | `reviewer` | Strongest / deep reasoning | Read-only | Review compatibility | Compatibility route for existing reviewer handoffs; prefer `code-reviewer` for new code review dispatches |
 | `qa-evaluator` | Strongest / deep reasoning | Read-only | Review QA | Independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation |
@@ -75,8 +75,8 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small** | Code Writer → Builder/Tester → Code Reviewer | Sequential, minimal (no Decompose); Reviewer is compatibility routing; QA only when explicitly requested |
-| **Medium** | Code Mapper → Architect (decompose) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Mapper feeds Architect, slices feed Writer; Reviewer is compatibility routing |
+| **Small** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when explicitly requested |
+| **Medium** | Code Mapper → Architect (decompose) → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only for separated_workers triggers |
 | **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer is compatibility routing |
 | **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration |
 

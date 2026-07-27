@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "1.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-workflow
 
@@ -17,20 +17,20 @@ completion_tiers:
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, test_results, debugging_result, artifact_contract, manual_test_steps, manual_verification_result, learning_controller, workflow_experiment_ledger, loop_readiness_assessment]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, final_handoff, plan_document, manual_test_steps, manual_verification_result, learning_controller, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
-    checkpoint_policy: "inline plan/check summary is enough; exact phase markers are required only by strict intensity, explicit project policy, or user request"
+    checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, plan_document]
-    conditional_artifacts: [test_results, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
-    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary, plan_document]
-    conditional_artifacts: [debugging_result, artifact_contract, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -39,8 +39,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, controller_intensity, required_gates, required_agents, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan"
+    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -59,6 +59,16 @@ artifacts:
         required: true
         enum_values: [light, standard, strict]
         validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default; strict requires independent strict, harness, or QA criteria. Do not infer strict from size=medium+ or delegation alone."
+      - name: plan_mode
+        type: enum
+        required: true
+        enum_values: [none, inline, approval_required]
+        validation: "Matches task size, risk, uncertainty, reversibility, approval policy, and the input contract eligibility rules"
+      - name: build_execution_lane
+        type: enum
+        required: true
+        enum_values: [inline_direct, bounded_executor, separated_workers]
+        validation: "Ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
       - name: workflow_state_mode
         type: enum
         required: true
@@ -73,7 +83,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [auto, not_required, required]
-        validation: "auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals"
+        validation: "normal work uses auto; auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals; journal mode records those triggers in Learning evidence signals as none or review_finding, build_test_failure, user_correction, and memory_trend; not_required requires a policy_disallowed: or explicit_exclusion: reason"
       - name: required_gates
         type: string[]
         required: true
@@ -86,16 +96,21 @@ artifacts:
         type: enum
         required: true
         enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
-        validation: "Resolved before any subagent dispatch. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or policy_disallowed before Build/Review."
+        validation: "Resolved before any subagent dispatch. When required_agents is non-empty and no delegation decision exists, use authorization_required. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or evidenced policy_disallowed before Build/Review; plan approval alone is not delegation approval."
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning; not_applicable means no subagent role is needed."
+        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning and requires authorization_denied, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed."
       - name: subagent_authorization_scope
         type: string[]
         required: true
         validation: "Empty unless explicit authorization was granted. When populated, names the authorized roles, phases, or actions."
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+        validation: "Non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception permits delegation"
       - name: search_mode
         type: enum
         required: true
@@ -133,13 +148,21 @@ artifacts:
     required: true
     condition: "always"
     description: "Compact adaptive-completion selection carried in the inline packet or task journal."
-    validation: "Records controller intensity and all three execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
-    on_fail: "Resolve and record controller_intensity, workflow_state_mode, manual_verification_mode, and learning_capture_mode before completion."
+    validation: "Records controller intensity, plan mode, and all three execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
+    on_fail: "Resolve and record controller_intensity, plan_mode, workflow_state_mode, manual_verification_mode, and learning_capture_mode before completion."
     object_fields:
       - name: controller_intensity
         type: enum
         required: true
         enum_values: [light, standard, strict]
+      - name: build_execution_lane
+        type: enum
+        required: true
+        enum_values: [inline_direct, bounded_executor, separated_workers]
+      - name: plan_mode
+        type: enum
+        required: true
+        enum_values: [none, inline, approval_required]
       - name: workflow_state_mode
         type: enum
         required: true
@@ -155,7 +178,7 @@ artifacts:
       - name: selection_reason
         type: string
         required: true
-        validation: "Names the concrete state, manual-verification, and learning triggers or states that none apply."
+        validation: "Names the concrete plan, state, manual-verification, and learning triggers or states that none apply. The learning reason uses normal_default:, explicit_request:, approved_plan:, policy_disallowed:, or explicit_exclusion:; not_required accepts only the last two."
 
   - name: phase_checkpoints
     type: string[]
@@ -166,13 +189,11 @@ artifacts:
       '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
       Light/standard work without an exact-marker trigger records concise natural progress instead.
     on_fail: "When exact markers were required, reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
-    minimum_entries:
-      # TRIAGE has no COMPLETE marker (checkpoint_end: null), so it contributes 1.
-      # All other phases contribute 2 (start + complete).
-      small: 11   # TRIAGE(1) + DISCOVER(2) + PLAN(2) + BUILD(2) + REVIEW(2) + DOCUMENT(2)
-      medium: 13  # + DECOMPOSE(2), Design optional
-      large: 15   # + DECOMPOSE(2) + DESIGN(2)
-      mega: 9     # TRIAGE(1) + DISCOVER(2) + DECOMPOSE(2) + REVIEW(2) + DOCUMENT(2); slice checkpoints are additional
+    minimum_entries_rule: >
+      Require the TRIAGE start marker plus paired start/complete markers for
+      every phase that actually ran. PLAN contributes no markers when
+      plan_mode=none; DECOMPOSE and DESIGN contribute only when selected.
+      Slice-local Build checkpoints are additional for mega work.
 
   - name: changed_files
     type: object[]
@@ -272,7 +293,7 @@ artifacts:
     type: object
     required: conditional
     condition: "controller_intensity == light"
-    description: "Compact review performed after relevant validation with fresh attention to the inline plan, changed files, and acceptance criteria."
+    description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
     validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected."
     on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
     object_fields:
@@ -295,150 +316,59 @@ artifacts:
     type: object
     required: conditional
     condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
-    validation: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. This is the code quality review result; QA acceptance is recorded separately in qa_evaluation_result when required."
-    on_fail: "Run assistant-review code quality review and record quality status, rounds, and resolved findings"
+    description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
+    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
+    on_fail: "Load and follow assistant-review, validate its final_summary and review_delegation_path, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
-      - name: quality_review_status
+      - name: canonical_result_ref
+        type: string
+        required: true
+        description: "Stable task-journal, dispatch, or artifact ref to the validated assistant-review final_summary"
+      - name: canonical_contract
+        type: string
+        required: true
+        validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
+      - name: delegation_path_ref
+        type: string
+        required: true
+        description: "Stable ref to the validated assistant-review review_delegation_path"
+      - name: delegation_contract
+        type: string
+        required: true
+        validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"
+      - name: validation_status
         type: enum
         required: true
-        enum_values: [clean, has_remaining]
-      - name: review_rounds
-        type: int
-        required: true
-        validation: ">= 1 and <= 10"
-      - name: must_fix_resolved
-        type: int
-        required: true
-      - name: should_fix_resolved
-        type: int
-        required: true
-      - name: pivot_restart_decision_ref
-        type: string
-        required: false
-        condition: "quality review loop observed STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT"
-        description: "Reference to the orchestrator-owned pivot_restart_decision artifact created before another review/fix dispatch."
+        enum_values: [validated]
 
   - name: qa_evaluation_result
     type: object
     required: conditional
     condition: "qa_evaluation_mode == required"
-    validation: "Independent QA evaluation result exists after build/test evidence and Code Reviewer result. Must include final_verdict, result, rounds (1-10), acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, and evidence."
-    on_fail: "Run the QAEvaluator loop from assistant-review references/qa-evaluation-loop.md, or record NEEDS_CONTEXT/BLOCKED with open_questions. Do not substitute Code Reviewer findings for QA evaluation."
+    description: "Workflow reference wrapper for canonical assistant-review QA artifacts. QA evaluation does not replace review_result."
+    validation: "canonical_result_ref resolves to a validated assistant-review qa_evaluation_result; delegation_path_ref resolves to its qa_evaluation_delegation_path; both declare their exact canonical contracts."
+    on_fail: "Load and follow the assistant-review QA loop, validate its canonical QA result and delegation path, and record stable refs. Do not substitute Code Reviewer findings for QA evaluation."
     object_fields:
-      - name: final_verdict
-        type: enum
-        required: true
-        enum_values: [accepted, accepted_with_concerns, rejected, blocked]
-      - name: result
-        type: enum
-        required: true
-        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, BLOCKED]
-      - name: rounds
-        type: int
-        required: true
-        validation: ">= 1 and <= 10"
-      - name: acceptance_findings
-        type: object[]
-        required: true
-        object_fields:
-          - name: severity
-            type: enum
-            required: true
-            enum_values: [blocker, concern, observation]
-          - name: criterion
-            type: string
-            required: true
-          - name: evidence
-            type: string
-            required: true
-          - name: disposition
-            type: enum
-            required: true
-            enum_values: [resolved, remaining, not_applicable]
-      - name: qa_scorecard
-        type: object
-        required: true
-        object_fields:
-          - name: acceptance_coverage
-            type: float
-            required: true
-          - name: evidence_strength
-            type: float
-            required: true
-          - name: domain_quality
-            type: float
-            required: true
-          - name: final_readiness
-            type: float
-            required: true
-          - name: weighted_score
-            type: float
-            required: true
-      - name: selected_domain_rubrics
-        type: string[]
-        required: false
-        condition: "domain_context or rubric_refs was provided, or acceptance criteria / Done Contract required subjective/product/UX/docs/DX/UI/domain craft evaluation"
-        description: "Rubric families selected from assistant-review references/domain-rubrics.md; empty or omitted when domain rubrics were not scoped"
-      - name: domain_quality_scores
-        type: object[]
-        required: false
-        condition: "selected_domain_rubrics is non-empty"
-        description: "Evidence-backed domain rubric scores from the final QA round"
-        object_fields:
-          - name: rubric_ref
-            type: string
-            required: true
-          - name: dimension
-            type: string
-            required: true
-          - name: score
-            type: float
-            required: true
-          - name: action
-            type: enum
-            required: true
-            enum_values: [accepted, accepted_with_concerns, refine, rejected, pivot, not_applicable]
-          - name: evidence
-            type: string
-            required: true
-      - name: score_progression
-        type: object[]
-        required: true
-        object_fields:
-          - name: round
-            type: int
-            required: true
-            validation: ">= 1 and <= 10"
-          - name: weighted_score
-            type: float
-            required: true
-          - name: failed_acceptance_count
-            type: int
-            required: true
-          - name: drift_status
-            type: enum
-            required: true
-            enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
-      - name: evidence
-        type: object[]
-        required: true
-        min_items: 1
-        object_fields:
-          - name: source
-            type: string
-            required: true
-          - name: detail
-            type: string
-            required: true
-      - name: open_questions
-        type: string[]
-        required: false
-        condition: "final_verdict == blocked or result == BLOCKED"
-      - name: pivot_restart_decision_ref
+      - name: canonical_result_ref
         type: string
-        required: false
-        condition: "QA loop observed STAGNATION, repeated DRIFT, repeated REGRESSION, or domain/rubric action pivot"
-        description: "Reference to the orchestrator-owned pivot_restart_decision artifact created before another QA/build dispatch."
+        required: true
+        description: "Stable task-journal, dispatch, or artifact ref to the validated assistant-review qa_evaluation_result"
+      - name: canonical_contract
+        type: string
+        required: true
+        validation: "Must equal assistant-review/contracts/output.yaml#qa_evaluation_result"
+      - name: delegation_path_ref
+        type: string
+        required: true
+        description: "Stable ref to the validated assistant-review qa_evaluation_delegation_path"
+      - name: delegation_contract
+        type: string
+        required: true
+        validation: "Must equal assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"
+      - name: validation_status
+        type: enum
+        required: true
+        enum_values: [validated]
 
   - name: spec_review_result
     type: object
@@ -580,9 +510,9 @@ artifacts:
     type: object
     required: conditional
     condition: "controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
-    description: "Standard/strict evidence that required subagent roles were dispatched or explicitly handled through direct fallback."
-    validation: "required_agents includes at minimum Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded. delegated mode records dispatch and result evidence for each required role; medium+ delegated work records per-slice dispatch evidence when slices apply. direct_fallback records one explicit policy reason (authorization_denied, subagents_unavailable, or policy_disallowed) plus equivalent role, phase, verification, and Code Reviewer review evidence; Reviewer direct evidence is compatibility evidence only. For standard/strict work, not_applicable is invalid for source-changing Build tasks. Light source-changing work uses subagent_policy_state=not_required, execution_mode=not_applicable, relevant automated validation/tests, and fresh_review_result instead of this artifact. QA Evaluator evidence is also required when qa_evaluation_mode=required."
-    on_fail: "Update the task journal Agent Dispatch Log. If delegated, add Code Writer, Builder/Tester, and Code Reviewer dispatch/result evidence, or Reviewer compatibility dispatch/result evidence for existing/legacy handoffs, plus medium+ per-slice dispatch evidence. If direct_fallback, add the explicit policy reason and role-equivalent Code Reviewer direct evidence, or Reviewer direct evidence only as compatibility evidence. Do not complete with silent fallback. When QA is required, add QAEvaluator dispatch/result or direct evidence separately from Code Reviewer/Reviewer compatibility."
+    description: "Standard/strict completion evidence whose Build and Review responsibilities are recorded separately."
+    validation: "Evidence matches build_execution_lane. Build records only selected-lane implementation/verification evidence: one bounded executor or Code Writer plus Builder/Tester. Independent Code Reviewer evidence remains required at completion for both lanes, but Review owns and emits it after Build. direct_fallback preserves the same phase ownership with an explicit policy reason."
+    on_fail: "Record selected-lane Build evidence, then record Review-owned independent Code Reviewer evidence after Build. Do not require reviewer evidence to leave Build or invent Builder/Tester dispatch in bounded_executor mode."
     object_fields:
       - name: execution_mode
         type: enum
@@ -591,26 +521,61 @@ artifacts:
       - name: required_roles
         type: string[]
         required: true
-        validation: "Includes Code Writer, Builder/Tester, and Code Reviewer for source-changing work. Reviewer compatibility may satisfy existing/legacy handoffs only when explicitly recorded."
+        validation: "bounded_executor includes one executor and Code Reviewer; separated_workers includes Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility is legacy-only when explicit."
+      - name: build_execution_lane
+        type: enum
+        required: true
+        enum_values: [bounded_executor, separated_workers]
+      - name: bounded_executor_evidence
+        type: object
+        required: conditional
+        condition: "build_execution_lane == bounded_executor"
+        validation: "Contains executor dispatch/direct evidence, valid RED when TDD applies, changed files, focused verification, and regression evidence"
+      - name: separated_worker_evidence
+        type: object
+        required: conditional
+        condition: "build_execution_lane == separated_workers"
+        validation: "Contains Code Writer and Builder/Tester dispatch/direct evidence with verification results"
       - name: delegated_dispatch_results
         type: object[]
         required: conditional
         condition: "execution_mode == delegated"
-        validation: "Each required role has dispatch evidence and result evidence."
+        validation: "Each required role has dispatch and result evidence in the phase that owns it; reviewer evidence is emitted during Review, not Build."
       - name: direct_fallback_reason
         type: enum
         required: conditional
         condition: "execution_mode == direct_fallback"
         enum_values: [authorization_denied, subagents_unavailable, policy_disallowed]
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "execution_mode == direct_fallback and direct_fallback_reason == policy_disallowed"
+        validation: "Non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception permits delegation"
       - name: direct_fallback_role_evidence
         type: object[]
         required: conditional
         condition: "execution_mode == direct_fallback"
-        validation: "Contains equivalent Code Writer, Builder/Tester, and Code Reviewer role/phase/verification/review evidence. Reviewer direct evidence is compatibility evidence only."
+        validation: "Contains equivalent selected-lane Build evidence and separately labeled Review-owned Code Reviewer evidence."
       - name: per_slice_dispatch_evidence
         type: object[]
         required: conditional
         condition: "size in [medium, large, mega] and execution_mode == delegated and slices apply"
+      - name: code_reviewer_evidence
+        type: object
+        required: true
+        description: "Independent Code Reviewer dispatch/result or fresh direct-fallback review evidence created during Review after Build completes"
+        validation: "Names Review as owner, identifies the reviewed scope, and references review_result evidence; it cannot be used to satisfy a Build exit gate."
+        object_fields:
+          - name: phase_owner
+            type: enum
+            required: true
+            enum_values: [REVIEW]
+          - name: reviewer_ref
+            type: string
+            required: true
+          - name: result_ref
+            type: string
+            required: true
       - name: qa_evaluator_evidence
         type: object
         required: conditional
@@ -630,12 +595,242 @@ artifacts:
             required: false
             description: "Fresh QA evidence when direct_fallback"
 
+  - name: task_state_reconciliation
+    type: object
+    required: conditional
+    condition: "persisted task state exists at entry, continuation, compaction recovery, or handoff"
+    description: "Freshness classification proving whether persisted state may be resumed"
+    validation: "Compares task identity, newest user goal, repository root, recorded/current branch and HEAD when available, and last verified evidence; only active may resume"
+    on_fail: "Load references/task-state-reconciliation.md, classify the state, repair or supersede it, and do not act on its next step until reconciled"
+    object_fields:
+      - name: task_identity
+        type: string
+        required: true
+        on_missing: fail
+      - name: repository_root
+        type: string
+        required: true
+        on_missing: fail
+      - name: recorded_repository_identity
+        type: string
+        required: true
+        on_missing: fail
+      - name: current_repository_identity
+        type: string
+        required: true
+        on_missing: fail
+      - name: latest_user_goal_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: classification
+        type: enum
+        required: true
+        enum_values: [active, stale, superseded, completed]
+        on_missing: fail
+      - name: reason
+        type: string
+        required: true
+        on_missing: fail
+      - name: evidence
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: exact_next_action
+        type: string
+        required: true
+        on_missing: fail
+
+  - name: requirement_acceptance_map
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Completion traceability from accepted requirements to verification evidence"
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
+    on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
+    object_fields:
+      - name: intended_outcome
+        type: string
+        required: true
+        on_missing: fail
+      - name: assumptions_and_defaults
+        type: string[]
+        required: true
+        on_missing: fail
+      - name: open_material_questions
+        type: string[]
+        required: true
+        on_missing: fail
+      - name: non_goals
+        type: string[]
+        required: true
+        on_missing: fail
+      - name: entries
+        type: object[]
+        required: true
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: requirement_id
+            type: string
+            required: true
+            on_missing: fail
+          - name: source
+            type: string
+            required: true
+            on_missing: fail
+          - name: requirement
+            type: string
+            required: true
+            on_missing: fail
+          - name: acceptance_criterion
+            type: string
+            required: true
+            on_missing: fail
+          - name: verification_method
+            type: string
+            required: true
+            on_missing: fail
+          - name: evidence_ref
+            type: string
+            required: true
+            on_missing: fail
+          - name: manual_scenario_or_na
+            type: string
+            required: true
+            on_missing: fail
+          - name: status
+            type: enum
+            required: true
+            enum_values: [passed, approved_exclusion]
+            on_missing: fail
+          - name: exclusion_reason
+            type: string
+            required: conditional
+            condition: "status == approved_exclusion"
+            on_missing: fail
+
+  - name: build_repair_state
+    type: object
+    required: conditional
+    condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
+    description: "Bounded ordinary Build repair controller state; harness-specific loops keep their existing controller artifacts"
+    validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across worker/context/session changes, and reaching either bound sets terminal_route to pivot or block rather than another retry."
+    on_fail: "Stop the retry, reconstruct the repair state from Build evidence, and create a pivot_restart_decision or return blocked before any further implementation attempt."
+    object_fields:
+      - name: attempt
+        type: int
+        required: true
+        validation: ">= 1 and <= 3"
+      - name: max_attempts
+        type: int
+        required: true
+        validation: "Exactly 3"
+      - name: no_progress_count
+        type: int
+        required: true
+        validation: ">= 0 and <= 2; reset only when new evidence proves measurable progress"
+      - name: no_progress_limit
+        type: int
+        required: true
+        validation: "Exactly 2"
+      - name: failure_signatures
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Normalized signatures for the current and prior same-scope failures"
+      - name: progress_evidence
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Concrete changed failure, passing check, reduced failing scope, or explicit no-progress evidence"
+      - name: plan_version
+        type: string
+        required: true
+        validation: "Stable approved-plan or no-plan task identity; changing it requires replan/reapproval before retry"
+      - name: cumulative_attempt_count
+        type: int
+        required: true
+        validation: ">= attempt and <= 3; never resets on redispatch, context reset, compaction, or continuation"
+      - name: status
+        type: enum
+        required: true
+        enum_values: [repairing, recovered, terminal_pivot, blocked]
+      - name: terminal_route
+        type: enum
+        required: conditional
+        condition: "status in [terminal_pivot, blocked]"
+        enum_values: [debugging, replan, restart_with_reapproval, block_for_user, block_for_environment]
+      - name: evidence_ref
+        type: string
+        required: true
+        validation: "Pointer to validation output, task journal repair entry, or carried-forward packet evidence"
+
+  - name: final_handoff
+    type: object
+    required: conditional
+    condition: "size in [medium, large, mega]"
+    description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
+    validation: "Includes changed behavior/areas, architecture decisions and rationale, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
+    on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
+    object_fields:
+      - name: changed_behavior_and_areas
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: architecture_decisions_and_rationale
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: rejected_alternatives_and_tradeoffs
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: requirement_evidence
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: automated_verification
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: manual_test_scenarios
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: compatibility_and_regression_surfaces
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: known_limitations_and_untested_areas
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: rollback_or_recovery
+        type: string
+        required: true
+        on_missing: fail
+      - name: review_claim
+        type: string
+        required: true
+        validation: "Evidence-bounded to reviewed scope and available evidence; does not claim proof of correctness"
+        on_missing: fail
+
   - name: task_journal
     type: file
     required: conditional
     condition: "workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
-    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md and contains Status: DONE"
-    on_fail: "Create or update task journal when configured and policy-allowed, or record carried-forward state fallback"
+    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md, contains Status: DONE and Task state: completed, and was reconciled before any continuation"
+    on_fail: "Create, reconcile, or update task journal when configured and policy-allowed, or record carried-forward state fallback"
     location: "{agent_state_dir}/task.md"
 
   - name: context_map
@@ -687,6 +882,10 @@ artifacts:
       - name: no_pattern_rationale
         type: string
         required: false
+      - name: external_pattern_decisions
+        type: string[]
+        required: false
+        description: "Optional library id + relative path, concrete design force, applicability, contraindications, and use/reject decision; never contains configured roots or source bodies"
 
   - name: context_handoff_packet
     type: object
@@ -1234,8 +1433,10 @@ artifacts:
         description: "Declared prerequisite slice IDs that must be VERIFIED before this slice starts"
         validation: "Every dependency is the slice_id of another declared slice in this manifest; no self dependency or circular dependency is allowed; use an empty array when there are no dependencies"
       - name: verification_command
-        type: string
+        type: string[]
         required: true
+        min_items: 1
+        validation: "Canonical argv vector: item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing"
       - name: expected_success_signal
         type: string
         required: true
@@ -1519,12 +1720,13 @@ artifacts:
   - name: plan_document
     type: string
     required: conditional
-    condition: "size in [medium, large, mega]; small work may use the inline plan in final response"
+    condition: "plan_mode in [inline, approval_required]"
     validation: >
-      Small: inline plan with goal, files, risks, tests.
-      Medium: standard plan per plan-template.md.
-      Large/Mega: full plan per plan-template.md including Security and Operability.
-    on_fail: "Write or update the plan document for the task size before proceeding"
+      inline: compact plan with goal, files, risks, and tests.
+      approval_required medium: standard plan per plan-template.md.
+      approval_required large/mega: full plan per plan-template.md including Security and Operability.
+      plan_mode=none: artifact is absent.
+    on_fail: "When plan_mode is inline or approval_required, write or update the proportional plan before proceeding; omit this artifact when plan_mode is none"
 
   - name: user_approval
     type: enum
@@ -1539,8 +1741,8 @@ artifacts:
 # 1. All required artifacts for the task's completion_tier are present and controller_intensity matches the selected tier
 # 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
 # 3. When size is medium/large/mega or risk_tier is high/critical: spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. When size is medium/large/mega or risk_tier is high/critical: review_result.quality_review_status is not missing
-# 5. If qa_evaluation_mode=required: qa_evaluation_result is populated after build/test and code-review evidence; QA evaluation does not replace review_result. Scoped domain rubrics require selected_domain_rubrics and domain_quality_scores; unscoped rubric scoring is invalid.
+# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts
+# 5. If qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
 # 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
 # 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation

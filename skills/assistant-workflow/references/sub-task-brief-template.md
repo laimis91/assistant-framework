@@ -63,7 +63,10 @@ This packet is the executable contract for the slice. Supporting context below c
   - [slice id, or "none"]
 - acceptance_criteria:
   - [ ] [binary pass/fail criterion]
-- verification_command: [exact command or inspection method]
+- verification_command:
+  - [argv item 0: executable]
+  - [argv item 1: literal argument]
+- verification_argv_rule: [one literal argument per item; execute directly without shell parsing]
 - expected_success_signal: [specific passing output, file, or review signal]
 - evidence_to_record:
   - [test result, eval fixture, changed file, review note, or artifact proof]
@@ -134,7 +137,9 @@ debugging, explorer, architect, candidate search, replan, or restart.
 
 ### Slice evidence
 - slice_id: [id]
-- verification_command: [command or method]
+- verification_command:
+  - [argv item 0: executable]
+  - [argv item 1: literal argument]
 - expected_success_signal: [signal]
 - result: [pass/fail/blocker]
 - evidence_recorded: [evidence from evidence_to_record]
@@ -158,8 +163,8 @@ Each agent gets a brief as its prompt. Requires well-defined contracts and an in
 Brief files use `briefs/slice-<N>-<slice_id>.md`.
 
 ```bash
-codex exec "$(cat 'briefs/slice-<N>-<slice_id>.md')" --cwd .
-codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" --cwd .
+codex exec "$(cat 'briefs/slice-<N>-<slice_id>.md')" -C .
+codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" -C .
 ```
 
 ## Decomposition rules

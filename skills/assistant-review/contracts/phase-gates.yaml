@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -133,11 +133,11 @@ gates:
 
       - id: EV1
         check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, ESCALATE_PIVOT_RESTART, CONTINUE"
-        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix (nits OK, note in report) and, for medium+ scope, weighted_score >= 4.0. EXIT_ISSUES_FIXED = round 10, all issues fixed this session, no must-fix/should-fix findings, and, for medium+ scope, weighted_score >= 4.0. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings. ESCALATE_PIVOT_RESTART = STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT."
+        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix and no fixes this session. EXIT_ISSUES_FIXED = fixes occurred and no must-fix/should-fix remain. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings. ESCALATE_PIVOT_RESTART = STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT. Rubric score calibrates residual risk but does not create a finding."
 
       - id: EV2
-        check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if: zero must-fix AND zero should-fix findings, and for medium+ scope weighted_score >= 4.0"
-        on_fail: "Findings exist or medium+ weighted_score is below 4.0 — apply rubric action first. REFINE continues to FIX; PIVOT escalates through pivot_restart_decision."
+        check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if zero must-fix and zero should-fix findings remain; any below-threshold rubric score is recorded as residual risk with the evidence-bounded claim"
+        on_fail: "Address or explicitly defer evidence-backed findings. Do not manufacture a finding or another round solely to raise a score."
 
       - id: EV3
         check: "EXIT_MAX_ROUNDS only if: round == 10"
@@ -149,9 +149,9 @@ gates:
         on_fail: "Audit mode does not fix or loop — present findings and exit"
 
       - id: EV5
-        check: "For medium+ scope: rubric threshold action is applied — PASS exits, REFINE continues, PIVOT escalates through pivot_restart_decision"
+        check: "For medium+ scope: rubric threshold action calibrates focus and residual risk — PASS supports a findings-based exit, REFINE targets existing findings only, and PIVOT escalates through pivot_restart_decision"
         condition: "scope_size in [medium, large] and rubric_scores is present"
-        on_fail: "Check rubric weighted_score against threshold table in references/review-rubric.md and apply the correct action"
+        on_fail: "Apply the rubric to existing evidence. Score below threshold alone is insufficient to create work or authorize an additional review round."
 
       - id: EV6
         check: "PIVOT action triggers orchestrator-owned pivot_restart_decision — do not silently continue after PIVOT"
@@ -161,7 +161,22 @@ gates:
       - id: EV7
         check: "STAGNATION, repeated DRIFT, or repeated REGRESSION triggers ESCALATE_PIVOT_RESTART and records pivot_restart_signal before another fix/review dispatch"
         condition: "scope_size in [medium, large] and round >= 2"
-        on_fail: "Pause the loop, build pivot_restart_signal from score_history, and require orchestrator-owned pivot_restart_decision. Do not advance to another review round until the decision names the exact next action."
+        on_fail: "Pause the loop, build pivot_restart_signal from score_history, and require orchestrator-owned pivot_restart_decision. Do not advance to another review round until the decision names the exact next action and an allowed evidence-backed additional_round_reason exists."
+
+      - id: EV8
+        check: "Audit mode exits after exactly one review pass without fixes or a second Reviewer dispatch"
+        condition: "mode == audit"
+        on_fail: "Stop after round 1 and present the evidence-backed audit findings."
+
+      - id: EV9
+        check: "The normal review-fix path is round 1 review, fixes and validation when needed, then one fresh round 2 re-review"
+        condition: "mode == review-fix"
+        on_fail: "After round 1 fixes, validate and perform one fresh round 2 re-review; do not schedule more rounds by default."
+
+      - id: EV10
+        check: "Round 3+ has a recorded additional_round_reason backed by new evidence from changed_files, unresolved_finding, validation_failure, regression_or_drift, or changed_hypothesis. Score below threshold alone is insufficient."
+        condition: "round >= 3"
+        on_fail: "Do not start or continue the additional round. Exit with the available evidence and residual risk, or record one allowed reason with a concrete evidence pointer created after the prior review began."
 
   # ─────────────────────────────────────────────
   # FIX step — per round (review-fix mode only)
@@ -276,6 +291,10 @@ gates:
         condition: "qa_evaluation_mode == required"
         on_fail: "Run or complete the QA evaluation loop before presenting final review results."
 
+      - id: X5
+        check: "A no-material-finding final result uses the evidence-bounded claim 'No material findings within the reviewed scope and available evidence' and does not present CLEAN as proof of correctness"
+        on_fail: "Keep the compatible machine enum, replace the user-facing certainty claim with the required evidence-bounded wording, and state residual risk."
+
 # ─────────────────────────────────────────────
 # Loop invariants
 # ─────────────────────────────────────────────
@@ -301,9 +320,9 @@ invariants:
     on_fail: "This is the core violation of this skill. Continue the loop without waiting."
 
   - id: INV4
-    check: "Each round finds fewer or equal issues than the previous round"
+    check: "Finding-count changes are explained by fixed items, regressions, drift, or newly discovered evidence"
     scope: all_rounds
-    on_fail: "Investigate whether fixes are introducing new problems. If issue count increased, document this in the final summary as a warning."
+    on_fail: "Investigate the increased count and classify each new item. Never suppress a new evidence-backed finding to preserve a monotonic count; record regressions or newly discovered risks in the final summary."
 
   - id: INV5
     check: "For medium+ scope: rubric score increases correlate with finding count decreases (no drift)"
@@ -344,6 +363,12 @@ invariants:
     scope: all_rounds
     condition: "agentic_loop_safety_review_required is true"
     on_fail: "Run the Agentic Loop Safety Checklist before declaring the review clean; report missing bounds, stop conditions, retry caps, empty-result handling, tool-error routing, stagnation detection, cost/token guards, or low-confidence escalation as findings."
+
+  - id: INV10
+    check: "Every round 3+ dispatch carries one allowed additional_round_reason and new evidence; score below threshold alone never authorizes another round"
+    scope: all_rounds
+    condition: "round >= 3"
+    on_fail: "Stop before dispatch and either record allowed new evidence from changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis, or exit with residual risk."
 
   - id: INV_QA1
     check: "QA evaluation never replaces Code Reviewer or Reviewer compatibility review"

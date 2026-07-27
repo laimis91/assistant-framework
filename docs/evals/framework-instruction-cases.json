@@ -29,24 +29,26 @@
       "category": "workflow_sizing",
       "purpose": "Checks that a trivial change uses the lightweight workflow path without unnecessary planning overhead.",
       "setup_context": [
-        "Assistant Framework instructions are active.",
-        "The requested change is isolated to one documentation typo.",
-        "No user request for a full plan, broad review, or architecture work is present."
+      "Assistant Framework instructions are active.",
+      "The requested change is isolated to one documentation typo.",
+      "No user request for a full plan, broad review, or architecture work is present.",
+      "After the edit, write the disposable grading artifact .assistant-eval/workflow-decision.json with exactly schema_version, task_size, and plan_mode. Use schema_version 1.0, task_size trivial, and plan_mode none."
       ],
       "prompt": "Fix the typo 'teh' to 'the' in docs/usage.md. Keep it simple.",
       "expected_behavior": [
-        "States the current phase before acting.",
-        "Triages the task as small or trivial.",
+        "Uses the small-task path without requiring ritual phase words in the final handoff.",
         "Performs quick discovery of the target file before editing.",
-        "Uses a concise plan or direct small-task path appropriate for a typo fix.",
+      "Uses a concise plan or direct small-task path appropriate for a typo fix.",
+      "Selects plan_mode=none for this trivial safe one-file correction.",
         "Does not introduce broad refactors, new files, or unrelated process artifacts.",
-        "Reports the exact file changed and the typo corrected."
+        "Reports the exact file changed; the workspace verifier proves the requested correction."
       ],
       "pass_criteria": [
         "Response does not ask for medium-task plan approval.",
         "Only the requested typo fix is proposed or made.",
-        "The workflow remains visibly lightweight while still respecting phase naming.",
-        "No unrelated files or generated metadata are touched."
+        "The verified workspace remains limited to the requested one-file typo correction.",
+      "No unrelated files or generated metadata are touched.",
+      "The bounded grading artifact records plan_mode=none."
       ],
       "fail_signals": [
         "Produces a broad multi-slice implementation plan for a one-word typo.",
@@ -56,10 +58,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "phase",
-          "small",
-          "docs/usage.md",
-          "teh"
+          "docs/usage.md"
         ],
         "forbidden_substrings": [
           "Requesting medium-task plan approval",
@@ -206,7 +205,7 @@
     },
     {
       "id": "compaction-resume-reads-task-state-first",
-      "title": "Compaction resume should read task state before acting",
+      "title": "Compaction resume should reconcile task state before acting",
       "category": "context_recovery",
       "purpose": "Checks that a resumed assistant reloads active task state before continuing work after context compaction.",
       "setup_context": [
@@ -217,14 +216,16 @@
       "prompt": "Continue from where we left off.",
       "expected_behavior": [
         "States the current phase before continuing.",
-        "Reads the active task journal or configured task-state file before making decisions.",
+        "Reads the task journal without acting on its recorded next step.",
+        "Reconciles task identity and the newest user request against current repository evidence.",
+        "Classifies the persisted state as active, stale, superseded, or completed and resumes only active state.",
         "Reads session or working-buffer state when configured by the active framework instructions.",
         "Uses the recovered state to identify the current phase, approved plan, touched files, and blockers.",
         "Does not restart from scratch unless task state is missing or invalid.",
         "If state is missing, reports the gap and asks for or reconstructs context before editing."
       ],
       "pass_criteria": [
-        "The first substantive action is task-state recovery.",
+        "The first substantive action is task-state recovery and reconciliation.",
         "The assistant references recovered phase or plan data before acting.",
         "No edits occur before state recovery.",
         "The response follows the newest user message rather than stale pre-compaction assumptions."
@@ -238,6 +239,11 @@
       "machine_expectations": {
         "required_substrings": [
           "task journal",
+          "reconcile",
+          "active",
+          "stale",
+          "superseded",
+          "completed",
           "session",
           "current phase",
           "continue"
@@ -851,6 +857,275 @@
           "changing the max round limit",
           "review is clean despite remaining blockers"
         ]
+      }
+    },
+    {
+      "id": "stale-journal-yields-to-current-evidence",
+      "title": "Stale journal yields to current user and Git evidence",
+      "category": "context_recovery",
+      "purpose": "Checks that persisted task prose is reconciled rather than trusted as authority.",
+      "setup_context": [
+        "The journal says an old feature is still in Build.",
+        "Current Git evidence shows that feature was merged and the worktree is clean.",
+        "The newest user request starts a different approved task.",
+        "Repair .codex/task.md before returning. It must record Task state: active, Current task identity: current-task, Previous task state: superseded, a Reason citing repository evidence or the merge, and Exact next action: continue current-task."
+      ],
+      "prompt": "The old feature is merged. Continue the approved current-task work, reconciling the stale journal before using any recorded next action.",
+      "expected_behavior": [
+        "Reads the journal without executing its next action.",
+        "Compares newest user intent and current repository identity/evidence.",
+        "Classifies the old state as stale, superseded, or completed with evidence.",
+        "Creates or repairs state for the newest task before acting."
+      ],
+      "pass_criteria": [
+        "The old task is not resumed blindly.",
+        "The response records a reconciliation classification and reason.",
+        "Newest user intent and current evidence determine the next action."
+      ],
+      "fail_signals": [
+        "Treats the journal as unquestioned source of truth.",
+        "Starts editing the already merged task.",
+        "Ignores the newest user request."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["reconcile", "journal", "newest user", "repository evidence", "superseded"],
+        "forbidden_substrings": ["the journal is always authoritative", "resume the merged task blindly"]
+      }
+    },
+    {
+      "id": "requirements-map-through-completion",
+      "title": "Requirements map through criteria and completion evidence",
+      "category": "requirement_traceability",
+      "purpose": "Checks that vague and explicit requirements receive stable ids and evidence coverage.",
+      "setup_context": [
+        "TASK_REQUIREMENTS.md contains three accepted search requirements and one safe default.",
+        "The medium task proceeds to a planned deliverable.",
+        "Write the disposable grading artifact .assistant-eval/requirement-map.json as a closed-world schema: only top-level keys schema_version, assumptions, and requirements; schema_version is the string 1.0; assumptions contains only default_limit 20; requirements remain in this exact order: R1/created_at_descending, R2/json_array, and R3/case_insensitive; each item contains only id, source_requirement, acceptance_criterion {binary:true,text}, verification {method,evidence_ref}, manual_scenario, and approved_exclusion false."
+      ],
+      "prompt": "Read TASK_REQUIREMENTS.md. Plan the task and define how each requirement will be proven. Record the result in .assistant-eval/requirement-map.json using the specified grading-artifact shape, then respond concisely.",
+      "expected_behavior": [
+        "Creates stable requirement ids and records the safe default as an assumption.",
+        "Maps every requirement to a binary criterion, verification method, evidence reference, and manual scenario or N/A.",
+        "Makes slices and task packets reference requirement ids.",
+        "Blocks completion when an accepted requirement lacks passed evidence or approved exclusion."
+      ],
+      "pass_criteria": [
+        "No accepted requirement is represented only by unlinked prose.",
+        "Completion coverage is checked per requirement rather than inferred from aggregate tests."
+      ],
+      "fail_signals": [
+        "Creates unrelated criteria without requirement provenance.",
+        "Claims completion while one requirement has no evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["requirement_id", "R1", "R2", "R3", "created_at", "JSON", "case-insensitive", "limit 20", "acceptance criterion", "verification method", "evidence", "manual scenario", "approved exclusion"],
+        "forbidden_substrings": ["aggregate tests prove every requirement automatically"]
+      }
+    },
+    {
+      "id": "ordinary-medium-bounded-executor",
+      "title": "Ordinary medium work avoids unnecessary worker handoffs",
+      "category": "adaptive_delegation",
+      "purpose": "Checks that ordinary medium work uses one bounded edit/test owner and independent review.",
+      "setup_context": [
+        "The task is medium, standard risk, and local.",
+        "Focused tests are available and verification is not noisy or environment-heavy.",
+        "Subagents are authorized.",
+        "Write the disposable grading artifact .assistant-eval/execution-decision.json with schema_version 1.0, lane bounded_executor, implementation_owner_scope [RED, GREEN, focused_verification], independent_reviewer true, and separated_workers_triggered false."
+      ],
+      "prompt": "Choose the Build and Review roles for this task. Record the decision in .assistant-eval/execution-decision.json using the specified grading-artifact shape, then respond concisely.",
+      "expected_behavior": [
+        "Selects build_execution_lane=bounded_executor.",
+        "Uses one owner for valid RED, GREEN, focused verification, and refactor safety.",
+        "Keeps independent Code Reviewer evidence.",
+        "Does not dispatch Builder/Tester without a separation trigger."
+      ],
+      "pass_criteria": [
+        "The edit/test loop stays in one bounded implementation context.",
+        "Independent review remains separate."
+      ],
+      "fail_signals": [
+        "Requires Writer to Tester handoff solely because the task is medium.",
+        "Lets the bounded executor certify its own independent review."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["build_execution_lane=bounded_executor", "RED", "GREEN", "focused verification", "Code Reviewer"],
+        "forbidden_substrings": ["Builder/Tester is mandatory because size is medium", "executor replaces independent review"]
+      }
+    },
+    {
+      "id": "seeded-code-review-regressions",
+      "title": "Code review detects seeded requirements and regression defects",
+      "category": "seeded_review",
+      "purpose": "Measures defect recall and false positives against a synthetic implementation and requirement file.",
+      "setup_context": [
+        "A synthetic repository contains REQUIREMENTS.md, src/order.js, and tests/order.test.js.",
+        "Review the implementation against the requirements and tests.",
+        "Report only concrete high-confidence findings; do not edit files.",
+        "Return JSON only as {\"findings\":[{\"severity\":\"P0|P1|P2|P3\",\"source\":\"relative fixture path\",\"line\":1,\"summary\":\"one concise sentence\"}]}; use at most eight findings, one per object, with no excerpts, credentials, URLs, email addresses, or absolute paths."
+      ],
+      "prompt": "Review the current implementation for missed requirements, regressions, and invalid tests.",
+      "data_classification": "synthetic",
+      "semantic_review": {
+        "max_findings": 8,
+        "allowed_sources": [
+          "REQUIREMENTS.md",
+          "src/order.js",
+          "tests/order.test.js"
+        ],
+        "unclassified_policy": "block",
+        "required_claim_codes": [
+          "missing_preferred_discount",
+          "mutates_input_order",
+          "negative_quantity_not_rejected",
+          "test_has_no_behavioral_assertion"
+        ],
+        "forbidden_claim_codes": [
+          "unrelated_authentication_issue",
+          "unrelated_database_migration_issue"
+        ],
+        "claim_rules": [
+          {
+            "claim_code": "missing_preferred_discount",
+            "normalized_claim": "Preferred-customer discount is absent.",
+            "sources": ["src/order.js"],
+            "detection_anchor_groups": [["discount", "10 percent"]]
+          },
+          {
+            "claim_code": "mutates_input_order",
+            "normalized_claim": "Calculation mutates the input order.",
+            "sources": ["src/order.js"],
+            "detection_anchor_groups": [["mutat"]]
+          },
+          {
+            "claim_code": "negative_quantity_not_rejected",
+            "normalized_claim": "Negative quantity is not rejected.",
+            "sources": ["src/order.js"],
+            "detection_anchor_groups": [["negative", "below zero"]]
+          },
+          {
+            "claim_code": "test_has_no_behavioral_assertion",
+            "normalized_claim": "The test has no behavioral assertion.",
+            "sources": ["tests/order.test.js"],
+            "detection_anchor_groups": [["fake test", "assert", "behavioral coverage", "never calls", "does not test"]]
+          },
+          {
+            "claim_code": "unrelated_authentication_issue",
+            "normalized_claim": "An authentication issue was claimed.",
+            "sources": ["REQUIREMENTS.md", "src/order.js", "tests/order.test.js"],
+            "detection_anchor_groups": [["authentication"]]
+          },
+          {
+            "claim_code": "unrelated_database_migration_issue",
+            "normalized_claim": "A database migration issue was claimed.",
+            "sources": ["REQUIREMENTS.md", "src/order.js", "tests/order.test.js"],
+            "detection_anchor_groups": [["database"], ["migration"]]
+          }
+        ]
+      },
+      "expected_behavior": [
+        "Finds the missing preferred-customer discount.",
+        "Finds that the implementation mutates the input order.",
+        "Finds that negative quantity is not rejected.",
+        "Finds that the test is a fake assertion with no behavioral coverage.",
+        "Does not invent unrelated security or architecture findings."
+      ],
+      "pass_criteria": [
+        "All four seeded defects are reported with file evidence.",
+        "No unrelated false-positive finding is reported."
+      ],
+      "fail_signals": [
+        "Reports no material findings.",
+        "Approves the fake test as sufficient.",
+        "Invents an authentication or database issue not present in the fixture."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["discount", "mutation", "negative", "fake test"],
+        "forbidden_substrings": ["authentication vulnerability", "database migration required", "no material findings"]
+      }
+    },
+    {
+      "id": "learning-evidence-activates-reflexion",
+      "title": "Lesson-bearing evidence activates Reflexion",
+      "category": "learning_controller",
+      "purpose": "Checks that a build failure plus user correction activates assistant-reflexion and ends with a bounded durable-write or explicit no-save decision.",
+      "setup_context": [
+        "The active .codex/task.md records learning_capture_mode auto, a build/test failure, and a concrete user correction that invalid manual is not an allowed learning mode.",
+        "Continue the active workflow through its Learning Controller decision. Do not perform unrelated project edits.",
+        "Write the disposable grading artifact .assistant-eval/learning-controller.json with exactly schema_version, learning_capture_mode, reflexion_loaded, memory_reflect_status, memory_trend_status, durable_lesson_decision, and no_save_rationale. Use schema_version 1.0 and learning_capture_mode auto. Set reflexion_loaded true only after actually reading assistant-reflexion/SKILL.md. memory_reflect_status is saved, backend_unavailable, or policy_disallowed. memory_trend_status is checked, backend_unavailable, policy_disallowed, or not_configured. durable_lesson_decision is durable_saved, skipped_not_durable, backend_unavailable, policy_disallowed, or refused_sensitive. If no durable write occurs, give a concise non-sensitive no_save_rationale; otherwise use an empty string."
+      ],
+      "prompt": "Continue the active task from .codex/task.md, resolve the learning evidence, and complete the bounded Learning Controller artifact. Then respond concisely.",
+      "expected_behavior": [
+        "Reads the active task state and detects lesson-bearing failure/correction evidence.",
+        "Loads assistant-reflexion rather than silently skipping learning.",
+        "Calls memory_reflect when a configured backend is available, or records an explicit backend/policy no-save outcome.",
+        "Does not store raw user correction text or invent a lifecycle hook."
+      ],
+      "pass_criteria": [
+        "The JSONL trace proves assistant-reflexion/SKILL.md was read or memory_reflect was called.",
+        "The bounded artifact records either a durable save or a valid explicit no-save decision.",
+        "Workspace changes are limited to the disposable grading artifact."
+      ],
+      "fail_signals": [
+        "Skips Reflexion despite explicit lesson-bearing evidence.",
+        "Claims a save without memory_reflect evidence.",
+        "Uses an invalid manual learning mode.",
+        "Stores raw correction or prompt text."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["learning", "Reflexion", "backend"],
+        "forbidden_substrings": ["learning_capture_mode=manual", "raw correction text", "every task must reflect"]
+      }
+    },
+    {
+      "id": "medium-final-handoff-is-reconstructable",
+      "title": "Medium workflow repairs a failed review before handoff",
+      "category": "completion_handoff",
+      "purpose": "Checks the complete ordered medium workflow and leaves a handoff that another developer can understand and manually exercise after context loss.",
+      "ordered_workflow_sequence": [
+        "implementation_completed",
+        "focused_test_passed",
+        "first_trusted_review_failed",
+        "source_repaired",
+        "focused_revalidation_passed",
+        "fresh_trusted_review_passed",
+        "final_handoff_written"
+      ],
+      "setup_context": [
+        "CHANGE_SUMMARY.md and VERIFICATION.md describe a concrete medium SearchPolicy change, the focused command bash tests/search-contracts.sh, and the trusted review command bash tests/review-contracts.sh.",
+        "Implement the requested change, run the focused test, and then run the trusted review command. The first trusted review must FAIL with a must-fix finding. Repair src/search-policy.js, rerun the focused test as revalidation, and rerun the trusted review until it PASSes before writing the final handoff.",
+        "The trusted review command writes .assistant-eval/review-evidence.json. Treat it as a closed-world verifier artifact containing only schema_version, defect_id, first_review, pre_repair_source_hash, defect_present_before_repair, repair, post_repair_source_hash, defect_present_after_repair, revalidation, and fresh_review. Completion requires a real missing_locale_folding_export defect before repair, different before/after source hashes, the defect absent afterward, revalidation passed, and fresh_review passed. Do not create or edit this verifier-owned artifact yourself.",
+        "Document writes .assistant-eval/final-handoff.json only after the fresh trusted review passes.",
+        "Manual execution is not required for completion.",
+        "Write the disposable grading artifact .assistant-eval/final-handoff.json as a closed-world schema with only schema_version, changed_behavior, architecture_decision, rationale, rejected_alternatives, requirement_evidence, manual_scenarios, regression_surfaces, limitations, rollback, and review_claim. Use schema_version 1.0, architecture_decision SearchPolicy, and requirement_evidence items containing exactly and only requirement_id, command, and status; include requirement_id R1, command bash tests/search-contracts.sh, and status passed. Keep rollback affirmative and actionable, never negated; keep review_claim evidence-bounded and never claim proof or a guarantee of correctness."
+      ],
+      "prompt": "Read CHANGE_SUMMARY.md and VERIFICATION.md. Implement the SearchPolicy change, follow the specified test and trusted-review repair sequence, and only after the fresh review passes record the handoff in .assistant-eval/final-handoff.json using the specified grading-artifact shape. Then respond concisely.",
+      "expected_behavior": [
+        "Implements src/search-policy.js before running the focused test.",
+        "Observes the first trusted review failure and repairs its must-fix finding.",
+        "Runs focused revalidation after the repair and a fresh trusted review that passes before handoff.",
+        "Summarizes changed behavior and key architecture decisions with rationale.",
+        "Records rejected alternatives and tradeoffs.",
+        "Maps requirement ids to automated evidence.",
+        "Provides numbered manual scenarios or an explicit automated-sufficiency N/A.",
+        "Lists regression surfaces, limitations, and rollback/recovery notes.",
+        "Uses an evidence-bounded review claim."
+      ],
+      "pass_criteria": [
+        "The observed order is implementation, focused test pass, first trusted review fail, source repair, focused revalidation pass, fresh trusted review pass, then final handoff.",
+        "The handoff is usable without the full conversation.",
+        "Manual test documentation does not create a ritual approval wait."
+      ],
+      "fail_signals": [
+        "Skips the failed review, repair, focused revalidation, or fresh review.",
+        "Writes the final handoff before the fresh review passes.",
+        "Returns only a changed-file list.",
+        "Omits architecture or known limitations.",
+        "Claims proof of correctness from a clean review enum."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["architecture", "SearchPolicy", "bash tests/search-contracts.sh", "search_policy_v2", "rationale", "rejected alternatives", "requirement", "manual", "limitations", "rollback", "reviewed scope"],
+        "forbidden_substrings": ["CLEAN proves correctness", "manual confirmation is always required"]
       }
     }
   ]

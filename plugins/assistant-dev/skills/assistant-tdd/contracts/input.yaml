@@ -6,6 +6,15 @@ contract: input
 skill: assistant-tdd
 
 fields:
+  - name: execution_lane
+    type: enum
+    required: false
+    enum_values: [bounded_executor, separated_workers]
+    description: "Whether one bounded executor owns the cycle or RED/GREEN/verification are split across workers"
+    default: bounded_executor
+    on_missing: infer
+    infer_from: "Use workflow build_execution_lane when composed; otherwise bounded_executor unless high/critical risk, explicit independent RED evidence, broad/noisy/environment-heavy verification, or explicit role separation requires separated_workers"
+
   - name: activation_reason
     type: enum
     required: true
