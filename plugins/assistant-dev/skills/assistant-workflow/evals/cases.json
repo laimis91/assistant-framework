@@ -840,6 +840,47 @@
       }
     },
     {
+      "id": "review-gated-slice-evidence-is-provider-neutral",
+      "title": "Review-gated slices await portable evidence",
+      "category": "slice_review",
+      "purpose": "Checks that review_gated work records local exact-SHA evidence without local promotion or provider-specific mechanics.",
+      "prompt": "Run the approved review_gated slice and prepare it for external review.",
+      "setup_context": [
+        "The strict packet declares target_branch, target_base_sha, task_branch, slice_branch, and promotion_mode: review_gated.",
+        "Local verification has passed for one exact slice head."
+      ],
+      "expected_behavior": [
+        "Records REVIEW_PENDING with verified_base_sha, verified_head_sha, verification_evidence_ref, and local verification evidence.",
+        "Does not perform local promotion, does not mutate the task branch, and does not mark the slice VERIFIED.",
+        "Requires fresh post-integration verification before VERIFIED and states that a provider-neutral adapter owns remote review and gate evidence."
+      ],
+      "pass_criteria": [
+        "REVIEW_PENDING, the reviewed SHA pair, verification_evidence_ref, and local verification evidence are explicit.",
+        "The task branch remains unchanged until provider-neutral approval, integration, and fresh post-integration verification succeed."
+      ],
+      "fail_signals": [
+        "Performs provider-specific execution directly.",
+        "Treats REVIEW_PENDING as VERIFIED."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "review_gated",
+          "REVIEW_PENDING",
+          "verified_base_sha",
+          "verified_head_sha",
+          "verification_evidence_ref",
+          "local verification",
+          "no local promotion",
+          "fresh post-integration verification",
+          "provider-neutral"
+        ],
+        "forbidden_substrings": [
+          "gh pr",
+          "glab mr"
+        ]
+      }
+    },
+    {
       "id": "workflow-required-roles-missing-delegation-authorization",
       "title": "Required workflow roles ask for delegation authorization",
       "category": "subagent_authorization",

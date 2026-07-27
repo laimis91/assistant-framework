@@ -136,6 +136,7 @@ For subagent rules, load `references/subagent-dispatch.md` and resolve `subagent
 
 Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
 Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
+For review-gated multi-slice work, load `references/slice-review-topology.md` before emitting or consuming slice review evidence.
 
 ## Output
 

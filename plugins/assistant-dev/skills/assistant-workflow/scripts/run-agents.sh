@@ -24,6 +24,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/slice-execution-metadata.sh"
+source "$SCRIPT_DIR/lib/slice-review-evidence.sh"
 
 # Source agent.conf for defaults; --agent flag overrides
 AGENT_PROMPT_ARG="-p"
@@ -54,6 +56,10 @@ HOST_VERIFY_LOG_MAX_BYTES=65536
 HOST_VERIFY_TIMEOUT_SECONDS="${HOST_VERIFY_TIMEOUT_SECONDS:-900}"
 AGENT_LOG_MAX_BYTES="${AGENT_LOG_MAX_BYTES:-1048576}"
 HOST_VERIFY_ALLOWED_EXECUTABLES="${HOST_VERIFY_ALLOWED_EXECUTABLES:-true false bash sh pwsh powershell powershell.exe cmd.exe dotnet npm pnpm yarn bun cargo go pytest python python3 node ruby perl java mvn gradle make cmake ctest}"
+RUN_TOPOLOGY_KIND=""
+RUN_TASK_BRANCH=""
+RUN_PROMOTION_MODE=""
+REVIEW_PENDING_COUNT=0
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 
@@ -769,7 +775,10 @@ fi
 
 get_branch_from_brief() {
     local brief_file="$1"
-    grep 'Git branch:' "$brief_file" 2>/dev/null | sed 's/.*Git branch:[[:space:]]*//' | awk '{print $1}' || echo ""
+    local slice_id
+    slice_id=$(get_slice_id_from_brief "$brief_file")
+    slice_metadata_resolve "$brief_file" "$slice_id" || return 1
+    printf '%s\n' "$SLICE_METADATA_SLICE_BRANCH"
 }
 
 get_worktree_from_brief() {
@@ -779,6 +788,14 @@ get_worktree_from_brief() {
 
 derive_integration_branch_from_slice_branch() {
     local branch="$1"
+    local task_name
+    if [[ "$branch" == slice/*/* ]]; then
+        task_name="${branch#slice/}"
+        task_name="${task_name%/*}"
+        slice_metadata_is_safe_task "$task_name" || return 1
+        printf 'feature/%s\n' "$task_name"
+        return 0
+    fi
     if [[ "$branch" == feature/*/slice-* ]]; then
         printf '%s\n' "${branch%/slice-*}/integration"
         return 0
@@ -804,8 +821,13 @@ validate_slice_branch_identity() {
     local branch_tail
     local task_part
 
-    branch=$(get_branch_from_brief "$brief_file")
-    [[ -n "$branch" ]] || fail "Slice '$slice_id' brief '$brief_file' is missing 'Git branch:'; expected feature/<task>/slice-$slice_id before launching agents."
+    if ! slice_metadata_resolve "$brief_file" "$slice_id"; then
+        fail "Invalid slice topology in '$brief_file'."
+    fi
+    branch="$SLICE_METADATA_SLICE_BRANCH"
+    if ! $SLICE_METADATA_LEGACY; then
+        return 0
+    fi
 
     expected_tail="slice-$slice_id"
     branch_tail="${branch##*/}"
@@ -825,14 +847,44 @@ validate_slice_branch_identity() {
 }
 
 validate_slice_branch_identities() {
-    local i
+    local i expected_target="" expected_target_base="" expected_task="" expected_mode="" topology_kind=""
     for ((i = 0; i < ${#BRIEF_FILES[@]}; i++)); do
         validate_slice_branch_identity "${BRIEF_FILES[$i]}" "${SLICE_IDS[$i]}"
+        slice_metadata_resolve "${BRIEF_FILES[$i]}" "${SLICE_IDS[$i]}" || fail "Invalid slice topology in '${BRIEF_FILES[$i]}'."
+        if $SLICE_METADATA_LEGACY; then
+            if [[ -n "$topology_kind" && "$topology_kind" != legacy ]]; then
+                fail "Slice brief set cannot mix legacy and new topology briefs before dispatch."
+            fi
+            topology_kind="legacy"
+        else
+            if [[ -n "$topology_kind" && "$topology_kind" != new ]]; then
+                fail "Slice brief set cannot mix legacy and new topology briefs before dispatch."
+            fi
+            topology_kind="new"
+            if [[ -z "$expected_target" ]]; then
+                expected_target="$SLICE_METADATA_TARGET_BRANCH"
+                expected_target_base="$SLICE_METADATA_TARGET_BASE_SHA"
+                expected_task="$SLICE_METADATA_TASK_BRANCH"
+                expected_mode="$SLICE_METADATA_PROMOTION_MODE"
+            elif [[ "$expected_target" != "$SLICE_METADATA_TARGET_BRANCH" || "$expected_target_base" != "$SLICE_METADATA_TARGET_BASE_SHA" || "$expected_task" != "$SLICE_METADATA_TASK_BRANCH" || "$expected_mode" != "$SLICE_METADATA_PROMOTION_MODE" ]]; then
+                fail "All new-topology slice briefs must share target_branch, target_base_sha, task_branch, and promotion_mode before dispatch."
+            fi
+            if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$SLICE_METADATA_TARGET_BRANCH" \
+                || ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$SLICE_METADATA_TASK_BRANCH" \
+                || ! git -C "$REPO" cat-file -e "${SLICE_METADATA_TARGET_BASE_SHA}^{commit}" \
+                || ! git -C "$REPO" merge-base --is-ancestor "$SLICE_METADATA_TARGET_BASE_SHA" "$SLICE_METADATA_TARGET_BRANCH" \
+                || ! git -C "$REPO" merge-base --is-ancestor "$SLICE_METADATA_TARGET_BASE_SHA" "$SLICE_METADATA_TASK_BRANCH"; then
+                fail "Slice '${SLICE_IDS[$i]}' immutable target_base_sha '$SLICE_METADATA_TARGET_BASE_SHA' must be an ancestor of both target_branch '$SLICE_METADATA_TARGET_BRANCH' and task_branch '$SLICE_METADATA_TASK_BRANCH'."
+            fi
+        fi
     done
+    RUN_TOPOLOGY_KIND="$topology_kind"
+    RUN_TASK_BRANCH="$expected_task"
+    RUN_PROMOTION_MODE="$expected_mode"
 }
 
 prove_external_verified_prerequisites() {
-    local dep dep_index dep_brief dep_branch integration_branch
+    local dep dep_index dep_brief dep_branch integration_branch dep_slice_id
 
     [[ ${#EXTERNALLY_VERIFIED_SLICES[@]} -gt 0 ]] || return 0
 
@@ -842,6 +894,7 @@ prove_external_verified_prerequisites() {
         fi
 
         dep_brief="${BRIEF_FILES[$dep_index]}"
+        dep_slice_id="${SLICE_IDS[$dep_index]}"
         dep_branch=$(get_branch_from_brief "$dep_brief")
         if ! integration_branch=$(derive_integration_branch_from_slice_branch "$dep_branch"); then
             fail "External verified-slice proof failed: prerequisite '$dep' branch '$dep_branch' does not match feature/<task>/slice-<slice_id>."
@@ -852,6 +905,13 @@ prove_external_verified_prerequisites() {
         fi
         if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$dep_branch"; then
             fail "External verified-slice proof failed: prerequisite branch '$dep_branch' is missing."
+        fi
+        slice_metadata_resolve "$dep_brief" "$dep_slice_id" || fail "External verified-slice proof failed: invalid topology metadata for '$dep'."
+        if [[ "$SLICE_METADATA_LEGACY" == false && "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]]; then
+            if ! slice_review_validate_approved_pair "$REPO" "$LOG_DIR" "$dep_brief" "$dep_slice_id" \
+                "$SLICE_METADATA_TARGET_BRANCH" "$SLICE_METADATA_TARGET_BASE_SHA" "$SLICE_METADATA_TASK_BRANCH" "$SLICE_METADATA_SLICE_BRANCH"; then
+                fail "External verified-slice proof failed: REVIEW_APPROVED provider-neutral review evidence is required for prerequisite '$dep'."
+            fi
         fi
         if ! git -C "$REPO" merge-base --is-ancestor "$dep_branch" "$integration_branch"; then
             fail "External verified-slice proof failed: prerequisite branch '$dep_branch' is not merged into integration branch '$integration_branch'."
@@ -1247,7 +1307,7 @@ run_host_verification() {
         current_branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
         if [[ "$current_branch" != "$expected_checked_out_branch" ]]; then
             rm -f "$raw_log"
-            warn "Host verification rejected slice '$slice_id': worktree branch '$current_branch' does not match expected branch '$expected_checked_out_branch'."
+            warn "Host verification rejected slice '$slice_id': worktree branch '$current_branch' does not match expected branch '$expected_checked_out_branch'; immutable slice ref context changed."
             return 1
         fi
     fi
@@ -1312,7 +1372,7 @@ run_host_verification() {
         return 1
     fi
     if [[ "$current_slice_commit" != "$expected_slice_commit" || "$current_integration_commit" != "$expected_integration_commit" ]]; then
-        warn "Host verification rejected slice '$slice_id': verifier mutated a protected slice or integration ref. Evidence: $log_file"
+        warn "Host verification rejected slice '$slice_id': protected slice ref changed during verification. Evidence: $log_file"
         return 1
     fi
     if [[ "$executable_identity_after" != "$executable_identity_before" ]]; then
@@ -1336,11 +1396,12 @@ run_host_verification() {
         return 1
     fi
 
-    ok "Host-verified slice '$slice_id' at immutable commit '$expected_worktree_commit' before VERIFIED/merge state. Evidence: $log_file"
+    ok "Host-verified slice '$slice_id' at immutable commit '$expected_worktree_commit' before promotion state. Evidence: $log_file"
 }
 
 LAST_VERIFIED_COMMIT=""
 LAST_VERIFIED_INTEGRATION_COMMIT=""
+LAST_VERIFIED_LOG=""
 
 verify_committed_slice_output() {
     local brief_file="$1"
@@ -1354,6 +1415,7 @@ verify_committed_slice_output() {
         dry "host verify slice '$slice_id' using snapshotted canonical argv and exact commit before merge/VERIFIED"
         LAST_VERIFIED_COMMIT="dry-run"
         LAST_VERIFIED_INTEGRATION_COMMIT="dry-run"
+        LAST_VERIFIED_LOG="dry-run"
         return 0
     fi
 
@@ -1372,9 +1434,57 @@ verify_committed_slice_output() {
     if run_host_verification "$brief_file" "$brief_index" "$slice_id" "$worktree" "$slice_commit" "$branch" "$branch" "$slice_commit" "$integration_branch" "$integration_commit"; then
         LAST_VERIFIED_COMMIT="$slice_commit"
         LAST_VERIFIED_INTEGRATION_COMMIT="$integration_commit"
+        LAST_VERIFIED_LOG="$LOG_DIR/$(basename "$brief_file" .md).host-verify.log"
         return 0
     fi
     return 1
+}
+
+is_review_gated_slice() {
+    local brief_file="$1"
+    local slice_id
+    slice_id=$(get_slice_id_from_brief "$brief_file")
+    slice_metadata_resolve "$brief_file" "$slice_id" || return 1
+    [[ "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]]
+}
+
+emit_review_pending_evidence() {
+    local brief_file="$1"
+    local slice_id="$2"
+    local verified_head="$3"
+    local verified_base="$4"
+    local current_head current_base
+
+    slice_metadata_resolve "$brief_file" "$slice_id" || return 1
+    [[ "$SLICE_METADATA_LEGACY" == false && "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]] || return 1
+    if $DRY_RUN; then
+        dry "would emit REVIEW_PENDING evidence for slice '$slice_id' in $LOG_DIR"
+        REVIEW_PENDING_COUNT=$((REVIEW_PENDING_COUNT + 1))
+        return 0
+    fi
+    current_head=$(git -C "$REPO" rev-parse "${SLICE_METADATA_SLICE_BRANCH}^{commit}" 2>/dev/null || printf 'unreadable')
+    current_base=$(git -C "$REPO" rev-parse "${SLICE_METADATA_TASK_BRANCH}^{commit}" 2>/dev/null || printf 'unreadable')
+    if [[ "$current_head" != "$verified_head" || "$current_base" != "$verified_base" ]]; then
+        warn "REVIEW_PENDING evidence rejected for slice '$slice_id': slice ref or task ref changed after immutable verification."
+        return 1
+    fi
+
+    SLICE_REVIEW_REPO="$REPO" slice_review_write_pending "$LOG_DIR" "$brief_file" "$slice_id" \
+        "$SLICE_METADATA_TARGET_BRANCH" "$SLICE_METADATA_TARGET_BASE_SHA" "$SLICE_METADATA_TASK_BRANCH" "$SLICE_METADATA_SLICE_BRANCH" \
+        "$verified_base" "$verified_head" "$LAST_VERIFIED_LOG" || return 1
+    cat "$SLICE_REVIEW_PENDING_PATH"
+    REVIEW_PENDING_COUNT=$((REVIEW_PENDING_COUNT + 1))
+}
+
+invalidate_prior_review_evidence() {
+    local brief_file="$1"
+    local slice_id
+
+    $DRY_RUN && return 0
+    slice_id=$(get_slice_id_from_brief "$brief_file")
+    slice_metadata_resolve "$brief_file" "$slice_id" || return 1
+    [[ "$SLICE_METADATA_LEGACY" == false && "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]] || return 0
+    slice_review_invalidate "$LOG_DIR" "$brief_file" || return 1
 }
 
 verify_external_slice_on_detached_worktree() {
@@ -1806,6 +1916,9 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
         agent_cwd=$(canonical_dir "$agent_cwd") \
             || fail "Could not canonicalize resolved worktree for slice '${SLICE_IDS[$i]}': $agent_cwd"
     fi
+    if ! invalidate_prior_review_evidence "$brief"; then
+        fail "Slice '${SLICE_IDS[$i]}' cannot start because prior review evidence could not be invalidated safely."
+    fi
     LAUNCHED=$((LAUNCHED + 1))
     # Track only NEW worktrees for cleanup (resolve_agent_cwd runs in subshell, can't update parent array)
     if [[ -d "$agent_cwd" && "$agent_cwd" != "$REPO" ]]; then
@@ -1828,6 +1941,14 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
             if ! verify_committed_slice_output "$brief" "$i" "${SLICE_IDS[$i]}" "$branch" "$agent_cwd"; then
                 FAILED+=("$(basename "$brief" .md)")
                 warn "Slice '${SLICE_IDS[$i]}' failed host verification; stopping before merge or dependent launch."
+                break
+            elif is_review_gated_slice "$brief"; then
+                if emit_review_pending_evidence "$brief" "${SLICE_IDS[$i]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
+                    info "Slice '${SLICE_IDS[$i]}' is REVIEW_PENDING; no local promotion or dependent launch occurs until provider-neutral review evidence is supplied."
+                    break
+                fi
+                FAILED+=("$(basename "$brief" .md)")
+                warn "Slice '${SLICE_IDS[$i]}' review evidence could not be bound to the immutable verified refs."
                 break
             elif merge_verified_slice_into_integration "${SLICE_IDS[$i]}" "$branch" "$agent_cwd" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
                 mark_verified_slice "${SLICE_IDS[$i]}"
@@ -1868,6 +1989,12 @@ if $PARALLEL && [[ ${#PIDS[@]} -gt 0 ]]; then
         if ! verify_committed_slice_output "${PID_BRIEF_FILES[$idx]}" "${PID_BRIEF_INDEXES[$idx]}" "${PID_SLICE_IDS[$idx]}" "$branch" "${PID_AGENT_CWDS[$idx]}"; then
             FAILED+=("${PID_BRIEFS[$idx]}")
             warn "Parallel slice '${PID_SLICE_IDS[$idx]}' failed host verification; it was not merged or marked VERIFIED."
+        elif is_review_gated_slice "${PID_BRIEF_FILES[$idx]}"; then
+            if emit_review_pending_evidence "${PID_BRIEF_FILES[$idx]}" "${PID_SLICE_IDS[$idx]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
+                info "Slice '${PID_SLICE_IDS[$idx]}' is REVIEW_PENDING; it was not locally promoted or marked VERIFIED."
+            else
+                FAILED+=("${PID_BRIEFS[$idx]}")
+            fi
         elif merge_verified_slice_into_integration "${PID_SLICE_IDS[$idx]}" "$branch" "${PID_AGENT_CWDS[$idx]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
             mark_verified_slice "${PID_SLICE_IDS[$idx]}"
         else
@@ -1931,9 +2058,23 @@ fi
 
 echo "📌 Next steps:"
 echo "  1. Review agent logs in $LOG_DIR/"
-echo "  2. Merge verified slice branches into feature/<task>/integration"
-echo "  3. Rerun deferred dependent slices with --verified-slices after prerequisites are merged"
-echo "  4. Run integration check: ./scripts/check-integration.sh --integration-branch feature/<task>/integration"
+if [[ "$RUN_TOPOLOGY_KIND" == new ]]; then
+    echo "  2. Task branch: $RUN_TASK_BRANCH"
+    if [[ "$RUN_PROMOTION_MODE" == review_gated ]]; then
+        if [[ "$REVIEW_PENDING_COUNT" -gt 0 ]]; then
+            echo "  3. Pending slice review evidence awaits the configured adapter; do not promote or unlock dependent slices locally."
+        else
+            echo "  3. Resolve failed slice verification before attempting review-gated promotion."
+        fi
+    else
+        echo "  3. Rerun deferred dependent slices with --verified-slices after prerequisites are merged"
+        echo "  4. Run integration check: ./scripts/check-integration.sh --task-branch $RUN_TASK_BRANCH --briefs $BRIEFS_DIR"
+    fi
+else
+    echo "  2. Merge verified slice branches into feature/<task>/integration"
+    echo "  3. Rerun deferred dependent slices with --verified-slices after prerequisites are merged"
+    echo "  4. Run integration check: ./scripts/check-integration.sh --integration-branch feature/<task>/integration"
+fi
 
 if $PARALLEL && ! $CLEANUP_WORKTREES; then
     echo ""

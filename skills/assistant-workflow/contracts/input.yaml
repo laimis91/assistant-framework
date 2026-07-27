@@ -8,6 +8,16 @@ contract: input
 skill: assistant-workflow
 
 fields:
+  - name: slice_promotion_mode
+    type: enum
+    required: false
+    enum_values: [local, review_gated]
+    description: "Promotion policy for new multi-slice topology; review_gated emits portable review evidence rather than performing remote actions"
+    default: local
+    validation: "review_gated requires explicit task/slice topology and any remote-write authorization remains outside the core workflow"
+    on_missing: infer
+    infer_from: "Use local unless the approved task or configured adapter selects review_gated."
+
   - name: task_description
     type: string
     required: true

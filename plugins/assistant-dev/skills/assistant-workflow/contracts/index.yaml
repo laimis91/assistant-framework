@@ -23,6 +23,16 @@ load_sets:
         key: name
         names: [task_description, task_type, scope_hint, target_files, constraints, acceptance_criteria, plan_mode]
     budget_words: 4000
+  slice_review:
+    references:
+      - references/slice-review-topology.md
+    selectors:
+      - id: workflow-slice-review-mode
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [slice_promotion_mode]
+    budget_words: 2300
   current_phase:
     selectors:
       - id: workflow-current-phase-gate
@@ -53,7 +63,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [triage_result, completion_policy, phase_checkpoints, changed_files, debugging_result, test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, learning_controller, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
+        allowed_names: [triage_result, completion_policy, phase_checkpoints, changed_files, debugging_result, test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, learning_controller, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
     budget_words: 12000
 
 fallback:

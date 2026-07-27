@@ -206,6 +206,11 @@ gates:
         check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, verification_command, expected_success_signal, evidence_to_record, and deviation_rollback_rule"
         on_fail: "Rewrite the Decompose output into the strict slice schema before entering Plan"
 
+      - id: DC_SLICE_REVIEW_TOPOLOGY
+        check: "When slice_manifest has more than one item or slice_promotion_mode == review_gated, every generated slice packet contains complete topology metadata: target_branch, target_base_sha, task_branch, slice_branch, and promotion_mode"
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        on_fail: "Load references/slice-review-topology.md and add complete topology metadata before Build."
+
       - id: DC3
         check: "Slices are ordered by dependency — independent slices first and dependent slices after every depends_on prerequisite"
         on_fail: "Reorder slices so prerequisites come before dependents"
@@ -450,6 +455,16 @@ gates:
         check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
         condition: "size in [medium, large, mega]"
         on_fail: "This is a process violation — slices must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
+
+      - id: B_SLICE_REVIEW_PENDING
+        check: "For review_gated slices, local verification emits REVIEW_PENDING evidence with exact reviewed SHAs, must not mutate the task branch, and must not mark the slice VERIFIED or unlock dependent work."
+        condition: "slice_promotion_mode == review_gated"
+        on_fail: "Keep the slice pending and record exact local evidence; wait for adapter evidence."
+
+      - id: B_SLICE_REVIEW_PROMOTION
+        check: "A review-gated slice becomes VERIFIED only after provider evidence shows a passed gate for the exact reviewed SHAs, the reviewed head has ancestry in task_branch, and fresh verification succeeds. REVIEW_PENDING, REVIEW_REJECTED, and REVIEW_STALE remain non-completion states."
+        condition: "slice_promotion_mode == review_gated"
+        on_fail: "Treat changed refs as stale, obtain fresh provider evidence and fresh verification, and do not complete the slice early."
 
     guidance_assertions:
 

@@ -295,6 +295,11 @@ verification. In `separated_workers`, run Code Writer then Builder/Tester.
 Verify each acceptance criterion, record lane-matched slice ledger evidence,
 and mark the slice `VERIFIED` before advancing.
 
+For `promotion_mode=review_gated`, load `references/slice-review-topology.md`.
+After local verification, record `REVIEW_PENDING` evidence with exact SHAs; do
+not mutate the task branch, mark the slice VERIFIED, or unlock dependents until
+the portable adapter evidence and fresh verification gates are satisfied.
+
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
 `subagent_policy_state=not_required`, and

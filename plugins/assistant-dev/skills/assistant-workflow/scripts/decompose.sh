@@ -41,12 +41,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/slice-execution-metadata.sh"
+
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
 TASK=""
 INPUT=""
 BRIEFS_DIR="briefs"
-BASE_BRANCH="main"
+TARGET_BRANCH=""
+BASE_BRANCH_ALIAS=""
+PROMOTION_MODE="local"
 WORKTREES_DIR=".worktrees"
 DRY_RUN=false
 
@@ -63,7 +68,9 @@ Options:
   --task NAME          Task name (used for branch naming, e.g. "add-notifications")
   --input FILE         Path to JSON decomposition file with top-level slice_manifest
   --briefs DIR         Directory for brief files (default: briefs/)
-  --base BRANCH        Base branch to branch from (default: main)
+  --target-branch REF  Target branch for the umbrella task branch (default: current local branch)
+  --base BRANCH        Legacy alias for --target-branch
+  --promotion-mode MODE  local or review_gated (default: local)
   --worktrees-dir DIR  Directory for git worktrees (default: .worktrees/)
   --dry-run            Show what would be done without doing it
   -h, --help           Show this help
@@ -80,7 +87,9 @@ while [[ $# -gt 0 ]]; do
         --task)            [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; TASK="$2"; shift 2 ;;
         --input)           [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; INPUT="$2"; shift 2 ;;
         --briefs)          [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; BRIEFS_DIR="$2"; shift 2 ;;
-        --base)            [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; BASE_BRANCH="$2"; shift 2 ;;
+        --target-branch)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; TARGET_BRANCH="$2"; shift 2 ;;
+        --base)            [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; BASE_BRANCH_ALIAS="$2"; shift 2 ;;
+        --promotion-mode)  [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PROMOTION_MODE="$2"; shift 2 ;;
         --worktrees-dir)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; WORKTREES_DIR="$2"; shift 2 ;;
         --dry-run)         DRY_RUN=true; shift ;;
         -h|--help)         usage ;;
@@ -88,6 +97,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -n "$TARGET_BRANCH" && -n "$BASE_BRANCH_ALIAS" && "$TARGET_BRANCH" != "$BASE_BRANCH_ALIAS" ]]; then
+    echo "--target-branch and --base must name the same ref when both are supplied." >&2
+    exit 1
+fi
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 fail() { echo "❌ $1" >&2; exit 1; }
@@ -98,9 +111,25 @@ dry()  { echo "🔸 [dry-run] $1"; }
 command -v git >/dev/null 2>&1 || fail "git is required but not installed."
 command -v jq  >/dev/null 2>&1 || fail "jq is required but not installed. Install: brew install jq / apt install jq"
 
+if [[ -z "$TARGET_BRANCH" && -z "$BASE_BRANCH_ALIAS" ]]; then
+    TARGET_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    [[ -n "$TARGET_BRANCH" ]] \
+        || fail "Cannot infer a target branch from detached, unborn, or non-repository HEAD. Supply --target-branch REF before decomposition."
+    git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH" \
+        || fail "Cannot infer a current local target branch from HEAD. Supply --target-branch REF before decomposition."
+else
+    TARGET_BRANCH="${TARGET_BRANCH:-$BASE_BRANCH_ALIAS}"
+fi
+
 [[ -n "$TASK" ]]  || fail "Missing --task. Provide a task name (e.g. --task add-notifications)."
 [[ -n "$INPUT" ]] || fail "Missing --input. Provide path to decomposition JSON file."
 [[ -f "$INPUT" ]] || fail "Input file not found: $INPUT"
+slice_metadata_is_safe_task "$TASK" \
+    || fail "Invalid --task '$TASK'. Task names must use lowercase letters, digits, and hyphens; start and end with a letter or digit."
+slice_metadata_is_safe_branch "$TARGET_BRANCH" \
+    || fail "Invalid --target-branch '$TARGET_BRANCH'. Target must be a safe git branch ref."
+[[ "$PROMOTION_MODE" == local || "$PROMOTION_MODE" == review_gated ]] \
+    || fail "Invalid --promotion-mode '$PROMOTION_MODE'. Use local or review_gated."
 
 format_lines_csv() {
     awk 'NF { printf "%s%s", sep, $0; sep=", " } END { printf "\n" }'
@@ -199,6 +228,17 @@ fi
 if ! git diff --quiet HEAD; then
     fail "Working tree has uncommitted changes. Commit or stash first."
 fi
+git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH" \
+    || fail "Target branch not found: $TARGET_BRANCH"
+TARGET_BASE_SHA=$(git rev-parse "${TARGET_BRANCH}^{commit}") \
+    || fail "Could not snapshot target branch commit: $TARGET_BRANCH"
+slice_metadata_is_canonical_commit_sha "$TARGET_BASE_SHA" \
+    || fail "Target branch '$TARGET_BRANCH' did not resolve to a canonical commit SHA."
+
+LEGACY_CHILD_REFS=$(git for-each-ref --format='%(refname:short)' "refs/heads/feature/${TASK}/" 2>/dev/null || true)
+if [[ -n "$LEGACY_CHILD_REFS" ]]; then
+    fail "Legacy child-ref collision: feature/${TASK} cannot be created while legacy child ref(s) exist: $(format_lines_csv <<< "$LEGACY_CHILD_REFS"). Rename or remove those legacy branches before decomposition."
+fi
 
 # ── Read decomposition ────────────────────────────────────────────────────────
 
@@ -224,27 +264,84 @@ info "Description: $DESCRIPTION"
 info "Slices: $SLICE_COUNT"
 echo ""
 
-# ── Step 1: Create integration branch ────────────────────────────────────────
+# ── Step 1: Create umbrella task branch ─────────────────────────────────────
 
-TASK_BRANCH_PREFIX="feature/${TASK}"
-INTEGRATION_BRANCH="${TASK_BRANCH_PREFIX}/integration"
-SLICE_BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-"
+# Legacy compatibility note: INTEGRATION_BRANCH="${TASK_BRANCH_PREFIX}/integration"
+# and SLICE_BRANCH_PREFIX="${TASK_BRANCH_PREFIX}/slice-" are intentionally not
+# emitted by this decomposer; old briefs remain accepted by the runner.
 
-if ! $DRY_RUN && git show-ref --verify --quiet "refs/heads/$TASK_BRANCH_PREFIX"; then
-    fail "Existing branch '$TASK_BRANCH_PREFIX' conflicts with grouped decomposition branches '$INTEGRATION_BRANCH' and '${SLICE_BRANCH_PREFIX}<slice_id>'. Rename or delete the old parent branch first."
+TASK_BRANCH="feature/${TASK}"
+SLICE_BRANCH_PREFIX="slice/${TASK}/"
+
+brief_is_complete_generated_packet() {
+    local brief_file="$1"
+    local required_scalar
+    for required_scalar in slice_id slice_name observable_increment deliverable_type expected_success_signal deviation_rollback_rule; do
+        [[ -n "$(slice_metadata_strict_scalar "$brief_file" "$required_scalar")" ]] || return 1
+    done
+    awk '
+        /^### Supporting context/ { exit }
+        /^- (files_to_create|files_to_modify|files_to_test|enabling_changes_included|depends_on|acceptance_criteria|verification_command|evidence_to_record):[[:space:]]*$/ {
+            if (!required[$0]) { required[$0] = 1; required_count++ }
+            active = $0
+            next
+        }
+        active != "" && /^  - [^[:space:]]/ { populated[active] = 1; next }
+        /^- [a-z_]+:/ { active = "" }
+        END {
+            for (field in required) if (!populated[field]) exit 1
+            exit (required_count == 8) ? 0 : 1
+        }
+    ' "$brief_file"
+}
+
+if git show-ref --verify --quiet "refs/heads/$TASK_BRANCH"; then
+    REUSED_TARGET_BASE_SHA=""
+    REUSED_BRIEF_COUNT=0
+    while IFS= read -r existing_brief; do
+        REUSED_BRIEF_COUNT=$((REUSED_BRIEF_COUNT + 1))
+        existing_slice_id=$(slice_metadata_strict_scalar "$existing_brief" slice_id)
+        existing_target=$(slice_metadata_strict_scalar "$existing_brief" target_branch)
+        existing_target_base=$(slice_metadata_strict_scalar "$existing_brief" target_base_sha)
+        if [[ "$existing_target" != "$TARGET_BRANCH" ]]; then
+            fail "Existing task branch '$TASK_BRANCH' has a divergent target binding in '$existing_brief': target_branch '$existing_target' does not match requested '$TARGET_BRANCH'."
+        fi
+        if [[ -z "$existing_slice_id" ]] || ! brief_is_complete_generated_packet "$existing_brief" || ! slice_metadata_resolve "$existing_brief" "$existing_slice_id"; then
+            fail "Existing task branch '$TASK_BRANCH' can be reused only with complete generated briefs that prove its immutable target_base_sha binding."
+        fi
+        if $SLICE_METADATA_LEGACY || [[ "$SLICE_METADATA_TASK_BRANCH" != "$TASK_BRANCH" || "$SLICE_METADATA_TARGET_BRANCH" != "$TARGET_BRANCH" ]]; then
+            fail "Existing task branch '$TASK_BRANCH' has incomplete or divergent new-topology brief binding: $existing_brief"
+        fi
+        if [[ -z "$REUSED_TARGET_BASE_SHA" ]]; then
+            REUSED_TARGET_BASE_SHA="$SLICE_METADATA_TARGET_BASE_SHA"
+        elif [[ "$REUSED_TARGET_BASE_SHA" != "$SLICE_METADATA_TARGET_BASE_SHA" ]]; then
+            fail "Existing task branch '$TASK_BRANCH' has briefs with divergent immutable target_base_sha bindings."
+        fi
+        [[ "$existing_target_base" == "$REUSED_TARGET_BASE_SHA" ]] || fail "Existing task branch '$TASK_BRANCH' target_base_sha binding is inconsistent in '$existing_brief'."
+    done < <(find "$BRIEFS_DIR" -maxdepth 1 -name 'slice-*.md' -type f | sort 2>/dev/null)
+    [[ "$REUSED_BRIEF_COUNT" -gt 0 ]] || fail "Existing task branch '$TASK_BRANCH' can be reused only with prior complete generated briefs in '$BRIEFS_DIR' that prove its immutable target_base_sha binding."
+    git cat-file -e "${REUSED_TARGET_BASE_SHA}^{commit}" \
+        && git merge-base --is-ancestor "$REUSED_TARGET_BASE_SHA" "$TARGET_BRANCH" \
+        && git merge-base --is-ancestor "$REUSED_TARGET_BASE_SHA" "$TASK_BRANCH" \
+        || fail "Existing task branch '$TASK_BRANCH' immutable target_base_sha '$REUSED_TARGET_BASE_SHA' is no longer an ancestor of both target and task branches."
+    TARGET_BASE_SHA="$REUSED_TARGET_BASE_SHA"
 fi
 
 if $DRY_RUN; then
-    dry "git checkout $BASE_BRANCH"
-    dry "git checkout -b $INTEGRATION_BRANCH"
-else
-    git checkout "$BASE_BRANCH" --quiet
-    if git show-ref --verify --quiet "refs/heads/$INTEGRATION_BRANCH"; then
-        info "Integration branch '$INTEGRATION_BRANCH' already exists, checking out."
-        git checkout "$INTEGRATION_BRANCH" --quiet
+    if git show-ref --verify --quiet "refs/heads/$TASK_BRANCH"; then
+        dry "git checkout $TASK_BRANCH (reuse proven target binding at $TARGET_BASE_SHA)"
     else
-        git checkout -b "$INTEGRATION_BRANCH" --quiet
-        ok "Created integration branch: $INTEGRATION_BRANCH"
+        dry "git checkout $TARGET_BRANCH"
+        dry "git checkout -b $TASK_BRANCH $TARGET_BASE_SHA"
+    fi
+else
+    if git show-ref --verify --quiet "refs/heads/$TASK_BRANCH"; then
+        info "Task branch '$TASK_BRANCH' already exists, checking out."
+        git checkout "$TASK_BRANCH" --quiet
+    else
+        git checkout "$TARGET_BRANCH" --quiet
+        git checkout -b "$TASK_BRANCH" "$TARGET_BASE_SHA" --quiet
+        ok "Created task branch: $TASK_BRANCH"
     fi
 fi
 
@@ -268,12 +365,12 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
     fi
 
     if $DRY_RUN; then
-        dry "git branch $BRANCH (from $INTEGRATION_BRANCH)"
+        dry "git branch $BRANCH (from $TASK_BRANCH)"
     else
         if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
             info "Branch '$BRANCH' already exists, skipping."
         else
-            git branch "$BRANCH" "$INTEGRATION_BRANCH"
+            git branch "$BRANCH" "$TASK_BRANCH"
             ok "Created branch: $BRANCH"
         fi
     fi
@@ -367,7 +464,7 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
 
     if [[ "$DEPENDS_CSV" != "none" ]]; then
         ORDER_NOTE="Dependency order comes from depends_on: $DEPENDS_CSV must be VERIFIED before this slice starts."
-        BRANCH_WORKTREE_NOTE="This branch and worktree are created by run-agents.sh at launch time from the current integration branch after dependencies are VERIFIED."
+        BRANCH_WORKTREE_NOTE="This branch and worktree are created by run-agents.sh at launch time from the current task branch after dependencies are VERIFIED."
         WORKTREE_DISPLAY="${WORKTREE_PATH} (created at launch after dependencies are VERIFIED)"
     else
         ORDER_NOTE="No slice dependencies; this slice can run in parallel with other dependency-free slices."
@@ -383,6 +480,11 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
 ### Strict slice packet (execution contract)
 - slice_id: ${SLICE_ID}
 - slice_name: ${SLICE_NAME}
+- target_branch: ${TARGET_BRANCH}
+- target_base_sha: ${TARGET_BASE_SHA}
+- task_branch: ${TASK_BRANCH}
+- slice_branch: ${BRANCH}
+- promotion_mode: ${PROMOTION_MODE}
 - observable_increment: ${OBSERVABLE_INCREMENT}
 - deliverable_type: ${DELIVERABLE_TYPE}
 - files_to_create:
@@ -461,7 +563,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📋 Decomposition complete"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Integration branch: $INTEGRATION_BRANCH"
+echo "Task branch: $TASK_BRANCH"
 echo ""
 echo "Slices:"
 for i in $(seq 0 $((SLICE_COUNT - 1))); do
@@ -472,7 +574,7 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
     if [[ "$DEPENDS" == "none" ]]; then
         echo "    └── worktree: ${WORKTREES_DIR}/${SLICE_ID}/"
     else
-        echo "    └── branch/worktree deferred until dependencies are VERIFIED; run-agents.sh creates them from integration at launch."
+        echo "    └── branch/worktree deferred until dependencies are VERIFIED; run-agents.sh creates them from the task branch at launch."
     fi
 done
 echo ""
@@ -514,7 +616,7 @@ for i in $(seq 0 $((SLICE_COUNT - 1))); do
 done
 echo ""
 echo "3. After all slices complete:"
-echo "   ./scripts/check-integration.sh --integration-branch $INTEGRATION_BRANCH"
+echo "   ./scripts/check-integration.sh --task-branch $TASK_BRANCH --briefs $BRIEFS_DIR"
 echo ""
 echo "4. Clean up worktrees when done:"
 echo "   git worktree list"

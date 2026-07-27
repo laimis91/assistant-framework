@@ -141,6 +141,12 @@ Only tracked `assistant-*` directories are first-class release skills.
 ### assistant-workflow
 Core development pipeline: idea-to-action decomposition, discover, proportional planning, build and verification, independent review, bounded repair, and evidence-backed documentation.
 
+For multi-slice work, Assistant Workflow infers the repository's current local
+target branch unless explicitly supplied, then uses a portable task branch
+(`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`).
+`review_gated` slices emit SHA-bound `REVIEW_PENDING` evidence; remote review
+and policy mechanics remain in the configured provider adapter.
+
 The architecture is an adaptive loop implemented through native skill routing;
 there is no installed lifecycle engine. Its conceptual states map to the public
 workflow like this:

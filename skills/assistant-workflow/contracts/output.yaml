@@ -24,13 +24,13 @@ completion_tiers:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, learning_controller, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -1401,6 +1401,32 @@ artifacts:
         required: true
         description: "Unique branch/path-safe slice identifier reused for branches, worktrees, brief filenames, and depends_on references"
         validation: "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators"
+      - name: target_branch
+        type: string
+        required: conditional
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        validation: "Repository target ref for the umbrella task branch."
+      - name: target_base_sha
+        type: string
+        required: conditional
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        validation: "Canonical 40- or 64-character lowercase immutable target commit SHA; ancestor of target_branch and task_branch."
+      - name: task_branch
+        type: string
+        required: conditional
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        validation: "Uses feature/<task> and shares the immutable target_base_sha with every slice."
+      - name: slice_branch
+        type: string
+        required: conditional
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        validation: "Uses slice/<task>/<slice_id>."
+      - name: promotion_mode
+        type: enum
+        required: conditional
+        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
+        enum_values: [local, review_gated]
+        validation: "All slices in a task share this promotion mode."
       - name: name
         type: string
         required: true
@@ -1464,8 +1490,10 @@ artifacts:
       Contains one entry per slice from the manifest, in order, with task
       packet id, RED status when TDD was active, implementation status,
       verification command/result, acceptance criteria checked, self-check
-      result, and final status. Every slice final status must be VERIFIED before
-      WORKFLOW COMPLETE.
+      result, and final status. REVIEW_PENDING and BLOCKED are active
+      non-completion states; Every slice final status must be VERIFIED before
+      WORKFLOW COMPLETE. Detailed review lifecycle states belong in
+      slice_review_evidence.
     on_fail: "Run and record per-slice verification evidence until every slice final_status is VERIFIED"
     object_fields:
       - name: slice_id
@@ -1500,7 +1528,72 @@ artifacts:
       - name: final_status
         type: enum
         required: true
-        enum_values: [VERIFIED]
+        enum_values: [REVIEW_PENDING, BLOCKED, VERIFIED]
+
+  - name: slice_review_evidence
+    type: object[]
+    required: conditional
+    condition: "slice_promotion_mode == review_gated"
+    validation: "Provider-neutral evidence binds a review request and gate outcome to the exact locally verified SHA pair. REVIEW_PENDING never satisfies VERIFIED."
+    object_fields:
+      - name: schema_version
+        type: string
+        required: true
+      - name: slice_id
+        type: string
+        required: true
+      - name: state
+        type: enum
+        required: true
+        enum_values: [REVIEW_PENDING, REVIEW_APPROVED, REVIEW_REJECTED, REVIEW_STALE]
+      - name: promotion_mode
+        type: enum
+        required: true
+        enum_values: [review_gated]
+        validation: "Review evidence is valid only for review_gated promotion."
+      - name: target_branch
+        type: string
+        required: true
+      - name: target_base_sha
+        type: string
+        required: true
+        validation: "Canonical 40- or 64-character lowercase commit SHA, immutable for the task and an ancestor of both current target_branch and task_branch."
+      - name: task_branch
+        type: string
+        required: true
+      - name: slice_branch
+        type: string
+        required: true
+      - name: review_base_ref
+        type: string
+        required: true
+      - name: review_head_ref
+        type: string
+        required: true
+      - name: verified_base_sha
+        type: string
+        required: true
+      - name: verified_head_sha
+        type: string
+        required: true
+      - name: verification_evidence_ref
+        type: string
+        required: true
+        validation: "Nonblank, non-whitespace-only local verifier evidence reference."
+      - name: review_request_ref
+        type: string
+        required: conditional
+        condition: "state in [REVIEW_APPROVED, REVIEW_REJECTED, REVIEW_STALE]"
+        validation: "Nonblank, non-whitespace-only opaque adapter reference when a review outcome has been recorded; absent from core REVIEW_PENDING evidence."
+      - name: provider_gate_state
+        type: enum
+        required: true
+        enum_values: [not_evaluated, passed, failed]
+      - name: provider_gate_evidence_ref
+        type: string
+        required: conditional
+        condition: "provider_gate_state in [passed, failed]"
+        validation: "Required nonblank, non-whitespace-only provider-neutral gate evidence when provider_gate_state is passed or failed; not required while not_evaluated."
 
   - name: metrics_entry
     type: jsonl_line

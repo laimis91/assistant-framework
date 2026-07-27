@@ -7,28 +7,31 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 - Aim for one or more smallest iterable slice packets; use a single slice when correct and record the rationale
 - Do not split by layer, module, folder, broad feature bucket, setup step, or broad component unless that split is itself a verified deliverable artifact slice
 - Contract-only work is valid only when it is the verified deliverable artifact slice
-- Dependent slice branches start from the integration branch after prerequisite slices are verified
+- Dependent slice branches start from the task branch after prerequisite slices are VERIFIED
 - UI slices include a Design step, backend slices skip it
 - Slice packets add code comments but do NOT update README, CHANGELOG, or architecture docs
 
 ## Git branching strategy
 
 ```
-main
- └── feature/[mega-task-name]/integration        ← integration branch
-      ├── feature/[mega-task]/slice-[slice_id]   ← verified deliverable slice
-      ├── feature/[mega-task]/slice-[slice_id]
-      ├── feature/[mega-task]/slice-[slice_id]
-      └── feature/[mega-task]/slice-[slice_id]
+<target-branch>
+ └── feature/[mega-task-name]                    ← task branch
+      ├── slice/[mega-task]/[slice-id]           ← reviewed slice head
+      ├── slice/[mega-task]/[slice-id]
+      └── slice/[mega-task]/[slice-id]
 ```
 
 Workflow:
-1. Create integration branch from main
-2. Build the first verified deliverable slice, merge into integration branch
-3. Each dependent slice branch starts from integration branch after its prerequisites are verified
-4. Slices execute independently on their branches
-5. Integration: merge all into integration branch, resolve conflicts
-6. Final merge: integration branch → main
+1. Snapshot the target branch commit as immutable `target_base_sha`, then create the task branch from that commit
+2. Build independently verifiable slice heads from the task branch
+3. Each dependent slice starts only after its prerequisite is VERIFIED
+4. `review_gated` emits REVIEW_PENDING evidence and waits for configured adapter evidence
+5. Local promotion or reviewed integration updates the task branch
+6. Final task branch review targets the repository-specific <target-branch>
+
+Legacy compatibility: old `feature/<task>/integration` and
+`feature/<task>/slice-<slice-id>` briefs remain runnable only as a complete
+legacy set; do not generate or mix that layout with the new topology.
 
 ## Brief template
 
@@ -49,6 +52,11 @@ This packet is the executable contract for the slice. Supporting context below c
 
 - slice_id: [approved slice id]
 - slice_name: [approved slice name]
+- target_branch: [target branch]
+- target_base_sha: [immutable 40- or 64-character lowercase target commit SHA]
+- task_branch: feature/[task]
+- slice_branch: slice/[task]/[slice_id]
+- promotion_mode: local | review_gated
 - observable_increment: [what becomes visible/verifiable after this slice]
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - files_to_create:
