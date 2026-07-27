@@ -233,7 +233,7 @@ for file in \
         "slice_id values are unique branch/path-safe" \
         "depends_on entries reference only declared slice_id values" \
         "without self dependencies or circular dependencies" \
-        "Unique branch/path-safe slice identifier reused for branches, worktrees, brief filenames, and depends_on references" \
+        "Stable descriptive outcome-oriented slice identifier that is branch/path-safe and reused for branches, worktrees, brief filenames, and depends_on references" \
         "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators" \
         "Every dependency is the slice_id of another declared slice in this manifest; no self dependency or circular dependency is allowed; use an empty array when there are no dependencies"; do
         if ! grep -Fq -- "$term" "$file"; then
@@ -245,6 +245,53 @@ if [[ "${#missing_safe_slice_contract_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "output.yaml missing safe slice_id/dependency contract terms: ${missing_safe_slice_contract_terms[*]}"
+fi
+
+test_start "workflow slice identities are descriptive while ordering stays display-only"
+missing_descriptive_slice_terms=()
+for skill_root in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"; do
+    output_contract="$skill_root/contracts/output.yaml"
+    phase_gates="$skill_root/contracts/phase-gates.yaml"
+    plan_template="$skill_root/references/plan-template.md"
+    journal_template="$skill_root/references/task-journal-template.md"
+    topology_reference="$skill_root/references/slice-review-topology.md"
+
+    for term in \
+        "Stable descriptive outcome-oriented slice identifier" \
+        "Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"; do
+        if ! grep -Fq -- "$term" "$output_contract"; then
+            missing_descriptive_slice_terms+=("${output_contract#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+    for term in \
+        "- id: DC_SLICE_IDENTITY" \
+        "Every slice_id names its observable increment or verified deliverable" \
+        "- id: DC_SLICE_SEQUENCE_LABEL" \
+        "No slice_id is an ordinal-only or generic sequence label"; do
+        if ! grep -Fq -- "$term" "$phase_gates"; then
+            missing_descriptive_slice_terms+=("${phase_gates#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+    if ! grep -Fq -- "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" "$plan_template"; then
+        missing_descriptive_slice_terms+=("${plan_template#$FRAMEWORK_DIR/}: descriptive slice_id template")
+    fi
+    if ! grep -Fq -- "| 1. [slice_id] [name] |" "$journal_template" \
+        || grep -Fq -- "| S1: [slice_id] [name] |" "$journal_template"; then
+        missing_descriptive_slice_terms+=("${journal_template#$FRAMEWORK_DIR/}: ordinal must be display-only and separate from slice_id")
+    fi
+    if ! grep -Fq -- "\`<slice-id>\` is a stable descriptive outcome or deliverable slug; sequence numbers belong to manifest order and display labels, not branch identity" "$topology_reference"; then
+        missing_descriptive_slice_terms+=("${topology_reference#$FRAMEWORK_DIR/}: descriptive branch identity guidance")
+    fi
+done
+if ! grep -Fq -- "descriptive outcome-oriented slice identifiers" "$FRAMEWORK_DIR/README.md"; then
+    missing_descriptive_slice_terms+=("README.md: descriptive outcome-oriented slice identifier guidance")
+fi
+if [[ "${#missing_descriptive_slice_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow descriptive slice identity contract is incomplete: ${missing_descriptive_slice_terms[*]}"
 fi
 
 test_start "workflow decompose creates task and collision-safe slice refs with complete topology metadata"

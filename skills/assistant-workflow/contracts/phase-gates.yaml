@@ -206,6 +206,14 @@ gates:
         check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, verification_command, expected_success_signal, evidence_to_record, and deviation_rollback_rule"
         on_fail: "Rewrite the Decompose output into the strict slice schema before entering Plan"
 
+      - id: DC_SLICE_IDENTITY
+        check: "Every slice_id names its observable increment or verified deliverable"
+        on_fail: "Rename generic slice IDs to stable descriptive outcome or deliverable slugs and update every manifest dependency and packet reference before branch creation"
+
+      - id: DC_SLICE_SEQUENCE_LABEL
+        check: "No slice_id is an ordinal-only or generic sequence label"
+        on_fail: "Replace ordinal-only slice IDs with descriptive slugs before branch creation and keep sequencing in manifest order and depends_on"
+
       - id: DC_SLICE_REVIEW_TOPOLOGY
         check: "When slice_manifest has more than one item or slice_promotion_mode == review_gated, every generated slice packet contains complete topology metadata: target_branch, target_base_sha, task_branch, slice_branch, and promotion_mode"
         condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"

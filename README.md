@@ -143,7 +143,8 @@ Core development pipeline: idea-to-action decomposition, discover, proportional 
 
 For multi-slice work, Assistant Workflow infers the repository's current local
 target branch unless explicitly supplied, then uses a portable task branch
-(`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`).
+(`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`)
+built from descriptive outcome-oriented slice identifiers rather than ordinal-only labels.
 `review_gated` slices emit SHA-bound `REVIEW_PENDING` evidence; remote review
 and policy mechanics remain in the configured provider adapter.
 

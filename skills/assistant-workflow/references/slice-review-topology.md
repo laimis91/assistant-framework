@@ -13,6 +13,8 @@ target_base_sha: <immutable target commit>
     └── slice_branch: slice/<task>/<slice-id>
 ```
 
+`<slice-id>` is a stable descriptive outcome or deliverable slug; sequence numbers belong to manifest order and display labels, not branch identity.
+
 Every new strict slice packet carries all five fields together:
 
 - `target_branch`: the repository-specific umbrella task target ref; it is not a `main` invariant.

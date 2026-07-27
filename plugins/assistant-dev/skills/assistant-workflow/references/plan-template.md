@@ -91,7 +91,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 
 [paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
 
-- slice_id:
+- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]
 - name:
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor

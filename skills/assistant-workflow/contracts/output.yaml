@@ -1399,8 +1399,9 @@ artifacts:
       - name: slice_id
         type: string
         required: true
-        description: "Unique branch/path-safe slice identifier reused for branches, worktrees, brief filenames, and depends_on references"
-        validation: "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators"
+        description: "Stable descriptive outcome-oriented slice identifier that is branch/path-safe and reused for branches, worktrees, brief filenames, and depends_on references"
+        validation: "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators. Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"
+        examples: [notification-validation, email-delivery]
       - name: target_branch
         type: string
         required: conditional
