@@ -1455,7 +1455,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-Contains $agents 'Keep orchestration proportional' 'Codex guidance is missing the proportionality boundary'
             Assert-Contains $agents '## Boundaries' 'Codex guidance is missing the compact boundaries section'
             Assert-Contains $agents 'Get plan approval before medium+ or risky edits.' 'Codex guidance is missing the plan approval boundary'
-            Assert-Contains $agents 'Do not spawn subagents without explicit authorization; continue safe non-spawn work while authorization is unresolved.' 'Codex guidance is missing the delegation boundary'
+            Assert-Contains $agents 'Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.' 'Codex guidance is missing the delegation boundary'
             Assert-Contains $agents 'Preserve user-authored files and existing dirty work.' 'Codex guidance is missing the user-work preservation boundary'
             Assert-NotContains $agents 'The orchestrator owns framework state files' 'Codex guidance duplicated workflow state mechanics'
             Assert-NotContains $agents 'use direct fallback only after' 'Codex guidance duplicated subagent fallback mechanics'

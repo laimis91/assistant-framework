@@ -17,16 +17,20 @@ triggers:
 
 Canonical input, output, phase-gate, and handoff schemas remain authoritative at their enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry.
 
-- `entry`: `contracts/input.yaml` at review entry selects `review_scope`, `review_material_snapshot`, `scope_size`, `mode`, `change_kind`, `semantic_contract_review_required`, `behavioral_contract_review_required`, and `agentic_loop_safety_review_required`.
+- `entry`: load `contracts/input.yaml` review-entry fields selected by `review-entry-fields` in `contracts/index.yaml`.
 - `current_round`: load the active round step from `contracts/phase-gates.yaml` at each transition.
 - `selected_handoff`: select the compact dispatch pointer from `contracts/handoffs.yaml` before Reviewer or QAEvaluator dispatch.
 - `reviewer_context`: resolve the fresh bounded Reviewer bundle only when a review pass begins.
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v2. Every Reviewer return and
+Migration note: assistant-review contracts are v3. Applicable direct-user,
+`AGENTS.md`, and active-skill instructions trigger required Reviewer and QA
+roles; record their provenance and covered work in `subagent_trigger_scope`
+without a second permission question. Explicit opt-out, real unavailability,
+and exact active policy blocks retain direct fallback. Every Reviewer return and
 final summary now requires a non-empty `reviewed_scope` string array so workflow
-v3 can consume the producer packet without deriving or guessing its boundary.
+v4 can consume the producer packet without deriving or guessing its boundary.
 
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 

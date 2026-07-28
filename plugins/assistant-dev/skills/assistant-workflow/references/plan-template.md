@@ -140,9 +140,9 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Plan mode: [approval_required]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
-- Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+- Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
-- Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
+- Subagent trigger scope: [direct user | applicable AGENTS.md | active skill; covered roles/phases/actions, or none]
 - Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; required only for policy_disallowed]
 - Search mode: [none | lightweight | candidate_search]
 
@@ -269,7 +269,7 @@ Start with the Medium template, then add the sections below.
 - Runbook updates: [new on-call procedures needed?]
 
 ## Large/Mega addenda
-- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent authorization scope`, and `Search mode` as in Medium.
+- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent trigger scope`, and `Search mode` as in Medium.
 - Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
 - Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
 - Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.

@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -84,8 +84,8 @@ gates:
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
       - id: T9
-        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized before any phase that may spawn subagents; conditional policy_blocking_source is also initialized when policy_disallowed. Development/code-work with required roles and no explicit delegation approval or denial starts as authorization_required unless the current user prompt explicitly authorized subagents. Plan approval is not delegation approval. policy_disallowed requires a non-empty exact active blocking rule that confirms no applicable user, AGENTS, or skill exception; a conditional no-spawn rule does not make policy_disallowed when the active skill requires subagents."
-        on_fail: "Set subagent_policy_state=authorization_required and ask once for the needed delegation scope before continuing phases that require subagents. Set delegation_authorized only after explicit user approval or explicit user-requested subagents. Use direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source."
+        check: "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized before any phase that may spawn subagents; conditional policy_blocking_source is also initialized when policy_disallowed. Required roles covered by a direct user, applicable AGENTS.md, or active skill instruction use delegation_triggered and dispatch without a separate permission question. policy_disallowed requires a non-empty exact active blocking rule that confirms no applicable trigger exception."
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
 
       - id: T10
         check: "candidate_scope_scan is populated from a quick read-only scan before finalizing Triage, with likely touched paths, symbols/search terms checked, adjacent surfaces, confidence, and unknowns"
@@ -162,9 +162,9 @@ gates:
         check: "constraints list is captured (may be empty, but must be explicitly set)"
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
-      - id: D_SUBAGENT_AUTH
-        check: "If subagent_policy_state == authorization_required: explicit user authorization is obtained before any phase that requires subagents continues; if the user denies, subagent_execution_mode is set to direct_fallback with authorization_denied evidence. policy_disallowed requires policy_blocking_source; do not use it when a conditional policy leaves an active skill-required delegation exception."
-        on_fail: "Ask once for the needed delegation scope and wait. Do not continue Discovery/Decompose/Plan/Build/Review responsibilities that require subagents until the user approves or denies. If denied, record direct fallback evidence and continue without pretending delegation happened. Use policy_disallowed only with the exact blocking source and no applicable exception."
+      - id: D_SUBAGENT_TRIGGER
+        check: "Required roles covered by a direct user, applicable AGENTS.md, or active skill instruction use subagent_policy_state=delegation_triggered, inferred subagent_trigger_scope, and delegated dispatch without a separate permission question. Explicit opt-out selects direct_fallback with delegation_opted_out evidence. policy_disallowed requires policy_blocking_source."
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
 
       - id: D8
         check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"
@@ -673,10 +673,10 @@ invariants:
     scope: all_phases
     on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"
 
-  - id: INV_SUBAGENT_AUTHORIZATION_STATE
-    check: "When required roles lack a delegation decision, subagent_policy_state remains authorization_required and the workflow asks once before any role-dependent phase continues. delegated requires delegation_authorized. direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source."
+  - id: INV_SUBAGENT_TRIGGER_STATE
+    check: "When required roles are covered by a direct user, applicable AGENTS.md, or active skill instruction, subagent_policy_state=delegation_triggered and delegated dispatch proceeds without a separate permission question. direct_fallback only after delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source."
     scope: all_phases
-    on_fail: "Ask once for delegation authorization and wait. Do not select delegated or direct_fallback until its required authorization, failure, or policy evidence exists."
+    on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
 
   - id: INV_PIVOT_RESTART_REAPPROVAL
     check: "Any pivot_restart_decision that changes approved scope, files, behavior, risk, verification, or acceptance criteria has reapproval_required=true and records approval before Build or Review continues"

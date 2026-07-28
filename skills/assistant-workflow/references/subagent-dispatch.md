@@ -1,6 +1,6 @@
 # Subagent Dispatch — Roles and Rules
 
-Use specialized agents when the active tool policy and user authorization allow delegation. Each role has constrained access: code-reviewer, qa-evaluator, and reviewer cannot edit files. Code Writer may act as a bounded edit/test executor when that lane is selected. When subagents are unavailable, denied, or policy-disallowed, keep the same selected-lane responsibilities as direct fallback evidence instead of pretending delegation happened.
+Use specialized agents when a direct user request or applicable `AGENTS.md` or active-skill instruction triggers delegation. Each role has constrained access: code-reviewer, qa-evaluator, and reviewer cannot edit files. Code Writer may act as a bounded edit/test executor when that lane is selected. When subagents are unavailable, explicitly opted out, or policy-disallowed, keep the same selected-lane responsibilities as direct fallback evidence instead of pretending delegation happened. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
 
 For full role prompts, read `references/subagent-roles.md`.
 
@@ -10,40 +10,37 @@ Before spawning any subagent, resolve:
 
 | Field | Values | Meaning |
 |---|---|---|
-| `subagent_policy_state` | `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, `policy_disallowed` | Whether spawning subagents is allowed for this task and adapter |
+| `subagent_policy_state` | `not_required`, `delegation_triggered`, `delegation_opted_out`, `subagents_unavailable`, `policy_disallowed` | Whether an applicable instruction triggers delegation or requires evidenced fallback |
 | `subagent_execution_mode` | `delegated`, `direct_fallback`, `not_applicable` | Whether work is executed by subagents, by direct fallback with equivalent evidence, or without any subagent role |
-| `subagent_authorization_scope` | list of roles/phases/actions | What the user explicitly authorized, when authorization was required |
+| `subagent_trigger_scope` | provenance plus roles/phases/actions | Direct user, applicable `AGENTS.md`, or active skill instruction that triggers delegation and its covered work |
 | `policy_blocking_source` | exact active rule, conditional | Required only for `policy_disallowed`; names the rule and confirms no applicable user, AGENTS, or skill exception |
 
 Light small low-risk localized work uses `subagent_policy_state=not_required`
 and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
 instead records direct implementation, relevant automated validation/tests, and
 a fresh self-review. For standard/strict development/code-work roles, Assistant
-Framework policy requires explicit user authorization before spawning subagents.
-Ask once for the required scope before the first spawn unless the current
-user prompt already explicitly authorizes subagents for this task. If authorization
-is granted, set `subagent_policy_state=delegation_authorized`, set
-`subagent_execution_mode=delegated`, and spawn the configured role agents. If
-authorization has not been granted or denied yet, keep
-`subagent_policy_state=authorization_required`, ask the authorization question,
-and wait; do not continue through phases that require subagents. For Codex,
+Framework policy treats a direct user request or applicable `AGENTS.md` or
+active-skill instruction as a delegation trigger. Infer `subagent_trigger_scope`
+with its provenance and covered roles/phases/actions, set
+`subagent_policy_state=delegation_triggered`, set
+`subagent_execution_mode=delegated`, and spawn the configured role agents
+without a separate permission question. An explicit user opt-out sets
+`subagent_policy_state=delegation_opted_out` and uses direct fallback. For Codex,
 current CLI/app releases support native subagent workflows by default; custom
 agents live in `~/.codex/agents/` or project `.codex/agents/` and are spawned by
 explicitly asking Codex to spawn an agent by name. Do not mark
 `subagents_unavailable` merely because the visible tool list lacks a tool named
 `Task`, `delegate`, or `subagent`; only use `subagents_unavailable` after a real
 spawn attempt fails or the adapter documentation/configuration proves no subagent
-mechanism exists. If the user declines or policy disallows spawning for
+mechanism exists. If the user explicitly opts out or policy disallows spawning for
 standard/strict work, use `direct_fallback` and preserve the same phase gates,
 role separation, verification evidence, and review evidence.
 
-Plan approval is not delegation approval. When required roles lack a delegation
-decision, keep `authorization_required` and ask once. `policy_disallowed`
-requires a non-empty `policy_blocking_source` that names the exact active
-blocking rule and confirms no applicable user, AGENTS, or skill exception. A
-conditional policy that says not to spawn unless the user or applicable
-AGENTS/skill asks does not make policy_disallowed when the active skill requires
-subagents.
+`policy_disallowed` requires a non-empty `policy_blocking_source` that names the
+exact active blocking rule and confirms no applicable direct-user, `AGENTS.md`,
+or active-skill trigger exception. A conditional policy that says not to spawn
+unless an applicable instruction asks does not make policy_disallowed when the
+active skill requires subagents.
 
 ## Roles
 
@@ -129,7 +126,7 @@ its compact validation plus fresh-review evidence instead.
   native dispatch/thread and result. Reference the agent id, task name, thread,
   or tool result when the runtime exposes one; task-journal claims without a
   matching native result do not satisfy delegated evidence. Direct fallback is
-  allowed only for explicit `authorization_denied`,
+  allowed only for explicit `delegation_opted_out`,
   `subagents_unavailable`, or `policy_disallowed` reasons, and must record
   equivalent role, phase, verification, and review evidence; silent fallback
   fails the completion gates.
@@ -137,7 +134,7 @@ its compact validation plus fresh-review evidence instead.
 - **Every medium+ task gets Architect decomposition responsibility**: In delegated mode the Architect proposes smallest iterable slice boundaries; in direct fallback the same criteria and evidence are recorded directly.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)
 - **Code Mapper runs first** on medium+ tasks — its output feeds into Architect and Code Writer
-- **Code Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is authorized; `reviewer` is the compatibility route for older handoffs. Direct fallback must reset review context and record how stale-context risk was controlled.
-- **QA Evaluator gets a fresh dispatch each QA round** when QA is required and delegated mode is authorized. Direct fallback must reset acceptance-evaluation context and record how stale-context risk was controlled.
+- **Code Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is triggered; `reviewer` is the compatibility route for older handoffs. Direct fallback must reset review context and record how stale-context risk was controlled.
+- **QA Evaluator gets a fresh dispatch each QA round** when QA is required and delegated mode is triggered. Direct fallback must reset acceptance-evaluation context and record how stale-context risk was controlled.
 - **Main session stays Orchestrator**: owns user communication, final integration, handoffs
 - **Do not dispatch agents for small inline tasks** within a larger workflow (e.g., a one-line fix during review doesn't need a Code Writer agent)

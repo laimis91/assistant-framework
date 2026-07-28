@@ -43,10 +43,15 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 
 ## Constraints
 
+Migration note: assistant-thinking contracts are v2. Applicable direct-user,
+`AGENTS.md`, and active-skill instructions now trigger delegated Perspectives
+and high-stakes Stress Test work; `subagent_trigger_scope` records provenance
+and covered work without a second permission question.
+
 - Do not invoke deep reasoning for simple execution tasks.
 - Do not use this skill for broad brainstorming; route option generation to `assistant-ideate`.
 - Ask only when missing context would materially change the selected method or recommendation.
-- For `Perspectives` and high-stakes `Stress Test`, resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and conditional `policy_blocking_source` before spawning. When required roles lack a delegation decision, use `authorization_required` and ask once: `This reasoning method works best with independent perspective subagents. May I use subagents for this debate/stress test?` Plan approval is not delegation approval. Sequential fallback requires authorization denial, a real unavailability failure, or policy-disallowed evidence; `policy_disallowed` requires an exact blocking rule with no applicable user, AGENTS, or skill exception.
+- For `Perspectives` and high-stakes `Stress Test`, resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. A direct user request or applicable `AGENTS.md` or active-skill instruction triggers `delegation_triggered`: infer the covered roles and dispatch without a separate permission question. Sequential fallback requires explicit user opt-out, a real unavailability failure or supported configuration proof, or policy-disallowed evidence; `policy_disallowed` requires an exact blocking rule with no applicable trigger exception. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
 - Do not invent evidence. Mark unverified claims as assumptions and identify how to validate them.
 - Do not paste secrets, proprietary source, customer data, or sensitive logs into external tools as part of reasoning.
 
@@ -120,7 +125,7 @@ Return:
 - **Gaps** - assumptions, unknowns, or questions that limit confidence.
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
-- **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and authorization scope.
+- **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and trigger scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.
 
 ## Stop Rules

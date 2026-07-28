@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: output
 skill: assistant-workflow
 
@@ -39,8 +39,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, authorization scope, search_mode, and candidate_scope_scan"
+    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -95,17 +95,17 @@ artifacts:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
-        validation: "Resolved before any subagent dispatch. When required_agents is non-empty and no delegation decision exists, use authorization_required. authorization_required must transition to delegation_authorized, authorization_denied, subagents_unavailable, or evidenced policy_disallowed before Build/Review; plan approval alone is not delegation approval."
+        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+        validation: "Resolved before any subagent dispatch. When required_agents is non-empty, applicable direct-user, AGENTS.md, or active-skill instructions set delegation_triggered; explicit user opt-out, real unavailability, or evidenced policy_disallowed select fallback."
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-        validation: "delegated means subagents will be spawned; direct_fallback means the orchestrator preserves equivalent role evidence without spawning and requires authorization_denied, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed."
-      - name: subagent_authorization_scope
+        validation: "delegated requires delegation_triggered; direct_fallback preserves equivalent role evidence and requires delegation_opted_out, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed."
+      - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Empty unless explicit authorization was granted. When populated, names the authorized roles, phases, or actions."
+        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered roles, phases, and actions."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -545,7 +545,7 @@ artifacts:
         type: enum
         required: conditional
         condition: "execution_mode == direct_fallback"
-        enum_values: [authorization_denied, subagents_unavailable, policy_disallowed]
+        enum_values: [delegation_opted_out, subagents_unavailable, policy_disallowed]
       - name: policy_blocking_source
         type: string
         required: conditional

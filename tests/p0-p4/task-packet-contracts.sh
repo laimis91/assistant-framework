@@ -904,23 +904,17 @@ else
     fail "task-journal-template.md must anchor native dispatch evidence to Created identity: ${missing_task_identity_terms[*]}"
 fi
 
-test_start "workflow subagent policy state gates delegation before fallback"
+test_start "workflow subagent policy state dispatches from instruction triggers before fallback"
 missing_workflow_subagent_gate=()
 workflow_subagent_gate_surfaces=(
     "skills/assistant-workflow/SKILL.md"
+    "skills/assistant-workflow/contracts/index.yaml"
     "skills/assistant-workflow/contracts/input.yaml"
     "skills/assistant-workflow/contracts/output.yaml"
     "skills/assistant-workflow/contracts/phase-gates.yaml"
     "skills/assistant-workflow/references/subagent-dispatch.md"
     "skills/assistant-workflow/references/task-journal-template.md"
     "skills/assistant-workflow/references/phases.md"
-    "plugins/assistant-dev/skills/assistant-workflow/SKILL.md"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/references/subagent-dispatch.md"
-    "plugins/assistant-dev/skills/assistant-workflow/references/task-journal-template.md"
-    "plugins/assistant-dev/skills/assistant-workflow/references/phases.md"
 )
 for surface in "${workflow_subagent_gate_surfaces[@]}"; do
     if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
@@ -930,36 +924,37 @@ done
 workflow_subagent_gate_terms=(
     "skills/assistant-workflow/SKILL.md|subagent_policy_state"
     "skills/assistant-workflow/SKILL.md|subagent_execution_mode"
-    "skills/assistant-workflow/SKILL.md|subagent_authorization_scope"
-    "skills/assistant-workflow/SKILL.md|Assistant Framework policy requires explicit user authorization before spawning subagents"
-    "skills/assistant-workflow/SKILL.md|Ask once for the needed delegation scope and wait before continuing phases that require subagents"
-    "skills/assistant-workflow/SKILL.md|After authorization, use \`delegated\` mode and spawn the configured role agents"
+    "skills/assistant-workflow/SKILL.md|subagent_trigger_scope"
+    "skills/assistant-workflow/SKILL.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
+    "skills/assistant-workflow/SKILL.md|dispatch the configured role agents without a separate permission question"
+    "skills/assistant-workflow/SKILL.md|delegation_triggered"
     "skills/assistant-workflow/SKILL.md|do not infer unavailability merely because no visible tool is named \`Task\`, \`delegate\`, or \`subagent\`"
+    "skills/assistant-workflow/contracts/index.yaml|id: workflow-delegation-fields"
+    "skills/assistant-workflow/contracts/index.yaml|names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]"
     "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state"
-    "skills/assistant-workflow/contracts/input.yaml|authorization_required"
-    "skills/assistant-workflow/contracts/input.yaml|delegation_authorized"
-    "skills/assistant-workflow/contracts/input.yaml|authorization_denied"
+    "skills/assistant-workflow/contracts/input.yaml|delegation_triggered"
+    "skills/assistant-workflow/contracts/input.yaml|delegation_opted_out"
     "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
     "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
     "skills/assistant-workflow/contracts/input.yaml|not_applicable is invalid for Build"
     "skills/assistant-workflow/contracts/input.yaml|Code Writer, Builder/Tester, and Code Reviewer"
     "skills/assistant-workflow/contracts/input.yaml|Reviewer may satisfy only compatibility routing"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_trigger_scope"
     "skills/assistant-workflow/contracts/output.yaml|subagent_policy_state"
     "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
-    "skills/assistant-workflow/contracts/output.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/output.yaml|subagent_trigger_scope"
     "skills/assistant-workflow/contracts/output.yaml|- name: subagent_evidence"
     "skills/assistant-workflow/contracts/output.yaml|Evidence matches build_execution_lane"
     "skills/assistant-workflow/contracts/output.yaml|per_slice_dispatch_evidence"
-    "skills/assistant-workflow/contracts/output.yaml|authorization_denied, subagents_unavailable, or policy_disallowed"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_AUTH"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|explicit user authorization is obtained before any phase that requires subagents continues"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with authorization_denied"
+    "skills/assistant-workflow/contracts/output.yaml|delegation_opted_out, subagents_unavailable, or policy_disallowed"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_TRIGGER"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|delegated dispatch without a separate permission question"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with delegation_opted_out"
     "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_EVIDENCE"
     "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_SLICE_EVIDENCE"
     "skills/assistant-workflow/references/subagent-dispatch.md|Delegation Policy State"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Assistant Framework policy requires explicit user authorization before spawning subagents"
-    "skills/assistant-workflow/references/subagent-dispatch.md|ask the authorization question, and wait"
+    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
+    "skills/assistant-workflow/references/subagent-dispatch.md|without a separate permission question"
     "skills/assistant-workflow/references/subagent-dispatch.md|For Codex, current CLI/app releases support native subagent workflows by default"
     "skills/assistant-workflow/references/subagent-dispatch.md|Do not mark \`subagents_unavailable\` merely because the visible tool list lacks a tool named \`Task\`, \`delegate\`, or \`subagent\`"
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
@@ -977,7 +972,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
     "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester dispatch/result/direct evidence"
     "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
-    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
+    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_trigger_scope\` before spawning any subagent"
     "skills/assistant-workflow/references/phases.md|add Code Mapper to \`Required agents\`"
     "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
     "skills/assistant-workflow/references/phases.md|\`assistant-review\` SKILL.md and contracts"
@@ -988,8 +983,7 @@ workflow_subagent_gate_terms=(
 )
 for pair in "${workflow_subagent_gate_terms[@]}"; do
     IFS='|' read -r root_surface term <<< "$pair"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
             missing_workflow_subagent_gate+=("$surface: $term")
         fi
@@ -998,40 +992,36 @@ done
 if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
     missing_workflow_subagent_gate+=("skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
 fi
-if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/phases.md"; then
-    missing_workflow_subagent_gate+=("plugins/assistant-dev/skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
-fi
 if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
-test_start "workflow delegation fallback requires authorization or evidenced policy block"
+test_start "workflow delegation fallback requires trigger evidence or policy block"
 workflow_delegation_proof_failures=()
 workflow_delegation_proof_terms=(
     "skills/assistant-workflow/contracts/input.yaml|policy_blocking_source"
     "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state == policy_disallowed"
-    "skills/assistant-workflow/contracts/input.yaml|required_agents is non-empty and no explicit delegation approval or denial exists"
-    "skills/assistant-workflow/contracts/input.yaml|Plan approval is not delegation approval"
+    "skills/assistant-workflow/contracts/input.yaml|When required_agents is non-empty"
+    "skills/assistant-workflow/contracts/input.yaml|direct user, applicable AGENTS.md, or active skill instruction"
     "skills/assistant-workflow/contracts/output.yaml|policy_blocking_source"
     "skills/assistant-workflow/contracts/output.yaml|policy_disallowed"
     "skills/assistant-workflow/contracts/phase-gates.yaml|policy_blocking_source"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|does not make policy_disallowed when the active skill requires subagents"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Plan approval is not delegation approval"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|no applicable trigger exception"
+    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
     "skills/assistant-workflow/references/subagent-dispatch.md|policy_blocking_source"
     "skills/assistant-workflow/references/subagent-dispatch.md|active skill requires subagents"
     "skills/assistant-workflow/references/task-journal-template.md|Policy blocking source"
     "skills/assistant-workflow/references/plan-template.md|Policy blocking source"
-    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-missing-delegation-authorization"
-    "skills/assistant-workflow/evals/cases.json|authorization_required"
-    "skills/assistant-workflow/evals/cases.json|plan approval is not delegation approval"
+    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-dispatch-from-instruction-trigger"
+    "skills/assistant-workflow/evals/cases.json|delegation_triggered"
+    "skills/assistant-workflow/evals/cases.json|direct user, applicable AGENTS.md, or active skill instruction"
     "skills/assistant-workflow/evals/cases.json|policy_blocking_source"
 )
 for pair in "${workflow_delegation_proof_terms[@]}"; do
     IFS='|' read -r root_surface term <<< "$pair"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
             workflow_delegation_proof_failures+=("$surface: file missing")
         elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
@@ -1042,30 +1032,85 @@ done
 if [[ "${#workflow_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow delegation fallback must carry authorization or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
+    fail "workflow delegation fallback must carry trigger or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
 fi
 
-test_start "workflow loads the delegation authorization invariant"
-workflow_authorization_invariant_failures=()
+test_start "workflow loads the delegation trigger invariant"
+workflow_trigger_invariant_failures=()
 for surface_and_term in \
-    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_AUTHORIZATION_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_AUTHORIZATION_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|required roles lack a delegation decision" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"; do
+    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_TRIGGER_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_TRIGGER_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct user, applicable AGENTS.md, or active skill instruction" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"; do
     IFS='|' read -r root_surface term <<< "$surface_and_term"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
-            workflow_authorization_invariant_failures+=("$surface: file missing")
+            workflow_trigger_invariant_failures+=("$surface: file missing")
         elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
-            workflow_authorization_invariant_failures+=("$surface: $term")
+            workflow_trigger_invariant_failures+=("$surface: $term")
         fi
     done
 done
-if [[ "${#workflow_authorization_invariant_failures[@]}" -eq 0 ]]; then
+if [[ "${#workflow_trigger_invariant_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow must load an authorization-state invariant for every phase: ${workflow_authorization_invariant_failures[*]}"
+    fail "workflow must load a trigger-state invariant for every phase: ${workflow_trigger_invariant_failures[*]}"
+fi
+
+test_start "delegation recovery preserves evidenced fallback and dispatches only from triggers"
+delegation_recovery_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced fallback state" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::applicable trigger exists" \
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced sequential fallback state" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced direct fallback state" \
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::active workflow instruction and its covered roles" \
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::direct-user opt-out is recorded only in subagent_policy_state=delegation_opted_out"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        delegation_recovery_failures+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#delegation_recovery_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "delegation recovery can overwrite opt-out or dispatch without a trigger: ${delegation_recovery_failures[*]}"
+fi
+
+test_start "active delegation surfaces exclude retired state identifiers"
+retired_delegation_identifiers=(
+    "authorization""_required"
+    "subagent""_authorization_scope"
+    "delegation""_authorized"
+    "authorization""_denied"
+)
+active_delegation_surfaces=(
+    "$FRAMEWORK_DIR/skills/assistant-workflow"
+    "$FRAMEWORK_DIR/skills/assistant-thinking"
+    "$FRAMEWORK_DIR/skills/assistant-review"
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review"
+    "$FRAMEWORK_DIR/plugins/assistant-research/skills/assistant-thinking"
+    "$FRAMEWORK_DIR/install.sh"
+    "$FRAMEWORK_DIR/install.ps1"
+    "$FRAMEWORK_DIR/docs/troubleshooting-subagents.md"
+    "$FRAMEWORK_DIR/docs/v0.3.0-research-improvements.md"
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+)
+retired_delegation_matches=()
+for identifier in "${retired_delegation_identifiers[@]}"; do
+    if matches="$(rg -n -F -- "$identifier" "${active_delegation_surfaces[@]}" 2>/dev/null)"; then
+        retired_delegation_matches+=("$matches")
+    fi
+done
+if [[ "${#retired_delegation_matches[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired delegation identifiers remain on active surfaces: ${retired_delegation_matches[*]}"
 fi
 
 test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"

@@ -9,7 +9,7 @@ pass. Review-fix mode performs the initial review, fixes and validation, then
 one fresh re-review by default. Round 3+ requires an evidence-backed
 `additional_round_reason`; the loop supports up to 10 rounds and 10 remains the
 terminal safety cap. You do not need
-user input between authorized rounds.
+user input between valid review rounds.
 
 For small tasks, do a quick pass through the "must-check" items only. For medium+ tasks, work through the full checklist.
 

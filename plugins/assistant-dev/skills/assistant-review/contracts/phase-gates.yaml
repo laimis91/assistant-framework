@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -39,8 +39,8 @@ gates:
         on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
 
       - id: E6
-        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are resolved before any Reviewer subagent dispatch"
-        on_fail: "Resolve the active adapter/tool policy. Ask once when explicit authorization is required, or set direct_fallback/not_applicable and record why no Reviewer subagent will be spawned."
+        check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required Reviewer roles without a separate permission question. Otherwise preserve and complete the evidenced direct fallback state; do not overwrite explicit opt-out."
 
       - id: E7
         check: "If qa_evaluation_mode is required: Done Contract with debate_record when available, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, and qa_filter_policy are resolved before QAEvaluator dispatch"

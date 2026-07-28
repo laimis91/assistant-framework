@@ -57,7 +57,7 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "Get plan approval before medium+ or risky edits." "$agents_file" \
-            && grep -Fq "Do not spawn subagents without explicit authorization; continue safe non-spawn work while authorization is unresolved." "$agents_file" \
+            && grep -Fq "Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent." "$agents_file" \
             && ! grep -Fq "## Skills (loaded" "$agents_file" \
             && [[ -f "$INSTALL_HOME/.codex/agents/code-reviewer.toml" ]] \
             && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME/.codex/agents/code-reviewer.toml" \

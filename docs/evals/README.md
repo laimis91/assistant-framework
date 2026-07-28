@@ -19,7 +19,7 @@ under common operating conditions:
 - per-slice verification before advancing
 - separate spec review and quality review gates
 - structured worker status packets from subagents
-- subagent authorization denial direct fallback
+- subagent opt-out direct fallback
 - Native Codex role constraints without extra runtime reinforcement
 - Done Contract debate and Harness Recipe before Build
 - trace/replay artifacts and typed artifact refs for harness recovery

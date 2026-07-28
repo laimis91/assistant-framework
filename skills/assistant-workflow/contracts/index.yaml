@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "4.0"
 contract: index
 skill: assistant-workflow
 
@@ -23,6 +23,14 @@ load_sets:
         key: name
         names: [task_description, task_type, scope_hint, target_files, constraints, acceptance_criteria, plan_mode]
     budget_words: 4000
+  delegation:
+    selectors:
+      - id: workflow-delegation-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]
+    budget_words: 2300
   slice_review:
     references:
       - references/slice-review-topology.md
@@ -45,7 +53,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV_TASK_STATE_FRESHNESS, INV1, INV2, INV3, INV4, INV_SUBAGENT_AUTHORIZATION_STATE, INV_PIVOT_RESTART_REAPPROVAL, INV_CONTROLLER_INTENSITY_STANDARD, INV_BUILD_REPAIR_BOUNDED]
+        names: [INV_TASK_STATE_FRESHNESS, INV1, INV2, INV3, INV4, INV_SUBAGENT_TRIGGER_STATE, INV_PIVOT_RESTART_REAPPROVAL, INV_CONTROLLER_INTENSITY_STANDARD, INV_BUILD_REPAIR_BOUNDED]
     budget_words: 12000
   selected_handoff:
     selectors:

@@ -69,22 +69,20 @@ load only the active selector:
 - `current_phase` for the active transition and invariants;
 - `selected_handoff` before dispatch and return validation;
 - `completion` before final exit.
+- `delegation` before dispatch for indexed role/trigger fields.
 
 Missing or invalid selectors use `load_full_authoritative_file` and record the
 recovery. Load `references/workflow-controller.md` for cross-phase routing and
 `references/phases.md` for phase mechanics. Load other references only when
 their named condition applies.
 
-Migration note: workflow contracts are v3. Required `verification_command`
-values are non-empty argv `string[]`. Workflow-owned Reviewer and QAEvaluator
-packets are retired; assistant-review v2 is the canonical owner, including the
-required non-empty Reviewer `reviewed_scope`, and workflow consumes validated
-`final_summary` / `qa_evaluation_result` references.
+Migration: workflow v4 uses `subagent_trigger_scope`; `verification_command`
+remains non-empty argv `string[]`. assistant-review v3 owns Reviewer/QA packets
+and returns `final_summary` / `qa_evaluation_result`.
 
 ## Execution
 
-1. Triage size, risk, required gates, state mode, execution lane, review/QA
-   routing, and delegation authorization from local evidence.
+1. Triage size, risk, gates, state, lane, review/QA, and delegation triggers.
 2. Discover the relevant code and constraints; reconcile state. Create the
    Requirement Acceptance Map when its medium+/promotion condition applies.
 3. Apply `plan_mode`: skip Plan for `none`, keep `inline` concise, and for

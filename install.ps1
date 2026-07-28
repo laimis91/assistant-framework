@@ -2645,13 +2645,13 @@ Codex uses installed skills through native skill routing. When a skill matches, 
 ## Operating stance
 
 - For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
-- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when authorized.
+- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
 - Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
 ## Boundaries
 
 - Get plan approval before medium+ or risky edits.
-- Do not spawn subagents without explicit authorization; continue safe non-spawn work while authorization is unresolved.
+- Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.
 - Preserve user-authored files and existing dirty work.
 - Verify changes with repository commands and review the approved scope before handoff.
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.

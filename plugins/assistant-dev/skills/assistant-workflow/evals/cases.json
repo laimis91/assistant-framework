@@ -498,8 +498,8 @@
         "Checks bounded step, round, time, or cost budget before dispatch.",
         "Checks dependency order and shared-contract sequencing.",
         "Checks output-plan match: artifacts, files, verification criteria, and expected success signals.",
-        "Resolves subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope before any subagent dispatch.",
-        "Asks once when authorization is required, or records direct_fallback when authorization is denied, unavailable, or policy-disallowed.",
+        "Resolves subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope before any subagent dispatch.",
+        "Dispatches when a direct user, applicable AGENTS.md, or active skill instruction triggers delegation, or records direct_fallback only for explicit opt-out, real unavailability, or policy-disallowed.",
         "Uses decision proceed, revise_decomposition, or return_to_discover and does not enter Plan unless decision is proceed.",
         "Applies the decomposition review gate even when the user only asks for an implementation plan, not an explicit review."
       ],
@@ -512,7 +512,7 @@
       ],
       "fail_signals": [
         "Skips decomposition review because slices already exist.",
-        "Dispatches subagents before checking count sanity, budget, or subagent authorization state.",
+        "Dispatches subagents before checking count sanity, budget, or subagent trigger state.",
         "Accepts an unbounded step budget.",
         "Does not verify output artifacts or success signals match the requested deliverable.",
         "Treats direct fallback as no evidence required.",
@@ -538,7 +538,7 @@
           "broad-split rejection",
           "subagent_policy_state",
           "subagent_execution_mode",
-          "subagent_authorization_scope",
+          "subagent_trigger_scope",
           "direct_fallback"
         ],
         "forbidden_substrings": [
@@ -547,7 +547,7 @@
           "unbounded step budget is fine",
           "output plan does not matter",
           "fallback requires no evidence",
-          "spawn subagents before authorization",
+          "ask a separate spawn-permission question",
           "only if explicitly requested",
           "no review needed for ordinary plan",
           "component_manifest",
@@ -881,46 +881,46 @@
       }
     },
     {
-      "id": "workflow-required-roles-missing-delegation-authorization",
-      "title": "Required workflow roles ask for delegation authorization",
-      "category": "subagent_authorization",
-      "purpose": "Checks that an approved implementation plan cannot silently become direct fallback when required roles still lack a delegation decision.",
-      "prompt": "Implement the approved medium contract change. The plan names Code Mapper, a bounded executor, and Code Reviewer, but I have not approved delegation.",
+      "id": "workflow-required-roles-dispatch-from-instruction-trigger",
+      "title": "Required workflow roles dispatch from an applicable instruction trigger",
+      "category": "subagent_delegation_trigger",
+      "purpose": "Checks that an active workflow instruction dispatches required roles without silently falling back or asking a second permission question.",
+      "prompt": "Implement the approved medium contract change with the active assistant-workflow process. The plan names Code Mapper, a bounded executor, and Code Reviewer.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "The task is standard medium source-changing work with non-empty required_agents.",
-        "A generic active policy says do not spawn unless the user or applicable AGENTS/skill asks; the active workflow skill requires the listed roles.",
-        "Plan approval has been recorded, but no explicit delegation approval or denial exists."
+        "The active workflow skill instruction requires the listed roles and the project AGENTS.md permits required role dispatch.",
+        "No explicit user opt-out or exact active policy block exists."
       ],
       "expected_behavior": [
-        "Sets subagent_policy_state=authorization_required and asks once for the needed delegation scope.",
-        "States that plan approval is not delegation approval.",
-        "Does not select direct_fallback or policy_disallowed before authorization is denied, a real spawn failure occurs, or an exact blocking rule proves no applicable exception.",
-        "Treats the conditional active policy as allowing the active skill-required delegation exception rather than as policy_disallowed."
+        "Sets subagent_policy_state=delegation_triggered and infers subagent_trigger_scope from the active instruction.",
+        "Dispatches the required roles without a separate permission question.",
+        "Does not select direct_fallback or policy_disallowed without explicit opt-out, a real spawn failure or supported configuration proof, or an exact blocking rule.",
+        "Records parent sandbox and action/tool approval safeguards as unchanged."
       ],
       "pass_criteria": [
-        "The response records authorization_required and an authorization question.",
-        "The response names the required roles and waits before their dependent phases continue.",
-        "The response reserves policy_blocking_source for an exact policy_disallowed rule with no applicable user, AGENTS, or skill exception."
+        "The response records delegation_triggered and the active-skill or AGENTS.md trigger provenance.",
+        "The response names and dispatches the required roles without a second permission question.",
+        "The response reserves policy_blocking_source for an exact policy_disallowed rule with no applicable trigger exception."
       ],
       "fail_signals": [
-        "Treats plan approval as delegation approval.",
-        "Uses direct_fallback before the user denies delegation or a real spawn attempt fails.",
-        "Calls the conditional no-spawn policy policy_disallowed despite the active skill requirement.",
+        "Uses direct_fallback without explicit opt-out, real unavailability, or an exact policy block.",
+        "Asks a separate spawn-permission question.",
+        "Calls an applicable active-skill trigger policy_disallowed.",
         "Records policy_disallowed without policy_blocking_source."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "authorization_required",
-          "ask once",
-          "plan approval is not delegation approval",
+          "delegation_triggered",
+          "subagent_trigger_scope",
+          "without a separate permission question",
           "required roles",
           "policy_blocking_source",
-          "active skill requires subagents"
+          "parent sandbox"
         ],
         "forbidden_substrings": [
-          "plan approval authorizes delegation",
-          "direct_fallback before authorization decision",
+          "ask for permission to spawn",
+          "direct_fallback without fallback evidence",
           "policy_disallowed without policy_blocking_source",
           "conditional policy blocks active skill exception"
         ]

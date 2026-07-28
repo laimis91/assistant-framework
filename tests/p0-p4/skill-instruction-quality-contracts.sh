@@ -473,25 +473,25 @@ else
     fail "assistant-review direct fallback still implies mandatory Reviewer dispatch: ${review_fallback_failures[*]}"
 fi
 
-test_start "assistant-thinking asks before sequential fallback without an evidenced policy block"
+test_start "assistant-thinking dispatches from applicable delegation triggers and records evidenced fallback"
 thinking_delegation_proof_failures=()
 thinking_delegation_proof_terms=(
-    "$thinking_skill::required roles lack a delegation decision"
+    "$thinking_skill::direct user request or applicable \`AGENTS.md\` or active-skill instruction"
     "$thinking_skill::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::authorization_required"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::sequential_fallback"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Plan approval is not delegation approval"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-missing-delegation-authorization"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::authorization_required"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::dispatch without a separate permission question"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-dispatch-from-instruction-trigger"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::delegation_triggered"
     "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::policy_blocking_source"
 )
 for file_and_term in "${thinking_delegation_proof_terms[@]}"; do
@@ -507,13 +507,13 @@ for method_file in \
     "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md" \
     "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md"; do
     if grep -Fq -- "If denied, unavailable, or policy-disallowed" "$method_file"; then
-        thinking_delegation_proof_failures+=("${method_file#$FRAMEWORK_DIR/}: loose not-authorized fallback wording")
+        thinking_delegation_proof_failures+=("${method_file#$FRAMEWORK_DIR/}: loose fallback wording")
     fi
 done
 if [[ "${#thinking_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-thinking delegation fallback must carry authorization or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
+    fail "assistant-thinking delegation fallback must carry trigger or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

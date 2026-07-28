@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-review
 
@@ -57,7 +57,7 @@ fields:
     type: enum
     required: true
     enum_values: [trivial, small, medium, large]
-    description: "Size of the review scope — determines review rigor and whether delegated review is expected when authorized"
+    description: "Size of the review scope — determines review rigor and whether delegated review is required"
     on_missing: infer
     infer_from: >
       1-2 files, < 50 lines changed → trivial.
@@ -68,30 +68,38 @@ fields:
   - name: subagent_policy_state
     type: enum
     required: false
-    enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
-    description: "Whether Reviewer subagent spawning is allowed under the active adapter and user/tool policy"
+    enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+    description: "Whether applicable instructions trigger Reviewer subagent dispatch or require evidenced fallback"
     validation: "Must be resolved before dispatching a Reviewer subagent"
     default: not_required
     on_missing: infer
-    infer_from: "Use authorization_required when the active tool policy requires explicit user permission before spawning reviewer subagents; use delegation_authorized after explicit user approval; use authorization_denied when the user declines; use subagents_unavailable when the adapter has no subagent mechanism; use policy_disallowed when policy forbids spawning; use not_required for trivial/small self-review paths."
+    infer_from: "Use delegation_triggered when a direct user request or applicable AGENTS.md or active skill instruction covers Reviewer roles; infer scope without asking. Use delegation_opted_out when the user explicitly declines; use subagents_unavailable after a real dispatch failure or supported configuration proof; use policy_disallowed only when an exact active rule blocks spawning with no applicable trigger exception; use not_required for trivial/small self-review paths."
 
   - name: subagent_execution_mode
     type: enum
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How Reviewer responsibility is executed"
-    validation: "delegated requires authorization or a policy that permits subagents; direct_fallback requires fresh review context evidence without spawning; not_applicable applies to trivial/small self-review"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed plus fresh review context evidence; not_applicable applies to trivial/small self-review"
     default: not_applicable
     on_missing: infer
-    infer_from: "For medium+ scope use delegated when Reviewer subagents are authorized and available. Use direct_fallback when authorization is denied, subagents are unavailable, or policy disallows spawning. Use not_applicable for trivial/small self-review."
+    infer_from: "For medium+ scope use delegated when applicable instructions trigger Reviewer subagents. Use direct_fallback when the user explicitly opts out, subagents are unavailable after real failure or supported configuration proof, or policy disallows spawning. Use not_applicable for trivial/small self-review."
 
-  - name: subagent_authorization_scope
+  - name: subagent_trigger_scope
     type: string[]
     required: false
-    description: "Review rounds, roles, or files covered by explicit user authorization for Reviewer subagent spawning"
-    validation: "Empty unless explicit authorization was granted. Non-empty when subagent_policy_state=delegation_authorized."
+    description: "Direct-user, applicable-AGENTS.md, or active-skill provenance plus review rounds, roles, and files covered by the trigger"
+    validation: "Non-empty when delegation is relevant and inferred without asking; empty only when subagent_policy_state=not_required."
     default: []
-    on_missing: skip
+    on_missing: infer
+
+  - name: policy_blocking_source
+    type: string
+    required: conditional
+    condition: "subagent_policy_state == policy_disallowed"
+    description: "Exact active rule that blocks Reviewer or QAEvaluator spawning after confirming no applicable direct-user, AGENTS.md, or active-skill trigger exception"
+    validation: "Non-empty when policy_disallowed; a conditional policy does not block an applicable trigger."
+    on_missing: fail
 
   - name: harness_capable
     type: boolean

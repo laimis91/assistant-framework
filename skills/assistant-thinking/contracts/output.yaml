@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-thinking
 
@@ -58,20 +58,21 @@ artifacts:
     required: conditional
     condition: "tool_used in [perspectives, stress_test]"
     description: "How independent roles or attack angles were executed"
-    validation: "States subagent_policy_state, subagent_execution_mode, authorization scope when any, conditional policy_blocking_source, and whether roles/angles were delegated or run sequentially in fallback"
-    on_fail: "Record delegated execution or sequential fallback before presenting synthesis; do not imply subagents were used when they were not authorized or available"
+    validation: "States subagent_policy_state, subagent_execution_mode, trigger scope when relevant, conditional policy_blocking_source, and whether roles/angles were delegated or run sequentially in fallback"
+    on_fail: "Record delegated execution or sequential fallback before presenting synthesis; do not imply subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, sequential_fallback, not_applicable]
-      - name: subagent_authorization_scope
+      - name: subagent_trigger_scope
         type: string[]
         required: true
+        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered roles or attack angles."
       - name: policy_blocking_source
         type: string
         required: conditional
