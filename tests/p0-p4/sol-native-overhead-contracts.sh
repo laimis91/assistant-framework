@@ -282,7 +282,9 @@ review_root_index_words="$(skill_root_index_words "$FRAMEWORK_DIR/skills/assista
 agents_words="$(marker_block_words "$CODEX_NATIVE_HOME/.codex/AGENTS.md" ASSISTANT_FRAMEWORK_AGENTS_MD_START ASSISTANT_FRAMEWORK_AGENTS_MD_END)"
 memory_words="$(marker_block_words "$CODEX_NATIVE_HOME/.codex/AGENTS.md" ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END)"
 guidance_words=$(( agents_words + memory_words ))
-test_start "initial instruction budgets count SKILL+index and eager closure (workflow initial=$workflow_root_index_words eager=$workflow_words; review initial=$review_root_index_words eager=$review_words; guidance=$guidance_words)"
+project_agents_words="$(wc -w < "$FRAMEWORK_DIR/AGENTS.md" | tr -d '[:space:]')"
+effective_standing_words=$(( guidance_words + project_agents_words ))
+test_start "initial instruction budgets count SKILL+index and eager closure (workflow initial=$workflow_root_index_words eager=$workflow_words; review initial=$review_root_index_words eager=$review_words; guidance=$guidance_words; project=$project_agents_words; effective=$effective_standing_words)"
 budget_failures=()
 if (( workflow_root_index_words >= 4000 )); then
     budget_failures+=("workflow SKILL+index words $workflow_root_index_words is not below 4000")
@@ -298,6 +300,9 @@ if (( review_words >= 5000 )); then
 fi
 if (( guidance_words >= 900 )); then
     budget_failures+=("generated AGENTS+memory words $guidance_words is not below 900")
+fi
+if (( effective_standing_words >= 700 )); then
+    budget_failures+=("generated AGENTS+memory+project words $effective_standing_words is not below 700")
 fi
 if [[ "${#budget_failures[@]}" -eq 0 ]]; then
     pass

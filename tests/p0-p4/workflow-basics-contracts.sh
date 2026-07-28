@@ -17,8 +17,10 @@ fi
 test_start "Codex AGENTS delegates phase detail to native skill routing"
 if grep -Fq 'Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.' \
     "$FRAMEWORK_DIR/install.sh" \
-    && grep -Fq "Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan" \
+    && grep -Fq "Get plan approval before medium+ or risky edits." \
     "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "The orchestrator owns framework state files" "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "use direct fallback only after" "$FRAMEWORK_DIR/install.sh" \
     && ! grep -Fq "TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT" \
     "$FRAMEWORK_DIR/install.sh"; then
     pass

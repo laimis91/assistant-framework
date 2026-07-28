@@ -163,6 +163,8 @@ fi
 
 test_start "Installer-managed Codex AGENTS guidance keeps one adaptive main stance without subagent role configuration"
 lean_guidance_failures=()
+unix_guidance=""
+windows_guidance=""
 for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"; do
     installer_label="${installer_source#$FRAMEWORK_DIR/}"
     if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort' "$installer_source"; then
@@ -182,11 +184,70 @@ for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"
     if grep -Fq -- 'Review the work, not the author.' "$installer_source"; then
         lean_guidance_failures+=("$installer_label: embeds subagent-specific personality guidance")
     fi
+    while IFS= read -r guidance_bullet; do
+        guidance_bullet="${guidance_bullet#- }"
+        guidance_bullet_words="$(wc -w <<<"$guidance_bullet" | tr -d '[:space:]')"
+        if (( guidance_bullet_words > 32 )); then
+            lean_guidance_failures+=("$installer_label: managed guidance bullet exceeds 32 words: $guidance_bullet")
+        fi
+    done < <(
+        awk '
+            /^## Operating stance$/ { in_guidance = 1 }
+            in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
+            in_guidance && /^- / { print }
+        ' "$installer_source"
+    )
+    for deferred_detail in \
+        "The orchestrator owns framework state files" \
+        "Do not infer that subagents are unavailable" \
+        "use direct fallback only after"; do
+        if grep -Fq -- "$deferred_detail" "$installer_source"; then
+            lean_guidance_failures+=("$installer_label: global guidance must defer '$deferred_detail' mechanics to assistant-workflow")
+        fi
+    done
+    normalized_guidance="$(
+        awk '
+            /^# AGENTS.md — Codex Agent Instructions$/ { in_guidance = 1 }
+            in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
+            in_guidance {
+                gsub(/\\`/, "`")
+                print
+            }
+        ' "$installer_source"
+    )"
+    if [[ "$installer_label" == "install.sh" ]]; then
+        unix_guidance="$normalized_guidance"
+    else
+        windows_guidance="$normalized_guidance"
+    fi
 done
+if [[ "$unix_guidance" != "$windows_guidance" ]]; then
+    lean_guidance_failures+=("install.sh and install.ps1 managed guidance differ")
+fi
 if [[ "${#lean_guidance_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "Codex AGENTS installer source must keep only the compact main stance: ${lean_guidance_failures[*]}"
+fi
+
+test_start "Project AGENTS guidance stays repository-specific instead of repeating global workflow policy"
+project_guidance_failures=()
+for duplicate_anchor in \
+    "Route requests through installed skill descriptions" \
+    "Keep work proportional to risk" \
+    "Preserve unrelated user changes" \
+    "never hardcode secrets or log PII"; do
+    if grep -Fq -- "$duplicate_anchor" "$FRAMEWORK_DIR/AGENTS.md"; then
+        project_guidance_failures+=("AGENTS.md repeats global policy '$duplicate_anchor'")
+    fi
+done
+if [[ "$(grep -Fc -- 'tools/plugins/sync-plugin-skills.sh --apply' "$FRAMEWORK_DIR/AGENTS.md")" != "1" ]]; then
+    project_guidance_failures+=("AGENTS.md must name the generated-mirror sync command exactly once")
+fi
+if [[ "${#project_guidance_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "project AGENTS must contain repository-specific guidance: ${project_guidance_failures[*]}"
 fi
 
 test_start "Codex agent smoke helper is fixed-scope and metadata-only"

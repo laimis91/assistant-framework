@@ -4,16 +4,13 @@
 
 Assistant Framework is a framework repository, not an application. It installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
 
-Root `skills/assistant-*` directories are the editable source of truth. Plugin-local skill copies are generated mirrors; refresh them with `tools/plugins/sync-plugin-skills.sh --apply` and verify with `--check`. See `README.md` and `docs/plugin-architecture.md` for architecture and platform details.
+Root `skills/assistant-*` directories are the editable source of truth. Plugin-local skill copies are generated mirrors. See `README.md` and `docs/plugin-architecture.md` for architecture and platform details.
 
 ## Workflow
 
-- Route requests through installed skill descriptions and follow a matching `SKILL.md`.
-- All supported agents use their native skill discovery and routing. Workflow discipline comes from skill contracts, evals, project instructions, and review rather than lifecycle scripts.
-- Keep work proportional to risk. Plan medium or larger changes before implementation, add tests with behavior changes, run relevant verification, and review before completion.
-- Preserve unrelated user changes. Avoid destructive Git operations and never hardcode secrets or log PII.
-
-When creating or modifying skills, read `docs/skill-contract-design-guide.md`. Contracts must follow that guide; do not duplicate its rules here.
+- Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
+- Before changing skills, read `docs/skill-contract-design-guide.md`; keep detailed contract rules there.
+- Run focused checks first, then the aggregate verification appropriate to the changed surface.
 
 ## Commands
 
