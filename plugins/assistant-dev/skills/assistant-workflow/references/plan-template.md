@@ -58,6 +58,15 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Implementation notes / constraints:
   - implementation_notes:
     - [existing pattern to follow, dependency rule, non-goal, or boundary]
+- Reuse search:
+  - applicability: [applicable | not_applicable]
+  - applicability_reason: [concrete reason]
+  - searches: [query_or_path | scope | outcome; required when applicable]
+  - candidates: [name | location | disposition: reuse | extend | intentional_duplicate | reject_coincidental | reject_independent | rationale]
+  - no_candidate_reason: [required when applicable and candidates are empty]
+  - decision: [reuse | extend | new | intentional_duplicate]
+  - decision_rationale: [why this is the bounded existing-capability decision]
+  - divergence_control: [required for intentional_duplicate]
 - Verification:
   - verification_command: ["executable", "arg1", "arg2"]
   - argv rule: [one literal argument per item; execute directly without shell parsing]
@@ -141,6 +150,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - [Q&A question]: [chosen option and why]
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
+- Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
 
 ## Research (current state)
 - Modules/subprojects: ...

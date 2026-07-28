@@ -40,7 +40,7 @@ dispatch_context_bundles:
     review_evidence_pointer:
       required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
       validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -224,6 +224,11 @@ handoffs:
         default: true
         description: "Whether Reviewer must apply SOLID, KISS, DRY, YAGNI, and readability checks from references/review-principles.md"
         notes: "Default true for every review. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
+
+      - name: reuse_search_instruction
+        type: string
+        required: true
+        description: "Require a fresh independent capability search for rule-like changes during review; carried Mapper/task-packet evidence is context only and cannot satisfy reuse_search."
 
       - name: semantic_contract_review_required
         type: boolean
@@ -458,6 +463,70 @@ handoffs:
             type: string
             required: true
             description: "Readability observations or 'no concrete risk found'"
+
+      - name: reuse_search
+        type: object
+        required: true
+        description: "Bounded existing-capability search and reuse decision for rule-like changes; not_applicable records a concrete reason without search ceremony"
+        validation: "When applicability=applicable, searches must be non-empty and candidates must be present or no_candidate_reason must be non-empty; decision and decision_rationale are required. An applicable review cannot return clean without this evidence."
+        object_fields:
+          - name: applicability
+            type: enum
+            required: true
+            enum_values: [applicable, not_applicable]
+          - name: applicability_reason
+            type: string
+            required: true
+          - name: searches
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            min_items: 1
+            object_fields:
+              - name: query_or_path
+                type: string
+                required: true
+              - name: scope
+                type: string
+                required: true
+              - name: outcome
+                type: string
+                required: true
+          - name: candidates
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            object_fields:
+              - name: name
+                type: string
+                required: true
+              - name: location
+                type: string
+                required: true
+              - name: disposition
+                type: enum
+                required: true
+                enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+              - name: rationale
+                type: string
+                required: true
+          - name: no_candidate_reason
+            type: string
+            required: conditional
+            condition: "applicability == applicable and candidates is empty"
+          - name: decision
+            type: enum
+            required: conditional
+            condition: "applicability == applicable"
+            enum_values: [reuse, extend, new, intentional_duplicate]
+          - name: decision_rationale
+            type: string
+            required: conditional
+            condition: "applicability == applicable"
+          - name: divergence_control
+            type: string
+            required: conditional
+            condition: "decision == intentional_duplicate"
 
       - name: verdict
         type: enum

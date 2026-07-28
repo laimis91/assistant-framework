@@ -417,6 +417,33 @@ else
     fail "assistant-review enum extension guidance is incomplete: ${enum_extension_failures[*]}"
 fi
 
+test_start "assistant-review classifies authoritative duplicate behavior through bounded reuse search"
+reuse_search_principle_failures=()
+for file_and_term in \
+    "$review_principles::## Reuse Search and Authoritative Duplication" \
+    "$review_principles::business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details" \
+    "$review_principles::should-fix" \
+    "$review_principles::must-fix" \
+    "$review_principles::coincidental similarity" \
+    "$review_principles::independent concepts" \
+    "$review_principles::divergence control" \
+    "$review_evals::review-reuse-search-authoritative-conversion" \
+    "$review_evals::nautical-mile" \
+    "$review_evals::duplicated mapper arithmetic" \
+    "$review_evals::differing rounding" \
+    "$review_evals::non-finding"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        reuse_search_principle_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ "${#reuse_search_principle_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review reuse-search principle/eval coverage is incomplete: ${reuse_search_principle_failures[*]}"
+fi
+
 test_start "assistant-review direct fallback does not require reviewer dispatch"
 review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"

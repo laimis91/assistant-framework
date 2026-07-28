@@ -176,6 +176,11 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Re-dispatch Code Mapper or complete direct-fallback mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
 
+      - id: D_REUSE_SEARCH
+        check: "For rule-like changes involving business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details: reuse_search records bounded existing-capability searches before implementation, then candidates or no_candidate_reason, decision, and rationale. not_applicable records a concrete reason without search ceremony."
+        condition: "task scope includes rule-like behavior"
+        on_fail: "Search the accepted task area before implementation, record the reuse_search result in the context map and task packet, or record a concrete not_applicable reason. Do not substitute candidate_search for this bounded capability check."
+
       - id: D9
         check: "For large+ tasks: execution paths were traced by Explorer subagent when subagent_execution_mode=delegated, or traced directly in fallback mode with equivalent evidence"
         condition: "size in [large, mega]"

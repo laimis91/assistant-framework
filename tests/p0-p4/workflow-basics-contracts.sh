@@ -188,6 +188,28 @@ else
     fail "workflow reference mapping guard missing terms: ${missing_reference_mapping_terms[*]}"
 fi
 
+test_start "workflow records bounded reuse-search evidence for rule-like changes"
+reuse_search_workflow_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::reuse_search" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::before implementation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::## Reuse Search" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::applicability_reason: [concrete reason]" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::- Reuse search:" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::decision_rationale"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        reuse_search_workflow_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ "${#reuse_search_workflow_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow reuse-search evidence gate/template is incomplete: ${reuse_search_workflow_failures[*]}"
+fi
+
 test_start "internal workflow controller reference exists and is linked"
 workflow_controller_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md"
 controller_link_failures=()

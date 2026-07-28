@@ -371,6 +371,52 @@
       }
     },
     {
+      "id": "review-reuse-search-authoritative-conversion",
+      "title": "Review reuses authoritative conversion behavior",
+      "category": "reuse_search_and_authoritative_duplication",
+      "purpose": "Checks that review distinguishes reusable authoritative conversion behavior, semantic drift, and unrelated similar arithmetic.",
+      "prompt": "Review a mapper that duplicates nautical-mile to metre conversion arithmetic while an authoritative helper already exists. Also assess a second mapper with differing rounding and an unrelated percentage calculation.",
+      "setup_context": [
+        "The helper and first duplicated mapper arithmetic have the same conversion semantics.",
+        "The second mapper uses differing rounding, so its semantics diverge from the helper.",
+        "The percentage calculation is an independent concept despite similar arithmetic."
+      ],
+      "expected_behavior": [
+        "Records bounded reuse_search evidence before deciding.",
+        "Classifies same-semantics mapper duplication as helper reuse and should-fix.",
+        "Classifies differing rounding as must-fix semantic divergence.",
+        "Classifies unrelated similar arithmetic as a non-finding."
+      ],
+      "pass_criteria": [
+        "The response names searches, candidates or no-candidate reason, decision, and rationale.",
+        "The same-semantics case chooses reuse or extend rather than new arithmetic.",
+        "The differing-rounding case is must-fix.",
+        "The unrelated calculation is rejected as independent or coincidental."
+      ],
+      "fail_signals": [
+        "Treats every arithmetic resemblance as duplicate behavior.",
+        "Allows a clean result without applicable reuse-search evidence.",
+        "Treats differing rounding as harmless duplication."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "reuse_search",
+          "nautical-mile",
+          "metre conversion helper",
+          "duplicated mapper arithmetic",
+          "should-fix",
+          "differing rounding",
+          "must-fix",
+          "non-finding"
+        ],
+        "forbidden_substrings": [
+          "all arithmetic is duplicate behavior",
+          "clean without reuse search",
+          "rounding differences do not matter"
+        ]
+      }
+    },
+    {
       "id": "bugfix-review-checks-debugging-evidence",
       "title": "Bugfix review checks debugging evidence",
       "category": "bugfix_evidence_review",

@@ -24,6 +24,10 @@ DRY is about duplicated knowledge, not merely similar-looking code. Flag duplica
 
 Do not force DRY on coincidental resemblance. If two similar blocks serve different concepts or change for different reasons, merging them can create hidden coupling.
 
+## Reuse Search and Authoritative Duplication
+
+Before implementation and independently during review, search existing capabilities for business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details. Duplicated authoritative behavior is should-fix, and must-fix when semantics differ or duplication caused the bug. Non-findings include coincidental similarity and independent concepts. Intentional boundary duplication needs divergence control. Carried Mapper/task-packet evidence alone cannot satisfy review; record searches, candidates or no-candidate reason, decision, and rationale.
+
 ## YAGNI
 
 Avoid building capability for imagined future requirements. Flag speculative extension points, unused abstractions, dormant config, unused parameters, anticipatory generic types, and future-only branches when they add complexity without serving the current task.

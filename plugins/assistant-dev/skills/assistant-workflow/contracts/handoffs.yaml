@@ -231,6 +231,68 @@ handoffs:
             type: string
             required: true
             description: "What was found, why it matters, or why it is not applicable/deferred"
+      - name: reuse_search
+        type: object
+        required: true
+        description: "Bounded existing-capability search for rule-like changes; not_applicable records a concrete reason without search ceremony"
+        object_fields:
+          - name: applicability
+            type: enum
+            required: true
+            enum_values: [applicable, not_applicable]
+          - name: applicability_reason
+            type: string
+            required: true
+          - name: searches
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            min_items: 1
+            object_fields:
+              - name: query_or_path
+                type: string
+                required: true
+              - name: scope
+                type: string
+                required: true
+              - name: outcome
+                type: string
+                required: true
+          - name: candidates
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            object_fields:
+              - name: name
+                type: string
+                required: true
+              - name: location
+                type: string
+                required: true
+              - name: disposition
+                type: enum
+                required: true
+                enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+              - name: rationale
+                type: string
+                required: true
+          - name: no_candidate_reason
+            type: string
+            required: conditional
+            condition: "applicability == applicable and candidates is empty"
+          - name: decision
+            type: enum
+            required: conditional
+            condition: "applicability == applicable"
+            enum_values: [reuse, extend, new, intentional_duplicate]
+          - name: decision_rationale
+            type: string
+            required: conditional
+            condition: "applicability == applicable"
+          - name: divergence_control
+            type: string
+            required: conditional
+            condition: "decision == intentional_duplicate"
       - name: context_map_markdown
         type: string
         required: true
@@ -528,6 +590,68 @@ handoffs:
         type: string
         required: true
         description: "CodeMapper output — the Architect builds on this, not from scratch"
+      - name: reuse_search
+        type: object
+        required: true
+        description: "CodeMapper reuse-search result carried into task-packet planning"
+        object_fields:
+          - name: applicability
+            type: enum
+            required: true
+            enum_values: [applicable, not_applicable]
+          - name: applicability_reason
+            type: string
+            required: true
+          - name: searches
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            min_items: 1
+            object_fields:
+              - name: query_or_path
+                type: string
+                required: true
+              - name: scope
+                type: string
+                required: true
+              - name: outcome
+                type: string
+                required: true
+          - name: candidates
+            type: object[]
+            required: conditional
+            condition: "applicability == applicable"
+            object_fields:
+              - name: name
+                type: string
+                required: true
+              - name: location
+                type: string
+                required: true
+              - name: disposition
+                type: enum
+                required: true
+                enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+              - name: rationale
+                type: string
+                required: true
+          - name: no_candidate_reason
+            type: string
+            required: conditional
+            condition: "applicability == applicable and candidates is empty"
+          - name: decision
+            type: enum
+            required: conditional
+            condition: "applicability == applicable"
+            enum_values: [reuse, extend, new, intentional_duplicate]
+          - name: decision_rationale
+            type: string
+            required: conditional
+            condition: "applicability == applicable"
+          - name: divergence_control
+            type: string
+            required: conditional
+            condition: "decision == intentional_duplicate"
       - name: explorer_findings
         type: string
         required: false
@@ -713,6 +837,68 @@ handoffs:
             type: string[]
             required: true
             description: "Observable behavior this task packet must deliver"
+          - name: reuse_search
+            type: object
+            required: true
+            description: "CodeMapper reuse-search result carried unchanged into the executable task packet"
+            object_fields:
+              - name: applicability
+                type: enum
+                required: true
+                enum_values: [applicable, not_applicable]
+              - name: applicability_reason
+                type: string
+                required: true
+              - name: searches
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                min_items: 1
+                object_fields:
+                  - name: query_or_path
+                    type: string
+                    required: true
+                  - name: scope
+                    type: string
+                    required: true
+                  - name: outcome
+                    type: string
+                    required: true
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                object_fields:
+                  - name: name
+                    type: string
+                    required: true
+                  - name: location
+                    type: string
+                    required: true
+                  - name: disposition
+                    type: enum
+                    required: true
+                    enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+                  - name: rationale
+                    type: string
+                    required: true
+              - name: no_candidate_reason
+                type: string
+                required: conditional
+                condition: "applicability == applicable and candidates is empty"
+              - name: decision
+                type: enum
+                required: conditional
+                condition: "applicability == applicable"
+                enum_values: [reuse, extend, new, intentional_duplicate]
+              - name: decision_rationale
+                type: string
+                required: conditional
+                condition: "applicability == applicable"
+              - name: divergence_control
+                type: string
+                required: conditional
+                condition: "decision == intentional_duplicate"
           - name: done_contract_ref
             type: string
             required: conditional
@@ -904,6 +1090,68 @@ handoffs:
           - name: acceptance_criteria
             type: string[]
             required: true
+          - name: reuse_search
+            type: object
+            required: true
+            description: "Task-packet reuse-search result; implement its reuse, extend, new, or intentional_duplicate decision"
+            object_fields:
+              - name: applicability
+                type: enum
+                required: true
+                enum_values: [applicable, not_applicable]
+              - name: applicability_reason
+                type: string
+                required: true
+              - name: searches
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                min_items: 1
+                object_fields:
+                  - name: query_or_path
+                    type: string
+                    required: true
+                  - name: scope
+                    type: string
+                    required: true
+                  - name: outcome
+                    type: string
+                    required: true
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                object_fields:
+                  - name: name
+                    type: string
+                    required: true
+                  - name: location
+                    type: string
+                    required: true
+                  - name: disposition
+                    type: enum
+                    required: true
+                    enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+                  - name: rationale
+                    type: string
+                    required: true
+              - name: no_candidate_reason
+                type: string
+                required: conditional
+                condition: "applicability == applicable and candidates is empty"
+              - name: decision
+                type: enum
+                required: conditional
+                condition: "applicability == applicable"
+                enum_values: [reuse, extend, new, intentional_duplicate]
+              - name: decision_rationale
+                type: string
+                required: conditional
+                condition: "applicability == applicable"
+              - name: divergence_control
+                type: string
+                required: conditional
+                condition: "decision == intentional_duplicate"
           - name: done_contract_ref
             type: string
             required: conditional
@@ -1268,6 +1516,68 @@ handoffs:
           - name: acceptance_criteria
             type: string[]
             required: true
+          - name: reuse_search
+            type: object
+            required: true
+            description: "Task-packet reuse-search result validated alongside the verified increment"
+            object_fields:
+              - name: applicability
+                type: enum
+                required: true
+                enum_values: [applicable, not_applicable]
+              - name: applicability_reason
+                type: string
+                required: true
+              - name: searches
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                min_items: 1
+                object_fields:
+                  - name: query_or_path
+                    type: string
+                    required: true
+                  - name: scope
+                    type: string
+                    required: true
+                  - name: outcome
+                    type: string
+                    required: true
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                object_fields:
+                  - name: name
+                    type: string
+                    required: true
+                  - name: location
+                    type: string
+                    required: true
+                  - name: disposition
+                    type: enum
+                    required: true
+                    enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+                  - name: rationale
+                    type: string
+                    required: true
+              - name: no_candidate_reason
+                type: string
+                required: conditional
+                condition: "applicability == applicable and candidates is empty"
+              - name: decision
+                type: enum
+                required: conditional
+                condition: "applicability == applicable"
+                enum_values: [reuse, extend, new, intentional_duplicate]
+              - name: decision_rationale
+                type: string
+                required: conditional
+                condition: "applicability == applicable"
+              - name: divergence_control
+                type: string
+                required: conditional
+                condition: "decision == intentional_duplicate"
           - name: done_contract_ref
             type: string
             required: conditional

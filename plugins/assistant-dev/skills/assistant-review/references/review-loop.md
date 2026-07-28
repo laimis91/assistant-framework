@@ -28,6 +28,7 @@ while round <= 10:
        - selected `dispatch_context_ref` for `orchestrator_to_reviewer.context_fields`
        - `review_evidence_pointer` covering Spec Review PASS evidence, review material, and required `build_test_verification_ref`
        - round number, `additional_round_reason` when round >= 3, previously_fixed, finding_filter_policy, and review-mode flags
+       - `reuse_search_instruction`: independently during review, conduct the bounded capability search for rule-like changes; Carried Mapper/task-packet evidence alone cannot satisfy review
        - `references/review-principles.md`
        - `references/review-rubric.md` for the medium+ Reviewer
        - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, and/or Agentic Loop Safety Checklist

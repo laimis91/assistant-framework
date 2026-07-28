@@ -1398,6 +1398,68 @@ else
     fail "Architect implementation_steps producer must cover consumer current_task_packet required fields: ${missing_packet_coverage[*]}"
 fi
 
+reuse_search_schema_signature() {
+    local file="$1"
+    local handoff="$2"
+    local section="$3"
+    local container="$4"
+
+    awk -v handoff="$handoff" -v section="$section" -v container="$container" '
+        function indent(line) { match(line, /^ */); return RLENGTH }
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && $0 == "    " section ":" { in_section = 1; next }
+        in_section && /^    (context_fields|return_fields):/ && $0 != "    " section ":" { exit }
+        !in_section { next }
+        container == "" && $0 == "      - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        container != "" && $0 == "      - name: " container { in_container = 1; next }
+        in_container && /^      - name: / && $0 != "      - name: " container { exit }
+        in_container && $0 == "          - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        !in_target { next }
+        indent($0) == target_indent && /^ *- name: / { exit }
+        /^ *- name: / {
+            value = $0
+            sub(/^ *- name: /, "", value)
+            print "field|" (indent($0) - target_indent) "|" value
+            next
+        }
+        /^ *(type|required|condition|enum_values|min_items): / {
+            key = $0
+            sub(/^ */, "", key)
+            value = key
+            sub(/^[^:]+: /, "", value)
+            sub(/: .*/, "", key)
+            print "attribute|" (indent($0) - target_indent) "|" key "|" value
+        }
+    ' "$file"
+}
+
+test_start "reuse-search schema is identical across mapper, task-packet, build, and review boundaries"
+reuse_search_packet_failures=()
+workflow_handoffs="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+canonical_reuse_search_schema="$(reuse_search_schema_signature "$workflow_handoffs" "orchestrator_to_code_mapper" "return_fields" "")"
+if [[ -z "$canonical_reuse_search_schema" ]]; then
+    reuse_search_packet_failures+=("CodeMapper return reuse_search schema is empty")
+fi
+for boundary in \
+    "Architect input:$workflow_handoffs:orchestrator_to_architect:context_fields:" \
+    "Architect implementation_steps:$workflow_handoffs:orchestrator_to_architect:return_fields:implementation_steps" \
+    "CodeWriter current_task_packet:$workflow_handoffs:orchestrator_to_code_writer:context_fields:current_task_packet" \
+    "BuilderTester current_task_packet:$workflow_handoffs:orchestrator_to_builder_tester:context_fields:current_task_packet" \
+    "Reviewer return:$review_handoffs:orchestrator_to_reviewer:return_fields:"; do
+    IFS=':' read -r boundary_name boundary_file boundary_handoff boundary_section boundary_container <<< "$boundary"
+    boundary_schema="$(reuse_search_schema_signature "$boundary_file" "$boundary_handoff" "$boundary_section" "$boundary_container")"
+    if [[ "$boundary_schema" != "$canonical_reuse_search_schema" ]]; then
+        reuse_search_packet_failures+=("$boundary_name reuse_search schema differs from CodeMapper return")
+    fi
+done
+if [[ "${#reuse_search_packet_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "reuse-search schema parity failed: ${reuse_search_packet_failures[*]}"
+fi
+
 test_start "workflow mega sub-task brief uses strict slice packet contract"
 sub_task_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
 missing_sub_task_packet_terms=()
