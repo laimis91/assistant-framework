@@ -369,6 +369,54 @@ else
     fail "assistant-review clean-code principle lens is incomplete: ${review_principle_failures[*]}"
 fi
 
+test_start "assistant-review detects nullable properties used as hidden state"
+nullable_state_failures=()
+
+for file_and_term in \
+    "$review_principles::## State and Extensibility Modeling" \
+    "$review_principles::null -> value" \
+    "$review_principles::business or lifecycle transition" \
+    "$review_principles::optional or missing data" \
+    "$review_evals::review-detects-null-encoded-state-transitions" \
+    "$review_evals::explicit transition methods or events" \
+    "$review_evals::genuine optional data"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        nullable_state_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#nullable_state_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review nullable hidden-state guidance is incomplete: ${nullable_state_failures[*]}"
+fi
+
+test_start "assistant-review distinguishes open-ended enums from closed sets"
+enum_extension_failures=()
+
+for file_and_term in \
+    "$review_principles::### Enums as extension points" \
+    "$review_principles::open-ended feature set" \
+    "$review_principles::switches or conditionals in several places" \
+    "$review_principles::small, stable, closed set" \
+    "$review_evals::review-detects-enum-extension-traps" \
+    "$review_evals::handlers, strategies" \
+    "$review_evals::stable closed enum"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        enum_extension_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#enum_extension_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review enum extension guidance is incomplete: ${enum_extension_failures[*]}"
+fi
+
 test_start "assistant-review direct fallback does not require reviewer dispatch"
 review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"

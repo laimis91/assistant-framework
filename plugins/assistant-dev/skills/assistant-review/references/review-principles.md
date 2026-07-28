@@ -30,6 +30,20 @@ Avoid building capability for imagined future requirements. Flag speculative ext
 
 YAGNI is not permission to neglect code health. Tests, refactoring that keeps the code malleable, and small seams around real side effects can be current needs.
 
+## State and Extensibility Modeling
+
+### Nullable properties as hidden state
+
+- Flag code when `null -> value` or `value -> null` represents a business or lifecycle transition, especially when rules, side effects, or required data depend on that change.
+- Prefer named states and explicit transition methods or events that carry the required data.
+- Do not flag nullable properties when `null` only means optional or missing data.
+
+### Enums as extension points
+
+- Flag an enum when it represents an open-ended feature set and adding a value requires changing switches or conditionals in several places.
+- Prefer handlers, strategies, or another extensible design for open-ended cases.
+- Do not flag enums that represent a small, stable, closed set.
+
 ## Readability
 
 Readability is a human judgment of how easy code is to understand and safely maintain. Review for:
