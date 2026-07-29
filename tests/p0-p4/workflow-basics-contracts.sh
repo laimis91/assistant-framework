@@ -17,8 +17,10 @@ fi
 test_start "Codex AGENTS delegates phase detail to native skill routing"
 if grep -Fq 'Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.' \
     "$FRAMEWORK_DIR/install.sh" \
-    && grep -Fq "Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan" \
+    && grep -Fq "Get plan approval before medium+ or risky edits." \
     "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "The orchestrator owns framework state files" "$FRAMEWORK_DIR/install.sh" \
+    && ! grep -Fq "use direct fallback only after" "$FRAMEWORK_DIR/install.sh" \
     && ! grep -Fq "TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT" \
     "$FRAMEWORK_DIR/install.sh"; then
     pass
@@ -42,6 +44,58 @@ if rg -n "name: diff|Full diff|exists in the diff" \
     fail "found diff-only reviewer handoff wording; see /tmp/p0p4-review-handoff-diff-only.out"
 else
     pass
+fi
+
+test_start "review delegation dispatches from applicable instruction triggers"
+review_trigger_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::assistant-review contracts are v3" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::load \`contracts/input.yaml\` review-entry fields selected by \`review-entry-fields\` in \`contracts/index.yaml\`" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::v4 can consume the producer packet" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::subagent_trigger_scope" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::policy_blocking_source" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::qa_evaluation_mode" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::delegation_triggered" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::delegation_opted_out" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::direct user request or applicable AGENTS.md or active skill instruction" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::subagent_trigger_scope" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::subagent_trigger_scope" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::without a separate permission question"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        review_trigger_failures+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#review_trigger_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review trigger delegation contract missing: ${review_trigger_failures[*]}"
+fi
+
+test_start "review delegation outputs require exact policy-block evidence"
+review_policy_block_failures=()
+for artifact in review_delegation_path qa_evaluation_delegation_path; do
+    artifact_block="$(awk -v artifact="$artifact" '
+        $0 == "  - name: " artifact { inside = 1 }
+        inside { print }
+        inside && NR > 1 && $0 ~ /^  - name: / && $0 != "  - name: " artifact { exit }
+    ' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml")"
+    if ! grep -Fq -- '- name: policy_blocking_source' <<<"$artifact_block"; then
+        review_policy_block_failures+=("$artifact: missing policy_blocking_source")
+    elif ! grep -Fq -- 'required: conditional' <<<"$artifact_block"; then
+        review_policy_block_failures+=("$artifact: policy_blocking_source is not conditional")
+    elif ! grep -Fq -- 'subagent_policy_state == policy_disallowed' <<<"$artifact_block"; then
+        review_policy_block_failures+=("$artifact: missing policy_disallowed condition")
+    elif ! grep -Fq -- 'Exact active blocking rule' <<<"$artifact_block" \
+        || ! grep -Fq -- 'no applicable direct-user, AGENTS.md, or active-skill trigger exception' <<<"$artifact_block"; then
+        review_policy_block_failures+=("$artifact: missing exact blocking-rule validation")
+    fi
+done
+if [[ "${#review_policy_block_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review delegation outputs omit policy-block evidence: ${review_policy_block_failures[*]}"
 fi
 
 test_start "agentic loop safety review requires low-confidence escalation evidence"
@@ -90,7 +144,7 @@ for term in \
     "Required agents" \
     "Subagent policy state" \
     "Subagent execution mode" \
-    "Subagent authorization scope" \
+    "Subagent trigger scope" \
     "Candidate scope scan" \
     "Bugfix" \
     "Feature" \
@@ -117,7 +171,7 @@ for term in \
     "required_agents" \
     "subagent_policy_state" \
     "subagent_execution_mode" \
-    "subagent_authorization_scope"; do
+    "subagent_trigger_scope"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
         missing_triage_terms+=("input.yaml: $term")
     fi
@@ -131,7 +185,7 @@ for term in \
     "controller_intensity is set" \
     "required_gates includes common gates" \
     "build_execution_lane and required_agents/fallback roles are populated" \
-    "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are initialized" \
+    "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized" \
     "candidate_scope_scan is populated from a quick read-only scan"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_triage_terms+=("phase-gates.yaml: $term")
@@ -145,7 +199,7 @@ for term in \
     "Required agents:" \
     "Subagent policy state:" \
     "Subagent execution mode:" \
-    "Subagent authorization scope:" \
+    "Subagent trigger scope:" \
     "Candidate scope scan:"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
         missing_triage_terms+=("task-journal-template.md: $term")
@@ -186,6 +240,28 @@ if [[ "${#missing_reference_mapping_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow reference mapping guard missing terms: ${missing_reference_mapping_terms[*]}"
+fi
+
+test_start "workflow records bounded reuse-search evidence for rule-like changes"
+reuse_search_workflow_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::reuse_search" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::before implementation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::## Reuse Search" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::applicability_reason: [concrete reason]" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::- Reuse search:" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::decision_rationale"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        reuse_search_workflow_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ "${#reuse_search_workflow_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow reuse-search evidence gate/template is incomplete: ${reuse_search_workflow_failures[*]}"
 fi
 
 test_start "internal workflow controller reference exists and is linked"

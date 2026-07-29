@@ -36,6 +36,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 ### Task [ID]: [short name]
 - name: [task packet name; must populate current_task_packet.name]
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
+- Slice topology: target_branch: [target] | target_base_sha: [immutable target commit SHA] | task_branch: feature/[task] | slice_branch: slice/[task]/[slice_id] | promotion_mode: [local | review_gated]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
@@ -57,6 +58,15 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Implementation notes / constraints:
   - implementation_notes:
     - [existing pattern to follow, dependency rule, non-goal, or boundary]
+- Reuse search:
+  - applicability: [applicable | not_applicable]
+  - applicability_reason: [concrete reason]
+  - searches: [query_or_path | scope | outcome; required when applicable]
+  - candidates: [name | location | disposition: reuse | extend | intentional_duplicate | reject_coincidental | reject_independent | rationale]
+  - no_candidate_reason: [required when applicable and candidates are empty]
+  - decision: [reuse | extend | new | intentional_duplicate]
+  - decision_rationale: [why this is the bounded existing-capability decision]
+  - divergence_control: [required for intentional_duplicate]
 - Verification:
   - verification_command: ["executable", "arg1", "arg2"]
   - argv rule: [one literal argument per item; execute directly without shell parsing]
@@ -78,6 +88,11 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 
 ## Slice Manifest
 
+For `review_gated`, copy the complete topology metadata into every packet and
+record `REVIEW_PENDING` review evidence rather than calling the slice VERIFIED.
+Use `references/slice-review-topology.md` for the exact evidence and adapter
+boundary; legacy briefs are a separate compatibility format and cannot mix.
+
 For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
 
 ```markdown
@@ -85,7 +100,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 
 [paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
 
-- slice_id:
+- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]
 - name:
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
@@ -125,9 +140,9 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Plan mode: [approval_required]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
-- Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+- Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
-- Subagent authorization scope: [roles/phases/actions explicitly authorized by the user, or none]
+- Subagent trigger scope: [direct user | applicable AGENTS.md | active skill; covered roles/phases/actions, or none]
 - Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; required only for policy_disallowed]
 - Search mode: [none | lightweight | candidate_search]
 
@@ -135,6 +150,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - [Q&A question]: [chosen option and why]
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
+- Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
 
 ## Research (current state)
 - Modules/subprojects: ...
@@ -253,7 +269,7 @@ Start with the Medium template, then add the sections below.
 - Runbook updates: [new on-call procedures needed?]
 
 ## Large/Mega addenda
-- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent authorization scope`, and `Search mode` as in Medium.
+- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent trigger scope`, and `Search mode` as in Medium.
 - Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
 - Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
 - Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.

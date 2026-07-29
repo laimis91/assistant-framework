@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -39,8 +39,8 @@ gates:
         on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
 
       - id: E6
-        check: "subagent_policy_state, subagent_execution_mode, and subagent_authorization_scope are resolved before any Reviewer subagent dispatch"
-        on_fail: "Resolve the active adapter/tool policy. Ask once when explicit authorization is required, or set direct_fallback/not_applicable and record why no Reviewer subagent will be spawned."
+        check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required Reviewer roles without a separate permission question. Otherwise preserve and complete the evidenced direct fallback state; do not overwrite explicit opt-out."
 
       - id: E7
         check: "If qa_evaluation_mode is required: Done Contract with debate_record when available, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, and qa_filter_policy are resolved before QAEvaluator dispatch"
@@ -76,7 +76,7 @@ gates:
         on_fail: "Resolve the reviewer_context load set, create the same bounded bundle used by delegated review, clear stale assumptions, record direct-fallback evidence, and do not claim a Reviewer subagent was dispatched"
 
       - id: RS2
-        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, review_preparation_mode, review_evidence_pointer proving latest Spec Review PASS plus required build_test_verification_ref, round, previously_fixed, finding_filter_policy, review-principles, review-rubric when required, and only triggered checklist sections"
+        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, review_preparation_mode, review_evidence_pointer proving latest Spec Review PASS plus required build_test_verification_ref, round, previously_fixed, finding_filter_policy, reuse_search_instruction requiring a fresh independent capability search, review-principles, review-rubric when required, and only triggered checklist sections"
         on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and re-dispatch or restart direct fallback with the repaired bundle."
 
       - id: RS2A
@@ -103,6 +103,10 @@ gates:
       - id: RS6
         check: "Reviewer or direct-fallback review applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
         on_fail: "In delegated mode, re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only. In direct fallback mode, complete principle_checks against the fresh review context."
+
+      - id: RS_REUSE_SEARCH
+        check: "Reviewer or direct-fallback return includes reuse_search from a fresh independent capability search, not merely carried Mapper/task-packet evidence. When applicability=applicable, it records bounded searches, candidates or no_candidate_reason, decision, and decision_rationale; an applicable review cannot return clean without this evidence."
+        on_fail: "Re-dispatch Reviewer or complete direct fallback with the fresh independent bounded reuse search. For not_applicable, record the concrete applicability_reason without search ceremony."
 
       - id: RS7
         check: "When semantic_contract_review_required is true: Reviewer or direct-fallback review applied the Semantic Contract Review Checklist and returned semantic_contract_checks"

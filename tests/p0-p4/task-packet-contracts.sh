@@ -109,7 +109,7 @@ for term in \
     "criteria_checked" \
     "self_check_result" \
     "final_status" \
-    "enum_values: [VERIFIED]" \
+    "enum_values: [REVIEW_PENDING, BLOCKED, VERIFIED]" \
     "Every slice final status must be VERIFIED before"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
         missing_slice_output_terms+=("$term")
@@ -233,7 +233,7 @@ for file in \
         "slice_id values are unique branch/path-safe" \
         "depends_on entries reference only declared slice_id values" \
         "without self dependencies or circular dependencies" \
-        "Unique branch/path-safe slice identifier reused for branches, worktrees, brief filenames, and depends_on references" \
+        "Stable descriptive outcome-oriented slice identifier that is branch/path-safe and reused for branches, worktrees, brief filenames, and depends_on references" \
         "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators" \
         "Every dependency is the slice_id of another declared slice in this manifest; no self dependency or circular dependency is allowed; use an empty array when there are no dependencies"; do
         if ! grep -Fq -- "$term" "$file"; then
@@ -247,7 +247,54 @@ else
     fail "output.yaml missing safe slice_id/dependency contract terms: ${missing_safe_slice_contract_terms[*]}"
 fi
 
-test_start "workflow decompose non-dry-run creates non-conflicting integration and slice refs"
+test_start "workflow slice identities are descriptive while ordering stays display-only"
+missing_descriptive_slice_terms=()
+for skill_root in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"; do
+    output_contract="$skill_root/contracts/output.yaml"
+    phase_gates="$skill_root/contracts/phase-gates.yaml"
+    plan_template="$skill_root/references/plan-template.md"
+    journal_template="$skill_root/references/task-journal-template.md"
+    topology_reference="$skill_root/references/slice-review-topology.md"
+
+    for term in \
+        "Stable descriptive outcome-oriented slice identifier" \
+        "Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"; do
+        if ! grep -Fq -- "$term" "$output_contract"; then
+            missing_descriptive_slice_terms+=("${output_contract#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+    for term in \
+        "- id: DC_SLICE_IDENTITY" \
+        "Every slice_id names its observable increment or verified deliverable" \
+        "- id: DC_SLICE_SEQUENCE_LABEL" \
+        "No slice_id is an ordinal-only or generic sequence label"; do
+        if ! grep -Fq -- "$term" "$phase_gates"; then
+            missing_descriptive_slice_terms+=("${phase_gates#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+    if ! grep -Fq -- "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" "$plan_template"; then
+        missing_descriptive_slice_terms+=("${plan_template#$FRAMEWORK_DIR/}: descriptive slice_id template")
+    fi
+    if ! grep -Fq -- "| 1. [slice_id] [name] |" "$journal_template" \
+        || grep -Fq -- "| S1: [slice_id] [name] |" "$journal_template"; then
+        missing_descriptive_slice_terms+=("${journal_template#$FRAMEWORK_DIR/}: ordinal must be display-only and separate from slice_id")
+    fi
+    if ! grep -Fq -- "\`<slice-id>\` is a stable descriptive outcome or deliverable slug; sequence numbers belong to manifest order and display labels, not branch identity" "$topology_reference"; then
+        missing_descriptive_slice_terms+=("${topology_reference#$FRAMEWORK_DIR/}: descriptive branch identity guidance")
+    fi
+done
+if ! grep -Fq -- "descriptive outcome-oriented slice identifiers" "$FRAMEWORK_DIR/README.md"; then
+    missing_descriptive_slice_terms+=("README.md: descriptive outcome-oriented slice identifier guidance")
+fi
+if [[ "${#missing_descriptive_slice_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow descriptive slice identity contract is incomplete: ${missing_descriptive_slice_terms[*]}"
+fi
+
+test_start "workflow decompose creates task and collision-safe slice refs with complete topology metadata"
 decompose_branch_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-decompose-branches.XXXXXX")"
 p0p4_register_cleanup "$decompose_branch_repo"
 git -C "$decompose_branch_repo" init -q
@@ -307,42 +354,186 @@ decompose_branch_out="$decompose_runtime_output/decompose.out"
 decompose_branch_err="$decompose_runtime_output/decompose.err"
 decompose_check_out="$decompose_runtime_output/check-integration.out"
 decompose_check_err="$decompose_runtime_output/check-integration.err"
+decompose_ready_briefs="$decompose_runtime_output/ready-briefs"
 if ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task branch-safe --input "$decompose_branch_manifest" --base "$decompose_branch_base" >"$decompose_branch_out" 2>"$decompose_branch_err"); then
     fail "decompose.sh non-dry-run branch probe failed: $(tr '\n' ' ' <"$decompose_branch_err")"
-elif ! git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe/integration"; then
-    fail "decompose.sh did not create feature/branch-safe/integration"
-elif ! git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe/slice-alpha-core"; then
-    fail "decompose.sh did not create feature/branch-safe/slice-alpha-core"
-elif git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe/slice-beta-flow"; then
-    fail "decompose.sh created dependent slice branch feature/branch-safe/slice-beta-flow before alpha-core was verified"
-elif git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe"; then
-    fail "decompose.sh created conflicting parent ref feature/branch-safe"
+elif ! git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe"; then
+    fail "decompose.sh did not create task branch feature/branch-safe from the --base alias"
+elif [[ "$(git -C "$decompose_branch_repo" rev-parse feature/branch-safe)" != "$(git -C "$decompose_branch_repo" rev-parse "$decompose_branch_base")" ]]; then
+    fail "decompose.sh task branch was not based on the explicit --base ref"
+elif ! git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/slice/branch-safe/alpha-core"; then
+    fail "decompose.sh did not create collision-safe slice/branch-safe/alpha-core"
+elif git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/slice/branch-safe/beta-flow"; then
+    fail "decompose.sh created dependent slice branch slice/branch-safe/beta-flow before alpha-core was verified"
+elif git -C "$decompose_branch_repo" show-ref --verify --quiet "refs/heads/feature/branch-safe/integration"; then
+    fail "decompose.sh retained the retired feature/<task>/integration topology"
 elif [[ ! -d "$decompose_branch_repo/.worktrees/alpha-core" ]]; then
     fail "decompose.sh did not create dependency-free alpha-core worktree"
 elif [[ -d "$decompose_branch_repo/.worktrees/beta-flow" ]]; then
     fail "decompose.sh created dependent beta-flow worktree before alpha-core was verified"
 elif [[ ! -f "$decompose_branch_repo/briefs/slice-1-alpha-core.md" || ! -f "$decompose_branch_repo/briefs/slice-2-beta-flow.md" ]]; then
     fail "decompose.sh did not create expected slice brief files"
-elif ! grep -Fq -- "- Git branch: feature/branch-safe/slice-alpha-core" "$decompose_branch_repo/briefs/slice-1-alpha-core.md"; then
-    fail "alpha brief did not record the new slice branch scheme"
+elif ! grep -Fq -- "- target_branch: ${decompose_branch_base}" "$decompose_branch_repo/briefs/slice-1-alpha-core.md" \
+    || ! grep -Fq -- "- task_branch: feature/branch-safe" "$decompose_branch_repo/briefs/slice-1-alpha-core.md" \
+    || ! grep -Fq -- "- slice_branch: slice/branch-safe/alpha-core" "$decompose_branch_repo/briefs/slice-1-alpha-core.md" \
+    || ! grep -Fq -- "- promotion_mode: local" "$decompose_branch_repo/briefs/slice-1-alpha-core.md"; then
+    fail "alpha brief did not emit complete strict target_branch/task_branch/slice_branch/promotion_mode metadata"
 elif ! grep -Fq -- "Worktree: .worktrees/beta-flow (created at launch after dependencies are VERIFIED)" "$decompose_branch_repo/briefs/slice-2-beta-flow.md"; then
     fail "dependent beta brief did not record launch-time worktree creation"
-elif ! grep -Fq -- "Deferring branch 'feature/branch-safe/slice-beta-flow' until dependencies are VERIFIED" "$decompose_branch_out"; then
+elif ! grep -Fq -- "Deferring branch 'slice/branch-safe/beta-flow' until dependencies are VERIFIED" "$decompose_branch_out"; then
     fail "decompose summary did not explain deferred dependent branch creation"
 elif ! grep -Fq -- "branch/worktree deferred until dependencies are VERIFIED" "$decompose_branch_out"; then
     fail "decompose summary did not list deferred dependent slice worktree"
-elif ! grep -Fq -- "Integration branch: feature/branch-safe/integration" "$decompose_branch_out"; then
-    fail "decompose summary did not record the new integration branch scheme"
-elif ! (cd "$decompose_branch_repo/.worktrees/alpha-core" && printf 'alpha output\n' >alpha.txt && git add alpha.txt && git commit -q -m "alpha output"); then
+elif ! grep -Fq -- "Task branch: feature/branch-safe" "$decompose_branch_out"; then
+    fail "decompose summary did not record the task branch topology"
+elif ! (mkdir -p "$decompose_ready_briefs" \
+    && cp "$decompose_branch_repo/briefs/slice-1-alpha-core.md" "$decompose_ready_briefs/" \
+    && cd "$decompose_branch_repo/.worktrees/alpha-core" \
+    && printf 'alpha output\n' >alpha.txt \
+    && git add alpha.txt \
+    && git commit -q -m "alpha output"); then
     fail "decompose branch probe could not create required slice output commit before integration readiness check"
 elif ! (git -C "$decompose_branch_repo" add briefs && git -C "$decompose_branch_repo" commit -q -m "record slice briefs"); then
     fail "decompose branch probe could not commit generated brief artifacts before clean integration validation"
-elif ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --integration-branch feature/branch-safe/integration --dry-run --skip-validation "contract fixture" >"$decompose_check_out" 2>"$decompose_check_err"); then
-    fail "check-integration.sh did not accept the new integration branch scheme: $(tr '\n' ' ' <"$decompose_check_err")"
+elif ! (cd "$decompose_branch_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --task-branch feature/branch-safe --briefs "$decompose_ready_briefs" --dry-run --skip-validation "contract fixture" >"$decompose_check_out" 2>"$decompose_check_err"); then
+    fail "check-integration.sh did not accept --task-branch with explicit briefs: $(tr '\n' ' ' <"$decompose_check_err")"
 elif ! grep -Fq -- "Found 1 slice branch(es)" "$decompose_check_out"; then
     fail "check-integration.sh did not discover the dependency-free slice branch"
-elif grep -Fq -- "  - feature/branch-safe/integration" "$decompose_check_out"; then
-    fail "check-integration.sh included the integration branch as a slice"
+elif grep -Fq -- "  - feature/branch-safe" "$decompose_check_out"; then
+    fail "check-integration.sh included the task branch as a slice"
+else
+    pass
+fi
+
+test_start "workflow check-integration rejects a declared new-topology slice branch that is missing"
+declared_missing_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-declared-missing.XXXXXX")"
+p0p4_register_cleanup "$declared_missing_repo"
+git -C "$declared_missing_repo" init -q
+git -C "$declared_missing_repo" config user.email "p0p4@example.invalid"
+git -C "$declared_missing_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$declared_missing_repo/README.md"
+git -C "$declared_missing_repo" add README.md
+git -C "$declared_missing_repo" commit -q -m init
+declared_missing_caller="$(git -C "$declared_missing_repo" branch --show-current)"
+git -C "$declared_missing_repo" branch feature/declared-missing
+git -C "$declared_missing_repo" checkout -q -b slice/declared-missing/alpha feature/declared-missing
+printf 'alpha output\n' >"$declared_missing_repo/alpha.txt"
+git -C "$declared_missing_repo" add alpha.txt
+git -C "$declared_missing_repo" commit -q -m alpha
+git -C "$declared_missing_repo" checkout -q "$declared_missing_caller"
+mkdir -p "$declared_missing_repo/briefs"
+for declared_missing_id in alpha beta; do
+    cat >"$declared_missing_repo/briefs/slice-1-${declared_missing_id}.md" <<BRIEF
+## Slice Brief: ${declared_missing_id}
+
+### Strict slice packet (execution contract)
+- slice_id: ${declared_missing_id}
+- slice_name: ${declared_missing_id}
+- target_branch: ${declared_missing_caller}
+- target_base_sha: $(git -C "$declared_missing_repo" rev-parse "$declared_missing_caller")
+- task_branch: feature/declared-missing
+- slice_branch: slice/declared-missing/${declared_missing_id}
+- promotion_mode: local
+- observable_increment: fixture
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - ${declared_missing_id}.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] fixture passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - fixture
+- deviation_rollback_rule: Return DEVIATED
+BRIEF
+done
+git -C "$declared_missing_repo" add briefs
+git -C "$declared_missing_repo" commit -q -m briefs
+declared_missing_out="$(mktemp "${TMPDIR:-/tmp}/workflow-declared-missing-out.XXXXXX")"
+declared_missing_err="$(mktemp "${TMPDIR:-/tmp}/workflow-declared-missing-err.XXXXXX")"
+p0p4_register_cleanup "$declared_missing_out" "$declared_missing_err"
+if (cd "$declared_missing_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/check-integration.sh" --task-branch feature/declared-missing --briefs "$declared_missing_repo/briefs" --skip-validation 'declared branch fixture' >"$declared_missing_out" 2>"$declared_missing_err"); then
+    fail "check-integration silently omitted declared slice/declared-missing/beta"
+elif ! grep -Eqi 'declared.*beta|beta.*(missing|not found)|slice branch.*missing' "$declared_missing_out" "$declared_missing_err"; then
+    fail "missing declared slice rejection did not name beta before readiness evaluation"
+else
+    pass
+fi
+
+test_start "workflow decompose reuses the immutable target binding after target branch advances"
+target_reuse_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-target-reuse.XXXXXX")"
+p0p4_register_cleanup "$target_reuse_repo"
+git -C "$target_reuse_repo" init -q
+git -C "$target_reuse_repo" config user.email "p0p4@example.invalid"
+git -C "$target_reuse_repo" config user.name "P0 P4"
+printf 'base\n' >"$target_reuse_repo/README.md"
+git -C "$target_reuse_repo" add README.md
+git -C "$target_reuse_repo" commit -q -m base
+target_reuse_target="$(git -C "$target_reuse_repo" branch --show-current)"
+cat >"$target_reuse_repo/decomposition.json" <<'JSON'
+{"task":"target-reuse","description":"binding fixture","single_slice_rationale":"One isolated fixture is sufficient.","slice_manifest":[{"slice_id":"alpha","name":"Alpha","observable_increment":"fixture","deliverable_type":"behavior","files_to_create":[],"files_to_modify":["alpha.txt"],"files_to_test":[],"enabling_changes_included":[],"depends_on":[],"acceptance_criteria":["fixture passes"],"verification_command":["true"],"expected_success_signal":"true exits 0","evidence_to_record":["fixture"],"deviation_rollback_rule":"Return DEVIATED"}]}
+JSON
+target_reuse_first_out="$target_reuse_repo/first.out"
+target_reuse_first_err="$target_reuse_repo/first.err"
+target_reuse_second_out="$target_reuse_repo/second.out"
+target_reuse_second_err="$target_reuse_repo/second.err"
+if ! (cd "$target_reuse_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task target-reuse --input decomposition.json --target-branch "$target_reuse_target" >"$target_reuse_first_out" 2>"$target_reuse_first_err"); then
+    fail "initial target-binding decomposition failed: $(tr '\n' ' ' <"$target_reuse_first_err")"
+elif ! target_reuse_bound_sha="$(sed -n 's/^- target_base_sha:[[:space:]]*//p' "$target_reuse_repo/briefs/slice-1-alpha.md")" || [[ -z "$target_reuse_bound_sha" ]]; then
+    fail "decompose did not record target_base_sha in the strict brief"
+else
+    printf 'target moved\n' >"$target_reuse_repo/target-moved.txt"
+    git -C "$target_reuse_repo" add target-moved.txt
+    git -C "$target_reuse_repo" commit -q -m 'advance target'
+    if ! (cd "$target_reuse_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task target-reuse --input decomposition.json --target-branch "$target_reuse_target" >"$target_reuse_second_out" 2>"$target_reuse_second_err"); then
+        fail "decompose rejected a reusable task after its recorded target branch advanced: $(tr '\n' ' ' <"$target_reuse_second_err")"
+    elif [[ "$(sed -n 's/^- target_base_sha:[[:space:]]*//p' "$target_reuse_repo/briefs/slice-1-alpha.md")" != "$target_reuse_bound_sha" ]]; then
+        fail "decompose rewrote immutable target_base_sha after target branch advanced"
+    else
+        pass
+    fi
+fi
+
+test_start "workflow decompose refuses a task branch with a divergent recorded target binding"
+target_drift_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-target-drift.XXXXXX")"
+p0p4_register_cleanup "$target_drift_repo"
+git -C "$target_drift_repo" init -q
+git -C "$target_drift_repo" config user.email "p0p4@example.invalid"
+git -C "$target_drift_repo" config user.name "P0 P4"
+printf 'common\n' >"$target_drift_repo/README.md"
+git -C "$target_drift_repo" add README.md && git -C "$target_drift_repo" commit -q -m common
+target_drift_common="$(git -C "$target_drift_repo" rev-parse HEAD)"
+git -C "$target_drift_repo" checkout -q -b target-a "$target_drift_common"
+printf 'a\n' >"$target_drift_repo/a.txt"
+git -C "$target_drift_repo" add a.txt && git -C "$target_drift_repo" commit -q -m a
+target_drift_a="$(git -C "$target_drift_repo" rev-parse HEAD)"
+git -C "$target_drift_repo" checkout -q -b target-b "$target_drift_common"
+printf 'b\n' >"$target_drift_repo/b.txt"
+git -C "$target_drift_repo" add b.txt && git -C "$target_drift_repo" commit -q -m b
+git -C "$target_drift_repo" branch feature/target-drift "$target_drift_a"
+mkdir -p "$target_drift_repo/briefs"
+printf '%s\n' "- target_branch: target-a" "- target_base_sha: $target_drift_a" "- task_branch: feature/target-drift" "- slice_branch: slice/target-drift/alpha" "- promotion_mode: local" >"$target_drift_repo/briefs/slice-1-alpha.md"
+printf '%s\n' '{"task":"target-drift","single_slice_rationale":"Fixture.","slice_manifest":[{"slice_id":"alpha","name":"Alpha","observable_increment":"fixture","deliverable_type":"behavior","files_to_create":[],"files_to_modify":[],"files_to_test":[],"enabling_changes_included":[],"depends_on":[],"acceptance_criteria":["fixture"],"verification_command":["true"],"expected_success_signal":"true","evidence_to_record":["fixture"],"deviation_rollback_rule":"Return DEVIATED"}]}' >"$target_drift_repo/decomposition.json"
+target_drift_before="$(git -C "$target_drift_repo" rev-parse feature/target-drift)"
+target_drift_out="$(mktemp "${TMPDIR:-/tmp}/workflow-target-drift-out.XXXXXX")"
+target_drift_err="$(mktemp "${TMPDIR:-/tmp}/workflow-target-drift-err.XXXXXX")"
+p0p4_register_cleanup "$target_drift_out" "$target_drift_err"
+if (cd "$target_drift_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task target-drift --input decomposition.json --target-branch target-b >"$target_drift_out" 2>"$target_drift_err"); then
+    fail "decompose accepted a feature branch bound to divergent target-a for target-b"
+elif [[ "$(git -C "$target_drift_repo" rev-parse feature/target-drift)" != "$target_drift_before" ]] \
+    || git -C "$target_drift_repo" show-ref --verify --quiet refs/heads/slice/target-drift/alpha; then
+    fail "divergent target rejection mutated task refs before failing"
+elif ! grep -Eqi 'target.*(binding|base|diverg)|target_base_sha' "$target_drift_out" "$target_drift_err"; then
+    fail "divergent target rejection did not identify target_base_sha binding"
 else
     pass
 fi
@@ -713,23 +904,17 @@ else
     fail "task-journal-template.md must anchor native dispatch evidence to Created identity: ${missing_task_identity_terms[*]}"
 fi
 
-test_start "workflow subagent policy state gates delegation before fallback"
+test_start "workflow subagent policy state dispatches from instruction triggers before fallback"
 missing_workflow_subagent_gate=()
 workflow_subagent_gate_surfaces=(
     "skills/assistant-workflow/SKILL.md"
+    "skills/assistant-workflow/contracts/index.yaml"
     "skills/assistant-workflow/contracts/input.yaml"
     "skills/assistant-workflow/contracts/output.yaml"
     "skills/assistant-workflow/contracts/phase-gates.yaml"
     "skills/assistant-workflow/references/subagent-dispatch.md"
     "skills/assistant-workflow/references/task-journal-template.md"
     "skills/assistant-workflow/references/phases.md"
-    "plugins/assistant-dev/skills/assistant-workflow/SKILL.md"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"
-    "plugins/assistant-dev/skills/assistant-workflow/references/subagent-dispatch.md"
-    "plugins/assistant-dev/skills/assistant-workflow/references/task-journal-template.md"
-    "plugins/assistant-dev/skills/assistant-workflow/references/phases.md"
 )
 for surface in "${workflow_subagent_gate_surfaces[@]}"; do
     if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
@@ -739,36 +924,37 @@ done
 workflow_subagent_gate_terms=(
     "skills/assistant-workflow/SKILL.md|subagent_policy_state"
     "skills/assistant-workflow/SKILL.md|subagent_execution_mode"
-    "skills/assistant-workflow/SKILL.md|subagent_authorization_scope"
-    "skills/assistant-workflow/SKILL.md|Assistant Framework policy requires explicit user authorization before spawning subagents"
-    "skills/assistant-workflow/SKILL.md|Ask once for the needed delegation scope and wait before continuing phases that require subagents"
-    "skills/assistant-workflow/SKILL.md|After authorization, use \`delegated\` mode and spawn the configured role agents"
+    "skills/assistant-workflow/SKILL.md|subagent_trigger_scope"
+    "skills/assistant-workflow/SKILL.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
+    "skills/assistant-workflow/SKILL.md|dispatch the configured role agents without a separate permission question"
+    "skills/assistant-workflow/SKILL.md|delegation_triggered"
     "skills/assistant-workflow/SKILL.md|do not infer unavailability merely because no visible tool is named \`Task\`, \`delegate\`, or \`subagent\`"
+    "skills/assistant-workflow/contracts/index.yaml|id: workflow-delegation-fields"
+    "skills/assistant-workflow/contracts/index.yaml|names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]"
     "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state"
-    "skills/assistant-workflow/contracts/input.yaml|authorization_required"
-    "skills/assistant-workflow/contracts/input.yaml|delegation_authorized"
-    "skills/assistant-workflow/contracts/input.yaml|authorization_denied"
+    "skills/assistant-workflow/contracts/input.yaml|delegation_triggered"
+    "skills/assistant-workflow/contracts/input.yaml|delegation_opted_out"
     "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
     "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
     "skills/assistant-workflow/contracts/input.yaml|not_applicable is invalid for Build"
     "skills/assistant-workflow/contracts/input.yaml|Code Writer, Builder/Tester, and Code Reviewer"
     "skills/assistant-workflow/contracts/input.yaml|Reviewer may satisfy only compatibility routing"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/input.yaml|subagent_trigger_scope"
     "skills/assistant-workflow/contracts/output.yaml|subagent_policy_state"
     "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
-    "skills/assistant-workflow/contracts/output.yaml|subagent_authorization_scope"
+    "skills/assistant-workflow/contracts/output.yaml|subagent_trigger_scope"
     "skills/assistant-workflow/contracts/output.yaml|- name: subagent_evidence"
     "skills/assistant-workflow/contracts/output.yaml|Evidence matches build_execution_lane"
     "skills/assistant-workflow/contracts/output.yaml|per_slice_dispatch_evidence"
-    "skills/assistant-workflow/contracts/output.yaml|authorization_denied, subagents_unavailable, or policy_disallowed"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_AUTH"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|explicit user authorization is obtained before any phase that requires subagents continues"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with authorization_denied"
+    "skills/assistant-workflow/contracts/output.yaml|delegation_opted_out, subagents_unavailable, or policy_disallowed"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_TRIGGER"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|delegated dispatch without a separate permission question"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with delegation_opted_out"
     "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_EVIDENCE"
     "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_SLICE_EVIDENCE"
     "skills/assistant-workflow/references/subagent-dispatch.md|Delegation Policy State"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Assistant Framework policy requires explicit user authorization before spawning subagents"
-    "skills/assistant-workflow/references/subagent-dispatch.md|ask the authorization question, and wait"
+    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
+    "skills/assistant-workflow/references/subagent-dispatch.md|without a separate permission question"
     "skills/assistant-workflow/references/subagent-dispatch.md|For Codex, current CLI/app releases support native subagent workflows by default"
     "skills/assistant-workflow/references/subagent-dispatch.md|Do not mark \`subagents_unavailable\` merely because the visible tool list lacks a tool named \`Task\`, \`delegate\`, or \`subagent\`"
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
@@ -786,7 +972,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
     "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester dispatch/result/direct evidence"
     "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
-    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_authorization_scope\` before spawning any subagent"
+    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_trigger_scope\` before spawning any subagent"
     "skills/assistant-workflow/references/phases.md|add Code Mapper to \`Required agents\`"
     "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
     "skills/assistant-workflow/references/phases.md|\`assistant-review\` SKILL.md and contracts"
@@ -797,8 +983,7 @@ workflow_subagent_gate_terms=(
 )
 for pair in "${workflow_subagent_gate_terms[@]}"; do
     IFS='|' read -r root_surface term <<< "$pair"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
             missing_workflow_subagent_gate+=("$surface: $term")
         fi
@@ -807,40 +992,36 @@ done
 if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
     missing_workflow_subagent_gate+=("skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
 fi
-if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/phases.md"; then
-    missing_workflow_subagent_gate+=("plugins/assistant-dev/skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
-fi
 if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
-test_start "workflow delegation fallback requires authorization or evidenced policy block"
+test_start "workflow delegation fallback requires trigger evidence or policy block"
 workflow_delegation_proof_failures=()
 workflow_delegation_proof_terms=(
     "skills/assistant-workflow/contracts/input.yaml|policy_blocking_source"
     "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state == policy_disallowed"
-    "skills/assistant-workflow/contracts/input.yaml|required_agents is non-empty and no explicit delegation approval or denial exists"
-    "skills/assistant-workflow/contracts/input.yaml|Plan approval is not delegation approval"
+    "skills/assistant-workflow/contracts/input.yaml|When required_agents is non-empty"
+    "skills/assistant-workflow/contracts/input.yaml|direct user, applicable AGENTS.md, or active skill instruction"
     "skills/assistant-workflow/contracts/output.yaml|policy_blocking_source"
     "skills/assistant-workflow/contracts/output.yaml|policy_disallowed"
     "skills/assistant-workflow/contracts/phase-gates.yaml|policy_blocking_source"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|does not make policy_disallowed when the active skill requires subagents"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Plan approval is not delegation approval"
+    "skills/assistant-workflow/contracts/phase-gates.yaml|no applicable trigger exception"
+    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
     "skills/assistant-workflow/references/subagent-dispatch.md|policy_blocking_source"
     "skills/assistant-workflow/references/subagent-dispatch.md|active skill requires subagents"
     "skills/assistant-workflow/references/task-journal-template.md|Policy blocking source"
     "skills/assistant-workflow/references/plan-template.md|Policy blocking source"
-    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-missing-delegation-authorization"
-    "skills/assistant-workflow/evals/cases.json|authorization_required"
-    "skills/assistant-workflow/evals/cases.json|plan approval is not delegation approval"
+    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-dispatch-from-instruction-trigger"
+    "skills/assistant-workflow/evals/cases.json|delegation_triggered"
+    "skills/assistant-workflow/evals/cases.json|direct user, applicable AGENTS.md, or active skill instruction"
     "skills/assistant-workflow/evals/cases.json|policy_blocking_source"
 )
 for pair in "${workflow_delegation_proof_terms[@]}"; do
     IFS='|' read -r root_surface term <<< "$pair"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
             workflow_delegation_proof_failures+=("$surface: file missing")
         elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
@@ -851,30 +1032,85 @@ done
 if [[ "${#workflow_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow delegation fallback must carry authorization or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
+    fail "workflow delegation fallback must carry trigger or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
 fi
 
-test_start "workflow loads the delegation authorization invariant"
-workflow_authorization_invariant_failures=()
+test_start "workflow loads the delegation trigger invariant"
+workflow_trigger_invariant_failures=()
 for surface_and_term in \
-    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_AUTHORIZATION_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_AUTHORIZATION_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|required roles lack a delegation decision" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"; do
+    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_TRIGGER_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_TRIGGER_STATE" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct user, applicable AGENTS.md, or active skill instruction" \
+    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"; do
     IFS='|' read -r root_surface term <<< "$surface_and_term"
-    plugin_surface="plugins/assistant-dev/$root_surface"
-    for surface in "$root_surface" "$plugin_surface"; do
+    for surface in "$root_surface"; do
         if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
-            workflow_authorization_invariant_failures+=("$surface: file missing")
+            workflow_trigger_invariant_failures+=("$surface: file missing")
         elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
-            workflow_authorization_invariant_failures+=("$surface: $term")
+            workflow_trigger_invariant_failures+=("$surface: $term")
         fi
     done
 done
-if [[ "${#workflow_authorization_invariant_failures[@]}" -eq 0 ]]; then
+if [[ "${#workflow_trigger_invariant_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "workflow must load an authorization-state invariant for every phase: ${workflow_authorization_invariant_failures[*]}"
+    fail "workflow must load a trigger-state invariant for every phase: ${workflow_trigger_invariant_failures[*]}"
+fi
+
+test_start "delegation recovery preserves evidenced fallback and dispatches only from triggers"
+delegation_recovery_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced fallback state" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::applicable trigger exists" \
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced sequential fallback state" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced direct fallback state" \
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::active workflow instruction and its covered roles" \
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::direct-user opt-out is recorded only in subagent_policy_state=delegation_opted_out"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        delegation_recovery_failures+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#delegation_recovery_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "delegation recovery can overwrite opt-out or dispatch without a trigger: ${delegation_recovery_failures[*]}"
+fi
+
+test_start "active delegation surfaces exclude retired state identifiers"
+retired_delegation_identifiers=(
+    "authorization""_required"
+    "subagent""_authorization_scope"
+    "delegation""_authorized"
+    "authorization""_denied"
+)
+active_delegation_surfaces=(
+    "$FRAMEWORK_DIR/skills/assistant-workflow"
+    "$FRAMEWORK_DIR/skills/assistant-thinking"
+    "$FRAMEWORK_DIR/skills/assistant-review"
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review"
+    "$FRAMEWORK_DIR/plugins/assistant-research/skills/assistant-thinking"
+    "$FRAMEWORK_DIR/install.sh"
+    "$FRAMEWORK_DIR/install.ps1"
+    "$FRAMEWORK_DIR/docs/troubleshooting-subagents.md"
+    "$FRAMEWORK_DIR/docs/v0.3.0-research-improvements.md"
+    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json"
+    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+)
+retired_delegation_matches=()
+for identifier in "${retired_delegation_identifiers[@]}"; do
+    if matches="$(rg -n -F -- "$identifier" "${active_delegation_surfaces[@]}" 2>/dev/null)"; then
+        retired_delegation_matches+=("$matches")
+    fi
+done
+if [[ "${#retired_delegation_matches[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired delegation identifiers remain on active surfaces: ${retired_delegation_matches[*]}"
 fi
 
 test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"
@@ -1207,6 +1443,68 @@ else
     fail "Architect implementation_steps producer must cover consumer current_task_packet required fields: ${missing_packet_coverage[*]}"
 fi
 
+reuse_search_schema_signature() {
+    local file="$1"
+    local handoff="$2"
+    local section="$3"
+    local container="$4"
+
+    awk -v handoff="$handoff" -v section="$section" -v container="$container" '
+        function indent(line) { match(line, /^ */); return RLENGTH }
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && $0 == "    " section ":" { in_section = 1; next }
+        in_section && /^    (context_fields|return_fields):/ && $0 != "    " section ":" { exit }
+        !in_section { next }
+        container == "" && $0 == "      - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        container != "" && $0 == "      - name: " container { in_container = 1; next }
+        in_container && /^      - name: / && $0 != "      - name: " container { exit }
+        in_container && $0 == "          - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        !in_target { next }
+        indent($0) == target_indent && /^ *- name: / { exit }
+        /^ *- name: / {
+            value = $0
+            sub(/^ *- name: /, "", value)
+            print "field|" (indent($0) - target_indent) "|" value
+            next
+        }
+        /^ *(type|required|condition|enum_values|min_items): / {
+            key = $0
+            sub(/^ */, "", key)
+            value = key
+            sub(/^[^:]+: /, "", value)
+            sub(/: .*/, "", key)
+            print "attribute|" (indent($0) - target_indent) "|" key "|" value
+        }
+    ' "$file"
+}
+
+test_start "reuse-search schema is identical across mapper, task-packet, build, and review boundaries"
+reuse_search_packet_failures=()
+workflow_handoffs="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+canonical_reuse_search_schema="$(reuse_search_schema_signature "$workflow_handoffs" "orchestrator_to_code_mapper" "return_fields" "")"
+if [[ -z "$canonical_reuse_search_schema" ]]; then
+    reuse_search_packet_failures+=("CodeMapper return reuse_search schema is empty")
+fi
+for boundary in \
+    "Architect input:$workflow_handoffs:orchestrator_to_architect:context_fields:" \
+    "Architect implementation_steps:$workflow_handoffs:orchestrator_to_architect:return_fields:implementation_steps" \
+    "CodeWriter current_task_packet:$workflow_handoffs:orchestrator_to_code_writer:context_fields:current_task_packet" \
+    "BuilderTester current_task_packet:$workflow_handoffs:orchestrator_to_builder_tester:context_fields:current_task_packet" \
+    "Reviewer return:$review_handoffs:orchestrator_to_reviewer:return_fields:"; do
+    IFS=':' read -r boundary_name boundary_file boundary_handoff boundary_section boundary_container <<< "$boundary"
+    boundary_schema="$(reuse_search_schema_signature "$boundary_file" "$boundary_handoff" "$boundary_section" "$boundary_container")"
+    if [[ "$boundary_schema" != "$canonical_reuse_search_schema" ]]; then
+        reuse_search_packet_failures+=("$boundary_name reuse_search schema differs from CodeMapper return")
+    fi
+done
+if [[ "${#reuse_search_packet_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "reuse-search schema parity failed: ${reuse_search_packet_failures[*]}"
+fi
+
 test_start "workflow mega sub-task brief uses strict slice packet contract"
 sub_task_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
 missing_sub_task_packet_terms=()
@@ -1480,6 +1778,8 @@ git -C "$brief_validation_repo" config user.name "P0 P4"
 printf 'fixture\n' >"$brief_validation_repo/README.md"
 git -C "$brief_validation_repo" add README.md
 git -C "$brief_validation_repo" commit -q -m init
+brief_validation_target="$(git -C "$brief_validation_repo" branch --show-current)"
+brief_validation_target_base="$(git -C "$brief_validation_repo" rev-parse HEAD)"
 
 write_strict_probe_brief() {
     local briefs_dir="$1"
@@ -1649,6 +1949,253 @@ elif ! grep -Fq -- "Invalid depends_on value 'bad/id'" "$unsafe_dependency_err";
     fail "unsafe depends_on rejection was not actionable"
 elif grep -Fq -- "Agent " "$unsafe_dependency_out"; then
     fail "unsafe depends_on launched an agent before strict validation failed"
+else
+    pass
+fi
+
+test_start "workflow topology metadata rejects unsafe partial and conflicting values before agent dispatch"
+topology_metadata_briefs="$brief_validation_repo/topology-metadata"
+topology_partial_out="$brief_validation_repo/topology-partial.out"
+topology_partial_err="$brief_validation_repo/topology-partial.err"
+topology_conflict_out="$brief_validation_repo/topology-conflict.out"
+topology_conflict_err="$brief_validation_repo/topology-conflict.err"
+mkdir -p "$topology_metadata_briefs"
+cat >"$topology_metadata_briefs/slice-1-partial.md" <<BRIEF
+## Slice Brief: partial
+
+### Strict slice packet (execution contract)
+- slice_id: partial
+- slice_name: partial
+- target_branch: ${brief_validation_target}
+- target_base_sha: ${brief_validation_target_base}
+- task_branch: feature/topology-metadata
+- observable_increment: partial increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - partial.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] partial criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+BRIEF
+cat >"$topology_metadata_briefs/slice-2-conflict.md" <<BRIEF
+## Slice Brief: conflict
+
+### Strict slice packet (execution contract)
+- slice_id: conflict
+- slice_name: conflict
+- target_branch: ${brief_validation_target}
+- target_base_sha: ${brief_validation_target_base}
+- task_branch: feature/topology-metadata
+- slice_branch: slice/a-different-task/conflict
+- promotion_mode: local
+- observable_increment: conflict increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - conflict.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] conflict criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+BRIEF
+if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$topology_metadata_briefs" --repo "$brief_validation_repo" --dry-run >"$topology_partial_out" 2>"$topology_partial_err"; then
+    fail "run-agents.sh accepted partial topology metadata without slice_branch and promotion_mode"
+elif ! grep -Fq -- "missing topology metadata field 'slice_branch'" "$topology_partial_err"; then
+    fail "partial topology metadata failure did not identify the missing topology fields"
+elif grep -Fq -- "Agent " "$topology_partial_out"; then
+    fail "partial topology metadata reached dispatch before validation"
+elif mv "$topology_metadata_briefs/slice-1-partial.md" "$topology_metadata_briefs/slice-1-partial.disabled" \
+    && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$topology_metadata_briefs" --repo "$brief_validation_repo" --dry-run >"$topology_conflict_out" 2>"$topology_conflict_err"; then
+    fail "run-agents.sh accepted conflicting task_branch and slice_branch metadata"
+elif ! grep -Fq -- "slice_branch 'slice/a-different-task/conflict' does not match task_branch 'feature/topology-metadata'" "$topology_conflict_err"; then
+    fail "conflicting topology metadata failure was not actionable"
+elif grep -Fq -- "Agent " "$topology_conflict_out"; then
+    fail "conflicting topology metadata reached dispatch before validation"
+else
+    pass
+fi
+
+test_start "workflow whitespace topology metadata fails before dispatch without legacy fallback"
+topology_blank_briefs="$brief_validation_repo/topology-blank"
+mkdir -p "$topology_blank_briefs"
+topology_blank_ok=true
+for topology_blank_field in target_branch target_base_sha task_branch slice_branch promotion_mode; do
+    topology_blank_brief="$topology_blank_briefs/slice-1-alpha.md"
+    cat >"$topology_blank_brief" <<BRIEF
+## Slice Brief: alpha
+
+### Strict slice packet (execution contract)
+- slice_id: alpha
+- slice_name: alpha
+- target_branch: ${brief_validation_target}
+- target_base_sha: ${brief_validation_target_base}
+- task_branch: feature/topology-blank
+- slice_branch: slice/topology-blank/alpha
+- promotion_mode: local
+- observable_increment: alpha increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - alpha.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] alpha criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+
+### Supporting context (not the execution contract)
+- Git branch: feature/topology-blank/slice-alpha
+BRIEF
+    sed -i.bak "s/^- ${topology_blank_field}: .*/- ${topology_blank_field}:    /" "$topology_blank_brief"
+    rm -f "$topology_blank_brief.bak"
+    topology_blank_out="$brief_validation_repo/topology-blank-${topology_blank_field}.out"
+    topology_blank_err="$brief_validation_repo/topology-blank-${topology_blank_field}.err"
+    if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$topology_blank_briefs" --repo "$brief_validation_repo" --dry-run >"$topology_blank_out" 2>"$topology_blank_err"; then
+        fail "run-agents.sh accepted blank ${topology_blank_field} metadata"
+        topology_blank_ok=false
+        break
+    elif grep -Fq -- "Agent " "$topology_blank_out" || grep -Eq 'legacy|feature/.*/slice-' "$topology_blank_out" "$topology_blank_err"; then
+        fail "blank ${topology_blank_field} metadata reached dispatch or fell back to legacy topology"
+        topology_blank_ok=false
+        break
+    fi
+done
+if $topology_blank_ok; then
+    pass
+fi
+
+test_start "workflow all-whitespace topology metadata never downgrades to valid legacy context"
+topology_all_blank_briefs="$brief_validation_repo/topology-all-blank"
+topology_all_blank_out="$brief_validation_repo/topology-all-blank.out"
+topology_all_blank_err="$brief_validation_repo/topology-all-blank.err"
+mkdir -p "$topology_all_blank_briefs"
+cat >"$topology_all_blank_briefs/slice-1-alpha.md" <<'BRIEF'
+## Slice Brief: alpha
+
+### Strict slice packet (execution contract)
+- slice_id: alpha
+- slice_name: alpha
+- target_branch:
+- target_base_sha:
+- task_branch:
+- slice_branch:
+- promotion_mode:
+- observable_increment: alpha increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - alpha.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] alpha criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+
+### Supporting context (not the execution contract)
+- Git branch: feature/topology-blank/slice-alpha
+BRIEF
+sed -i.bak \
+    -e 's/^- target_branch:$/- target_branch:    /' \
+    -e 's/^- target_base_sha:$/- target_base_sha:    /' \
+    -e 's/^- task_branch:$/- task_branch:    /' \
+    -e 's/^- slice_branch:$/- slice_branch:    /' \
+    -e 's/^- promotion_mode:$/- promotion_mode:    /' \
+    "$topology_all_blank_briefs/slice-1-alpha.md"
+rm -f "$topology_all_blank_briefs/slice-1-alpha.md.bak"
+if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$topology_all_blank_briefs" --repo "$brief_validation_repo" --dry-run >"$topology_all_blank_out" 2>"$topology_all_blank_err"; then
+    fail "run-agents.sh accepted all-whitespace topology metadata through legacy fallback"
+elif grep -Fq -- "Agent " "$topology_all_blank_out" \
+    || grep -Eq 'legacy topology|feature/topology-blank/slice-alpha' "$topology_all_blank_out" "$topology_all_blank_err"; then
+    fail "all-whitespace topology metadata reached legacy dispatch instead of failing before launch"
+else
+    pass
+fi
+
+test_start "workflow decompose rejects unsafe task branch names before creating refs or briefs"
+unsafe_task_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-unsafe-task.XXXXXX")"
+p0p4_register_cleanup "$unsafe_task_repo"
+git -C "$unsafe_task_repo" init -q
+git -C "$unsafe_task_repo" config user.email "p0p4@example.invalid"
+git -C "$unsafe_task_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$unsafe_task_repo/README.md"
+git -C "$unsafe_task_repo" add README.md
+git -C "$unsafe_task_repo" commit -q -m init
+unsafe_task_manifest="$unsafe_task_repo/decomposition.json"
+cat >"$unsafe_task_manifest" <<'JSON'
+{
+  "task": "unsafe-task",
+  "description": "Unsafe task branch fixture",
+  "single_slice_rationale": "One fixture increment is sufficient.",
+  "slice_manifest": [{
+    "slice_id": "only",
+    "name": "Only",
+    "observable_increment": "Fixture increment",
+    "deliverable_type": "behavior",
+    "files_to_create": [],
+    "files_to_modify": ["fixture.txt"],
+    "files_to_test": [],
+    "enabling_changes_included": [],
+    "depends_on": [],
+    "acceptance_criteria": ["Fixture checks"],
+    "verification_command": ["true"],
+    "expected_success_signal": "true exits 0",
+    "evidence_to_record": ["fixture evidence"],
+    "deviation_rollback_rule": "Return DEVIATED"
+  }]
+}
+JSON
+unsafe_task_out="$unsafe_task_repo/unsafe-task.out"
+unsafe_task_err="$unsafe_task_repo/unsafe-task.err"
+if (cd "$unsafe_task_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task 'unsafe/task' --input "$unsafe_task_manifest" >"$unsafe_task_out" 2>"$unsafe_task_err"); then
+    fail "decompose.sh accepted an unsafe task name containing a ref separator"
+elif ! grep -Eqi 'invalid.*task|task.*(safe|slug|branch)' "$unsafe_task_err"; then
+    fail "unsafe task name rejection was not actionable"
+elif git -C "$unsafe_task_repo" show-ref --verify --quiet refs/heads/feature/unsafe/task || [[ -d "$unsafe_task_repo/briefs" ]]; then
+    fail "unsafe task name mutated refs or generated briefs before validation"
 else
     pass
 fi
@@ -2288,6 +2835,250 @@ if [[ "${#stale_pivot_restart_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "stale loose stagnation/drift exits remain: ${stale_pivot_restart_terms[*]}"
+fi
+
+test_start "workflow runner rejects mixed legacy and new topology briefs before dispatch"
+mixed_topology_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-mixed-topology.XXXXXX")"
+p0p4_register_cleanup "$mixed_topology_repo"
+git -C "$mixed_topology_repo" init -q
+git -C "$mixed_topology_repo" config user.email "p0p4@example.invalid"
+git -C "$mixed_topology_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$mixed_topology_repo/README.md"
+git -C "$mixed_topology_repo" add README.md
+git -C "$mixed_topology_repo" commit -q -m init
+mixed_topology_base="$(git -C "$mixed_topology_repo" branch --show-current)"
+git -C "$mixed_topology_repo" branch feature/mixed-topology/integration "$mixed_topology_base"
+git -C "$mixed_topology_repo" branch feature/mixed-topology/slice-legacy feature/mixed-topology/integration
+git -C "$mixed_topology_repo" branch slice/mixed-topology/new "$mixed_topology_base"
+mixed_topology_briefs="$mixed_topology_repo/briefs"
+mkdir -p "$mixed_topology_briefs"
+cat >"$mixed_topology_briefs/slice-1-legacy.md" <<BRIEF
+## Slice Brief: legacy
+
+### Strict slice packet (execution contract)
+- slice_id: legacy
+- slice_name: legacy
+- observable_increment: legacy increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - legacy.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] legacy criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+
+### Supporting context (not the execution contract)
+- Git branch: feature/mixed-topology/slice-legacy
+- Worktree: ${mixed_topology_repo}/.worktrees/legacy
+BRIEF
+cat >"$mixed_topology_briefs/slice-2-new.md" <<BRIEF
+## Slice Brief: new
+
+### Strict slice packet (execution contract)
+- slice_id: new
+- slice_name: new
+- target_branch: ${mixed_topology_base}
+- target_base_sha: $(git -C "$mixed_topology_repo" rev-parse "$mixed_topology_base")
+- task_branch: feature/mixed-topology
+- slice_branch: slice/mixed-topology/new
+- promotion_mode: local
+- observable_increment: new increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - new.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] new criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+
+### Supporting context (not the execution contract)
+- Git branch: slice/mixed-topology/new
+- Worktree: ${mixed_topology_repo}/.worktrees/new
+BRIEF
+mixed_topology_out="$mixed_topology_repo/mixed.out"
+mixed_topology_err="$mixed_topology_repo/mixed.err"
+if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$mixed_topology_briefs" --repo "$mixed_topology_repo" --dry-run >"$mixed_topology_out" 2>"$mixed_topology_err"; then
+    fail "run-agents.sh accepted a mixed legacy and new topology brief set"
+elif ! grep -Fq -- "cannot mix legacy and new topology briefs" "$mixed_topology_err"; then
+    fail "mixed topology rejection was not actionable"
+elif grep -Fq -- "Agent " "$mixed_topology_out"; then
+    fail "mixed topology reached dispatch before validation"
+else
+    pass
+fi
+
+test_start "workflow runner rejects duplicate supporting Git branch metadata before dispatch"
+duplicate_support_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-duplicate-support.XXXXXX")"
+p0p4_register_cleanup "$duplicate_support_repo"
+git -C "$duplicate_support_repo" init -q
+git -C "$duplicate_support_repo" config user.email "p0p4@example.invalid"
+git -C "$duplicate_support_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$duplicate_support_repo/README.md"
+git -C "$duplicate_support_repo" add README.md
+git -C "$duplicate_support_repo" commit -q -m init
+duplicate_support_base="$(git -C "$duplicate_support_repo" branch --show-current)"
+git -C "$duplicate_support_repo" branch feature/duplicate-support/integration "$duplicate_support_base"
+git -C "$duplicate_support_repo" branch feature/duplicate-support/slice-alpha feature/duplicate-support/integration
+duplicate_support_briefs="$duplicate_support_repo/briefs"
+mkdir -p "$duplicate_support_briefs"
+cat >"$duplicate_support_briefs/slice-1-alpha.md" <<BRIEF
+## Slice Brief: alpha
+
+### Strict slice packet (execution contract)
+- slice_id: alpha
+- slice_name: alpha
+- observable_increment: alpha increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - alpha.txt
+- files_to_test:
+  - none
+- enabling_changes_included:
+  - none
+- depends_on:
+  - none
+- acceptance_criteria:
+  - [ ] alpha criterion passes
+- verification_command:
+  - true
+- expected_success_signal: true exits 0
+- evidence_to_record:
+  - dry-run result
+- deviation_rollback_rule: Return DEVIATED
+
+### Supporting context (not the execution contract)
+- Git branch: feature/duplicate-support/slice-alpha
+- Git branch: feature/other-task/slice-alpha
+- Worktree: ${duplicate_support_repo}/.worktrees/alpha
+BRIEF
+duplicate_support_out="$duplicate_support_repo/duplicate.out"
+duplicate_support_err="$duplicate_support_repo/duplicate.err"
+if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$duplicate_support_briefs" --repo "$duplicate_support_repo" --dry-run >"$duplicate_support_out" 2>"$duplicate_support_err"; then
+    fail "run-agents.sh accepted duplicate supporting Git branch metadata"
+elif ! grep -Fq -- "duplicates supporting Git branch metadata" "$duplicate_support_err"; then
+    fail "duplicate supporting Git branch rejection was not actionable"
+elif grep -Fq -- "Agent " "$duplicate_support_out"; then
+    fail "duplicate supporting Git branch metadata reached dispatch"
+else
+    pass
+fi
+
+test_start "workflow decompose rejects legacy child-ref collisions before caller checkout or brief creation"
+legacy_collision_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-legacy-ref-collision.XXXXXX")"
+p0p4_register_cleanup "$legacy_collision_repo"
+git -C "$legacy_collision_repo" init -q
+git -C "$legacy_collision_repo" config user.email "p0p4@example.invalid"
+git -C "$legacy_collision_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$legacy_collision_repo/README.md"
+git -C "$legacy_collision_repo" add README.md
+git -C "$legacy_collision_repo" commit -q -m init
+legacy_collision_base="$(git -C "$legacy_collision_repo" branch --show-current)"
+git -C "$legacy_collision_repo" checkout -q -b caller
+git -C "$legacy_collision_repo" branch feature/legacy-collision/integration "$legacy_collision_base"
+legacy_collision_manifest="$legacy_collision_repo/decomposition.json"
+cp "$unsafe_task_manifest" "$legacy_collision_manifest"
+legacy_collision_before_branch="$(git -C "$legacy_collision_repo" branch --show-current)"
+legacy_collision_before_head="$(git -C "$legacy_collision_repo" rev-parse HEAD)"
+legacy_collision_out="$legacy_collision_repo/collision.out"
+legacy_collision_err="$legacy_collision_repo/collision.err"
+if (cd "$legacy_collision_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task legacy-collision --input "$legacy_collision_manifest" --target-branch "$legacy_collision_base" >"$legacy_collision_out" 2>"$legacy_collision_err"); then
+    fail "decompose.sh accepted a legacy feature/<task> child-ref collision"
+elif ! grep -Eqi 'legacy.*(child|ref|branch)|feature/legacy-collision' "$legacy_collision_err"; then
+    fail "legacy child-ref collision rejection was not actionable"
+elif [[ "$(git -C "$legacy_collision_repo" branch --show-current)" != "$legacy_collision_before_branch" || "$(git -C "$legacy_collision_repo" rev-parse HEAD)" != "$legacy_collision_before_head" ]]; then
+    fail "legacy child-ref collision changed the caller branch or HEAD before failing"
+elif [[ -d "$legacy_collision_repo/briefs" ]]; then
+    fail "legacy child-ref collision generated briefs before failing"
+else
+    pass
+fi
+
+test_start "workflow decompose defaults the target branch to the currently checked-out local branch"
+implicit_target_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-implicit-target.XXXXXX")"
+p0p4_register_cleanup "$implicit_target_repo"
+git -C "$implicit_target_repo" init -q
+git -C "$implicit_target_repo" config user.email "p0p4@example.invalid"
+git -C "$implicit_target_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$implicit_target_repo/README.md"
+printf '.worktrees/\n' >"$implicit_target_repo/.gitignore"
+git -C "$implicit_target_repo" add README.md .gitignore
+git -C "$implicit_target_repo" commit -q -m init
+implicit_initial_branch="$(git -C "$implicit_target_repo" branch --show-current)"
+git -C "$implicit_target_repo" checkout -q -b develop
+git -C "$implicit_target_repo" branch -D "$implicit_initial_branch"
+implicit_target_manifest="$implicit_target_repo/decomposition.json"
+cp "$unsafe_task_manifest" "$implicit_target_manifest"
+git -C "$implicit_target_repo" add decomposition.json
+git -C "$implicit_target_repo" commit -q -m "add implicit target fixture"
+implicit_target_before="$(git -C "$implicit_target_repo" rev-parse develop)"
+implicit_target_out="$implicit_target_repo/decompose.out"
+implicit_target_err="$implicit_target_repo/decompose.err"
+if ! (cd "$implicit_target_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task implicit-target --input "$implicit_target_manifest" >"$implicit_target_out" 2>"$implicit_target_err"); then
+    fail "decompose.sh did not infer the checked-out develop branch: $(tr '\n' ' ' <"$implicit_target_err")"
+elif [[ "$(git -C "$implicit_target_repo" rev-parse feature/implicit-target)" != "$implicit_target_before" ]]; then
+    fail "decompose.sh did not create feature/implicit-target from the inferred develop target"
+elif ! grep -Fq -- "- target_branch: develop" "$implicit_target_repo/briefs/slice-1-only.md"; then
+    fail "decompose.sh did not emit the inferred develop target_branch in the strict brief"
+elif git -C "$implicit_target_repo" show-ref --verify --quiet refs/heads/main; then
+    fail "implicit target fixture unexpectedly recreated or required a universal main branch"
+else
+    pass
+fi
+
+test_start "workflow decompose requires an explicit target branch from detached HEAD before creating refs or briefs"
+detached_target_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-detached-target.XXXXXX")"
+p0p4_register_cleanup "$detached_target_repo"
+git -C "$detached_target_repo" init -q
+git -C "$detached_target_repo" config user.email "p0p4@example.invalid"
+git -C "$detached_target_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$detached_target_repo/README.md"
+printf '.worktrees/\n' >"$detached_target_repo/.gitignore"
+git -C "$detached_target_repo" add README.md .gitignore
+git -C "$detached_target_repo" commit -q -m init
+detached_target_manifest="$detached_target_repo/decomposition.json"
+cp "$unsafe_task_manifest" "$detached_target_manifest"
+git -C "$detached_target_repo" add decomposition.json
+git -C "$detached_target_repo" commit -q -m "add detached target fixture"
+git -C "$detached_target_repo" checkout -q --detach
+detached_target_head="$(git -C "$detached_target_repo" rev-parse HEAD)"
+detached_target_out="$detached_target_repo/decompose.out"
+detached_target_err="$detached_target_repo/decompose.err"
+if (cd "$detached_target_repo" && bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" --task detached-target --input "$detached_target_manifest" >"$detached_target_out" 2>"$detached_target_err"); then
+    fail "decompose.sh inferred a target branch from detached HEAD without explicit --target-branch"
+elif ! grep -Eqi 'detached.*HEAD.*--target-branch|--target-branch.*detached' "$detached_target_err"; then
+    fail "detached HEAD target inference failure was not actionable"
+elif [[ "$(git -C "$detached_target_repo" rev-parse HEAD)" != "$detached_target_head" || "$(git -C "$detached_target_repo" symbolic-ref --quiet --short HEAD 2>/dev/null || true)" != "" ]]; then
+    fail "detached HEAD target inference failure changed the caller checkout"
+elif git -C "$detached_target_repo" show-ref --verify --quiet refs/heads/feature/detached-target || [[ -d "$detached_target_repo/briefs" ]]; then
+    fail "detached HEAD target inference created refs or briefs before requiring an explicit target"
+else
+    pass
 fi
 
 test_start "workflow decompose surfaces reject broad layer module folder strategies"

@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-thinking
 
@@ -25,8 +25,8 @@ gates:
         check: "Analysis depth matches the stakes level (low/medium/high)"
         on_fail: "Deepen the analysis for high-stakes problems or simplify for low-stakes"
       - id: A3
-        check: "For perspectives and high-stakes stress_test: subagent_policy_state, subagent_execution_mode, and conditional policy_blocking_source are resolved before any subagent spawn. When required roles lack a delegation decision, use authorization_required and ask once; Plan approval is not delegation approval. Sequential fallback is recorded only when authorization is denied, unavailable after a real spawn failure, or policy-disallowed with an exact active blocking rule and no applicable exception."
-        on_fail: "Ask once for explicit delegation authorization when required. Use sequential fallback only after denial, real unavailability, or evidenced policy_disallowed; then record the fallback path."
+        check: "For perspectives and high-stakes stress_test: subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, and conditional policy_blocking_source are resolved before any subagent spawn. A direct user, applicable AGENTS.md, or active skill instruction triggers delegation_triggered and dispatch without a separate permission question. Sequential fallback is recorded only for explicit opt-out, real unavailability or supported configuration proof, or policy-disallowed with an exact active blocking rule and no applicable trigger exception."
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced sequential fallback state; do not overwrite explicit opt-out."
 
   - phase: SYNTHESIS
     checkpoint_start: "--- PHASE: SYNTHESIS ---"

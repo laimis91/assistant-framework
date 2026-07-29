@@ -369,6 +369,81 @@ else
     fail "assistant-review clean-code principle lens is incomplete: ${review_principle_failures[*]}"
 fi
 
+test_start "assistant-review detects nullable properties used as hidden state"
+nullable_state_failures=()
+
+for file_and_term in \
+    "$review_principles::## State and Extensibility Modeling" \
+    "$review_principles::null -> value" \
+    "$review_principles::business or lifecycle transition" \
+    "$review_principles::optional or missing data" \
+    "$review_evals::review-detects-null-encoded-state-transitions" \
+    "$review_evals::explicit transition methods or events" \
+    "$review_evals::genuine optional data"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        nullable_state_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#nullable_state_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review nullable hidden-state guidance is incomplete: ${nullable_state_failures[*]}"
+fi
+
+test_start "assistant-review distinguishes open-ended enums from closed sets"
+enum_extension_failures=()
+
+for file_and_term in \
+    "$review_principles::### Enums as extension points" \
+    "$review_principles::open-ended feature set" \
+    "$review_principles::switches or conditionals in several places" \
+    "$review_principles::small, stable, closed set" \
+    "$review_evals::review-detects-enum-extension-traps" \
+    "$review_evals::handlers, strategies" \
+    "$review_evals::stable closed enum"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        enum_extension_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if [[ "${#enum_extension_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review enum extension guidance is incomplete: ${enum_extension_failures[*]}"
+fi
+
+test_start "assistant-review classifies authoritative duplicate behavior through bounded reuse search"
+reuse_search_principle_failures=()
+for file_and_term in \
+    "$review_principles::## Reuse Search and Authoritative Duplication" \
+    "$review_principles::business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details" \
+    "$review_principles::should-fix" \
+    "$review_principles::must-fix" \
+    "$review_principles::coincidental similarity" \
+    "$review_principles::independent concepts" \
+    "$review_principles::divergence control" \
+    "$review_evals::review-reuse-search-authoritative-conversion" \
+    "$review_evals::nautical-mile" \
+    "$review_evals::duplicated mapper arithmetic" \
+    "$review_evals::differing rounding" \
+    "$review_evals::non-finding"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        reuse_search_principle_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ "${#reuse_search_principle_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review reuse-search principle/eval coverage is incomplete: ${reuse_search_principle_failures[*]}"
+fi
+
 test_start "assistant-review direct fallback does not require reviewer dispatch"
 review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
@@ -398,25 +473,25 @@ else
     fail "assistant-review direct fallback still implies mandatory Reviewer dispatch: ${review_fallback_failures[*]}"
 fi
 
-test_start "assistant-thinking asks before sequential fallback without an evidenced policy block"
+test_start "assistant-thinking dispatches from applicable delegation triggers and records evidenced fallback"
 thinking_delegation_proof_failures=()
 thinking_delegation_proof_terms=(
-    "$thinking_skill::required roles lack a delegation decision"
+    "$thinking_skill::direct user request or applicable \`AGENTS.md\` or active-skill instruction"
     "$thinking_skill::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::authorization_required"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::sequential_fallback"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Plan approval is not delegation approval"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::delegated requires subagent_policy_state=delegation_authorized"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-missing-delegation-authorization"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::authorization_required"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::dispatch without a separate permission question"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::delegated requires subagent_policy_state=delegation_triggered"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-dispatch-from-instruction-trigger"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::delegation_triggered"
     "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::policy_blocking_source"
 )
 for file_and_term in "${thinking_delegation_proof_terms[@]}"; do
@@ -432,13 +507,13 @@ for method_file in \
     "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md" \
     "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md"; do
     if grep -Fq -- "If denied, unavailable, or policy-disallowed" "$method_file"; then
-        thinking_delegation_proof_failures+=("${method_file#$FRAMEWORK_DIR/}: loose not-authorized fallback wording")
+        thinking_delegation_proof_failures+=("${method_file#$FRAMEWORK_DIR/}: loose fallback wording")
     fi
 done
 if [[ "${#thinking_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-thinking delegation fallback must carry authorization or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
+    fail "assistant-thinking delegation fallback must carry trigger or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

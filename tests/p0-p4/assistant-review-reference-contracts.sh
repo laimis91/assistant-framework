@@ -236,4 +236,72 @@ else
     fail "score or issue-count gates still bias review toward churn or suppressed findings"
 fi
 
+test_start "assistant-review return requires evidence-bounded reuse-search results"
+reuse_search_return_failures=()
+for file_and_term in \
+    "$review_handoffs::- name: reuse_search" \
+    "$review_handoffs::applicability" \
+    "$review_handoffs::enum_values: [applicable, not_applicable]" \
+    "$review_handoffs::applicability_reason" \
+    "$review_handoffs::query_or_path" \
+    "$review_handoffs::scope" \
+    "$review_handoffs::outcome" \
+    "$review_handoffs::disposition" \
+    "$review_handoffs::enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]" \
+    "$review_handoffs::no_candidate_reason" \
+    "$review_handoffs::decision_rationale" \
+    "$review_handoffs::divergence_control" \
+    "$review_phase_gates::reuse_search" \
+    "$review_phase_gates::cannot return clean"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        reuse_search_return_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ "${#reuse_search_return_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review reuse-search return contract is incomplete: ${reuse_search_return_failures[*]}"
+fi
+
+test_start "assistant-review requires an independent reuse search in every fresh review"
+independent_reuse_search_failures=()
+for file_and_term in \
+    "$review_handoffs::- name: reuse_search_instruction" \
+    "$review_loop::independently during review" \
+    "$review_loop::Carried Mapper/task-packet evidence alone cannot satisfy review" \
+    "$review_phase_gates::fresh independent capability search" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::independently during review" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::Carried Mapper/task-packet evidence alone cannot satisfy review"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        independent_reuse_search_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if ! awk '
+    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
+    in_bundle && /^  - name: / { exit }
+    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
+        fields = $0
+        sub(/^.*\[/, "", fields)
+        sub(/\].*$/, "", fields)
+        count = split(fields, items, ",")
+        for (item_index = 1; item_index <= count; item_index++) {
+            item = items[item_index]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+            if (item == "reuse_search_instruction") found = 1
+        }
+    }
+    END { exit found ? 0 : 1 }
+' "$review_handoffs"; then
+    independent_reuse_search_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing reuse_search_instruction")
+fi
+if [[ "${#independent_reuse_search_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

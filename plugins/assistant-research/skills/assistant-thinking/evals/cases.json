@@ -122,44 +122,44 @@
       }
     },
     {
-      "id": "thinking-required-roles-missing-delegation-authorization",
-      "title": "Thinking roles ask before sequential fallback",
-      "category": "subagent_authorization",
-      "purpose": "Checks that Perspectives does not silently run sequential fallback when independent roles lack a delegation decision.",
-      "prompt": "Think through this architecture decision with Perspectives. The plan is approved, but I have not approved perspective subagents.",
+      "id": "thinking-required-roles-dispatch-from-instruction-trigger",
+      "title": "Thinking roles dispatch from an applicable instruction trigger",
+      "category": "subagent_delegation_trigger",
+      "purpose": "Checks that Perspectives dispatches its required independent roles from active instructions without a second permission question.",
+      "prompt": "Think through this architecture decision with Perspectives using the active assistant-thinking process.",
       "setup_context": [
         "The assistant-thinking skill instructions are active.",
-        "Perspectives requires independent roles and no explicit delegation approval or denial exists.",
-        "A generic policy says do not spawn unless the user or applicable AGENTS/skill asks; the active thinking skill requires the independent roles."
+        "Perspectives requires independent roles and the active thinking skill instruction covers them.",
+        "No explicit user opt-out or exact active policy block exists."
       ],
       "expected_behavior": [
-        "Sets subagent_policy_state=authorization_required and asks once before spawning the perspective roles.",
-        "States that plan approval is not delegation approval.",
-        "Does not use sequential_fallback until authorization is denied, a real spawn failure occurs, or policy_disallowed has an exact policy_blocking_source with no applicable exception.",
-        "Does not treat the conditional policy as policy_disallowed while the active tool requires the roles."
+        "Sets subagent_policy_state=delegation_triggered and infers subagent_trigger_scope before spawning the perspective roles.",
+        "Dispatches without a separate permission question.",
+        "Does not use sequential_fallback without explicit opt-out, real spawn failure or supported configuration proof, or policy_disallowed with an exact policy_blocking_source.",
+        "Preserves parent sandbox and action/tool approval safeguards."
       ],
       "pass_criteria": [
-        "The delegation path records authorization_required and the requested role scope.",
-        "The response asks once instead of claiming delegated or sequential execution.",
+        "The delegation path records delegation_triggered and the inferred trigger scope.",
+        "The response dispatches the required roles without a separate permission question.",
         "Any policy_disallowed path includes policy_blocking_source."
       ],
       "fail_signals": [
-        "Treats plan approval as delegation approval.",
-        "Runs sequential_fallback before an authorization decision.",
+        "Runs sequential_fallback without fallback evidence.",
+        "Asks a separate spawn-permission question.",
         "Uses policy_disallowed without policy_blocking_source.",
         "Ignores the active skill exception to the conditional policy."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "authorization_required",
-          "ask once",
-          "plan approval is not delegation approval",
+          "delegation_triggered",
+          "subagent_trigger_scope",
+          "without a separate permission question",
           "sequential_fallback",
           "policy_blocking_source"
         ],
         "forbidden_substrings": [
-          "plan approval authorizes delegation",
-          "sequential fallback before authorization decision",
+          "ask for permission to spawn",
+          "sequential fallback without fallback evidence",
           "policy_disallowed without policy_blocking_source"
         ]
       }

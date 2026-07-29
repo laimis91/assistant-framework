@@ -3,11 +3,21 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: input
 skill: assistant-workflow
 
 fields:
+  - name: slice_promotion_mode
+    type: enum
+    required: false
+    enum_values: [local, review_gated]
+    description: "Promotion policy for new multi-slice topology; review_gated emits portable review evidence rather than performing remote actions"
+    default: local
+    validation: "review_gated requires explicit task/slice topology and any remote-write authorization remains outside the core workflow"
+    on_missing: infer
+    infer_from: "Use local unless the approved task or configured adapter selects review_gated."
+
   - name: task_description
     type: string
     required: true
@@ -54,30 +64,30 @@ fields:
   - name: subagent_policy_state
     type: enum
     required: false
-    enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
-    description: "Whether subagent spawning is allowed for this task under the active adapter and user/tool policy"
-    validation: "Must describe the current authorization or availability state before any subagent dispatch occurs"
+    enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+    description: "Whether an applicable instruction triggers delegation or requires evidenced fallback"
+    validation: "Must describe the current trigger, opt-out, availability, or exact policy-block state before any subagent dispatch occurs"
     default: not_required
     on_missing: infer
-    infer_from: "Use not_required for controller_intensity=light inline/direct work. When required_agents is non-empty and no explicit delegation approval or denial exists, use authorization_required for standard/strict development work that needs workflow subagent roles unless the prompt already authorizes them. Plan approval is not delegation approval. Use delegation_authorized only after explicit approval, authorization_denied when declined, subagents_unavailable only after a real spawn failure, and policy_disallowed only when an exact active rule blocks spawning with no applicable user, AGENTS, or skill exception."
+    infer_from: "Use not_required when no role is required. When required_agents is non-empty, use delegation_triggered when a direct user request or applicable AGENTS.md or active skill instruction covers the roles; infer scope without asking. Use delegation_opted_out when the user explicitly declines; use subagents_unavailable only after a real spawn failure or supported configuration proof; use policy_disallowed only when an exact active rule blocks spawning with no applicable trigger exception."
 
   - name: subagent_execution_mode
     type: enum
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How role responsibilities will be executed for this task"
-    validation: "delegated requires subagent_policy_state=delegation_authorized; direct_fallback requires authorization_denied, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
     default: not_applicable
     on_missing: infer
-    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state is delegation_authorized after explicit user authorization or when the current user prompt explicitly asked for agents/subagents. If authorization_required has not been resolved, ask and wait before continuing phases that require subagents; do not select direct_fallback unless the user denies authorization, subagents are unavailable after a real spawn failure, or policy disallows spawning. If authorization is denied, subagents are unavailable after a real spawn failure, or policy disallows spawning, use direct_fallback and record direct fallback evidence."
+    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, relevant automated validation/tests, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state=delegation_triggered from a direct user, applicable AGENTS.md, or active skill instruction. Use direct_fallback only for delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source; record equivalent role evidence."
 
-  - name: subagent_authorization_scope
+  - name: subagent_trigger_scope
     type: string[]
     required: false
-    description: "Roles, phases, or actions covered by explicit user authorization for subagent spawning"
-    validation: "Empty when no authorization was needed or granted. Non-empty when subagent_policy_state=delegation_authorized."
+    description: "Trigger provenance plus roles, phases, and actions covered by direct user, applicable AGENTS.md, or active skill instruction"
+    validation: "Non-empty when delegation is relevant; records provenance and covered roles/phases/actions, inferred without asking. Empty only when subagent_policy_state=not_required."
     default: []
-    on_missing: skip
+    on_missing: infer
 
   - name: policy_blocking_source
     type: string

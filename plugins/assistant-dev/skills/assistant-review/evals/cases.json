@@ -281,6 +281,142 @@
       }
     },
     {
+      "id": "review-detects-null-encoded-state-transitions",
+      "title": "Review distinguishes null-encoded state from optional data",
+      "category": "state_and_extensibility_modeling",
+      "purpose": "Checks that review flags nullable-property changes used as hidden lifecycle transitions without treating genuine optional data as a defect.",
+      "prompt": "Review this change for maintainability. Order.ApprovedAt changes from null to a timestamp to approve an order and from a timestamp to null to revoke approval. Rules and notifications depend on those changes. Customer.SecondaryPhone is nullable only because it is optional.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "Approval and revocation are business transitions inferred from changes to Order.ApprovedAt.",
+        "Customer.SecondaryPhone has no transition rules, side effects, or state-dependent required data."
+      ],
+      "expected_behavior": [
+        "Flags Order.ApprovedAt because null -> value and value -> null encode business or lifecycle transitions.",
+        "Explains the concrete risk from hidden transition rules, side effects, or required transition data.",
+        "Recommends named states and explicit transition methods or events that carry required data.",
+        "Does not flag Customer.SecondaryPhone because it represents genuine optional data.",
+        "Does not require a state-machine framework when a smaller explicit model is sufficient."
+      ],
+      "pass_criteria": [
+        "The response distinguishes hidden state from ordinary optionality.",
+        "The finding is tied to the approval behavior and concrete risk.",
+        "The recommendation is the smallest durable explicit transition model.",
+        "The optional secondary phone is not reported as a defect."
+      ],
+      "fail_signals": [
+        "Treats every nullable property as hidden state.",
+        "Ignores approval or revocation because the property type permits null.",
+        "Requires a state-machine framework regardless of complexity.",
+        "Reports Customer.SecondaryPhone as a defect."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "null -> value",
+          "business or lifecycle transition",
+          "explicit transition methods or events",
+          "required data",
+          "genuine optional data"
+        ],
+        "forbidden_substrings": [
+          "all nullable properties are defects",
+          "state-machine framework is always required",
+          "Customer.SecondaryPhone is a defect"
+        ]
+      }
+    },
+    {
+      "id": "review-detects-enum-extension-traps",
+      "title": "Review distinguishes open-ended enums from closed sets",
+      "category": "state_and_extensibility_modeling",
+      "purpose": "Checks that review flags enums used as open-ended feature extension points without treating every stable closed enum as a defect.",
+      "prompt": "Review this integration change. PaymentProvider is an enum that gains a value for every new provider, and pricing, routing, validation, and logging each switch on it. The product supports provider plugins. LogLevel is a stable closed enum used only for logging severity.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "PaymentProvider is an open-ended feature set and additions require changes in several consumers.",
+        "LogLevel is a small stable closed enum with no provider-specific behavior."
+      ],
+      "expected_behavior": [
+        "Flags PaymentProvider because new features expand the enum and require changing switches or conditionals in several places.",
+        "Explains the concrete branching growth or poor extension-seam risk.",
+        "Recommends handlers, strategies, or another extensible design for provider-specific behavior.",
+        "Does not flag LogLevel because it is a stable closed enum.",
+        "Does not claim all enums are extension traps."
+      ],
+      "pass_criteria": [
+        "The response distinguishes an open feature axis from a closed value set.",
+        "The finding cites the scattered provider switches and plugin requirement.",
+        "The recommendation is scoped to provider-specific behavior.",
+        "The stable logging enum is not reported as a defect."
+      ],
+      "fail_signals": [
+        "Treats every enum as an extension trap.",
+        "Ignores the scattered PaymentProvider switches.",
+        "Recommends another closed type code without addressing extension.",
+        "Reports LogLevel as a defect."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "open-ended feature set",
+          "switches or conditionals in several places",
+          "branching growth",
+          "handlers, strategies",
+          "stable closed enum"
+        ],
+        "forbidden_substrings": [
+          "all enums are defects",
+          "every enum is an extension trap",
+          "LogLevel is a defect"
+        ]
+      }
+    },
+    {
+      "id": "review-reuse-search-authoritative-conversion",
+      "title": "Review reuses authoritative conversion behavior",
+      "category": "reuse_search_and_authoritative_duplication",
+      "purpose": "Checks that review distinguishes reusable authoritative conversion behavior, semantic drift, and unrelated similar arithmetic.",
+      "prompt": "Review a mapper that duplicates nautical-mile to metre conversion arithmetic while an authoritative helper already exists. Also assess a second mapper with differing rounding and an unrelated percentage calculation.",
+      "setup_context": [
+        "The helper and first duplicated mapper arithmetic have the same conversion semantics.",
+        "The second mapper uses differing rounding, so its semantics diverge from the helper.",
+        "The percentage calculation is an independent concept despite similar arithmetic."
+      ],
+      "expected_behavior": [
+        "Records bounded reuse_search evidence before deciding.",
+        "Classifies same-semantics mapper duplication as helper reuse and should-fix.",
+        "Classifies differing rounding as must-fix semantic divergence.",
+        "Classifies unrelated similar arithmetic as a non-finding."
+      ],
+      "pass_criteria": [
+        "The response names searches, candidates or no-candidate reason, decision, and rationale.",
+        "The same-semantics case chooses reuse or extend rather than new arithmetic.",
+        "The differing-rounding case is must-fix.",
+        "The unrelated calculation is rejected as independent or coincidental."
+      ],
+      "fail_signals": [
+        "Treats every arithmetic resemblance as duplicate behavior.",
+        "Allows a clean result without applicable reuse-search evidence.",
+        "Treats differing rounding as harmless duplication."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "reuse_search",
+          "nautical-mile",
+          "metre conversion helper",
+          "duplicated mapper arithmetic",
+          "should-fix",
+          "differing rounding",
+          "must-fix",
+          "non-finding"
+        ],
+        "forbidden_substrings": [
+          "all arithmetic is duplicate behavior",
+          "clean without reuse search",
+          "rounding differences do not matter"
+        ]
+      }
+    },
+    {
       "id": "bugfix-review-checks-debugging-evidence",
       "title": "Bugfix review checks debugging evidence",
       "category": "bugfix_evidence_review",

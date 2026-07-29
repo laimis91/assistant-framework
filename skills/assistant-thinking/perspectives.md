@@ -21,10 +21,10 @@ Choose 4 perspectives relevant to the decision. Defaults:
 
 Swap roles as needed (e.g., Security Expert, Performance Engineer, Domain Expert).
 
-### Delegation permission gate
-For medium/high-stakes debates, prefer one independent subagent per role when available and authorized. Resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_authorization_scope`, and conditional `policy_blocking_source` before spawning. If the active tool policy requires explicit user authorization before spawning subagents, ask once: `This reasoning method works best with independent perspective subagents. May I use subagents for this debate?`
+### Delegation trigger
+For medium/high-stakes debates, prefer one independent subagent per role when applicable instructions trigger delegation. Resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. A direct user request or applicable `AGENTS.md` or active-skill instruction sets `delegation_triggered`; infer its covered roles and dispatch without a separate permission question.
 
-Delegate each role only when `delegated requires subagent_policy_state=delegation_authorized`. Otherwise, `sequential_fallback requires authorization_denied, subagents_unavailable after a real spawn failure, or policy_disallowed with policy_blocking_source`; record that state and evidence in the synthesis.
+Delegate each role only when `delegated requires subagent_policy_state=delegation_triggered`. Otherwise, `sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source`; record that state and evidence in the synthesis.
 
 ### Round 1: Independent positions
 Each perspective gives their position on the decision in 3-5 sentences. No interaction yet.

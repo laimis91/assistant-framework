@@ -196,7 +196,7 @@ if jq -e '
       "review-loop-continues-after-findings",
       "small-fix-stays-lightweight",
       "spec-review-not-replaced-by-quality-review",
-      "subagent-authorization-denied-direct-fallback",
+      "subagent-opt-out-uses-direct-fallback",
       "tdd-red-before-green-handoff",
       "worker-status-packet-required"
     ]))
@@ -216,7 +216,7 @@ if jq -e '
     and case_category("per-slice-verification-before-advancing"; "slice_verification")
     and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
     and case_category("worker-status-packet-required"; "subagent_handoffs")
-    and case_category("subagent-authorization-denied-direct-fallback"; "subagent_authorization")
+    and case_category("subagent-opt-out-uses-direct-fallback"; "subagent_delegation_trigger")
     and case_category("codex-role-constraints-native"; "role_constraints")
 ' "$eval_fixture" >/dev/null; then
     pass
@@ -261,7 +261,7 @@ for term in \
     "per-slice verification before advancing" \
     "separate spec review and quality review gates" \
     "structured worker status packets from subagents" \
-    "subagent authorization denial direct fallback" \
+    "subagent opt-out direct fallback" \
     "Native Codex role constraints without extra runtime reinforcement"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/README.md"; then
         missing_eval_readme_terms+=("$term")

@@ -56,17 +56,15 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
             && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
-            && grep -Fq "Medium and larger changes require an approved plan" "$agents_file" \
-            && grep -Fq "Delegation consent is required only before an actual subagent spawn." "$agents_file" \
-            && grep -Fq "Continue safe non-spawn work while authorization is unresolved." "$agents_file" \
-            && grep -Fq "use native Codex subagents by configured name" "$agents_file" \
+            && grep -Fq "Get plan approval before medium+ or risky edits." "$agents_file" \
+            && grep -Fq "Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent." "$agents_file" \
             && ! grep -Fq "## Skills (loaded" "$agents_file" \
             && [[ -f "$INSTALL_HOME/.codex/agents/code-reviewer.toml" ]] \
             && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME/.codex/agents/code-reviewer.toml" \
-            && grep -Fq "The orchestrator owns framework state files" "$agents_file" \
-            && grep -Fq ".codex/context-map.md" "$agents_file" \
-            && grep -Fq "Do not infer that subagents are unavailable from the absence of a visible tool name" "$agents_file" \
-            && grep -Fq "Preserve user-authored project files and existing dirty work." "$agents_file"; then
+            && ! grep -Fq "The orchestrator owns framework state files" "$agents_file" \
+            && ! grep -Fq ".codex/context-map.md" "$agents_file" \
+            && ! grep -Fq "Do not infer that subagents are unavailable from the absence of a visible tool name" "$agents_file" \
+            && grep -Fq "Preserve user-authored files and existing dirty work." "$agents_file"; then
             pass
         else
             fail "expected one lean native-Codex framework block and one current memory protocol block"

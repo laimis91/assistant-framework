@@ -7,7 +7,7 @@ Use the strict slice packet fields from `slice_manifest` for every executable br
 - One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
-- Git: integration branch named `feature/<task>/integration` + per-slice branches named `feature/<task>/slice-<slice_id>`
+- Git: task branch `feature/<task>` + per-slice branches `slice/<task>/<slice-id>`; use `references/slice-review-topology.md` when `promotion_mode: review_gated` produces REVIEW_PENDING evidence. Legacy branch layouts are compatibility-only and must not mix with new briefs.
 
 Automation scripts in `scripts/` (bash):
 - `decompose.sh` -- create branches, worktrees, briefs

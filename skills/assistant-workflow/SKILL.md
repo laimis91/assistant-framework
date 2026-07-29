@@ -47,6 +47,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 Canonical files stay authoritative; validate applicable rules at enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry. Load only the contract selector applicable to current boundary:
 
 - `entry`: load the exact entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
+- `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
 - `selected_handoff`: `contracts/handoffs.yaml` before dispatch and return validation.
 - `completion`: `contracts/output.yaml` at completion before final exit.
@@ -55,14 +56,13 @@ Selectors resolve by unique id plus canonical path, exact section, key, and expl
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: the assistant-workflow contract suite is v3. Canonical required
-`verification_command` fields changed from shell-form strings to non-empty argv
-`string[]` values; consumers must execute the array directly without shell parsing.
-Workflow-owned Reviewer and QAEvaluator packets are retired. Review loads
-assistant-review v2, which solely owns those worker handoffs and returns canonical
-`final_summary` / `qa_evaluation_result` artifacts; workflow records validated
-references to them. The canonical Reviewer result requires non-empty `reviewed_scope`.
-Handoff v2's retired lifecycle-script reference kind remains replaced by `runtime`.
+Migration note: assistant-workflow contracts are v4. Direct-user, applicable
+`AGENTS.md`, or active-skill instructions trigger delegation; record
+`subagent_trigger_scope` and dispatch without a separate permission question.
+Explicit opt-out, real unavailability, or an exact policy block uses evidenced
+fallback. `verification_command` is non-empty argv `string[]`. assistant-review
+v3 owns Reviewer/QAEvaluator handoffs and returns `final_summary` /
+`qa_evaluation_result`; Reviewer `reviewed_scope` is non-empty.
 
 ## Visible Checkpoints
 
@@ -132,10 +132,11 @@ Load `references/phases.md` for the current phase. Load `references/workflow-con
 | Review | All | Light gets a fresh self-review without worker/reviewer dispatch evidence; standard/strict use Spec Review then independent `assistant-review`; QA only when required. |
 | Document | All | Apply the state/manual/learning modes; metrics, reflexion, and memory are optional/non-blocking. |
 
-For subagent rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_authorization_scope` before spawning. Light small low-risk localized work may select `not_required` plus `not_applicable` and does not ask for delegation. For standard/strict development work, Assistant Framework policy requires explicit user authorization before spawning subagents unless the current prompt already authorizes them. Ask once for the needed delegation scope and wait before continuing phases that require subagents. After authorization, use `delegated` mode and spawn the configured role agents. Use direct fallback only when authorization is denied, policy disallows spawning, or a real spawn attempt fails because subagents/custom agents are unavailable; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`.
+For subagent rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. Light small low-risk localized work selects `not_required` plus `not_applicable`. For standard/strict development work, a direct user request or applicable `AGENTS.md` or active-skill instruction triggers delegation: set `delegation_triggered`, infer its covered roles/phases/actions, and dispatch the configured role agents without a separate permission question. Use direct fallback only for explicit user opt-out, an exact active policy block, or real subagent unavailability; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
 
 Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
 Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
+For review-gated multi-slice work, load `references/slice-review-topology.md` before emitting or consuming slice review evidence.
 
 ## Output
 

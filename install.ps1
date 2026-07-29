@@ -2645,17 +2645,15 @@ Codex uses installed skills through native skill routing. When a skill matches, 
 ## Operating stance
 
 - For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
-- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when authorized.
+- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
 - Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
-## Development workflow
+## Boundaries
 
-- Follow the matching skill's workflow and scale its phases to the task. Medium and larger changes require an approved plan before project source, test, documentation, configuration, or installer edits begin.
-- Resolve material unknowns before planning. State safe defaults when local evidence makes the path clear.
-- The orchestrator owns framework state files such as `.codex/task.md`, `.codex/context-map.md`, `.codex/session.md`, and `.codex/working-buffer.md`. Preserve user-authored project files and existing dirty work.
-- Delegation consent is required only before an actual subagent spawn. Do not ask during preparation merely because agents might be useful. Ask once immediately before the first spawn unless the user already authorized that scope. Continue safe non-spawn work while authorization is unresolved.
-- After authorization, use native Codex subagents by configured name. Do not infer that subagents are unavailable from the absence of a visible tool name; use direct fallback only after denial, policy restriction, or a real unavailable-agent failure.
-- Verify changes with the relevant repository commands. Review the result against the approved scope and fix material findings before handoff; use independent review when the active skill or risk requires it.
+- Get plan approval before medium+ or risky edits.
+- Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.
+- Preserve user-authored files and existing dirty work.
+- Verify changes with repository commands and review the approved scope before handoff.
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->
 '@

@@ -1,4 +1,4 @@
-schema_version: "2.0"
+schema_version: "3.0"
 contract: index
 skill: assistant-review
 
@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required]
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, qa_evaluation_mode]
     budget_words: 5000
   current_round:
     selectors:

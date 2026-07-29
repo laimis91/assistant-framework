@@ -37,6 +37,9 @@ Task type: [feature | bugfix | refactor | migration | rewrite | config | infra |
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
+Slice promotion mode: [local | review_gated]
+Slice topology: target_branch=[ref] | task_branch=[feature/<task>] | slice_branch format=[slice/<task>/<slice-id>]
+Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REVIEW_STALE plus evidence refs]
 Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
 Manual verification mode: [not_required | optional | required]
@@ -60,10 +63,10 @@ Required gates:
 - [common gate or task-category gate from references/triage-rubric.md]
 Required agents:
 - [workflow role or skill required by size/risk/type]
-Subagent policy state: [not_required | authorization_required | delegation_authorized | authorization_denied | subagents_unavailable | policy_disallowed]
+Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 Subagent execution mode: [delegated | direct_fallback | not_applicable]
-Subagent authorization scope:
-- [roles/phases/actions covered by user authorization, or none]
+Subagent trigger scope:
+- [direct user | applicable AGENTS.md | active skill; covered roles/phases/actions, or none]
 Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; N/A unless policy_disallowed]
 Candidate scope scan:
 - Likely touched paths: [exact paths, directories, modules, or unknown]
@@ -83,7 +86,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - Build execution lane: [inline_direct | bounded_executor | separated_workers]
 - Execution mode: delegated | direct_fallback | not_applicable
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
-- Direct fallback reason: [authorization_denied | subagents_unavailable | policy_disallowed | N/A]
+- Direct fallback reason: [delegation_opted_out | subagents_unavailable | policy_disallowed | N/A]
 - Policy blocking source: [exact active rule plus no-applicable-exception confirmation; required when Direct fallback reason is policy_disallowed]
 - Evidence shorthand: delegated refs | role-equivalent direct evidence | N/A only when role not required.
 - Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
@@ -159,7 +162,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 do not start the next slice until the current one is `VERIFIED`
 | Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
 |-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
-| S1: [slice_id] [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `["executable", "arg"]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
+| 1. [slice_id] [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `["executable", "arg"]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
 
 ## Test Coverage
 - Unit: [what's covered]

@@ -69,7 +69,7 @@ owner of Reviewer and QAEvaluator worker packet schemas. Add Code Reviewer to
 `Required agents` before Stage 2. Use `Reviewer` only as compatibility routing
 inside assistant-review. Do not implement the review loop inline
 when `subagent_execution_mode=delegated` and a delegated review agent is
-authorized; dispatch Code Reviewer and record `Code Reviewer dispatch` plus
+triggered; dispatch Code Reviewer and record `Code Reviewer dispatch` plus
 `Code Reviewer result` evidence, or `Reviewer dispatch` plus `Reviewer result`
 only for compatibility routing.
 

@@ -78,6 +78,84 @@ BRIEF
 BRIEF
 }
 
+init_topology_runtime_repo() {
+    local repo="$1"
+    local task="$2"
+
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "p0p4@example.invalid"
+    git -C "$repo" config user.name "P0 P4"
+    printf 'fixture\n' >"$repo/README.md"
+    printf '.worktrees/\n' >"$repo/.gitignore"
+    git -C "$repo" add README.md .gitignore
+    git -C "$repo" commit -q -m init
+    git -C "$repo" branch "feature/${task}"
+}
+
+write_topology_runtime_brief() {
+    local repo="$1"
+    local task="$2"
+    local number="$3"
+    local slice_id="$4"
+    local depends_on="$5"
+    local promotion_mode="$6"
+    shift 6
+    local brief="$repo/briefs/slice-${number}-${slice_id}.md"
+    local arg
+    local target_base_sha
+    local target_branch
+
+    mkdir -p "$repo/briefs"
+    target_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null || printf master)
+    target_base_sha=$(git -C "$repo" merge-base "$target_branch" "feature/${task}" 2>/dev/null || git -C "$repo" rev-parse HEAD)
+    cat >"$brief" <<BRIEF
+## Slice Brief: ${slice_id}
+
+### Strict slice packet (execution contract)
+- slice_id: ${slice_id}
+- slice_name: ${slice_id}
+- target_branch: ${target_branch}
+- target_base_sha: ${target_base_sha}
+- task_branch: feature/${task}
+- slice_branch: slice/${task}/${slice_id}
+- promotion_mode: ${promotion_mode}
+- observable_increment: ${slice_id} increment
+- deliverable_type: behavior
+- files_to_create:
+  - none
+- files_to_modify:
+  - ${slice_id}-marker.txt
+- files_to_test:
+  - host verification command
+- enabling_changes_included:
+  - none
+- depends_on:
+BRIEF
+    if [[ "$depends_on" == "none" ]]; then
+        printf '  - none\n' >>"$brief"
+    else
+        printf '  - %s\n' "$depends_on" >>"$brief"
+    fi
+    cat >>"$brief" <<BRIEF
+- acceptance_criteria:
+  - [ ] ${slice_id} is independently host verified
+- verification_command:
+BRIEF
+    for arg in "$@"; do
+        printf '  - %s\n' "$arg" >>"$brief"
+    done
+    cat >>"$brief" <<BRIEF
+- expected_success_signal: verifier exits 0 without mutating HEAD
+- evidence_to_record:
+  - host verifier exit status and immutable HEAD proof
+- deviation_rollback_rule: Return FAILED_VERIFICATION without promotion or VERIFIED status
+
+### Supporting context (not the execution contract)
+- Git branch: slice/${task}/${slice_id}
+- Worktree: ${repo}/.worktrees/${slice_id}
+BRIEF
+}
+
 make_fake_done_agent() {
     local bin_dir="$1"
 
@@ -296,7 +374,11 @@ add_verifier() {
     chmod +x "$repo/$name"
     git -C "$repo" add "$name"
     git -C "$repo" commit -q -m "add $name"
-    git -C "$repo" branch -f "$(git -C "$repo" for-each-ref --format='%(refname:short)' 'refs/heads/feature/*/integration' | head -n 1)" HEAD
+    local integration_branch
+    integration_branch="$(git -C "$repo" for-each-ref --format='%(refname:short)' 'refs/heads/feature/*/integration' | head -n 1)"
+    if [[ -n "$integration_branch" ]]; then
+        git -C "$repo" branch -f "$integration_branch" HEAD
+    fi
 }
 
 prepare_external_alpha() {
@@ -816,6 +898,549 @@ else
     pass
 fi
 
+test_start "workflow review_gated verification emits exact review evidence without local promotion or dependency unlock"
+review_gated_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-gated.XXXXXX")"
+review_gated_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-gated-agent.XXXXXX")"
+p0p4_register_cleanup "$review_gated_repo" "$review_gated_agent_bin"
+init_topology_runtime_repo "$review_gated_repo" runtime-review-gated
+add_verifier "$review_gated_repo" verify-pass.sh 'exit 0'
+git -C "$review_gated_repo" branch -f feature/runtime-review-gated HEAD
+git -C "$review_gated_repo" branch "slice/runtime-review-gated/alpha" feature/runtime-review-gated
+git -C "$review_gated_repo" branch "slice/runtime-review-gated/beta" feature/runtime-review-gated
+write_topology_runtime_brief "$review_gated_repo" runtime-review-gated 1 alpha none review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_gated_repo" runtime-review-gated 2 beta alpha review_gated ./verify-pass.sh
+make_fake_done_agent "$review_gated_agent_bin"
+review_gated_task_before="$(git -C "$review_gated_repo" rev-parse feature/runtime-review-gated)"
+review_gated_out="$runtime_output_dir/review-gated.out"
+review_gated_err="$runtime_output_dir/review-gated.err"
+if ! PATH="$review_gated_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_gated_repo/briefs" --repo "$review_gated_repo" --agent codex >"$review_gated_out" 2>"$review_gated_err"; then
+    fail "review_gated slice was not host-verified into REVIEW_PENDING: $(tr '\n' ' ' <"$review_gated_err")"
+elif [[ "$(git -C "$review_gated_repo" rev-parse feature/runtime-review-gated)" != "$review_gated_task_before" ]]; then
+    fail "review_gated verification promoted a slice into the task branch before external review"
+elif ! git -C "$review_gated_repo" show "slice/runtime-review-gated/alpha:alpha-marker.txt" >/dev/null 2>&1; then
+    fail "review_gated fake agent did not produce the immutable alpha slice head"
+elif ! review_gated_alpha_head="$(git -C "$review_gated_repo" rev-parse slice/runtime-review-gated/alpha)"; then
+    fail "review_gated fixture could not resolve the alpha slice SHA"
+elif ! grep -Fq "REVIEW_PENDING" "$review_gated_out" \
+    || ! grep -Fq "slice/runtime-review-gated/alpha" "$review_gated_out" \
+    || ! grep -Fq "$review_gated_alpha_head" "$review_gated_out"; then
+    fail "review_gated verification did not emit REVIEW_PENDING evidence bound to the exact slice SHA"
+elif ! grep -Fq "provider_gate_state: not_evaluated" "$review_gated_out"; then
+    fail "REVIEW_PENDING evidence does not explicitly record provider_gate_state: not_evaluated"
+elif grep -Fq "VERIFIED" "$review_gated_out"; then
+    fail "review_gated verification marked a slice VERIFIED before provider-neutral review evidence was supplied"
+elif grep -Fq "Agent 2: slice-2-beta" "$review_gated_out" || git -C "$review_gated_repo" show "slice/runtime-review-gated/beta:beta-marker.txt" >/dev/null 2>&1; then
+    fail "review_gated REVIEW_PENDING alpha unlocked dependent beta before promotion evidence"
+else
+    pass
+fi
+
+test_start "workflow review_gated dry-runs do not write evidence or promote slice refs"
+review_dry_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-dry.XXXXXX")"
+p0p4_register_cleanup "$review_dry_repo"
+init_topology_runtime_repo "$review_dry_repo" runtime-review-dry
+git -C "$review_dry_repo" branch "slice/runtime-review-dry/alpha" feature/runtime-review-dry
+git -C "$review_dry_repo" branch "slice/runtime-review-dry/beta" feature/runtime-review-dry
+write_topology_runtime_brief "$review_dry_repo" runtime-review-dry 1 alpha none review_gated true
+write_topology_runtime_brief "$review_dry_repo" runtime-review-dry 2 beta none review_gated true
+review_dry_task_before="$(git -C "$review_dry_repo" rev-parse feature/runtime-review-dry)"
+review_dry_refs_before="$(git -C "$review_dry_repo" for-each-ref --format='%(refname):%(objectname)' refs/heads/slice/runtime-review-dry/)"
+review_dry_seq_out="$runtime_output_dir/review-dry-seq.out"
+review_dry_parallel_out="$runtime_output_dir/review-dry-parallel.out"
+review_dry_seq_exit=0
+review_dry_parallel_exit=0
+bash "$workflow/scripts/run-agents.sh" --briefs "$review_dry_repo/briefs" --repo "$review_dry_repo" --dry-run >"$review_dry_seq_out" 2>&1 || review_dry_seq_exit=$?
+bash "$workflow/scripts/run-agents.sh" --briefs "$review_dry_repo/briefs" --repo "$review_dry_repo" --parallel --dry-run >"$review_dry_parallel_out" 2>&1 || review_dry_parallel_exit=$?
+if [[ "$review_dry_seq_exit" -ne 0 || "$review_dry_parallel_exit" -ne 0 ]]; then
+    fail "review_gated sequential or parallel dry-run failed: sequential=$(tr '\n' ' ' <"$review_dry_seq_out") parallel=$(tr '\n' ' ' <"$review_dry_parallel_out")"
+elif find "$review_dry_repo/briefs" -name '*.review-evidence.txt' -type f -print -quit | grep -q .; then
+    fail "review_gated dry-run wrote provider review evidence"
+elif [[ "$(git -C "$review_dry_repo" rev-parse feature/runtime-review-dry)" != "$review_dry_task_before" ]] \
+    || [[ "$(git -C "$review_dry_repo" for-each-ref --format='%(refname):%(objectname)' refs/heads/slice/runtime-review-dry/)" != "$review_dry_refs_before" ]]; then
+    fail "review_gated dry-run promoted or otherwise mutated task/slice refs"
+else
+    pass
+fi
+
+test_start "workflow review-gated prerequisite promotion requires exact REVIEW_APPROVED evidence"
+review_approval_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-approval.XXXXXX")"
+p0p4_register_cleanup "$review_approval_repo"
+init_topology_runtime_repo "$review_approval_repo" runtime-review-approval
+git -C "$review_approval_repo" branch "slice/runtime-review-approval/alpha" feature/runtime-review-approval
+git -C "$review_approval_repo" branch "slice/runtime-review-approval/beta" feature/runtime-review-approval
+write_topology_runtime_brief "$review_approval_repo" runtime-review-approval 1 alpha none review_gated true
+write_topology_runtime_brief "$review_approval_repo" runtime-review-approval 2 beta alpha review_gated true
+review_approval_out="$runtime_output_dir/review-approval.out"
+review_approval_err="$runtime_output_dir/review-approval.err"
+if bash "$workflow/scripts/run-agents.sh" --briefs "$review_approval_repo/briefs" --repo "$review_approval_repo" --verified-slices alpha --dry-run >"$review_approval_out" 2>"$review_approval_err"; then
+    fail "review_gated --verified-slices accepted ancestry/host proof without REVIEW_APPROVED evidence"
+elif ! rg -q -i 'review.*approved|provider.*gate|review evidence' "$review_approval_out" "$review_approval_err"; then
+    fail "review_gated prerequisite rejection did not identify missing REVIEW_APPROVED provider evidence"
+else
+    pass
+fi
+
+test_start "workflow exact approved review evidence re-verifies prerequisite and launches its dependent"
+review_approved_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-approved.XXXXXX")"
+review_approved_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-approved-agent.XXXXXX")"
+p0p4_register_cleanup "$review_approved_repo" "$review_approved_agent_bin"
+init_topology_runtime_repo "$review_approved_repo" runtime-review-approved
+review_approved_target="$(git -C "$review_approved_repo" branch --show-current)"
+add_verifier "$review_approved_repo" verify-pass.sh 'exit 0'
+git -C "$review_approved_repo" branch -f feature/runtime-review-approved HEAD
+git -C "$review_approved_repo" branch "slice/runtime-review-approved/alpha" feature/runtime-review-approved
+git -C "$review_approved_repo" branch "slice/runtime-review-approved/beta" feature/runtime-review-approved
+review_approved_base="$(git -C "$review_approved_repo" rev-parse feature/runtime-review-approved)"
+git -C "$review_approved_repo" checkout -q slice/runtime-review-approved/alpha
+printf 'approved alpha\n' >"$review_approved_repo/alpha-approved.txt"
+git -C "$review_approved_repo" add alpha-approved.txt && git -C "$review_approved_repo" commit -q -m 'approved alpha transition'
+git -C "$review_approved_repo" checkout -q feature/runtime-review-approved
+git -C "$review_approved_repo" merge --ff-only -q slice/runtime-review-approved/alpha
+git -C "$review_approved_repo" branch -f slice/runtime-review-approved/beta feature/runtime-review-approved
+git -C "$review_approved_repo" checkout -q "$review_approved_target"
+write_topology_runtime_brief "$review_approved_repo" runtime-review-approved 1 alpha none review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_approved_repo" runtime-review-approved 2 beta alpha review_gated ./verify-pass.sh
+sed -i.bak "s/^- target_base_sha:.*/- target_base_sha: ${review_approved_base}/" "$review_approved_repo/briefs/slice-1-alpha.md" "$review_approved_repo/briefs/slice-2-beta.md"
+rm -f "$review_approved_repo/briefs/slice-1-alpha.md.bak" "$review_approved_repo/briefs/slice-2-beta.md.bak"
+review_approved_head="$(git -C "$review_approved_repo" rev-parse slice/runtime-review-approved/alpha)"
+mkdir -p "$review_approved_repo/briefs/logs"
+cat >"$review_approved_repo/briefs/logs/slice-1-alpha.review-evidence.txt" <<EVIDENCE
+--- SLICE REVIEW EVIDENCE ---
+schema_version: 1
+state: REVIEW_PENDING
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_approved_target}
+target_base_sha: ${review_approved_base}
+task_branch: feature/runtime-review-approved
+slice_branch: slice/runtime-review-approved/alpha
+review_base_ref: feature/runtime-review-approved
+review_head_ref: slice/runtime-review-approved/alpha
+verified_base_sha: ${review_approved_base}
+verified_head_sha: ${review_approved_head}
+verification_evidence_ref: local://host-verifier/alpha
+provider_gate_state: not_evaluated
+--- END SLICE REVIEW EVIDENCE ---
+EVIDENCE
+cat >"$review_approved_repo/briefs/logs/slice-1-alpha.review-approval.txt" <<EVIDENCE
+--- SLICE REVIEW APPROVAL ---
+schema_version: 1
+state: REVIEW_APPROVED
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_approved_target}
+target_base_sha: ${review_approved_base}
+task_branch: feature/runtime-review-approved
+slice_branch: slice/runtime-review-approved/alpha
+review_base_ref: feature/runtime-review-approved
+review_head_ref: slice/runtime-review-approved/alpha
+verified_base_sha: ${review_approved_base}
+verified_head_sha: ${review_approved_head}
+verification_evidence_ref: local://host-verifier/alpha
+review_request_ref: adapter://opaque-review-request/alpha-1
+provider_gate_state: passed
+provider_gate_evidence_ref: adapter://opaque-provider-gate/alpha-1
+--- END SLICE REVIEW APPROVAL ---
+EVIDENCE
+make_fake_done_agent "$review_approved_agent_bin"
+review_approved_out="$runtime_output_dir/review-approved.out"
+review_approved_err="$runtime_output_dir/review-approved.err"
+if ! PATH="$review_approved_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_approved_repo/briefs" --repo "$review_approved_repo" --agent codex --verified-slices alpha >"$review_approved_out" 2>"$review_approved_err"; then
+    fail "exact REVIEW_APPROVED evidence did not permit fresh prerequisite verification and dependent launch: $(tr '\n' ' ' <"$review_approved_err")"
+elif ! grep -Fq "Agent 2: slice-2-beta" "$review_approved_out" \
+    || ! git -C "$review_approved_repo" show "slice/runtime-review-approved/beta:beta-marker.txt" >/dev/null 2>&1; then
+    fail "exact REVIEW_APPROVED evidence did not launch the dependent after host re-verification"
+else
+    pass
+fi
+
+test_start "workflow rejects mismatched REVIEW_APPROVED evidence before dependent dispatch"
+review_mismatched_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-mismatched.XXXXXX")"
+p0p4_register_cleanup "$review_mismatched_repo"
+init_topology_runtime_repo "$review_mismatched_repo" runtime-review-mismatched
+review_mismatched_target="$(git -C "$review_mismatched_repo" branch --show-current)"
+git -C "$review_mismatched_repo" branch "slice/runtime-review-mismatched/alpha" feature/runtime-review-mismatched
+git -C "$review_mismatched_repo" branch "slice/runtime-review-mismatched/beta" feature/runtime-review-mismatched
+write_topology_runtime_brief "$review_mismatched_repo" runtime-review-mismatched 1 alpha none review_gated true
+write_topology_runtime_brief "$review_mismatched_repo" runtime-review-mismatched 2 beta alpha review_gated true
+review_mismatched_base="$(git -C "$review_mismatched_repo" rev-parse feature/runtime-review-mismatched)"
+review_mismatched_head="$(git -C "$review_mismatched_repo" rev-parse slice/runtime-review-mismatched/alpha)"
+mkdir -p "$review_mismatched_repo/briefs/logs"
+cat >"$review_mismatched_repo/briefs/logs/slice-1-alpha.review-evidence.txt" <<EVIDENCE
+--- SLICE REVIEW EVIDENCE ---
+schema_version: 1
+state: REVIEW_PENDING
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_mismatched_target}
+target_base_sha: ${review_mismatched_base}
+task_branch: feature/runtime-review-mismatched
+slice_branch: slice/runtime-review-mismatched/alpha
+review_base_ref: feature/runtime-review-mismatched
+review_head_ref: slice/runtime-review-mismatched/alpha
+verified_base_sha: ${review_mismatched_base}
+verified_head_sha: ${review_mismatched_head}
+verification_evidence_ref: local://host-verifier/alpha
+provider_gate_state: not_evaluated
+--- END SLICE REVIEW EVIDENCE ---
+EVIDENCE
+cat >"$review_mismatched_repo/briefs/logs/slice-1-alpha.review-approval.txt" <<EVIDENCE
+--- SLICE REVIEW APPROVAL ---
+schema_version: 1
+state: REVIEW_APPROVED
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_mismatched_target}
+target_base_sha: ${review_mismatched_base}
+task_branch: feature/runtime-review-mismatched
+slice_branch: slice/runtime-review-mismatched/alpha
+review_base_ref: feature/runtime-review-mismatched
+review_head_ref: slice/runtime-review-mismatched/alpha
+verified_base_sha: ${review_mismatched_base}
+verified_head_sha: 0000000000000000000000000000000000000000
+verification_evidence_ref: local://host-verifier/alpha
+review_request_ref: adapter://opaque-review-request/mismatched
+provider_gate_state: passed
+provider_gate_evidence_ref: adapter://opaque-provider-gate/mismatched
+--- END SLICE REVIEW APPROVAL ---
+EVIDENCE
+review_mismatched_out="$runtime_output_dir/review-mismatched.out"
+review_mismatched_err="$runtime_output_dir/review-mismatched.err"
+if bash "$workflow/scripts/run-agents.sh" --briefs "$review_mismatched_repo/briefs" --repo "$review_mismatched_repo" --verified-slices alpha --dry-run >"$review_mismatched_out" 2>"$review_mismatched_err"; then
+    fail "mismatched REVIEW_APPROVED evidence was accepted before dependent dispatch"
+elif grep -Fq "Agent 2: slice-2-beta" "$review_mismatched_out"; then
+    fail "mismatched REVIEW_APPROVED evidence reached dependent dispatch"
+elif ! rg -q -i 'review.*(sha|head|evidence)|approval.*mismatch' "$review_mismatched_out" "$review_mismatched_err"; then
+    fail "mismatched REVIEW_APPROVED evidence rejection was not actionable"
+else
+    pass
+fi
+
+test_start "workflow task-branch integration rejects review-gated slices without exact approval evidence"
+review_integration_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-integration.XXXXXX")"
+p0p4_register_cleanup "$review_integration_repo"
+init_topology_runtime_repo "$review_integration_repo" runtime-review-integration
+git -C "$review_integration_repo" checkout -q -b slice/runtime-review-integration/alpha feature/runtime-review-integration
+printf 'review gated output\n' >"$review_integration_repo/alpha-marker.txt"
+git -C "$review_integration_repo" add alpha-marker.txt
+git -C "$review_integration_repo" commit -q -m 'review gated alpha output'
+review_integration_base_branch="$(git -C "$review_integration_repo" symbolic-ref --quiet --short HEAD)"
+git -C "$review_integration_repo" checkout -q "$review_integration_base_branch"
+write_topology_runtime_brief "$review_integration_repo" runtime-review-integration 1 alpha none review_gated true
+git -C "$review_integration_repo" add briefs
+git -C "$review_integration_repo" commit -q -m 'add review integration brief fixture'
+review_integration_out="$runtime_output_dir/review-integration.out"
+review_integration_err="$runtime_output_dir/review-integration.err"
+if (cd "$review_integration_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-review-integration --briefs "$review_integration_repo/briefs" --skip-validation 'review evidence fixture' >"$review_integration_out" 2>"$review_integration_err"); then
+    fail "check-integration accepted a review_gated slice without exact REVIEW_APPROVED evidence"
+elif ! rg -q -i 'review.*approved|provider.*gate|review evidence' "$review_integration_out" "$review_integration_err"; then
+    fail "check-integration rejection did not identify missing REVIEW_APPROVED provider evidence: stdout=$(tr '\n' ' ' <"$review_integration_out") stderr=$(tr '\n' ' ' <"$review_integration_err")"
+else
+    pass
+fi
+
+test_start "workflow task-branch integration accepts exact approved evidence from a custom evidence directory"
+review_checker_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-checker.XXXXXX")"
+p0p4_register_cleanup "$review_checker_repo"
+init_topology_runtime_repo "$review_checker_repo" runtime-review-checker
+review_checker_base="$(git -C "$review_checker_repo" rev-parse feature/runtime-review-checker)"
+review_checker_caller_branch="$(git -C "$review_checker_repo" symbolic-ref --quiet --short HEAD)"
+git -C "$review_checker_repo" checkout -q -b slice/runtime-review-checker/alpha feature/runtime-review-checker
+printf 'approved review output\n' >"$review_checker_repo/alpha-marker.txt"
+git -C "$review_checker_repo" add alpha-marker.txt
+git -C "$review_checker_repo" commit -q -m 'approved review alpha output'
+review_checker_head="$(git -C "$review_checker_repo" rev-parse HEAD)"
+git -C "$review_checker_repo" checkout -q feature/runtime-review-checker
+git -C "$review_checker_repo" reset --hard -q "$review_checker_head"
+git -C "$review_checker_repo" checkout -q "$review_checker_caller_branch"
+write_topology_runtime_brief "$review_checker_repo" runtime-review-checker 1 alpha none review_gated true
+git -C "$review_checker_repo" add briefs
+git -C "$review_checker_repo" commit -q -m 'add checker review brief fixture'
+review_checker_evidence="$review_checker_repo/review-evidence"
+mkdir -p "$review_checker_evidence"
+cat >"$review_checker_evidence/slice-1-alpha.review-evidence.txt" <<EVIDENCE
+--- SLICE REVIEW EVIDENCE ---
+schema_version: 1
+state: REVIEW_PENDING
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_checker_caller_branch}
+target_base_sha: ${review_checker_base}
+task_branch: feature/runtime-review-checker
+slice_branch: slice/runtime-review-checker/alpha
+review_base_ref: feature/runtime-review-checker
+review_head_ref: slice/runtime-review-checker/alpha
+verified_base_sha: ${review_checker_base}
+verified_head_sha: ${review_checker_head}
+verification_evidence_ref: local://host-verifier/alpha
+provider_gate_state: not_evaluated
+--- END SLICE REVIEW EVIDENCE ---
+EVIDENCE
+cat >"$review_checker_evidence/slice-1-alpha.review-approval.txt" <<EVIDENCE
+--- SLICE REVIEW APPROVAL ---
+schema_version: 1
+state: REVIEW_APPROVED
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${review_checker_caller_branch}
+target_base_sha: ${review_checker_base}
+task_branch: feature/runtime-review-checker
+slice_branch: slice/runtime-review-checker/alpha
+review_base_ref: feature/runtime-review-checker
+review_head_ref: slice/runtime-review-checker/alpha
+verified_base_sha: ${review_checker_base}
+verified_head_sha: ${review_checker_head}
+verification_evidence_ref: local://host-verifier/alpha
+review_request_ref: adapter://opaque-review-request/checker-alpha
+provider_gate_state: passed
+provider_gate_evidence_ref: adapter://opaque-provider-gate/checker-alpha
+--- END SLICE REVIEW APPROVAL ---
+EVIDENCE
+review_checker_out="$runtime_output_dir/review-checker.out"
+review_checker_err="$runtime_output_dir/review-checker.err"
+if ! (cd "$review_checker_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-review-checker --briefs "$review_checker_repo/briefs" --review-evidence-dir "$review_checker_evidence" --skip-validation 'approved review fixture' >"$review_checker_out" 2>"$review_checker_err"); then
+    fail "check-integration rejected exact REVIEW_APPROVED evidence from custom evidence directory: $(tr '\n' ' ' <"$review_checker_err")"
+elif ! grep -Eq 'READY|BRANCH-ONLY' "$review_checker_out"; then
+    fail "check-integration did not report readiness after exact approved review evidence"
+else
+    pass
+fi
+
+prepare_approval_toctou_fixture() {
+    local kind="$1"
+    TOCTOU_REPO="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-toctou-${kind}.XXXXXX")"
+    TOCTOU_BIN="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-toctou-bin-${kind}.XXXXXX")"
+    p0p4_register_cleanup "$TOCTOU_REPO" "$TOCTOU_BIN"
+    init_topology_runtime_repo "$TOCTOU_REPO" "toctou-${kind}"
+    TOCTOU_CALLER="$(git -C "$TOCTOU_REPO" symbolic-ref --quiet --short HEAD)"
+    TOCTOU_BASE="$(git -C "$TOCTOU_REPO" rev-parse "feature/toctou-${kind}")"
+    git -C "$TOCTOU_REPO" checkout -q -b "slice/toctou-${kind}/alpha" "feature/toctou-${kind}"
+    printf 'approved\n' >"$TOCTOU_REPO/alpha.txt"
+    git -C "$TOCTOU_REPO" add alpha.txt && git -C "$TOCTOU_REPO" commit -q -m approved
+    TOCTOU_HEAD="$(git -C "$TOCTOU_REPO" rev-parse HEAD)"
+    git -C "$TOCTOU_REPO" checkout -q "feature/toctou-${kind}"
+    git -C "$TOCTOU_REPO" merge --no-ff --no-edit -q "slice/toctou-${kind}/alpha"
+    git -C "$TOCTOU_REPO" checkout -q "$TOCTOU_CALLER"
+    printf 'moved\n' >"$TOCTOU_REPO/moved.txt"
+    git -C "$TOCTOU_REPO" add moved.txt && git -C "$TOCTOU_REPO" commit -q -m moved
+    TOCTOU_MOVED="$(git -C "$TOCTOU_REPO" rev-parse HEAD)"
+    if [[ "$kind" == target ]]; then
+        TOCTOU_MOVED="$(git -C "$TOCTOU_REPO" mktree </dev/null | xargs git -C "$TOCTOU_REPO" commit-tree -m 'orphan target move')"
+    fi
+    git -C "$TOCTOU_REPO" update-ref "refs/heads/slice/toctou-${kind}/alpha" "$TOCTOU_HEAD"
+    write_topology_runtime_brief "$TOCTOU_REPO" "toctou-${kind}" 1 alpha none review_gated true
+    sed -i.bak "s/^- target_base_sha:.*/- target_base_sha: ${TOCTOU_BASE}/" "$TOCTOU_REPO/briefs/slice-1-alpha.md"
+    rm -f "$TOCTOU_REPO/briefs/slice-1-alpha.md.bak"
+    git -C "$TOCTOU_REPO" add briefs && git -C "$TOCTOU_REPO" commit -q -m briefs
+    TOCTOU_EVIDENCE="$TOCTOU_REPO/evidence"
+    mkdir -p "$TOCTOU_EVIDENCE"
+    for state_file in evidence approval; do
+        if [[ "$state_file" == evidence ]]; then state=REVIEW_PENDING; gate=not_evaluated; marker=EVIDENCE; else state=REVIEW_APPROVED; gate=passed; marker=APPROVAL; fi
+        cat >"$TOCTOU_EVIDENCE/slice-1-alpha.review-${state_file}.txt" <<EVIDENCE
+--- SLICE REVIEW ${marker} ---
+schema_version: 1
+state: ${state}
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: ${TOCTOU_CALLER}
+target_base_sha: ${TOCTOU_BASE}
+task_branch: feature/toctou-${kind}
+slice_branch: slice/toctou-${kind}/alpha
+review_base_ref: feature/toctou-${kind}
+review_head_ref: slice/toctou-${kind}/alpha
+verified_base_sha: ${TOCTOU_BASE}
+verified_head_sha: ${TOCTOU_HEAD}
+verification_evidence_ref: local://verifier
+provider_gate_state: ${gate}
+EVIDENCE
+        if [[ "$state_file" == approval ]]; then printf '%s\n' 'review_request_ref: adapter://request' 'provider_gate_evidence_ref: adapter://gate' >>"$TOCTOU_EVIDENCE/slice-1-alpha.review-${state_file}.txt"; fi
+        printf '%s\n' "--- END SLICE REVIEW ${marker} ---" >>"$TOCTOU_EVIDENCE/slice-1-alpha.review-${state_file}.txt"
+    done
+    if [[ "$kind" == slice ]]; then
+        TOCTOU_MOVE_REF="refs/heads/slice/toctou-${kind}/alpha"
+    elif [[ "$kind" == task ]]; then
+        TOCTOU_MOVE_REF="refs/heads/feature/toctou-${kind}"
+    else
+        TOCTOU_MOVE_REF="refs/heads/${TOCTOU_CALLER}"
+    fi
+    cat >"$TOCTOU_BIN/git" <<WRAPPER
+#!/usr/bin/env bash
+if { [[ "\$1" == worktree && "\$2" == add ]] || [[ "\$3" == worktree && "\$4" == add ]]; }; then
+  "\$REAL_GIT" -C "$TOCTOU_REPO" update-ref "$TOCTOU_MOVE_REF" "$TOCTOU_MOVED"
+fi
+exec "\$REAL_GIT" "\$@"
+WRAPPER
+    chmod +x "$TOCTOU_BIN/git"
+}
+
+test_start "workflow rejects an empty REVIEW_APPROVED fast-forward equality"
+review_empty_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-empty.XXXXXX")"
+p0p4_register_cleanup "$review_empty_repo"
+init_topology_runtime_repo "$review_empty_repo" runtime-review-empty
+review_empty_base="$(git -C "$review_empty_repo" rev-parse feature/runtime-review-empty)"
+git -C "$review_empty_repo" branch slice/runtime-review-empty/alpha "$review_empty_base"
+write_topology_runtime_brief "$review_empty_repo" runtime-review-empty 1 alpha none review_gated true
+git -C "$review_empty_repo" add briefs && git -C "$review_empty_repo" commit -q -m briefs
+review_empty_evidence="$review_empty_repo/evidence"
+mkdir -p "$review_empty_evidence"
+for review_empty_file in evidence approval; do
+    if [[ "$review_empty_file" == evidence ]]; then review_empty_state=REVIEW_PENDING; review_empty_gate=not_evaluated; review_empty_marker=EVIDENCE; else review_empty_state=REVIEW_APPROVED; review_empty_gate=passed; review_empty_marker=APPROVAL; fi
+    cat >"$review_empty_evidence/slice-1-alpha.review-${review_empty_file}.txt" <<EVIDENCE
+--- SLICE REVIEW ${review_empty_marker} ---
+schema_version: 1
+state: ${review_empty_state}
+slice_id: alpha
+promotion_mode: review_gated
+target_branch: master
+target_base_sha: ${review_empty_base}
+task_branch: feature/runtime-review-empty
+slice_branch: slice/runtime-review-empty/alpha
+review_base_ref: feature/runtime-review-empty
+review_head_ref: slice/runtime-review-empty/alpha
+verified_base_sha: ${review_empty_base}
+verified_head_sha: ${review_empty_base}
+verification_evidence_ref: local://verifier
+provider_gate_state: ${review_empty_gate}
+EVIDENCE
+    if [[ "$review_empty_file" == approval ]]; then printf '%s\n' 'review_request_ref: adapter://empty' 'provider_gate_evidence_ref: adapter://empty' >>"$review_empty_evidence/slice-1-alpha.review-${review_empty_file}.txt"; fi
+done
+review_empty_out="$runtime_output_dir/review-empty.out"
+review_empty_err="$runtime_output_dir/review-empty.err"
+if (cd "$review_empty_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-review-empty --briefs "$review_empty_repo/briefs" --review-evidence-dir "$review_empty_evidence" --skip-validation fixture >"$review_empty_out" 2>"$review_empty_err"); then
+    fail "check-integration accepted REVIEW_APPROVED evidence with no reviewed transition"
+elif ! rg -q -i 'empty|head.*base|no.*commit|review.*transition' "$review_empty_out" "$review_empty_err"; then
+    fail "empty approved review rejection did not identify the missing reviewed transition"
+else
+    pass
+fi
+
+test_start "workflow integration allows only exact untracked generated brief artifacts"
+dirty_allow_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-dirty-allow.XXXXXX")"
+p0p4_register_cleanup "$dirty_allow_repo"
+init_topology_runtime_repo "$dirty_allow_repo" runtime-dirty-allow
+dirty_allow_caller="$(git -C "$dirty_allow_repo" symbolic-ref --quiet --short HEAD)"
+dirty_allow_base="$(git -C "$dirty_allow_repo" rev-parse feature/runtime-dirty-allow)"
+git -C "$dirty_allow_repo" checkout -q -b slice/runtime-dirty-allow/alpha feature/runtime-dirty-allow
+printf 'approved\n' >"$dirty_allow_repo/alpha.txt"
+git -C "$dirty_allow_repo" add alpha.txt && git -C "$dirty_allow_repo" commit -q -m alpha
+dirty_allow_head="$(git -C "$dirty_allow_repo" rev-parse HEAD)"
+git -C "$dirty_allow_repo" checkout -q "$dirty_allow_caller"
+write_topology_runtime_brief "$dirty_allow_repo" runtime-dirty-allow 1 alpha none local true
+sed -i.bak "s/^- target_base_sha:.*/- target_base_sha: ${dirty_allow_base}/" "$dirty_allow_repo/briefs/slice-1-alpha.md" && rm -f "$dirty_allow_repo/briefs/slice-1-alpha.md.bak"
+mkdir -p "$dirty_allow_repo/briefs/logs"
+for dirty_suffix in .log .host-verify.log .external.host-verify.log .review-evidence.txt .review-approval.txt; do
+    printf 'generated artifact\n' >"$dirty_allow_repo/briefs/logs/slice-1-alpha${dirty_suffix}"
+done
+dirty_allow_out="$runtime_output_dir/dirty-allow.out"
+dirty_allow_err="$runtime_output_dir/dirty-allow.err"
+if ! (cd "$dirty_allow_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-dirty-allow --briefs "$dirty_allow_repo/briefs" --skip-validation fixture >"$dirty_allow_out" 2>"$dirty_allow_err"); then
+    fail "check-integration rejected only exact generated untracked brief/log artifacts: $(tr '\n' ' ' <"$dirty_allow_err")"
+else
+    printf 'unrelated\n' >"$dirty_allow_repo/unrelated.tmp"
+    if (cd "$dirty_allow_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-dirty-allow --briefs "$dirty_allow_repo/briefs" --skip-validation fixture >/dev/null 2>&1); then
+        fail "check-integration accepted an unrelated untracked path"
+    else
+        rm -f "$dirty_allow_repo/unrelated.tmp"
+        printf 'tracked mutation\n' >>"$dirty_allow_repo/README.md"
+        if (cd "$dirty_allow_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-dirty-allow --briefs "$dirty_allow_repo/briefs" --skip-validation fixture >/dev/null 2>&1); then
+            fail "check-integration accepted a tracked modification"
+        else
+            pass
+        fi
+    fi
+fi
+
+test_start "workflow integration fails closed when an approved slice ref moves after evidence validation"
+prepare_approval_toctou_fixture slice
+toctou_slice_out="$runtime_output_dir/toctou-slice.out"
+toctou_slice_err="$runtime_output_dir/toctou-slice.err"
+if (cd "$TOCTOU_REPO" && PATH="$TOCTOU_BIN:$PATH" REAL_GIT="$(command -v git)" bash "$workflow/scripts/check-integration.sh" --task-branch feature/toctou-slice --briefs "$TOCTOU_REPO/briefs" --review-evidence-dir "$TOCTOU_EVIDENCE" --skip-validation fixture >"$toctou_slice_out" 2>"$toctou_slice_err"); then
+    fail "check-integration accepted a post-approval moved slice ref"
+elif grep -Eq '^(✅ READY|⚠️  READY|ℹ️  BRANCH-ONLY)' "$toctou_slice_out"; then
+    fail "moved approved slice emitted a readiness verdict"
+elif ! rg -q -i 'slice.*(moved|changed)|review.*stale|approved.*(changed|mismatch)' "$toctou_slice_out" "$toctou_slice_err"; then
+    fail "moved slice rejection was not explicitly bound to post-snapshot approval staleness"
+else
+    pass
+fi
+
+test_start "workflow integration fails closed when an approved task ref moves after evidence validation"
+prepare_approval_toctou_fixture task
+toctou_task_out="$runtime_output_dir/toctou-task.out"
+toctou_task_err="$runtime_output_dir/toctou-task.err"
+if (cd "$TOCTOU_REPO" && PATH="$TOCTOU_BIN:$PATH" REAL_GIT="$(command -v git)" bash "$workflow/scripts/check-integration.sh" --task-branch feature/toctou-task --briefs "$TOCTOU_REPO/briefs" --review-evidence-dir "$TOCTOU_EVIDENCE" --skip-validation fixture >"$toctou_task_out" 2>"$toctou_task_err"); then
+    fail "check-integration accepted a post-approval moved task ref"
+elif grep -Eq '^(✅ READY|⚠️  READY|ℹ️  BRANCH-ONLY)' "$toctou_task_out"; then
+    fail "moved approved task emitted a readiness verdict"
+elif ! rg -q -i 'task.*(moved|changed)|review.*stale|approved.*(changed|mismatch)' "$toctou_task_out" "$toctou_task_err"; then
+    fail "moved task rejection was not explicitly bound to post-snapshot approval staleness"
+else
+    pass
+fi
+
+test_start "workflow integration fails closed when target branch moves after immutable readiness snapshot"
+prepare_approval_toctou_fixture target
+toctou_target_out="$runtime_output_dir/toctou-target.out"
+toctou_target_err="$runtime_output_dir/toctou-target.err"
+if (cd "$TOCTOU_REPO" && PATH="$TOCTOU_BIN:$PATH" REAL_GIT="$(command -v git)" bash "$workflow/scripts/check-integration.sh" --task-branch feature/toctou-target --briefs "$TOCTOU_REPO/briefs" --review-evidence-dir "$TOCTOU_EVIDENCE" --skip-validation fixture >"$toctou_target_out" 2>"$toctou_target_err"); then
+    fail "check-integration accepted a post-snapshot moved target branch"
+elif grep -Eq '^(✅ READY|⚠️  READY|ℹ️  BRANCH-ONLY)' "$toctou_target_out"; then
+    fail "moved target branch emitted a positive readiness verdict"
+elif ! rg -q -i 'target.*(moved|changed)|target.*stale|review.*stale' "$toctou_target_out" "$toctou_target_err"; then
+    fail "moved target rejection did not identify immutable target ref staleness"
+else
+    pass
+fi
+
+test_start "workflow integration permits target advancement that remains descended from target_base_sha"
+prepare_approval_toctou_fixture target-forward
+toctou_target_forward_out="$runtime_output_dir/toctou-target-forward.out"
+toctou_target_forward_err="$runtime_output_dir/toctou-target-forward.err"
+if ! (cd "$TOCTOU_REPO" && PATH="$TOCTOU_BIN:$PATH" REAL_GIT="$(command -v git)" bash "$workflow/scripts/check-integration.sh" --task-branch feature/toctou-target-forward --briefs "$TOCTOU_REPO/briefs" --review-evidence-dir "$TOCTOU_EVIDENCE" --skip-validation fixture >"$toctou_target_forward_out" 2>"$toctou_target_forward_err"); then
+    fail "check-integration rejected a descendant target advancement: $(tr '\n' ' ' <"$toctou_target_forward_err")"
+elif ! grep -Eq '^(✅ READY|⚠️  READY|ℹ️  BRANCH-ONLY)' "$toctou_target_forward_out"; then
+    fail "descendant target advancement did not reach a positive readiness result"
+elif rg -q -i 'target.*(stale|moved|changed)|target_base_sha.*ancestor' "$toctou_target_forward_out" "$toctou_target_forward_err"; then
+    fail "descendant target advancement was incorrectly classified as stale"
+else
+    pass
+fi
+
+test_start "workflow integration implementation snapshots approved target and slice SHAs before readiness"
+if ! rg -q 'target_base_sha' "$workflow/scripts/check-integration.sh"; then
+    fail "check-integration has no target_base_sha validation for approved review evidence"
+elif ! rg -q -i 'approved.*(head|slice).*(sha|commit)|(sha|commit).*approved' "$workflow/scripts/check-integration.sh"; then
+    fail "check-integration has no immutable approved slice SHA snapshot before readiness"
+elif ! rg -q -i '(changed|moved|stale).*?(slice|task)|(slice|task).*?(changed|moved|stale)' "$workflow/scripts/check-integration.sh"; then
+    fail "check-integration has no fail-closed moved task/slice ref guard after approval validation"
+else
+    pass
+fi
+
+test_start "workflow review_gated mode rejects moved slice refs after immutable verification"
+review_moved_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-moved.XXXXXX")"
+review_moved_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-moved-agent.XXXXXX")"
+p0p4_register_cleanup "$review_moved_repo" "$review_moved_agent_bin"
+init_topology_runtime_repo "$review_moved_repo" runtime-review-moved
+add_verifier "$review_moved_repo" verify-moves-slice-ref.sh 'git update-ref refs/heads/slice/runtime-review-moved/alpha "${MUTATED_COMMIT:?}"'
+git -C "$review_moved_repo" branch -f feature/runtime-review-moved HEAD
+printf 'unverified ref target\n' >"$review_moved_repo/unverified-target.txt"
+git -C "$review_moved_repo" add unverified-target.txt
+git -C "$review_moved_repo" commit -q -m "unverified alternate target"
+review_moved_commit="$(git -C "$review_moved_repo" rev-parse HEAD)"
+git -C "$review_moved_repo" branch "slice/runtime-review-moved/alpha" feature/runtime-review-moved
+write_topology_runtime_brief "$review_moved_repo" runtime-review-moved 1 alpha none review_gated ./verify-moves-slice-ref.sh
+make_fake_detaching_agent "$review_moved_agent_bin"
+review_moved_out="$runtime_output_dir/review-moved.out"
+review_moved_err="$runtime_output_dir/review-moved.err"
+if PATH="$review_moved_agent_bin:$PATH" MUTATED_COMMIT="$review_moved_commit" bash "$workflow/scripts/run-agents.sh" --briefs "$review_moved_repo/briefs" --repo "$review_moved_repo" --agent codex >"$review_moved_out" 2>"$review_moved_err"; then
+    fail "review_gated mode accepted a slice branch moved after immutable verification"
+elif ! grep -Eqi 'slice.*ref.*(changed|moved)|ref.*(changed|moved)|commit.*(changed|mismatch)' "$review_moved_out" "$review_moved_err"; then
+    fail "review_gated moved-ref rejection did not identify invalidated immutable evidence"
+else
+    pass
+fi
+
 test_start "workflow parallel success is host verified before merge and VERIFIED state"
 parallel_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-parallel.XXXXXX")"
 parallel_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-parallel-agent.XXXXXX")"
@@ -1041,7 +1666,7 @@ if [[ "$(cat "$dirty_integration_repo/README.md")" != "local dirty sentinel" ]] 
     fail "check-integration.sh mutated or discarded the caller's dirty worktree state"
 elif [[ "$dirty_integration_exit" -eq 0 ]]; then
     fail "check-integration.sh did not reject a dirty caller worktree before readiness mutation"
-elif ! grep -Eqi 'dirty|uncommitted|working tree.*clean' "$dirty_integration_out" "$dirty_integration_err"; then
+elif ! grep -Eqi 'dirty|uncommitted|working tree.*clean|tracked modifications|unrelated untracked|declared briefs|runner-owned artifacts' "$dirty_integration_out" "$dirty_integration_err"; then
     fail "dirty worktree rejection was not actionable"
 else
     pass
@@ -1102,6 +1727,82 @@ elif grep -Eq '^(✅ READY for integration|⚠️  READY with warnings)' "$mutat
     fail "check-integration.sh emitted a readiness verdict after candidate mutation"
 elif ! grep -Eqi 'mutat|candidate.*(changed|HEAD)|HEAD.*changed' "$mutating_validation_out" "$mutating_validation_err"; then
     fail "candidate mutation was rejected without identifying the integrity failure"
+else
+    pass
+fi
+
+test_start "workflow review_gated verification retains exact checked-out branch binding"
+review_detached_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-detached.XXXXXX")"
+review_detached_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-detached-agent.XXXXXX")"
+p0p4_register_cleanup "$review_detached_repo" "$review_detached_agent_bin"
+init_topology_runtime_repo "$review_detached_repo" runtime-review-detached
+add_verifier "$review_detached_repo" verify-pass.sh 'exit 0'
+git -C "$review_detached_repo" branch -f feature/runtime-review-detached HEAD
+git -C "$review_detached_repo" branch "slice/runtime-review-detached/alpha" feature/runtime-review-detached
+write_topology_runtime_brief "$review_detached_repo" runtime-review-detached 1 alpha none review_gated ./verify-pass.sh
+make_fake_detaching_agent "$review_detached_agent_bin"
+review_detached_out="$runtime_output_dir/review-detached.out"
+review_detached_err="$runtime_output_dir/review-detached.err"
+if PATH="$review_detached_agent_bin:$PATH" DETACH_TO_PARENT=false bash "$workflow/scripts/run-agents.sh" --briefs "$review_detached_repo/briefs" --repo "$review_detached_repo" --agent codex >"$review_detached_out" 2>"$review_detached_err"; then
+    fail "review_gated verification accepted a detached worktree at the verified slice SHA"
+elif ! grep -Eqi 'worktree branch.*expected branch|branch.*does not match expected' "$review_detached_out" "$review_detached_err"; then
+    fail "review_gated detached-worktree rejection did not preserve branch-binding evidence"
+elif grep -Fq "REVIEW_PENDING" "$review_detached_out"; then
+    fail "review_gated detached worktree emitted REVIEW_PENDING evidence despite failed branch binding"
+else
+    pass
+fi
+
+test_start "workflow review_gated stale runs invalidate prior REVIEW_PENDING evidence"
+review_stale_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-stale.XXXXXX")"
+review_stale_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-stale-agent.XXXXXX")"
+p0p4_register_cleanup "$review_stale_repo" "$review_stale_agent_bin"
+init_topology_runtime_repo "$review_stale_repo" runtime-review-stale
+add_verifier "$review_stale_repo" verify-pass.sh 'exit 0'
+add_verifier "$review_stale_repo" verify-conditional-move.sh 'if [[ "${MOVE_SLICE_REF:-false}" == true ]]; then git update-ref refs/heads/slice/runtime-review-stale/alpha "${MUTATED_COMMIT:?}"; fi'
+git -C "$review_stale_repo" branch -f feature/runtime-review-stale HEAD
+git -C "$review_stale_repo" branch "slice/runtime-review-stale/alpha" feature/runtime-review-stale
+printf 'alternate ref target\n' >"$review_stale_repo/alternate.txt"
+git -C "$review_stale_repo" add alternate.txt
+git -C "$review_stale_repo" commit -q -m "alternate review ref target"
+review_stale_alternate="$(git -C "$review_stale_repo" rev-parse HEAD)"
+write_topology_runtime_brief "$review_stale_repo" runtime-review-stale 1 alpha none review_gated ./verify-conditional-move.sh
+make_fake_done_agent "$review_stale_agent_bin"
+review_stale_out="$runtime_output_dir/review-stale.out"
+review_stale_err="$runtime_output_dir/review-stale.err"
+if ! PATH="$review_stale_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_stale_repo/briefs" --repo "$review_stale_repo" --agent codex >"$review_stale_out" 2>"$review_stale_err"; then
+    fail "review_gated fixture could not create initial REVIEW_PENDING evidence: $(tr '\n' ' ' <"$review_stale_err")"
+fi
+review_stale_evidence="$review_stale_repo/briefs/logs/slice-1-alpha.review-evidence.txt"
+review_stale_second_out="$runtime_output_dir/review-stale-second.out"
+review_stale_second_err="$runtime_output_dir/review-stale-second.err"
+if [[ ! -f "$review_stale_evidence" ]] || ! grep -Fq "state: REVIEW_PENDING" "$review_stale_evidence"; then
+    fail "review_gated fixture did not write initial REVIEW_PENDING evidence"
+elif PATH="$review_stale_agent_bin:$PATH" MOVE_SLICE_REF=true MUTATED_COMMIT="$review_stale_alternate" bash "$workflow/scripts/run-agents.sh" --briefs "$review_stale_repo/briefs" --repo "$review_stale_repo" --agent codex >"$review_stale_second_out" 2>"$review_stale_second_err"; then
+    fail "review_gated stale run accepted a moved slice ref"
+elif [[ -f "$review_stale_evidence" ]] && grep -Fq "state: REVIEW_PENDING" "$review_stale_evidence"; then
+    fail "review_gated stale run left prior reusable REVIEW_PENDING evidence after immutable binding failed"
+else
+    pass
+fi
+
+test_start "workflow new-topology runner next steps target the resolved task branch"
+new_topology_steps_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-new-topology-steps.XXXXXX")"
+p0p4_register_cleanup "$new_topology_steps_repo"
+init_topology_runtime_repo "$new_topology_steps_repo" runtime-new-topology-steps
+git -C "$new_topology_steps_repo" branch "slice/runtime-new-topology-steps/alpha" feature/runtime-new-topology-steps
+write_topology_runtime_brief "$new_topology_steps_repo" runtime-new-topology-steps 1 alpha none local true
+new_topology_steps_out="$runtime_output_dir/new-topology-steps.out"
+new_topology_steps_err="$runtime_output_dir/new-topology-steps.err"
+if ! bash "$workflow/scripts/run-agents.sh" --briefs "$new_topology_steps_repo/briefs" --repo "$new_topology_steps_repo" --dry-run >"$new_topology_steps_out" 2>"$new_topology_steps_err"; then
+    fail "new-topology runner dry-run failed: $(tr '\n' ' ' <"$new_topology_steps_err")"
+elif ! grep -Fq -- "Task branch: feature/runtime-new-topology-steps" "$new_topology_steps_out"; then
+    fail "new-topology runner next steps did not name the resolved task branch"
+elif ! grep -Fq -- "check-integration.sh --task-branch feature/runtime-new-topology-steps --briefs $new_topology_steps_repo/briefs" "$new_topology_steps_out"; then
+    fail "new-topology runner next steps did not direct task-branch integration validation with the brief directory"
+elif grep -Fq -- "feature/<task>/integration" "$new_topology_steps_out" \
+    || grep -Fq -- "--integration-branch feature/<task>/integration" "$new_topology_steps_out"; then
+    fail "new-topology runner next steps still advertised the retired feature/<task>/integration route"
 else
     pass
 fi

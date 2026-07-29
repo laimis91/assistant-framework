@@ -46,6 +46,16 @@ Generated: [date] | Task: [1-sentence description]
 |---------------|--------------|---------|
 | [path or search] | Caller / Consumer / Test / Docs / Contract / Config / Mirror / Runtime | [covered, not applicable, or deferred with reason] |
 
+## Reuse Search
+- applicability: [applicable | not_applicable]
+- applicability_reason: [concrete reason]
+- searches: [query_or_path | scope | outcome; required when applicable]
+- candidates: [name | location | disposition | rationale]
+- no_candidate_reason: [required when applicable and candidates are empty]
+- decision: [reuse | extend | new | intentional_duplicate]
+- decision_rationale: [why this decision preserves authoritative behavior]
+- divergence_control: [required for intentional_duplicate]
+
 ## Conventions Observed
 - [naming pattern, e.g. "Services end in *Service, registered as scoped"]
 - [architecture pattern, e.g. "CQRS with MediatR handlers"]

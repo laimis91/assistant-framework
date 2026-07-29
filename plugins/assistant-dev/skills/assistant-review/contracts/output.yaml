@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-review
 
@@ -11,20 +11,26 @@ artifacts:
     required: conditional
     condition: "scope_size in [medium, large] or subagent_execution_mode in [delegated, direct_fallback]"
     description: "How Reviewer responsibility was executed"
-    validation: "States subagent policy state, execution mode, authorization scope, and whether review used a fresh Reviewer subagent or fresh direct-fallback context"
-    on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when they were not authorized or available"
+    validation: "States subagent policy state, execution mode, trigger scope, and whether review used a fresh Reviewer subagent or fresh direct-fallback context"
+    on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-      - name: subagent_authorization_scope
+      - name: subagent_trigger_scope
         type: string[]
         required: true
+        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered review roles, rounds, or files."
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+        validation: "Exact active blocking rule that confirms no applicable direct-user, AGENTS.md, or active-skill trigger exception."
       - name: fresh_context_evidence
         type: string
         required: true
@@ -35,20 +41,26 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "How QAEvaluator responsibility was executed"
-    validation: "States subagent policy state, execution mode, authorization scope, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context"
-    on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when they were not authorized or available"
+    validation: "States subagent policy state, execution mode, trigger scope, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context"
+    on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, authorization_required, delegation_authorized, authorization_denied, subagents_unavailable, policy_disallowed]
+        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
       - name: subagent_execution_mode
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-      - name: subagent_authorization_scope
+      - name: subagent_trigger_scope
         type: string[]
         required: true
+        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered QA roles, rounds, or files."
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+        validation: "Exact active blocking rule that confirms no applicable direct-user, AGENTS.md, or active-skill trigger exception."
       - name: fresh_context_evidence
         type: string
         required: true

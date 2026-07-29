@@ -12,9 +12,9 @@ Record these fields in the task journal for medium+ tasks and in the inline comp
 - `Controller intensity`: `light`, `standard`, or `strict`
 - `Plan mode`: `none`, `inline`, or `approval_required`
 - `Required agents`: the roles required by size and risk
-- `Subagent policy state`: `not_required`, `authorization_required`, `delegation_authorized`, `authorization_denied`, `subagents_unavailable`, or `policy_disallowed`
+- `Subagent policy state`: `not_required`, `delegation_triggered`, `delegation_opted_out`, `subagents_unavailable`, or `policy_disallowed`
 - `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
-- `Subagent authorization scope`: roles/phases/actions explicitly authorized by the user, or empty when none
+- `Subagent trigger scope`: direct-user, applicable-`AGENTS.md`, or active-skill provenance plus covered roles/phases/actions; infer it without asking when delegation is relevant
 - `Required gates`: the common gates plus every applicable task-category gate pack
 - `Search mode`: `none`, `lightweight`, or `candidate_search`
 - `Candidate scope scan`: likely touched paths or modules, symbols/search terms checked, adjacent tests/docs/contracts/config/mirrors to inspect, confidence, and unknowns

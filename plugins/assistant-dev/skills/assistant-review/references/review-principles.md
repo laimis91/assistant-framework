@@ -24,11 +24,29 @@ DRY is about duplicated knowledge, not merely similar-looking code. Flag duplica
 
 Do not force DRY on coincidental resemblance. If two similar blocks serve different concepts or change for different reasons, merging them can create hidden coupling.
 
+## Reuse Search and Authoritative Duplication
+
+Before implementation and independently during review, search existing capabilities for business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details. Duplicated authoritative behavior is should-fix, and must-fix when semantics differ or duplication caused the bug. Non-findings include coincidental similarity and independent concepts. Intentional boundary duplication needs divergence control. Carried Mapper/task-packet evidence alone cannot satisfy review; record searches, candidates or no-candidate reason, decision, and rationale.
+
 ## YAGNI
 
 Avoid building capability for imagined future requirements. Flag speculative extension points, unused abstractions, dormant config, unused parameters, anticipatory generic types, and future-only branches when they add complexity without serving the current task.
 
 YAGNI is not permission to neglect code health. Tests, refactoring that keeps the code malleable, and small seams around real side effects can be current needs.
+
+## State and Extensibility Modeling
+
+### Nullable properties as hidden state
+
+- Flag code when `null -> value` or `value -> null` represents a business or lifecycle transition, especially when rules, side effects, or required data depend on that change.
+- Prefer named states and explicit transition methods or events that carry the required data.
+- Do not flag nullable properties when `null` only means optional or missing data.
+
+### Enums as extension points
+
+- Flag an enum when it represents an open-ended feature set and adding a value requires changing switches or conditionals in several places.
+- Prefer handlers, strategies, or another extensible design for open-ended cases.
+- Do not flag enums that represent a small, stable, closed set.
 
 ## Readability
 

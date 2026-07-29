@@ -56,7 +56,7 @@ Delegated mode (`subagent_execution_mode=delegated`):
 
 For standard/strict work, Direct fallback mode
 (`subagent_execution_mode=direct_fallback`) is allowed only for
-`authorization_denied`, `subagents_unavailable`, or `policy_disallowed`.
+`delegation_opted_out`, `subagents_unavailable`, or `policy_disallowed`.
 Do not pretend delegation happened. Record `subagent_policy_state`,
 `subagent_execution_mode`, `build_execution_lane`, the explicit direct fallback
 reason, matching bounded/separated evidence, independent Code Reviewer

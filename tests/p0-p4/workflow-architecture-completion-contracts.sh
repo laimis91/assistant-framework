@@ -112,17 +112,18 @@ else
     pass
 fi
 
-test_start "workflow v3 migration note covers every breaking producer contract"
+test_start "workflow v4 migration note covers every breaking producer contract"
 migration_note="$(awk '
     /^Migration note:/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
 if ! grep -Fq 'verification_command' <<<"$migration_note"; then
-    fail "v3 migration note does not explain verification_command argv migration"
+    fail "v4 migration note does not explain verification_command argv migration"
 elif ! grep -Fq 'assistant-review' <<<"$migration_note" \
-    || ! grep -Eiq 'retir|sole|canonical' <<<"$migration_note"; then
-    fail "v3 migration note does not retire workflow-owned Reviewer/QA schemas in favor of assistant-review"
+    || ! grep -Eiq 'owns?' <<<"$migration_note" \
+    || ! grep -Fq 'subagent_trigger_scope' <<<"$migration_note"; then
+    fail "v4 migration note does not cover assistant-review ownership and trigger-based delegation"
 else
     pass
 fi
@@ -175,7 +176,7 @@ else
     pass
 fi
 
-test_start "assistant-review and every Reviewer prompt produce workflow v3 reviewed_scope"
+test_start "assistant-review and every Reviewer prompt produce workflow v4 reviewed_scope"
 assistant_review_return_block="$(awk '
     /^    return_fields:/ { inside = 1 }
     inside && /^  - name: / { exit }
@@ -203,10 +204,10 @@ else
     pass
 fi
 
-test_start "promotable workflow overlay preserves optional Plan ownership and v3 migration semantics"
+test_start "promotable workflow overlay preserves optional Plan ownership and v4 migration semantics"
 candidate_missing=()
-for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review' 'canonical' 'Build repair' 'Document is the sole owner'; do
-    if ! grep -Fq "$term" "$candidate_skill"; then
+for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v3' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
+    if ! grep -Fq -- "$term" "$candidate_skill"; then
         candidate_missing+=("$term")
     fi
 done

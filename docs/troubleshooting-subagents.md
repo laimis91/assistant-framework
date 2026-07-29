@@ -5,17 +5,17 @@ Verify the workflow skill and agent definitions are installed, then look for a
 real native dispatch/thread and result rather than framework-generated runtime
 messages.
 
-Delegation consent is needed only immediately before an actual spawn. The agent
-should continue safe triage, discovery, and planning without asking merely
-because subagents might be useful. When a spawn is needed, authorize it
-explicitly or approve the bounded request.
+Subagent use is triggered by a direct user request or by applicable project or
+skill instructions. The agent should not ask for separate spawn consent after a
+trigger applies. An explicit user opt-out still prevents delegation for that
+scope.
 
 ## Common causes and fixes
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Preparation completes without spawning | No current step needs a subagent, or consent has not yet been requested for the first real spawn | If delegation is required, say "Use delegation" or authorize the named roles when the agent is ready to spawn them. |
-| A required spawn is never attempted | Installed workflow guidance is stale, or the matching skill was not loaded | Rerun the installer for that agent, confirm the relevant installed `SKILL.md`, and repeat the request with "Use delegation." |
+| Preparation completes without spawning | No applicable instruction requires a subagent for the current step, or the work is small enough for direct execution | If you want delegation beyond the skill's requirements, ask for it directly. |
+| A required spawn is never attempted | Installed workflow guidance is stale, the matching skill was not loaded, or an explicit opt-out is active | Rerun the installer, confirm the relevant installed `SKILL.md`, and remove any unintended opt-out. |
 | Codex says "unknown agent" | TOML definitions are missing or names do not match | Check `~/.codex/agents/*.toml` and each file's `name` field, then reinstall if needed. |
 | Codex says no subagent tool is visible | Native spawning is not necessarily exposed as a tool named `Task`, `delegate`, or `subagent` | Ask Codex to spawn the configured agent by name. Record `subagents_unavailable` only after a real spawn fails or supported-version evidence proves it unavailable. |
 | Claude or Gemini uses the wrong role | Skill or agent files are stale | Rerun the installer and inspect the agent's installed workflow skill and agent definitions. |
@@ -86,7 +86,7 @@ During the one-release migration window, the installer removes only retired
 Assistant Framework lifecycle registrations, preserves unrelated custom
 configuration, and neutralizes detected stale framework entrypoints.
 
-Direct fallback is valid only after the user denies delegation, policy forbids
-it, or a real spawn attempt fails. Record that reason plus equivalent
+Direct fallback is valid only after the user opts out of delegation, policy
+forbids it, or a real spawn attempt fails. Record that reason plus equivalent
 implementation, verification, and review evidence instead of treating missing
 framework runtime output as proof that subagents are unavailable.
