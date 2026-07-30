@@ -607,6 +607,52 @@ JSON
     fi
 fi
 
+test_start "workflow runner accepts a decompose-generated strict verification argv despite its supporting response example"
+generated_brief_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-generated-brief.XXXXXX")"
+p0p4_register_cleanup "$generated_brief_repo"
+git -C "$generated_brief_repo" init -q
+git -C "$generated_brief_repo" config user.email "p0p4@example.invalid"
+git -C "$generated_brief_repo" config user.name "P0 P4"
+printf 'fixture\n' >"$generated_brief_repo/README.md"
+git -C "$generated_brief_repo" add README.md
+git -C "$generated_brief_repo" commit -q -m init
+cat >"$generated_brief_repo/decomposition.json" <<'JSON'
+{
+  "task": "generated-brief-argv",
+  "description": "accept generated strict verification argv",
+  "single_slice_rationale": "one generated packet exercises the runner boundary",
+  "slice_manifest": [{
+    "slice_id": "alpha",
+    "name": "alpha",
+    "observable_increment": "generated packet reaches dry-run validation",
+    "deliverable_type": "behavior",
+    "files_to_create": [],
+    "files_to_modify": [],
+    "files_to_test": [],
+    "enabling_changes_included": [],
+    "depends_on": [],
+    "acceptance_criteria": ["generated strict packet is accepted"],
+    "verification_command": ["true", "-f"],
+    "expected_success_signal": "runner dry-run accepts the generated packet",
+    "evidence_to_record": ["runner dry-run result"],
+    "deviation_rollback_rule": "stop"
+  }]
+}
+JSON
+generated_brief_decompose_out="$runtime_output_dir/generated-brief-decompose.out"
+generated_brief_decompose_err="$runtime_output_dir/generated-brief-decompose.err"
+generated_brief_runner_out="$runtime_output_dir/generated-brief-runner.out"
+generated_brief_runner_err="$runtime_output_dir/generated-brief-runner.err"
+if ! (cd "$generated_brief_repo" && bash "$workflow/scripts/decompose.sh" --task generated-brief-argv --input decomposition.json >"$generated_brief_decompose_out" 2>"$generated_brief_decompose_err"); then
+    fail "decompose.sh could not generate the strict packet fixture: $(tr '\n' ' ' <"$generated_brief_decompose_err")"
+elif ! grep -Fq -- '  - -f' "$generated_brief_repo/briefs/slice-1-alpha.md"; then
+    fail "decompose.sh did not preserve literal -f as a verification argv item in the generated strict packet"
+elif ! bash "$workflow/scripts/run-agents.sh" --briefs "$generated_brief_repo/briefs" --repo "$generated_brief_repo" --dry-run >"$generated_brief_runner_out" 2>"$generated_brief_runner_err"; then
+    fail "run-agents.sh rejected decompose-generated strict verification argv before dry-run dispatch: $(tr '\n' ' ' <"$generated_brief_runner_err")"
+else
+    pass
+fi
+
 test_start "workflow host verifier preserves argv boundaries and gates DONE pass reports"
 argv_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-argv.XXXXXX")"
 argv_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-argv-agent.XXXXXX")"
@@ -927,10 +973,89 @@ elif ! grep -Fq "REVIEW_PENDING" "$review_gated_out" \
     fail "review_gated verification did not emit REVIEW_PENDING evidence bound to the exact slice SHA"
 elif ! grep -Fq "provider_gate_state: not_evaluated" "$review_gated_out"; then
     fail "REVIEW_PENDING evidence does not explicitly record provider_gate_state: not_evaluated"
-elif grep -Fq "VERIFIED" "$review_gated_out"; then
+elif grep -Fq "state: VERIFIED" "$review_gated_out"; then
     fail "review_gated verification marked a slice VERIFIED before provider-neutral review evidence was supplied"
 elif grep -Fq "Agent 2: slice-2-beta" "$review_gated_out" || git -C "$review_gated_repo" show "slice/runtime-review-gated/beta:beta-marker.txt" >/dev/null 2>&1; then
     fail "review_gated REVIEW_PENDING alpha unlocked dependent beta before promotion evidence"
+else
+    pass
+fi
+
+test_start "workflow sequential review-gated scheduling continues independent slices while deferring dependent slices"
+review_sequential_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-sequential.XXXXXX")"
+review_sequential_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-sequential-agent.XXXXXX")"
+p0p4_register_cleanup "$review_sequential_repo" "$review_sequential_agent_bin"
+init_topology_runtime_repo "$review_sequential_repo" runtime-review-sequential
+add_verifier "$review_sequential_repo" verify-pass.sh 'exit 0'
+git -C "$review_sequential_repo" branch -f feature/runtime-review-sequential HEAD
+git -C "$review_sequential_repo" branch "slice/runtime-review-sequential/alpha" feature/runtime-review-sequential
+git -C "$review_sequential_repo" branch "slice/runtime-review-sequential/beta" feature/runtime-review-sequential
+git -C "$review_sequential_repo" branch "slice/runtime-review-sequential/gamma" feature/runtime-review-sequential
+write_topology_runtime_brief "$review_sequential_repo" runtime-review-sequential 1 alpha none review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_sequential_repo" runtime-review-sequential 2 beta alpha review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_sequential_repo" runtime-review-sequential 3 gamma none review_gated ./verify-pass.sh
+make_fake_done_agent "$review_sequential_agent_bin"
+review_sequential_task_before="$(git -C "$review_sequential_repo" rev-parse feature/runtime-review-sequential)"
+review_sequential_out="$runtime_output_dir/review-sequential.out"
+review_sequential_err="$runtime_output_dir/review-sequential.err"
+review_sequential_alpha_evidence="$review_sequential_repo/briefs/logs/slice-1-alpha.review-evidence.txt"
+review_sequential_beta_evidence="$review_sequential_repo/briefs/logs/slice-2-beta.review-evidence.txt"
+review_sequential_gamma_evidence="$review_sequential_repo/briefs/logs/slice-3-gamma.review-evidence.txt"
+if ! PATH="$review_sequential_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_sequential_repo/briefs" --repo "$review_sequential_repo" --agent codex >"$review_sequential_out" 2>"$review_sequential_err"; then
+    fail "sequential review_gated runner failed before processing independent slices: $(tr '\n' ' ' <"$review_sequential_err")"
+elif [[ "$(git -C "$review_sequential_repo" rev-parse feature/runtime-review-sequential)" != "$review_sequential_task_before" ]]; then
+    fail "sequential review_gated runner promoted a slice before external review"
+elif ! git -C "$review_sequential_repo" show "slice/runtime-review-sequential/alpha:alpha-marker.txt" >/dev/null 2>&1 \
+    || [[ ! -f "$review_sequential_alpha_evidence" ]] \
+    || ! grep -Fq 'state: REVIEW_PENDING' "$review_sequential_alpha_evidence"; then
+    fail "sequential review_gated runner did not host-verify alpha into REVIEW_PENDING"
+elif ! git -C "$review_sequential_repo" show "slice/runtime-review-sequential/gamma:gamma-marker.txt" >/dev/null 2>&1; then
+    fail "sequential review_gated runner did not continue to independent gamma after alpha became REVIEW_PENDING"
+elif [[ ! -f "$review_sequential_gamma_evidence" ]] \
+    || ! grep -Fq 'state: REVIEW_PENDING' "$review_sequential_gamma_evidence" \
+    || ! grep -Fq 'slice_id: gamma' "$review_sequential_gamma_evidence" \
+    || cmp -s "$review_sequential_alpha_evidence" "$review_sequential_gamma_evidence"; then
+    fail "sequential review_gated runner did not emit distinct REVIEW_PENDING evidence for alpha and gamma"
+elif git -C "$review_sequential_repo" show "slice/runtime-review-sequential/beta:beta-marker.txt" >/dev/null 2>&1 \
+    || [[ -e "$review_sequential_beta_evidence" ]] \
+    || grep -Fq 'Agent 2: slice-2-beta' "$review_sequential_out"; then
+    fail "sequential review_gated runner launched beta before alpha received external approval"
+elif ! grep -Fq "Deferring slice 'beta' in this run: waiting for VERIFIED prerequisite(s): alpha" "$review_sequential_out"; then
+    fail "sequential review_gated runner did not report beta as deferred for unverified alpha"
+else
+    pass
+fi
+
+test_start "workflow review-gated verification rejects a stale independent sibling after task promotion"
+review_ancestry_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-ancestry.XXXXXX")"
+review_ancestry_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-ancestry-agent.XXXXXX")"
+p0p4_register_cleanup "$review_ancestry_repo" "$review_ancestry_agent_bin"
+init_topology_runtime_repo "$review_ancestry_repo" runtime-review-ancestry
+review_ancestry_target="$(git -C "$review_ancestry_repo" branch --show-current)"
+add_verifier "$review_ancestry_repo" verify-pass.sh 'exit 0'
+git -C "$review_ancestry_repo" branch -f feature/runtime-review-ancestry HEAD
+review_ancestry_base="$(git -C "$review_ancestry_repo" rev-parse feature/runtime-review-ancestry)"
+git -C "$review_ancestry_repo" branch "slice/runtime-review-ancestry/alpha" "$review_ancestry_base"
+git -C "$review_ancestry_repo" checkout -q slice/runtime-review-ancestry/alpha
+printf 'reviewed sibling output\n' >"$review_ancestry_repo/alpha-reviewed.txt"
+git -C "$review_ancestry_repo" add alpha-reviewed.txt
+git -C "$review_ancestry_repo" commit -q -m 'promote reviewed alpha sibling'
+git -C "$review_ancestry_repo" checkout -q feature/runtime-review-ancestry
+git -C "$review_ancestry_repo" merge --ff-only -q slice/runtime-review-ancestry/alpha
+review_ancestry_task_head="$(git -C "$review_ancestry_repo" rev-parse feature/runtime-review-ancestry)"
+git -C "$review_ancestry_repo" branch "slice/runtime-review-ancestry/beta" "$review_ancestry_base"
+git -C "$review_ancestry_repo" checkout -q "$review_ancestry_target"
+write_topology_runtime_brief "$review_ancestry_repo" runtime-review-ancestry 1 beta none review_gated ./verify-pass.sh
+make_fake_done_agent "$review_ancestry_agent_bin"
+review_ancestry_out="$runtime_output_dir/review-ancestry.out"
+review_ancestry_err="$runtime_output_dir/review-ancestry.err"
+review_ancestry_evidence="$review_ancestry_repo/briefs/logs/slice-1-beta.review-evidence.txt"
+if PATH="$review_ancestry_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_ancestry_repo/briefs" --repo "$review_ancestry_repo" --agent codex >"$review_ancestry_out" 2>"$review_ancestry_err"; then
+    fail "review_gated runner accepted divergent verified base/head after task promotion: base=$review_ancestry_task_head head=$(git -C "$review_ancestry_repo" rev-parse slice/runtime-review-ancestry/beta)"
+elif [[ -e "$review_ancestry_evidence" ]]; then
+    fail "review_gated runner wrote reusable REVIEW_PENDING evidence for a divergent verified base/head pair"
+elif ! rg -q -i 'verified.*(base|head).*(ancestor|ancestry)|(ancestor|ancestry).*(verified.*(base|head))' "$review_ancestry_out" "$review_ancestry_err"; then
+    fail "divergent verified base/head rejection did not identify the ancestry requirement"
 else
     pass
 fi
@@ -1204,6 +1329,35 @@ elif ! grep -Eq 'READY|BRANCH-ONLY' "$review_checker_out"; then
     fail "check-integration did not report readiness after exact approved review evidence"
 else
     pass
+fi
+
+test_start "workflow shared review evidence parsing accepts CRLF records and rejects remaining carriage returns"
+for review_crlf_record in \
+    "$review_approved_repo/briefs/logs/slice-1-alpha.review-evidence.txt" \
+    "$review_approved_repo/briefs/logs/slice-1-alpha.review-approval.txt" \
+    "$review_checker_evidence/slice-1-alpha.review-evidence.txt" \
+    "$review_checker_evidence/slice-1-alpha.review-approval.txt"; do
+    awk '{ printf "%s\r\n", $0 }' "$review_crlf_record" >"${review_crlf_record}.tmp"
+    mv "${review_crlf_record}.tmp" "$review_crlf_record"
+done
+review_crlf_runner_out="$runtime_output_dir/review-crlf-runner.out"
+review_crlf_runner_err="$runtime_output_dir/review-crlf-runner.err"
+review_crlf_checker_out="$runtime_output_dir/review-crlf-checker.out"
+review_crlf_checker_err="$runtime_output_dir/review-crlf-checker.err"
+review_crlf_invalid_out="$runtime_output_dir/review-crlf-invalid.out"
+review_crlf_invalid_err="$runtime_output_dir/review-crlf-invalid.err"
+if ! bash "$workflow/scripts/run-agents.sh" --briefs "$review_approved_repo/briefs" --repo "$review_approved_repo" --verified-slices alpha --dry-run >"$review_crlf_runner_out" 2>"$review_crlf_runner_err"; then
+    fail "run-agents rejected standards-compliant CRLF REVIEW_APPROVED evidence: $(tr '\n' ' ' <"$review_crlf_runner_err")"
+elif ! (cd "$review_checker_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-review-checker --briefs "$review_checker_repo/briefs" --review-evidence-dir "$review_checker_evidence" --skip-validation 'CRLF review evidence fixture' >"$review_crlf_checker_out" 2>"$review_crlf_checker_err"); then
+    fail "check-integration rejected standards-compliant CRLF REVIEW_APPROVED evidence: $(tr '\n' ' ' <"$review_crlf_checker_err")"
+else
+    awk 'NR == 2 { printf "%s\r\r\n", $0; next } { printf "%s\r\n", $0 }' "$review_checker_evidence/slice-1-alpha.review-approval.txt" >"$review_checker_evidence/slice-1-alpha.review-approval.txt.tmp"
+    mv "$review_checker_evidence/slice-1-alpha.review-approval.txt.tmp" "$review_checker_evidence/slice-1-alpha.review-approval.txt"
+    if (cd "$review_checker_repo" && bash "$workflow/scripts/check-integration.sh" --task-branch feature/runtime-review-checker --briefs "$review_checker_repo/briefs" --review-evidence-dir "$review_checker_evidence" --skip-validation 'malformed CRLF review evidence fixture' >"$review_crlf_invalid_out" 2>"$review_crlf_invalid_err"); then
+        fail "check-integration accepted review evidence with a remaining carriage return"
+    else
+        pass
+    fi
 fi
 
 prepare_approval_toctou_fixture() {

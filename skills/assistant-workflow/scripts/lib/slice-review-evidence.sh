@@ -42,6 +42,13 @@ slice_review_read_record() {
         return 1
     }
     while IFS= read -r value || [[ -n "$value" ]]; do
+        if [[ "$value" == *$'\r' ]]; then
+            value="${value%$'\r'}"
+        fi
+        [[ "$value" != *$'\r'* ]] || {
+            echo "Review evidence contains an unexpected carriage return: $record_path" >&2
+            return 1
+        }
         lines+=("$value")
     done <"$record_path"
     [[ ${#lines[@]} -ge 3 && "${lines[0]}" == "$opening_marker" && "${lines[${#lines[@]}-1]}" == "$closing_marker" ]] || {
@@ -111,6 +118,10 @@ slice_review_write_pending() {
     current_target=$(git -C "$SLICE_REVIEW_REPO" rev-parse "${target_branch}^{commit}" 2>/dev/null || printf 'unreadable')
     [[ "$current_head" == "$verified_head_sha" && "$current_base" == "$verified_base_sha" ]] || {
         echo "REVIEW_PENDING evidence rejected: slice or task ref changed after immutable verification for '$slice_id'." >&2
+        return 1
+    }
+    git -C "$SLICE_REVIEW_REPO" merge-base --is-ancestor "$verified_base_sha" "$verified_head_sha" || {
+        echo "REVIEW_PENDING evidence rejected: verified_base_sha '$verified_base_sha' must be an ancestor of verified_head_sha '$verified_head_sha' for '$slice_id'." >&2
         return 1
     }
     slice_metadata_is_canonical_commit_sha "$target_base_sha" \

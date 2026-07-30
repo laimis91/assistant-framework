@@ -264,6 +264,7 @@ strict_packet_list_field_is_canonical() {
     local brief_file="$1"
     local field="$2"
     awk -v field="$field" '
+        /^### Supporting context/ { exit }
         $0 ~ "^- " field ":[[:space:]]*$" {
             occurrences++
             in_field = 1
@@ -292,6 +293,7 @@ strict_packet_list_field_is_canonical() {
 get_verification_argv_from_brief() {
     local brief_file="$1"
     awk '
+        /^### Supporting context/ { exit }
         /^- verification_command:[[:space:]]*$/ { in_field = 1; next }
         in_field && /^- [A-Za-z_]+:/ { exit }
         in_field && /^  - / { print substr($0, 5); next }
@@ -685,20 +687,7 @@ validate_dependency_plan() {
     done
 }
 
-dependencies_verified_now() {
-    local index="$1"
-    local dep current_id
-    current_id="${SLICE_IDS[$index]}"
-
-    while IFS= read -r dep; do
-        [[ -n "$dep" ]] || continue
-        if ! is_verified_slice "$dep"; then
-            fail "Slice '$current_id' cannot start because dependency '$dep' is not VERIFIED. Earlier selected prerequisites must complete successfully before dependent slices launch."
-        fi
-    done <<< "${SLICE_DEPENDS[$index]}"
-}
-
-parallel_unverified_dependencies() {
+unresolved_dependencies() {
     local index="$1"
     local dep
 
@@ -1900,15 +1889,11 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
         info "Skipping externally verified slice '${SLICE_IDS[$i]}' after ancestry proof and host re-verification."
         continue
     fi
-    if $PARALLEL; then
-        unresolved_deps=$(parallel_unverified_dependencies "$i" | join_lines_csv)
-        if [[ -n "$unresolved_deps" ]]; then
-            DEFERRED+=("$(basename "$brief" .md): waiting for VERIFIED prerequisite(s): $unresolved_deps")
-            warn "Deferring slice '${SLICE_IDS[$i]}' in this parallel wave: waiting for VERIFIED prerequisite(s): $unresolved_deps"
-            continue
-        fi
-    else
-        dependencies_verified_now "$i"
+    unresolved_deps=$(unresolved_dependencies "$i" | join_lines_csv)
+    if [[ -n "$unresolved_deps" ]]; then
+        DEFERRED+=("$(basename "$brief" .md): waiting for VERIFIED prerequisite(s): $unresolved_deps")
+        warn "Deferring slice '${SLICE_IDS[$i]}' in this run: waiting for VERIFIED prerequisite(s): $unresolved_deps"
+        continue
     fi
 
     agent_cwd=$(resolve_agent_cwd "$brief" "${SLICE_IDS[$i]}" "${SLICE_DEPENDS[$i]}")
@@ -1944,12 +1929,12 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
                 break
             elif is_review_gated_slice "$brief"; then
                 if emit_review_pending_evidence "$brief" "${SLICE_IDS[$i]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
-                    info "Slice '${SLICE_IDS[$i]}' is REVIEW_PENDING; no local promotion or dependent launch occurs until provider-neutral review evidence is supplied."
+                    info "Slice '${SLICE_IDS[$i]}' is REVIEW_PENDING; it was not locally promoted and dependent slices remain locked until provider-neutral review evidence is supplied."
+                else
+                    FAILED+=("$(basename "$brief" .md)")
+                    warn "Slice '${SLICE_IDS[$i]}' review evidence could not be bound to the immutable verified refs."
                     break
                 fi
-                FAILED+=("$(basename "$brief" .md)")
-                warn "Slice '${SLICE_IDS[$i]}' review evidence could not be bound to the immutable verified refs."
-                break
             elif merge_verified_slice_into_integration "${SLICE_IDS[$i]}" "$branch" "$agent_cwd" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
                 mark_verified_slice "${SLICE_IDS[$i]}"
             else
@@ -2041,7 +2026,7 @@ echo "Logs: $LOG_DIR/"
 echo ""
 
 if [[ ${#DEFERRED[@]} -gt 0 ]]; then
-    warn "Some dependent slices were deferred and not launched in this parallel wave."
+    warn "Some dependent slices were deferred and not launched in this run."
     for f in "${DEFERRED[@]}"; do
         echo "  ⏭️  $f"
     done

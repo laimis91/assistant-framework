@@ -1760,7 +1760,7 @@ else
         fail "run-agents.sh parallel dry-run did not launch independent late slice"
     elif grep -Fq "Agent 2: slice-2-beta" "$runner_parallel_out"; then
         fail "run-agents.sh parallel dry-run launched dependency-blocked beta"
-    elif ! grep -Fq "Deferring slice 'beta' in this parallel wave" "$runner_parallel_out"; then
+    elif ! grep -Fq "Deferring slice 'beta' in this run" "$runner_parallel_out"; then
         fail "run-agents.sh parallel dry-run did not explain deferred beta"
     elif ! grep -Fq "Deferred: 1" "$runner_parallel_out"; then
         fail "run-agents.sh parallel summary did not count deferred slices"
