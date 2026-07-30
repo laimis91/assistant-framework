@@ -13,6 +13,7 @@
 #   ./scripts/run-agents.sh --briefs briefs/ --repo .
 #   ./scripts/run-agents.sh --briefs briefs/ --repo . --skip-first --parallel
 #   ./scripts/run-agents.sh --briefs briefs/ --repo . --parallel --verified-slices slice-1
+#   ./scripts/run-agents.sh --briefs briefs/ --repo . --retry-slices slice-2
 #   ./scripts/run-agents.sh --briefs briefs/ --repo . --agent codex --parallel
 #   ./scripts/run-agents.sh --briefs briefs/ --repo . --dry-run
 #
@@ -52,6 +53,7 @@ LOG_DIR=""
 WORKTREES_DIR=".worktrees"
 CLEANUP_WORKTREES=false
 VERIFIED_SLICES_CSV=""
+RETRY_SLICES_CSV=""
 HOST_VERIFY_LOG_MAX_BYTES=65536
 HOST_VERIFY_TIMEOUT_SECONDS="${HOST_VERIFY_TIMEOUT_SECONDS:-900}"
 AGENT_LOG_MAX_BYTES="${AGENT_LOG_MAX_BYTES:-1048576}"
@@ -81,6 +83,8 @@ Options:
   --skip-first         Skip slice #1 and treat its slice_id as already VERIFIED
   --verified-slices CSV
                        Comma-separated slice_ids that are already VERIFIED prerequisites
+  --retry-slices CSV   Comma-separated review_gated slice_ids whose valid
+                       REVIEW_PENDING evidence should be invalidated and rerun
   --worktrees-dir DIR  Directory for git worktrees (default: .worktrees/)
   --cleanup            Remove worktrees after all agents complete
   --log-dir DIR        Directory for agent output logs (default: briefs/logs/)
@@ -97,6 +101,9 @@ Examples:
   # Run parallel slices that depend on already verified prerequisites
   $(basename "$0") --briefs briefs/ --repo . --parallel --verified-slices slice-1,slice-2
 
+  # Explicitly replace valid pending evidence and rerun one review-gated slice
+  $(basename "$0") --briefs briefs/ --repo . --retry-slices slice-2
+
   # Parallel with cleanup after completion
   $(basename "$0") --briefs briefs/ --repo . --skip-first --parallel --cleanup
 EOF
@@ -111,6 +118,7 @@ while [[ $# -gt 0 ]]; do
         --parallel)        PARALLEL=true; shift ;;
         --skip-first)      SKIP_FIRST=true; shift ;;
         --verified-slices) [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; VERIFIED_SLICES_CSV="$2"; shift 2 ;;
+        --retry-slices)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; RETRY_SLICES_CSV="$2"; shift 2 ;;
         --worktrees-dir)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; WORKTREES_DIR="$2"; shift 2 ;;
         --cleanup)         CLEANUP_WORKTREES=true; shift ;;
         --log-dir)         [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; LOG_DIR="$2"; shift 2 ;;
@@ -154,6 +162,11 @@ validate_depends_on_from_brief() {
 validate_verified_slice_id() {
     local slice_id="$1"
     is_safe_slice_id "$slice_id" || fail "Invalid --verified-slices value '$slice_id'. --verified-slices entries must be slice_id values that $SAFE_SLICE_ID_RULE"
+}
+
+validate_retry_slice_id() {
+    local slice_id="$1"
+    is_safe_slice_id "$slice_id" || fail "Invalid --retry-slices value '$slice_id'. --retry-slices entries must be slice_id values that $SAFE_SLICE_ID_RULE"
 }
 
 command -v git >/dev/null 2>&1 || fail "git is required."
@@ -264,6 +277,7 @@ strict_packet_list_field_is_canonical() {
     local brief_file="$1"
     local field="$2"
     awk -v field="$field" '
+        /^### Supporting context/ { exit }
         $0 ~ "^- " field ":[[:space:]]*$" {
             occurrences++
             in_field = 1
@@ -292,6 +306,7 @@ strict_packet_list_field_is_canonical() {
 get_verification_argv_from_brief() {
     local brief_file="$1"
     awk '
+        /^### Supporting context/ { exit }
         /^- verification_command:[[:space:]]*$/ { in_field = 1; next }
         in_field && /^- [A-Za-z_]+:/ { exit }
         in_field && /^  - / { print substr($0, 5); next }
@@ -576,6 +591,7 @@ snapshot_verification_command() {
 
 VERIFIED_SLICES=()
 EXTERNALLY_VERIFIED_SLICES=()
+RETRY_SLICES=()
 
 is_verified_slice() {
     local slice_id="$1"
@@ -624,6 +640,38 @@ parse_verified_slices() {
         if [[ -n "$slice_id" ]]; then
             validate_verified_slice_id "$slice_id"
             mark_external_verified_slice "$slice_id"
+        fi
+    done
+}
+
+is_retry_slice() {
+    local slice_id="$1"
+    local retry
+    ((${#RETRY_SLICES[@]} > 0)) || return 1
+    for retry in "${RETRY_SLICES[@]}"; do
+        [[ "$retry" == "$slice_id" ]] && return 0
+    done
+    return 1
+}
+
+mark_retry_slice() {
+    local slice_id="$1"
+    [[ -n "$slice_id" ]] || return 0
+    if ! is_retry_slice "$slice_id"; then
+        RETRY_SLICES+=("$slice_id")
+    fi
+}
+
+parse_retry_slices() {
+    [[ -n "$RETRY_SLICES_CSV" ]] || return 0
+
+    local raw_slice slice_id
+    IFS=',' read -ra raw_retry_slices <<< "$RETRY_SLICES_CSV"
+    for raw_slice in "${raw_retry_slices[@]}"; do
+        slice_id=$(trim_value "$raw_slice")
+        if [[ -n "$slice_id" ]]; then
+            validate_retry_slice_id "$slice_id"
+            mark_retry_slice "$slice_id"
         fi
     done
 }
@@ -685,20 +733,7 @@ validate_dependency_plan() {
     done
 }
 
-dependencies_verified_now() {
-    local index="$1"
-    local dep current_id
-    current_id="${SLICE_IDS[$index]}"
-
-    while IFS= read -r dep; do
-        [[ -n "$dep" ]] || continue
-        if ! is_verified_slice "$dep"; then
-            fail "Slice '$current_id' cannot start because dependency '$dep' is not VERIFIED. Earlier selected prerequisites must complete successfully before dependent slices launch."
-        fi
-    done <<< "${SLICE_DEPENDS[$index]}"
-}
-
-parallel_unverified_dependencies() {
+unresolved_dependencies() {
     local index="$1"
     local dep
 
@@ -758,6 +793,7 @@ fi
 info "Found ${#BRIEF_FILES[@]} brief files in $BRIEFS_DIR/"
 
 parse_verified_slices
+parse_retry_slices
 
 # Skip first if requested
 START_INDEX=0
@@ -769,6 +805,9 @@ fi
 
 if [[ ${#VERIFIED_SLICES[@]} -gt 0 ]]; then
     info "Verified prerequisite slices: ${VERIFIED_SLICES[*]}"
+fi
+if [[ ${#RETRY_SLICES[@]} -gt 0 ]]; then
+    info "Explicit review retries: ${RETRY_SLICES[*]}"
 fi
 
 # ── Extract fields from brief ────────────────────────────────────────────────
@@ -924,6 +963,26 @@ prove_external_verified_prerequisites() {
 }
 
 validate_slice_branch_identities
+
+validate_retry_plan() {
+    local slice_id slice_index
+
+    ((${#RETRY_SLICES[@]} > 0)) || return 0
+    for slice_id in "${RETRY_SLICES[@]}"; do
+        if ! slice_index=$(slice_index_by_id "$slice_id"); then
+            fail "Invalid --retry-slices value '$slice_id': no matching strict slice brief was found."
+        fi
+        if is_external_verified_slice "$slice_id"; then
+            fail "Slice '$slice_id' cannot be listed in both --verified-slices and --retry-slices."
+        fi
+        slice_metadata_resolve "${BRIEF_FILES[$slice_index]}" "$slice_id" \
+            || fail "Invalid slice topology for --retry-slices value '$slice_id'."
+        [[ "$SLICE_METADATA_LEGACY" == false && "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]] \
+            || fail "Invalid --retry-slices value '$slice_id': explicit review retries require a review_gated slice brief."
+    done
+}
+
+validate_retry_plan
 validate_dependency_plan
 
 slice_has_dependencies() {
@@ -1487,6 +1546,18 @@ invalidate_prior_review_evidence() {
     slice_review_invalidate "$LOG_DIR" "$brief_file" || return 1
 }
 
+has_current_review_pending_evidence() {
+    local brief_file="$1"
+    local slice_id="$2"
+
+    slice_metadata_resolve "$brief_file" "$slice_id" || return 1
+    [[ "$SLICE_METADATA_LEGACY" == false && "$SLICE_METADATA_PROMOTION_MODE" == review_gated ]] || return 1
+    slice_review_evidence_paths "$LOG_DIR" "$brief_file"
+    [[ -e "$SLICE_REVIEW_PENDING_PATH" || -L "$SLICE_REVIEW_PENDING_PATH" ]] || return 1
+    slice_review_validate_pending "$REPO" "$LOG_DIR" "$brief_file" "$slice_id" \
+        "$SLICE_METADATA_TARGET_BRANCH" "$SLICE_METADATA_TARGET_BASE_SHA" "$SLICE_METADATA_TASK_BRANCH" "$SLICE_METADATA_SLICE_BRANCH"
+}
+
 verify_external_slice_on_detached_worktree() {
     local brief_file="$1"
     local slice_id="$2"
@@ -1900,23 +1971,36 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
         info "Skipping externally verified slice '${SLICE_IDS[$i]}' after ancestry proof and host re-verification."
         continue
     fi
-    if $PARALLEL; then
-        unresolved_deps=$(parallel_unverified_dependencies "$i" | join_lines_csv)
-        if [[ -n "$unresolved_deps" ]]; then
-            DEFERRED+=("$(basename "$brief" .md): waiting for VERIFIED prerequisite(s): $unresolved_deps")
-            warn "Deferring slice '${SLICE_IDS[$i]}' in this parallel wave: waiting for VERIFIED prerequisite(s): $unresolved_deps"
-            continue
-        fi
-    else
-        dependencies_verified_now "$i"
+    if ! slice_has_dependencies "${SLICE_DEPENDS[$i]}" \
+        && ! is_retry_slice "${SLICE_IDS[$i]}" \
+        && has_current_review_pending_evidence "$brief" "${SLICE_IDS[$i]}"; then
+        info "Preserving slice '${SLICE_IDS[$i]}' in REVIEW_PENDING; its immutable review evidence still matches the current topology and reviewed head."
+        REVIEW_PENDING_COUNT=$((REVIEW_PENDING_COUNT + 1))
+        continue
+    fi
+    unresolved_deps=$(unresolved_dependencies "$i" | join_lines_csv)
+    if [[ -n "$unresolved_deps" ]]; then
+        DEFERRED+=("$(basename "$brief" .md): waiting for VERIFIED prerequisite(s): $unresolved_deps")
+        warn "Deferring slice '${SLICE_IDS[$i]}' in this run: waiting for VERIFIED prerequisite(s): $unresolved_deps"
+        continue
     fi
 
+    review_evidence_invalidated=false
+    if slice_has_dependencies "${SLICE_DEPENDS[$i]}"; then
+        if ! invalidate_prior_review_evidence "$brief"; then
+            fail "Slice '${SLICE_IDS[$i]}' cannot resume after its prerequisites were verified because prior review evidence could not be invalidated safely."
+        fi
+        review_evidence_invalidated=true
+    fi
     agent_cwd=$(resolve_agent_cwd "$brief" "${SLICE_IDS[$i]}" "${SLICE_DEPENDS[$i]}")
     if ! $DRY_RUN && [[ -d "$agent_cwd" ]]; then
         agent_cwd=$(canonical_dir "$agent_cwd") \
             || fail "Could not canonicalize resolved worktree for slice '${SLICE_IDS[$i]}': $agent_cwd"
     fi
-    if ! invalidate_prior_review_evidence "$brief"; then
+    if is_retry_slice "${SLICE_IDS[$i]}"; then
+        info "Retrying review-gated slice '${SLICE_IDS[$i]}' by explicit request; invalidating prior review evidence before launch."
+    fi
+    if [[ "$review_evidence_invalidated" == false ]] && ! invalidate_prior_review_evidence "$brief"; then
         fail "Slice '${SLICE_IDS[$i]}' cannot start because prior review evidence could not be invalidated safely."
     fi
     LAUNCHED=$((LAUNCHED + 1))
@@ -1944,12 +2028,12 @@ for ((i = START_INDEX; i < ${#BRIEF_FILES[@]}; i++)); do
                 break
             elif is_review_gated_slice "$brief"; then
                 if emit_review_pending_evidence "$brief" "${SLICE_IDS[$i]}" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
-                    info "Slice '${SLICE_IDS[$i]}' is REVIEW_PENDING; no local promotion or dependent launch occurs until provider-neutral review evidence is supplied."
+                    info "Slice '${SLICE_IDS[$i]}' is REVIEW_PENDING; it was not locally promoted and dependent slices remain locked until provider-neutral review evidence is supplied."
+                else
+                    FAILED+=("$(basename "$brief" .md)")
+                    warn "Slice '${SLICE_IDS[$i]}' review evidence could not be bound to the immutable verified refs."
                     break
                 fi
-                FAILED+=("$(basename "$brief" .md)")
-                warn "Slice '${SLICE_IDS[$i]}' review evidence could not be bound to the immutable verified refs."
-                break
             elif merge_verified_slice_into_integration "${SLICE_IDS[$i]}" "$branch" "$agent_cwd" "$LAST_VERIFIED_COMMIT" "$LAST_VERIFIED_INTEGRATION_COMMIT"; then
                 mark_verified_slice "${SLICE_IDS[$i]}"
             else
@@ -2041,7 +2125,7 @@ echo "Logs: $LOG_DIR/"
 echo ""
 
 if [[ ${#DEFERRED[@]} -gt 0 ]]; then
-    warn "Some dependent slices were deferred and not launched in this parallel wave."
+    warn "Some dependent slices were deferred and not launched in this run."
     for f in "${DEFERRED[@]}"; do
         echo "  ⏭️  $f"
     done

@@ -1625,6 +1625,7 @@ for file in \
         "No slice brief files found" \
         "Skip slice #1 and treat its slice_id as already VERIFIED" \
         "--verified-slices CSV" \
+        "--retry-slices CSV" \
         "Parallel launch blocked" \
         "Sequential launch blocked" \
         "Use this only when slice #1 is already VERIFIED" \
@@ -1760,7 +1761,7 @@ else
         fail "run-agents.sh parallel dry-run did not launch independent late slice"
     elif grep -Fq "Agent 2: slice-2-beta" "$runner_parallel_out"; then
         fail "run-agents.sh parallel dry-run launched dependency-blocked beta"
-    elif ! grep -Fq "Deferring slice 'beta' in this parallel wave" "$runner_parallel_out"; then
+    elif ! grep -Fq "Deferring slice 'beta' in this run" "$runner_parallel_out"; then
         fail "run-agents.sh parallel dry-run did not explain deferred beta"
     elif ! grep -Fq "Deferred: 1" "$runner_parallel_out"; then
         fail "run-agents.sh parallel summary did not count deferred slices"
@@ -1911,6 +1912,8 @@ duplicate_out="$brief_validation_repo/duplicate.out"
 duplicate_err="$brief_validation_repo/duplicate.err"
 unsafe_verified_out="$brief_validation_repo/unsafe-verified.out"
 unsafe_verified_err="$brief_validation_repo/unsafe-verified.err"
+unsafe_retry_out="$brief_validation_repo/unsafe-retry.out"
+unsafe_retry_err="$brief_validation_repo/unsafe-retry.err"
 unsafe_dependency_out="$brief_validation_repo/unsafe-dependency.out"
 unsafe_dependency_err="$brief_validation_repo/unsafe-dependency.err"
 if bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$old_style_briefs" --repo "$brief_validation_repo" --dry-run >"$old_style_out" 2>"$old_style_err"; then
@@ -1943,6 +1946,12 @@ elif ! grep -Fq -- "Invalid --verified-slices value 'bad/id'" "$unsafe_verified_
     fail "unsafe --verified-slices rejection was not actionable"
 elif grep -Fq -- "Agent " "$unsafe_verified_out"; then
     fail "unsafe --verified-slices launched an agent before strict validation failed"
+elif bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$unsafe_verified_briefs" --repo "$brief_validation_repo" --retry-slices bad/id --dry-run >"$unsafe_retry_out" 2>"$unsafe_retry_err"; then
+    fail "run-agents.sh accepted an unsafe --retry-slices token"
+elif ! grep -Fq -- "Invalid --retry-slices value 'bad/id'" "$unsafe_retry_err"; then
+    fail "unsafe --retry-slices rejection was not actionable"
+elif grep -Fq -- "Agent " "$unsafe_retry_out"; then
+    fail "unsafe --retry-slices launched an agent before strict validation failed"
 elif bash "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/run-agents.sh" --briefs "$unsafe_dependency_briefs" --repo "$brief_validation_repo" --verified-slices bad/id --dry-run >"$unsafe_dependency_out" 2>"$unsafe_dependency_err"; then
     fail "run-agents.sh accepted unsafe depends_on hidden by matching --verified-slices"
 elif ! grep -Fq -- "Invalid depends_on value 'bad/id'" "$unsafe_dependency_err"; then

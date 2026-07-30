@@ -8,6 +8,7 @@ SLICE_REVIEW_APPROVAL_PATH=""
 SLICE_REVIEW_VERIFIED_BASE_SHA=""
 SLICE_REVIEW_VERIFIED_HEAD_SHA=""
 SLICE_REVIEW_RECORD_KEYS=""
+SLICE_REVIEW_PENDING_KEYS='schema_version state slice_id promotion_mode target_branch target_base_sha task_branch slice_branch review_base_ref review_head_ref verified_base_sha verified_head_sha verification_evidence_ref provider_gate_state'
 
 slice_review_nonblank() {
     [[ -n "${1//[[:space:]]/}" ]]
@@ -42,6 +43,13 @@ slice_review_read_record() {
         return 1
     }
     while IFS= read -r value || [[ -n "$value" ]]; do
+        if [[ "$value" == *$'\r' ]]; then
+            value="${value%$'\r'}"
+        fi
+        [[ "$value" != *$'\r'* ]] || {
+            echo "Review evidence contains an unexpected carriage return: $record_path" >&2
+            return 1
+        }
         lines+=("$value")
     done <"$record_path"
     [[ ${#lines[@]} -ge 3 && "${lines[0]}" == "$opening_marker" && "${lines[${#lines[@]}-1]}" == "$closing_marker" ]] || {
@@ -92,6 +100,67 @@ slice_review_invalidate() {
     rm -f -- "$SLICE_REVIEW_PENDING_PATH" "$SLICE_REVIEW_APPROVAL_PATH"
 }
 
+slice_review_validate_pending() {
+    local repo="$1"
+    local evidence_dir="$2"
+    local brief_file="$3"
+    local slice_id="$4"
+    local target_branch="$5"
+    local target_base_sha="$6"
+    local task_branch="$7"
+    local slice_branch="$8"
+    local key current_head record_variable pending_variable
+
+    slice_review_evidence_paths "$evidence_dir" "$brief_file"
+    slice_review_read_record "$SLICE_REVIEW_PENDING_PATH" '--- SLICE REVIEW EVIDENCE ---' '--- END SLICE REVIEW EVIDENCE ---' "$SLICE_REVIEW_PENDING_KEYS" || return 1
+    for key in $SLICE_REVIEW_PENDING_KEYS; do
+        record_variable="SLICE_REVIEW_RECORD_${key}"
+        pending_variable="SLICE_REVIEW_PENDING_${key}"
+        printf -v "$pending_variable" '%s' "${!record_variable}"
+    done
+
+    [[ "$SLICE_REVIEW_PENDING_schema_version" == 1 && "$SLICE_REVIEW_PENDING_state" == REVIEW_PENDING && "$SLICE_REVIEW_PENDING_promotion_mode" == review_gated && "$SLICE_REVIEW_PENDING_provider_gate_state" == not_evaluated ]] || {
+        echo "Review evidence must be a REVIEW_PENDING record with provider_gate_state: not_evaluated." >&2
+        return 1
+    }
+    [[ "$SLICE_REVIEW_PENDING_slice_id" == "$slice_id" && "$SLICE_REVIEW_PENDING_target_branch" == "$target_branch" && "$SLICE_REVIEW_PENDING_target_base_sha" == "$target_base_sha" && "$SLICE_REVIEW_PENDING_task_branch" == "$task_branch" && "$SLICE_REVIEW_PENDING_slice_branch" == "$slice_branch" && "$SLICE_REVIEW_PENDING_review_base_ref" == "$task_branch" && "$SLICE_REVIEW_PENDING_review_head_ref" == "$slice_branch" ]] || {
+        echo "Review evidence does not match the current slice topology." >&2
+        return 1
+    }
+    slice_metadata_is_canonical_commit_sha "$SLICE_REVIEW_PENDING_target_base_sha" || {
+        echo "Review evidence must contain a canonical immutable target_base_sha." >&2
+        return 1
+    }
+    [[ "$SLICE_REVIEW_PENDING_verified_base_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$SLICE_REVIEW_PENDING_verified_head_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || {
+        echo "Review evidence must contain canonical verified commit SHAs." >&2
+        return 1
+    }
+    [[ "$SLICE_REVIEW_PENDING_verified_head_sha" != "$SLICE_REVIEW_PENDING_verified_base_sha" ]] || {
+        echo "Review evidence cannot describe an empty transition: verified_head_sha must differ from verified_base_sha." >&2
+        return 1
+    }
+    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_verified_base_sha" "$SLICE_REVIEW_PENDING_verified_head_sha" || {
+        echo "Review evidence verified_base_sha must be an ancestor of verified_head_sha." >&2
+        return 1
+    }
+    current_head=$(git -C "$repo" rev-parse "${slice_branch}^{commit}" 2>/dev/null || printf 'unreadable')
+    [[ "$current_head" == "$SLICE_REVIEW_PENDING_verified_head_sha" ]] || {
+        echo "Review evidence head SHA does not match the current slice ref." >&2
+        return 1
+    }
+    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_verified_base_sha" "$task_branch" || {
+        echo "Review evidence base SHA is not an ancestor of current task branch '$task_branch'." >&2
+        return 1
+    }
+    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_target_base_sha" "$target_branch" \
+        && git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_target_base_sha" "$task_branch" || {
+        echo "Review evidence immutable target_base_sha is not an ancestor of current target and task branches." >&2
+        return 1
+    }
+    SLICE_REVIEW_VERIFIED_BASE_SHA="$SLICE_REVIEW_PENDING_verified_base_sha"
+    SLICE_REVIEW_VERIFIED_HEAD_SHA="$SLICE_REVIEW_PENDING_verified_head_sha"
+}
+
 slice_review_write_pending() {
     local evidence_dir="$1"
     local brief_file="$2"
@@ -111,6 +180,10 @@ slice_review_write_pending() {
     current_target=$(git -C "$SLICE_REVIEW_REPO" rev-parse "${target_branch}^{commit}" 2>/dev/null || printf 'unreadable')
     [[ "$current_head" == "$verified_head_sha" && "$current_base" == "$verified_base_sha" ]] || {
         echo "REVIEW_PENDING evidence rejected: slice or task ref changed after immutable verification for '$slice_id'." >&2
+        return 1
+    }
+    git -C "$SLICE_REVIEW_REPO" merge-base --is-ancestor "$verified_base_sha" "$verified_head_sha" || {
+        echo "REVIEW_PENDING evidence rejected: verified_base_sha '$verified_base_sha' must be an ancestor of verified_head_sha '$verified_head_sha' for '$slice_id'." >&2
         return 1
     }
     slice_metadata_is_canonical_commit_sha "$target_base_sha" \
@@ -150,17 +223,12 @@ slice_review_validate_approved_pair() {
     local target_base_sha="$6"
     local task_branch="$7"
     local slice_branch="$8"
-    local pending_keys approval_keys key current_head record_variable pending_variable approval_variable
+    local pending_keys approval_keys key record_variable pending_variable approval_variable
 
-    pending_keys='schema_version state slice_id promotion_mode target_branch target_base_sha task_branch slice_branch review_base_ref review_head_ref verified_base_sha verified_head_sha verification_evidence_ref provider_gate_state'
+    pending_keys="$SLICE_REVIEW_PENDING_KEYS"
     approval_keys="$pending_keys review_request_ref provider_gate_evidence_ref"
-    slice_review_evidence_paths "$evidence_dir" "$brief_file"
-    slice_review_read_record "$SLICE_REVIEW_PENDING_PATH" '--- SLICE REVIEW EVIDENCE ---' '--- END SLICE REVIEW EVIDENCE ---' "$pending_keys" || return 1
-    for key in $pending_keys; do
-        record_variable="SLICE_REVIEW_RECORD_${key}"
-        pending_variable="SLICE_REVIEW_PENDING_${key}"
-        printf -v "$pending_variable" '%s' "${!record_variable}"
-    done
+    slice_review_validate_pending "$repo" "$evidence_dir" "$brief_file" "$slice_id" \
+        "$target_branch" "$target_base_sha" "$task_branch" "$slice_branch" || return 1
     slice_review_read_record "$SLICE_REVIEW_APPROVAL_PATH" '--- SLICE REVIEW APPROVAL ---' '--- END SLICE REVIEW APPROVAL ---' "$approval_keys" || return 1
     for key in $approval_keys; do
         record_variable="SLICE_REVIEW_RECORD_${key}"
@@ -168,10 +236,6 @@ slice_review_validate_approved_pair() {
         printf -v "$approval_variable" '%s' "${!record_variable}"
     done
 
-    [[ "$SLICE_REVIEW_PENDING_schema_version" == 1 && "$SLICE_REVIEW_PENDING_state" == REVIEW_PENDING && "$SLICE_REVIEW_PENDING_promotion_mode" == review_gated && "$SLICE_REVIEW_PENDING_provider_gate_state" == not_evaluated ]] || {
-        echo "Review evidence must be a REVIEW_PENDING record with provider_gate_state: not_evaluated." >&2
-        return 1
-    }
     [[ "$SLICE_REVIEW_APPROVAL_schema_version" == 1 && "$SLICE_REVIEW_APPROVAL_state" == REVIEW_APPROVED && "$SLICE_REVIEW_APPROVAL_promotion_mode" == review_gated && "$SLICE_REVIEW_APPROVAL_provider_gate_state" == passed ]] || {
         echo "Review approval must be REVIEW_APPROVED with provider_gate_state: passed." >&2
         return 1
@@ -188,44 +252,8 @@ slice_review_validate_approved_pair() {
             return 1
         }
     done
-    [[ "$SLICE_REVIEW_PENDING_slice_id" == "$slice_id" && "$SLICE_REVIEW_PENDING_target_branch" == "$target_branch" && "$SLICE_REVIEW_PENDING_target_base_sha" == "$target_base_sha" && "$SLICE_REVIEW_PENDING_task_branch" == "$task_branch" && "$SLICE_REVIEW_PENDING_slice_branch" == "$slice_branch" && "$SLICE_REVIEW_PENDING_review_base_ref" == "$task_branch" && "$SLICE_REVIEW_PENDING_review_head_ref" == "$slice_branch" ]] || {
-        echo "Review evidence does not match the current slice topology." >&2
-        return 1
-    }
-    slice_metadata_is_canonical_commit_sha "$SLICE_REVIEW_PENDING_target_base_sha" || {
-        echo "Review evidence must contain a canonical immutable target_base_sha." >&2
-        return 1
-    }
-    [[ "$SLICE_REVIEW_PENDING_verified_base_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$SLICE_REVIEW_PENDING_verified_head_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || {
-        echo "Review evidence must contain canonical verified commit SHAs." >&2
-        return 1
-    }
-    [[ "$SLICE_REVIEW_PENDING_verified_head_sha" != "$SLICE_REVIEW_PENDING_verified_base_sha" ]] || {
-        echo "Review approval cannot certify an empty transition: verified_head_sha must differ from verified_base_sha." >&2
-        return 1
-    }
-    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_verified_base_sha" "$SLICE_REVIEW_PENDING_verified_head_sha" || {
-        echo "Review approval verified_base_sha must be an ancestor of verified_head_sha." >&2
-        return 1
-    }
-    current_head=$(git -C "$repo" rev-parse "${slice_branch}^{commit}" 2>/dev/null || printf 'unreadable')
-    [[ "$current_head" == "$SLICE_REVIEW_PENDING_verified_head_sha" ]] || {
-        echo "Review evidence head SHA does not match the current slice ref." >&2
-        return 1
-    }
-    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_verified_base_sha" "$task_branch" || {
-        echo "Review evidence base SHA is not an ancestor of current task branch '$task_branch'." >&2
-        return 1
-    }
     git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_verified_head_sha" "$task_branch" || {
         echo "Review approval head SHA is not integrated into current task branch '$task_branch'." >&2
         return 1
     }
-    git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_target_base_sha" "$target_branch" \
-        && git -C "$repo" merge-base --is-ancestor "$SLICE_REVIEW_PENDING_target_base_sha" "$task_branch" || {
-        echo "Review evidence immutable target_base_sha is not an ancestor of current target and task branches." >&2
-        return 1
-    }
-    SLICE_REVIEW_VERIFIED_BASE_SHA="$SLICE_REVIEW_PENDING_verified_base_sha"
-    SLICE_REVIEW_VERIFIED_HEAD_SHA="$SLICE_REVIEW_PENDING_verified_head_sha"
 }
