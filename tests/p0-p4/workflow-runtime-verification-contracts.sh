@@ -1026,6 +1026,179 @@ else
     pass
 fi
 
+test_start "workflow externally verified alpha preserves an independent gamma REVIEW_PENDING lifecycle"
+review_lifecycle_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-lifecycle.XXXXXX")"
+review_lifecycle_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-lifecycle-agent.XXXXXX")"
+p0p4_register_cleanup "$review_lifecycle_repo" "$review_lifecycle_agent_bin"
+init_topology_runtime_repo "$review_lifecycle_repo" runtime-review-lifecycle
+review_lifecycle_target="$(git -C "$review_lifecycle_repo" branch --show-current)"
+add_verifier "$review_lifecycle_repo" verify-pass.sh 'exit 0'
+git -C "$review_lifecycle_repo" branch -f feature/runtime-review-lifecycle HEAD
+git -C "$review_lifecycle_repo" branch slice/runtime-review-lifecycle/alpha feature/runtime-review-lifecycle
+git -C "$review_lifecycle_repo" branch slice/runtime-review-lifecycle/gamma feature/runtime-review-lifecycle
+write_topology_runtime_brief "$review_lifecycle_repo" runtime-review-lifecycle 1 alpha none review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_lifecycle_repo" runtime-review-lifecycle 2 gamma none review_gated ./verify-pass.sh
+make_fake_done_agent "$review_lifecycle_agent_bin"
+review_lifecycle_first_out="$runtime_output_dir/review-lifecycle-first.out"
+review_lifecycle_first_err="$runtime_output_dir/review-lifecycle-first.err"
+review_lifecycle_second_out="$runtime_output_dir/review-lifecycle-second.out"
+review_lifecycle_second_err="$runtime_output_dir/review-lifecycle-second.err"
+if ! PATH="$review_lifecycle_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_lifecycle_repo/briefs" --repo "$review_lifecycle_repo" --agent codex >"$review_lifecycle_first_out" 2>"$review_lifecycle_first_err"; then
+    fail "review lifecycle fixture did not create independent pending records: $(tr '\n' ' ' <"$review_lifecycle_first_err")"
+else
+    review_lifecycle_alpha_pending="$review_lifecycle_repo/briefs/logs/slice-1-alpha.review-evidence.txt"
+    review_lifecycle_alpha_approval="$review_lifecycle_repo/briefs/logs/slice-1-alpha.review-approval.txt"
+    review_lifecycle_gamma_pending="$review_lifecycle_repo/briefs/logs/slice-2-gamma.review-evidence.txt"
+    review_lifecycle_gamma_before="$runtime_output_dir/review-lifecycle-gamma-before.txt"
+    review_lifecycle_gamma_head="$(git -C "$review_lifecycle_repo" rev-parse slice/runtime-review-lifecycle/gamma)"
+    if [[ ! -f "$review_lifecycle_alpha_pending" || ! -f "$review_lifecycle_gamma_pending" ]]; then
+        fail "review lifecycle fixture did not produce both independent REVIEW_PENDING records"
+    else
+        cp "$review_lifecycle_gamma_pending" "$review_lifecycle_gamma_before"
+        git -C "$review_lifecycle_repo" checkout -q feature/runtime-review-lifecycle
+        git -C "$review_lifecycle_repo" merge --ff-only -q slice/runtime-review-lifecycle/alpha
+        git -C "$review_lifecycle_repo" checkout -q "$review_lifecycle_target"
+        awk '
+            /SLICE REVIEW EVIDENCE/ { gsub("EVIDENCE", "APPROVAL") }
+            /^state: REVIEW_PENDING$/ { $0 = "state: REVIEW_APPROVED" }
+            /^provider_gate_state: not_evaluated$/ {
+                print "provider_gate_state: passed"
+                print "review_request_ref: adapter://review-lifecycle/alpha"
+                print "provider_gate_evidence_ref: adapter://gate-lifecycle/alpha"
+                next
+            }
+            { print }
+        ' "$review_lifecycle_alpha_pending" >"$review_lifecycle_alpha_approval"
+        sed -i.bak 's/commit -q/commit --allow-empty -q/' "$review_lifecycle_agent_bin/codex"
+        rm -f "${review_lifecycle_agent_bin}/codex.bak"
+        review_lifecycle_second_exit=0
+        PATH="$review_lifecycle_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_lifecycle_repo/briefs" --repo "$review_lifecycle_repo" --agent codex --verified-slices alpha >"$review_lifecycle_second_out" 2>"$review_lifecycle_second_err" || review_lifecycle_second_exit=$?
+        if [[ "$review_lifecycle_second_exit" -ne 0 ]]; then
+            fail "externally verified alpha rerun failed before independent lifecycle preservation could be checked: $(tr '\n' ' ' <"$review_lifecycle_second_err")"
+        elif ! grep -Fq "Skipping externally verified slice 'alpha'" "$review_lifecycle_second_out"; then
+            fail "externally verified alpha was not handled through the existing --verified-slices flow"
+        elif ! cmp -s "$review_lifecycle_gamma_before" "$review_lifecycle_gamma_pending"; then
+            fail "externally verified alpha rerun replaced independent gamma REVIEW_PENDING evidence"
+        elif [[ "$(git -C "$review_lifecycle_repo" rev-parse slice/runtime-review-lifecycle/gamma)" != "$review_lifecycle_gamma_head" ]]; then
+            fail "externally verified alpha rerun relaunched independent gamma and moved its slice head"
+        elif grep -Fq "Agent 2: slice-2-gamma" "$review_lifecycle_second_out"; then
+            fail "externally verified alpha rerun relaunched independent gamma despite its existing REVIEW_PENDING record"
+        else
+            pass
+        fi
+    fi
+fi
+
+test_start "workflow retry defers a dependent pending slice until its prerequisite is externally verified"
+review_dependent_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-dependent.XXXXXX")"
+review_dependent_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-dependent-agent.XXXXXX")"
+p0p4_register_cleanup "$review_dependent_repo" "$review_dependent_agent_bin"
+init_topology_runtime_repo "$review_dependent_repo" runtime-review-dependent
+review_dependent_target="$(git -C "$review_dependent_repo" branch --show-current)"
+add_verifier "$review_dependent_repo" verify-pass.sh 'exit 0'
+git -C "$review_dependent_repo" branch -f feature/runtime-review-dependent HEAD
+git -C "$review_dependent_repo" branch slice/runtime-review-dependent/alpha feature/runtime-review-dependent
+git -C "$review_dependent_repo" branch slice/runtime-review-dependent/beta feature/runtime-review-dependent
+write_topology_runtime_brief "$review_dependent_repo" runtime-review-dependent 1 alpha none review_gated ./verify-pass.sh
+write_topology_runtime_brief "$review_dependent_repo" runtime-review-dependent 2 beta alpha review_gated ./verify-pass.sh
+make_fake_done_agent "$review_dependent_agent_bin"
+review_dependent_initial_out="$runtime_output_dir/review-dependent-initial.out"
+review_dependent_initial_err="$runtime_output_dir/review-dependent-initial.err"
+review_dependent_bootstrap_out="$runtime_output_dir/review-dependent-bootstrap.out"
+review_dependent_bootstrap_err="$runtime_output_dir/review-dependent-bootstrap.err"
+review_dependent_retry_out="$runtime_output_dir/review-dependent-retry.out"
+review_dependent_retry_err="$runtime_output_dir/review-dependent-retry.err"
+review_dependent_verified_out="$runtime_output_dir/review-dependent-verified.out"
+review_dependent_verified_err="$runtime_output_dir/review-dependent-verified.err"
+review_dependent_alpha_pending="$review_dependent_repo/briefs/logs/slice-1-alpha.review-evidence.txt"
+review_dependent_alpha_approval="$review_dependent_repo/briefs/logs/slice-1-alpha.review-approval.txt"
+review_dependent_beta_pending="$review_dependent_repo/briefs/logs/slice-2-beta.review-evidence.txt"
+if ! PATH="$review_dependent_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_dependent_repo/briefs" --repo "$review_dependent_repo" --agent codex >"$review_dependent_initial_out" 2>"$review_dependent_initial_err"; then
+    fail "dependent review lifecycle fixture could not create alpha REVIEW_PENDING evidence: $(tr '\n' ' ' <"$review_dependent_initial_err")"
+elif [[ ! -f "$review_dependent_alpha_pending" || -e "$review_dependent_beta_pending" ]] \
+    || ! grep -Fq "Deferring slice 'beta' in this run: waiting for VERIFIED prerequisite(s): alpha" "$review_dependent_initial_out"; then
+    fail "dependent review lifecycle fixture did not defer beta before alpha was externally verified"
+else
+    git -C "$review_dependent_repo" checkout -q feature/runtime-review-dependent
+    git -C "$review_dependent_repo" merge --ff-only -q slice/runtime-review-dependent/alpha
+    git -C "$review_dependent_repo" branch -f slice/runtime-review-dependent/beta feature/runtime-review-dependent
+    git -C "$review_dependent_repo" checkout -q "$review_dependent_target"
+    awk '
+        /SLICE REVIEW EVIDENCE/ { gsub("EVIDENCE", "APPROVAL") }
+        /^state: REVIEW_PENDING$/ { $0 = "state: REVIEW_APPROVED" }
+        /^provider_gate_state: not_evaluated$/ {
+            print "provider_gate_state: passed"
+            print "review_request_ref: adapter://review-dependent/alpha"
+            print "provider_gate_evidence_ref: adapter://gate-dependent/alpha"
+            next
+        }
+        { print }
+    ' "$review_dependent_alpha_pending" >"$review_dependent_alpha_approval"
+    if ! PATH="$review_dependent_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_dependent_repo/briefs" --repo "$review_dependent_repo" --agent codex --verified-slices alpha >"$review_dependent_bootstrap_out" 2>"$review_dependent_bootstrap_err"; then
+        fail "externally verified alpha did not launch beta into REVIEW_PENDING: $(tr '\n' ' ' <"$review_dependent_bootstrap_err")"
+    elif [[ ! -f "$review_dependent_beta_pending" ]]; then
+        fail "dependent review lifecycle fixture did not produce beta REVIEW_PENDING evidence"
+    else
+        cp "$review_dependent_beta_pending" "$runtime_output_dir/review-dependent-beta-before.txt"
+        review_dependent_beta_before="$runtime_output_dir/review-dependent-beta-before.txt"
+        review_dependent_beta_head="$(git -C "$review_dependent_repo" rev-parse slice/runtime-review-dependent/beta)"
+        sed -i.bak 's/commit -q/commit --allow-empty -q/' "$review_dependent_agent_bin/codex"
+        rm -f "${review_dependent_agent_bin}/codex.bak"
+        review_dependent_retry_exit=0
+        PATH="$review_dependent_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_dependent_repo/briefs" --repo "$review_dependent_repo" --agent codex --retry-slices alpha >"$review_dependent_retry_out" 2>"$review_dependent_retry_err" || review_dependent_retry_exit=$?
+        if [[ "$review_dependent_retry_exit" -ne 0 ]]; then
+            fail "explicit alpha retry failed before dependent pending lifecycle could be checked: $(tr '\n' ' ' <"$review_dependent_retry_err")"
+        elif ! grep -Fq "Deferring slice 'beta' in this run: waiting for VERIFIED prerequisite(s): alpha" "$review_dependent_retry_out"; then
+            fail "explicit alpha retry preserved dependent beta REVIEW_PENDING evidence instead of deferring it behind alpha"
+        elif ! cmp -s "$review_dependent_beta_before" "$review_dependent_beta_pending" \
+            || [[ "$(git -C "$review_dependent_repo" rev-parse slice/runtime-review-dependent/beta)" != "$review_dependent_beta_head" ]] \
+            || grep -Fq "Agent 2: slice-2-beta" "$review_dependent_retry_out"; then
+            fail "deferred dependent beta changed before alpha became externally VERIFIED"
+        else
+            git -C "$review_dependent_repo" checkout -q feature/runtime-review-dependent
+            git -C "$review_dependent_repo" merge --ff-only -q slice/runtime-review-dependent/alpha
+            git -C "$review_dependent_repo" checkout -q "$review_dependent_target"
+            awk '
+                /SLICE REVIEW EVIDENCE/ { gsub("EVIDENCE", "APPROVAL") }
+                /^state: REVIEW_PENDING$/ { $0 = "state: REVIEW_APPROVED" }
+                /^provider_gate_state: not_evaluated$/ {
+                    print "provider_gate_state: passed"
+                    print "review_request_ref: adapter://review-dependent/alpha-retry"
+                    print "provider_gate_evidence_ref: adapter://gate-dependent/alpha-retry"
+                    next
+                }
+                { print }
+            ' "$review_dependent_alpha_pending" >"$review_dependent_alpha_approval"
+            review_dependent_verified_exit=0
+            PATH="$review_dependent_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_dependent_repo/briefs" --repo "$review_dependent_repo" --agent codex --verified-slices alpha >"$review_dependent_verified_out" 2>"$review_dependent_verified_err" || review_dependent_verified_exit=$?
+            if [[ "$review_dependent_verified_exit" -eq 0 ]]; then
+                fail "externally verified alpha accepted stale dependent beta branch before required recreation"
+            elif ! grep -Fq "Stale dependent slice branch" "$review_dependent_verified_err"; then
+                fail "externally verified alpha stale dependent rejection was not actionable: $(tr '\n' ' ' <"$review_dependent_verified_err")"
+            elif [[ -f "$review_dependent_beta_pending" ]] || [[ -L "$review_dependent_beta_pending" ]]; then
+                fail "stale dependent beta rejection left prior REVIEW_PENDING evidence after alpha became externally VERIFIED"
+            elif [[ "$(git -C "$review_dependent_repo" rev-parse slice/runtime-review-dependent/beta)" != "$review_dependent_beta_head" ]] \
+                || grep -Fq "Agent 2: slice-2-beta" "$review_dependent_verified_out"; then
+                fail "stale dependent beta rejection changed or launched beta before branch recreation"
+            else
+                git -C "$review_dependent_repo" branch -f slice/runtime-review-dependent/beta feature/runtime-review-dependent
+                review_dependent_recreated_exit=0
+                PATH="$review_dependent_agent_bin:$PATH" bash "$workflow/scripts/run-agents.sh" --briefs "$review_dependent_repo/briefs" --repo "$review_dependent_repo" --agent codex --verified-slices alpha >"$review_dependent_verified_out" 2>"$review_dependent_verified_err" || review_dependent_recreated_exit=$?
+                if [[ "$review_dependent_recreated_exit" -ne 0 ]]; then
+                    fail "recreated dependent beta branch did not launch after externally verified alpha: $(tr '\n' ' ' <"$review_dependent_verified_err")"
+                elif [[ ! -f "$review_dependent_beta_pending" ]] \
+                    || cmp -s "$review_dependent_beta_before" "$review_dependent_beta_pending" \
+                    || [[ "$(git -C "$review_dependent_repo" rev-parse slice/runtime-review-dependent/beta)" == "$review_dependent_beta_head" ]] \
+                    || ! grep -Fq "Agent 2: slice-2-beta" "$review_dependent_verified_out"; then
+                    fail "recreated dependent beta branch did not receive fresh REVIEW_PENDING evidence after re-verification"
+                else
+                    pass
+                fi
+            fi
+        fi
+    fi
+fi
+
 test_start "workflow review-gated verification rejects a stale independent sibling after task promotion"
 review_ancestry_repo="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-ancestry.XXXXXX")"
 review_ancestry_agent_bin="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime-review-ancestry-agent.XXXXXX")"
@@ -1932,10 +2105,12 @@ review_stale_second_out="$runtime_output_dir/review-stale-second.out"
 review_stale_second_err="$runtime_output_dir/review-stale-second.err"
 if [[ ! -f "$review_stale_evidence" ]] || ! grep -Fq "state: REVIEW_PENDING" "$review_stale_evidence"; then
     fail "review_gated fixture did not write initial REVIEW_PENDING evidence"
-elif PATH="$review_stale_agent_bin:$PATH" MOVE_SLICE_REF=true MUTATED_COMMIT="$review_stale_alternate" bash "$workflow/scripts/run-agents.sh" --briefs "$review_stale_repo/briefs" --repo "$review_stale_repo" --agent codex >"$review_stale_second_out" 2>"$review_stale_second_err"; then
-    fail "review_gated stale run accepted a moved slice ref"
+elif PATH="$review_stale_agent_bin:$PATH" MOVE_SLICE_REF=true MUTATED_COMMIT="$review_stale_alternate" bash "$workflow/scripts/run-agents.sh" --briefs "$review_stale_repo/briefs" --repo "$review_stale_repo" --agent codex --retry-slices alpha >"$review_stale_second_out" 2>"$review_stale_second_err"; then
+    fail "review_gated stale retry accepted a moved slice ref"
+elif grep -Fq -- "Unknown option: --retry-slices" "$review_stale_second_err"; then
+    fail "review_gated stale retry rejected the explicit --retry-slices alpha control"
 elif [[ -f "$review_stale_evidence" ]] && grep -Fq "state: REVIEW_PENDING" "$review_stale_evidence"; then
-    fail "review_gated stale run left prior reusable REVIEW_PENDING evidence after immutable binding failed"
+    fail "review_gated stale retry left prior reusable REVIEW_PENDING evidence after immutable binding failed"
 else
     pass
 fi
