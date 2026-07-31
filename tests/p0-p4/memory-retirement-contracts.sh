@@ -4,6 +4,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+p0p4_enable_codex_semantic_fixture
 
 cleanup_bash="$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh"
 cleanup_powershell="$FRAMEWORK_DIR/tools/cleanup-memory-graph.ps1"
@@ -500,8 +501,8 @@ command = "keep quoted unrelated table"
 TOML
     cp "$toml_string_home/.codex/config.toml" "$toml_string_home/.codex/config.before"
     if [[ "$toml_string_runner" == bash ]]; then
-        if HOME="$toml_string_home" bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-cleanup-toml-string-bash.out 2>/tmp/p0p4-memory-cleanup-toml-string-bash.err; then toml_string_status=0; else toml_string_status=$?; fi
-    elif USERPROFILE="$toml_string_home" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-cleanup-toml-string-powershell.out 2>/tmp/p0p4-memory-cleanup-toml-string-powershell.err; then
+        if HOME="$toml_string_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=absent bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-cleanup-toml-string-bash.out 2>/tmp/p0p4-memory-cleanup-toml-string-bash.err; then toml_string_status=0; else toml_string_status=$?; fi
+    elif USERPROFILE="$toml_string_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=absent pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-cleanup-toml-string-powershell.out 2>/tmp/p0p4-memory-cleanup-toml-string-powershell.err; then
         toml_string_status=0
     else
         toml_string_status=$?
@@ -561,13 +562,13 @@ invalid = [1,
 TOML
     cp "$coupling_home/.codex/config.toml" "$coupling_home/.codex/config.before"
     if [[ "$cleanup_runner" == bash ]]; then
-        if HOME="$coupling_home" bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-cleanup-coupling-bash.out 2>/tmp/p0p4-memory-cleanup-coupling-bash.err; then
+        if HOME="$coupling_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-cleanup-coupling-bash.out 2>/tmp/p0p4-memory-cleanup-coupling-bash.err; then
             cleanup_status=0
         else
             cleanup_status=$?
         fi
     elif command -v pwsh >/dev/null 2>&1; then
-        if USERPROFILE="$coupling_home" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-cleanup-coupling-powershell.out 2>/tmp/p0p4-memory-cleanup-coupling-powershell.err; then
+        if USERPROFILE="$coupling_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-cleanup-coupling-powershell.out 2>/tmp/p0p4-memory-cleanup-coupling-powershell.err; then
             cleanup_status=0
         else
             cleanup_status=$?
@@ -1062,10 +1063,10 @@ for invalid_toml_runner in "${invalid_toml_runners[@]}"; do
     printf '%s\n' '[mcp_servers.memory-graph]' 'command = "retire"' '' '[mcp_servers.keep]' 'secret = "do-not-echo-retirement-secret"' 'invalid = [1,' >"$invalid_toml_home/.codex/config.toml"
     cp "$invalid_toml_home/.codex/config.toml" "$invalid_toml_home/.codex/config.before"
     if [[ "$invalid_toml_runner" == bash ]]; then
-        HOME="$invalid_toml_home" bash "$cleanup_bash" --agent codex >/tmp/p0p4-authoritative-invalid-toml-bash.out 2>/tmp/p0p4-authoritative-invalid-toml-bash.err && invalid_toml_status=0 || invalid_toml_status=$?
+        HOME="$invalid_toml_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject bash "$cleanup_bash" --agent codex >/tmp/p0p4-authoritative-invalid-toml-bash.out 2>/tmp/p0p4-authoritative-invalid-toml-bash.err && invalid_toml_status=0 || invalid_toml_status=$?
         invalid_toml_output="$(cat /tmp/p0p4-authoritative-invalid-toml-bash.out /tmp/p0p4-authoritative-invalid-toml-bash.err)"
     else
-        USERPROFILE="$invalid_toml_home" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-authoritative-invalid-toml-powershell.out 2>/tmp/p0p4-authoritative-invalid-toml-powershell.err && invalid_toml_status=0 || invalid_toml_status=$?
+        USERPROFILE="$invalid_toml_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-authoritative-invalid-toml-powershell.out 2>/tmp/p0p4-authoritative-invalid-toml-powershell.err && invalid_toml_status=0 || invalid_toml_status=$?
         invalid_toml_output="$(cat /tmp/p0p4-authoritative-invalid-toml-powershell.out /tmp/p0p4-authoritative-invalid-toml-powershell.err)"
     fi
     if [[ "$invalid_toml_status" -eq 0 ]] || ! cmp -s "$invalid_toml_home/.codex/config.before" "$invalid_toml_home/.codex/config.toml" \
@@ -1261,7 +1262,7 @@ p0p4_register_cleanup "$installer_incomplete_home"
 mkdir -p "$installer_incomplete_home/.codex/tools/memory-graph"
 printf '%s\n' runtime >"$installer_incomplete_home/.codex/tools/memory-graph/run-memory-graph.sh"
 printf '%s\n' '[mcp_servers.memory-graph]' 'command = "retire"' '' '[mcp_servers.keep]' 'invalid = [1,' >"$installer_incomplete_home/.codex/config.toml"
-if HOME="$installer_incomplete_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-installer-incomplete-bash.out 2>/tmp/p0p4-installer-incomplete-bash.err; then
+if HOME="$installer_incomplete_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-installer-incomplete-bash.out 2>/tmp/p0p4-installer-incomplete-bash.err; then
     fail "Bash installer reported success despite incomplete retirement"
 elif [[ -e "$installer_incomplete_home/.codex/skills/assistant-workflow" || ! -f "$installer_incomplete_home/.codex/tools/memory-graph/run-memory-graph.sh" ]] \
     || grep -Fq 'Installation complete' /tmp/p0p4-installer-incomplete-bash.out; then
@@ -1596,7 +1597,7 @@ else
     mkdir -p "$ps_installer_incomplete_home/.codex/tools/memory-graph"
     printf '%s\n' runtime >"$ps_installer_incomplete_home/.codex/tools/memory-graph/run-memory-graph.ps1"
     printf '%s\n' '[mcp_servers.memory-graph]' 'command = "retire"' '' '[mcp_servers.keep]' 'invalid = [1,' >"$ps_installer_incomplete_home/.codex/config.toml"
-    if USERPROFILE="$ps_installer_incomplete_home" HOME="$ps_installer_incomplete_home" pwsh -NoLogo -NoProfile -File "$FRAMEWORK_DIR/install.ps1" -Agent codex -Skill assistant-workflow -NoHooks >/tmp/p0p4-installer-incomplete-powershell.out 2>/tmp/p0p4-installer-incomplete-powershell.err; then
+    if USERPROFILE="$ps_installer_incomplete_home" HOME="$ps_installer_incomplete_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE=reject pwsh -NoLogo -NoProfile -File "$FRAMEWORK_DIR/install.ps1" -Agent codex -Skill assistant-workflow -NoHooks >/tmp/p0p4-installer-incomplete-powershell.out 2>/tmp/p0p4-installer-incomplete-powershell.err; then
         fail "PowerShell installer reported success despite incomplete retirement"
     elif [[ -e "$ps_installer_incomplete_home/.codex/skills/assistant-workflow" || ! -f "$ps_installer_incomplete_home/.codex/tools/memory-graph/run-memory-graph.ps1" ]] \
         || grep -Fq 'Installation complete' /tmp/p0p4-installer-incomplete-powershell.out; then
@@ -1648,4 +1649,5 @@ else
     pass
 fi
 
+p0p4_disable_codex_semantic_fixture
 p0p4_finish_suite "${BASH_SOURCE[0]}"

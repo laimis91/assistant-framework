@@ -558,7 +558,8 @@ function Get-CodexMcpNames {
                 $payload = @()
             }
             else {
-                $payload = @($output | ConvertFrom-Json -ErrorAction Stop)
+                $parsedPayload = $output | ConvertFrom-Json -ErrorAction Stop
+                $payload = @($parsedPayload)
             }
         }
         catch { throw (New-Object System.IO.InvalidDataException "Invalid Codex CLI JSON output for $LiteralPath; preserved unchanged.") }

@@ -2,6 +2,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+p0p4_enable_codex_semantic_fixture
 
 p0p4_file_mode_octal() {
     local path="$1"
@@ -637,4 +638,5 @@ else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
+p0p4_disable_codex_semantic_fixture
 p0p4_finish_suite "${BASH_SOURCE[0]}"

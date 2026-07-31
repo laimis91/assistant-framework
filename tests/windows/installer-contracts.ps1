@@ -158,11 +158,49 @@ function New-IsolatedCodexSemanticAuthority {
 if not "%~1|%~2|%~3|%~4"=="mcp|list|--json|" exit /b 64
 if not defined CODEX_HOME exit /b 64
 if not exist "%CODEX_HOME%\config.toml" exit /b 64
-findstr /x /c:"[mcp_servers.memory-graph]" "%CODEX_HOME%\config.toml" >nul
+findstr /l /x /c:"[mcp_servers.memory-graph]" "%CODEX_HOME%\config.toml" >nul
 if errorlevel 1 (echo []) else (echo [{"name":"memory-graph"}])
 exit /b 0
 '@
     [System.IO.File]::WriteAllText($fakeCodex, $source, (New-Object System.Text.UTF8Encoding($false)))
+    return $fakeBin
+}
+
+function New-ProgrammableCodexSemanticAuthority {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string[]]$JsonLines,
+        [switch]$ReturnAbsentAfterFirstResponse
+    )
+    $fakeBin = Join-Path $Root 'programmable-codex-semantic-authority'
+    [void][System.IO.Directory]::CreateDirectory($fakeBin)
+    $windowsOutput = (@($JsonLines | ForEach-Object { 'echo ' + $_ }) -join "`r`n")
+    $unixOutput = ($JsonLines -join "`n")
+    $windowsPreOutput = ''
+    $unixPreOutput = ''
+    if ($ReturnAbsentAfterFirstResponse) {
+        $responseState = Join-Path $fakeBin 'authority-response-state'
+        $windowsPreOutput = 'if exist "' + $responseState + '" (echo [] & exit /b 0)' + "`r`n" + 'type nul > "' + $responseState + '"' + "`r`n"
+        $unixPreOutput = 'if [ -f ''' + $responseState + ''' ]; then printf ''[]\n''; exit 0; fi' + "`n: > '" + $responseState + "'`n"
+    }
+    $windowsSource = @'
+@echo off
+if not "%~1|%~2|%~3|%~4"=="mcp|list|--json|" exit /b 64
+if not defined CODEX_HOME exit /b 64
+if not exist "%CODEX_HOME%\config.toml" exit /b 64
+'@
+    $windowsSource += $windowsPreOutput
+    $windowsSource += $windowsOutput + "`r`nexit /b 0`r`n"
+    $unixSource = @'
+#!/bin/sh
+if [ "$#" -ne 3 ] || [ "$1" != "mcp" ] || [ "$2" != "list" ] || [ "$3" != "--json" ]; then exit 64; fi
+if [ -z "${CODEX_HOME:-}" ] || [ ! -f "$CODEX_HOME/config.toml" ]; then exit 64; fi
+'@
+    $unixSource += $unixPreOutput
+    $unixSource += "cat <<'JSON'`n" + $unixOutput + "`nJSON`nexit 0`n"
+    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), $windowsSource, (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex'), $unixSource, (New-Object System.Text.UTF8Encoding($false)))
+    if ($env:OS -ne 'Windows_NT') { & chmod +x (Join-Path $fakeBin 'codex') }
     return $fakeBin
 }
 
@@ -405,6 +443,13 @@ try {
         }
         Assert-Contains $combined '-LiteralPath' 'Literal-path operations are not present'
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
+        $cleanup = [System.IO.File]::ReadAllText($script:MemoryCleanupPath)
+        Assert-Contains $cleanup '$parsedPayload = $output | ConvertFrom-Json -ErrorAction Stop' 'Codex semantic JSON parsing does not preserve the PowerShell 5.1 two-step normalization'
+        Assert-Contains $cleanup '$payload = @($parsedPayload)' 'Codex semantic JSON parsing does not flatten the parsed payload'
+        Assert-NotContains $cleanup '$payload = @($output | ConvertFrom-Json -ErrorAction Stop)' 'Codex semantic JSON parsing still wraps the pipeline result directly'
+        $contracts = [System.IO.File]::ReadAllText($PSCommandPath)
+        $literalFindstr = 'findstr /l /x' + ' /c:'
+        Assert-Equal 2 (Get-LiteralCount $contracts $literalFindstr) 'Codex semantic test fakes must use literal exact-line matching'
     }
 
     Invoke-Contract 'child PowerShell output preserves raw long diagnostics across runtimes' {
@@ -464,6 +509,76 @@ try {
                 Assert-Contains $result.Output $configFile 'Semantic disagreement diagnostic omitted the affected path'
             }
             finally { $env:PATH = $oldPath; $env:FAKE_CODEX_ARGS = $oldArgs }
+        }
+    }
+
+    Invoke-Contract 'Codex semantic authority rejects null JSON entries and accepts pretty-printed valid output' {
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            Skip-Contract -Name 'Codex semantic authority rejects null JSON entries and accepts pretty-printed valid output' -Reason 'programmable Codex authority contract exercises the native Windows command shim'
+            return
+        }
+        Use-IsolatedEnvironment 'codex programmable semantic authority' {
+            param($root, $isolatedUserProfile)
+            $authorityCases = @(
+                [PSCustomObject]@{
+                    Name = 'null authority entry'
+                    JsonLines = @('[null]')
+                    ExpectsRetirement = $false
+                    ReturnAbsentAfterFirstResponse = $false
+                },
+                [PSCustomObject]@{
+                    Name = 'pretty printed authority entry'
+                    JsonLines = @('[', '  {', '    "name": "memory-graph"', '  }', ']')
+                    ExpectsRetirement = $true
+                    ReturnAbsentAfterFirstResponse = $true
+                }
+            )
+            foreach ($authorityCase in $authorityCases) {
+                $caseRoot = Join-Path $root $authorityCase.Name
+                $codexHome = Join-Path $caseRoot 'Codex Home'
+                $configFile = Join-Path $codexHome 'config.toml'
+                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
+                $provider = Join-Path $codexHome 'memory\graph.db'
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
+                $originalConfig = "[mcp_servers.memory-graph]`r`ncommand = `"retire`"`r`n"
+                $runtimeBytes = [byte[]](0, 1, 2, 255)
+                $providerBytes = [byte[]](3, 4, 5, 254)
+                [IO.File]::WriteAllText($configFile, $originalConfig, (New-Object Text.UTF8Encoding($false)))
+                [IO.File]::WriteAllBytes($runtime, $runtimeBytes)
+                [IO.File]::WriteAllBytes($provider, $providerBytes)
+                $configFingerprint = [Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))
+                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $authorityCase.JsonLines -ReturnAbsentAfterFirstResponse:$authorityCase.ReturnAbsentAfterFirstResponse
+                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
+                try {
+                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+                    $fakeCommand = if ($env:OS -eq 'Windows_NT') { Join-Path $fakeBin 'codex.cmd' } else { Join-Path $fakeBin 'codex' }
+                    $childCodex = @(& $script:PowerShellExecutable -NoLogo -NoProfile -Command '(Get-Command codex -ErrorAction Stop).Source')
+                    Assert-Equal $fakeCommand ($childCodex -join [Environment]::NewLine) "$($authorityCase.Name) child PowerShell did not resolve the isolated Codex authority"
+                    $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
+                    if ($authorityCase.ExpectsRetirement) {
+                        Assert-True (Test-Path -LiteralPath (Join-Path $fakeBin 'authority-response-state') -PathType Leaf) 'Pretty-printed authority fake did not supply its source response'
+                        Assert-Equal 0 $result.ExitCode "Pretty-printed valid authority JSON was rejected: $($result.Output)"
+                        Assert-NotContains ([IO.File]::ReadAllText($configFile)) '[mcp_servers.memory-graph]' 'Pretty-printed valid authority JSON did not remove the retired table'
+                        Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) 'Pretty-printed valid authority JSON did not authorize runtime retirement'
+                        Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Pretty-printed valid authority JSON deleted provider data'
+                        Assert-Equal ([Convert]::ToBase64String($providerBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($provider))) 'Pretty-printed valid authority JSON changed provider bytes'
+                    }
+                    else {
+                        Assert-True ($result.ExitCode -ne 0) "Null authority JSON entry was accepted: $($result.Output)"
+                        Assert-Equal $configFingerprint ([Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))) 'Null authority JSON entry changed config bytes'
+                        Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Null authority JSON entry deleted runtime'
+                        Assert-Equal ([Convert]::ToBase64String($runtimeBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($runtime))) 'Null authority JSON entry changed runtime bytes'
+                        Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Null authority JSON entry deleted provider data'
+                        Assert-Equal ([Convert]::ToBase64String($providerBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($provider))) 'Null authority JSON entry changed provider bytes'
+                    }
+                }
+                finally {
+                    $env:PATH = $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
+                }
+            }
         }
     }
 
@@ -2420,7 +2535,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Set-Acl -LiteralPath $configFile -AclObject $protectedAcl
             $configAclBefore = Get-Acl -LiteralPath $configFile
             Assert-True $configAclBefore.AreAccessRulesProtected 'Protected cleanup config ACL fixture lost inheritance protection before cleanup'
-            [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`nfindstr /x /c:`"[mcp_servers.memory-graph]`" `"%HOME%\config.toml`" >nul`r`nif errorlevel 1 (echo []) else (echo [{`"name`":`"memory-graph`"}])`r`nexit /b 0`r`n")
+            [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`nif not `"%~1|%~2|%~3|%~4`"==`"mcp|list|--json|`" exit /b 64`r`nif not defined CODEX_HOME exit /b 64`r`nif not exist `"%CODEX_HOME%\config.toml`" exit /b 64`r`nfindstr /l /x /c:`"[mcp_servers.memory-graph]`" `"%CODEX_HOME%\config.toml`" >nul`r`nif errorlevel 1 (echo []) else (echo [{`"name`":`"memory-graph`"}])`r`nexit /b 0`r`n")
             $oldPath = $env:PATH
             try {
                 $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
