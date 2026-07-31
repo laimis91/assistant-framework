@@ -256,7 +256,8 @@ namespace AssistantFrameworkCleanup {
         private const uint WriteDac = 0x00040000u;
         private const uint OpenExisting = 3u;
         private const uint FileAttributeNormal = 0x00000080u;
-        [StructLayout(LayoutKind.Sequential)] private struct Info { public uint Attributes; public long Creation; public long Access; public long Write; public uint Volume; public uint SizeHigh; public uint SizeLow; public uint NumberOfLinks; public uint IndexHigh; public uint IndexLow; }
+        [StructLayout(LayoutKind.Sequential)] private struct FileTime { public uint LowDateTime; public uint HighDateTime; }
+        [StructLayout(LayoutKind.Sequential)] private struct Info { public uint Attributes; public FileTime Creation; public FileTime Access; public FileTime Write; public uint Volume; public uint SizeHigh; public uint SizeLow; public uint NumberOfLinks; public uint IndexHigh; public uint IndexLow; }
         [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
         [DllImport("kernel32.dll", SetLastError=true)] private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out Info info);
         private static SafeFileHandle OpenChecked(string path, uint access, uint disposition) { var handle = CreateFileW(path, access, 0u, IntPtr.Zero, disposition, FileAttributeNormal, IntPtr.Zero); if (handle.IsInvalid) { var error = Marshal.GetLastWin32Error(); handle.Dispose(); throw new Win32Exception(error); } return handle; }
@@ -553,7 +554,12 @@ function Get-CodexMcpNames {
             $root = Read-JsonLexicalValue -Text $output -Index $outputIndexRef -Depth 0
             Skip-JsonIdentityWhitespace -Text $output -Index $outputIndexRef
             if ($root.Kind -ne 'array' -or $outputIndex -ne $output.Length) { throw 'Unexpected MCP list JSON root.' }
-            $payload = @($output | ConvertFrom-Json -ErrorAction Stop)
+            if ($output.Substring($root.Start, $root.End - $root.Start) -ceq '[]') {
+                $payload = @()
+            }
+            else {
+                $payload = @($output | ConvertFrom-Json -ErrorAction Stop)
+            }
         }
         catch { throw (New-Object System.IO.InvalidDataException "Invalid Codex CLI JSON output for $LiteralPath; preserved unchanged.") }
         $names = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)

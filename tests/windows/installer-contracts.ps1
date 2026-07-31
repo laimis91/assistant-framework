@@ -25,6 +25,7 @@ $script:FrameworkRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '
 $script:InstallerPath = Join-Path $script:FrameworkRoot 'install.ps1'
 $script:MemoryCleanupPath = Join-Path $script:FrameworkRoot 'tools\cleanup-memory-graph.ps1'
 $script:PowerShellExecutable = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+$script:ExternalCodexCommand = @(Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)[0]
 $suiteTempBase = [System.IO.Path]::GetTempPath()
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -and (Test-Path -LiteralPath '/private/tmp' -PathType Container)) {
     # macOS exposes /var as a symlink. Use its canonical private temp root so
@@ -147,6 +148,24 @@ function Restore-ProcessEnvironment {
     }
 }
 
+function New-IsolatedCodexSemanticAuthority {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    $fakeBin = Join-Path $Root 'fake-codex-semantic-authority'
+    [void][System.IO.Directory]::CreateDirectory($fakeBin)
+    $fakeCodex = Join-Path $fakeBin 'codex.cmd'
+    $source = @'
+@echo off
+if not "%~1|%~2|%~3|%~4"=="mcp|list|--json|" exit /b 64
+if not defined CODEX_HOME exit /b 64
+if not exist "%CODEX_HOME%\config.toml" exit /b 64
+findstr /x /c:"[mcp_servers.memory-graph]" "%CODEX_HOME%\config.toml" >nul
+if errorlevel 1 (echo []) else (echo [{"name":"memory-graph"}])
+exit /b 0
+'@
+    [System.IO.File]::WriteAllText($fakeCodex, $source, (New-Object System.Text.UTF8Encoding($false)))
+    return $fakeBin
+}
+
 function Use-IsolatedEnvironment {
     param([string]$Name, [scriptblock]$Body)
     $root = Join-Path $script:SuiteRoot $Name
@@ -170,6 +189,7 @@ function Use-IsolatedEnvironment {
         NUGET_PLUGINS_CACHE_PATH = [Environment]::GetEnvironmentVariable('NUGET_PLUGINS_CACHE_PATH', 'Process')
         POWERSHELL_TELEMETRY_OPTOUT = [Environment]::GetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', 'Process')
         OS = [Environment]::GetEnvironmentVariable('OS', 'Process')
+        PATH = [Environment]::GetEnvironmentVariable('PATH', 'Process')
     }
     try {
         $script:ActiveIsolatedUserProfile = $isolatedUserProfile
@@ -193,6 +213,8 @@ function Use-IsolatedEnvironment {
         foreach ($runtimeDirectory in @('appdata', 'localappdata', 'cache', 'config', 'data', 'dotnet', 'nuget-packages', 'nuget-http-cache', 'nuget-plugin-cache')) {
             [void][System.IO.Directory]::CreateDirectory((Join-Path $hostRuntimeRoot $runtimeDirectory))
         }
+        $fakeCodexBin = New-IsolatedCodexSemanticAuthority -Root $root
+        [Environment]::SetEnvironmentVariable('PATH', $fakeCodexBin + [System.IO.Path]::PathSeparator + $saved.PATH, 'Process')
         & $Body $root $isolatedUserProfile
     }
     finally {
@@ -407,6 +429,42 @@ try {
         )
         $actual = Convert-ProcessOutputToText -OutputItems @('stdout marker', $errorRecord)
         Assert-Equal ('stdout marker' + [Environment]::NewLine + $expectedError) $actual 'Raw-output normalization changed a long native error message'
+    }
+
+    Invoke-Contract 'Codex semantic absence with a local owned span fails closed through the JSON validator protocol' {
+        Use-IsolatedEnvironment 'codex semantic absence local span' {
+            param($root, $isolatedUserProfile)
+            $codexHome = Join-Path $root 'Semantic Absent Codex Home'
+            $configFile = Join-Path $codexHome 'config.toml'
+            $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
+            $provider = Join-Path $codexHome 'memory\graph.db'
+            $fakeBin = Join-Path $root 'fake-codex'
+            $argsFile = Join-Path $root 'fake-codex.args'
+            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
+            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
+            [void][IO.Directory]::CreateDirectory($fakeBin)
+            [IO.File]::WriteAllText($runtime, 'runtime')
+            [IO.File]::WriteAllText($provider, 'provider')
+            $original = "[mcp_servers.memory-graph]`ncommand = `"retire`"`n"
+            [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
+            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`necho %1^|%2^|%3>>`"%FAKE_CODEX_ARGS%`"`r`nif /I `"%1 %2 %3`"==`"mcp list --json`" (echo [] & exit /b 0)`r`nexit /b 64`r`n")
+            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex'), "#!/bin/sh`nprintf '%s|%s|%s\\n' `"`$1`" `"`$2`" `"`$3`" >> '$argsFile'`nif [ `"`$1`" = mcp ] && [ `"`$2`" = list ] && [ `"`$3`" = --json ]; then printf '[]\\n'; exit 0; fi`nexit 64`n")
+            if ($env:OS -ne 'Windows_NT') { & chmod +x (Join-Path $fakeBin 'codex') }
+            $oldPath, $oldArgs = $env:PATH, $env:FAKE_CODEX_ARGS
+            try {
+                $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
+                $env:FAKE_CODEX_ARGS = $argsFile
+                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
+                Assert-True ($result.ExitCode -ne 0) "Semantic absence/local span cleanup reported success: $($result.Output)"
+                Assert-Equal $original ([IO.File]::ReadAllText($configFile)) 'Semantic absence/local span cleanup changed config bytes'
+                Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Semantic absence/local span cleanup deleted runtime'
+                Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Semantic absence/local span cleanup deleted provider data'
+                Assert-Contains ([IO.File]::ReadAllText($argsFile)) 'mcp|list|--json' 'Fake validator did not receive the exact JSON MCP protocol'
+                Assert-Contains $result.Output $configFile 'Semantic disagreement diagnostic omitted the affected path'
+            }
+            finally { $env:PATH = $oldPath; $env:FAKE_CODEX_ARGS = $oldArgs }
+        }
     }
 
     Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through private DACL creation and content write' {
@@ -710,41 +768,6 @@ try {
     Assert-PrivateAclInvariant -Acl (Get-FileStreamAcl -Stream $stream)
     $stream.WriteByte(65)
     $stream.Flush($true)
-    Invoke-Contract 'Codex semantic absence with a local owned span fails closed through the JSON validator protocol' {
-        Use-IsolatedEnvironment 'codex semantic absence local span' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Semantic Absent Codex Home'
-            $configFile = Join-Path $codexHome 'config.toml'
-            $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-            $provider = Join-Path $codexHome 'memory\graph.db'
-            $fakeBin = Join-Path $root 'fake-codex'
-            $argsFile = Join-Path $root 'fake-codex.args'
-            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-            [void][IO.Directory]::CreateDirectory($fakeBin)
-            [IO.File]::WriteAllText($runtime, 'runtime')
-            [IO.File]::WriteAllText($provider, 'provider')
-            $original = "[mcp_servers.memory-graph]`ncommand = `"retire`"`n"
-            [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
-            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`necho %1^|%2^|%3>>`"%FAKE_CODEX_ARGS%`"`r`nif /I `"%1 %2 %3`"==`"mcp list --json`" (echo [] & exit /b 0)`r`nexit /b 64`r`n")
-            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex'), "#!/bin/sh`nprintf '%s|%s|%s\\n' `"`$1`" `"`$2`" `"`$3`" >> '$argsFile'`nif [ `"`$1`" = mcp ] && [ `"`$2`" = list ] && [ `"`$3`" = --json ]; then printf '[]\\n'; exit 0; fi`nexit 64`n")
-            if ($env:OS -ne 'Windows_NT') { & chmod +x (Join-Path $fakeBin 'codex') }
-            $oldPath, $oldArgs = $env:PATH, $env:FAKE_CODEX_ARGS
-            try {
-                $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                $env:FAKE_CODEX_ARGS = $argsFile
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-                Assert-True ($result.ExitCode -ne 0) "Semantic absence/local span cleanup reported success: $($result.Output)"
-                Assert-Equal $original ([IO.File]::ReadAllText($configFile)) 'Semantic absence/local span cleanup changed config bytes'
-                Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Semantic absence/local span cleanup deleted runtime'
-                Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Semantic absence/local span cleanup deleted provider data'
-                Assert-Contains ([IO.File]::ReadAllText($argsFile)) 'mcp|list|--json' 'Fake validator did not receive the exact JSON MCP protocol'
-                Assert-Contains $result.Output $configFile 'Semantic disagreement diagnostic omitted the affected path'
-            }
-            finally { $env:PATH = $oldPath; $env:FAKE_CODEX_ARGS = $oldArgs }
-        }
-    }
 }
 finally {
     if ($null -ne $stream) { $stream.Dispose() }
@@ -1445,7 +1468,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-Contains $config 'keep-similar' 'Similar unrelated TOML value was removed'
             Assert-Equal 0 (Get-LiteralCount $config '[mcp_servers.memory-graph]') 'Canonical retired TOML table survived reinstall'
             Assert-NotContains $config 'command = "stale"' 'Stale retired TOML table survived cleanup'
-            $codexCommand = Get-Command codex -ErrorAction SilentlyContinue
+            $codexCommand = $script:ExternalCodexCommand
             if ($null -ne $codexCommand) {
                 $parseOutput = @(& $codexCommand.Source mcp list 2>&1)
                 Assert-Equal 0 $LASTEXITCODE "Refreshed supported TOML was rejected by Codex: $($parseOutput | Out-String)"
@@ -1678,7 +1701,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 "foo.bar = 1`r`n",
                 "[custom]`r`nvalues = [`r`n  `"one`",`r`n  `"two`",`r`n]`r`n"
             )
-            $codexCommand = Get-Command codex -ErrorAction SilentlyContinue
+            $codexCommand = $script:ExternalCodexCommand
             for ($index = 0; $index -lt $fixtures.Count; $index++) {
                 $codexHome = Join-Path $root ('Codex Valid Unsupported TOML Fixture ' + $index)
                 [void][System.IO.Directory]::CreateDirectory($codexHome)
@@ -2140,7 +2163,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
 
             $preflightHome = Join-Path $root 'Codex User File Preflight Home'
             [void][System.IO.Directory]::CreateDirectory($preflightHome)
-            foreach ($relativeLeaf in @('config.toml', 'AGENTS.md', 'hooks.json', 'memory\graph.jsonl')) {
+            foreach ($relativeLeaf in @('config.toml', 'AGENTS.md', 'hooks.json')) {
                 $leafJunction = Join-Path $preflightHome $relativeLeaf
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $leafJunction))
                 $leafJunctionCreated = $false

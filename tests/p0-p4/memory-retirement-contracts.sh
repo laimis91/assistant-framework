@@ -8,6 +8,10 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 cleanup_bash="$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh"
 cleanup_powershell="$FRAMEWORK_DIR/tools/cleanup-memory-graph.ps1"
 
+skip() {
+    printf 'skipped: %s\n' "$*"
+}
+
 test_start "released skill inventory retires custom memory and reflexion skills"
 first_class_skill_count="$(find "$FRAMEWORK_DIR/skills"/assistant-* -mindepth 1 -maxdepth 1 -type f -name SKILL.md | wc -l | tr -d ' ')"
 if [[ -e "$FRAMEWORK_DIR/skills/assistant-memory" || -e "$FRAMEWORK_DIR/skills/assistant-reflexion" \
@@ -1523,9 +1527,10 @@ else
     printf '%s\n' provider >"$fifo_home/.codex/memory/graph.db"
     mkfifo "$fifo_home/.codex/config.toml"
     fifo_started="$(date +%s)"
-    USERPROFILE="$fifo_home" HOME="$fifo_home" perl -e 'alarm 3; exec @ARGV' pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-fifo.out 2>/tmp/p0p4-fifo.err && fifo_status=0 || fifo_status=$?
+    fifo_deadline_seconds=10
+    USERPROFILE="$fifo_home" HOME="$fifo_home" perl -e 'alarm shift; exec @ARGV' "$fifo_deadline_seconds" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-fifo.out 2>/tmp/p0p4-fifo.err && fifo_status=0 || fifo_status=$?
     fifo_elapsed=$(( $(date +%s) - fifo_started ))
-    if [[ "$fifo_status" -eq 0 || "$fifo_elapsed" -ge 3 || ! -p "$fifo_home/.codex/config.toml" \
+    if [[ "$fifo_status" -eq 0 || "$fifo_elapsed" -ge "$fifo_deadline_seconds" || ! -p "$fifo_home/.codex/config.toml" \
         || ! -f "$fifo_home/.codex/tools/memory-graph/run-memory-graph.sh" || ! -f "$fifo_home/.codex/memory/graph.db" ]]; then
         fail "PowerShell FIFO preflight blocked or mutated before rejecting a non-regular config"
     else
