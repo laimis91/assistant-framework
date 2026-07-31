@@ -2308,12 +2308,12 @@ function Invoke-AssistantFrameworkInstall {
     if (-not (Test-Path -LiteralPath $retirementTool -PathType Leaf)) {
         throw "Memory Graph retirement tool not found: $retirementTool"
     }
-    & $retirementTool -Agent $agentName -DryRun:$DryRun
-    $retirementSucceeded = $?
-    if (-not $retirementSucceeded) { throw 'Memory Graph retirement cleanup failed before installation.' }
-
     $installedAgentFiles = @()
     try {
+        & $retirementTool -Agent $agentName -DryRun:$DryRun
+        $retirementSucceeded = $?
+        if (-not $retirementSucceeded) { throw 'Memory Graph retirement cleanup failed before installation.' }
+
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
         }
