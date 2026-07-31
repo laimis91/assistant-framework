@@ -152,15 +152,18 @@ function New-IsolatedCodexSemanticAuthority {
     param([Parameter(Mandatory = $true)][string]$Root)
     $fakeBin = Join-Path $Root 'fake-codex-semantic-authority'
     [void][System.IO.Directory]::CreateDirectory($fakeBin)
-    $fakeCodex = Join-Path $fakeBin 'codex.cmd'
+    $fakeCodex = Join-Path $fakeBin 'codex.ps1'
     $source = @'
-@echo off
-if not "%~1|%~2|%~3|%~4"=="mcp|list|--json|" exit /b 64
-if not defined CODEX_HOME exit /b 64
-if not exist "%CODEX_HOME%\config.toml" exit /b 64
-findstr /l /x /c:"[mcp_servers.memory-graph]" "%CODEX_HOME%\config.toml" >nul
-if errorlevel 1 (echo []) else (echo [{"name":"memory-graph"}])
-exit /b 0
+if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
+if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
+$configFile = Join-Path $env:CODEX_HOME 'config.toml'
+if (-not [IO.File]::Exists($configFile)) { exit 64 }
+$hasCanonicalTable = $false
+foreach ($line in [IO.File]::ReadAllLines($configFile)) {
+    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
+}
+if ($hasCanonicalTable) { '[{"name":"memory-graph"}]' } else { '[]' }
+exit 0
 '@
     [System.IO.File]::WriteAllText($fakeCodex, $source, (New-Object System.Text.UTF8Encoding($false)))
     return $fakeBin
@@ -169,38 +172,25 @@ exit /b 0
 function New-ProgrammableCodexSemanticAuthority {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string[]]$JsonLines,
-        [switch]$ReturnAbsentAfterFirstResponse
+        [Parameter(Mandatory = $true)][string[]]$JsonLines
     )
     $fakeBin = Join-Path $Root 'programmable-codex-semantic-authority'
     [void][System.IO.Directory]::CreateDirectory($fakeBin)
-    $windowsOutput = (@($JsonLines | ForEach-Object { 'echo ' + $_ }) -join "`r`n")
-    $unixOutput = ($JsonLines -join "`n")
-    $windowsPreOutput = ''
-    $unixPreOutput = ''
-    if ($ReturnAbsentAfterFirstResponse) {
-        $responseState = Join-Path $fakeBin 'authority-response-state'
-        $windowsPreOutput = 'if exist "' + $responseState + '" (echo [] & exit /b 0)' + "`r`n" + 'type nul > "' + $responseState + '"' + "`r`n"
-        $unixPreOutput = 'if [ -f ''' + $responseState + ''' ]; then printf ''[]\n''; exit 0; fi' + "`n: > '" + $responseState + "'`n"
-    }
-    $windowsSource = @'
-@echo off
-if not "%~1|%~2|%~3|%~4"=="mcp|list|--json|" exit /b 64
-if not defined CODEX_HOME exit /b 64
-if not exist "%CODEX_HOME%\config.toml" exit /b 64
+    $jsonOutput = (@($JsonLines | ForEach-Object { "    '" + $_.Replace("'", "''") + "'" }) -join ",`r`n")
+    $source = @'
+if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
+if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
+$configFile = Join-Path $env:CODEX_HOME 'config.toml'
+if (-not [IO.File]::Exists($configFile)) { exit 64 }
+$hasCanonicalTable = $false
+foreach ($line in [IO.File]::ReadAllLines($configFile)) {
+    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
+}
+if (-not $hasCanonicalTable) { '[]'; exit 0 }
+@(
 '@
-    $windowsSource += $windowsPreOutput
-    $windowsSource += $windowsOutput + "`r`nexit /b 0`r`n"
-    $unixSource = @'
-#!/bin/sh
-if [ "$#" -ne 3 ] || [ "$1" != "mcp" ] || [ "$2" != "list" ] || [ "$3" != "--json" ]; then exit 64; fi
-if [ -z "${CODEX_HOME:-}" ] || [ ! -f "$CODEX_HOME/config.toml" ]; then exit 64; fi
-'@
-    $unixSource += $unixPreOutput
-    $unixSource += "cat <<'JSON'`n" + $unixOutput + "`nJSON`nexit 0`n"
-    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), $windowsSource, (New-Object System.Text.UTF8Encoding($false)))
-    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex'), $unixSource, (New-Object System.Text.UTF8Encoding($false)))
-    if ($env:OS -ne 'Windows_NT') { & chmod +x (Join-Path $fakeBin 'codex') }
+    $source += $jsonOutput + "`r`n) | ForEach-Object { `$_ }`r`nexit 0`r`n"
+    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $source, (New-Object System.Text.UTF8Encoding($false)))
     return $fakeBin
 }
 
@@ -448,8 +438,9 @@ try {
         Assert-Contains $cleanup '$payload = @($parsedPayload)' 'Codex semantic JSON parsing does not flatten the parsed payload'
         Assert-NotContains $cleanup '$payload = @($output | ConvertFrom-Json -ErrorAction Stop)' 'Codex semantic JSON parsing still wraps the pipeline result directly'
         $contracts = [System.IO.File]::ReadAllText($PSCommandPath)
-        $literalFindstr = 'findstr /l /x' + ' /c:'
-        Assert-Equal 2 (Get-LiteralCount $contracts $literalFindstr) 'Codex semantic test fakes must use literal exact-line matching'
+        Assert-Contains $contracts '[IO.File]::ReadAllLines($configFile)' 'Codex semantic test fakes do not read TOML as exact lines'
+        Assert-Contains $contracts '[System.StringComparison]::Ordinal' 'Codex semantic test fakes do not use ordinal exact-line matching'
+        Assert-NotContains $contracts ('findstr /l /x' + ' /c:') 'Codex semantic test fakes still use findstr parsing'
     }
 
     Invoke-Contract 'child PowerShell output preserves raw long diagnostics across runtimes' {
@@ -492,9 +483,16 @@ try {
             [IO.File]::WriteAllText($provider, 'provider')
             $original = "[mcp_servers.memory-graph]`ncommand = `"retire`"`n"
             [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
-            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`necho %1^|%2^|%3>>`"%FAKE_CODEX_ARGS%`"`r`nif /I `"%1 %2 %3`"==`"mcp list --json`" (echo [] & exit /b 0)`r`nexit /b 64`r`n")
-            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex'), "#!/bin/sh`nprintf '%s|%s|%s\\n' `"`$1`" `"`$2`" `"`$3`" >> '$argsFile'`nif [ `"`$1`" = mcp ] && [ `"`$2`" = list ] && [ `"`$3`" = --json ]; then printf '[]\\n'; exit 0; fi`nexit 64`n")
-            if ($env:OS -ne 'Windows_NT') { & chmod +x (Join-Path $fakeBin 'codex') }
+            $fakeSource = @'
+if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
+if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
+$configFile = Join-Path $env:CODEX_HOME 'config.toml'
+if (-not [IO.File]::Exists($configFile)) { exit 64 }
+[IO.File]::AppendAllText($env:FAKE_CODEX_ARGS, ($args -join '|') + [Environment]::NewLine)
+'[]'
+exit 0
+'@
+            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $fakeSource, (New-Object Text.UTF8Encoding($false)))
             $oldPath, $oldArgs = $env:PATH, $env:FAKE_CODEX_ARGS
             try {
                 $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
@@ -513,10 +511,6 @@ try {
     }
 
     Invoke-Contract 'Codex semantic authority rejects null JSON entries and accepts pretty-printed valid output' {
-        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-            Skip-Contract -Name 'Codex semantic authority rejects null JSON entries and accepts pretty-printed valid output' -Reason 'programmable Codex authority contract exercises the native Windows command shim'
-            return
-        }
         Use-IsolatedEnvironment 'codex programmable semantic authority' {
             param($root, $isolatedUserProfile)
             $authorityCases = @(
@@ -524,13 +518,11 @@ try {
                     Name = 'null authority entry'
                     JsonLines = @('[null]')
                     ExpectsRetirement = $false
-                    ReturnAbsentAfterFirstResponse = $false
                 },
                 [PSCustomObject]@{
                     Name = 'pretty printed authority entry'
                     JsonLines = @('[', '  {', '    "name": "memory-graph"', '  }', ']')
                     ExpectsRetirement = $true
-                    ReturnAbsentAfterFirstResponse = $true
                 }
             )
             foreach ($authorityCase in $authorityCases) {
@@ -548,17 +540,16 @@ try {
                 [IO.File]::WriteAllBytes($runtime, $runtimeBytes)
                 [IO.File]::WriteAllBytes($provider, $providerBytes)
                 $configFingerprint = [Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))
-                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $authorityCase.JsonLines -ReturnAbsentAfterFirstResponse:$authorityCase.ReturnAbsentAfterFirstResponse
+                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $authorityCase.JsonLines
                 $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
                 try {
                     $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
                     [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                    $fakeCommand = if ($env:OS -eq 'Windows_NT') { Join-Path $fakeBin 'codex.cmd' } else { Join-Path $fakeBin 'codex' }
+                    $fakeCommand = Join-Path $fakeBin 'codex.ps1'
                     $childCodex = @(& $script:PowerShellExecutable -NoLogo -NoProfile -Command '(Get-Command codex -ErrorAction Stop).Source')
                     Assert-Equal $fakeCommand ($childCodex -join [Environment]::NewLine) "$($authorityCase.Name) child PowerShell did not resolve the isolated Codex authority"
                     $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
                     if ($authorityCase.ExpectsRetirement) {
-                        Assert-True (Test-Path -LiteralPath (Join-Path $fakeBin 'authority-response-state') -PathType Leaf) 'Pretty-printed authority fake did not supply its source response'
                         Assert-Equal 0 $result.ExitCode "Pretty-printed valid authority JSON was rejected: $($result.Output)"
                         Assert-NotContains ([IO.File]::ReadAllText($configFile)) '[mcp_servers.memory-graph]' 'Pretty-printed valid authority JSON did not remove the retired table'
                         Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) 'Pretty-printed valid authority JSON did not authorize runtime retirement'
@@ -2535,7 +2526,19 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Set-Acl -LiteralPath $configFile -AclObject $protectedAcl
             $configAclBefore = Get-Acl -LiteralPath $configFile
             Assert-True $configAclBefore.AreAccessRulesProtected 'Protected cleanup config ACL fixture lost inheritance protection before cleanup'
-            [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@echo off`r`nif not `"%~1|%~2|%~3|%~4`"==`"mcp|list|--json|`" exit /b 64`r`nif not defined CODEX_HOME exit /b 64`r`nif not exist `"%CODEX_HOME%\config.toml`" exit /b 64`r`nfindstr /l /x /c:`"[mcp_servers.memory-graph]`" `"%CODEX_HOME%\config.toml`" >nul`r`nif errorlevel 1 (echo []) else (echo [{`"name`":`"memory-graph`"}])`r`nexit /b 0`r`n")
+            $fakeSource = @'
+if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
+if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
+$configFile = Join-Path $env:CODEX_HOME 'config.toml'
+if (-not [IO.File]::Exists($configFile)) { exit 64 }
+$hasCanonicalTable = $false
+foreach ($line in [IO.File]::ReadAllLines($configFile)) {
+    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
+}
+if ($hasCanonicalTable) { '[{"name":"memory-graph"}]' } else { '[]' }
+exit 0
+'@
+            [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $fakeSource, (New-Object Text.UTF8Encoding($false)))
             $oldPath = $env:PATH
             try {
                 $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath

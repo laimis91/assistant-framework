@@ -106,7 +106,7 @@ else
     chmod 600 "$ps_mode_home/.codex/config.toml"
     printf '%s\n' '#!/bin/sh' \
         'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then' \
-        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf "[{\\\"name\\\":\\\"memory-graph\\\"}]\\n"; else printf "[]\\n"; fi' \
+        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf '"'"'%s\n'"'"' '"'"'[{"name":"memory-graph"}]'"'"'; else printf '"'"'%s\n'"'"' '"'"'[]'"'"'; fi' \
         '  exit 0' \
         'fi' \
         'exit 64' >"$ps_mode_bin/codex"
@@ -1284,7 +1284,7 @@ for authority_runner in "${authority_runners[@]}"; do
     printf '%s\n' provider >"$authority_home/.codex/memory/graph.db"
     printf '%s\n' 'mcp_servers.memory-graph = { command = "retire" }' '[mcp_servers.keep]' 'command = "keep"' >"$authority_home/.codex/config.toml"
     cp "$authority_home/.codex/config.toml" "$authority_home/.codex/config.before"
-    printf '%s\n' '#!/bin/sh' 'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf "[{\\"name\\":\\"memory-graph\\"}]\\n"; exit 0; fi' 'exit 0' >"$authority_bin/codex"
+    printf '%s\n' '#!/bin/sh' 'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf '"'"'%s\n'"'"' '"'"'[{"name":"memory-graph"}]'"'"'; exit 0; fi' 'exit 0' >"$authority_bin/codex"
     chmod +x "$authority_bin/codex"
     if [[ "$authority_runner" == bash ]]; then
         HOME="$authority_home" PATH="$authority_bin:$PATH" bash "$cleanup_bash" --agent codex >/tmp/p0p4-authority-bash.out 2>/tmp/p0p4-authority-bash.err && authority_status=0 || authority_status=$?
@@ -1314,7 +1314,7 @@ for semantic_absent_runner in "${semantic_absent_runners[@]}"; do
     printf '%s\n' provider >"$semantic_absent_home/.codex/memory/graph.db"
     printf '%s\n' '[mcp_servers.memory-graph]' 'command = "retire"' >"$semantic_absent_home/.codex/config.toml"
     cp "$semantic_absent_home/.codex/config.toml" "$semantic_absent_home/.codex/config.before"
-    printf '%s\n' '#!/bin/sh' "printf '%s|%s|%s\\n' \"\$1\" \"\$2\" \"\$3\" >>'$semantic_absent_home/codex.args'" 'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf "[]\n"; exit 0; fi' 'exit 64' >"$semantic_absent_bin/codex"
+    printf '%s\n' '#!/bin/sh' "printf '%s|%s|%s\\n' \"\$1\" \"\$2\" \"\$3\" >>'$semantic_absent_home/codex.args'" 'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf '"'"'%s\n'"'"' '"'"'[]'"'"'; exit 0; fi' 'exit 64' >"$semantic_absent_bin/codex"
     chmod +x "$semantic_absent_bin/codex"
     if [[ "$semantic_absent_runner" == bash ]]; then
         HOME="$semantic_absent_home" PATH="$semantic_absent_bin:$PATH" bash "$cleanup_bash" --agent codex >/tmp/p0p4-semantic-absent-bash.out 2>/tmp/p0p4-semantic-absent-bash.err && semantic_absent_status=0 || semantic_absent_status=$?
@@ -1400,7 +1400,7 @@ printf '%s\n' 'mcp_servers.memory-graph = { command = "retire" }' '[mcp_servers.
 cp "$authority_json_home/.codex/config.toml" "$authority_json_home/.codex/config.before"
 printf '%s\n' '#!/bin/sh' \
     "printf '%s|%s|%s\\n' \"\$1\" \"\$2\" \"\$3\" >>'$authority_json_home/codex.args'" \
-    'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf "[{\\\"name\\\":\\\"memory-graph\\\",\\\"name\\\":\\\"MEMORY-GRAPH\\\"}]\\n"; exit 0; fi' \
+    'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then printf '"'"'%s\n'"'"' '"'"'[{"name":"memory-graph","name":"MEMORY-GRAPH"}]'"'"'; exit 0; fi' \
     'exit 64' >"$authority_json_bin/codex"
 chmod +x "$authority_json_bin/codex"
 HOME="$authority_json_home" PATH="$authority_json_bin:$PATH" bash "$cleanup_bash" --agent codex >/tmp/p0p4-authority-json.out 2>/tmp/p0p4-authority-json.err && authority_json_status=0 || authority_json_status=$?
@@ -1432,10 +1432,10 @@ for authority_collision_runner in "${authority_collision_runners[@]}"; do
     printf '%s\n' '#!/bin/sh' \
         "printf '%s|%s|%s\\n' \"\$1\" \"\$2\" \"\$3\" >>'$authority_collision_home/codex.args'" \
         'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then' \
-        '  first=true; printf "["' \
-        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf "{\\\"name\\\":\\\"memory-graph\\\"}"; first=false; fi' \
-        '  if grep -Fxq "[mcp_servers.MEMORY-GRAPH]" "$HOME/config.toml"; then $first || printf ","; printf "{\\\"name\\\":\\\"MEMORY-GRAPH\\\"}"; fi' \
-        '  printf "]\\n"; exit 0' \
+        '  first=true; printf '"'"'%s'"'"' '"'"'['"'"'' \
+        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf '"'"'%s'"'"' '"'"'{"name":"memory-graph"}'"'"'; first=false; fi' \
+        '  if grep -Fxq "[mcp_servers.MEMORY-GRAPH]" "$HOME/config.toml"; then $first || printf '"'"'%s'"'"' '"'"','"'"'; printf '"'"'%s'"'"' '"'"'{"name":"MEMORY-GRAPH"}'"'"'; fi' \
+        '  printf '"'"'%s\n'"'"' '"'"']'"'"'; exit 0' \
         'fi' \
         'exit 64' >"$authority_collision_bin/codex"
     chmod +x "$authority_collision_bin/codex"
@@ -1478,8 +1478,8 @@ for source_drift_runner in "${source_drift_runners[@]}"; do
     printf '%s\n' '#!/bin/sh' \
         'count_file="$DRIFT_CALLS"; count=0; [ -f "$count_file" ] && count=$(cat "$count_file"); count=$((count + 1)); printf "%s" "$count" >"$count_file"' \
         'if [ "$1" = "mcp" ] && [ "$2" = "list" ] && [ "$3" = "--json" ]; then' \
-        '  if [ "$count" -eq 2 ]; then printf "[mcp_servers.concurrent]\\ncommand = \\\"concurrent\\\"\\n" >"$DRIFT_TARGET"; fi' \
-        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf "[{\\\"name\\\":\\\"memory-graph\\\"}]\\n"; else printf "[]\\n"; fi; exit 0' \
+        '  if [ "$count" -eq 2 ]; then printf '"'"'%s\n'"'"' '"'"'[mcp_servers.concurrent]'"'"' '"'"'command = "concurrent"'"'"' >"$DRIFT_TARGET"; fi' \
+        '  if grep -Fxq "[mcp_servers.memory-graph]" "$HOME/config.toml"; then printf '"'"'%s\n'"'"' '"'"'[{"name":"memory-graph"}]'"'"'; else printf '"'"'%s\n'"'"' '"'"'[]'"'"'; fi; exit 0' \
         'fi' \
         'exit 64' >"$source_drift_bin/codex"
     chmod +x "$source_drift_bin/codex"
