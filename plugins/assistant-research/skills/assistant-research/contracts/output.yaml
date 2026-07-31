@@ -285,12 +285,6 @@ artifacts:
     description: "1-3 sentence synthesis of key findings"
     validation: "Non-empty. Must answer the original question, not just list findings."
 
-  - name: insight_captured
-    type: boolean
-    required: false
-    condition: "findings contain notable reusable insights"
-    description: "Whether findings were recorded in the knowledge graph via memory_add_insight for future sessions"
-
 # Output format (must be followed for all tiers):
 #
 # RESEARCH: {question}

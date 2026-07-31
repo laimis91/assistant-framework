@@ -63,8 +63,8 @@ gates:
         on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
-        check: "plan_mode is none, inline, or approval_required; workflow_state_mode is inline or journal; manual_verification_mode is not_required, optional, or required; learning_capture_mode is auto, not_required, or required; normal work uses auto; and not_required has a policy_disallowed: or explicit_exclusion: reason"
-        on_fail: "Infer and record plan_mode plus the three additive completion modes from the input contract before continuing; do not infer journal, manual verification, or learning ceremony from size alone."
+        check: "plan_mode is none, inline, or approval_required; workflow_state_mode is inline or journal; and manual_verification_mode is not_required, optional, or required"
+        on_fail: "Infer and record plan_mode plus the two additive completion modes from the input contract; do not infer journal or manual-verification ceremony from size alone."
 
       - id: T_PLAN_MODE
         check: "plan_mode=none is used only for trivial localized reversible low-risk work with an obvious path and verification; inline is used only for bounded small no-approval work; approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests"
@@ -603,16 +603,6 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "Review what documentation needs updating (README, CHANGELOG, code comments)"
 
-      - id: DOC_LEARNING_CONTROLLER
-        check: "When learning capture is activated, the selected state surface contains the canonical Learning Controller evidence and decision fields"
-        condition: "learning_capture_mode == required or (learning_capture_mode == auto and concrete review finding, build/test failure, user correction, or memory trend evidence exists)"
-        on_fail: "Load assistant-reflexion and assistant-memory contracts, inspect Review Log findings, build/test failures, and user corrections for durable lessons, check memory trend/backend availability when allowed, then write the Learning Controller block. Use backend_unavailable or policy_disallowed when appropriate; do not require a memory write when tools are unavailable, and do not persist routine progress as a lesson."
-
-      - id: DOC_LEARNING_STATE_VALIDATION
-        check: "For journal mode, the canonical Learning evidence signals ledger is current and bash scripts/validate-learning-state.sh <task-journal> passes after the conditional Learning Controller decision is recorded"
-        condition: "workflow_state_mode == journal"
-        on_fail: "Correct invalid learning_capture_mode, add the required prefixed selection reason, or complete the activated Learning Controller fields; do not use a legacy manual value or an unjustified not_required skip."
-
       - id: DOC_HARNESS_REPLAY_PACKET
         check: "For medium+ harness-capable work: final Harness Run State, Trace Ledger, and Replay Packet evidence is current before completion or handoff"
         condition: "size in [medium, large, mega] and harness_capable == true"
@@ -640,7 +630,7 @@ gates:
       - id: DOC2
         severity: guidance
         check: "Optional metrics were appended when useful and configured, or omitted without affecting completion"
-        on_fail: "Record metrics later if useful; missing metrics, reflexion, or memory never blocks completion."
+        on_fail: "Record metrics later if useful; missing metrics never blocks completion."
 
 # ─────────────────────────────────────────────
 # Cross-phase invariants

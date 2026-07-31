@@ -35,7 +35,7 @@ p0p4_path_without_jq() {
     done
 }
 
-test_start "Codex reinstall keeps one lean framework block and one memory protocol block"
+test_start "Codex reinstall keeps one lean framework block and retires the memory protocol"
 INSTALL_HOME="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME"
 if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-1.out 2>/tmp/p0p4-install-1.err; then
@@ -47,7 +47,7 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
         agents_starts="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$agents_file")"
         agents_ends="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$agents_file")"
         operating_stances="$(count_occurrences "^## Operating stance$" "$agents_file")"
-        if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
+        if [[ "$starts" == "0" && "$ends" == "0" && "$preambles" == "0" ]] \
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && [[ "$operating_stances" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
@@ -67,7 +67,7 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "Preserve user-authored files and existing dirty work." "$agents_file"; then
             pass
         else
-            fail "expected one lean native-Codex framework block and one current memory protocol block"
+            fail "expected one lean native-Codex framework block with no retired memory protocol"
         fi
     else
         fail "second install failed; see /tmp/p0p4-install-2.err"
@@ -107,10 +107,8 @@ if HOME="$INSTALL_HOME_PLUGIN_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent code
     if printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin profile: assistant-core" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-core -> ./skills/" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-clarify assistant-memory assistant-reflexion assistant-telos" \
+        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-clarify assistant-telos" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-clarify/" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-memory/" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-reflexion/" \
         && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-telos/" \
         && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-workflow/" \
         && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-research/" \
@@ -202,7 +200,7 @@ if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --
     agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
     missing_core_skill=""
     unexpected_profile_skill=""
-    for core_skill in assistant-clarify assistant-memory assistant-reflexion assistant-telos; do
+    for core_skill in assistant-clarify assistant-telos; do
         if [[ ! -d "$installed_skills_dir/$core_skill" ]]; then
             missing_core_skill="$core_skill"
             break
@@ -337,7 +335,7 @@ else
     fail "installer should explain --skill/--plugin mutual exclusion"
 fi
 
-test_start "installer replaces interrupted memory protocol install without duplicating blocks"
+test_start "installer rejects interrupted retired memory protocol without mutation"
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"
 mkdir -p "$INSTALL_HOME_THREE/.codex"
@@ -355,23 +353,17 @@ $legacy_orchestrator_role
 
 Interrupted installer-owned memory content that should be removed.
 TRUNCATED
+cp "$INSTALL_HOME_THREE/.codex/AGENTS.md" "$INSTALL_HOME_THREE/.codex/AGENTS.before"
 if HOME="$INSTALL_HOME_THREE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-truncated.out 2>/tmp/p0p4-install-truncated.err; then
-    agents_file="$INSTALL_HOME_THREE/.codex/AGENTS.md"
-    starts="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START" "$agents_file")"
-    ends="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END" "$agents_file")"
-    preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$agents_file")"
-    if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
-        && grep -q "User-managed heading before installer content." "$agents_file" \
-        && ! grep -q "Interrupted installer-owned memory content" "$agents_file"; then
-        pass
-    else
-        fail "expected truncated installer block to be replaced once while preserving user content"
-    fi
+    fail "install should reject an interrupted retired memory protocol"
+elif cmp -s "$INSTALL_HOME_THREE/.codex/AGENTS.before" "$INSTALL_HOME_THREE/.codex/AGENTS.md" \
+    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-truncated.err; then
+    pass
 else
-    fail "install after truncated memory protocol failed; see /tmp/p0p4-install-truncated.err"
+    fail "interrupted retired memory protocol was not preserved with a fail-closed diagnostic"
 fi
 
-test_start "Codex reinstall collapses duplicate and interrupted memory protocol blocks while preserving user content"
+test_start "Codex reinstall rejects duplicate retired memory protocol blocks without mutation"
 INSTALL_HOME_SIX="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SIX"
 mkdir -p "$INSTALL_HOME_SIX/.codex"
@@ -417,31 +409,17 @@ $legacy_orchestrator_role
 
 Interrupted installer-owned memory content that should be removed.
 DUPLICATE_CODEX
+cp "$INSTALL_HOME_SIX/.codex/AGENTS.md" "$INSTALL_HOME_SIX/.codex/AGENTS.before"
 if HOME="$INSTALL_HOME_SIX" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-duplicate-codex.out 2>/tmp/p0p4-install-duplicate-codex.err; then
-    agents_file="$INSTALL_HOME_SIX/.codex/AGENTS.md"
-    starts="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START" "$agents_file")"
-    ends="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END" "$agents_file")"
-    preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$agents_file")"
-    agents_starts="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$agents_file")"
-    agents_ends="$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$agents_file")"
-    if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
-        && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
-        && grep -q "User-managed content before old installer blocks." "$agents_file" \
-        && grep -q "User-managed content before first memory block." "$agents_file" \
-        && grep -q "User-managed content between complete memory blocks." "$agents_file" \
-        && grep -q "User-managed content before interrupted memory block." "$agents_file" \
-        && ! grep -q "Old complete memory content A" "$agents_file" \
-        && ! grep -q "Old complete memory content B" "$agents_file" \
-        && ! grep -q "Interrupted installer-owned memory content" "$agents_file"; then
-        pass
-    else
-        fail "expected duplicate and interrupted Codex memory protocol blocks to be replaced once while preserving user content"
-    fi
+    fail "install should reject duplicate retired memory protocol blocks"
+elif cmp -s "$INSTALL_HOME_SIX/.codex/AGENTS.before" "$INSTALL_HOME_SIX/.codex/AGENTS.md" \
+    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-duplicate-codex.err; then
+    pass
 else
-    fail "Codex install with duplicate memory protocols failed; see /tmp/p0p4-install-duplicate-codex.err"
+    fail "duplicate retired memory protocol blocks were not preserved with a fail-closed diagnostic"
 fi
 
-test_start "installer strips substituted Gemini legacy memory preamble"
+test_start "installer rejects interrupted Gemini retired memory protocol without mutation"
 INSTALL_HOME_FOUR="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_FOUR"
 mkdir -p "$INSTALL_HOME_FOUR/.gemini"
@@ -459,26 +437,14 @@ $legacy_orchestrator_role
 
 Interrupted installer-owned Gemini memory content that should be removed.
 TRUNCATED_GEMINI
+cp "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" "$INSTALL_HOME_FOUR/.gemini/GEMINI.before"
 if HOME="$INSTALL_HOME_FOUR" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow --no-hooks >/tmp/p0p4-install-gemini-truncated.out 2>/tmp/p0p4-install-gemini-truncated.err; then
-    gemini_file="$INSTALL_HOME_FOUR/.gemini/GEMINI.md"
-    starts="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START" "$gemini_file")"
-    ends="$(count_occurrences "ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END" "$gemini_file")"
-    preambles="$(count_occurrences "^# Assistant Framework — Memory Protocol$" "$gemini_file")"
-    if [[ "$starts" == "1" && "$ends" == "1" && "$preambles" == "1" ]] \
-        && grep -q "User-managed Gemini heading before installer content." "$gemini_file" \
-        && grep -Fq ".gemini/task.md" "$gemini_file" \
-        && grep -Fq ".gemini/session.md" "$gemini_file" \
-        && grep -Fq ".gemini/working-buffer.md" "$gemini_file" \
-        && grep -Fq "Routine completion does not require reflection, metrics, memory writes, consolidation, or health checks." "$gemini_file" \
-        && ! grep -Fq ".codex/task.md" "$gemini_file" \
-        && ! grep -Fq ".claude/task.md" "$gemini_file" \
-        && ! grep -q "Interrupted installer-owned Gemini memory content" "$gemini_file"; then
-        pass
-    else
-        fail "expected substituted Gemini installer block to be replaced once, use .gemini state paths, and preserve user content"
-    fi
+    fail "install should reject an interrupted Gemini retired memory protocol"
+elif cmp -s "$INSTALL_HOME_FOUR/.gemini/GEMINI.before" "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" \
+    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-gemini-truncated.err; then
+    pass
 else
-    fail "Gemini install after truncated memory protocol failed; see /tmp/p0p4-install-gemini-truncated.err"
+    fail "interrupted Gemini retired memory protocol was not preserved with a fail-closed diagnostic"
 fi
 
 test_start "installer reinstall removes stale installed tool build artifacts"
@@ -503,7 +469,7 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
-test_start "Codex reinstall refreshes stale memory-graph MCP config, preserves no-hooks profile, and file mode"
+test_start "Codex reinstall retires stale memory-graph MCP config, preserves no-hooks profile, and file mode"
 INSTALL_HOME_NINE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_NINE"
 mkdir -p "$INSTALL_HOME_NINE/.codex"
@@ -525,9 +491,6 @@ approval_mode = "deny"
 [mcp_servers.memory-graph.tools.memory_search]
 approval_mode = "approve"
 
-[mcp_servers.memory-graph.tools.memory_search]
-approval_mode = "approve"
-
 [features]
 hooks = false
 codex_hooks = false
@@ -536,74 +499,16 @@ chmod 600 "$INSTALL_HOME_NINE/.codex/config.toml"
 if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-stale-codex-mcp.out 2>/tmp/p0p4-install-stale-codex-mcp.err; then
     config_file="$INSTALL_HOME_NINE/.codex/config.toml"
     config_mode="$(p0p4_file_mode_octal "$config_file")"
-    expected_command="command = \"$INSTALL_HOME_NINE/.codex/tools/memory-graph/run-memory-graph.sh\""
-    expected_args="args = [\"--memory-dir\", \"$INSTALL_HOME_NINE/.codex/memory\"]"
-    expected_startup_timeout='startup_timeout_sec = 120'
-    memory_tools=(
-        memory_context
-        memory_search
-        memory_stats
-        memory_doctor
-        memory_add_entity
-        memory_add_insight
-        memory_add_relation
-        memory_remove_entity
-        memory_remove_relation
-        memory_graph
-        memory_reflect
-        memory_decide
-        memory_pattern
-        memory_consolidate
-        memory_signal
-        memory_trend
-    )
-
-    if [[ "$(count_occurrences "^\\[mcp_servers\\.memory-graph\\]$" "$config_file")" != "1" ]] \
-        || ! grep -Fq "$expected_command" "$config_file" \
-        || ! grep -Fq "$expected_args" "$config_file" \
-        || [[ "$(count_occurrences "^${expected_startup_timeout}$" "$config_file")" != "1" ]] \
-        || grep -q '^startup_timeout_sec = 10$' "$config_file" \
+    if grep -q '^\[mcp_servers\.memory-graph\]' "$config_file" \
         || grep -q "/stale/memory-graph" "$config_file" \
         || ! grep -q '^model = "test-model"$' "$config_file" \
         || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
         || ! grep -q '^hooks = false$' "$config_file" \
         || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph command/args/startup timeout to refresh while preserving unrelated config, disabled hooks profile, and file mode"
+        fail "expected stale Codex memory-graph registration to retire while preserving unrelated config, disabled hooks profile, and file mode"
     else
-        missing_tool=""
-        duplicate_tool=""
-        bad_approval_tool=""
-        for tool in "${memory_tools[@]}"; do
-            section="mcp_servers\\.memory-graph\\.tools\\.$tool"
-            if [[ "$(count_occurrences "^\\[$section\\]$" "$config_file")" == "0" ]]; then
-                missing_tool="$tool"
-                break
-            fi
-            if [[ "$(count_occurrences "^\\[$section\\]$" "$config_file")" != "1" ]]; then
-                duplicate_tool="$tool"
-                break
-            fi
-            if ! awk -v section="[mcp_servers.memory-graph.tools.$tool]" '
-                $0 == section { in_section = 1; next }
-                in_section && /^\[/ { exit }
-                in_section && $0 == "approval_mode = \"approve\"" { found = 1; exit }
-                END { exit found ? 0 : 1 }
-            ' "$config_file"; then
-                bad_approval_tool="$tool"
-                break
-            fi
-        done
-
-        if [[ -n "$missing_tool" ]]; then
-            fail "expected refreshed Codex MCP config to include approval block for $missing_tool"
-        elif [[ -n "$duplicate_tool" ]]; then
-            fail "expected refreshed Codex MCP config to avoid duplicate approval blocks for $duplicate_tool"
-        elif [[ -n "$bad_approval_tool" ]]; then
-            fail "expected refreshed Codex MCP config to approve $bad_approval_tool"
-        else
-            pass
-        fi
+        pass
     fi
 else
     fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
@@ -673,6 +578,9 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
     while IFS= read -r source_skill_md; do
         source_assistant_skill_count=$((source_assistant_skill_count + 1))
         source_skill="$(basename "$(dirname "$source_skill_md")")"
+        if [[ "$source_skill" == "assistant-memory" || "$source_skill" == "assistant-reflexion" ]]; then
+            continue
+        fi
         if [[ ! -d "$installed_skills_dir/$source_skill" ]]; then
             missing_assistant_skill="$source_skill"
             break
@@ -696,8 +604,8 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
 
     if [[ -n "$missing_assistant_skill" ]]; then
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
-    elif [[ "$source_assistant_skill_count" -lt "16" ]]; then
-        fail "expected source inventory to contain at least 16 assistant skills including the assistant-named custom fixture; found $source_assistant_skill_count"
+    elif [[ "$source_assistant_skill_count" -lt "14" ]]; then
+        fail "expected source inventory to contain at least 14 non-retired assistant skills including the assistant-named custom fixture; found $source_assistant_skill_count"
     elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
         fail "expected generated Codex AGENTS.md to stay lean and keep routing metadata in installed skills"
     elif [[ -n "$unexpected_installed_skill" ]]; then

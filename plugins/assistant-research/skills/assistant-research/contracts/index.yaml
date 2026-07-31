@@ -74,7 +74,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, conflicts, gaps, summary, insight_captured]
+        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, conflicts, gaps, summary]
     budget_words: 6000
 
 fallback:

@@ -1454,7 +1454,6 @@ path_allowed_for_case() {
         stale-journal-yields-to-current-evidence:.codex/task.md) return 0 ;;
         requirements-map-through-completion:.assistant-eval/requirement-map.json) return 0 ;;
         ordinary-medium-bounded-executor:.assistant-eval/execution-decision.json) return 0 ;;
-        learning-evidence-activates-reflexion:.assistant-eval/learning-controller.json) return 0 ;;
         medium-final-handoff-is-reconstructable:src/search-policy.js) return 0 ;;
         medium-final-handoff-is-reconstructable:.assistant-eval/test-pass-count) return 0 ;;
         medium-final-handoff-is-reconstructable:.assistant-eval/review-attempt) return 0 ;;
@@ -1600,38 +1599,6 @@ ordered_workflow_event_evidence() {
     ' "$jsonl"
 }
 
-learning_reflexion_event_evidence() {
-    local jsonl="$1"
-
-    jq -cs '
-      def command_text:
-        (.item.command // .item.command_line // "")
-        | if type == "array" then join(" ") else tostring end;
-      def successful_command:
-        .type == "item.completed"
-        and .item.type == "command_execution"
-        and (.item.exit_code | type == "number")
-        and .item.exit_code == 0
-        and .item.status == "completed";
-      def read_command:
-        successful_command
-        and (command_text | test("^((/bin/)?(bash|zsh|sh)[[:space:]]+-lc[[:space:]]+.?)?((/usr/bin/|/bin/)?(cat|sed|head|tail|awk|rg))[[:space:]].*assistant-reflexion/SKILL\\.md"));
-      def memory_reflect_call:
-        .type == "item.completed"
-        and .item.type == "mcp_tool_call"
-        and ([.item.tool?, .item.name?, .item.tool_name?]
-          | map(select(type == "string"))
-          | any(. == "memory_reflect"));
-      {
-        skill_loaded: any(.[]; read_command),
-        memory_reflect_succeeded: any(.[];
-          memory_reflect_call
-          and ((.item.status // "completed") == "completed")
-          and (.item.error? == null))
-      }
-    ' "$jsonl"
-}
-
 verify_workspace() {
     local case_id="$1"
     local workspace="$2"
@@ -1766,46 +1733,6 @@ verify_workspace() {
               and (.implementation_owner_scope | sort) == (["RED", "GREEN", "focused_verification"] | sort)'
             workspace_json_check "$artifact" "workspace-005" '.independent_reviewer == true'
             workspace_json_check "$artifact" "workspace-006" '.separated_workers_triggered == false'
-            ;;
-        learning-evidence-activates-reflexion)
-            status="passed"
-            artifact="$workspace/.assistant-eval/learning-controller.json"
-            workspace_artifact_preflight "$workspace" "$artifact" "workspace-001"
-            event_evidence="$(learning_reflexion_event_evidence "$jsonl")"
-            if jq -e '.skill_loaded == true' <<<"$event_evidence" >/dev/null 2>&1; then
-                workspace_record_check "workspace-002" true
-            else
-                workspace_record_check "workspace-002" false
-            fi
-            workspace_json_check "$artifact" "workspace-003" '
-              type == "object"
-              and (keys | sort) == ["durable_lesson_decision", "learning_capture_mode", "memory_reflect_status", "memory_trend_status", "no_save_rationale", "reflexion_loaded", "schema_version"]
-              and .schema_version == "1.0"
-              and .learning_capture_mode == "auto"
-              and .reflexion_loaded == true
-              and (.memory_reflect_status | IN("saved", "backend_unavailable", "policy_disallowed"))
-              and (.memory_trend_status | IN("checked", "backend_unavailable", "policy_disallowed", "not_configured"))
-              and (.durable_lesson_decision | IN("durable_saved", "skipped_not_durable", "backend_unavailable", "policy_disallowed", "refused_sensitive"))
-              and (.no_save_rationale | type == "string" and length <= 500)'
-            if [[ "$workspace_artifact_safe" == true ]] \
-                && jq -e --argjson reflect_succeeded "$(jq '.memory_reflect_succeeded' <<<"$event_evidence")" '
-                  if .memory_reflect_status == "saved" then
-                    .durable_lesson_decision == "durable_saved"
-                    and .no_save_rationale == ""
-                    and $reflect_succeeded
-                  else
-                    (.no_save_rationale | length >= 10)
-                    and (
-                      (.memory_reflect_status == "backend_unavailable" and .durable_lesson_decision == "backend_unavailable")
-                      or (.memory_reflect_status == "policy_disallowed" and .durable_lesson_decision == "policy_disallowed")
-                      or (.durable_lesson_decision | IN("skipped_not_durable", "refused_sensitive"))
-                    )
-                  end
-                ' "$artifact" >/dev/null 2>&1; then
-                workspace_record_check "workspace-004" true
-            else
-                workspace_record_check "workspace-004" false
-            fi
             ;;
         medium-final-handoff-is-reconstructable)
             status="passed"
@@ -1978,19 +1905,6 @@ seed_case_workspace() {
 - Safe default: limit 20 results when the caller omits a limit.
 EOF
             ;;
-        learning-evidence-activates-reflexion)
-            mkdir -p "$workspace/.codex"
-            printf '%s\n' \
-                '## Active evaluation task' \
-                'Current phase: DOCUMENT' \
-                'Learning capture mode: auto' \
-                'Learning capture reason: normal_default: evidence-triggered learning remains enabled' \
-                'Learning evidence signals: build_test_failure,user_correction' \
-                'Build/test failure: the initial validation accepted an invalid mode' \
-                'User correction: manual is not an allowed learning_capture_mode value' \
-                'Learning evaluation signal: lesson-bearing evidence is unresolved' \
-                'Exact next action: run the Learning Controller and record the bounded grading artifact' >"$workspace/.codex/task.md"
-            ;;
         medium-final-handoff-is-reconstructable)
             mkdir -p "$workspace/src" "$workspace/tests"
             cat >"$workspace/CHANGE_SUMMARY.md" <<'EOF'
@@ -2147,12 +2061,6 @@ execute_one_run() {
     prompt_file="$run_raw/prompt.txt"
     mkdir -p "$workspace/.agents/skills/assistant-workflow"
     cp -R "$instruction_dir"/. "$workspace/.agents/skills/assistant-workflow/"
-    if [[ "$case_id" == learning-evidence-activates-reflexion ]]; then
-        mkdir -p "$workspace/.agents/skills/assistant-reflexion"
-        while IFS= read -r entry; do
-            cp -R "$entry" "$workspace/.agents/skills/assistant-reflexion/"
-        done < <(find "$REPO_ROOT/skills/assistant-reflexion" -mindepth 1 -maxdepth 1 ! -name evals ! -name .DS_Store -print | LC_ALL=C sort)
-    fi
     seed_case_workspace "$workspace" "$case_id"
     seed_workspace_hash="$(hash_seed_workspace "$workspace")"
     git -C "$workspace" init -q

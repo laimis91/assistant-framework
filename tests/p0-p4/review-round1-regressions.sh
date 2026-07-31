@@ -392,20 +392,15 @@ else
     fail "workflow guidance still makes explicit phase markers universal instead of strict/project-policy only"
 fi
 
-test_start "native learning contracts activate auto mode only for concrete lesson-bearing evidence"
+test_start "workflow contracts retire Learning Controller persistence while retaining non-blocking metrics"
 learning_failures=()
-if ! grep -Fq 'auto requires the Learning Controller only when concrete lesson-bearing evidence exists' "$workflow_input"; then
-    learning_failures+=("input contract lost concrete-evidence activation for learning auto mode")
+if rg -n -i -e 'Learning Controller' -e 'learning_capture_mode' -e 'memory_(reflect|signal|trend)' \
+    "$workflow_input" "$workflow_output" "$workflow_gates" "$workflow_controller" >/tmp/p0p4-workflow-retired-learning.out; then
+    learning_failures+=("workflow contracts retain retired learning-controller persistence")
 fi
-if ! grep -Fq 'auto activates only for concrete review findings, build/test failures, user corrections, or memory trend signals' "$workflow_output"; then
-    learning_failures+=("output contract broadened learning auto mode beyond concrete evidence")
-fi
-if ! grep -Fq 'learning_capture_mode == required or (learning_capture_mode == auto and concrete review finding, build/test failure, user correction, or memory trend evidence exists)' "$workflow_gates"; then
-    learning_failures+=("Document learning gate lost the provider-neutral concrete-evidence condition")
-fi
-if ! grep -Fq 'Metrics,' "$workflow_controller" \
-    || ! grep -Fq 'reflexion, and memory remain optional and non-blocking.' "$workflow_controller"; then
-    learning_failures+=("controller no longer keeps learning-related persistence optional and non-blocking")
+completion_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/completion-controller.md"
+if ! rg -qi 'metrics.*(optional|non-blocking|never a reason to block)|does not make metrics blocking' "$completion_controller"; then
+    learning_failures+=("controller no longer keeps metrics optional and non-blocking")
 fi
 if [[ "${#learning_failures[@]}" -eq 0 ]]; then
     pass

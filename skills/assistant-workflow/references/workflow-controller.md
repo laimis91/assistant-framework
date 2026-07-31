@@ -23,7 +23,7 @@ file centralizes decision boundaries that cut across phase details while
 - Load this reference from `assistant-workflow` when a task needs shared
   workflow routing or default decisions.
 - Use it before phase-specific detail when selecting `controller_intensity`,
-  `plan_mode`, `workflow_state_mode`, `manual_verification_mode`, `learning_capture_mode`,
+  `plan_mode`, `workflow_state_mode`, `manual_verification_mode`,
   `harness_capable`, `qa_evaluation_mode`, movement direction, or review/QA
   ownership.
 - Keep the root `SKILL.md` outcome-shaped. Keep phase mechanics in
@@ -51,7 +51,7 @@ file centralizes decision boundaries that cut across phase details while
   `workflow_state_mode=inline`, `subagent_policy_state=not_required`, and
   `subagent_execution_mode=not_applicable`; do not require Code Writer,
   Builder/Tester, or independent Reviewer dispatch evidence. It does not require
-  a journal, metrics, reflexion, memory, or manual verification unless separately
+  a journal, metrics, or manual verification unless separately
   triggered.
 - `standard`: ordinary medium+ source-changing work defaults to
   `controller_intensity=standard`, `harness_capable=false`, and
@@ -102,18 +102,6 @@ gates.
   subjective or UI acceptance, external effects, destructive/migration work,
   or inadequate automated verification. Optional steps do not create a wait,
   and user confirmation is not a ritual completion gate.
-- Use `learning_capture_mode=auto` normally. The Learning Controller becomes
-  required only for explicit `required` mode or concrete review findings,
-  build/test failures, user corrections, or memory trend signals. Metrics,
-  reflexion, and memory remain optional and non-blocking.
-- When `memory_signal` is available, record one fixed-type signal for each
-  concrete correction, pivot, frustration, or non-routine approval. Pass only
-  `type` and a bounded ASCII project slug; never pass raw user text, prompt
-  content, secrets, PII, or a free-form detail. This prompt-time capture is not
-  a lifecycle hook and does not make routine reflection mandatory.
-- Update the journal's `Learning evidence signals` ledger when concrete
-  review, build/test, correction, or trend evidence appears; use `none` only
-  while no such evidence exists.
 
 ## Move Forward, Step Back, or Replan
 

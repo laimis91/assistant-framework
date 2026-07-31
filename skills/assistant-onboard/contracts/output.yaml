@@ -42,7 +42,7 @@ artifacts:
   - name: artifacts
     type: string[]
     required: true
-    description: "Orientation or memory files created/updated, or ['none'] if no files changed"
+    description: "Orientation files created/updated, or ['none'] if no files changed"
     validation: "Must accurately reflect filesystem writes"
     on_fail: "Set artifacts to written paths or ['none'] when no orientation artifact was created"
 
@@ -52,13 +52,6 @@ artifacts:
     description: "Whether a project-local orientation artifact was created or updated"
     validation: "Must accurately reflect whether artifacts[] includes a file write"
     on_fail: "Set artifact_updated true only when artifacts[] names written files; otherwise set false"
-
-  - name: durable_memory_updated
-    type: boolean
-    required: true
-    description: "Whether approved local durable memory/knowledge graph was updated separately from orientation artifacts"
-    validation: "True only when a policy-approved durable memory backend was updated; false when memory was unavailable, disallowed, or skipped"
-    on_fail: "Set durable_memory_updated according to the approved durable memory backend result, not orientation artifacts"
 
   - name: questions
     type: string[]

@@ -16,8 +16,6 @@ Write to `{agent_state_dir}/task.md` in the project root when a local state dire
 - After each Build step: Progress, Artifact Registry, Milestones
 - After key decisions, new user constraints, review passes, verification summary, or user review feedback
 - After harness-capable events, Pivot/Restart Decisions, typed artifact refs, or QA results when applicable
-- During Document, after lesson-bearing evidence is checked when
-  `learning_capture_mode=required` or auto activates
 
 ## Template
 
@@ -43,9 +41,6 @@ Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REV
 Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
 Manual verification mode: [not_required | optional | required]
-Learning capture mode: [auto | not_required | required]
-Learning capture reason: [normal_default: ... | explicit_request: ... | approved_plan: ... | policy_disallowed: ... | explicit_exclusion: ...]
-Learning evidence signals: [none | review_finding | build_test_failure | user_correction | memory_trend; comma-separated]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification defaults:
@@ -270,23 +265,6 @@ do not start the next slice until the current one is `VERIFIED`
 - Should-fix deferred: [list any remaining]
 - Nits noted: [count, not fixed]
 
-## Document Log
-
-### Learning Controller
-[include only when learning_capture_mode=required or auto found concrete lesson-bearing evidence]
-- Memory trend checked: [checked | backend_unavailable | policy_disallowed | not_configured]
-- Learning evidence reviewed:
-  - [review_finding | build_test_failure | user_correction | memory_trend | none]: [source reference] — [summary, or none-with-reason]
-- Review findings considered:
-  - [finding summary and lesson decision, or none-with-reason]
-- Build/test failures considered:
-  - [failure summary and lesson decision, or none-with-reason]
-- User corrections considered:
-  - [correction summary and lesson decision, or none-with-reason]
-- Durable lesson decision: [durable_saved | durable_updated | skipped_not_durable | backend_unavailable | policy_disallowed | refused_sensitive]
-- Persistence evidence: [memory_reflect/memory_add_insight/backend evidence when saved or updated, else N/A]
-- No-save rationale: [required when no durable write occurred; do not use ad hoc markdown as cross-session memory when backend is available]
-
 ## Review Notes
 [filled during user review / handoff]
 - [ ] [issue or change request]
@@ -301,8 +279,8 @@ do not start the next slice until the current one is `VERIFIED`
 4. **Decompose/Plan** persists the slice manifest for medium+ work. Plan is omitted only for eligible `plan_mode=none`, inline mode records a no-wait compact plan, and approval-required mode captures approval.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
 6. **Review** owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
-7. **Document/Handoff** solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, Review Notes, and Learning Controller only when its mode/evidence activates.
-8. **Done** sets `Status: DONE` and `Task state: completed`, records only evidence-backed durable lessons when allowed, and leaves the ignored state file unless cleanup is requested.
+7. **Document/Handoff** solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
+8. **Done** sets `Status: DONE` and `Task state: completed`, then leaves the ignored state file unless cleanup is requested.
 
 ## Rules
 

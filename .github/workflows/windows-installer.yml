@@ -7,8 +7,8 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
-      - 'memory-protocol.md'
-      - 'graph-seed.jsonl'
+      - 'tools/cleanup-memory-graph.sh'
+      - 'tools/cleanup-memory-graph.ps1'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -17,6 +17,7 @@ on:
       - 'skills/**'
       - 'tests/windows/**'
       - 'tests/p0-p4/windows-installer-contracts.sh'
+      - 'tests/p0-p4/memory-retirement-contracts.sh'
       - 'tools/**'
   push:
     branches:
@@ -26,8 +27,8 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
-      - 'memory-protocol.md'
-      - 'graph-seed.jsonl'
+      - 'tools/cleanup-memory-graph.sh'
+      - 'tools/cleanup-memory-graph.ps1'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -36,6 +37,7 @@ on:
       - 'skills/**'
       - 'tests/windows/**'
       - 'tests/p0-p4/windows-installer-contracts.sh'
+      - 'tests/p0-p4/memory-retirement-contracts.sh'
       - 'tools/**'
 
 permissions:
@@ -49,11 +51,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Set up .NET 8 SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '8.0.x'
-
       - name: Run Windows PowerShell 5.1 contracts
         shell: powershell
         run: .\tests\windows\installer-contracts.ps1 -FailOnSkip
@@ -64,11 +61,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
-
-      - name: Set up .NET 8 SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '8.0.x'
 
       - name: Run PowerShell 7 contracts
         shell: pwsh

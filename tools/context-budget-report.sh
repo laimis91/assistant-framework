@@ -285,13 +285,9 @@ PROJECT_AGENTS_FILE="$REPO_ROOT/AGENTS.md"
 GLOBAL_INSTRUCTIONS_FILE="$INSTALL_HOME/.codex/AGENTS.md"
 
 GLOBAL_AGENTS_BLOCK="$WORK_ROOT/generated-global-agents.md"
-MEMORY_BLOCK="$WORK_ROOT/generated-memory-protocol.md"
 extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \
     ASSISTANT_FRAMEWORK_AGENTS_MD_START ASSISTANT_FRAMEWORK_AGENTS_MD_END \
     "$GLOBAL_AGENTS_BLOCK"
-extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \
-    ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END \
-    "$MEMORY_BLOCK"
 
 CATALOG_FILE="$WORK_ROOT/native-skill-catalog-descriptions.txt"
 : >"$CATALOG_FILE"
@@ -313,14 +309,13 @@ build_selected_boundaries "$SOURCE_SKILL_DIR" "$SELECTED_INITIAL_FILE" "$SELECTE
 
 read -r PROJECT_WORDS PROJECT_BYTES < <(measure_file "$PROJECT_AGENTS_FILE")
 read -r GLOBAL_WORDS GLOBAL_BYTES < <(measure_file "$GLOBAL_AGENTS_BLOCK")
-read -r MEMORY_WORDS MEMORY_BYTES < <(measure_file "$MEMORY_BLOCK")
 read -r CATALOG_WORDS CATALOG_BYTES < <(measure_file "$CATALOG_FILE")
 CATALOG_CHARACTERS="$(wc -m <"$CATALOG_FILE" | tr -d ' ')"
 read -r INITIAL_WORDS INITIAL_BYTES < <(measure_file "$SELECTED_INITIAL_FILE")
 read -r ENTRY_WORDS ENTRY_BYTES < <(measure_file "$SELECTED_ENTRY_FILE")
 
-STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + MEMORY_WORDS + CATALOG_WORDS))
-STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + MEMORY_BYTES + CATALOG_BYTES))
+STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + CATALOG_WORDS))
+STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + CATALOG_BYTES))
 TOTAL_INITIAL_WORDS=$((STANDING_WORDS + INITIAL_WORDS))
 TOTAL_INITIAL_BYTES=$((STANDING_BYTES + INITIAL_BYTES))
 TOTAL_ENTRY_WORDS=$((STANDING_WORDS + ENTRY_WORDS))
@@ -340,8 +335,6 @@ jq -n \
     --argjson project_bytes "$PROJECT_BYTES" \
     --argjson global_words "$GLOBAL_WORDS" \
     --argjson global_bytes "$GLOBAL_BYTES" \
-    --argjson memory_words "$MEMORY_WORDS" \
-    --argjson memory_bytes "$MEMORY_BYTES" \
     --argjson catalog_words "$CATALOG_WORDS" \
     --argjson catalog_bytes "$CATALOG_BYTES" \
     --argjson catalog_characters "$CATALOG_CHARACTERS" \
@@ -362,7 +355,6 @@ jq -n \
       components: {
         project_agents: {words: $project_words, bytes: $project_bytes},
         generated_global_agents: {words: $global_words, bytes: $global_bytes},
-        generated_memory_protocol: {words: $memory_words, bytes: $memory_bytes},
         native_skill_catalog_descriptions: {
           words: $catalog_words,
           bytes: $catalog_bytes,

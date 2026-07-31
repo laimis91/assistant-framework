@@ -161,14 +161,7 @@ fixture, and JSONL events. The runtime prompt
 contains only setup context and the user request. Expected behavior, pass
 criteria, fail signals, and machine grading anchors remain hidden from Codex.
 Skill-local `evals/` directories are excluded from materialized variants, and
-the native `.agents/skills/assistant-workflow` copy is exposed. The
-`learning-evidence-activates-reflexion` case additionally exposes the trusted
-canonical `assistant-reflexion` skill and includes those bytes in the seed hash.
-Its verifier requires a real JSONL command event that reads
-`assistant-reflexion/SKILL.md`; it then accepts either a traced successful
-`memory_reflect` save or a bounded explicit backend/policy no-save artifact.
-The fake adapter covers missing-load and invalid-no-save failures, while a real
-`--execute` run remains separate quota-bearing evidence. Seeded Git baselines
+the native `.agents/skills/assistant-workflow` copy is exposed. Seeded Git baselines
 make unexpected created, changed, or deleted paths measurable; review-only
 cases fail verification on any workspace edit.
 The `medium-final-handoff-is-reconstructable` case also seeds an incomplete
@@ -452,8 +445,8 @@ The reporter requires a successful isolated temporary install and emits counts,
 not instruction text. Installation failures stop the report instead of emitting
 partial or zero-filled inventory. `project_agents` measures the repository
 `AGENTS.md`.
-`generated_global_agents` and `generated_memory_protocol` separately measure
-their installer-owned marker blocks. `native_skill_catalog_descriptions`
+`generated_global_agents` measures its installer-owned marker block.
+`native_skill_catalog_descriptions`
 measures the first-class `assistant-*` description catalog. The selected
 skill's initial boundary is `SKILL.md` plus `contracts/index.yaml` when present;
 its entry boundary adds references declared for the `entry` load set and only
@@ -486,7 +479,7 @@ those skill fixtures with the same provider-neutral constraints as the framework
 instruction eval runner. It uses local shell and `jq` only; it does not call
 provider SDKs, model APIs, or network services.
 
-This slice now covers all 16 first-class `assistant-*` skills. Local-only Unity
+This slice now covers all 14 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is
 passed. The current tracked first-class fixtures are:
 
@@ -495,9 +488,7 @@ passed. The current tracked first-class fixtures are:
 - `skills/assistant-diagrams/evals/cases.json`
 - `skills/assistant-docs/evals/cases.json`
 - `skills/assistant-ideate/evals/cases.json`
-- `skills/assistant-memory/evals/cases.json`
 - `skills/assistant-onboard/evals/cases.json`
-- `skills/assistant-reflexion/evals/cases.json`
 - `skills/assistant-research/evals/cases.json`
 - `skills/assistant-review/evals/cases.json`
 - `skills/assistant-security/evals/cases.json`

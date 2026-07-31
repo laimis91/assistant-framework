@@ -28,10 +28,6 @@ tools/plugins/sync-plugin-skills.sh --apply
 # Contract suites
 ./tests/test-p0-p4-contracts.sh
 
-# Memory Graph (.NET 8)
-dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal
-dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal
-
 # Cognitive complexity tool
 dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:minimal
 ```

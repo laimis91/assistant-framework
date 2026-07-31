@@ -2,7 +2,7 @@
 
 ## Goal
 
-Extend candidate-search beyond `assistant-workflow` into the thinking, ideation, review, and reflexion skills while staying agent-agnostic, local-first, and company-safe.
+Extend candidate-search beyond `assistant-workflow` into the thinking, ideation, and review skills while staying agent-agnostic, local-first, and company-safe.
 
 ## Context from Phase 1
 
@@ -13,7 +13,6 @@ Phase 1 added workflow-level `search_mode`, a candidate-search reference, candid
 - `assistant-thinking` can run candidate search as a structured reasoning method when a thinking task is open-ended or high uncertainty.
 - `assistant-ideate` supports candidate lineage and search operators without replacing its existing diverge/converge/refine flow.
 - `assistant-review` can evaluate pre-code candidates with a dedicated candidate rubric instead of misusing the code-review rubric.
-- `assistant-reflexion` can capture which search operator, verifier, or rubric dimension helped, when policy allows local lessons.
 - Root skill changes are synchronized to plugin-local copies under `plugins/assistant-research`, `plugins/assistant-dev`, and `plugins/assistant-core` as applicable.
 - Contracts, phase gates, handoffs, eval fixtures, and P0-P4 contract tests are updated together.
 
@@ -28,8 +27,6 @@ Phase 1 added workflow-level `search_mode`, a candidate-search reference, candid
 - `skills/assistant-review/SKILL.md`
 - `skills/assistant-review/contracts/*`
 - `skills/assistant-review/references/review-rubric.md` or a new `references/candidate-rubric.md`
-- `skills/assistant-reflexion/SKILL.md`
-- `skills/assistant-reflexion/contracts/*`
 - matching plugin copies under `plugins/*/skills/*`
 - `tests/p0-p4/*.sh`
 
@@ -55,13 +52,7 @@ Phase 1 added workflow-level `search_mode`, a candidate-search reference, candid
 - Make it clear that code review starts only after code exists.
 - Add handoff/output fields for candidate-review verdicts when a reviewer requests a pivot.
 
-### Task 4: Reflexion learning hook
-
-- Add optional local lesson fields for useful search operators/rubric dimensions.
-- Include policy gate: write only when local memory/reflexion is configured and allowed.
-- Avoid storing rejected proprietary implementation details; summarize patterns and redactions.
-
-### Task 5: Validation and parity
+### Task 4: Validation and parity
 
 - Add P0-P4 tests for each skill's candidate-search contracts.
 - Update eval fixtures for provider-neutral expected behavior.
@@ -80,7 +71,7 @@ bash ./tests/p0-p4/skill-eval-contracts.sh
 bash ./tests/p0-p4/plugin-manifest-contracts.sh
 ```
 
-Add focused tests for the modified thinking/ideation/review/reflexion contracts.
+Add focused tests for the modified thinking, ideation, and review contracts.
 
 ## Risks
 

@@ -11,7 +11,7 @@ else
     fail "unexpected .DS_Store file under tests/: $ds_store_file"
 fi
 
-test_start "general CI covers framework contracts, installs, mirrors, and Memory Graph"
+test_start "general CI covers framework contracts, installs, and mirrors without retired runtime jobs"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 framework_validation_failures=()
 if [[ ! -f "$framework_validation_workflow" ]]; then
@@ -28,25 +28,27 @@ else
         "tools/plugins/sync-plugin-skills.sh --check" \
         "./install.sh --agent codex --dry-run" \
         "./install.sh --agent claude --dry-run" \
-        "./install.sh --agent gemini --dry-run" \
-        "dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal"; do
+        "./install.sh --agent gemini --dry-run"; do
         if ! grep -Fq -- "$term" "$framework_validation_workflow"; then
             framework_validation_failures+=("framework-validation.yml: $term")
         fi
     done
 
-    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
-        || framework_validation_failures+=("framework-validation.yml: expected two checkout@v5 steps")
-    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
-        || framework_validation_failures+=("framework-validation.yml: every checkout must disable credential persistence")
-    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
-        || framework_validation_failures+=("framework-validation.yml: every job must use the bounded timeout")
+    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: expected one checkout@v5 step")
+    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
+    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: the framework-contract job must use the bounded timeout")
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")
     [[ "$(grep -Ec '^[[:space:]]+contents: read[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one read-only contents permission")
     if grep -Eq 'pull_request_target|secrets\.' "$framework_validation_workflow"; then
         framework_validation_failures+=("framework-validation.yml: privileged PR events and secret references are forbidden")
+    fi
+    if rg -n -i -e 'memory graph' -e 'tools/memory-graph' -e 'MemoryGraph\.Tests' "$framework_validation_workflow" >/tmp/p0p4-framework-validation-retired-runtime.out; then
+        framework_validation_failures+=("framework-validation.yml: retired Memory Graph job or invocation remains")
     fi
 fi
 if [[ "${#framework_validation_failures[@]}" -eq 0 ]]; then

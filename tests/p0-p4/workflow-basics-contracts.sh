@@ -335,7 +335,7 @@ fi
 skill_entrypoint="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
 for term in \
     "Load \`references/workflow-controller.md\` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions." \
-    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation."; do
+    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation."; do
     if ! grep -Fq "$term" "$skill_entrypoint"; then
         controller_link_failures+=("SKILL.md missing lean controller term: $term")
     fi

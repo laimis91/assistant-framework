@@ -23,15 +23,11 @@ Validate and report the planned work without changing the filesystem.
 .PARAMETER NoHooks
 Deprecated compatibility switch. All installs are hookless.
 
-.PARAMETER AcceptMemoryProtocol
-On a first Claude or Gemini install, append the memory protocol without an
-interactive prompt. Existing installer-owned protocol blocks are always updated.
-
 .EXAMPLE
 .\install.ps1 -Agent codex
 
 .EXAMPLE
-.\install.ps1 -Agent claude -Skill assistant-workflow -AcceptMemoryProtocol
+.\install.ps1 -Agent claude -Skill assistant-workflow
 
 .EXAMPLE
 .\install.ps1 -Agent codex -Plugin assistant-dev -DryRun
@@ -43,7 +39,6 @@ param(
     [string]$Plugin,
     [switch]$DryRun,
     [switch]$NoHooks,
-    [switch]$AcceptMemoryProtocol,
     [Alias('h')]
     [switch]$Help
 )
@@ -57,7 +52,6 @@ $script:MaxJsonInputBytes = 4 * 1024 * 1024
 $script:MaxJsonIdentityDepth = 64
 $script:MaxJsonIdentityProperties = 10000
 $script:MaxJsonIdentityValues = 10000
-$script:MemoryGraphStartupTimeoutSeconds = 120
 $script:SupportedPluginProfiles = @('assistant-core', 'assistant-research', 'assistant-dev')
 $script:LegacyHookEntrypoints = @(
     'session-start.sh',
@@ -101,7 +95,6 @@ Options:
   -Plugin <name>            Install assistant-core, assistant-research, or assistant-dev
   -DryRun                   Validate and show work without changing files
   -NoHooks                  Deprecated no-op; installs are hookless
-  -AcceptMemoryProtocol     Append protocol on first Claude/Gemini install
   -Help                     Show this help
 
 The installer mirrors managed skill, tool, and eval-doc directories. Files
@@ -1718,23 +1711,6 @@ function Save-JsonObject {
     Write-AtomicText -LiteralPath $LiteralPath -Content ($json.TrimEnd() + [Environment]::NewLine)
 }
 
-function Assert-JsonMemoryGraphConfigCanBeUpdated {
-    param([Parameter(Mandatory = $true)][string]$ConfigFile)
-    if (-not (Test-Path -LiteralPath $ConfigFile -PathType Leaf)) { return }
-    $document = Read-JsonObject -LiteralPath $ConfigFile
-    if ($null -eq $document) { return }
-    $topLevelVariant = Get-JsonPropertyCaseVariant -Object $document -Name 'mcpServers'
-    if ($null -ne $topLevelVariant) {
-        throw "JSON property '$($topLevelVariant.Name)' in $ConfigFile conflicts with installer-owned exact property 'mcpServers'; preserved unchanged."
-    }
-    $servers = Get-JsonProperty -Object $document -Name 'mcpServers'
-    if ($null -eq $servers -or $servers -is [System.Array] -or $servers -is [string] -or $servers -is [ValueType]) { return }
-    $serverVariant = Get-JsonPropertyCaseVariant -Object $servers -Name 'memory-graph'
-    if ($null -ne $serverVariant) {
-        throw "JSON property '$($serverVariant.Name)' in $ConfigFile conflicts with installer-owned exact property 'memory-graph'; preserved unchanged."
-    }
-}
-
 function Get-PluginProfileSkills {
     param([string]$PluginName, [string]$SkillsSource)
     if ($script:SupportedPluginProfiles -notcontains $PluginName) {
@@ -1909,479 +1885,6 @@ function Get-CurrentPowerShellExecutable {
         throw 'Cannot determine the current PowerShell executable for MCP registration.'
     }
     return $path
-}
-
-function Convert-ToTomlString {
-    param([string]$Value)
-    return ($Value | ConvertTo-Json -Compress)
-}
-
-function Convert-TomlBasicStringToValue {
-    param([string]$Text)
-    if ($Text.Length -lt 2 -or -not $Text.StartsWith('"') -or -not $Text.EndsWith('"')) {
-        return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-    }
-    $builder = New-Object System.Text.StringBuilder
-    for ($index = 1; $index -lt $Text.Length - 1; $index++) {
-        $character = $Text[$index]
-        $codePoint = [int]$character
-        if ($character -ne '\') {
-            if ($character -eq '"' -or $codePoint -le 8 -or ($codePoint -ge 10 -and $codePoint -le 31) -or $codePoint -eq 127) {
-                return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-            }
-            [void]$builder.Append($character)
-            continue
-        }
-        $index++
-        if ($index -ge $Text.Length - 1) {
-            return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-        }
-        $escape = $Text[$index]
-        $simpleEscapes = New-OrdinalDictionary
-        $simpleEscapes.Add('"', '"')
-        $simpleEscapes.Add('\', '\')
-        $simpleEscapes.Add('b', [char]8)
-        $simpleEscapes.Add('t', [char]9)
-        $simpleEscapes.Add('n', [char]10)
-        $simpleEscapes.Add('f', [char]12)
-        $simpleEscapes.Add('r', [char]13)
-        if ($simpleEscapes.ContainsKey([string]$escape)) {
-            [void]$builder.Append($simpleEscapes[[string]$escape])
-            continue
-        }
-        if ($escape -cne 'u' -and $escape -cne 'U') {
-            return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-        }
-        $digitCount = if ($escape -ceq 'u') { 4 } else { 8 }
-        if ($index + $digitCount -ge $Text.Length) {
-            return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-        }
-        $digits = $Text.Substring($index + 1, $digitCount)
-        if ($digits -cnotmatch '^[0-9A-Fa-f]+$') {
-            return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-        }
-        try {
-            $scalar = [Convert]::ToInt32($digits, 16)
-            [void]$builder.Append([char]::ConvertFromUtf32($scalar))
-        }
-        catch {
-            return (New-Object PSObject -Property @{ Valid = $false; Value = $null })
-        }
-        $index += $digitCount
-    }
-    return (New-Object PSObject -Property @{ Valid = $true; Value = $builder.ToString() })
-}
-
-function Convert-TomlDottedNameToCanonical {
-    param([string]$Name)
-    $part = '(?:[A-Za-z0-9_-]+|"(?:\\.|[^"\\])*"|''[^'']*'')'
-    $match = [regex]::Match($Name, ('^\s*(?<part>' + $part + ')\s*(?:\.\s*(?<part>' + $part + ')\s*)*$'))
-    if (-not $match.Success) { return $null }
-    $parts = New-Object System.Collections.Generic.List[string]
-    foreach ($capture in $match.Groups['part'].Captures) {
-        $value = $capture.Value
-        if ($value.StartsWith('"') -and $value.EndsWith('"')) {
-            $decoded = Convert-TomlBasicStringToValue -Text $value
-            if (-not $decoded.Valid) { return $null }
-            $value = $decoded.Value
-        }
-        elseif ($value.StartsWith("'") -and $value.EndsWith("'")) {
-            $value = $value.Substring(1, $value.Length - 2)
-            if ($value -cmatch '[\x00-\x08\x0A-\x1F\x7F]') { return $null }
-        }
-        $parts.Add($value)
-    }
-    return ($parts -join [char]0x1f)
-}
-
-function Get-TomlCodeLine {
-    param([string]$Line)
-    $builder = New-Object System.Text.StringBuilder
-    $quote = [char]0
-    $escaped = $false
-    foreach ($character in $Line.ToCharArray()) {
-        if ($quote -ne [char]0) {
-            [void]$builder.Append($character)
-            if ($quote -eq '"' -and $escaped) { $escaped = $false; continue }
-            if ($quote -eq '"' -and $character -eq '\') { $escaped = $true; continue }
-            if ($character -eq $quote) { $quote = [char]0 }
-            continue
-        }
-        if ($character -eq '#') { break }
-        [void]$builder.Append($character)
-        if ($character -eq '"' -or $character -eq "'") { $quote = $character }
-    }
-    return (New-Object PSObject -Property @{ Valid = ($quote -eq [char]0); Text = $builder.ToString() })
-}
-
-function Split-TomlTopLevelValues {
-    param([string]$Text)
-    $items = New-Object System.Collections.Generic.List[string]
-    $builder = New-Object System.Text.StringBuilder
-    $quote = [char]0
-    $escaped = $false
-    $square = 0
-    $curly = 0
-    foreach ($character in $Text.ToCharArray()) {
-        if ($quote -ne [char]0) {
-            [void]$builder.Append($character)
-            if ($quote -eq '"' -and $escaped) { $escaped = $false; continue }
-            if ($quote -eq '"' -and $character -eq '\') { $escaped = $true; continue }
-            if ($character -eq $quote) { $quote = [char]0 }
-            continue
-        }
-        if ($character -eq '"' -or $character -eq "'") {
-            $quote = $character
-            [void]$builder.Append($character)
-            continue
-        }
-        if ($character -eq '[') { $square++ }
-        elseif ($character -eq ']') { $square-- }
-        elseif ($character -eq '{') { $curly++ }
-        elseif ($character -eq '}') { $curly-- }
-        if ($character -eq ',' -and $square -eq 0 -and $curly -eq 0) {
-            $items.Add($builder.ToString().Trim())
-            [void]$builder.Clear()
-        }
-        else {
-            [void]$builder.Append($character)
-        }
-    }
-    $items.Add($builder.ToString().Trim())
-    return (New-Object PSObject -Property @{ Valid = ($quote -eq [char]0 -and $square -eq 0 -and $curly -eq 0); Items = @($items.ToArray()) })
-}
-
-function Test-TomlNumericValue {
-    param([string]$Value)
-    if ($Value -cmatch '^[+-]?(?:inf|nan)$') { return $true }
-    # Radix integers are valid TOML but intentionally outside this conservative
-    # editor's subset; rejecting them avoids range/sign ambiguity.
-    if ($Value -cmatch '^[+-]?0[xob]') { return $false }
-    $clean = $Value.Replace('_', '')
-    if ($Value -cmatch '^[+-]?(?:0|[1-9](?:_?\d)*)$') {
-        $integer = [long]0
-        return [long]::TryParse(
-            $clean,
-            [System.Globalization.NumberStyles]::AllowLeadingSign,
-            [System.Globalization.CultureInfo]::InvariantCulture,
-            [ref]$integer
-        )
-    }
-    $floatShape = '^[+-]?(?:0|[1-9](?:_?\d)*)(?:(?:\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|[eE][+-]?\d(?:_?\d)*)$'
-    if ($Value -cnotmatch $floatShape) { return $false }
-    $number = [double]0
-    if (-not [double]::TryParse(
-        $clean,
-        [System.Globalization.NumberStyles]::Float,
-        [System.Globalization.CultureInfo]::InvariantCulture,
-        [ref]$number
-    )) { return $false }
-    return -not [double]::IsInfinity($number) -and -not [double]::IsNaN($number)
-}
-
-function Test-TomlValueShape {
-    param([string]$Value)
-    $square = 0
-    $curly = 0
-    $quote = [char]0
-    $escaped = $false
-    foreach ($character in $Value.ToCharArray()) {
-        if ($quote -ne [char]0) {
-            if ($quote -eq '"' -and $escaped) { $escaped = $false; continue }
-            if ($quote -eq '"' -and $character -eq '\') { $escaped = $true; continue }
-            if ($character -eq $quote) { $quote = [char]0 }
-            continue
-        }
-        if ($character -eq '"' -or $character -eq "'") { $quote = $character; continue }
-        if ($character -eq '[') { $square++ }
-        elseif ($character -eq ']') { $square--; if ($square -lt 0) { return $false } }
-        elseif ($character -eq '{') { $curly++ }
-        elseif ($character -eq '}') { $curly--; if ($curly -lt 0) { return $false } }
-    }
-    if ($quote -ne [char]0 -or $square -ne 0 -or $curly -ne 0) { return $false }
-    $trimmed = $Value.Trim()
-    if ([string]::IsNullOrWhiteSpace($trimmed)) { return $false }
-    if ($trimmed.StartsWith('"')) {
-        return (Convert-TomlBasicStringToValue -Text $trimmed).Valid
-    }
-    if ($trimmed.StartsWith("'")) {
-        return $trimmed -cmatch "^'[^'\x00-\x08\x0A-\x1F\x7F]*'$"
-    }
-    if ($trimmed.StartsWith('[')) {
-        if (-not $trimmed.EndsWith(']')) { return $false }
-        $inner = $trimmed.Substring(1, $trimmed.Length - 2).Trim()
-        if ([string]::IsNullOrWhiteSpace($inner)) { return $true }
-        $split = Split-TomlTopLevelValues -Text $inner
-        if (-not $split.Valid) { return $false }
-        $values = @($split.Items)
-        if ($values.Count -gt 0 -and [string]::IsNullOrWhiteSpace($values[$values.Count - 1])) {
-            $values = @($values | Select-Object -First ($values.Count - 1))
-        }
-        foreach ($item in $values) {
-            if ([string]::IsNullOrWhiteSpace($item) -or -not (Test-TomlValueShape -Value $item)) { return $false }
-        }
-        return $true
-    }
-    if ($trimmed.StartsWith('{')) {
-        if (-not $trimmed.EndsWith('}')) { return $false }
-        $inner = $trimmed.Substring(1, $trimmed.Length - 2).Trim()
-        if ([string]::IsNullOrWhiteSpace($inner)) { return $true }
-        $split = Split-TomlTopLevelValues -Text $inner
-        if (-not $split.Valid) { return $false }
-        $inlineKeys = New-OrdinalDictionary
-        foreach ($item in @($split.Items)) {
-            $assignment = [regex]::Match($item, '^(?<key>.+?)\s*=\s*(?<value>.+)$')
-            if (-not $assignment.Success) { return $false }
-            $rawKey = $assignment.Groups['key'].Value
-            $key = Convert-TomlDottedNameToCanonical -Name $rawKey
-            if ($null -eq $key -or $key.Contains([string][char]0x1f) -or
-                $inlineKeys.ContainsKey($key) -or
-                -not (Test-TomlValueShape -Value $assignment.Groups['value'].Value)) { return $false }
-            $inlineKeys[$key] = $true
-        }
-        return $true
-    }
-    if ($trimmed -cmatch '^(?:true|false)$') { return $true }
-    if (Test-TomlNumericValue -Value $trimmed) { return $true }
-    # Date/time literals are intentionally outside this conservative editor's
-    # supported subset; shape-only checks can accept impossible calendar data.
-    return $false
-}
-
-function Test-CodexTomlDocument {
-    param([string]$Text)
-    $separator = [string][char]0x1f
-    $tables = New-OrdinalDictionary
-    $keys = New-OrdinalDictionary
-    $valuePaths = New-OrdinalDictionary
-    $currentTable = ''
-    $currentCanonicalTable = ''
-    foreach ($line in @($Text -split '\r?\n')) {
-        $codeResult = Get-TomlCodeLine -Line $line
-        if (-not $codeResult.Valid) { return $false }
-        $code = $codeResult.Text.Trim()
-        if ([string]::IsNullOrWhiteSpace($code)) { continue }
-
-        if ($code.StartsWith('[')) {
-            $tableMatch = [regex]::Match($code, '^\[(?<array>\[?)(?<name>.+?)\](?<arrayEnd>\]?)$')
-            if (-not $tableMatch.Success -or
-                ($tableMatch.Groups['array'].Value.Length -ne $tableMatch.Groups['arrayEnd'].Value.Length)) {
-                return $false
-            }
-            $rawTableName = $tableMatch.Groups['name'].Value
-            $canonical = Convert-TomlDottedNameToCanonical -Name $rawTableName
-            if ($null -eq $canonical) { return $false }
-            foreach ($valuePath in @($valuePaths.Keys)) {
-                if ([string]::Equals($canonical, $valuePath, [System.StringComparison]::Ordinal) -or
-                    $canonical.StartsWith($valuePath + $separator, [System.StringComparison]::Ordinal)) {
-                    return $false
-                }
-            }
-            if ($tableMatch.Groups['array'].Value.Length -eq 0) {
-                if ($keys.ContainsKey('') -and $keys[''].ContainsKey($canonical)) { return $false }
-                if ($tables.ContainsKey($canonical)) { return $false }
-                $tables[$canonical] = 'regular'
-                $currentTable = $canonical
-            }
-            else {
-                if ($tables.ContainsKey($canonical) -and $tables[$canonical] -ne 'array') { return $false }
-                $tables[$canonical] = 'array'
-                $arrayIndex = 1
-                while ($keys.ContainsKey("array:$canonical#$arrayIndex")) { $arrayIndex++ }
-                $currentTable = "array:$canonical#$arrayIndex"
-            }
-            $currentCanonicalTable = $canonical
-            if (-not $keys.ContainsKey($currentTable)) { $keys[$currentTable] = New-OrdinalDictionary }
-            continue
-        }
-
-        $assignment = [regex]::Match($code, '^(?<key>.+?)\s*=\s*(?<value>.+)$')
-        if (-not $assignment.Success) { return $false }
-        $rawAssignmentKey = $assignment.Groups['key'].Value
-        $canonicalKey = Convert-TomlDottedNameToCanonical -Name $rawAssignmentKey
-        if ($null -eq $canonicalKey -or -not (Test-TomlValueShape -Value $assignment.Groups['value'].Value)) { return $false }
-        if ($canonicalKey.Contains([string][char]0x1f)) { return $false }
-        if (-not $keys.ContainsKey($currentTable)) { $keys[$currentTable] = New-OrdinalDictionary }
-        if ($keys[$currentTable].ContainsKey($canonicalKey)) { return $false }
-        $fullValuePath = if ([string]::IsNullOrEmpty($currentCanonicalTable)) {
-            $canonicalKey
-        }
-        else {
-            $currentCanonicalTable + $separator + $canonicalKey
-        }
-        foreach ($tablePath in @($tables.Keys)) {
-            if ([string]::Equals($tablePath, $fullValuePath, [System.StringComparison]::Ordinal) -or
-                $tablePath.StartsWith($fullValuePath + $separator, [System.StringComparison]::Ordinal)) {
-                return $false
-            }
-        }
-        $keys[$currentTable][$canonicalKey] = $true
-        $valuePaths[$fullValuePath] = $true
-    }
-    return $true
-}
-
-function Test-CodexTomlRequiresConservativePreservation {
-    param([string]$Text)
-    $separator = [string][char]0x1f
-    $memoryGraphPath = 'mcp_servers' + $separator + 'memory-graph'
-    $currentDetectionTable = ''
-    foreach ($line in @($Text -split '\r?\n')) {
-        $codeResult = Get-TomlCodeLine -Line $line
-        if (-not $codeResult.Valid) { return $true }
-        $code = $codeResult.Text.Trim()
-        if ([string]::IsNullOrWhiteSpace($code)) { continue }
-
-        if ($code.StartsWith('[')) {
-            $tableMatch = [regex]::Match($code, '^\[(?<array>\[?)(?<name>.+?)\](?<arrayEnd>\]?)$')
-            if (-not $tableMatch.Success) { return $true }
-            $rawName = $tableMatch.Groups['name'].Value
-            $currentDetectionTable = Convert-TomlDottedNameToCanonical -Name $rawName
-            if ($null -eq $currentDetectionTable) { return $true }
-            $isOwnedMemoryGraphTable = [string]::Equals($currentDetectionTable, $memoryGraphPath, [System.StringComparison]::Ordinal) -or
-                $currentDetectionTable.StartsWith($memoryGraphPath + $separator, [System.StringComparison]::Ordinal)
-            if ($isOwnedMemoryGraphTable -and -not (Test-IsRemovableMemoryGraphTomlHeader -Line $code)) {
-                return $true
-            }
-            $isEscapedMemoryGraphTable = $rawName.Contains('\') -and
-                ([string]::Equals($currentDetectionTable, $memoryGraphPath, [System.StringComparison]::Ordinal) -or
-                    $currentDetectionTable.StartsWith($memoryGraphPath + $separator, [System.StringComparison]::Ordinal))
-            if ($isEscapedMemoryGraphTable) {
-                return $true
-            }
-            continue
-        }
-
-        $assignment = [regex]::Match($code, '^(?<key>.+?)\s*=\s*(?<value>.+)$')
-        if (-not $assignment.Success) { return $true }
-        $rawKey = $assignment.Groups['key'].Value
-        $canonicalKey = Convert-TomlDottedNameToCanonical -Name $rawKey
-        if ($null -eq $canonicalKey) { return $true }
-        $detectionKey = Convert-TomlDottedNameToCanonical -Name $rawKey
-        if ($null -eq $detectionKey) { return $true }
-        $fullKey = if ([string]::IsNullOrEmpty($currentDetectionTable)) {
-            $detectionKey
-        }
-        else {
-            $currentDetectionTable + $separator + $detectionKey
-        }
-        $isMemoryGraphKey = [string]::Equals($fullKey, $memoryGraphPath, [System.StringComparison]::Ordinal) -or
-            $fullKey.StartsWith($memoryGraphPath + $separator, [System.StringComparison]::Ordinal) -or
-            $memoryGraphPath.StartsWith($fullKey + $separator, [System.StringComparison]::Ordinal)
-        $isSupportedMemoryGraphTable = [string]::Equals($currentDetectionTable, $memoryGraphPath, [System.StringComparison]::Ordinal) -or $currentDetectionTable.StartsWith($memoryGraphPath + $separator, [System.StringComparison]::Ordinal)
-        if ($isMemoryGraphKey -and -not $isSupportedMemoryGraphTable) {
-            return $true
-        }
-    }
-    return $false
-}
-
-function Test-IsRemovableMemoryGraphTomlHeader {
-    param([string]$Line)
-    return $Line -cmatch '^\s*\[\[?\s*mcp_servers\s*\.\s*(?:"memory-graph"|''memory-graph''|memory-graph)(?:\s*\.|\s*\]\]?)'
-}
-
-function Assert-CodexMemoryGraphTomlCanBeUpdated {
-    param([Parameter(Mandatory = $true)][string]$ConfigFile)
-    if (-not (Test-Path -LiteralPath $ConfigFile -PathType Leaf)) { return }
-    $original = Read-StrictUtf8Text -LiteralPath $ConfigFile
-    if (-not (Test-CodexTomlDocument -Text $original) -or
-        (Test-CodexTomlRequiresConservativePreservation -Text $original)) {
-        throw "Invalid, duplicate, ambiguous, or unsupported TOML in $ConfigFile; preserved unchanged because Memory Graph registration cannot be refreshed safely."
-    }
-}
-
-function Remove-MemoryGraphTomlSections {
-    param([string]$Text)
-    $lines = @($Text -split '\r?\n')
-    $kept = New-Object System.Collections.Generic.List[string]
-    $skipping = $false
-    foreach ($line in $lines) {
-        $isTable = $line -cmatch '^\s*\[\[?.*?\]\]?\s*(?:#.*)?$'
-        if ($isTable) {
-            $isMemoryGraph = Test-IsRemovableMemoryGraphTomlHeader -Line $line
-            $skipping = $isMemoryGraph
-        }
-        if (-not $skipping) { $kept.Add($line) }
-    }
-    return ($kept -join [Environment]::NewLine).TrimEnd()
-}
-
-function Update-CodexMemoryGraphConfig {
-    param([string]$ConfigFile, [string]$Command, [string[]]$Arguments)
-    Assert-CodexMemoryGraphTomlCanBeUpdated -ConfigFile $ConfigFile
-    if ($DryRun) { Write-DryRun "Refresh memory-graph MCP server in $ConfigFile"; return }
-    $original = ''
-    if (Test-Path -LiteralPath $ConfigFile -PathType Leaf) {
-        $original = Read-StrictUtf8Text -LiteralPath $ConfigFile
-    }
-    $kept = Remove-MemoryGraphTomlSections -Text $original
-    $tools = @(
-        'memory_context', 'memory_search', 'memory_stats', 'memory_doctor',
-        'memory_add_entity', 'memory_add_insight', 'memory_add_relation',
-        'memory_remove_entity', 'memory_remove_relation', 'memory_graph',
-        'memory_reflect', 'memory_decide', 'memory_pattern',
-        'memory_consolidate', 'memory_trend'
-    )
-    $argumentText = (($Arguments | ForEach-Object { Convert-ToTomlString -Value $_ }) -join ', ')
-    $lines = New-Object System.Collections.Generic.List[string]
-    if (-not [string]::IsNullOrWhiteSpace($kept)) {
-        $lines.Add($kept)
-        $lines.Add('')
-    }
-    $lines.Add('[mcp_servers.memory-graph]')
-    $lines.Add('command = ' + (Convert-ToTomlString -Value $Command))
-    $lines.Add('args = [' + $argumentText + ']')
-    $lines.Add('startup_timeout_sec = ' + $script:MemoryGraphStartupTimeoutSeconds)
-    foreach ($tool in $tools) {
-        $lines.Add('')
-        $lines.Add('[mcp_servers.memory-graph.tools.' + $tool + ']')
-        $lines.Add('approval_mode = "approve"')
-    }
-    $updated = ($lines -join [Environment]::NewLine) + [Environment]::NewLine
-    if (-not (Test-CodexTomlDocument -Text $updated)) {
-        throw "Refusing to write invalid or ambiguous TOML to $ConfigFile"
-    }
-    Write-AtomicText -LiteralPath $ConfigFile -Content $updated
-    Write-Ok "MCP server memory-graph refreshed in $ConfigFile"
-}
-
-function Update-JsonMemoryGraphConfig {
-    param([string]$ConfigFile, [string]$Command, [string[]]$Arguments)
-    if ($DryRun) { Write-DryRun "Refresh memory-graph MCP server in $ConfigFile"; return }
-    $document = Read-JsonObject -LiteralPath $ConfigFile
-    if ($null -eq $document) { return }
-    $servers = Get-JsonProperty -Object $document -Name 'mcpServers'
-    if ($null -eq $servers) {
-        $servers = New-Object PSObject
-        Set-JsonProperty -Object $document -Name 'mcpServers' -Value $servers
-    }
-    elseif ($servers -is [System.Array] -or $servers -is [string] -or $servers -is [ValueType]) {
-        Write-Info "WARNING: mcpServers in $ConfigFile is not an object; preserved unchanged."
-        return
-    }
-    $definition = New-Object PSObject
-    Set-JsonProperty -Object $definition -Name 'command' -Value $Command
-    Set-JsonProperty -Object $definition -Name 'args' -Value @($Arguments)
-    Set-JsonProperty -Object $servers -Name 'memory-graph' -Value $definition
-    Save-JsonObject -LiteralPath $ConfigFile -Object $document
-    Write-Ok "MCP server memory-graph refreshed in $ConfigFile"
-}
-
-function Remove-JsonMemoryGraphConfig {
-    param([string]$ConfigFile)
-    if (-not (Test-Path -LiteralPath $ConfigFile -PathType Leaf)) { return }
-    if ($DryRun) { Write-DryRun "Remove stale memory-graph MCP entry from $ConfigFile when present"; return }
-    $document = Read-JsonObject -LiteralPath $ConfigFile
-    if ($null -eq $document) { return }
-    $servers = Get-JsonProperty -Object $document -Name 'mcpServers'
-    if ($null -eq $servers -or $servers -is [System.Array] -or $servers -is [string] -or $servers -is [ValueType]) { return }
-    if ($null -ne (Get-JsonPropertyInfoExact -Object $servers -Name 'memory-graph')) {
-        Remove-JsonProperty -Object $servers -Name 'memory-graph'
-        if (@($servers.PSObject.Properties).Count -eq 0) { Remove-JsonProperty -Object $document -Name 'mcpServers' }
-        Save-JsonObject -LiteralPath $ConfigFile -Object $document
-        Write-Info "Removed stale memory-graph MCP entry from $ConfigFile"
-    }
 }
 
 function Get-CommandExecutableToken {
@@ -2671,84 +2174,6 @@ function Update-CodexInstructions {
     Write-Ok "Installer guidance refreshed in $InstructionsFile (user content preserved)"
 }
 
-function Update-MemoryProtocol {
-    param([string]$InstructionsFile, [string]$AgentName)
-    $source = Join-Path $script:FrameworkDir 'memory-protocol.md'
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { return }
-    $sourceItem = Get-Item -LiteralPath $source -Force
-    if (($sourceItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "Refusing memory protocol source reparse point: $source"
-    }
-    $protocol = (Read-StrictUtf8Text -LiteralPath $source).Replace('{agent_state_dir}', '.' + $AgentName).Replace('substituted during install.sh', 'substituted during install.ps1').Trim()
-    $existing = ''
-    $hasExistingFile = Test-Path -LiteralPath $InstructionsFile -PathType Leaf
-    if ($hasExistingFile) { $existing = Read-StrictUtf8Text -LiteralPath $InstructionsFile }
-    $hasInstallerBlock = Test-ContainsExactMarkerLine -Text $existing -MarkerLine '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->'
-
-    if (-not $hasInstallerBlock -and $existing -match 'WAL Protocol|Persistent Memory System') {
-        Write-Info "WARNING: $InstructionsFile contains a manually added memory protocol; preserved unchanged."
-        return
-    }
-    if ($AgentName -ne 'codex' -and -not $hasInstallerBlock -and -not $AcceptMemoryProtocol) {
-        Write-Info "Memory protocol was not added to $InstructionsFile. Re-run with -AcceptMemoryProtocol to opt in."
-        return
-    }
-    if ($DryRun) { Write-DryRun "Append or refresh memory protocol in $InstructionsFile"; return }
-
-    $custom = Remove-InstallerMarkedBlocks -Text $existing -StartMarker 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START' -EndMarker 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END'
-    $updated = $custom.TrimEnd()
-    if (-not [string]::IsNullOrWhiteSpace($updated)) { $updated += [Environment]::NewLine + [Environment]::NewLine }
-    $updated += $protocol + [Environment]::NewLine
-    Write-AtomicText -LiteralPath $InstructionsFile -Content $updated
-    Write-Ok "Memory protocol refreshed in $InstructionsFile"
-}
-
-function Assert-GraphSeedInstallSafe {
-    param([string]$GraphSeed, [string]$MemoryTarget)
-    $graphTarget = Assert-SafeManagedChild -LiteralPath (Join-Path $MemoryTarget 'graph.jsonl') -ManagedRoot $MemoryTarget -Purpose 'legacy graph seed'
-    if (Test-Path -LiteralPath $graphTarget) {
-        $targetItem = Get-Item -LiteralPath $graphTarget -Force
-        if (($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or $targetItem.PSIsContainer) {
-            throw "Refusing unsafe legacy graph seed target: $graphTarget"
-        }
-    }
-    if (Test-Path -LiteralPath $GraphSeed) {
-        $seedItem = Get-Item -LiteralPath $GraphSeed -Force
-        if (($seedItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or $seedItem.PSIsContainer) {
-            throw "Refusing unsafe graph seed source: $GraphSeed"
-        }
-    }
-    return $graphTarget
-}
-
-function Install-GraphSeed {
-    param([string]$GraphSeed, [string]$MemoryTarget)
-    $graphTarget = Assert-GraphSeedInstallSafe -GraphSeed $GraphSeed -MemoryTarget $MemoryTarget
-    if (Test-Path -LiteralPath $graphTarget -PathType Leaf) {
-        Write-Info "Legacy graph data already exists at $graphTarget; skipping (never overwrite)."
-        return
-    }
-    if (-not (Test-Path -LiteralPath $GraphSeed -PathType Leaf)) {
-        Write-Info 'No legacy graph seed found; skipping.'
-        return
-    }
-    if ($DryRun) { Write-DryRun "Copy $GraphSeed -> $graphTarget (first install only)"; return }
-    Ensure-Directory -LiteralPath $MemoryTarget
-    try {
-        [System.IO.File]::Copy($GraphSeed, $graphTarget, $false)
-        Write-Ok "Legacy graph seed installed to $graphTarget"
-    }
-    catch [System.IO.IOException] {
-        if (Test-Path -LiteralPath $graphTarget -PathType Leaf) {
-            Assert-NoReparseTraversal -LiteralPath $graphTarget -Purpose 'concurrently created graph seed'
-            Write-Info "Legacy graph data was created concurrently at $graphTarget; skipping (never overwrite)."
-        }
-        else {
-            throw
-        }
-    }
-}
-
 function Invoke-AssistantFrameworkInstall {
     if ([string]::IsNullOrWhiteSpace($Agent)) { throw 'Missing -Agent. Supported: claude, codex, gemini.' }
     $agentName = $Agent.Trim().ToLowerInvariant()
@@ -2818,7 +2243,6 @@ function Invoke-AssistantFrameworkInstall {
         $skillsTarget = Join-Path $agentHome 'skills'
         [void](Assert-SafeManagedChild -LiteralPath $skillsTarget -ManagedRoot $agentHome -Purpose "$agentName skills root")
     }
-    $memoryTarget = Join-Path $agentHome 'memory'
     $toolsTarget = Join-Path $agentHome 'tools'
     $evalDocsTarget = Join-Path (Join-Path $agentHome 'docs') 'evals'
     $hooksRoot = Join-Path $agentHome 'hooks'
@@ -2834,7 +2258,7 @@ function Invoke-AssistantFrameworkInstall {
     else {
         Join-Path $agentHome 'GEMINI.md'
     }
-    foreach ($ownedRoot in @($memoryTarget, $hooksRoot)) {
+    foreach ($ownedRoot in @($hooksRoot)) {
         [void](Assert-SafeManagedChild -LiteralPath $ownedRoot -ManagedRoot $agentHome -Purpose 'agent-owned root')
     }
 
@@ -2852,24 +2276,14 @@ function Invoke-AssistantFrameworkInstall {
         'evals/finalize-workflow-kernel-review.sh',
         'evals/lib/context-budget-evidence.sh'
     )
-    $graphSeedSource = Join-Path $script:FrameworkDir 'graph-seed.jsonl'
     [void](Assert-SafeUserFile -LiteralPath $settingsFile -ManagedRoot $agentHome -Purpose 'agent settings')
     [void](Assert-SafeUserFile -LiteralPath $legacySettings -ManagedRoot $agentHome -Purpose 'legacy hook settings')
     [void](Assert-SafeUserFile -LiteralPath $instructionsFile -ManagedRoot $agentHome -Purpose 'agent instructions' -RequireExclusiveUpdatePreflight:($agentName -eq 'codex'))
-    [void](Assert-GraphSeedInstallSafe -GraphSeed $graphSeedSource -MemoryTarget $memoryTarget)
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $settingsFile
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $legacySettings
-    if ($agentName -eq 'codex') {
-        $codexConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $agentHome 'config.toml') -ManagedRoot $agentHome -Purpose 'Codex configuration' -RequireExclusiveUpdatePreflight
-        Assert-CodexMemoryGraphTomlCanBeUpdated -ConfigFile $codexConfigFile
-    }
-    elseif ($agentName -eq 'claude') {
+    if ($agentName -eq 'claude') {
         $claudeConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $script:UserHome '.claude.json') -ManagedRoot $script:UserHome -Purpose 'Claude configuration'
         Assert-JsonFilePropertyIdentitySafe -LiteralPath $claudeConfigFile
-        Assert-JsonMemoryGraphConfigCanBeUpdated -ConfigFile $claudeConfigFile
-    }
-    else {
-        Assert-JsonMemoryGraphConfigCanBeUpdated -ConfigFile (Join-Path $agentHome 'settings.json')
     }
 
     foreach ($skillName in $selectedSkills) {
@@ -2890,6 +2304,14 @@ function Invoke-AssistantFrameworkInstall {
     }
     Assert-LegacyHookCleanupSafe -HooksTarget $hooksTarget
 
+    $retirementTool = Join-Path $script:FrameworkDir 'tools/cleanup-memory-graph.ps1'
+    if (-not (Test-Path -LiteralPath $retirementTool -PathType Leaf)) {
+        throw "Memory Graph retirement tool not found: $retirementTool"
+    }
+    & $retirementTool -Agent $agentName -DryRun:$DryRun
+    $retirementSucceeded = $?
+    if (-not $retirementSucceeded) { throw 'Memory Graph retirement cleanup failed before installation.' }
+
     $installedAgentFiles = @()
     try {
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
@@ -2906,25 +2328,6 @@ function Invoke-AssistantFrameworkInstall {
             Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
         }
 
-        $memoryLauncher = Join-Path (Join-Path $toolsTarget 'memory-graph') 'run-memory-graph.ps1'
-        $launcherSource = Join-Path (Join-Path $toolsSource 'memory-graph') 'run-memory-graph.ps1'
-        if ((Test-Path -LiteralPath $memoryLauncher -PathType Leaf) -or ($DryRun -and (Test-Path -LiteralPath $launcherSource -PathType Leaf))) {
-            $powerShellCommand = Get-CurrentPowerShellExecutable
-            $mcpArguments = @('-NoProfile', '-File', $memoryLauncher, '--memory-dir', $memoryTarget)
-            if ($agentName -eq 'codex') {
-                Update-CodexMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'config.toml') -Command $powerShellCommand -Arguments $mcpArguments
-            }
-            elseif ($agentName -eq 'claude') {
-                Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $script:UserHome '.claude.json') -Command $powerShellCommand -Arguments $mcpArguments
-                Remove-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json')
-            }
-            else {
-                Update-JsonMemoryGraphConfig -ConfigFile (Join-Path $agentHome 'settings.json') -Command $powerShellCommand -Arguments $mcpArguments
-            }
-        }
-
-        Install-GraphSeed -GraphSeed $graphSeedSource -MemoryTarget $memoryTarget
-
         if ($agentName -eq 'codex') {
             $installedAgentFiles = @(Copy-FlatArtifacts -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'codex') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.toml' -Label 'Codex agent')
             [void](Copy-FlatArtifacts -Source (Join-Path $script:FrameworkDir 'codex-rules') -Target (Join-Path $agentHome 'rules') -ManagedRoot $agentHome -Filter '*.rules' -Label 'Codex rule')
@@ -2939,7 +2342,6 @@ function Invoke-AssistantFrameworkInstall {
             if ($agentName -eq 'codex') {
                 Update-CodexInstructions -InstructionsFile $instructionsFile
             }
-            Update-MemoryProtocol -InstructionsFile $instructionsFile -AgentName $agentName
         }
     }
     catch {
@@ -2953,7 +2355,6 @@ function Invoke-AssistantFrameworkInstall {
     foreach ($skillName in $selectedSkills) { Write-Host ('  ' + (Join-Path $skillsTarget $skillName)) }
     if (Test-Path -LiteralPath $toolsSource -PathType Container) { Write-Host "Tools: $toolsTarget" }
     if ($installedAgentFiles.Count -gt 0) { Write-Host "Agents: $(Join-Path $agentHome 'agents')" }
-    Write-Host "Memory store: $memoryTarget"
 }
 
 if ($Help) {

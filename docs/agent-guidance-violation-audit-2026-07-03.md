@@ -207,7 +207,7 @@ Remove `Bash` from Code Writer unless a narrow implementation command use case i
 
 - `AGENTS.md` is 7,472 bytes and 129 lines, below Codex's default project-doc budget and within Claude memory guidance to keep repository instructions concise.
 - `CLAUDE.md` exists, so Claude Code has a native memory file rather than relying only on `AGENTS.md`.
-- Skill validation passes for all 16 skills.
+- Skill validation passes for all first-class skills.
 - Contract checks are strong around review loops, QA evaluator separation, harness/eval docs, instruction overload, and task packets.
 - The review loop has a terminal cap and contract tests.
 - Code Reviewer and QA Evaluator are distinct roles and have read-only Claude tool surfaces.
@@ -224,7 +224,7 @@ Remove `Bash` from Code Writer unless a narrow implementation command use case i
 
 | Check | Result |
 |---|---|
-| `bash tools/skills/validate-skills.sh` | Passed: 16 skills validated |
+| `bash tools/skills/validate-skills.sh` | Passed: first-class skills validated |
 | `bash tests/p0-p4/instruction-overload-contracts.sh` | Passed: 7 passed, 0 failed |
 | `bash tests/p0-p4/review-loop-cap-contracts.sh` | Passed: 4 passed, 0 failed |
 | `bash tests/p0-p4/qa-evaluator-contracts.sh` | Passed: 12 passed, 0 failed |
