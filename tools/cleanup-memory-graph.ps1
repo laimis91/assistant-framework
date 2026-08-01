@@ -1046,6 +1046,35 @@ function Get-WithoutMemoryProtocol {
     if ($start.Count -eq 0 -and $end.Count -eq 0) { return $null }
     if ($start.Count -ne 1 -or $end.Count -ne 1 -or $start[0].Index -gt $end[0].Index) { throw "Ambiguous Memory Graph instruction markers in $LiteralPath; preserved unchanged." }
     $removeStart = $start[0].Index
+    $startPosition = [array]::IndexOf($lines, $start[0])
+    $preambleStart = $startPosition
+    while ($preambleStart -gt 0) {
+        $line = $lines[$preambleStart - 1].Value.TrimEnd("`r", "`n")
+        $isLegacyPreamble = (
+            $line -ceq '' -or
+            $line -ceq '# Assistant Framework — Memory Protocol' -or
+            $line -ceq '## Role' -or
+            (($line.StartsWith('You are an orchestrator for memory-aware workflow.', [System.StringComparison]::Ordinal)) -and
+                $line.IndexOf('The orchestrator may create and update framework-owned state artifacts such as .', [System.StringComparison]::Ordinal) -ge 0 -and
+                $line.IndexOf('/task.md, .', [System.StringComparison]::Ordinal) -ge 0 -and
+                $line.IndexOf('/context-map.md, .', [System.StringComparison]::Ordinal) -ge 0 -and
+                $line.IndexOf('/session.md, and .', [System.StringComparison]::Ordinal) -ge 0 -and
+                $line.IndexOf('/working-buffer.md; it does not edit project source files directly.', [System.StringComparison]::Ordinal) -ge 0) -or
+            $line -ceq 'You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions.' -or
+            (($line.StartsWith('You are an orchestrator. You delegate ALL file editing', [System.StringComparison]::Ordinal)) -and
+                $line.IndexOf('code implementation, and phase execution', [System.StringComparison]::Ordinal) -ge 0) -or
+            $line -cmatch '^<!-- This is a template\. Paths like ~/\.(claude|codex|gemini)/' -or
+            $line.StartsWith('<!-- Appended by Assistant Framework install.', [System.StringComparison]::Ordinal)
+        )
+        if (-not $isLegacyPreamble) { break }
+        $preambleStart--
+    }
+    for ($index = $preambleStart; $index -lt $startPosition; $index++) {
+        if ($lines[$index].Value.TrimEnd("`r", "`n") -ceq '# Assistant Framework — Memory Protocol') {
+            $removeStart = $lines[$preambleStart].Index
+            break
+        }
+    }
     $removeEnd = $end[0].Index + $end[0].Length
     [PSCustomObject]@{ Content = $text.Substring(0, $removeStart) + $text.Substring($removeEnd); HasBom = $utf8Document.HasBom }
 }

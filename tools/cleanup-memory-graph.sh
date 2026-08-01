@@ -126,7 +126,8 @@ cleanup_home_physical="$(cd -P -- "$cleanup_home" && pwd -P)"
 [[ "$cleanup_home_physical" != / ]] || { echo "Error: HOME must resolve to an existing non-root directory." >&2; exit 1; }
 HOME="$cleanup_home"
 
-if [[ -n "${CODEX_HOME:-}" ]]; then
+cleanup_codex_home=""
+if [[ -z "$agent_filter" || "$agent_filter" = codex ]] && [[ -n "${CODEX_HOME:-}" ]]; then
     cleanup_codex_home="$(shell_normalize_absolute_path "$CODEX_HOME")" || { echo "Error: CODEX_HOME must be a non-root absolute path." >&2; exit 1; }
     [[ "$cleanup_codex_home" != / ]] || { echo "Error: CODEX_HOME must be a non-root absolute path." >&2; exit 1; }
     shell_assert_no_symlink_ancestors "$cleanup_codex_home" "CODEX_HOME"
@@ -142,7 +143,6 @@ if [[ -n "${CODEX_HOME:-}" ]]; then
         echo "Error: Refusing CODEX_HOME with ambiguous physical identity: $cleanup_codex_home" >&2
         exit 1
     fi
-    CODEX_HOME="$cleanup_codex_home"
 fi
 
 python_bin=""
@@ -234,8 +234,8 @@ else
     [[ -n "$agent_filter" ]] || agents=(claude codex gemini)
     for agent in "${agents[@]}"; do
         external=false
-        if [[ "$agent" = codex && -n "${CODEX_HOME:-}" ]]; then
-            agent_home="$CODEX_HOME"
+        if [[ "$agent" = codex && -n "$cleanup_codex_home" ]]; then
+            agent_home="$cleanup_codex_home"
             external=true
         else
             agent_home="$HOME/.$agent"
@@ -273,8 +273,8 @@ else
     # particular, a later unsafe target must not permit partial retirement of
     # an earlier otherwise-safe agent installation.
     for agent in "${agents[@]}"; do
-        if [[ "$agent" = codex && -n "${CODEX_HOME:-}" ]]; then
-            agent_home="$CODEX_HOME"
+        if [[ "$agent" = codex && -n "$cleanup_codex_home" ]]; then
+            agent_home="$cleanup_codex_home"
             traversal_root=/
         else
             agent_home="$HOME/.$agent"
@@ -320,7 +320,7 @@ else
     exit 0
 fi
 
-"$python_bin" - "$HOME" "${CODEX_HOME:-}" "$agent_filter" "$dry_run" "$purge_data" <<'PY'
+"$python_bin" - "$HOME" "$cleanup_codex_home" "$agent_filter" "$dry_run" "$purge_data" <<'PY'
 import json
 import os
 import re
@@ -981,6 +981,35 @@ def remove_protocol(path):
         return None, source
     if len(starts) != 1 or len(ends) != 1 or starts[0] > ends[0]:
         fail("Ambiguous Memory Graph instruction markers in %s; preserved unchanged." % path)
+
+    def is_legacy_protocol_preamble_line(raw_line):
+        line = raw_line.rstrip("\r\n")
+        return (
+            line == ""
+            or line == "# Assistant Framework — Memory Protocol"
+            or line == "## Role"
+            or (
+                line.startswith("You are an orchestrator for memory-aware workflow.")
+                and "The orchestrator may create and update framework-owned state artifacts such as ." in line
+                and "/task.md, ." in line
+                and "/context-map.md, ." in line
+                and "/session.md, and ." in line
+                and "/working-buffer.md; it does not edit project source files directly." in line
+            )
+            or line == "You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions."
+            or (
+                line.startswith("You are an orchestrator. You delegate ALL file editing")
+                and "code implementation, and phase execution" in line
+            )
+            or re.match(r"^<!-- This is a template\. Paths like ~/\.(claude|codex|gemini)/", line) is not None
+            or line.startswith("<!-- Appended by Assistant Framework install.")
+        )
+
+    preamble_start = starts[0]
+    while preamble_start > 0 and is_legacy_protocol_preamble_line(lines[preamble_start - 1]):
+        preamble_start -= 1
+    if any(line.rstrip("\r\n") == "# Assistant Framework — Memory Protocol" for line in lines[preamble_start:starts[0]]):
+        starts[0] = preamble_start
     return encode_utf8(bom, "".join(lines[:starts[0]] + lines[ends[0] + 1:])), source
 
 

@@ -2447,6 +2447,42 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
+    Invoke-Contract 'Memory Graph cleanup removes the exact historical contiguous preamble while preserving BOM CRLF and bare-CR bytes' {
+        Use-IsolatedEnvironment 'cleanup historical protocol preamble bytes' {
+            param($root, $isolatedUserProfile)
+            foreach ($lineEnding in @("`r`n", "`r")) {
+                $codexHome = Join-Path $root ('Historical Preamble ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lineEnding)))
+                [void][System.IO.Directory]::CreateDirectory($codexHome)
+                $agentsFile = Join-Path $codexHome 'AGENTS.md'
+                $lines = @(
+                    'user-prefix',
+                    '',
+                    '# Assistant Framework — Memory Protocol',
+                    '',
+                    '## Role',
+                    '',
+                    'You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.',
+                    '<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->',
+                    '<!-- Appended by Assistant Framework install. Do not remove this marker. -->',
+                    '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->',
+                    'retired protocol',
+                    '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->',
+                    'user-suffix',
+                    ''
+                )
+                $originalBytes = [byte[]](0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes(($lines -join $lineEnding))
+                $expectedBytes = [byte[]](0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes(('user-prefix' + $lineEnding + 'user-suffix' + $lineEnding))
+                [System.IO.File]::WriteAllBytes($agentsFile, $originalBytes)
+                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+
+                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
+
+                Assert-Equal 0 $result.ExitCode "Cleanup rejected the exact historical preamble: $($result.Output)"
+                Assert-Equal $expectedBytes ([System.IO.File]::ReadAllBytes($agentsFile)) 'Cleanup did not remove the whole historical preamble while preserving BOM and external line-ending bytes'
+            }
+        }
+    }
+
     Invoke-Contract 'Memory Graph cleanup rejects exact duplicate JSON before removing the retired entry' {
         Use-IsolatedEnvironment 'cleanup duplicate JSON identity' {
             param($root, $isolatedUserProfile)

@@ -92,6 +92,16 @@ p0p4_memory_retirement_file_mode_octal() {
     esac
 }
 
+p0p4_make_no_python_path() {
+    local target="$1"
+    local command_name command_path
+    mkdir -p "$target"
+    for command_name in awk basename bash cat chmod cp dirname env find grep ln mkdir mktemp pwd readlink rm rsync sed sort stat tr uname; do
+        command_path="$(command -v "$command_name" 2>/dev/null || true)"
+        [[ -n "$command_path" ]] && ln -s "$command_path" "$target/$command_name"
+    done
+}
+
 test_start "PowerShell cleanup preserves restrictive Unix config mode after successful Codex retirement"
 if ! command -v pwsh >/dev/null 2>&1; then
     skip "pwsh is unavailable for PowerShell mode-preservation verification"
@@ -284,6 +294,49 @@ if HOME="$codex_symlink_home" CODEX_HOME="$codex_symlink_external/intermediate/c
     fail "Bash cleanup accepted external CODEX_HOME through an intermediate symlink"
 elif [[ ! -f "$codex_symlink_external/real-codex/codex-home/tools/memory-graph/sentinel" ]]; then
     fail "Bash cleanup deleted through an external CODEX_HOME intermediate symlink"
+else
+    pass
+fi
+
+test_start "Bash unfiltered cleanup rejects hostile CODEX_HOME before every agent mutation"
+unfiltered_codex_home_failures=()
+for unfiltered_codex_home_mode in python no-python; do
+    unfiltered_codex_home="$(mktemp -d)"
+    unfiltered_codex_paths_before="$(mktemp)"
+    unfiltered_codex_bytes_before="$(mktemp)"
+    unfiltered_codex_paths_after="$(mktemp)"
+    unfiltered_codex_bytes_after="$(mktemp)"
+    p0p4_register_cleanup "$unfiltered_codex_home" "$unfiltered_codex_paths_before" "$unfiltered_codex_bytes_before" "$unfiltered_codex_paths_after" "$unfiltered_codex_bytes_after"
+    if [[ "$unfiltered_codex_home_mode" == no-python ]]; then
+        unfiltered_codex_bin="$(mktemp -d)"
+        p0p4_register_cleanup "$unfiltered_codex_bin"
+        p0p4_make_no_python_path "$unfiltered_codex_bin"
+        unfiltered_codex_path_prefix="PATH=$unfiltered_codex_bin"
+    else
+        unfiltered_codex_path_prefix=""
+    fi
+    for unfiltered_codex_agent in claude codex gemini; do
+        mkdir -p "$unfiltered_codex_home/.${unfiltered_codex_agent}/tools/memory-graph" "$unfiltered_codex_home/.${unfiltered_codex_agent}/memory"
+        printf '%s\n' "$unfiltered_codex_agent runtime sentinel" >"$unfiltered_codex_home/.${unfiltered_codex_agent}/tools/memory-graph/run-memory-graph.sh"
+        printf '%s\n' "$unfiltered_codex_agent provider sentinel" >"$unfiltered_codex_home/.${unfiltered_codex_agent}/memory/graph.db"
+    done
+    mkdir -p "$unfiltered_codex_home/.agents/skills/assistant-memory"
+    printf '%s\n' 'native Codex skill sentinel' >"$unfiltered_codex_home/.agents/skills/assistant-memory/SKILL.md"
+    find "$unfiltered_codex_home" -print | sort >"$unfiltered_codex_paths_before"
+    find "$unfiltered_codex_home" -type f -exec shasum {} + | sort >"$unfiltered_codex_bytes_before"
+    if env $unfiltered_codex_path_prefix HOME="$unfiltered_codex_home" CODEX_HOME=/ /bin/bash "$cleanup_bash" >/tmp/p0p4-memory-unfiltered-codex-home-${unfiltered_codex_home_mode}.out 2>/tmp/p0p4-memory-unfiltered-codex-home-${unfiltered_codex_home_mode}.err; then
+        unfiltered_codex_home_failures+=("$unfiltered_codex_home_mode accepted unsafe CODEX_HOME")
+    fi
+    find "$unfiltered_codex_home" -print | sort >"$unfiltered_codex_paths_after"
+    find "$unfiltered_codex_home" -type f -exec shasum {} + | sort >"$unfiltered_codex_bytes_after"
+    if ! grep -Fq 'CODEX_HOME' /tmp/p0p4-memory-unfiltered-codex-home-${unfiltered_codex_home_mode}.err \
+        || ! cmp -s "$unfiltered_codex_paths_before" "$unfiltered_codex_paths_after" \
+        || ! cmp -s "$unfiltered_codex_bytes_before" "$unfiltered_codex_bytes_after"; then
+        unfiltered_codex_home_failures+=("$unfiltered_codex_home_mode did not reject before preserving every agent tree and provider sentinel")
+    fi
+done
+if [[ "${#unfiltered_codex_home_failures[@]}" -ne 0 ]]; then
+    fail "${unfiltered_codex_home_failures[*]}"
 else
     pass
 fi
@@ -601,16 +654,6 @@ else
     fi
 fi
 
-p0p4_make_no_python_path() {
-    local target="$1"
-    local command_name command_path
-    mkdir -p "$target"
-    for command_name in awk basename bash cat chmod cp dirname env find grep ln mkdir mktemp pwd readlink rm rsync sed sort stat tr uname; do
-        command_path="$(command -v "$command_name" 2>/dev/null || true)"
-        [[ -n "$command_path" ]] && ln -s "$command_path" "$target/$command_name"
-    done
-}
-
 test_start "no-Python escaped retired JSON identity fails closed before runtime deletion"
 escaped_no_python_home="$(mktemp -d)"
 escaped_no_python_bin="$(mktemp -d)"
@@ -680,6 +723,69 @@ if PATH="$no_python_bin" HOME="$no_python_home" /bin/bash "$cleanup_bash" --agen
     fi
 else
     fail "cleanup without legacy structured configuration must not require Python"
+fi
+
+test_start "filtered Claude and Gemini cleanup ignore hostile ambient CODEX_HOME with and without Python"
+non_codex_home_failures=()
+for non_codex_home_path in python no-python; do
+    non_codex_home="$(mktemp -d)"
+    p0p4_register_cleanup "$non_codex_home"
+    if [[ "$non_codex_home_path" == no-python ]]; then
+        non_codex_bin="$(mktemp -d)"
+        p0p4_register_cleanup "$non_codex_bin"
+        p0p4_make_no_python_path "$non_codex_bin"
+        non_codex_path_prefix="PATH=$non_codex_bin"
+    else
+        non_codex_path_prefix=""
+    fi
+    for non_codex_agent in claude gemini; do
+        if [[ "$non_codex_agent" == claude ]]; then
+            non_codex_instruction=CLAUDE.md
+        else
+            non_codex_instruction=GEMINI.md
+        fi
+        mkdir -p "$non_codex_home/.${non_codex_agent}/tools/memory-graph" "$non_codex_home/.${non_codex_agent}/memory"
+        printf '%s\n' runtime >"$non_codex_home/.${non_codex_agent}/tools/memory-graph/run-memory-graph.sh"
+        printf '%s\n' provider >"$non_codex_home/.${non_codex_agent}/memory/graph.db"
+        if [[ "$non_codex_home_path" == python ]]; then
+            printf '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\nretired\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\n' >"$non_codex_home/.${non_codex_agent}/$non_codex_instruction"
+        fi
+        if env $non_codex_path_prefix HOME="$non_codex_home" CODEX_HOME=/ /bin/bash "$cleanup_bash" --agent "$non_codex_agent" >/tmp/p0p4-memory-non-codex-home-${non_codex_home_path}-${non_codex_agent}.out 2>/tmp/p0p4-memory-non-codex-home-${non_codex_home_path}-${non_codex_agent}.err \
+            && [[ ! -e "$non_codex_home/.${non_codex_agent}/tools/memory-graph" ]] \
+            && [[ -f "$non_codex_home/.${non_codex_agent}/memory/graph.db" ]] \
+            && { [[ "$non_codex_home_path" != python ]] || ! grep -Fq 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START' "$non_codex_home/.${non_codex_agent}/$non_codex_instruction"; }; then
+            :
+        else
+            non_codex_home_failures+=("$non_codex_home_path/$non_codex_agent")
+        fi
+    done
+done
+if [[ "${#non_codex_home_failures[@]}" -ne 0 ]]; then
+    fail "filtered non-Codex cleanup used hostile ambient CODEX_HOME instead of preserving provider data and cleaning its selected agent: ${non_codex_home_failures[*]}"
+else
+    pass
+fi
+
+test_start "no-Python cleanup fails closed for managed instruction markers before mutation"
+no_python_instruction_home="$(mktemp -d)"
+no_python_instruction_bin="$(mktemp -d)"
+p0p4_register_cleanup "$no_python_instruction_home" "$no_python_instruction_bin"
+p0p4_make_no_python_path "$no_python_instruction_bin"
+mkdir -p "$no_python_instruction_home/.claude/tools/memory-graph"
+printf '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\nretired\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\n' >"$no_python_instruction_home/.claude/CLAUDE.md"
+printf '%s\n' runtime >"$no_python_instruction_home/.claude/tools/memory-graph/run-memory-graph.sh"
+chmod 600 "$no_python_instruction_home/.claude/CLAUDE.md"
+cp "$no_python_instruction_home/.claude/CLAUDE.md" "$no_python_instruction_home/.claude/CLAUDE.before"
+no_python_instruction_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_instruction_home/.claude/CLAUDE.md")"
+if PATH="$no_python_instruction_bin" HOME="$no_python_instruction_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-memory-no-python-instruction.out 2>/tmp/p0p4-memory-no-python-instruction.err; then
+    fail "no-Python cleanup accepted a managed instruction marker instead of failing closed before mutation"
+elif ! grep -Fq 'Python 3 is required' /tmp/p0p4-memory-no-python-instruction.err \
+    || ! cmp -s "$no_python_instruction_home/.claude/CLAUDE.before" "$no_python_instruction_home/.claude/CLAUDE.md" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_instruction_home/.claude/CLAUDE.md")" != "$no_python_instruction_mode" ]] \
+    || [[ ! -f "$no_python_instruction_home/.claude/tools/memory-graph/run-memory-graph.sh" ]]; then
+    fail "no-Python managed instruction-marker cleanup must preserve exact bytes, mode, and runtime after a Python-required failure"
+else
+    pass
 fi
 
 test_start "no-Python cleanup validates every target before deleting an earlier safe runtime"
@@ -829,6 +935,60 @@ for marker_byte_runner in "${marker_byte_runners[@]}"; do
     fi
 done
 if [[ "${#marker_byte_failures[@]}" -ne 0 ]]; then fail "${marker_byte_failures[*]}"; else pass; fi
+
+test_start "Bash and PowerShell remove only title-anchored exact historical Memory Protocol preambles"
+historical_role_forms=(
+    "You are an orchestrator for memory-aware workflow. The orchestrator may create and update framework-owned state artifacts such as .assistant/task.md, .assistant/context-map.md, .assistant/session.md, and .assistant/working-buffer.md; it does not edit project source files directly."
+    "You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions."
+    "You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents."
+)
+historical_preamble_failures=()
+historical_preamble_runners=(bash)
+command -v pwsh >/dev/null 2>&1 && historical_preamble_runners+=(powershell)
+for historical_preamble_runner in "${historical_preamble_runners[@]}"; do
+    for historical_role_form in "${historical_role_forms[@]}"; do
+        historical_preamble_home="$(mktemp -d)"
+        p0p4_register_cleanup "$historical_preamble_home"
+        mkdir -p "$historical_preamble_home/.codex"
+        historical_preamble_agents="$historical_preamble_home/.codex/AGENTS.md"
+        printf '\357\273\277user-prefix\r\n\r\n# Assistant Framework — Memory Protocol\r\n\r\n## Role\r\n\r\n%s\r\n<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->\r\n<!-- Appended by Assistant Framework install. Do not remove this marker. -->\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\r\nretired protocol\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\r\nuser-suffix\r\n' "$historical_role_form" >"$historical_preamble_agents"
+        printf '\357\273\277user-prefix\r\nuser-suffix\r\n' >"$historical_preamble_home/expected-agents.md"
+        if [[ "$historical_preamble_runner" == bash ]]; then
+            HOME="$historical_preamble_home" bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-historical-preamble-bash.out 2>/tmp/p0p4-memory-historical-preamble-bash.err && historical_preamble_status=0 || historical_preamble_status=$?
+        else
+            USERPROFILE="$historical_preamble_home" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-historical-preamble-powershell.out 2>/tmp/p0p4-memory-historical-preamble-powershell.err && historical_preamble_status=0 || historical_preamble_status=$?
+        fi
+        if [[ "$historical_preamble_status" -ne 0 ]] || ! cmp -s "$historical_preamble_home/expected-agents.md" "$historical_preamble_agents"; then
+            historical_preamble_failures+=("$historical_preamble_runner authoritative-role")
+        fi
+    done
+    for historical_negative_case in title-absent unknown-interrupt; do
+        historical_preamble_home="$(mktemp -d)"
+        p0p4_register_cleanup "$historical_preamble_home"
+        mkdir -p "$historical_preamble_home/.codex"
+        historical_preamble_agents="$historical_preamble_home/.codex/AGENTS.md"
+        if [[ "$historical_negative_case" == title-absent ]]; then
+            printf '\357\273\277user-prefix\r\n## Role\r\n%s\r\n<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->\r\n<!-- Appended by Assistant Framework install. Do not remove this marker. -->\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\r\nretired protocol\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\r\nuser-suffix\r\n' "${historical_role_forms[2]}" >"$historical_preamble_agents"
+            printf '\357\273\277user-prefix\r\n## Role\r\n%s\r\n<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->\r\n<!-- Appended by Assistant Framework install. Do not remove this marker. -->\r\nuser-suffix\r\n' "${historical_role_forms[2]}" >"$historical_preamble_home/expected-agents.md"
+        else
+            printf '\357\273\277user-prefix\r\n# Assistant Framework — Memory Protocol\r\n## Role\r\n%s\r\nunknown user line interrupts capture\r\n<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\r\nretired protocol\r\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\r\nuser-suffix\r\n' "${historical_role_forms[1]}" >"$historical_preamble_agents"
+            printf '\357\273\277user-prefix\r\n# Assistant Framework — Memory Protocol\r\n## Role\r\n%s\r\nunknown user line interrupts capture\r\n<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->\r\nuser-suffix\r\n' "${historical_role_forms[1]}" >"$historical_preamble_home/expected-agents.md"
+        fi
+        if [[ "$historical_preamble_runner" == bash ]]; then
+            HOME="$historical_preamble_home" bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-historical-negative-bash.out 2>/tmp/p0p4-memory-historical-negative-bash.err && historical_preamble_status=0 || historical_preamble_status=$?
+        else
+            USERPROFILE="$historical_preamble_home" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-historical-negative-powershell.out 2>/tmp/p0p4-memory-historical-negative-powershell.err && historical_preamble_status=0 || historical_preamble_status=$?
+        fi
+        if [[ "$historical_preamble_status" -ne 0 ]] || ! cmp -s "$historical_preamble_home/expected-agents.md" "$historical_preamble_agents"; then
+            historical_preamble_failures+=("$historical_preamble_runner $historical_negative_case")
+        fi
+    done
+done
+if [[ "${#historical_preamble_failures[@]}" -ne 0 ]]; then
+    fail "cleanup did not preserve title-anchored historical-preamble ownership boundaries: ${historical_preamble_failures[*]}"
+else
+    pass
+fi
 
 test_start "Bash cleanup accepts valid JSON Windows paths while retiring exact Memory Graph identity"
 windows_json_home="$(mktemp -d)"

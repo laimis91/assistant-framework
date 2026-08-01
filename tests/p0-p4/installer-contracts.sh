@@ -336,6 +336,23 @@ else
     fail "installer should explain --skill/--plugin mutual exclusion"
 fi
 
+test_start "Claude and Gemini installs ignore hostile ambient CODEX_HOME"
+installer_non_codex_home_failures=()
+for installer_non_codex_agent in claude gemini; do
+    installer_non_codex_home="$(mktemp -d)"
+    p0p4_register_cleanup "$installer_non_codex_home"
+    if ! HOME="$installer_non_codex_home" CODEX_HOME=/ bash "$FRAMEWORK_DIR/install.sh" --agent "$installer_non_codex_agent" --skill assistant-workflow --no-hooks >/tmp/p0p4-install-non-codex-home-${installer_non_codex_agent}.out 2>/tmp/p0p4-install-non-codex-home-${installer_non_codex_agent}.err \
+        || [[ ! -f "$installer_non_codex_home/.${installer_non_codex_agent}/skills/assistant-workflow/SKILL.md" ]] \
+        || [[ -e /skills/assistant-workflow ]]; then
+        installer_non_codex_home_failures+=("$installer_non_codex_agent")
+    fi
+done
+if [[ "${#installer_non_codex_home_failures[@]}" -ne 0 ]]; then
+    fail "Claude or Gemini install forwarded hostile ambient CODEX_HOME instead of using only its selected agent home: ${installer_non_codex_home_failures[*]}"
+else
+    pass
+fi
+
 test_start "installer rejects interrupted retired memory protocol without mutation"
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"

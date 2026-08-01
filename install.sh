@@ -627,12 +627,16 @@ fi
 # before mutation. Run it before syncing so a stale runtime cannot be restored.
 MEMORY_RETIREMENT_TOOL="$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh"
 [[ -f "$MEMORY_RETIREMENT_TOOL" ]] || fail "Memory Graph retirement tool not found: $MEMORY_RETIREMENT_TOOL"
+RETIREMENT_CODEX_HOME=""
+if [[ "$AGENT" == "codex" ]]; then
+    RETIREMENT_CODEX_HOME="${CODEX_HOME:-}"
+fi
 if $DRY_RUN; then
-    if ! HOME="$HOME" CODEX_HOME="${CODEX_HOME:-}" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT" --dry-run; then
+    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT" --dry-run; then
         fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
     fi
 else
-    if ! HOME="$HOME" CODEX_HOME="${CODEX_HOME:-}" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT"; then
+    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT"; then
         fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
     fi
 fi
