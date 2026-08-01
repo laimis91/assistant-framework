@@ -14,6 +14,14 @@ FAIL=0
 P0P4_CLEANUP_PATHS=()
 P0P4_CODEX_SEMANTIC_FIXTURE_PATH=""
 P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH=""
+P0P4_CODEX_HOME_WAS_SET=0
+P0P4_CODEX_HOME_ORIGINAL_VALUE=""
+
+if [[ -n "${CODEX_HOME+x}" ]]; then
+    P0P4_CODEX_HOME_WAS_SET=1
+    P0P4_CODEX_HOME_ORIGINAL_VALUE="$CODEX_HOME"
+fi
+unset CODEX_HOME
 
 p0p4_abs_path() {
     local path="$1"
@@ -95,13 +103,27 @@ p0p4_disable_codex_semantic_fixture() {
     P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH=""
 }
 
+p0p4_restore_codex_home() {
+    if [[ "$P0P4_CODEX_HOME_WAS_SET" -eq 1 ]]; then
+        CODEX_HOME="$P0P4_CODEX_HOME_ORIGINAL_VALUE"
+        export CODEX_HOME
+    else
+        unset CODEX_HOME
+    fi
+}
+
 p0p4_cleanup() {
     local path
+    local cleanup_failed=0
     for path in "${P0P4_CLEANUP_PATHS[@]:-}"; do
         if [[ -n "$path" ]]; then
-            rm -rf "$path"
+            if ! rm -rf "$path"; then
+                cleanup_failed=1
+            fi
         fi
     done
+    p0p4_restore_codex_home
+    return "$cleanup_failed"
 }
 
 trap p0p4_cleanup EXIT
