@@ -572,6 +572,69 @@ else
     pass
 fi
 
+test_start "Bash and PowerShell apply TOML backslash parity without exposing string content as owned spans"
+toml_backslash_parity_failures=()
+for toml_string_runner in "${toml_string_runners[@]}"; do
+    for toml_backslash_case in even-terminator odd-terminator ordinary-escaped-quote; do
+        toml_string_home="$(mktemp -d)"
+        p0p4_register_cleanup "$toml_string_home"
+        mkdir -p "$toml_string_home/.codex/tools/memory-graph"
+        printf '%s\n' 'retired runtime sentinel' >"$toml_string_home/.codex/tools/memory-graph/run-memory-graph.sh"
+        case "$toml_backslash_case" in
+            even-terminator)
+                cat >"$toml_string_home/.codex/config.toml" <<'TOML'
+multiline_basic = """
+even consecutive backslashes \\"""
+[mcp_servers.keep]
+command = "keep"
+TOML
+                cp "$toml_string_home/.codex/config.toml" "$toml_string_home/.codex/config.expected"
+                toml_fixture_mode=absent
+                ;;
+            odd-terminator)
+                cat >"$toml_string_home/.codex/config.toml" <<'TOML'
+multiline_basic = """
+odd consecutive backslashes \"""
+[mcp_servers.memory-graph]
+remains = "inside the string"
+"""
+
+[mcp_servers.keep]
+command = "keep"
+TOML
+                cp "$toml_string_home/.codex/config.toml" "$toml_string_home/.codex/config.expected"
+                toml_fixture_mode=absent
+                ;;
+            ordinary-escaped-quote)
+                cat >"$toml_string_home/.codex/config.toml" <<'TOML'
+basic = "escaped quote: \" stays in this value"
+[mcp_servers.keep]
+command = "keep"
+TOML
+                cp "$toml_string_home/.codex/config.toml" "$toml_string_home/.codex/config.expected"
+                toml_fixture_mode=absent
+                ;;
+        esac
+        if [[ "$toml_string_runner" == bash ]]; then
+            if HOME="$toml_string_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE="$toml_fixture_mode" bash "$cleanup_bash" --agent codex >/tmp/p0p4-memory-cleanup-toml-backslash-${toml_string_runner}-${toml_backslash_case}.out 2>/tmp/p0p4-memory-cleanup-toml-backslash-${toml_string_runner}-${toml_backslash_case}.err; then toml_string_status=0; else toml_string_status=$?; fi
+        elif USERPROFILE="$toml_string_home" P0P4_CODEX_SEMANTIC_FIXTURE_MODE="$toml_fixture_mode" pwsh -NoLogo -NoProfile -File "$cleanup_powershell" -Agent codex >/tmp/p0p4-memory-cleanup-toml-backslash-${toml_string_runner}-${toml_backslash_case}.out 2>/tmp/p0p4-memory-cleanup-toml-backslash-${toml_string_runner}-${toml_backslash_case}.err; then
+            toml_string_status=0
+        else
+            toml_string_status=$?
+        fi
+        if [[ "$toml_string_status" -ne 0 ]] \
+            || ! cmp -s "$toml_string_home/.codex/config.expected" "$toml_string_home/.codex/config.toml" \
+            || [[ -e "$toml_string_home/.codex/tools/memory-graph" ]]; then
+            toml_backslash_parity_failures+=("$toml_string_runner/$toml_backslash_case")
+        fi
+    done
+done
+if [[ "${#toml_backslash_parity_failures[@]}" -ne 0 ]]; then
+    fail "TOML backslash parity did not preserve unrelated bytes and retire only the authorized runtime: ${toml_backslash_parity_failures[*]}"
+else
+    pass
+fi
+
 test_start "Bash JSON invalid escapes and raw controls fail closed before runtime deletion"
 invalid_json_failures=()
 for invalid_json_kind in illegal_escape raw_control; do

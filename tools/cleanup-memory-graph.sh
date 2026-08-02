@@ -879,11 +879,17 @@ def toml_string_state(line, active):
     while index < len(line):
         if active:
             delimiter = '\"\"\"' if active == 'basic' else "'''"
-            if line.startswith(delimiter, index) and (active != 'basic' or index == 0 or line[index - 1] != '\\'):
-                active = None
-                index += 3
-            else:
-                index += 1
+            if line.startswith(delimiter, index):
+                backslashes = 0
+                previous = index - 1
+                while active == 'basic' and previous >= 0 and line[previous] == '\\':
+                    backslashes += 1
+                    previous -= 1
+                if active != 'basic' or backslashes % 2 == 0:
+                    active = None
+                    index += 3
+                    continue
+            index += 1
             continue
         char = line[index]
         if quote:

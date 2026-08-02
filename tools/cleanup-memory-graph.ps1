@@ -404,23 +404,25 @@ function Get-TomlBasicKey {
     $index = 0
     while ($index -lt $Raw.Length) {
         $character = $Raw[$index]
-        if ($character -ne '\\') { [void]$value.Append($character); $index++; continue }
+        if ($character -ne '\') { [void]$value.Append($character); $index++; continue }
         $index++
         if ($index -ge $Raw.Length) { throw 'Ambiguous TOML basic key escape; preserved unchanged.' }
         $escape = $Raw[$index]
         $index++
-        switch ($escape) {
-            'b' { [void]$value.Append([char]8); continue }
-            't' { [void]$value.Append("`t"); continue }
-            'n' { [void]$value.Append("`n"); continue }
-            'f' { [void]$value.Append([char]12); continue }
-            'r' { [void]$value.Append("`r"); continue }
-            '"' { [void]$value.Append('"'); continue }
-            '\\' { [void]$value.Append('\\'); continue }
+        $width = 0
+        switch -CaseSensitive ($escape) {
+            'b' { [void]$value.Append([char]8); break }
+            't' { [void]$value.Append("`t"); break }
+            'n' { [void]$value.Append("`n"); break }
+            'f' { [void]$value.Append([char]12); break }
+            'r' { [void]$value.Append("`r"); break }
+            '"' { [void]$value.Append('"'); break }
+            '\' { [void]$value.Append('\'); break }
             'u' { $width = 4; break }
             'U' { $width = 8; break }
             default { throw 'Ambiguous TOML basic key escape; preserved unchanged.' }
         }
+        if ($width -eq 0) { continue }
         $digits = $Raw.Substring($index, [Math]::Min($width, $Raw.Length - $index))
         if ($digits.Length -ne $width -or $digits -notmatch ('^[0-9A-Fa-f]{' + $width + '}$')) { throw 'Ambiguous TOML basic key escape; preserved unchanged.' }
         [void]$value.Append([char]::ConvertFromUtf32([Convert]::ToInt32($digits, 16)))
@@ -443,7 +445,7 @@ function Get-TomlTablePath {
             while ($index -lt $Body.Length) {
                 $character = $Body[$index]
                 if ($character -eq '"' -and -not $escaped) { break }
-                if ($character -eq '\\' -and -not $escaped) { $escaped = $true } else { $escaped = $false }
+                if ($character -eq '\' -and -not $escaped) { $escaped = $true } else { $escaped = $false }
                 $index++
             }
             if ($index -ge $Body.Length) { throw 'Ambiguous TOML table identity; preserved unchanged.' }
@@ -481,7 +483,12 @@ function Get-TomlLineState {
         if (-not [string]::IsNullOrEmpty($state)) {
             $delimiter = if ($state -eq 'basic') { '"""' } else { "'''" }
             if ($index + 2 -lt $Line.Length -and $Line.Substring($index, 3) -eq $delimiter) {
-                if ($state -eq 'basic' -and $index -gt 0 -and $Line[$index - 1] -eq '\\') { $index++; continue }
+                if ($state -eq 'basic') {
+                    $backslashes = 0
+                    $previous = $index - 1
+                    while ($previous -ge 0 -and $Line[$previous] -eq '\') { $backslashes++; $previous-- }
+                    if ($backslashes % 2 -eq 1) { $index++; continue }
+                }
                 $state = $null; $index += 3; continue
             }
             $index++; continue
@@ -489,7 +496,7 @@ function Get-TomlLineState {
         if (-not [string]::IsNullOrEmpty($quote)) {
             $character = $Line[$index]
             [void]$code.Append($character)
-            if ($quote -eq 'basic' -and $character -eq '\\' -and -not $escaped) { $escaped = $true }
+            if ($quote -eq 'basic' -and $character -eq '\' -and -not $escaped) { $escaped = $true }
             elseif ((($quote -eq 'basic' -and $character -eq '"') -or ($quote -eq 'literal' -and $character -eq "'")) -and -not $escaped) { $quote = $null }
             else { $escaped = $false }
             $index++; continue
@@ -626,7 +633,7 @@ function Assert-TomlSourceLexicallyBalanced {
         $inLiteral = $false
         for ($index = 0; $index -lt $code.Length; $index++) {
             if ($inBasic) {
-                if ($code[$index] -eq '\\') { $index++; continue }
+                if ($code[$index] -eq '\') { $index++; continue }
                 if ($code[$index] -eq '"') { $inBasic = $false }
                 continue
             }

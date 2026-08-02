@@ -160,7 +160,11 @@ $configFile = Join-Path $env:CODEX_HOME 'config.toml'
 if (-not [IO.File]::Exists($configFile)) { exit 64 }
 $hasCanonicalTable = $false
 foreach ($line in [IO.File]::ReadAllLines($configFile)) {
-    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
+    if (
+        [string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal) -or
+        [string]::Equals($line, '[mcp_servers."memory\u002Dgraph"]', [System.StringComparison]::Ordinal) -or
+        [string]::Equals($line, '[mcp_servers."memory\U0000002Dgraph"]', [System.StringComparison]::Ordinal)
+    ) { $hasCanonicalTable = $true; break }
 }
 if ($hasCanonicalTable) { '[{"name":"memory-graph"}]' } else { '[]' }
 exit 0
@@ -570,6 +574,136 @@ exit 0
                     [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
                 }
             }
+        }
+    }
+
+    Invoke-Contract 'Memory Graph cleanup applies TOML backslash parity and preserves unrelated bytes' {
+        Use-IsolatedEnvironment 'cleanup TOML backslash parity' {
+            param($root, $isolatedUserProfile)
+            $cases = @(
+                [PSCustomObject]@{
+                    Name = 'even multiline terminator'
+                    SemanticJson = @('[]')
+                    Original = @'
+multiline_basic = """
+even consecutive backslashes \\"""
+[mcp_servers.keep]
+command = "keep"
+'@
+                    Expected = $null
+                }
+                [PSCustomObject]@{
+                    Name = 'odd multiline terminator'
+                    SemanticJson = @('[]')
+                    Original = @'
+multiline_basic = """
+odd consecutive backslashes \"""
+[mcp_servers.memory-graph]
+remains = "inside the string"
+"""
+
+[mcp_servers.keep]
+command = "keep"
+'@
+                    Expected = $null
+                }
+                [PSCustomObject]@{
+                    Name = 'ordinary escaped quote'
+                    SemanticJson = @('[]')
+                    Original = @'
+basic = "escaped quote: \" stays in this value"
+[mcp_servers.keep]
+command = "keep"
+'@
+                    Expected = $null
+                }
+            )
+            foreach ($case in $cases) {
+                $caseRoot = Join-Path $root $case.Name
+                $codexHome = Join-Path $caseRoot 'Codex Home'
+                $configFile = Join-Path $codexHome 'config.toml'
+                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
+                [IO.File]::WriteAllText($configFile, $case.Original, (New-Object Text.UTF8Encoding($false)))
+                [IO.File]::WriteAllText($runtime, 'runtime', (New-Object Text.UTF8Encoding($false)))
+                $expected = if ($null -eq $case.Expected) { $case.Original } else { $case.Expected }
+                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $case.SemanticJson
+                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
+                try {
+                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+                    $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
+                    Assert-Equal 0 $result.ExitCode "$($case.Name) cleanup failed: $($result.Output)"
+                    Assert-Equal $expected ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup changed unrelated TOML bytes or failed to remove exactly the owned span"
+                    Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup did not retire the authorized stale runtime"
+                }
+                finally {
+                    $env:PATH = $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
+                }
+            }
+        }
+    }
+
+    Invoke-Contract 'Memory Graph cleanup decodes only case-sensitive TOML basic-key escapes' {
+        Use-IsolatedEnvironment 'cleanup TOML basic-key escape case' {
+            param($root, $isolatedUserProfile)
+            $cases = @(
+                [PSCustomObject]@{
+                    Name = 'lowercase unicode escape'
+                    Header = '[mcp_servers."memory\u002Dgraph"]'
+                    ExpectsRetirement = $true
+                }
+                [PSCustomObject]@{
+                    Name = 'uppercase eight-digit unicode escape'
+                    Header = '[mcp_servers."memory\U0000002Dgraph"]'
+                    ExpectsRetirement = $true
+                }
+                [PSCustomObject]@{
+                    Name = 'invalid uppercase basic escape'
+                    Header = '[mcp_servers."memory\Bgraph"]'
+                    ExpectsRetirement = $false
+                }
+            )
+            $caseFailures = @()
+            foreach ($case in $cases) {
+                $caseRoot = Join-Path $root $case.Name
+                $codexHome = Join-Path $caseRoot 'Codex Home'
+                $configFile = Join-Path $codexHome 'config.toml'
+                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
+                $original = $case.Header + "`ncommand = `"retire`"`n`n[mcp_servers.keep]`ncommand = `"keep`"`n"
+                $expected = "[mcp_servers.keep]`ncommand = `"keep`"`n"
+                [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
+                [IO.File]::WriteAllText($runtime, 'runtime', (New-Object Text.UTF8Encoding($false)))
+                $fakeBin = New-IsolatedCodexSemanticAuthority -Root $caseRoot
+                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
+                try {
+                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+                    try {
+                        $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
+                        if ($case.ExpectsRetirement) {
+                            Assert-Equal 0 $result.ExitCode "$($case.Name) cleanup failed: $($result.Output)"
+                            Assert-Equal $expected ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup did not remove exactly the owned encoded key"
+                            Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup did not retire the exact stale runtime"
+                        }
+                        else {
+                            Assert-True ($result.ExitCode -ne 0) "$($case.Name) cleanup accepted an invalid case-variant TOML escape: $($result.Output)"
+                            Assert-Equal $original ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup changed invalid TOML bytes"
+                            Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup deleted runtime after invalid TOML escape"
+                        }
+                    }
+                    catch {
+                        $caseFailures += $_.Exception.Message
+                    }
+                }
+                finally {
+                    $env:PATH = $oldPath
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
+                }
+            }
+            if ($caseFailures.Count -gt 0) { throw ($caseFailures -join [Environment]::NewLine) }
         }
     }
 
