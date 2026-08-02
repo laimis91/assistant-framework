@@ -74,7 +74,7 @@ Candidate scope scan:
 - Unknowns: [none, or one short scope/risk unknown per line]
 Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
-- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop; otherwise compact ref with loop_type/trigger/verifier/stop/max_iterations/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; otherwise compact ref with loop_type/trigger/verifier/stop/max_iterations/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 

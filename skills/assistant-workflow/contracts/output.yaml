@@ -1827,10 +1827,10 @@ artifacts:
   - name: loop_readiness_assessment
     type: object
     required: conditional
-    condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates"
-    description: "Pre-loop gate for repeat/optimization loops; not required for one-pass work or the normal required review loop."
+    condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover"
+    description: "Pre-loop/readiness gate for repeat/optimization loops and sequential progressive resolution; not required for one-pass work or the normal required review loop."
     validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    on_fail: "Before running the repeat/optimization loop, add the readiness assessment or remove the loop from the plan. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
+    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
     object_fields:
       - name: loop_type
         type: enum
@@ -1927,7 +1927,7 @@ artifacts:
 # 5. If qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
 # 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
-# 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
+# 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops or a second/sequential progressive decision activation and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
 # 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
 # 10. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
 # 11. manual_verification_result exists only when manual_verification_mode=required; user_approval exists only when that scoped check depends on user observation. Metrics never block completion.

@@ -21,6 +21,19 @@ input_field_has_text() {
     ' "$file"
 }
 
+output_artifact_has_text() {
+    local artifact="$1"
+    local expected="$2"
+    local file="$3"
+
+    awk -v artifact="$artifact" -v expected="$expected" '
+        $0 == "  - name: " artifact { in_artifact = 1; next }
+        in_artifact && /^  - name: / { exit }
+        in_artifact && index($0, expected) { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 load_set_has_text() {
     local load_set="$1"
     local expected="$2"
@@ -449,10 +462,26 @@ fi
 test_start "workflow bounds repeated progressive resolution with readiness evidence"
 readiness_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
+plan_template="$workflow_dir/references/plan-template.md"
+task_journal_template="$workflow_dir/references/task-journal-template.md"
 
 if ! progressive_artifact_selector_has_name "loop_readiness_assessment" "$index_contract"; then
     readiness_missing+=("contracts/index.yaml progressive_discovery must select loop_readiness_assessment from contracts/output.yaml artifacts")
 fi
+
+for term in \
+    "second/sequential progressive decision activation" \
+    "sequential progressive resolution"; do
+    if ! output_artifact_has_text "loop_readiness_assessment" "$term" "$output_contract"; then
+        readiness_missing+=("contracts/output.yaml loop_readiness_assessment missing $term")
+    fi
+done
+
+for template in "$plan_template" "$task_journal_template"; do
+    if ! p0p4_contains_text "$template" "sequential progressive decision activation"; then
+        readiness_missing+=("${template#"$FRAMEWORK_DIR/"} missing sequential progressive decision activation")
+    fi
+done
 
 for term in \
     "D_PROGRESSIVE_REPEAT_READINESS" \
