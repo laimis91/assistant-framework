@@ -34,7 +34,10 @@ state where decision items exist, including mapping, at most one item may have
 once it exists, it reflects that same limit while recording multiple sequential
 resolutions in one session. Keep decision resolutions canonical and carry the
 cleared decisions, constraints, exclusions, and acceptance seed back toward
-bounded Discover.
+bounded Discover. Every blocked item records blocker_kind, blocker_reason, and
+unblock_condition. The blocked_item_refs resolve to decision_item entries so a
+resumed journal knows why work stopped and what evidence or state change permits
+retry.
 
 ## Repeated Resolution Readiness
 

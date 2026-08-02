@@ -34,6 +34,22 @@ output_artifact_has_text() {
     ' "$file"
 }
 
+output_artifact_field_has_text() {
+    local artifact="$1"
+    local field="$2"
+    local expected="$3"
+    local file="$4"
+
+    awk -v artifact="$artifact" -v field="$field" -v expected="$expected" '
+        $0 == "  - name: " artifact { in_artifact = 1; next }
+        in_artifact && /^  - name: / { exit }
+        in_artifact && $0 == "      - name: " field { in_field = 1; next }
+        in_field && /^      - name: / { exit }
+        in_field && index($0, expected) { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 load_set_has_text() {
     local load_set="$1"
     local expected="$2"
@@ -291,6 +307,67 @@ if [[ "${#state_mode_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive state-mode inference contract missing: ${state_mode_missing[*]}"
+fi
+
+test_start "workflow persists blocked decision reasons and unblock conditions"
+blocked_recovery_missing=()
+blocked_eval_fixture="$workflow_dir/evals/cases.json"
+blocked_phase_gates="$workflow_dir/contracts/phase-gates.yaml"
+
+for field_and_terms in \
+    'blocker_kind::["type: enum","required: conditional","condition: \"status == blocked\"","enum_values: [missing_evidence, readiness_exhausted, external_dependency, human_input, tool_failure, policy_or_permission, other]"]' \
+    'blocker_reason::["type: string","required: conditional","condition: \"status == blocked\""]' \
+    'unblock_condition::["type: string","required: conditional","condition: \"status == blocked\""]'; do
+    field="${field_and_terms%%::*}"
+    terms_json="${field_and_terms#*::}"
+    while IFS= read -r term; do
+        if ! output_artifact_field_has_text "decision_item" "$field" "$term" "$output_contract"; then
+            blocked_recovery_missing+=("contracts/output.yaml decision_item.$field missing $term")
+        fi
+    done < <(jq -r '.[]' <<<"$terms_json")
+done
+
+for term in \
+    "INV_PROGRESSIVE_BLOCKED_RECOVERY" \
+    "decision_item status=blocked" \
+    "blocker_kind" \
+    "blocker_reason" \
+    "unblock_condition" \
+    "blocked_item_refs"; do
+    if ! p0p4_contains_text "$blocked_phase_gates" "$term"; then
+        blocked_recovery_missing+=("contracts/phase-gates.yaml missing $term")
+    fi
+done
+
+for term in \
+    "blocked_item_refs resolve to decision_item entries" \
+    "blocker_kind" \
+    "blocker_reason" \
+    "unblock_condition"; do
+    if ! output_artifact_has_text "decision_frontier" "$term" "$output_contract"; then
+        blocked_recovery_missing+=("contracts/output.yaml decision_frontier missing $term")
+    fi
+    if ! p0p4_contains_text "$progressive_ref" "$term"; then
+        blocked_recovery_missing+=("progressive-discovery.md missing $term")
+    fi
+done
+
+for term in \
+    "status=blocked" \
+    "blocker_kind=missing_evidence" \
+    "blocker_reason" \
+    "unblock_condition" \
+    "blocked_item_refs" \
+    "remain in progressive Discover"; do
+    if ! eval_case_has_machine_term "$blocked_eval_fixture" "progressive-blocked-decision-recovery" "$term"; then
+        blocked_recovery_missing+=("eval case progressive-blocked-decision-recovery missing machine expectation $term")
+    fi
+done
+
+if [[ "${#blocked_recovery_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive blocked-decision recovery contract missing: ${blocked_recovery_missing[*]}"
 fi
 
 test_start "workflow gates progressive safety recomputation and route clearance"

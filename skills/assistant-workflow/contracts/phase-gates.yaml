@@ -722,6 +722,12 @@ invariants:
     scope: all_phases
     on_fail: "Keep the decision unresolved, request or record actual user evidence, and do not manufacture human confirmation."
 
+  - id: INV_PROGRESSIVE_BLOCKED_RECOVERY
+    check: "Every decision_item status=blocked records blocker_kind, blocker_reason, and unblock_condition; each blocked_item_refs entry resolves to that canonical decision item so recovery knows why it stopped and what must change before retry."
+    condition: "uncertainty_shape == progressive and any decision_item has status=blocked"
+    scope: all_phases
+    on_fail: "Keep the item blocked, record its typed reason and concrete unblock condition, repair the frontier reference, and do not retry or advance until the condition is evidenced."
+
   - id: INV_PROGRESSIVE_RECOMPUTATION
     check: "Each decision_resolution records downstream effects, newly precise items, and superseded/invalidated items before recomputing the frontier."
     condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear]"

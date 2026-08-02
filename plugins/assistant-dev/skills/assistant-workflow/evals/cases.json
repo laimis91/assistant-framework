@@ -1136,6 +1136,49 @@
       }
     },
     {
+      "id": "progressive-blocked-decision-recovery",
+      "title": "Blocked progressive decisions retain typed recovery state",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a blocked decision persists why it stopped and the exact condition required before retry or continuation.",
+      "prompt": "A progressive retention decision cannot continue because its required evidence is missing. Record a recoverable blocked state that will still be actionable after compaction; do not retry or advance to planning.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and the active decision lacks required evidence.",
+        "The task journal or equivalent carried state may be resumed after compaction."
+      ],
+      "expected_behavior": [
+        "Marks the decision item status=blocked with blocker_kind=missing_evidence.",
+        "Records a concrete blocker_reason and unblock_condition on the canonical decision item.",
+        "Keeps blocked_item_refs pointed at that item so the frontier does not duplicate or lose recovery state.",
+        "Remains in progressive Discover and does not retry until the unblock condition is evidenced."
+      ],
+      "pass_criteria": [
+        "The blocked item explains why it stopped and what must change before retry.",
+        "The frontier reference resolves to the canonical typed item.",
+        "The response does not treat compaction or continuation as permission to clear the blocker."
+      ],
+      "fail_signals": [
+        "Stores only a blocked reference with no reason.",
+        "Retries without an unblock condition or evidence.",
+        "Advances to planning while the blocked item remains unresolved."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "status=blocked",
+          "blocker_kind=missing_evidence",
+          "blocker_reason",
+          "unblock_condition",
+          "blocked_item_refs",
+          "remain in progressive Discover"
+        ],
+        "forbidden_substrings": [
+          "retry without an unblock condition",
+          "clear the blocker after compaction",
+          "advance to Plan while blocked"
+        ]
+      }
+    },
+    {
       "id": "progressive-mapping-single-active-negative",
       "title": "Progressive mapping rejects two active decision items",
       "category": "progressive_discovery",

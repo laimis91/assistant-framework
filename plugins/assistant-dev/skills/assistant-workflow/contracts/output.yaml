@@ -1544,8 +1544,8 @@ artifacts:
     required: conditional
     condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
     description: "Typed register item for a precise progressive Discover decision"
-    validation: "Contains interaction_mode, dependencies, and status; at most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
-    on_fail: "Record the missing decision item fields, keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
+    validation: "Contains interaction_mode, dependencies, and status; status=blocked additionally requires blocker_kind, blocker_reason, and unblock_condition. At most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
+    on_fail: "Record the missing decision item fields, including typed blocker recovery state when blocked; keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
     object_fields:
       - name: decision_id
         type: string
@@ -1564,6 +1564,22 @@ artifacts:
         type: enum
         required: true
         enum_values: [pending, active, resolved, blocked, superseded, excluded]
+      - name: blocker_kind
+        type: enum
+        required: conditional
+        condition: "status == blocked"
+        enum_values: [missing_evidence, readiness_exhausted, external_dependency, human_input, tool_failure, policy_or_permission, other]
+        validation: "Classifies the blocked state without replacing the concrete blocker reason"
+      - name: blocker_reason
+        type: string
+        required: conditional
+        condition: "status == blocked"
+        validation: "Nonblank reason the decision cannot currently proceed"
+      - name: unblock_condition
+        type: string
+        required: conditional
+        condition: "status == blocked"
+        validation: "Concrete evidence, state change, approval, or dependency result required before retry"
 
   - name: deferred_uncertainty
     type: object[]
@@ -1596,8 +1612,8 @@ artifacts:
     required: conditional
     condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear, blocked]"
     description: "Current eligible, active, and blocked progressive decision state"
-    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. It allows at most one active item while multiple sequential resolutions per session are allowed."
-    on_fail: "Recompute the frontier, leave no more than one active item, and preserve blocked items with their reasons."
+    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. The blocked_item_refs resolve to decision_item entries carrying blocker_kind, blocker_reason, and unblock_condition. It allows at most one active item while multiple sequential resolutions per session are allowed."
+    on_fail: "Recompute the frontier, leave no more than one active item, and preserve each blocked item reference with its typed reason and unblock condition."
     object_fields:
       - name: computed_from
         type: string[]
