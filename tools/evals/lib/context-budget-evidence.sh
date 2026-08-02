@@ -23,7 +23,6 @@ context_budget_build_evidence() {
       def standing_components($report): {
         project_agents:$report.components.project_agents,
         generated_global_agents:$report.components.generated_global_agents,
-        generated_memory_protocol:$report.components.generated_memory_protocol,
         native_skill_catalog_descriptions:$report.components.native_skill_catalog_descriptions
       };
       standing_components($baseline[0]) as $baseline_components

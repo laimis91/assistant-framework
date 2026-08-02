@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, thinking tools, research, security analysis, cross-session memory, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, self-improving reflexion, and purpose-driven context (Telos).
+A Personal AI Assistant framework for developers. 14 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, and purpose-driven context (Telos).
 
 ## What it does
 
@@ -11,15 +11,13 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
 6. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
 7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
-8. **Memory System** — Cross-session learning: user preferences, feedback rules, task insights, project context
-9. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
-10. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, records project context
-11. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
-12. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-13. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
-14. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
-15. **Reflexion** — Self-improving agent: post-task reflection, lesson recall, strategy profiles, confidence calibration
-16. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
+8. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
+9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
+10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
+11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
+12. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
+13. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
+14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 
 ## Installation
 
@@ -41,7 +39,7 @@ Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The curr
 ./install.sh --agent codex --plugin assistant-dev
 ```
 
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold has plugin-local copies of the four core skills, the research scaffold has plugin-local copies of the three research skills, and the dev scaffold has plugin-local copies of the nine development skills. These plugin-local copies are generated release artifacts from the root `skills/assistant-*` source of truth; verify or refresh them with `tools/plugins/sync-plugin-skills.sh --check` and `tools/plugins/sync-plugin-skills.sh --apply`. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
+The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold contains `assistant-clarify` and `assistant-telos`; the research scaffold has three skills, and the dev scaffold has nine. These plugin-local copies are generated release artifacts from the root `skills/assistant-*` source of truth; verify or refresh them with `tools/plugins/sync-plugin-skills.sh --check` and `tools/plugins/sync-plugin-skills.sh --apply`. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
 
 Install a single skill:
 ```bash
@@ -61,11 +59,29 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 ./install.sh --agent gemini
 ```
 
-For one compatibility release, a normal install also retires older Assistant Framework lifecycle registrations safely. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. Invalid JSON is warned about and left unchanged. Restart the agent after migrating an older install. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
+For one compatibility release, a normal install also retires older Assistant Framework lifecycle registrations safely. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. Potentially relevant or ambiguous structured configuration is left unchanged and cleanup stops before deleting retired artifacts. Without Python, cleanup may preserve an unrelated structured configuration only after conservatively ruling out the retired identity; it does not validate provider syntax. Editing a potentially relevant Codex `config.toml` requires the Codex CLI; if it is unavailable or the semantic result is ambiguous, the config, runtime, and provider data are preserved and installation stops. Correct the configuration or make the Codex CLI available, then rerun the install. Restart the agent after migrating an older install. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
+
+### Retiring an older installation
+
+On an older or other machine, run the standalone cleanup tool from this checked-out repository before reinstalling. Start with a dry run; normal cleanup removes only framework-owned registrations and installed artifacts while preserving provider data. Editing a potentially relevant existing Codex `config.toml` requires the Codex CLI; unavailable or ambiguous semantic results preserve configuration, runtime, and provider data, then stop cleanup. `--purge-data` is optional and destructive.
+
+```bash
+tools/cleanup-memory-graph.sh --dry-run
+tools/cleanup-memory-graph.sh
+tools/cleanup-memory-graph.sh --purge-data
+tools/cleanup-memory-graph.sh --agent codex --dry-run
+```
+
+```powershell
+.\tools\cleanup-memory-graph.ps1 -DryRun
+.\tools\cleanup-memory-graph.ps1
+.\tools\cleanup-memory-graph.ps1 -PurgeData
+.\tools\cleanup-memory-graph.ps1 -Agent codex -DryRun
+```
 
 ### Native Windows installation
 
-Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7 and requires the .NET 8 SDK so the Memory Graph server can build on first use.
+Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7.
 
 Close Codex App before installing or updating Codex so it releases `config.toml` and `AGENTS.md`. The installer checks existing copies of both files before it starts changing managed files. If either file is locked, close Codex App and rerun the same command. If a file becomes unavailable after that check, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
 
@@ -77,17 +93,10 @@ Install the complete release inventory for one agent:
 .\install.ps1 -Agent gemini
 ```
 
-On the first Claude or Gemini install, add `-AcceptMemoryProtocol` if you want the installer to append the Assistant Framework memory instructions. Without it, the installer still installs the framework and tells you that the protocol was not added.
-
-```powershell
-.\install.ps1 -Agent claude -AcceptMemoryProtocol
-.\install.ps1 -Agent gemini -AcceptMemoryProtocol
-```
-
 The same entry point supports a single skill, a focused profile, and a non-mutating preview:
 
 ```powershell
-.\install.ps1 -Agent claude -Skill assistant-thinking -AcceptMemoryProtocol
+.\install.ps1 -Agent claude -Skill assistant-thinking
 .\install.ps1 -Agent codex -Plugin assistant-dev
 .\install.ps1 -Agent codex -DryRun
 ```
@@ -98,41 +107,39 @@ After pulling an update, reinstall by running the selected install command again
 .\install.ps1 -Agent codex
 ```
 
-Installer-owned directories are mirrored, while existing memory data, unrelated agent configuration, and user-authored instruction content are preserved. Restart the selected agent after updating an older installation.
+Installer-owned directories are mirrored, while unrelated agent configuration and user-authored instruction content are preserved. Restart the selected agent after updating an older installation.
 
 Windows destinations are:
 
-| Agent | Skills | Configuration, tools, and memory |
+| Agent | Skills | Configuration and tools |
 |---|---|---|
 | Codex | `%USERPROFILE%\.agents\skills\assistant-*` | `CODEX_HOME` when set; otherwise `%USERPROFILE%\.codex` |
 | Claude Code | `%USERPROFILE%\.claude\skills\assistant-*` | `%USERPROFILE%\.claude` and `%USERPROFILE%\.claude.json` |
 | Gemini CLI | `%USERPROFILE%\.gemini\skills\assistant-*` | `%USERPROFILE%\.gemini` |
 
-The Windows installer itself does not require administrator access, create symlinks, download dependencies, or change PowerShell execution policy. On the first Memory Graph launch, `dotnet publish` can restore the project's declared NuGet packages when they are not already cached; the machine's normal NuGet sources and network policy apply. If Windows marks the checked-out script as downloaded and blocks it, review the file and remove only that file's download mark:
+The Windows installer itself does not require administrator access, create symlinks, download dependencies, or change PowerShell execution policy. If Windows marks the checked-out script as downloaded and blocks it, review the file and remove only that file's download mark:
 
 ```powershell
 Unblock-File -LiteralPath .\install.ps1
 ```
 
-Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy Bypass`. The native installer and Memory Graph launcher are PowerShell scripts; the repository's remaining Bash-only maintenance and eval helpers still require Git Bash or WSL.
+Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy Bypass`. The repository's remaining Bash-only maintenance and eval helpers still require Git Bash or WSL.
 
 #### Windows manual verification
 
 1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
 2. Close Codex App, run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
-3. Resolve the Codex configuration root and confirm its Memory Graph launcher, configuration, and global instructions exist:
+3. Resolve the Codex configuration root and confirm its configuration and global instructions exist:
 
    ```powershell
    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-   Test-Path -LiteralPath (Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1')
    Test-Path -LiteralPath (Join-Path $codexHome 'config.toml')
    Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
-   Select-String -LiteralPath (Join-Path $codexHome 'config.toml') -SimpleMatch '[mcp_servers.memory-graph]'
    Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
    ```
 
 4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1`.
-5. Restart the selected agent and call `memory_context`, or inspect its MCP status, to verify that Memory Graph starts successfully.
+5. Restart the selected agent and verify its installed skills are available.
 
 ## Skills
 
@@ -236,11 +243,6 @@ Evidence-bounded code review: audits use one pass; review-fix work normally uses
 
 Triggers on: review, fresh review, code review, review this, check the code
 
-### assistant-memory
-Memory management via SQLite-backed knowledge graph (`~/.{agent}/memory/memory.db`). Records rules, preferences, insights, and project context. Survives skill reinstalls. Legacy `graph.jsonl` files are imported or used as fallback seed compatibility only.
-
-Triggers on: remember this, save insight, update memory, preferences
-
 ### assistant-docs
 Documentation generation and maintenance. Six modes: API docs, architecture overview, README, changelog, migration guide, code explainer. Detects stale docs and offers updates.
 
@@ -266,58 +268,12 @@ Visual documentation from code analysis. Seven diagram types: architecture, sequ
 
 Triggers on: diagram, draw, visualize, show me the flow, architecture diagram
 
-### assistant-reflexion
-Self-improving agent loop. Post-task reflection captures what worked and what didn't. Pre-task lesson recall loads relevant lessons from past work. Strategy profiles accumulate per project type. Confidence calibration tracks prediction accuracy.
-
-Triggers on: reflect, what did we learn, lessons, how did that go, calibrate
-
 ### assistant-telos
 Purpose context framework based on [Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos). Guides you through building a purpose chain (problems → mission → goals → challenges → strategies → projects) stored at `~/.claude/telos.md`. Loaded at every session start so agents can prioritize work aligned with what actually matters to you.
 
 Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
 
 ## Tools
-
-### Memory Graph (MCP Server)
-
-The sole persistence layer for cross-session memory. Provides queryable context so the agent can ask targeted questions like "What do I know about the desktop app?" via MCP tools.
-
-**16 MCP tools:** `memory_context`, `memory_search` (FTS5-powered), `memory_doctor`, `memory_add_entity`, `memory_add_relation`, `memory_add_insight`, `memory_remove_entity`, `memory_remove_relation`, `memory_graph`, `memory_reflect`, `memory_decide`, `memory_pattern`, `memory_consolidate`, `memory_stats`, `memory_signal`, `memory_trend`
-
-Installed automatically to `~/.{agent}/tools/memory-graph/` by the installer. The installer auto-registers the MCP server in your agent settings when `jq` is available. If not auto-registered, add manually (replace `~` with your actual home directory — most MCP hosts do not expand tilde):
-
-**Claude Code** (`~/.claude.json`):
-```json
-{
-  "mcpServers": {
-    "memory-graph": {
-      "command": "~/.claude/tools/memory-graph/run-memory-graph.sh",
-      "args": ["--memory-dir", "~/.claude/memory"]
-    }
-  }
-}
-```
-
-**Codex** (`~/.codex/config.toml`):
-```toml
-[mcp_servers.memory-graph]
-command = "~/.codex/tools/memory-graph/run-memory-graph.sh"
-args = ["--memory-dir", "~/.codex/memory"]
-```
-
-**Gemini** (`~/.gemini/settings.json`):
-```json
-{
-  "mcpServers": {
-    "memory-graph": {
-      "command": "~/.gemini/tools/memory-graph/run-memory-graph.sh",
-      "args": ["--memory-dir", "~/.gemini/memory"]
-    }
-  }
-}
-```
-
-Requires .NET 8+ SDK for the initial build (builds automatically on first run). See `tools/memory-graph/DESIGN.md` for architecture details.
 
 ### Cognitive Complexity
 
@@ -360,15 +316,9 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
-The default eval inventory is first-class `assistant-*` skills with fixtures and
-excludes local-only `unity-*` skills unless `--include-local` is passed. Current
-coverage is complete first-class skill coverage for all 16 tracked assistant
-skills: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`,
-`assistant-ideate`, `assistant-memory`, `assistant-onboard`,
-`assistant-reflexion`, `assistant-research`, `assistant-review`,
-`assistant-security`, `assistant-skill-creator`, `assistant-tdd`,
-`assistant-telos`, `assistant-thinking`, and `assistant-workflow`. Local-only
-Unity skills remain opt-in through `--include-local`. Local grading is heuristic
+The default eval inventory is 14 first-class `assistant-*` skills with fixtures
+and excludes local-only `unity-*` skills unless `--include-local` is passed.
+Local-only Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
 
@@ -447,8 +397,8 @@ fixture:
 
 Pull requests and pushes to `main` also run
 `.github/workflows/framework-validation.yml`, which executes the aggregate
-contracts, skill and generated-mirror checks, all three Unix installer
-dry-runs, and the Memory Graph tests on a hosted Linux runner.
+contracts, skill and generated-mirror checks, and all three Unix installer
+dry-runs on a hosted Linux runner.
 
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,
@@ -472,10 +422,9 @@ separate authorization for the six-case, three-repeat, two-variant pilot
 ## Structure
 
 ```
-install.sh                         <- Top-level installer (skills + migration cleanup + memory)
+install.sh                         <- Top-level installer (skills + migration cleanup)
 install.ps1                        <- Native Windows PowerShell 5.1/7 installer
 version.txt                        <- Framework version
-graph-seed.jsonl                   <- Default knowledge graph seed data
 
 skills/
   assistant-workflow/
@@ -520,13 +469,6 @@ skills/
   assistant-review/
     SKILL.md                       <- Autonomous review/fix/re-review loop
 
-  assistant-memory/
-    SKILL.md                       <- Memory categories, rules, hygiene
-    templates/                     <- Entry format templates
-      insight-template.md
-      feedback-template.md
-      user-pref-template.md
-
   assistant-docs/
     SKILL.md                       <- Mode selection and general protocol
     api-docs.md                    <- API surface documentation
@@ -555,9 +497,6 @@ skills/
     class-diagram.md               <- Type hierarchy diagrams
     state-diagram.md               <- State machine diagrams
 
-  assistant-reflexion/
-    SKILL.md                       <- Self-improvement loop protocol
-
   assistant-telos/
     SKILL.md                       <- Purpose context framework (Telos Method)
 
@@ -571,15 +510,6 @@ tools/
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
     run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
   cognitive-complexity/             <- Roslyn-based complexity analyzer
-  memory-graph/
-    DESIGN.md                      <- Architecture and data model
-    run-memory-graph.sh            <- Build-and-run script
-    src/MemoryGraph/               <- C# MCP server (stdio, JSON-RPC)
-      Graph/                       <- In-memory knowledge graph abstractions + legacy JSONL compatibility
-      Storage/                     <- Authoritative SQLite + FTS5 store (graph memory, reflexions, decisions, strategies)
-      Tools/                       <- 16 MCP tool implementations
-      Server/                      <- JSON-RPC message loop
-    tests/MemoryGraph.Tests/       <- xUnit behavior and integration tests
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
@@ -634,7 +564,7 @@ Docs skill: Scans endpoints, extracts parameters/types, generates API reference 
 ### For new projects
 ```
 You: "Learn this codebase"
-Onboard skill: Maps structure, identifies patterns, records project context through the memory graph, reports summary
+Onboard skill: Maps structure, identifies patterns, and reports project orientation
 ```
 
 ### For brainstorming
@@ -649,14 +579,6 @@ You: "Draw the architecture diagram"
 Diagrams skill: Traces code, maps components and dependencies, outputs Mermaid diagram
 ```
 
-### For evidence-triggered self-improvement
-```
-[After a task produces concrete lesson-bearing evidence]
-Reflexion skill: Reviews what worked, what failed, and saves only durable lessons
-[Before starting next task]
-Reflexion: Recalls relevant lessons, adjusts plan based on past experience
-```
-
 ### For purpose alignment
 ```
 You: "telos create"
@@ -669,8 +591,7 @@ Telos skill: Checks active work against your purpose chain
 
 Each supported agent selects installed skills from the skill name, description, and instructions. Framework contracts, evals, project guidance, and review provide the workflow discipline; there is no separate runtime router or lifecycle enforcement layer.
 
-Workflow metrics are optional, non-blocking observability. Reflexion and memory
-capture are also conditional rather than required completion ceremony.
+Workflow metrics are optional, non-blocking observability.
 
 The repository also keeps `triggers:` metadata as explicit examples for documentation and eval fixtures:
 
@@ -705,7 +626,5 @@ No runtime script changes are needed when adding a skill: add the skill metadata
 - **Composable skills** — Each first-class `assistant-*` skill works standalone or together with the others
 - **Progressive loading** — Each SKILL.md is small. Tool files load on demand.
 - **Thinking tools are tools, not phases** — Use them when needed, not on every task
-- **Memory survives reinstalls** — Data in `~/.{agent}/memory/`, not in skill directories
-- **Learning compounds** — Insights from past work inform future decisions
-- **Self-improving** — Evidence-backed lessons improve future tasks; routine tasks skip reflection.
+- **Evidence before change** — Current repository evidence, tests, and review gates guide delivery decisions
 - **Covers weaknesses** — Documentation, diagrams, and onboarding compensate for developer blind spots

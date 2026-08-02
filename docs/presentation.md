@@ -1,39 +1,35 @@
-# Assistant Framework v0.2.0
+# Assistant Framework
 
-## Your AI Becomes a Senior Developer That Never Forgets
+## A development workflow that makes delivery more reliable
 
 ---
 
 ## The Problem
 
-Every AI coding session starts from zero.
+AI coding sessions can lack the structure needed for dependable delivery.
 
-- No memory of past decisions
-- No knowledge of what worked before
-- Repeats the same mistakes
-- Doesn't know your preferences
-- Can't cover your weaknesses
+- No explicit task boundary
+- No proportionate plan for a risky change
+- No reliable evidence trail
+- No independent review
 - No structured workflow — just vibes
 
-**You are the memory. You are the process. You are the quality gate.**
+**You provide the goals. The framework provides a disciplined delivery loop.**
 
 ---
 
 ## What If Your AI Could...
 
-- Remember every decision and why it was made
-- Learn from its own mistakes automatically
 - Cover your weaknesses (docs, diagrams, onboarding)
 - Follow a battle-tested development workflow
-- Review its own code autonomously
-- Get better at YOUR projects over time
+- Use focused verification and independent review
 - Work the same way across Claude, Codex, and Gemini
 
 ---
 
 ## Assistant Framework
 
-**11 composable skills. 13 MCP tools. One self-improving system.**
+**14 composable skills. One evidence-gated workflow system.**
 
 Built from scratch. No imports. No marketplace dependencies.
 
@@ -69,22 +65,11 @@ Works with: **Claude Code** | **OpenAI Codex** | **Google Gemini CLI**
     │         │ │         │ │        │ │          │
     │API docs │ │6-phase  │ │diverge │ │7 types   │
     │arch doc │ │codebase │ │converge│ │from code │
-    │README   │ │learning │ │refine  │ │Mermaid   │
+    │README   │ │analysis │ │refine  │ │Mermaid   │
     │changes  │ │auto-    │ │score   │ │sequence  │
-    │migrate  │ │memory   │ │rank    │ │ER, flow  │
-    │explain  │ │generate │ │decide  │ │class     │
+    │migrate  │ │report   │ │decide  │ │ER, flow  │
+    │explain  │ │handoff  │ │        │ │class     │
     └─────────┘ └─────────┘ └────────┘ └──────────┘
-                        │
-              ┌─────────▼──────────┐
-              │    REFLEXION       │
-              │                    │
-              │ Self-improving     │
-              │ agent loop         │
-              │                    │
-              │ Every task makes   │
-              │ the next one       │
-              │ better             │
-              └────────────────────┘
 ```
 
 ---
@@ -208,8 +193,7 @@ Phase 1: Surface Scan      → README, build files, project shape
 Phase 2: Architecture Map  → layers, boundaries, data flow
 Phase 3: Pattern Recognition → naming, error handling, DI, testing
 Phase 4: Knowledge Gaps    → what's still unclear, asks you
-Phase 5: Generate Memory   → writes .claude/memory.md
-Phase 6: Report            → concise summary
+Phase 5: Report            → concise summary and open questions
 
 Output:
   Project: InventoryAPI
@@ -264,68 +248,6 @@ You: "Draw the architecture"
 
 ---
 
-## The Breakthrough: Reflexion
-
-**Every task makes the next task better.**
-
-```
-Session 1: Fix a bug in the API
-  → Reflexion: "Wasted 5 min because I forgot to check DI registration"
-  → Lesson stored: "In this project, always verify DI registration
-     when NullReferenceException involves a service"
-
-Session 5: Another API bug
-  → Discover phase: "Found 2 relevant lessons from past tasks"
-  → Applies lesson automatically → faster fix
-
-Session 20: Strategy profile is rich
-  → 12 accumulated lessons across discover/plan/build/review
-  → "You tend to underestimate refactors by 1 size category"
-  → Auto-adjusts estimate: suggests MEDIUM instead of SMALL
-```
-
----
-
-## Memory Architecture
-
-**Not just files. A queryable knowledge system.**
-
-```
-┌─────────────────────────────────────────────────┐
-│                  13 MCP Tools                    │
-│                                                  │
-│  memory_context    memory_search (FTS5)          │
-│  memory_reflect    memory_decide                 │
-│  memory_pattern    memory_consolidate            │
-│  memory_stats      memory_add_entity             │
-│  memory_add_relation  memory_add_insight          │
-│  memory_remove_entity  memory_remove_relation     │
-│  memory_graph                                    │
-└──────────┬──────────────────────┬────────────────┘
-           │                      │
-    ┌──────▼──────┐     ┌────────▼────────┐
-    │ Knowledge   │     │ SQLite + FTS5   │
-    │ Graph       │     │                 │
-    │ (JSONL)     │     │ Reflexions      │
-    │             │     │ Decisions       │
-    │ Entities    │     │ Strategy Lessons│
-    │ Relations   │     │ Calibration     │
-    │ Projects    │     │ FTS5 Index      │
-    │ Technologies│     │                 │
-    │ Patterns    │     │ Ranked search   │
-    │ Insights    │     │ across ALL      │
-    └─────────────┘     │ memory content  │
-                        └─────────────────┘
-```
-
-**Strategy lessons accumulate per project type:**
-- Confidence scoring (0.0 → 1.0)
-- Reinforcement on re-observation
-- Time decay for stale lessons
-- Automatic consolidation
-
----
-
 ## Multi-Agent Orchestration
 
 **Specialized roles with constrained access.**
@@ -373,8 +295,7 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 
 - Skills auto-adapt paths (`.claude/` → `.codex/` → `.gemini/`)
 - Agent definitions per platform (`.md` for Claude, `.toml` for Codex)
-- MCP server registers in each agent's config
-- Memory is shared or independent — your choice
+- Native skill routing selects installed skills from metadata and instructions
 
 ---
 
@@ -382,15 +303,12 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 
 | Metric | Count |
 |---|---|
-| Skills | 11 |
-| MCP tools | 13 |
+| Skills | 14 |
 | Contract levels | 4 |
 | Specialized agents | 6 |
 | Thinking tools | 6 |
 | Diagram types | 7 |
 | Doc generation modes | 6 |
-| Tests passing | Contract suites plus 65 memory-graph tests |
-| External dependencies | 1 (Microsoft.Data.Sqlite) |
 | Lines of YAML config | 0 (auto-discovered) |
 | Marketplace imports | 0 (100% built in-house) |
 
@@ -401,10 +319,8 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 | Others | Assistant Framework |
 |---|---|
 | Skills as suggestions | Skills as **mandatory enforcement** |
-| Memory as chat history | Memory as **queryable knowledge graph + FTS5** |
 | One-shot review | **Autonomous review loop** (max 10 rounds) |
-| Generic patterns | **Your project's patterns**, learned over time |
-| Reactive only | **Self-improving** — reflexion after every task |
+| Generic patterns | **Current repository evidence** informs the task |
 | Single agent | **Multi-agent orchestration** with role separation |
 | One platform | **Three platforms** (Claude, Codex, Gemini) |
 | Import from marketplace | **100% built in-house** |
@@ -430,7 +346,6 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 4. **"Brainstorm ways to improve performance"** → scored, ranked ideas
 5. **"Draw the architecture"** → Mermaid diagram from code analysis
 6. **"Fix this bug" (with workflow)** → watch the full pipeline in action
-7. **"What do you remember?"** → query the knowledge graph
 
 ---
 
@@ -442,14 +357,12 @@ cd assistant-framework
 ./install.sh --agent claude
 ```
 
-That's it. Skills route natively. Contracts guide execution. Memory stays on demand.
-
-The framework gets smarter every time you use it.
+That's it. Skills route natively. Contracts guide execution and review.
 
 ---
 
 ## Assistant Framework v0.2.0
 
-**Your AI. Your workflow. Your memory.**
+**Your AI. Your workflow. Your evidence.**
 
-**It learns. It improves. It never forgets.**
+**It plans, verifies, reviews, and documents.**

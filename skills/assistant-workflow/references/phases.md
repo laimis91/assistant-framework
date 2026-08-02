@@ -306,8 +306,7 @@ plan-step loop with `workflow_state_mode=inline`,
 `subagent_execution_mode=not_applicable`; record relevant automated
 build/test/validation evidence and skip Code Writer, Builder/Tester, Code
 Reviewer/Reviewer dispatch evidence. Skip task journal, slice ledger, metrics,
-reflexion, memory, and manual verification ceremony unless an independent mode
-explicitly requires one of them.
+and manual verification ceremony unless an independent mode explicitly requires one.
 
 For bugfixes with unknown cause, complete `assistant-debugging` first or record
 a concrete blocked/inconclusive debugging result. Do not patch until
@@ -369,15 +368,12 @@ Print: `--- PHASE: DOCUMENT ---`
 
 Load `references/completion-controller.md` and, for medium+ work,
 `references/final-handoff.md`. They own small/full Document paths,
-Learning Controller fields, optional reflexion/memory behavior, metrics JSON
-format, final harness refresh, the sole developer handoff creation step, and
-Verified Skill Distillation routing.
+metrics JSON format, final harness refresh, the sole developer handoff creation
+step, and Verified Skill Distillation routing.
 
-Use the controller-intensity path and the three completion modes. The Learning
-Controller is required only when `learning_capture_mode=required`, or when
-`auto` sees concrete review findings, build/test failures, user corrections, or
-memory trend signals. Metrics, reflexion, and memory are optional/non-blocking.
-Refresh harness runtime artifacts only when `harness_capable=true`.
+Use the controller-intensity path and the completion modes. Metrics remain
+optional and non-blocking. Refresh harness runtime artifacts only when
+`harness_capable=true`.
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`

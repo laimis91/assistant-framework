@@ -16,7 +16,7 @@ triggers:
 | File | Purpose |
 |---|---|
 | [`contracts/input.yaml`](contracts/input.yaml) | project_path, focus_area, depth |
-| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, durable_memory_updated, questions[] |
+| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, questions[] |
 
 - `project_path` is required; `depth` defaults to standard when not specified
 - `key_files` entries include path and purpose; `conventions` entries include pattern and example
@@ -44,7 +44,7 @@ Build a compact, evidence-based orientation for the project so future developmen
 - Build/test/run commands are identified from project files when available.
 - Risky areas and likely change points are called out for future development work.
 - Questions are specific to discovered gaps, not generic prompts.
-- Artifacts and durable memory updates are reported accurately.
+- Orientation artifacts are reported accurately.
 
 ## Constraints
 
@@ -181,12 +181,6 @@ Create or update a project-local orientation artifact only when allowed by user/
 - [non-obvious thing 2]
 ```
 
-Durable memory / knowledge graph updates are optional and policy-dependent:
-- If local memory tools are approved and available, record only stable conventions, project identity, and non-obvious development rules.
-- If memory tools are unavailable or policy-disallowed, skip durable memory updates and set `durable_memory_updated=false` in the report.
-- Project-local orientation artifacts are tracked separately in `artifacts[]`; writing an orientation file does not imply durable memory was updated.
-- Never store secrets, internal credentials, private endpoints, customer data, transient task progress, PR numbers, or issue status.
-
 ### Phase 6: Report
 
 Print: `>> Onboarding complete`
@@ -216,7 +210,7 @@ Return:
 - **Conventions** - discovered patterns with concrete examples.
 - **Risky areas** - surfaces that need extra care in future work and why.
 - **Likely change points** - files/directories future features or fixes will likely touch.
-- **Artifacts** - orientation or memory files created or updated, or "none" if no files changed.
+- **Artifacts** - orientation files created or updated, or "none" if no files changed.
 - **Gaps** - unknowns, assumptions, and specific questions for the user.
 - **Status** - onboarded, partially onboarded, or blocked by missing access/context.
 

@@ -172,9 +172,7 @@ if validation_output="$("$skill_eval_runner" --validate-fixture 2>&1)" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-diagrams/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-docs/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-ideate/evals/cases.json" \
-    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-memory/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-onboard/evals/cases.json" \
-    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-reflexion/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-research/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-review/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-security/evals/cases.json" \
@@ -234,10 +232,8 @@ if list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-reflexion\tpost-task-reflection-records-lessons\treflection_storage_contract\tPost-task reflection records lessons' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-memory\tsave-preference-uses-approved-local-backend\tmemory_save_contract\tSave preference uses approved local backend' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation'; then
     pass
@@ -287,8 +283,6 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "Skill: assistant-ideate" "$prompt_dir/assistant-ideate/brainstorm-diverges-before-ranking.md" \
     && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md" \
     && grep -Fq "Skill: assistant-skill-creator" "$prompt_dir/assistant-skill-creator/new-process-skill-designs-contracts-before-build.md" \
-    && grep -Fq "Skill: assistant-memory" "$prompt_dir/assistant-memory/save-preference-uses-approved-local-backend.md" \
-    && grep -Fq "Skill: assistant-reflexion" "$prompt_dir/assistant-reflexion/post-task-reflection-records-lessons.md" \
     && grep -Fq "Skill: assistant-research" "$prompt_dir/assistant-research/technology-comparison-uses-standard-tier.md" \
     && grep -Fq "Skill: assistant-onboard" "$prompt_dir/assistant-onboard/new-repo-onboarding-produces-orientation.md" \
     && grep -Fq "Skill: assistant-telos" "$prompt_dir/assistant-telos/create-personal-tcf-core-sections.md" \
@@ -588,8 +582,6 @@ if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-diagrams" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-docs" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-ideate" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-memory" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-reflexion" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-research" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-security" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-skill-creator" \
@@ -617,15 +609,13 @@ else
 fi
 
 test_start "skill eval docs describe complete first-class coverage"
-if grep -Fq "complete first-class skill coverage" "$FRAMEWORK_DIR/README.md" \
+if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-ideate" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-reflexion" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-telos" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-memory" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-onboard" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-workflow" "$FRAMEWORK_DIR/README.md" \
@@ -633,20 +623,21 @@ if grep -Fq "complete first-class skill coverage" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-tdd" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "This slice now covers all 14 first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "all 16 first-class skills" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "all 16 first-class skills" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-telos/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \

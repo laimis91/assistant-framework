@@ -41,8 +41,6 @@ Iterative progressive research:
 3. Deep-dive the highest-value findings
 4. Repeat until coverage is sufficient
 
-Use `memory_add_insight` to record notable findings in the knowledge graph for future sessions.
-
 ## Adapter-Aware Delegation
 
 Research angles are required; subagent dispatch is optional. If the active adapter and user/tool policy permit parallel agents, each angle can be delegated independently. If not, run the angles sequentially in the main session and record that delegation was unavailable. Never reduce source diversity just because delegation is unavailable.

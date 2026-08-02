@@ -32,7 +32,7 @@ Initial terminal Round 10 review found one remaining shell wrapper blocker (`noh
 - `bash tests/test-hooks.sh` 309/309
 - `bash tests/test-p0-p4-contracts.sh` 227/227
 - Broad bash syntax checks passed, including `workflow-guard.d` modules
-- `validate-skills` 16 skills
+- `validate-skills` first-class skills
 - Plugin sync check all mirrors checked
 - `git diff --check` passed
 - .NET builds succeeded; MemoryGraph NU1900 warning because NuGet vulnerability data was unreachable.

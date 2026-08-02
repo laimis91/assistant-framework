@@ -2,8 +2,7 @@
 # install.sh — Installs all Assistant Framework skills for any supported AI agent.
 #
 # Auto-discovers first-class release skills from skills/assistant-*/SKILL.md.
-# Also installs legacy graph seed/import compatibility data and performs one
-# release of cleanup for retired Assistant Framework hook registrations.
+# Performs bounded cleanup for retired framework registrations on reinstall.
 #
 # Usage:
 #   ./install.sh --agent claude     # → ~/.claude/skills/assistant-*/
@@ -17,8 +16,6 @@
 #   ./install.sh --agent codex                              # native, hookless behavior
 #   ./install.sh --agent claude --no-hooks                  # deprecated compatibility no-op
 #
-# Legacy graph seed compatibility data is installed to ~/.{agent}/memory/graph.jsonl
-# only if it doesn't already exist — existing legacy data is never overwritten.
 
 set -euo pipefail
 
@@ -29,7 +26,6 @@ DRY_RUN=false
 SINGLE_SKILL=""
 PLUGIN_PROFILE=""
 FRAMEWORK_DIR=""
-MEMORY_GRAPH_STARTUP_TIMEOUT_SEC=120
 toml_files=()
 
 # Skills are auto-discovered from first-class assistant-* release directories.
@@ -57,11 +53,6 @@ added manually to installed skill directories. Back up customizations first.
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
   Use --plugin assistant-core, --plugin assistant-research, or --plugin assistant-dev to install a focused profile.
-
-Memory data:
-  memory-graph MCP is registered against ~/.{agent}/memory.
-  Legacy graph seed/import compatibility data is installed on first install only.
-  Existing legacy graph data is never overwritten.
 
 Examples:
   $(basename "$0") --agent claude
@@ -463,7 +454,8 @@ validate_plugin_manifest_dry_run() {
 
     while IFS= read -r plugin_skill_file; do
         plugin_skill="$(basename "$(dirname "$plugin_skill_file")")"
-        skill_in_active_profile "$plugin_skill" || fail "Plugin manifest $plugin_name includes skill outside profile boundary: $plugin_skill"
+        skill_in_active_profile "$plugin_skill" \
+            || fail "Plugin manifest $plugin_name includes skill outside profile boundary: $plugin_skill"
     done < <(find "$plugin_skills_root" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -print | sort)
 
     dry "Validate plugin manifest: $plugin_name -> $manifest_skills"
@@ -526,86 +518,6 @@ substitute_agent_paths_in_file() {
     rm -f "${target_file}.bak"
 }
 
-strip_memory_protocol_from_file() {
-    local instructions_file="$1"
-    local marker_start="$2"
-    local marker_end="$3"
-
-    awk -v marker_start="$marker_start" -v marker_end="$marker_end" '
-        function is_legacy_protocol_preamble_line(line) {
-            return line == "" \
-                || line == "# Assistant Framework — Memory Protocol" \
-                || line == "## Role" \
-                || is_orchestrator_role_line(line) \
-                || line ~ /^<!-- This is a template\. Paths like ~\/\.(claude|codex|gemini)\// \
-                || index(line, "<!-- Appended by Assistant Framework install.") == 1
-        }
-
-        function is_orchestrator_role_line(line) {
-            return (index(line, "You are an orchestrator for memory-aware workflow.") == 1 \
-                    && index(line, "The orchestrator may create and update framework-owned state artifacts such as .") > 0 \
-                    && index(line, "/task.md, .") > 0 \
-                    && index(line, "/context-map.md, .") > 0 \
-                    && index(line, "/session.md, and .") > 0 \
-                    && index(line, "/working-buffer.md; it does not edit project source files directly.") > 0) \
-                || line == "You are an orchestrator for memory-aware workflow. Coordinate specialized agents and preserve workflow state while memory_context supplies project rules, preferences, and recent insights. File edits, code implementation, builds/tests, and independent review remain owned by the appropriate specialized agent; your role is dispatch, phase gates, progress tracking, communication, and memory protocol enforcement. The orchestrator does not edit files or write code directly. When a skill matches your task, invoke it and follow its instructions." \
-                || (index(line, "You are an orchestrator. You " "delegate ALL " "file editing") == 1 \
-                    && index(line, "code implementation, and " "phase execution") > 0)
-        }
-
-        function has_legacy_protocol_preamble(from, to,    k) {
-            for (k = from; k <= to; k++) {
-                if (lines[k] == "# Assistant Framework — Memory Protocol") {
-                    return 1
-                }
-            }
-            return 0
-        }
-
-        { lines[NR] = $0 }
-
-        END {
-            for (i = 1; i <= NR; i++) {
-                if (index(lines[i], marker_start) == 0) {
-                    continue
-                }
-
-                start = i
-                for (j = i - 1; j >= 1; j--) {
-                    if (!is_legacy_protocol_preamble_line(lines[j])) {
-                        break
-                    }
-                }
-                if (has_legacy_protocol_preamble(j + 1, i - 1)) {
-                    start = j + 1
-                }
-
-                end = i
-                while (end <= NR && index(lines[end], marker_end) == 0) {
-                    end++
-                }
-                if (end > NR) {
-                    for (j = start; j <= NR; j++) {
-                        skip[j] = 1
-                    }
-                    break
-                }
-
-                for (j = start; j <= end; j++) {
-                    skip[j] = 1
-                }
-                i = end
-            }
-
-            for (i = 1; i <= NR; i++) {
-                if (!(i in skip)) {
-                    print lines[i]
-                }
-            }
-        }
-    ' "$instructions_file" > "${instructions_file}.tmp" && mv "${instructions_file}.tmp" "$instructions_file"
-}
-
 cleanup_installed_tool_build_artifacts() {
     local tools_target="$1"
     local artifact_dir
@@ -649,146 +561,6 @@ evals/lib/context-budget-evidence.sh
 EOF
 }
 
-register_codex_memory_graph_mcp() {
-    local config_file="$1"
-    local mcp_command="$2"
-    local memory_dir="$3"
-    local python_bin=""
-
-    if command -v python3 >/dev/null 2>&1; then
-        python_bin="python3"
-    elif command -v python >/dev/null 2>&1 && python -c 'import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)' >/dev/null 2>&1; then
-        python_bin="python"
-    fi
-
-    if [[ -z "$python_bin" ]]; then
-        info "WARNING: Python 3 not found — cannot safely refresh Codex MCP TOML automatically."
-        info "Update $config_file manually with [mcp_servers.memory-graph], command/args, and memory tool approval blocks."
-        info "  command = \"$mcp_command\""
-        info "  args = [\"--memory-dir\", \"$memory_dir\"]"
-        info "  startup_timeout_sec = $MEMORY_GRAPH_STARTUP_TIMEOUT_SEC"
-        return 1
-    fi
-
-    if "$python_bin" - "$config_file" "$mcp_command" "$memory_dir" "$MEMORY_GRAPH_STARTUP_TIMEOUT_SEC" <<'PY'
-import json
-import os
-import re
-import stat
-import sys
-
-config_file, mcp_command, memory_dir, startup_timeout_sec = sys.argv[1:5]
-startup_timeout_sec = int(startup_timeout_sec)
-tools = [
-    "memory_context",
-    "memory_search",
-    "memory_stats",
-    "memory_doctor",
-    "memory_add_entity",
-    "memory_add_insight",
-    "memory_add_relation",
-    "memory_remove_entity",
-    "memory_remove_relation",
-    "memory_graph",
-    "memory_reflect",
-    "memory_decide",
-    "memory_pattern",
-    "memory_consolidate",
-    "memory_signal",
-    "memory_trend",
-]
-
-
-def table_name(line):
-    stripped = line.strip()
-    if stripped.startswith("[["):
-        end = stripped.find("]]")
-        if end == -1:
-            return None
-        name = stripped[2:end]
-    elif stripped.startswith("["):
-        end = stripped.find("]")
-        if end == -1:
-            return None
-        name = stripped[1:end]
-    else:
-        return None
-
-    name = re.sub(r"\s*\.\s*", ".", name.strip())
-    name = name.replace('"memory-graph"', "memory-graph")
-    name = name.replace("'memory-graph'", "memory-graph")
-    return name
-
-
-def is_memory_graph_table(name):
-    return name == "mcp_servers.memory-graph" or name.startswith("mcp_servers.memory-graph.")
-
-
-def split_sections(text):
-    sections = []
-    current = []
-    for line in text.splitlines(keepends=True):
-        if table_name(line) is not None:
-            if current:
-                sections.append(current)
-            current = [line]
-        else:
-            current.append(line)
-    if current:
-        sections.append(current)
-    return sections
-
-
-original = ""
-existing_mode = None
-if os.path.exists(config_file):
-    existing_mode = stat.S_IMODE(os.stat(config_file).st_mode)
-    with open(config_file, "r", encoding="utf-8") as handle:
-        original = handle.read()
-
-kept_lines = []
-for section in split_sections(original):
-    name = table_name(section[0]) if section else None
-    if name is not None and is_memory_graph_table(name):
-        continue
-    kept_lines.extend(section)
-
-memory_graph_lines = [
-    "[mcp_servers.memory-graph]\n",
-    "command = {}\n".format(json.dumps(mcp_command)),
-    "args = [\"--memory-dir\", {}]\n".format(json.dumps(memory_dir)),
-    "startup_timeout_sec = {}\n".format(startup_timeout_sec),
-]
-for tool in tools:
-    memory_graph_lines.extend([
-        "\n",
-        "[mcp_servers.memory-graph.tools.{}]\n".format(tool),
-        "approval_mode = \"approve\"\n",
-    ])
-
-kept_text = "".join(kept_lines).rstrip()
-memory_graph_text = "".join(memory_graph_lines)
-updated = "{}\n\n{}".format(kept_text, memory_graph_text) if kept_text else memory_graph_text
-if not updated.endswith("\n"):
-    updated += "\n"
-
-os.makedirs(os.path.dirname(config_file), exist_ok=True)
-tmp_file = "{}.tmp".format(config_file)
-with open(tmp_file, "w", encoding="utf-8") as handle:
-    handle.write(updated)
-if existing_mode is not None:
-    os.chmod(tmp_file, existing_mode)
-os.replace(tmp_file, config_file)
-PY
-    then
-        ok "MCP server memory-graph refreshed in $config_file"
-    else
-        rm -f "${config_file}.tmp"
-        info "WARNING: Failed to refresh MCP server in $config_file"
-        return 1
-    fi
-}
-
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -797,7 +569,6 @@ PY
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
-GRAPH_SEED="$FRAMEWORK_DIR/graph-seed.jsonl"
 [[ -d "$SKILLS_SOURCE" ]] || fail "Skills directory not found at $SKILLS_SOURCE"
 
 # Auto-discover first-class release skills: assistant-* directories containing SKILL.md.
@@ -819,7 +590,6 @@ else
     AGENT_HOME="$HOME/.${AGENT}"
 fi
 SKILLS_TARGET="$AGENT_HOME/skills"
-MEMORY_TARGET="$AGENT_HOME/memory"
 
 # Filter to single skill if requested
 if [[ -n "$SINGLE_SKILL" ]]; then
@@ -844,7 +614,6 @@ if [[ -n "$PLUGIN_PROFILE" ]]; then
     fi
 fi
 echo "  Skills target: $SKILLS_TARGET"
-echo "  Legacy graph seed: $GRAPH_SEED"
 echo ""
 
 # Dry-run validates plugin scaffold metadata without changing the real install path.
@@ -853,6 +622,24 @@ if [[ -n "$PLUGIN_PROFILE" ]] && $DRY_RUN; then
 fi
 
 # ── Install skills ────────────────────────────────────────────────────────────
+
+# The standalone tombstone validates every targeted path and configuration
+# before mutation. Run it before syncing so a stale runtime cannot be restored.
+MEMORY_RETIREMENT_TOOL="$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh"
+[[ -f "$MEMORY_RETIREMENT_TOOL" ]] || fail "Memory Graph retirement tool not found: $MEMORY_RETIREMENT_TOOL"
+RETIREMENT_CODEX_HOME=""
+if [[ "$AGENT" == "codex" ]]; then
+    RETIREMENT_CODEX_HOME="${CODEX_HOME:-}"
+fi
+if $DRY_RUN; then
+    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT" --dry-run; then
+        fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
+    fi
+else
+    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT"; then
+        fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
+    fi
+fi
 
 for skill in "${SKILLS[@]}"; do
     source_dir="$SKILLS_SOURCE/$skill"
@@ -992,6 +779,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
         if compgen -G "$TOOLS_TARGET"/*/*.sh >/dev/null 2>&1; then
             chmod +x "$TOOLS_TARGET"/*/*.sh
         fi
+        [[ ! -f "$TOOLS_TARGET/cleanup-memory-graph.sh" ]] || chmod +x "$TOOLS_TARGET/cleanup-memory-graph.sh"
 
         ok "Tools -> $TOOLS_TARGET/"
     fi
@@ -1013,144 +801,6 @@ if [[ -d "$EVAL_DOCS_SOURCE" ]]; then
             "$EVAL_DOCS_SOURCE/" "$EVAL_DOCS_TARGET/"
 
         ok "Eval docs -> $EVAL_DOCS_TARGET/"
-    fi
-fi
-
-# ── Register MCP servers ─────────────────────────────────────────────────────
-
-# Register memory-graph MCP server in the correct config file per agent.
-# Claude Code reads MCP servers from ~/.claude.json (user scope), NOT settings.json.
-# Other agents may use their own config files.
-if [[ -f "$TOOLS_TARGET/memory-graph/run-memory-graph.sh" ]] || { $DRY_RUN && [[ -f "$TOOLS_SOURCE/memory-graph/run-memory-graph.sh" ]]; }; then
-    echo ""
-    MCP_COMMAND="$TOOLS_TARGET/memory-graph/run-memory-graph.sh"
-    MCP_MEMORY_DIR="$MEMORY_TARGET"
-
-    if [[ "$AGENT" == "claude" ]]; then
-        # Claude Code: use `claude mcp add` if available, else write ~/.claude.json
-        if $DRY_RUN; then
-            dry "Register memory-graph MCP server (claude mcp add --scope user)"
-        elif command -v claude &>/dev/null; then
-            # Check if already registered
-            if claude mcp list 2>/dev/null | grep -q "memory-graph"; then
-                info "MCP server memory-graph already registered in Claude"
-            else
-                if claude mcp add --scope user --transport stdio memory-graph -- \
-                    "$MCP_COMMAND" --memory-dir "$MCP_MEMORY_DIR" 2>/dev/null; then
-                    ok "MCP server memory-graph registered via 'claude mcp add' (user scope)"
-                else
-                    info "WARNING: 'claude mcp add' failed. Falling back to manual registration."
-                    register_mcp_claude_json=true
-                fi
-            fi
-        else
-            register_mcp_claude_json=true
-        fi
-
-        # Fallback: write directly to ~/.claude.json
-        if [[ "${register_mcp_claude_json:-}" == "true" ]]; then
-            MCP_CONFIG_FILE="$HOME/.claude.json"
-            if command -v jq &>/dev/null; then
-                if [[ ! -f "$MCP_CONFIG_FILE" ]]; then
-                    echo '{}' > "$MCP_CONFIG_FILE"
-                fi
-                if jq -e '.mcpServers["memory-graph"]' "$MCP_CONFIG_FILE" &>/dev/null; then
-                    info "MCP server memory-graph already registered in $MCP_CONFIG_FILE"
-                else
-                    # Backup before modifying
-                    cp "$MCP_CONFIG_FILE" "${MCP_CONFIG_FILE}.bak"
-                    if jq --arg cmd "$MCP_COMMAND" --arg dir "$MCP_MEMORY_DIR" \
-                        '.mcpServers["memory-graph"] = {"command": $cmd, "args": ["--memory-dir", $dir]}' \
-                        "$MCP_CONFIG_FILE" > "${MCP_CONFIG_FILE}.tmp" \
-                        && jq . "${MCP_CONFIG_FILE}.tmp" > /dev/null 2>&1 \
-                        && mv "${MCP_CONFIG_FILE}.tmp" "$MCP_CONFIG_FILE"; then
-                        rm -f "${MCP_CONFIG_FILE}.bak"
-                        ok "MCP server memory-graph registered in $MCP_CONFIG_FILE"
-                    else
-                        rm -f "${MCP_CONFIG_FILE}.tmp"
-                        # Restore backup on failure
-                        mv "${MCP_CONFIG_FILE}.bak" "$MCP_CONFIG_FILE" 2>/dev/null || true
-                        info "WARNING: Failed to register MCP server in $MCP_CONFIG_FILE"
-                    fi
-                fi
-            else
-                info "NOTE: Neither 'claude' CLI nor 'jq' found — MCP server not auto-registered."
-                info "Register manually by running:"
-                info "  claude mcp add --scope user --transport stdio memory-graph -- \\"
-                info "    $MCP_COMMAND --memory-dir $MCP_MEMORY_DIR"
-            fi
-        fi
-
-        # Clean up stale mcpServers from settings.json (wrong location from older installs)
-        if [[ -f "$SETTINGS_FILE" ]] && command -v jq &>/dev/null; then
-            if jq -e '.mcpServers["memory-graph"]' "$SETTINGS_FILE" &>/dev/null; then
-                SETTINGS_TEMP="$(metadata_preserving_temp "$SETTINGS_FILE")" || SETTINGS_TEMP=""
-                if [[ -n "$SETTINGS_TEMP" ]] \
-                    && jq 'del(.mcpServers["memory-graph"]) | if .mcpServers == {} then del(.mcpServers) else . end' \
-                        "$SETTINGS_FILE" > "$SETTINGS_TEMP" \
-                    && mv "$SETTINGS_TEMP" "$SETTINGS_FILE"; then
-                    info "Cleaned up stale MCP config from $SETTINGS_FILE (moved to correct location)"
-                else
-                    [[ -n "${SETTINGS_TEMP:-}" ]] && rm -f "$SETTINGS_TEMP"
-                fi
-            fi
-        fi
-    elif [[ "$AGENT" == "codex" ]]; then
-        # Codex: register in ~/.codex/config.toml using [mcp_servers.name] TOML syntax
-        CODEX_CONFIG="$AGENT_HOME/config.toml"
-        if $DRY_RUN; then
-            dry "Refresh memory-graph MCP server in $CODEX_CONFIG"
-        else
-            register_codex_memory_graph_mcp "$CODEX_CONFIG" "$MCP_COMMAND" "$MCP_MEMORY_DIR" || true
-        fi
-    else
-        # Gemini and other agents: register in settings.json with JSON mcpServers format
-        if $DRY_RUN; then
-            dry "Register memory-graph MCP server in $SETTINGS_FILE"
-        elif command -v jq &>/dev/null; then
-            if [[ ! -f "$SETTINGS_FILE" ]]; then
-                echo '{}' > "$SETTINGS_FILE"
-            fi
-            if jq -e '.mcpServers["memory-graph"]' "$SETTINGS_FILE" &>/dev/null; then
-                info "MCP server memory-graph already registered in $SETTINGS_FILE"
-            else
-                SETTINGS_TEMP="$(metadata_preserving_temp "$SETTINGS_FILE")" || SETTINGS_TEMP=""
-                if [[ -n "$SETTINGS_TEMP" ]] \
-                    && jq --arg cmd "$MCP_COMMAND" --arg dir "$MCP_MEMORY_DIR" \
-                    '.mcpServers["memory-graph"] = {"command": $cmd, "args": ["--memory-dir", $dir]}' \
-                    "$SETTINGS_FILE" > "$SETTINGS_TEMP" \
-                    && mv "$SETTINGS_TEMP" "$SETTINGS_FILE"; then
-                    ok "MCP server memory-graph registered in $SETTINGS_FILE"
-                else
-                    [[ -n "${SETTINGS_TEMP:-}" ]] && rm -f "$SETTINGS_TEMP"
-                    info "WARNING: Failed to register MCP server in $SETTINGS_FILE"
-                fi
-            fi
-        else
-            info "NOTE: jq not found — memory-graph MCP server not auto-registered."
-            info "Add manually to $SETTINGS_FILE:"
-            info "  \"mcpServers\": { \"memory-graph\": { \"command\": \"$MCP_COMMAND\", \"args\": [\"--memory-dir\", \"$MCP_MEMORY_DIR\"] } }"
-        fi
-    fi
-fi
-
-# ── Seed legacy graph import compatibility (only if graph.jsonl doesn't exist) ─
-
-echo ""
-GRAPH_TARGET="$MEMORY_TARGET/graph.jsonl"
-if [[ -f "$GRAPH_TARGET" ]]; then
-    info "Legacy graph compatibility data already exists at $GRAPH_TARGET — skipping (never overwrite)"
-else
-    if [[ -f "$GRAPH_SEED" ]]; then
-        if $DRY_RUN; then
-            dry "cp $GRAPH_SEED -> $GRAPH_TARGET (legacy import compatibility, first install only)"
-        else
-            mkdir -p "$MEMORY_TARGET"
-            cp "$GRAPH_SEED" "$GRAPH_TARGET"
-            ok "Legacy graph seed installed to $GRAPH_TARGET for import compatibility"
-        fi
-    else
-        info "No legacy graph seed found — skipping"
     fi
 fi
 
@@ -1255,7 +905,7 @@ else
 fi
 
 # ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
-# Must run before memory protocol section since protocol is appended to AGENTS.md
+# Generate the current managed AGENTS.md section after legacy cleanup.
 
 AGENTS_MD_MARKER_START="ASSISTANT_FRAMEWORK_AGENTS_MD_START"
 AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
@@ -1308,81 +958,6 @@ Codex uses installed skills through native skill routing. When a skill matches, 
     fi
 fi
 
-# ── Memory protocol in global instructions ───────────────────────────────────
-
-MEMORY_PROTOCOL_SOURCE="$FRAMEWORK_DIR/memory-protocol.md"
-MARKER="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START"
-
-# Determine agent's global instructions file
-case "$AGENT" in
-    claude)  INSTRUCTIONS_FILE="$AGENT_HOME/CLAUDE.md" ;;
-    gemini)  INSTRUCTIONS_FILE="$AGENT_HOME/GEMINI.md" ;;
-    codex)
-        # Codex reads AGENTS.md natively — memory protocol is appended there
-        INSTRUCTIONS_FILE="$AGENT_HOME/AGENTS.md"
-        ;;
-esac
-
-if [[ -f "$MEMORY_PROTOCOL_SOURCE" ]]; then
-    echo ""
-
-    MARKER_END="ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END"
-
-    # Prepare substituted protocol content
-    protocol_content=$(substitute_agent_paths_in_stream < "$MEMORY_PROTOCOL_SOURCE")
-
-    # Strip old protocol if present (replace with latest version). Legacy installs
-    # placed the title/role preamble before the start marker; strip that preamble
-    # only when it is immediately tied to an installer-owned marker block.
-    if [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "$MARKER" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        if $DRY_RUN; then
-            dry "Would update memory protocol in $INSTRUCTIONS_FILE"
-        else
-            strip_memory_protocol_from_file "$INSTRUCTIONS_FILE" "$MARKER" "$MARKER_END"
-            echo "" >> "$INSTRUCTIONS_FILE"
-            echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
-            ok "Memory protocol updated in $INSTRUCTIONS_FILE"
-        fi
-    elif [[ -f "$INSTRUCTIONS_FILE" ]] && grep -q "WAL Protocol\|Persistent Memory System" "$INSTRUCTIONS_FILE" 2>/dev/null; then
-        info "WARNING: $INSTRUCTIONS_FILE contains a manually-added memory protocol — not replacing."
-        info "Remove the 'Persistent Memory System' section manually, then re-run install to get the latest."
-    elif [[ "$AGENT" == "codex" ]]; then
-        # Codex: we own AGENTS.md entirely — always append without prompting
-        if $DRY_RUN; then
-            dry "Would append memory protocol to $INSTRUCTIONS_FILE"
-        else
-            echo "" >> "$INSTRUCTIONS_FILE"
-            echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
-            ok "Memory protocol appended to $INSTRUCTIONS_FILE"
-        fi
-    elif $DRY_RUN; then
-        dry "Would append memory protocol to $INSTRUCTIONS_FILE"
-    else
-        # Claude/Gemini first install — ask for confirmation (modifying user's own file)
-        if [[ -t 0 ]]; then
-            echo ""
-            echo "  The memory system needs a protocol section in your global instructions file."
-            echo "  File: $INSTRUCTIONS_FILE"
-            echo ""
-            read -r -p "  Append memory protocol to $INSTRUCTIONS_FILE? [y/N] " response
-            case "$response" in
-                [yY]|[yY][eE][sS])
-                    mkdir -p "$(dirname "$INSTRUCTIONS_FILE")"
-                    echo "" >> "$INSTRUCTIONS_FILE"
-                    echo "$protocol_content" >> "$INSTRUCTIONS_FILE"
-                    ok "Memory protocol appended to $INSTRUCTIONS_FILE"
-                    ;;
-                *)
-                    info "Skipped. To add manually, append the contents of memory-protocol.md to $INSTRUCTIONS_FILE"
-                    ;;
-            esac
-        else
-            info "Non-interactive mode — skipping memory protocol setup."
-            info "To add manually: cat memory-protocol.md >> $INSTRUCTIONS_FILE"
-        fi
-    fi
-fi
-
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -1415,9 +990,6 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
     echo "Execution rules: $AGENT_HOME/rules/"
     echo "  (Starlark policy: git push/commit guards, destructive op confirmation)"
 fi
-echo ""
-echo "Memory store: $MEMORY_TARGET/"
-echo "Legacy graph seed/import compatibility: $MEMORY_TARGET/graph.jsonl"
 echo ""
 if [[ -n "$SINGLE_SKILL" ]]; then
     echo "To install all skills: ./install.sh --agent $AGENT"

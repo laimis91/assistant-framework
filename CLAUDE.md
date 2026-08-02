@@ -8,21 +8,6 @@ Assistant Framework v0.3.0 — a personal AI assistant framework providing compo
 
 ## Build and Test Commands
 
-### Memory Graph
-
-```bash
-# Build
-dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal
-
-# Run tests
-dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal
-
-# Run a single test
-dotnet test tools/memory-graph/tests/MemoryGraph.Tests/ --filter "FullyQualifiedName~TestMethodName"
-```
-
-Target framework: .NET 8 (`net8.0`), with `RollForward=LatestMajor`. Single dependency: `Microsoft.Data.Sqlite`.
-
 ### Cognitive Complexity Tool
 
 ```bash
@@ -32,7 +17,7 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 ### Installation
 
 ```bash
-./install.sh --agent claude              # Install all skills + memory seed
+./install.sh --agent claude              # Install all skills
 ./install.sh --agent claude --skill assistant-workflow  # Single skill
 ./install.sh --agent claude --dry-run    # Preview
 ```
@@ -43,8 +28,7 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 
 1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with YAML frontmatter (name, description, triggers). Sub-files load on demand (progressive loading). Skills are agent-agnostic.
 
-2. **Tools** (`tools/`) — Compiled utilities exposed as MCP servers or CLI tools.
-   - `memory-graph/` — C# MCP server (stdio, JSON-RPC) with 14 tools. In-memory knowledge graph + SQLite/FTS5 for reflexions/decisions. Source in `src/MemoryGraph/` with subdirs: `Graph/`, `Storage/`, `Tools/`, `Server/`.
+2. **Tools** (`tools/`) — Compiled and script utilities used for repository validation and installation.
    - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
 
 ### Skill anatomy

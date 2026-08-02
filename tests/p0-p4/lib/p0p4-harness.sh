@@ -12,6 +12,16 @@ P0P4_HARNESS_LOADED=1
 PASS=0
 FAIL=0
 P0P4_CLEANUP_PATHS=()
+P0P4_CODEX_SEMANTIC_FIXTURE_PATH=""
+P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH=""
+P0P4_CODEX_HOME_WAS_SET=0
+P0P4_CODEX_HOME_ORIGINAL_VALUE=""
+
+if [[ -n "${CODEX_HOME+x}" ]]; then
+    P0P4_CODEX_HOME_WAS_SET=1
+    P0P4_CODEX_HOME_ORIGINAL_VALUE="$CODEX_HOME"
+fi
+unset CODEX_HOME
 
 p0p4_abs_path() {
     local path="$1"
@@ -45,13 +55,75 @@ p0p4_register_cleanup() {
     done
 }
 
+p0p4_enable_codex_semantic_fixture() {
+    local fixture_dir fixture_command
+
+    [[ -z "$P0P4_CODEX_SEMANTIC_FIXTURE_PATH" ]] || return 0
+    command -v codex >/dev/null 2>&1 && return 0
+
+    fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-framework-codex-fixture.XXXXXX")"
+    fixture_command="$fixture_dir/codex"
+    p0p4_register_cleanup "$fixture_dir"
+    printf '%s\n' \
+        '#!/bin/bash' \
+        'if [[ "$#" -ne 3 || "$1" != "mcp" || "$2" != "list" || "$3" != "--json" ]]; then exit 64; fi' \
+        'config_file="${CODEX_HOME:-}/config.toml"' \
+        '[[ -f "$config_file" ]] || exit 64' \
+        'case "${P0P4_CODEX_SEMANTIC_FIXTURE_MODE:-auto}" in' \
+        '    absent) printf "[]\n"; exit 0 ;;' \
+        '    reject) exit 1 ;;' \
+        '    auto) ;;' \
+        '    *) exit 64 ;;' \
+        'esac' \
+        'if awk '"'"'
+BEGIN { bom = sprintf("%c%c%c", 239, 187, 191) }
+NR == 1 && substr($0, 1, length(bom)) == bom { $0 = substr($0, length(bom) + 1) }
+$0 ~ /^[[:space:]]*\[[[:space:]]*(mcp_servers|"mcp_servers")[[:space:]]*\.[[:space:]]*(memory-graph|"memory-graph")([[:space:]]*\.|[[:space:]]*\])/ { found = 1; exit }
+$0 ~ /^[[:space:]]*(mcp_servers|"mcp_servers")[[:space:]]*\.[[:space:]]*(memory-graph|"memory-graph")[[:space:]]*=/ { found = 1; exit }
+END { exit(found ? 0 : 1) }
+'"'"' "$config_file"; then' \
+        '    printf "[{\"name\":\"memory-graph\"}]\n"' \
+        'else' \
+        '    printf "[]\n"' \
+        'fi' >"$fixture_command"
+    chmod +x "$fixture_command"
+
+    P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH="$PATH"
+    P0P4_CODEX_SEMANTIC_FIXTURE_PATH="$fixture_dir"
+    PATH="$fixture_dir:$PATH"
+    export PATH
+}
+
+p0p4_disable_codex_semantic_fixture() {
+    if [[ -n "$P0P4_CODEX_SEMANTIC_FIXTURE_PATH" ]]; then
+        PATH="$P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH"
+        export PATH
+    fi
+    P0P4_CODEX_SEMANTIC_FIXTURE_PATH=""
+    P0P4_CODEX_SEMANTIC_FIXTURE_ORIGINAL_PATH=""
+}
+
+p0p4_restore_codex_home() {
+    if [[ "$P0P4_CODEX_HOME_WAS_SET" -eq 1 ]]; then
+        CODEX_HOME="$P0P4_CODEX_HOME_ORIGINAL_VALUE"
+        export CODEX_HOME
+    else
+        unset CODEX_HOME
+    fi
+}
+
 p0p4_cleanup() {
     local path
+    local cleanup_failed=0
     for path in "${P0P4_CLEANUP_PATHS[@]:-}"; do
         if [[ -n "$path" ]]; then
-            rm -rf "$path"
+            if ! rm -rf "$path"; then
+                cleanup_failed=1
+            fi
         fi
     done
+    p0p4_restore_codex_home
+    return "$cleanup_failed"
 }
 
 trap p0p4_cleanup EXIT

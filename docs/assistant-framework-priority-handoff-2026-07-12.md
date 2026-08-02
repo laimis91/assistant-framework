@@ -12,7 +12,7 @@ result without relying on the original agent transcript.
 - Current full contract aggregate: 436 passed, 0 failed.
 - Current focused evidence: workflow spine 14/14, adaptive execution 12/12,
   calibrated review 6/6, pattern library 11/11, Codex behavioral adapter 90/90,
-  eval/finalizer 41/41, context budget 14/14, installer 20/20, and 16/16 skill
+  eval/finalizer 41/41, context budget 14/14, installer 20/20, and skill
   validation.
 - Independent correctness, security, execution-context, and documentation
   reviews found two fail-open/hidden-contract issues in the follow-up iteration;
@@ -376,8 +376,8 @@ authorization; any promotion decision requires a fresh exact promotion profile.
 - Trace schema, validator, comparison logic, finalizer, fixtures, and installed
   eval docs are a single compatibility surface; v2/v3/v4 evidence remains
   diagnostic-only and cannot be mixed into v5 promotion.
-- Installer-owned skills, agents, rules, global guidance, memory protocol, and
-  legacy eval tools were refreshed; source-only promotion tools remain excluded.
+- Installer-owned skills, agents, rules, global guidance, and legacy eval tools
+  were refreshed; source-only promotion tools remain excluded.
 - Optional pattern retrieval adds no default configuration, company dependency,
   absolute personal path, or source-body indexing.
 

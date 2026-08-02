@@ -432,7 +432,7 @@ else
     fail "${dry_run_failures[*]}"
 fi
 
-test_start "python fallback retires framework registrations without jq for every agent"
+test_start "python fallback retires valid registrations and fails closed for malformed Claude/Gemini settings"
 fallback_failures=()
 fallback_bin="$(mktemp -d)"
 p0p4_register_cleanup "$fallback_bin"
@@ -485,7 +485,14 @@ else
                 printf '%s\n' '[]' > "$fallback_config"
             fi
             cp "$fallback_config" "$fallback_before"
-            if ! PATH="$fallback_bin" run_agent_install \
+            if [[ "$agent" != "codex" && "$fallback_invalid_kind" != "hooks_array" ]]; then
+                if PATH="$fallback_bin" run_agent_install \
+                    "$agent" "$fallback_home" "$fallback_codex_home" "$fallback_out" "$fallback_err"; then
+                    fallback_failures+=("$agent python fallback should fail closed for $fallback_invalid_kind settings")
+                elif ! cmp -s "$fallback_before" "$fallback_config"; then
+                    fallback_failures+=("$agent python fallback mutated $fallback_invalid_kind settings after failing closed")
+                fi
+            elif ! PATH="$fallback_bin" run_agent_install \
                 "$agent" "$fallback_home" "$fallback_codex_home" "$fallback_out" "$fallback_err"; then
                 fallback_failures+=("$agent python fallback failed for $fallback_invalid_kind settings")
             elif [[ "$fallback_invalid_kind" == "hooks_array" ]] \
@@ -523,7 +530,7 @@ else
     fail "${fallback_failures[*]}"
 fi
 
-test_start "stale hook state becomes inert shims while invalid JSON is warned and preserved"
+test_start "stale hook state becomes inert shims while malformed Claude/Gemini settings fail closed"
 shim_failures=()
 for agent in claude codex gemini; do
     shim_home="$(mktemp -d)"
@@ -577,8 +584,18 @@ for agent in claude codex gemini; do
     cp "$invalid_config" "$invalid_before"
     printf '%s\n' '#!/usr/bin/env bash' 'echo stale-framework-output' > "$invalid_dir/skill-router.sh"
     chmod +x "$invalid_dir/skill-router.sh"
+    invalid_entrypoint_before="$invalid_home/skill-router.before"
+    cp "$invalid_dir/skill-router.sh" "$invalid_entrypoint_before"
 
-    if ! run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
+    if [[ "$agent" != "codex" ]]; then
+        if run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
+            shim_failures+=("$agent invalid-JSON retirement should fail closed")
+        elif ! cmp -s "$invalid_before" "$invalid_config"; then
+            shim_failures+=("$agent invalid-JSON retirement mutated the invalid settings file after failing closed")
+        elif ! cmp -s "$invalid_entrypoint_before" "$invalid_dir/skill-router.sh"; then
+            shim_failures+=("$agent invalid-JSON retirement mutated the stale entrypoint after failing closed")
+        fi
+    elif ! run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
         shim_failures+=("$agent invalid-JSON retirement should warn and continue without rewriting the file")
     elif ! cmp -s "$invalid_before" "$invalid_config"; then
         shim_failures+=("$agent invalid-JSON retirement changed the invalid settings file")
@@ -603,7 +620,15 @@ for agent in claude codex gemini; do
     printf '%s\n' '[]' > "$non_object_config"
     cp "$non_object_config" "$non_object_before"
 
-    if ! run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
+    if [[ "$agent" != "codex" ]]; then
+        if run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
+            shim_failures+=("$agent non-object settings retirement should fail closed")
+        elif ! cmp -s "$non_object_before" "$non_object_config"; then
+            shim_failures+=("$agent non-object settings retirement mutated settings after failing closed")
+        elif [[ -e "$non_object_agent_home/hooks/assistant" ]]; then
+            shim_failures+=("$agent non-object settings retirement created hook state after failing closed")
+        fi
+    elif ! run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
         shim_failures+=("$agent non-object settings retirement should warn and continue")
     elif ! cmp -s "$non_object_before" "$non_object_config"; then
         shim_failures+=("$agent non-object settings retirement changed the settings file")

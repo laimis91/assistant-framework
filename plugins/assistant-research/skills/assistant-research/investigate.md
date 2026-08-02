@@ -51,7 +51,7 @@ Track down a cross-cutting technical issue:
 3. **Execute** — Search, read, cross-reference (use Research tool for parallel gathering)
 4. **Verify** — Cross-validate claims, verify URLs, check dates
 5. **Synthesize** — Answer the question with confidence levels
-6. **Document** — Use `memory_add_insight` to store findings in the knowledge graph if they'll be useful later
+6. **Document** — Present findings with their source evidence and confidence
 
 ## Output format
 

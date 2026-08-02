@@ -47,21 +47,3 @@ jobs:
           ./install.sh --agent codex --dry-run
           ./install.sh --agent claude --dry-run
           ./install.sh --agent gemini --dry-run
-
-  memory-graph:
-    name: Memory Graph tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-
-      - name: Set up .NET 8 SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Run Memory Graph tests
-        run: dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal

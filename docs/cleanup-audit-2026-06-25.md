@@ -20,7 +20,7 @@ Status: cleanup slices below were completed, validated, and final Stage 1/Stage 
 |---|---|---|---|
 | Prior slice - AGENTS.md agent wording | COMPLETED | Cleaned stale agent-name casing and install examples before this continuation. | Previously verified before this final documentation update. |
 | A1 - ignored `.DS_Store` files | COMPLETED | Removed ignored `.DS_Store` files outside `.git/.codex`. | Verified no remaining `.DS_Store` outside excluded trees and no unintended tracked changes. |
-| A2 - ignored .NET output roots | COMPLETED | Removed ignored .NET output roots under memory-graph and cognitive-complexity. | MemoryGraph build passed; MemoryGraph tests passed 171/0; CognitiveComplexity build passed. NU1900 service-index warnings occurred, but commands exited 0. |
+| A2 - ignored .NET output roots | COMPLETED | Removed ignored .NET output roots under cognitive-complexity. | CognitiveComplexity build passed. NU1900 service-index warnings occurred, but commands exited 0. |
 | B - hook output benchmark | COMPLETED | Added `tools/hooks/benchmark-hook-output.sh`, `docs/hook-output-benchmarks.md`, and the benchmark guard in `tests/p0-p4/instruction-overload-contracts.sh`. | Benchmark produced 7 rows; hook suite passed 166 tests; instruction-overload contracts passed 6 tests. |
 | C - workflow hook output trimming | COMPLETED | Trimmed `hooks/scripts/workflow-enforcer.sh`, `hooks/scripts/session-start.sh`, and `hooks/scripts/post-compact.sh` while preserving first blocker/action signals. | Focused hook tests and P0/P4 contracts passed after repair. Benchmark deltas: session-start 2122 bytes/225 words to 1766/183; workflow-enforcer 1892/232 to 1625/184; post-compact 2131/218 to 1526/154. |
 | E - assistant-review distillation | COMPLETED | Reduced `skills/assistant-review/SKILL.md` from 3242 to 2504 words; added `skills/assistant-review/references/review-checklists.md` at 956 words; synced plugin mirror. | Passed assistant-review skill validation, instruction-quality contracts, skill-eval contracts, assistant-review fixture validation, plugin sync apply/check. |
@@ -80,13 +80,13 @@ The counts in this section are the original audit snapshot. Later execution chan
 | Area | Tracked files | Notes |
 |---|---:|---|
 | `plugins/` | 159 | Plugin-local skill copies and manifests. Treat skill copies as generated mirrors. |
-| `skills/` | 156 | Root skill source of truth. Contains 16 assistant `SKILL.md` entry points plus contracts, references, playbooks, scripts, and agent configs. |
-| `tools/` | 85 | Memory graph, cognitive complexity, skill/plugin tooling. |
+| `skills/` | 156 | Root skill source of truth. Contains assistant `SKILL.md` entry points plus contracts, references, playbooks, scripts, and agent configs. |
+| `tools/` | 85 | Cognitive complexity and skill/plugin tooling. |
 | `tests/` | 26 | Hook, skill, plugin, and P0/P4 contract tests. |
 | `hooks/` | 19 | Lifecycle hook templates and scripts. |
 | `docs/` | 16 | Design docs, architecture notes, instruction-overload plan, contract guide. |
 | `agents/` | 13 | Codex/Claude agent role definitions. |
-| Root files | 14 | Installer, README, AGENTS, CLAUDE, memory protocol, license, version, rules, seed data. |
+| Root files | 14 | Installer, README, AGENTS, CLAUDE, license, version, and rules. |
 
 ### Largest Instruction Surfaces
 
@@ -100,7 +100,6 @@ Root skill entry points originally totaled 22,554 words. The largest `SKILL.md` 
 | `skills/assistant-telos/SKILL.md` | 1,769 | Remaining opportunity for moving examples/templates to references. |
 | `skills/assistant-tdd/SKILL.md` | 1,526 | Remaining opportunity. Preserve red-green-refactor gates; consider moving extended checklists to references. |
 | `skills/assistant-onboard/SKILL.md` | 1,521 | Remaining opportunity for reference extraction. |
-| `skills/assistant-reflexion/SKILL.md` | 1,385 | Remaining opportunity for moving longer reflection templates to references. |
 
 Hook scripts originally totaled 3,333 lines. The largest hook scripts at audit time were:
 
@@ -126,8 +125,6 @@ At audit time, ignored outputs included `.DS_Store` files and .NET build/publish
 |---|---:|
 | Repository root | 109M |
 | `tools/` | 88M |
-| `tools/memory-graph/src/MemoryGraph/bin` | 25M |
-| `tools/memory-graph/tests/MemoryGraph.Tests/bin` | 29M |
 | `tools/cognitive-complexity/bin` | 16M |
 | `tools/cognitive-complexity/.publish` | 16M |
 
@@ -143,7 +140,7 @@ These can be removed without changing tracked project behavior. Completed items 
    - Do not manually clean `.git/**` unless doing a deliberate repository-maintenance task.
 
 2. Ignored .NET build and publish outputs.
-   - Status: COMPLETED in slice A2 for memory-graph and cognitive-complexity output roots.
+   - Status: COMPLETED in slice A2 for cognitive-complexity output roots.
    - Future posture: safe to clear when disk cleanup is needed.
    - Common paths: `tools/**/bin/`, `tools/**/obj/`, and `tools/cognitive-complexity/.publish/`.
    - These are reproducible through `dotnet build`, `dotnet test`, or publish commands.
@@ -158,8 +155,6 @@ Recommended verification after clearing ignored files:
 ```bash
 git status --short --ignored
 git ls-files -i --exclude-standard -o
-dotnet build tools/memory-graph/src/MemoryGraph/MemoryGraph.csproj --tl:on -v:minimal
-dotnet test tools/memory-graph/tests/MemoryGraph.Tests/MemoryGraph.Tests.csproj --tl:on -v:minimal
 dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:minimal
 ```
 
@@ -202,7 +197,7 @@ Status: COMPLETED.
 Completed scope:
 
 - A1 removed ignored `.DS_Store` files outside `.git/.codex`.
-- A2 removed ignored .NET output roots under memory-graph and cognitive-complexity.
+- A2 removed ignored .NET output roots under cognitive-complexity.
 
 Verification receipts:
 
@@ -369,7 +364,7 @@ plugin sync apply/check passed.
 Remaining opportunities:
 
 - `skills/assistant-workflow/SKILL.md` remains high-care if its entrypoint is distilled later.
-- `skills/assistant-skill-creator/SKILL.md`, `skills/assistant-telos/SKILL.md`, `skills/assistant-tdd/SKILL.md`, `skills/assistant-onboard/SKILL.md`, and `skills/assistant-reflexion/SKILL.md` remain candidates for reference extraction.
+- `skills/assistant-skill-creator/SKILL.md`, `skills/assistant-telos/SKILL.md`, `skills/assistant-tdd/SKILL.md`, and `skills/assistant-onboard/SKILL.md` remain candidates for reference extraction.
 
 General acceptance criteria for future skill distillation:
 
@@ -402,7 +397,6 @@ Use the smallest validation set that covers the touched surface.
 | Hook scripts/templates | `bash tests/test-hooks.sh --filter <hook-or-area>`, `bash tests/p0-p4/instruction-overload-contracts.sh`. |
 | Installer docs/templates | `./install.sh --agent <agent> --dry-run`, instruction-overload contracts, plugin manifest contracts. |
 | Workflow/delegation behavior | Task packet contracts, hook tests, subagent monitor tests if present, manual scenario notes. |
-| Memory protocol text | Session-start/post-compact tests, memory protocol readback, no secret/PII checks. |
 | Benchmark data | Run `tools/hooks/benchmark-hook-output.sh` and confirm required signals, not just smaller byte counts. |
 
 ## Cleanup Philosophy

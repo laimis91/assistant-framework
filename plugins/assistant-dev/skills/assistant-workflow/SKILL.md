@@ -23,7 +23,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Before resume, reconcile state with the newest request and repository evidence.
 - If resume reconciliation classifies persisted state as stale, superseded, or completed, update the framework-owned `{agent_state_dir}/task.md` before acting or returning; record the classification and reason, current task identity, and repaired exact next action.
 - `plan_mode` keeps planning proportional: trivial safe work may use `none`, bounded small work may use `inline`, and medium+, risky, destructive, or scope-shaping work uses `approval_required`. When `plan_mode=inline`, small work has an inline plan and proceeds without ceremony unless risk requires approval.
-- `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, learning capture, harness/QA routing, and review-role separation.
+- `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
@@ -130,7 +130,7 @@ Load `references/phases.md` for the current phase. Load `references/workflow-con
 | Design | UI only | Direction, mockup, checklist, approval gate. |
 | Build | All | Light may execute directly; ordinary medium uses one bounded edit/test executor; separated Code Writer -> Builder/Tester is conditional for high-risk or broad/noisy/environment-heavy verification. Tests or relevant validation travel with code. |
 | Review | All | Light gets a fresh self-review without worker/reviewer dispatch evidence; standard/strict use Spec Review then independent `assistant-review`; QA only when required. |
-| Document | All | Apply the state/manual/learning modes; metrics, reflexion, and memory are optional/non-blocking. |
+| Document | All | Apply the state and manual-verification modes; metrics remain optional and non-blocking. |
 
 For subagent rules, load `references/subagent-dispatch.md` and resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. Light small low-risk localized work selects `not_required` plus `not_applicable`. For standard/strict development work, a direct user request or applicable `AGENTS.md` or active-skill instruction triggers delegation: set `delegation_triggered`, infer its covered roles/phases/actions, and dispatch the configured role agents without a separate permission question. Use direct fallback only for explicit user opt-out, an exact active policy block, or real subagent unavailability; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
 

@@ -84,7 +84,7 @@ if [[ -f "$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" ]] \
     && jq -e '
         .name == "assistant-core"
         and .version == "0.1.0"
-        and .description == "Foundation skills for clarification, memory, reflexion, and Telos context."
+        and .description == "Foundation skills for clarification and Telos context."
         and .repository == "https://github.com/laimis91/assistant-framework"
         and .skills == "./skills/"
         and (has("hooks") | not)
@@ -94,7 +94,7 @@ if [[ -f "$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" ]] \
         and .interface.shortDescription == "Foundation context and clarification skills"
         and .interface.category == "Productivity"
         and (.interface.capabilities == ["Interactive"])
-        and (.interface.defaultPrompt | length == 3)
+        and (.interface.defaultPrompt | length == 2)
     ' "$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" >/dev/null; then
     pass
 else
@@ -211,14 +211,18 @@ marketplace_file="$FRAMEWORK_DIR/.agents/plugins/marketplace.json"
 if grep -Fq "plugins/assistant-core/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugins/assistant-research/.codex-plugin/plugin.json" "$plugin_doc" \
     && grep -Fq "plugins/assistant-dev/.codex-plugin/plugin.json" "$plugin_doc" \
-    && grep -Fq "plugin-local copies of the four core skills" "$plugin_doc" \
+    && grep -Fq "assistant-core: assistant-clarify assistant-telos" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the three research skills" "$plugin_doc" \
     && grep -Fq "plugin-local copies of the nine development skills" "$plugin_doc" \
+    && grep -Fq "generated release artifacts" "$plugin_doc" \
     && grep -Fq "manifest-aware dry-run validation" "$plugin_doc" \
-    && grep -Fq "plugin-local copies of the four core skills" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "plugin-local copies of the three research skills" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "plugin-local copies of the nine development skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "not marketplace-registered yet" "$plugin_doc" \
+    && grep -Fq "core scaffold contains \`assistant-clarify\` and \`assistant-telos\`" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "research scaffold has three skills" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "dev scaffold has nine" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "generated release artifacts" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "manifest-aware dry-run validation" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "not marketplace-registered yet" "$FRAMEWORK_DIR/README.md" \
     && [[ ! -f "$marketplace_file" ]]; then
     pass
 else

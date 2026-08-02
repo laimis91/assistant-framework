@@ -280,8 +280,7 @@ review_words="$(mandatory_skill_words "$FRAMEWORK_DIR/skills/assistant-review")"
 workflow_root_index_words="$(skill_root_index_words "$FRAMEWORK_DIR/skills/assistant-workflow")"
 review_root_index_words="$(skill_root_index_words "$FRAMEWORK_DIR/skills/assistant-review")"
 agents_words="$(marker_block_words "$CODEX_NATIVE_HOME/.codex/AGENTS.md" ASSISTANT_FRAMEWORK_AGENTS_MD_START ASSISTANT_FRAMEWORK_AGENTS_MD_END)"
-memory_words="$(marker_block_words "$CODEX_NATIVE_HOME/.codex/AGENTS.md" ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END)"
-guidance_words=$(( agents_words + memory_words ))
+guidance_words="$agents_words"
 project_agents_words="$(wc -w < "$FRAMEWORK_DIR/AGENTS.md" | tr -d '[:space:]')"
 effective_standing_words=$(( guidance_words + project_agents_words ))
 test_start "initial instruction budgets count SKILL+index and eager closure (workflow initial=$workflow_root_index_words eager=$workflow_words; review initial=$review_root_index_words eager=$review_words; guidance=$guidance_words; project=$project_agents_words; effective=$effective_standing_words)"
@@ -299,10 +298,10 @@ if (( review_words >= 5000 )); then
     budget_failures+=("review transitive words $review_words is not below 5000")
 fi
 if (( guidance_words >= 900 )); then
-    budget_failures+=("generated AGENTS+memory words $guidance_words is not below 900")
+    budget_failures+=("generated AGENTS words $guidance_words is not below 900")
 fi
 if (( effective_standing_words >= 700 )); then
-    budget_failures+=("generated AGENTS+memory+project words $effective_standing_words is not below 700")
+    budget_failures+=("generated AGENTS+project words $effective_standing_words is not below 700")
 fi
 if [[ "${#budget_failures[@]}" -eq 0 ]]; then
     pass
@@ -354,16 +353,16 @@ test_start "completion ceremony is conditional and non-blocking outside applicab
 completion_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/completion-controller.md"
 workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
 completion_failures=()
-if rg -qi 'before completion, add .+learning controller' "$completion_controller"; then
-    completion_failures+=("Learning Controller remains unconditional")
+if rg -qi 'Learning Controller|Reflexion|memory_(reflect|signal|trend)' "$completion_controller"; then
+    completion_failures+=("completion controller retains retired custom-memory behavior")
 fi
-if ! rg -qi '(metrics|reflexion|memory).*(optional|non-blocking|not a completion blocker)' "$completion_controller"; then
-    completion_failures+=("metrics/reflexion/memory are not explicitly optional or non-blocking")
+if ! rg -qi 'metrics.*(optional|non-blocking|never a reason to block)|does not make metrics blocking' "$completion_controller"; then
+    completion_failures+=("metrics are not explicitly optional or non-blocking")
 fi
 if ! rg -qi 'manual verification.+(only|required when).*(subjective|external|destructive|UI|explicit)' "$completion_controller"; then
     completion_failures+=("manual verification is not limited to subjective/external/destructive/UI/explicit acceptance")
 fi
-if ! rg -qi 'small.+(does not require|without).+(task journal|metrics|reflexion|manual verification)' "$completion_controller"; then
+if ! rg -qi 'small.+(does not require|without).+(task journal|metrics|manual verification)' "$completion_controller"; then
     completion_failures+=("small completion does not explicitly omit ceremony")
 fi
 if ! rg -qi '(task journal.+(medium\+|cross-session|clarification|harness)|(medium\+|cross-session|clarification|harness).+task journal)' "$workflow_phases"; then

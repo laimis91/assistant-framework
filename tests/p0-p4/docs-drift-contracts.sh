@@ -37,13 +37,12 @@ else
     pass
 fi
 
-test_start "README memory graph tool list includes runtime count and memory_doctor"
-runtime_tool_count="$(grep -c 'registry.Register(new ' "$FRAMEWORK_DIR/tools/memory-graph/src/MemoryGraph/Server/MemoryGraphRuntime.cs")"
-if grep -Fq "**$runtime_tool_count MCP tools:**" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq '`memory_doctor`' "$FRAMEWORK_DIR/README.md"; then
+test_start "README does not document retired Memory Graph runtime or skills"
+if ! rg -n -i -e 'Memory Graph \(MCP Server\)' -e 'memory_doctor' -e 'assistant-memory' -e 'assistant-reflexion' \
+    "$FRAMEWORK_DIR/README.md" >/tmp/p0p4-docs-drift-retired-memory.out; then
     pass
 else
-    fail "README memory graph MCP tool list must match runtime count and include memory_doctor"
+    fail "README retains retired Memory Graph runtime or skill documentation; see /tmp/p0p4-docs-drift-retired-memory.out"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
