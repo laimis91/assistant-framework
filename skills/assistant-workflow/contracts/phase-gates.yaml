@@ -148,6 +148,21 @@ gates:
         check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
+      - id: D_PROGRESSIVE_DISCOVERY_HOLD
+        check: "When progressive_discovery_state in [mapping, resolving, blocked], unresolved progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording."
+        condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, blocked]"
+        on_fail: "Return to progressive Discover, preserve the unresolved decision state, and do not execute or prepare a mutating prerequisite outside a separate approved workflow with returned evidence."
+
+      - id: D_PROGRESSIVE_REPEAT_READINESS
+        check: "Before repeated progressive resolution activates a second/sequential decision item: loop_readiness_assessment records finite max_iterations, budget_limit, route-clear, cap, stagnation, or failure stop conditions, unchanged frontier/no-progress detection, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, and existing journal/equivalent state tracking; exhaustion ends in blocked/escalation."
+        condition: "uncertainty_shape == progressive and a second/sequential decision activation is proposed after a prior resolution"
+        on_fail: "Keep the next item inactive, record or repair loop_readiness_assessment, and fail closed to blocked/escalation when the finite cap, stagnation, failure, or evidence route is exhausted."
+
+      - id: D_PROGRESSIVE_ROUTE_CLEAR
+        check: "When progressive_discovery_state == route_clear, route clear proves no open/blocked items and no remaining deferred uncertainty except retired/excluded entries; route_clear_handoff.next_route is bounded_discover, then the normal Requirement Acceptance Map and current gates still run."
+        condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
+        on_fail: "Return to progressive Discover, resolve or explicitly retire/exclude remaining state, repair route_clear_handoff, and re-enter bounded Discover before normal mapping and current gates."
+
       - id: D_CONTEXT_BUDGET
         check: "For medium+ tasks or large material: context_budget_note records exact/pinned, summarized, omitted/deferred, and split/delegation plan"
         condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
@@ -682,3 +697,39 @@ invariants:
     check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
+
+  - id: INV_PROGRESSIVE_DISCOVERY_BOUNDARY
+    check: "Unresolved progressive mapping, resolving, or blocked state remains in Discover and is a no-execution boundary: no Decompose, Plan, Build, project/source mutation, external writes, branch creation, or credential-location recording occurs."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, blocked]"
+    scope: all_phases
+    on_fail: "Return to progressive Discover. Any mutating prerequisite must run as a separate approved workflow and return evidence before this workflow can consume it."
+
+  - id: INV_PROGRESSIVE_SINGLE_ACTIVE
+    check: "Ensures that at most one decision item is active in every progressive state where decision items exist, including mapping; use decision-item statuses when no decision_frontier snapshot exists, and the recomputed decision_frontier enforces the same limit once it exists. Sequential resolutions may continue in the same session only after each recomputation."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    scope: all_phases
+    on_fail: "Keep at most one decision-item status=active; use decision-item statuses during mapping and, when a decision_frontier snapshot exists, recompute it and preserve the unresolved and blocked refs. Do not require a decision_frontier during mapping."
+
+  - id: INV_PROGRESSIVE_REPEAT_READINESS
+    check: "One active item and multiple sequential resolutions remain allowed, but every second/sequential activation has a ready loop_readiness_assessment with finite max_iterations, budget_limit, route-clear, cap, stagnation, or failure stop conditions, unchanged frontier/no-progress detection, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, and existing journal/equivalent state tracking; exhaustion fails closed to blocked/escalation."
+    condition: "uncertainty_shape == progressive and a second/sequential decision activation is proposed after a prior resolution"
+    scope: all_phases
+    on_fail: "Do not activate another item. Record the bounded readiness evidence or route to blocked/escalation; never reset the cap or treat an unchanged frontier as progress."
+
+  - id: INV_PROGRESSIVE_HUMAN_EVIDENCE
+    check: "A human_required decision cannot self-resolve: its decision_resolution has actual user evidence at human_confirmation_ref before it is marked resolved."
+    condition: "uncertainty_shape == progressive"
+    scope: all_phases
+    on_fail: "Keep the decision unresolved, request or record actual user evidence, and do not manufacture human confirmation."
+
+  - id: INV_PROGRESSIVE_RECOMPUTATION
+    check: "Each decision_resolution records downstream effects, newly precise items, and superseded/invalidated items before recomputing the frontier."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear]"
+    scope: all_phases
+    on_fail: "Record the missing resolution effects and refs, then recompute the frontier before selecting another item."
+
+  - id: INV_PROGRESSIVE_ROUTE_CLEAR
+    check: "route_clear requires no open/blocked items and no remaining deferred uncertainty except retired/excluded entries; route_clear_handoff.next_route is bounded_discover and the normal Requirement Acceptance Map/current gates still run."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
+    scope: all_phases
+    on_fail: "Return to progressive Discover, repair the unresolved/deferred refs, and continue through bounded Discover and normal gates after clearance."

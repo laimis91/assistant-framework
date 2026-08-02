@@ -49,6 +49,22 @@ Workflow state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/contex
 
 Discover does not complete while `Clarification status: needs_clarification`. Clarification waiting is a Discover substate, not a separate workflow phase.
 
+Route prompt-level ambiguity that matches `assistant-clarify` first; clear
+prompts do not invoke it. Then classify the remaining implementation
+uncertainty. `uncertainty_shape=bounded` is the default: fully specified tasks
+remain bounded, and size alone is not a trigger. Use
+`uncertainty_shape=progressive` only when a not-yet-precise outcome-shaping
+unknown is unlocked by a predecessor; then load
+`references/progressive-discovery.md` before continuing Discover. Precise,
+answerable questions and deterministic safe defaults stay in the existing
+workflow clarification path.
+
+For progressive mapping, resolving, or blocked state, `references/progressive-discovery.md`
+defines the no-execution boundary. Do not enter Decompose, Plan, or Build and
+do not run a mutating prerequisite in this substate; use a separate approved
+workflow that returns evidence. After route clearance, return to bounded
+Discover for the normal Requirement Acceptance Map and current gates.
+
 Print: `>> Dispatching Code Mapper → context map` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Code Mapper responsibility → context map` (when `subagent_execution_mode=direct_fallback`)
 Print: `>> Dispatching Explorer` (when `subagent_execution_mode=delegated`)

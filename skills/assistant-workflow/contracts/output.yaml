@@ -1517,6 +1517,173 @@ artifacts:
         condition: "provider_gate_state in [passed, failed]"
         validation: "Required nonblank, non-whitespace-only provider-neutral gate evidence when provider_gate_state is passed or failed; not required while not_evaluated."
 
+  - name: decision_map
+    type: object
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    description: "Canonical progressive Discover map that anchors the intended outcome and scope"
+    validation: "Contains target_outcome, scope_anchor, decision_item_refs, and deferred_uncertainty_refs; refs identify typed state kept in the existing journal/equivalent carried state."
+    on_fail: "Return to progressive Discover, record the missing map anchor or refs, and do not treat the route as clear."
+    object_fields:
+      - name: target_outcome
+        type: string
+        required: true
+      - name: scope_anchor
+        type: string
+        required: true
+      - name: decision_item_refs
+        type: string[]
+        required: true
+      - name: deferred_uncertainty_refs
+        type: string[]
+        required: true
+
+  - name: decision_item
+    type: object[]
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    description: "Typed register item for a precise progressive Discover decision"
+    validation: "Contains interaction_mode, dependencies, and status; at most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
+    on_fail: "Record the missing decision item fields, keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
+    object_fields:
+      - name: decision_id
+        type: string
+        required: true
+      - name: prompt
+        type: string
+        required: true
+      - name: interaction_mode
+        type: enum
+        required: true
+        enum_values: [agent_only, human_required, collaborative]
+      - name: dependencies
+        type: string[]
+        required: true
+      - name: status
+        type: enum
+        required: true
+        enum_values: [pending, active, resolved, blocked, superseded, excluded]
+
+  - name: deferred_uncertainty
+    type: object[]
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    description: "Outcome-shaping uncertainty that cannot yet be stated as a decision item"
+    validation: "Contains unlock_condition. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
+    on_fail: "State the missing unlock condition or move a precise question into decision_item or workflow clarification before continuing."
+    object_fields:
+      - name: uncertainty_id
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: unlock_condition
+        type: string
+        required: true
+      - name: status
+        type: enum
+        required: true
+        enum_values: [deferred, unlocked, retired, excluded]
+      - name: converted_decision_item_ref
+        type: string
+        required: false
+        condition: "status == unlocked and a precise decision item was created"
+
+  - name: decision_frontier
+    type: object
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear, blocked]"
+    description: "Current eligible, active, and blocked progressive decision state"
+    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. It allows at most one active item while multiple sequential resolutions per session are allowed."
+    on_fail: "Recompute the frontier, leave no more than one active item, and preserve blocked items with their reasons."
+    object_fields:
+      - name: computed_from
+        type: string[]
+        required: true
+        validation: "Refs to the decision items, deferred uncertainty, and resolutions used to compute this snapshot"
+      - name: eligible_item_refs
+        type: string[]
+        required: true
+      - name: active_item_ref
+        type: string
+        required: false
+      - name: blocked_item_refs
+        type: string[]
+        required: true
+
+  - name: decision_resolution
+    type: object[]
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear]"
+    description: "Canonical record of one resolved progressive decision"
+    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs; human_confirmation_ref is required conditionally for human_required decisions."
+    on_fail: "Record the canonical resolution and its evidence/downstream effects before advancing the frontier."
+    object_fields:
+      - name: decision_item_ref
+        type: string
+        required: true
+      - name: resolution
+        type: string
+        required: true
+      - name: evidence
+        type: string
+        required: true
+      - name: downstream_effects
+        type: string[]
+        required: true
+      - name: human_confirmation_ref
+        type: string
+        required: conditional
+        condition: "decision item interaction_mode == human_required"
+        validation: "Actual user evidence reference required for human_required resolution; agents cannot self-resolve it"
+      - name: newly_precise_item_refs
+        type: string[]
+        required: true
+      - name: superseded_item_refs
+        type: string[]
+        required: true
+
+  - name: route_clear_handoff
+    type: object
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
+    description: "Compact handoff from progressive Discover back toward bounded Discover"
+    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit."
+    on_fail: "Return to progressive Discover and record the missing map reference or carried-forward planning inputs."
+    object_fields:
+      - name: decision_map_ref
+        type: string
+        required: true
+      - name: decisions
+        type: string[]
+        required: true
+      - name: constraints
+        type: string[]
+        required: true
+      - name: exclusions
+        type: string[]
+        required: true
+      - name: acceptance_seed
+        type: string[]
+        required: true
+      - name: open_item_refs
+        type: string[]
+        required: true
+      - name: blocked_item_refs
+        type: string[]
+        required: true
+      - name: remaining_deferred_uncertainty_refs
+        type: string[]
+        required: true
+      - name: retired_or_excluded_deferred_uncertainty_refs
+        type: string[]
+        required: true
+      - name: next_route
+        type: enum
+        required: true
+        enum_values: [bounded_discover]
+
   - name: metrics_entry
     type: jsonl_line
     required: false

@@ -148,6 +148,16 @@ Only tracked `assistant-*` directories are first-class release skills.
 ### assistant-workflow
 Core development pipeline: idea-to-action decomposition, discover, proportional planning, build and verification, independent review, bounded repair, and evidence-backed documentation.
 
+For dependency-shaped uncertainty, the workflow defaults to
+`uncertainty_shape=bounded`: size alone does not activate progressive Discover.
+It enters that substate only when a predecessor decision must unlock an
+outcome-shaping unknown. `assistant-clarify` owns prompt-level ambiguity, so
+precise requests stay in the ordinary flow without duplicate ceremony.
+Progressive Discover is a no-execution boundary; any mutation must use a
+separate approved workflow and returned evidence. Once the route is clear, it
+returns through bounded Discover to the normal Requirement Acceptance Map and
+phase gates.
+
 For multi-slice work, Assistant Workflow infers the repository's current local
 target branch unless explicitly supplied, then uses a portable task branch
 (`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`)

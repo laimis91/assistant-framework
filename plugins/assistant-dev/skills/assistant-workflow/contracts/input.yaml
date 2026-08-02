@@ -364,6 +364,26 @@ fields:
     default: []
     on_missing: skip
 
+  - name: uncertainty_shape
+    type: enum
+    required: false
+    enum_values: [bounded, progressive]
+    description: "Whether outcome-shaping uncertainty is already precise enough for ordinary Discover or must be resolved progressively before executable planning"
+    validation: "bounded is the default. Use progressive only when a not-yet-precise outcome-shaping unknown is unlocked by a predecessor; fully specified tasks remain bounded, and size alone is not a trigger."
+    default: bounded
+    on_missing: infer
+    infer_from: "Use bounded unless an outcome-shaping unknown cannot yet be stated precisely and a predecessor decision will unlock it."
+
+  - name: progressive_discovery_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, mapping, resolving, route_clear, blocked]
+    description: "Current typed state for progressive Discover decision work"
+    validation: "not_applicable requires uncertainty_shape=bounded. mapping, resolving, route_clear, and blocked require uncertainty_shape=progressive."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable for bounded uncertainty. For progressive uncertainty, use mapping until a decision map exists, resolving while the frontier has work, route_clear when the route can return to bounded Discover, or blocked when the next required decision cannot proceed."
+
   - name: clarification_status
     type: enum
     required: true

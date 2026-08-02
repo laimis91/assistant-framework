@@ -40,6 +40,9 @@ Slice topology: target_branch=[ref] | task_branch=[feature/<task>] | slice_branc
 Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REVIEW_STALE plus evidence refs]
 Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
+Uncertainty shape: [bounded | progressive]
+Progressive discovery state: [not_applicable | mapping | resolving | route_clear | blocked]
+Decision map ref: [N/A for bounded work | compact journal/packet ref]
 Manual verification mode: [not_required | optional | required]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
@@ -105,6 +108,14 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Requirement Acceptance Map
 [paste or reference the canonical map from `references/requirement-acceptance-map.md`; every accepted requirement id must end passed or approved_exclusion]
+
+## Progressive Discovery
+[N/A for bounded work. Keep compact refs here or in the equivalent carried state; do not duplicate full schemas.]
+- Decision items ref: [journal/packet ref]
+- Deferred uncertainty ref: [journal/packet ref]
+- Decision frontier ref: [journal/packet ref]
+- Decision resolutions ref: [journal/packet ref]
+- Route-clear handoff ref: [journal/packet ref]
 
 ## Key Decisions
 - [decision]: [why] (Step N)
