@@ -96,7 +96,7 @@ p0p4_make_no_python_path() {
     local target="$1"
     local command_name command_path
     mkdir -p "$target"
-    for command_name in awk basename bash cat chmod cp dirname env find grep ln mkdir mktemp pwd readlink rm rsync sed sort stat tr uname; do
+    for command_name in awk basename bash cat chmod cmp cp dirname env find grep ln mkdir mktemp mv pwd readlink rm rsync sed sort stat tr uname wc; do
         command_path="$(command -v "$command_name" 2>/dev/null || true)"
         [[ -n "$command_path" ]] && ln -s "$command_path" "$target/$command_name"
     done
@@ -723,6 +723,424 @@ if PATH="$no_python_bin" HOME="$no_python_home" /bin/bash "$cleanup_bash" --agen
     fi
 else
     fail "cleanup without legacy structured configuration must not require Python"
+fi
+
+test_start "no-Python cleanup and install preserve provably unrelated provider MCP configuration"
+no_python_unrelated_failures=()
+for no_python_unrelated_agent in claude gemini codex; do
+    no_python_unrelated_home="$(mktemp -d)"
+    no_python_unrelated_bin="$(mktemp -d)"
+    p0p4_register_cleanup "$no_python_unrelated_home" "$no_python_unrelated_bin"
+    p0p4_make_no_python_path "$no_python_unrelated_bin"
+    mkdir -p "$no_python_unrelated_home/.${no_python_unrelated_agent}"
+    case "$no_python_unrelated_agent" in
+        claude)
+            no_python_unrelated_home_path="$no_python_unrelated_home/.claude"
+            no_python_unrelated_config="$no_python_unrelated_home_path/settings.json"
+            printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"],"env":{"TEAM":"platform"}}}}' >"$no_python_unrelated_config"
+            ;;
+        gemini)
+            no_python_unrelated_home_path="$no_python_unrelated_home/.gemini"
+            no_python_unrelated_config="$no_python_unrelated_home_path/settings.json"
+            printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"],"env":{"TEAM":"platform"}}}}' >"$no_python_unrelated_config"
+            ;;
+        codex)
+            no_python_unrelated_home_path="$no_python_unrelated_home/.codex"
+            no_python_unrelated_config="$no_python_unrelated_home_path/config.toml"
+            mkdir -p "$no_python_unrelated_home_path"
+            printf '%s\n' '[mcp_servers.team-inventory]' 'command = "npx"' 'args = ["@acme/inventory-mcp"]' '' '[mcp_servers.team-inventory.env]' 'TEAM = "platform"' >"$no_python_unrelated_config"
+            ;;
+    esac
+    mkdir -p "$no_python_unrelated_home_path/tools/memory-graph" "$no_python_unrelated_home_path/memory"
+    printf '%s\n' 'retired runtime sentinel' >"$no_python_unrelated_home_path/tools/memory-graph/run-memory-graph.sh"
+    printf '%s\n' 'provider data sentinel' >"$no_python_unrelated_home_path/memory/graph.db"
+    chmod 640 "$no_python_unrelated_config"
+    cp "$no_python_unrelated_config" "$no_python_unrelated_home_path/config.before"
+    no_python_unrelated_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_unrelated_config")"
+    if ! PATH="$no_python_unrelated_bin" HOME="$no_python_unrelated_home" /bin/bash "$cleanup_bash" --agent "$no_python_unrelated_agent" >/tmp/p0p4-no-python-unrelated-cleanup-${no_python_unrelated_agent}.out 2>/tmp/p0p4-no-python-unrelated-cleanup-${no_python_unrelated_agent}.err \
+        || [[ -e "$no_python_unrelated_home_path/tools/memory-graph" ]] \
+        || ! cmp -s "$no_python_unrelated_home_path/config.before" "$no_python_unrelated_config" \
+        || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_unrelated_config")" != "$no_python_unrelated_mode" ]] \
+        || ! grep -Fq 'team-inventory' "$no_python_unrelated_config" \
+        || ! grep -Fq 'provider data sentinel' "$no_python_unrelated_home_path/memory/graph.db" \
+        || ! PATH="$no_python_unrelated_bin" HOME="$no_python_unrelated_home" /bin/bash "$FRAMEWORK_DIR/install.sh" --agent "$no_python_unrelated_agent" --skill assistant-workflow --no-hooks >/tmp/p0p4-no-python-unrelated-install-${no_python_unrelated_agent}.out 2>/tmp/p0p4-no-python-unrelated-install-${no_python_unrelated_agent}.err \
+        || [[ ! -f "$no_python_unrelated_home_path/skills/assistant-workflow/SKILL.md" ]] \
+        || [[ -e "$no_python_unrelated_home_path/tools/memory-graph" ]] \
+        || ! cmp -s "$no_python_unrelated_home_path/config.before" "$no_python_unrelated_config" \
+        || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_unrelated_config")" != "$no_python_unrelated_mode" ]] \
+        || ! grep -Fq 'team-inventory' "$no_python_unrelated_config" \
+        || ! grep -Fq 'provider data sentinel' "$no_python_unrelated_home_path/memory/graph.db"; then
+        no_python_unrelated_failures+=("$no_python_unrelated_agent")
+    fi
+done
+if [[ "${#no_python_unrelated_failures[@]}" -ne 0 ]]; then
+    fail "no-Python cleanup/install did not preserve provably unrelated provider config, mode, MCP registration, and provider data while retiring the exact runtime: ${no_python_unrelated_failures[*]}"
+else
+    pass
+fi
+
+test_start "no-Python cleanup rechecks source drift before retiring an unrelated structured runtime"
+no_python_drift_home="$(mktemp -d)"
+no_python_drift_bin="$(mktemp -d)"
+no_python_drift_real_grep="$(command -v grep)"
+p0p4_register_cleanup "$no_python_drift_home" "$no_python_drift_bin"
+p0p4_make_no_python_path "$no_python_drift_bin"
+mkdir -p "$no_python_drift_home/.claude/tools/memory-graph" "$no_python_drift_home/.claude/memory"
+printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_drift_home/.claude/settings.json"
+printf '%s\n' '{"mcpServers":{"memory-graph":{"command":"retire"},"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_drift_home/drifted-settings.json"
+printf '%s\n' 'retired runtime sentinel' >"$no_python_drift_home/.claude/tools/memory-graph/run-memory-graph.sh"
+printf '%s\n' 'provider data sentinel' >"$no_python_drift_home/.claude/memory/graph.db"
+chmod 640 "$no_python_drift_home/.claude/settings.json"
+no_python_drift_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_drift_home/.claude/settings.json")"
+rm "$no_python_drift_bin/grep"
+printf '%s\n' '#!/bin/sh' \
+    '"$P0P4_NO_PYTHON_DRIFT_REAL_GREP" "$@"' \
+    'status=$?' \
+    'if [ ! -e "$P0P4_NO_PYTHON_DRIFT_STATE" ]; then' \
+    '  : > "$P0P4_NO_PYTHON_DRIFT_STATE"' \
+    '  cat "$P0P4_NO_PYTHON_DRIFT_EXPECTED" > "$P0P4_NO_PYTHON_DRIFT_CONFIG"' \
+    'fi' \
+    'exit "$status"' >"$no_python_drift_bin/grep"
+chmod +x "$no_python_drift_bin/grep"
+if P0P4_NO_PYTHON_DRIFT_REAL_GREP="$no_python_drift_real_grep" \
+    P0P4_NO_PYTHON_DRIFT_STATE="$no_python_drift_home/identity-scan-complete" \
+    P0P4_NO_PYTHON_DRIFT_EXPECTED="$no_python_drift_home/drifted-settings.json" \
+    P0P4_NO_PYTHON_DRIFT_CONFIG="$no_python_drift_home/.claude/settings.json" \
+    PATH="$no_python_drift_bin" HOME="$no_python_drift_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-source-drift.out 2>/tmp/p0p4-no-python-source-drift.err; then
+    no_python_drift_status=0
+else
+    no_python_drift_status=$?
+fi
+if [[ "$no_python_drift_status" -eq 0 ]] \
+    || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-source-drift.err \
+    || ! cmp -s "$no_python_drift_home/drifted-settings.json" "$no_python_drift_home/.claude/settings.json" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_drift_home/.claude/settings.json")" != "$no_python_drift_mode" ]] \
+    || [[ ! -f "$no_python_drift_home/.claude/tools/memory-graph/run-memory-graph.sh" ]] \
+    || ! grep -Fq 'provider data sentinel' "$no_python_drift_home/.claude/memory/graph.db"; then
+    fail "no-Python cleanup did not recheck source drift after the initial unrelated identity scan before deleting runtime"
+else
+    pass
+fi
+
+test_start "no-Python cleanup revalidates target ancestors after source revalidation before retirement"
+no_python_target_drift_home="$(mktemp -d)"
+no_python_target_drift_bin="$(mktemp -d)"
+no_python_target_drift_external="$(mktemp -d)"
+no_python_target_drift_real_cmp="$(command -v cmp)"
+p0p4_register_cleanup "$no_python_target_drift_home" "$no_python_target_drift_bin" "$no_python_target_drift_external"
+p0p4_make_no_python_path "$no_python_target_drift_bin"
+mkdir -p "$no_python_target_drift_home/.claude/tools/memory-graph" "$no_python_target_drift_home/.claude/memory" "$no_python_target_drift_external/memory-graph"
+printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_target_drift_home/.claude/settings.json"
+printf '%s\n' 'retired runtime sentinel' >"$no_python_target_drift_home/.claude/tools/memory-graph/run-memory-graph.sh"
+printf '%s\n' 'provider data sentinel' >"$no_python_target_drift_home/.claude/memory/graph.db"
+printf '%s\n' 'external target sentinel' >"$no_python_target_drift_external/memory-graph/sentinel"
+chmod 640 "$no_python_target_drift_home/.claude/settings.json"
+cp "$no_python_target_drift_home/.claude/settings.json" "$no_python_target_drift_home/settings.before"
+no_python_target_drift_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_target_drift_home/.claude/settings.json")"
+rm "$no_python_target_drift_bin/cmp"
+printf '%s\n' '#!/bin/sh' \
+    '"$P0P4_NO_PYTHON_TARGET_DRIFT_REAL_CMP" "$@"' \
+    'status=$?' \
+    'count="$(cat "$P0P4_NO_PYTHON_TARGET_DRIFT_COUNT" 2>/dev/null || printf 0)"' \
+    'count=$((count + 1))' \
+    'printf "%s\n" "$count" > "$P0P4_NO_PYTHON_TARGET_DRIFT_COUNT"' \
+    'if [ "$count" -eq 2 ]; then' \
+    '  mv "$P0P4_NO_PYTHON_TARGET_DRIFT_TOOLS" "$P0P4_NO_PYTHON_TARGET_DRIFT_MOVED_TOOLS"' \
+    '  ln -s "$P0P4_NO_PYTHON_TARGET_DRIFT_EXTERNAL" "$P0P4_NO_PYTHON_TARGET_DRIFT_TOOLS"' \
+    'fi' \
+    'exit "$status"' >"$no_python_target_drift_bin/cmp"
+chmod +x "$no_python_target_drift_bin/cmp"
+if P0P4_NO_PYTHON_TARGET_DRIFT_REAL_CMP="$no_python_target_drift_real_cmp" \
+    P0P4_NO_PYTHON_TARGET_DRIFT_COUNT="$no_python_target_drift_home/cmp-count" \
+    P0P4_NO_PYTHON_TARGET_DRIFT_TOOLS="$no_python_target_drift_home/.claude/tools" \
+    P0P4_NO_PYTHON_TARGET_DRIFT_MOVED_TOOLS="$no_python_target_drift_home/.claude/tools-before-drift" \
+    P0P4_NO_PYTHON_TARGET_DRIFT_EXTERNAL="$no_python_target_drift_external" \
+    PATH="$no_python_target_drift_bin" HOME="$no_python_target_drift_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-target-drift.out 2>/tmp/p0p4-no-python-target-drift.err; then
+    no_python_target_drift_status=0
+else
+    no_python_target_drift_status=$?
+fi
+if [[ "$no_python_target_drift_status" -eq 0 ]] \
+    || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-target-drift.err \
+    || ! cmp -s "$no_python_target_drift_home/settings.before" "$no_python_target_drift_home/.claude/settings.json" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_target_drift_home/.claude/settings.json")" != "$no_python_target_drift_mode" ]] \
+    || [[ ! -f "$no_python_target_drift_home/.claude/tools-before-drift/memory-graph/run-memory-graph.sh" ]] \
+    || ! grep -Fq 'provider data sentinel' "$no_python_target_drift_home/.claude/memory/graph.db" \
+    || ! grep -Fq 'external target sentinel' "$no_python_target_drift_external/memory-graph/sentinel"; then
+    fail "no-Python cleanup did not fail closed after target-ancestor drift and preserve the original runtime plus external target"
+else
+    pass
+fi
+
+test_start "no-Python cleanup rechecks source state after global target revalidation before retirement"
+no_python_global_target_home="$(mktemp -d)"
+no_python_global_target_bin="$(mktemp -d)"
+no_python_global_target_real_stat="$(command -v stat)"
+p0p4_register_cleanup "$no_python_global_target_home" "$no_python_global_target_bin"
+p0p4_make_no_python_path "$no_python_global_target_bin"
+mkdir -p "$no_python_global_target_home/.claude/tools/memory-graph" "$no_python_global_target_home/.claude/memory"
+printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_global_target_home/.claude/settings.json"
+printf '%s\n' '{"mcpServers":{"memory-graph":{"command":"retire"},"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_global_target_home/drifted-settings.json"
+printf '%s\n' 'retired runtime sentinel' >"$no_python_global_target_home/.claude/tools/memory-graph/run-memory-graph.sh"
+printf '%s\n' 'provider data sentinel' >"$no_python_global_target_home/.claude/memory/graph.db"
+chmod 640 "$no_python_global_target_home/.claude/settings.json"
+no_python_global_target_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_global_target_home/.claude/settings.json")"
+rm "$no_python_global_target_bin/stat"
+printf '%s\n' '#!/bin/sh' \
+    'last=' \
+    'for last do :; done' \
+    '"$P0P4_NO_PYTHON_GLOBAL_TARGET_REAL_STAT" "$@"' \
+    'status=$?' \
+    'if [ "$last" = "$P0P4_NO_PYTHON_GLOBAL_TARGET_TOOLS" ]; then' \
+    '  count="$(cat "$P0P4_NO_PYTHON_GLOBAL_TARGET_COUNT" 2>/dev/null || printf 0)"' \
+    '  count=$((count + 1))' \
+    '  printf "%s\n" "$count" > "$P0P4_NO_PYTHON_GLOBAL_TARGET_COUNT"' \
+    '  if [ "$count" -eq 2 ]; then cat "$P0P4_NO_PYTHON_GLOBAL_TARGET_CHANGED" > "$P0P4_NO_PYTHON_GLOBAL_TARGET_CONFIG"; fi' \
+    'fi' \
+    'exit "$status"' >"$no_python_global_target_bin/stat"
+chmod +x "$no_python_global_target_bin/stat"
+if P0P4_NO_PYTHON_GLOBAL_TARGET_REAL_STAT="$no_python_global_target_real_stat" \
+    P0P4_NO_PYTHON_GLOBAL_TARGET_TOOLS="$no_python_global_target_home/.claude/tools" \
+    P0P4_NO_PYTHON_GLOBAL_TARGET_COUNT="$no_python_global_target_home/tools-stat-count" \
+    P0P4_NO_PYTHON_GLOBAL_TARGET_CHANGED="$no_python_global_target_home/drifted-settings.json" \
+    P0P4_NO_PYTHON_GLOBAL_TARGET_CONFIG="$no_python_global_target_home/.claude/settings.json" \
+    PATH="$no_python_global_target_bin" HOME="$no_python_global_target_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-global-target-drift.out 2>/tmp/p0p4-no-python-global-target-drift.err; then
+    no_python_global_target_status=0
+else
+    no_python_global_target_status=$?
+fi
+if [[ "$no_python_global_target_status" -eq 0 ]] \
+    || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-global-target-drift.err \
+    || ! cmp -s "$no_python_global_target_home/drifted-settings.json" "$no_python_global_target_home/.claude/settings.json" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_global_target_home/.claude/settings.json")" != "$no_python_global_target_mode" ]] \
+    || [[ ! -f "$no_python_global_target_home/.claude/tools/memory-graph/run-memory-graph.sh" ]] \
+    || ! grep -Fq 'provider data sentinel' "$no_python_global_target_home/.claude/memory/graph.db"; then
+    fail "no-Python cleanup did not recheck source state after global target revalidation before deleting runtime"
+else
+    pass
+fi
+
+test_start "no-Python pinned per-target guard preserves replacement after target drift"
+no_python_pinned_target_home="$(mktemp -d)"
+no_python_pinned_target_bin="$(mktemp -d)"
+no_python_pinned_target_real_stat="$(command -v stat)"
+p0p4_register_cleanup "$no_python_pinned_target_home" "$no_python_pinned_target_bin"
+p0p4_make_no_python_path "$no_python_pinned_target_bin"
+mkdir -p "$no_python_pinned_target_home/.claude/tools/memory-graph" "$no_python_pinned_target_home/.claude/memory"
+no_python_pinned_target_parent_physical="$(cd "$no_python_pinned_target_home/.claude/tools" && pwd -P)"
+printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_pinned_target_home/.claude/settings.json"
+printf '%s\n' 'retired runtime sentinel' >"$no_python_pinned_target_home/.claude/tools/memory-graph/run-memory-graph.sh"
+printf '%s\n' 'provider data sentinel' >"$no_python_pinned_target_home/.claude/memory/graph.db"
+chmod 640 "$no_python_pinned_target_home/.claude/settings.json"
+cp "$no_python_pinned_target_home/.claude/settings.json" "$no_python_pinned_target_home/settings.before"
+no_python_pinned_target_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_pinned_target_home/.claude/settings.json")"
+rm "$no_python_pinned_target_bin/stat"
+printf '%s\n' '#!/bin/sh' \
+    'last=' \
+    'for last do :; done' \
+    '"$P0P4_NO_PYTHON_PINNED_TARGET_REAL_STAT" "$@"' \
+    'status=$?' \
+    'if [ "$last" = . ] && [ "$(pwd -P)" = "$P0P4_NO_PYTHON_PINNED_TARGET_PARENT" ] && [ ! -e "$P0P4_NO_PYTHON_PINNED_TARGET_STATE" ]; then' \
+    '  : > "$P0P4_NO_PYTHON_PINNED_TARGET_STATE"' \
+    '  mv "$P0P4_NO_PYTHON_PINNED_TARGET" "$P0P4_NO_PYTHON_PINNED_MOVED_TARGET"' \
+    '  mkdir "$P0P4_NO_PYTHON_PINNED_TARGET"' \
+    '  printf "%s\n" "replacement sentinel" > "$P0P4_NO_PYTHON_PINNED_TARGET/sentinel"' \
+    'fi' \
+    'exit "$status"' >"$no_python_pinned_target_bin/stat"
+chmod +x "$no_python_pinned_target_bin/stat"
+if P0P4_NO_PYTHON_PINNED_TARGET_REAL_STAT="$no_python_pinned_target_real_stat" \
+    P0P4_NO_PYTHON_PINNED_TARGET_PARENT="$no_python_pinned_target_parent_physical" \
+    P0P4_NO_PYTHON_PINNED_TARGET="$no_python_pinned_target_home/.claude/tools/memory-graph" \
+    P0P4_NO_PYTHON_PINNED_MOVED_TARGET="$no_python_pinned_target_home/.claude/tools/memory-graph-before-drift" \
+    P0P4_NO_PYTHON_PINNED_TARGET_STATE="$no_python_pinned_target_home/target-guard-state" \
+    PATH="$no_python_pinned_target_bin" HOME="$no_python_pinned_target_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-pinned-target-drift.out 2>/tmp/p0p4-no-python-pinned-target-drift.err; then
+    no_python_pinned_target_status=0
+else
+    no_python_pinned_target_status=$?
+fi
+if [[ "$no_python_pinned_target_status" -eq 0 ]] \
+    || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-pinned-target-drift.err \
+    || ! cmp -s "$no_python_pinned_target_home/settings.before" "$no_python_pinned_target_home/.claude/settings.json" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_pinned_target_home/.claude/settings.json")" != "$no_python_pinned_target_mode" ]] \
+    || [[ ! -f "$no_python_pinned_target_home/.claude/tools/memory-graph-before-drift/run-memory-graph.sh" ]] \
+    || ! grep -Fq 'replacement sentinel' "$no_python_pinned_target_home/.claude/tools/memory-graph/sentinel" \
+    || ! grep -Fq 'provider data sentinel' "$no_python_pinned_target_home/.claude/memory/graph.db"; then
+    fail "no-Python pinned target guard did not preserve changed target, original runtime, config, and provider data"
+else
+    pass
+fi
+
+test_start "no-Python post-mktemp metadata failure preserves state and removes snapshot artifacts"
+no_python_snapshot_failure_home="$(mktemp -d)"
+no_python_snapshot_failure_bin="$(mktemp -d)"
+no_python_snapshot_failure_before="$(mktemp)"
+no_python_snapshot_failure_after="$(mktemp)"
+no_python_snapshot_failure_real_stat="$(command -v stat)"
+p0p4_register_cleanup "$no_python_snapshot_failure_home" "$no_python_snapshot_failure_bin" "$no_python_snapshot_failure_before" "$no_python_snapshot_failure_after"
+p0p4_make_no_python_path "$no_python_snapshot_failure_bin"
+find /tmp -maxdepth 1 -type d -name 'assistant-framework-memory-cleanup.*' -print | sort >"$no_python_snapshot_failure_before"
+mkdir -p "$no_python_snapshot_failure_home/.claude/tools/memory-graph" "$no_python_snapshot_failure_home/.claude/memory"
+printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx"}}}' >"$no_python_snapshot_failure_home/.claude/settings.json"
+printf '%s\n' 'retired runtime sentinel' >"$no_python_snapshot_failure_home/.claude/tools/memory-graph/run-memory-graph.sh"
+printf '%s\n' 'provider data sentinel' >"$no_python_snapshot_failure_home/.claude/memory/graph.db"
+chmod 640 "$no_python_snapshot_failure_home/.claude/settings.json"
+cp "$no_python_snapshot_failure_home/.claude/settings.json" "$no_python_snapshot_failure_home/settings.before"
+no_python_snapshot_failure_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_snapshot_failure_home/.claude/settings.json")"
+rm "$no_python_snapshot_failure_bin/stat"
+printf '%s\n' '#!/bin/sh' \
+    'last=' \
+    'for last do :; done' \
+    'case "$last" in' \
+    '  /tmp/assistant-framework-memory-cleanup.*) exit 1 ;;' \
+    'esac' \
+    'exec "$P0P4_NO_PYTHON_SNAPSHOT_FAILURE_REAL_STAT" "$@"' >"$no_python_snapshot_failure_bin/stat"
+chmod +x "$no_python_snapshot_failure_bin/stat"
+if P0P4_NO_PYTHON_SNAPSHOT_FAILURE_REAL_STAT="$no_python_snapshot_failure_real_stat" \
+    PATH="$no_python_snapshot_failure_bin" HOME="$no_python_snapshot_failure_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-snapshot-failure.out 2>/tmp/p0p4-no-python-snapshot-failure.err; then
+    no_python_snapshot_failure_status=0
+else
+    no_python_snapshot_failure_status=$?
+fi
+find /tmp -maxdepth 1 -type d -name 'assistant-framework-memory-cleanup.*' -print | sort >"$no_python_snapshot_failure_after"
+if [[ "$no_python_snapshot_failure_status" -ne 1 ]] \
+    || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-snapshot-failure.err \
+    || ! cmp -s "$no_python_snapshot_failure_home/settings.before" "$no_python_snapshot_failure_home/.claude/settings.json" \
+    || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_snapshot_failure_home/.claude/settings.json")" != "$no_python_snapshot_failure_mode" ]] \
+    || [[ ! -f "$no_python_snapshot_failure_home/.claude/tools/memory-graph/run-memory-graph.sh" ]] \
+    || ! grep -Fq 'provider data sentinel' "$no_python_snapshot_failure_home/.claude/memory/graph.db" \
+    || ! cmp -s "$no_python_snapshot_failure_before" "$no_python_snapshot_failure_after"; then
+    fail "no-Python post-mktemp metadata failure did not preserve state, original exit status, or exact snapshot inventory"
+else
+    pass
+fi
+
+test_start "no-Python cleanup fails closed for escaped or control-bearing unrelated structured configuration"
+no_python_ambiguous_failures=()
+for no_python_ambiguous_kind in json-backslash toml-control; do
+    no_python_ambiguous_home="$(mktemp -d)"
+    no_python_ambiguous_bin="$(mktemp -d)"
+    p0p4_register_cleanup "$no_python_ambiguous_home" "$no_python_ambiguous_bin"
+    p0p4_make_no_python_path "$no_python_ambiguous_bin"
+    if [[ "$no_python_ambiguous_kind" == json-backslash ]]; then
+        no_python_ambiguous_agent=claude
+        no_python_ambiguous_path="$no_python_ambiguous_home/.claude"
+        no_python_ambiguous_config="$no_python_ambiguous_path/settings.json"
+        mkdir -p "$no_python_ambiguous_path"
+        printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"C:\\\\tools\\\\inventory-mcp"}}}' >"$no_python_ambiguous_config"
+    else
+        no_python_ambiguous_agent=codex
+        no_python_ambiguous_path="$no_python_ambiguous_home/.codex"
+        no_python_ambiguous_config="$no_python_ambiguous_path/config.toml"
+        mkdir -p "$no_python_ambiguous_path"
+        printf '%s\n' '[mcp_servers.team-inventory]' 'command = "npx"' 'args = ["@acme/inventory-mcp"]' >"$no_python_ambiguous_config"
+        printf '\001' >>"$no_python_ambiguous_config"
+    fi
+    mkdir -p "$no_python_ambiguous_path/tools/memory-graph" "$no_python_ambiguous_path/memory"
+    printf '%s\n' 'retired runtime sentinel' >"$no_python_ambiguous_path/tools/memory-graph/run-memory-graph.sh"
+    printf '%s\n' 'provider data sentinel' >"$no_python_ambiguous_path/memory/graph.db"
+    chmod 640 "$no_python_ambiguous_config"
+    cp "$no_python_ambiguous_config" "$no_python_ambiguous_path/config.before"
+    no_python_ambiguous_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_ambiguous_config")"
+    if PATH="$no_python_ambiguous_bin" HOME="$no_python_ambiguous_home" /bin/bash "$cleanup_bash" --agent "$no_python_ambiguous_agent" >/tmp/p0p4-no-python-ambiguous-${no_python_ambiguous_kind}.out 2>/tmp/p0p4-no-python-ambiguous-${no_python_ambiguous_kind}.err \
+        || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-ambiguous-${no_python_ambiguous_kind}.err \
+        || ! cmp -s "$no_python_ambiguous_path/config.before" "$no_python_ambiguous_config" \
+        || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_ambiguous_config")" != "$no_python_ambiguous_mode" ]] \
+        || [[ ! -f "$no_python_ambiguous_path/tools/memory-graph/run-memory-graph.sh" ]] \
+        || ! grep -Fq 'provider data sentinel' "$no_python_ambiguous_path/memory/graph.db"; then
+        no_python_ambiguous_failures+=("$no_python_ambiguous_kind")
+    fi
+done
+if [[ "${#no_python_ambiguous_failures[@]}" -ne 0 ]]; then
+    fail "no-Python cleanup did not preserve escaped/control-bearing unrelated config, mode, provider data, and runtime before its Python-required failure: ${no_python_ambiguous_failures[*]}"
+else
+    pass
+fi
+
+test_start "no-Python cleanup fails closed for ambiguous structured config bytes and scan uncertainty"
+no_python_fail_closed_matrix_failures=()
+for no_python_fail_closed_case in case-variant high-byte nul printable-oversize copy-uncertainty grep-status-2 tr-status-2; do
+    no_python_fail_closed_home="$(mktemp -d)"
+    no_python_fail_closed_bin="$(mktemp -d)"
+    no_python_fail_closed_before_temps="$(mktemp)"
+    no_python_fail_closed_after_temps="$(mktemp)"
+    no_python_fail_closed_real_cp="$(command -v cp)"
+    no_python_fail_closed_real_grep="$(command -v grep)"
+    no_python_fail_closed_real_tr="$(command -v tr)"
+    p0p4_register_cleanup "$no_python_fail_closed_home" "$no_python_fail_closed_bin" "$no_python_fail_closed_before_temps" "$no_python_fail_closed_after_temps"
+    p0p4_make_no_python_path "$no_python_fail_closed_bin"
+    find /tmp -maxdepth 1 -type d -name 'assistant-framework-memory-cleanup.*' -print | sort >"$no_python_fail_closed_before_temps"
+    mkdir -p "$no_python_fail_closed_home/.claude/tools/memory-graph" "$no_python_fail_closed_home/.claude/memory"
+    case "$no_python_fail_closed_case" in
+        case-variant)
+            printf '%s\n' '{"mcpServers":{"memory-GRAPH":{"command":"retire"},"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_fail_closed_home/.claude/settings.json"
+            ;;
+        printable-oversize)
+            printf '%s' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}},"padding":"' >"$no_python_fail_closed_home/.claude/settings.json"
+            dd if=/dev/zero bs=1 count=$((4 * 1024 * 1024 + 1)) 2>/dev/null | tr '\0' x >>"$no_python_fail_closed_home/.claude/settings.json"
+            printf '%s\n' '"}' >>"$no_python_fail_closed_home/.claude/settings.json"
+            ;;
+        *)
+            printf '%s\n' '{"mcpServers":{"team-inventory":{"command":"npx","args":["@acme/inventory-mcp"]}}}' >"$no_python_fail_closed_home/.claude/settings.json"
+            ;;
+    esac
+    case "$no_python_fail_closed_case" in
+        high-byte) printf '\200' >>"$no_python_fail_closed_home/.claude/settings.json" ;;
+        nul) printf '\000' >>"$no_python_fail_closed_home/.claude/settings.json" ;;
+    esac
+    printf '%s\n' 'retired runtime sentinel' >"$no_python_fail_closed_home/.claude/tools/memory-graph/run-memory-graph.sh"
+    printf '%s\n' 'provider data sentinel' >"$no_python_fail_closed_home/.claude/memory/graph.db"
+    chmod 640 "$no_python_fail_closed_home/.claude/settings.json"
+    cp "$no_python_fail_closed_home/.claude/settings.json" "$no_python_fail_closed_home/settings.before"
+    no_python_fail_closed_mode="$(p0p4_memory_retirement_file_mode_octal "$no_python_fail_closed_home/.claude/settings.json")"
+    case "$no_python_fail_closed_case" in
+        copy-uncertainty)
+            rm "$no_python_fail_closed_bin/cp"
+            printf '%s\n' '#!/bin/sh' \
+                'if [ "$1" = "$P0P4_NO_PYTHON_FAIL_CLOSED_CONFIG" ]; then exit 2; fi' \
+                'exec "$P0P4_NO_PYTHON_FAIL_CLOSED_REAL_CP" "$@"' >"$no_python_fail_closed_bin/cp"
+            chmod +x "$no_python_fail_closed_bin/cp"
+            ;;
+        grep-status-2)
+            rm "$no_python_fail_closed_bin/grep"
+            printf '%s\n' '#!/bin/sh' \
+                'last=' \
+                'for last do :; done' \
+                'case "$last" in /tmp/assistant-framework-memory-cleanup.*) exit 2 ;; esac' \
+                'exec "$P0P4_NO_PYTHON_FAIL_CLOSED_REAL_GREP" "$@"' >"$no_python_fail_closed_bin/grep"
+            chmod +x "$no_python_fail_closed_bin/grep"
+            ;;
+        tr-status-2)
+            rm "$no_python_fail_closed_bin/tr"
+            printf '%s\n' '#!/bin/sh' \
+                'case "$*" in *-d*) exit 2 ;; esac' \
+                'exec "$P0P4_NO_PYTHON_FAIL_CLOSED_REAL_TR" "$@"' >"$no_python_fail_closed_bin/tr"
+            chmod +x "$no_python_fail_closed_bin/tr"
+            ;;
+    esac
+    if P0P4_NO_PYTHON_FAIL_CLOSED_CONFIG="$no_python_fail_closed_home/.claude/settings.json" \
+        P0P4_NO_PYTHON_FAIL_CLOSED_REAL_CP="$no_python_fail_closed_real_cp" \
+        P0P4_NO_PYTHON_FAIL_CLOSED_REAL_GREP="$no_python_fail_closed_real_grep" \
+        P0P4_NO_PYTHON_FAIL_CLOSED_REAL_TR="$no_python_fail_closed_real_tr" \
+        PATH="$no_python_fail_closed_bin" HOME="$no_python_fail_closed_home" /bin/bash "$cleanup_bash" --agent claude >/tmp/p0p4-no-python-fail-closed-${no_python_fail_closed_case}.out 2>/tmp/p0p4-no-python-fail-closed-${no_python_fail_closed_case}.err; then
+        no_python_fail_closed_status=0
+    else
+        no_python_fail_closed_status=$?
+    fi
+    find /tmp -maxdepth 1 -type d -name 'assistant-framework-memory-cleanup.*' -print | sort >"$no_python_fail_closed_after_temps"
+    if [[ "$no_python_fail_closed_status" -eq 0 ]] \
+        || ! grep -Fq 'Python 3 is required' /tmp/p0p4-no-python-fail-closed-${no_python_fail_closed_case}.err \
+        || ! cmp -s "$no_python_fail_closed_home/settings.before" "$no_python_fail_closed_home/.claude/settings.json" \
+        || [[ "$(p0p4_memory_retirement_file_mode_octal "$no_python_fail_closed_home/.claude/settings.json")" != "$no_python_fail_closed_mode" ]] \
+        || [[ ! -f "$no_python_fail_closed_home/.claude/tools/memory-graph/run-memory-graph.sh" ]] \
+        || ! grep -Fq 'provider data sentinel' "$no_python_fail_closed_home/.claude/memory/graph.db" \
+        || ! cmp -s "$no_python_fail_closed_before_temps" "$no_python_fail_closed_after_temps"; then
+        no_python_fail_closed_matrix_failures+=("$no_python_fail_closed_case")
+    fi
+done
+if [[ "${#no_python_fail_closed_matrix_failures[@]}" -ne 0 ]]; then
+    fail "no-Python cleanup did not fail closed with exact preservation for ambiguous bytes or scan uncertainty: ${no_python_fail_closed_matrix_failures[*]}"
+else
+    pass
 fi
 
 test_start "filtered Claude and Gemini cleanup ignore hostile ambient CODEX_HOME with and without Python"
@@ -1801,12 +2219,24 @@ if ! printf '%s\n' "$cleanup_help" | grep -Fq -- '--agent' \
     fail "cleanup help must document the agent filter"
 elif rg -n -i 'memory protocol' "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1" >/tmp/p0p4-installer-completion-wording.out; then
     fail "installer comments and completion text must not retain retired memory-protocol language"
-elif ! grep -Fq 'Invalid or ambiguous structured configuration is left unchanged and cleanup stops before deleting retired artifacts.' "$FRAMEWORK_DIR/README.md"; then
-    fail "README must describe malformed structured configuration as fail-closed and preserved"
 elif rg -n -i 'actions/setup-dotnet|dotnet-version' "$FRAMEWORK_DIR/.github/workflows/windows-installer.yml" >/tmp/p0p4-windows-dotnet-retirement.out; then
     fail "Windows installer workflow must not provision an unused .NET SDK after Memory Graph retirement"
 else
-    pass
+    wording_failures=()
+    if ! grep -Fq 'Potentially relevant or ambiguous structured configuration is left unchanged and cleanup stops before deleting retired artifacts.' "$FRAMEWORK_DIR/README.md"; then
+        wording_failures+=("README-install-fail-closed")
+    fi
+    if ! printf '%s\n' "$cleanup_help" | grep -Fq 'Editing a potentially relevant existing Codex config.toml requires the Codex CLI.'; then
+        wording_failures+=("cleanup-help-Codex-CLI-boundary")
+    fi
+    if ! grep -Fq 'Editing a potentially relevant existing Codex `config.toml` requires the Codex CLI;' "$FRAMEWORK_DIR/README.md"; then
+        wording_failures+=("README-standalone-Codex-CLI-boundary")
+    fi
+    if [[ "${#wording_failures[@]}" -ne 0 ]]; then
+        fail "cleanup/README wording must limit Codex CLI requirements to editing potentially relevant existing configuration: ${wording_failures[*]}"
+    else
+        pass
+    fi
 fi
 
 p0p4_disable_codex_semantic_fixture

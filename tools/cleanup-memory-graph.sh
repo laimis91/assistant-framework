@@ -19,9 +19,9 @@ Remove retired Assistant Framework Memory Graph registrations, tools, skills,
 and instruction blocks. Existing provider memory data is preserved unless
 --purge-data is supplied explicitly.
 
-Cleaning an existing Codex config.toml requires the Codex CLI. If its semantic
-check is unavailable or ambiguous, config, runtime, and provider data are
-preserved and cleanup stops.
+Editing a potentially relevant existing Codex config.toml requires the Codex CLI.
+If its semantic check is unavailable or ambiguous, config, runtime, and
+provider data are preserved and cleanup stops.
 EOF
 }
 
@@ -151,9 +151,130 @@ if command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1 && python -c 'import sys; raise SystemExit(sys.version_info[0] != 3)' >/dev/null 2>&1; then
     python_bin=python
 else
-    # Directory-only retirement is deliberately available without Python.  Do
-    # not attempt to inspect or rewrite a structured file or managed marker
-    # block without the parser below; fail before changing anything instead.
+    # Directory-only retirement is deliberately available without Python. A
+    # structured file may proceed only when a conservative byte-level check
+    # proves it cannot contain the retired identity; Python remains the only
+    # authority for structured edits. Managed instruction markers still fail
+    # closed before changing anything.
+    shell_require_python() {
+        echo "Error: Python 3 is required before retiring legacy TOML, JSON, or managed instruction markers; preserved unchanged." >&2
+        exit 1
+    }
+
+    shell_regular_file_identity() {
+        local path="$1"
+        [[ -f "$path" && ! -L "$path" ]] || return 1
+        case "$(uname -s)" in
+            Darwin|FreeBSD) stat -f '%d:%i:%p:%z:%m:%c' "$path" ;;
+            *) stat -c '%d:%i:%f:%s:%Y:%Z' "$path" ;;
+        esac
+    }
+
+    shell_directory_identity() {
+        local path="$1"
+        [[ -d "$path" && ! -L "$path" ]] || return 1
+        case "$(uname -s)" in
+            Darwin|FreeBSD) stat -f '%d:%i' "$path" ;;
+            *) stat -c '%d:%i' "$path" ;;
+        esac
+    }
+
+    shell_snapshot_directory_is_safe() {
+        [[ "$shell_snapshot_dir" = /tmp/assistant-framework-memory-cleanup.* \
+            && "$shell_snapshot_dir" != / \
+            && -d "$shell_snapshot_dir" \
+            && ! -L "$shell_snapshot_dir" ]]
+    }
+
+    shell_prepare_snapshot_directory() {
+        [[ -z "$shell_snapshot_dir" ]] || return 0
+        shell_snapshot_dir="$(mktemp -d /tmp/assistant-framework-memory-cleanup.XXXXXX)" || return 1
+        trap shell_cleanup_snapshots EXIT
+        shell_snapshot_directory_identity="$(shell_directory_identity "$shell_snapshot_dir" 2>/dev/null)" || return 1
+        shell_snapshot_directory_is_safe || return 1
+    }
+
+    shell_cleanup_snapshots() {
+        local status=$? current_identity
+        trap - EXIT
+        if shell_snapshot_directory_is_safe; then
+            current_identity="$(shell_directory_identity "$shell_snapshot_dir" 2>/dev/null || true)"
+            if [[ -z "$shell_snapshot_directory_identity" ]]; then
+                rm -rf -- "$shell_snapshot_dir" >/dev/null 2>&1 || true
+            elif [[ -n "$current_identity" && "$current_identity" = "$shell_snapshot_directory_identity" ]]; then
+                rm -rf -- "$shell_snapshot_dir" >/dev/null 2>&1 || true
+            fi
+        fi
+        exit "$status"
+    }
+
+    shell_relevant_path_is_safe() {
+        local path="$1" traversal_root="$2" current part relative
+        local IFS='/'
+        if [[ "$traversal_root" = / ]]; then
+            current=/
+            relative="${path#/}"
+        else
+            [[ "$path" = "${traversal_root%/}/"* && ! -L "$traversal_root" ]] || return 1
+            current="$traversal_root"
+            relative="${path#"$traversal_root"}"
+        fi
+        local -a parts
+        read -r -a parts <<<"${relative#/}"
+        for part in "${parts[@]}"; do
+            [[ -n "$part" ]] || continue
+            current="${current%/}/$part"
+            if [[ -L "$current" ]] && ! shell_is_macos_var_alias "$current"; then
+                return 1
+            fi
+        done
+        [[ ! -L "$path" && ( ! -e "$path" || -f "$path" ) ]]
+    }
+
+    shell_capture_relevant_file() {
+        local path="$1" traversal_root="$2" index identity_before identity_after snapshot
+        shell_relevant_path_is_safe "$path" "$traversal_root" || return 1
+
+        index="${#shell_relevant_paths[@]}"
+        shell_relevant_paths+=("$path")
+        shell_relevant_roots+=("$traversal_root")
+        if [[ ! -e "$path" ]]; then
+            shell_relevant_present+=(false)
+            shell_relevant_identities+=("")
+            shell_relevant_snapshots+=("")
+            return 0
+        fi
+
+        shell_prepare_snapshot_directory || return 1
+        identity_before="$(shell_regular_file_identity "$path" 2>/dev/null)" || return 1
+        snapshot="$shell_snapshot_dir/$index"
+        cp "$path" "$snapshot" || return 1
+        identity_after="$(shell_regular_file_identity "$path" 2>/dev/null)" || return 1
+        [[ "$identity_before" = "$identity_after" ]] || return 1
+        cmp -s "$path" "$snapshot" || return 1
+
+        shell_relevant_present+=(true)
+        shell_relevant_identities+=("$identity_after")
+        shell_relevant_snapshots+=("$snapshot")
+    }
+
+    shell_revalidate_relevant_files() {
+        local index path traversal_root identity
+        for index in "${!shell_relevant_paths[@]}"; do
+            path="${shell_relevant_paths[$index]}"
+            traversal_root="${shell_relevant_roots[$index]}"
+            shell_relevant_path_is_safe "$path" "$traversal_root" || return 1
+            if [[ "${shell_relevant_present[$index]}" = false ]]; then
+                [[ ! -e "$path" && ! -L "$path" ]] || return 1
+                continue
+            fi
+            [[ -e "$path" && -f "$path" && ! -L "$path" ]] || return 1
+            identity="$(shell_regular_file_identity "$path" 2>/dev/null)" || return 1
+            [[ "$identity" = "${shell_relevant_identities[$index]}" ]] || return 1
+            cmp -s "$path" "${shell_relevant_snapshots[$index]}" || return 1
+        done
+    }
+
     shell_assert_agent_home() {
         local agent="$1" agent_home="$2" external="$3" home_physical agent_physical
         [[ "$agent_home" = /* && "$agent_home" != / && "$agent_home" != "$HOME" ]] || {
@@ -174,26 +295,57 @@ else
         fi
     }
 
-    shell_requires_structured_edit() {
-        local path="$1"
-        [[ -f "$path" ]] || return 1
-        case "$path" in
-            *.json|*.toml) return 0 ;;
-            *) grep -Fq 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_' "$path" ;;
+    shell_structured_config_requires_python() {
+        local path="$1" scan_path="$2" byte_count disallowed_byte_count scan_status
+        [[ -f "$scan_path" ]] || return 0
+
+        byte_count="$(LC_ALL=C wc -c < "$scan_path")" || return 0
+        case "$byte_count" in
+            ""|*[!0-9\ ]*) return 0 ;;
         esac
+        byte_count="${byte_count// /}"
+        [[ -n "$byte_count" ]] || return 0
+        (( 10#$byte_count <= 4194304 )) || return 0
+
+        if LC_ALL=C grep -Fi 'memory-graph' "$scan_path" >/dev/null; then
+            return 0
+        else
+            scan_status=$?
+        fi
+        [[ "$scan_status" -eq 1 ]] || return 0
+
+        if LC_ALL=C grep -F $'\\' "$scan_path" >/dev/null; then
+            return 0
+        else
+            scan_status=$?
+        fi
+        [[ "$scan_status" -eq 1 ]] || return 0
+
+        disallowed_byte_count="$(LC_ALL=C tr -d '\011\012\015\040-\176' < "$scan_path" | LC_ALL=C wc -c)" || return 0
+        case "$disallowed_byte_count" in
+            ""|*[!0-9\ ]*) return 0 ;;
+        esac
+        disallowed_byte_count="${disallowed_byte_count// /}"
+        [[ "$disallowed_byte_count" = 0 ]] || return 0
+
+        return 1
     }
 
-    shell_preflight_relevant_file() {
-        local path="$1" purpose="$2" traversal_root="$3"
-        shell_assert_no_symlink_ancestors "$path" "$purpose" "$traversal_root"
-        if [[ -L "$path" ]]; then
-            echo "Error: Refusing unsafe $purpose file: $path" >&2
-            exit 1
-        fi
-        if [[ -e "$path" && ! -f "$path" ]]; then
-            echo "Error: Refusing unsafe $purpose file: $path" >&2
-            exit 1
-        fi
+    shell_requires_structured_edit() {
+        local path="$1" scan_path="$2" scan_status
+        [[ -f "$scan_path" ]] || return 0
+        case "$path" in
+            *.json|*.toml) shell_structured_config_requires_python "$path" "$scan_path" ;;
+            *)
+                if grep -F 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_' "$scan_path" >/dev/null; then
+                    return 0
+                else
+                    scan_status=$?
+                fi
+                [[ "$scan_status" -eq 1 ]] || return 0
+                return 1
+                ;;
+        esac
     }
 
     shell_validate_retire_directory() {
@@ -207,17 +359,89 @@ else
         fi
     }
 
-    shell_retire_directory() {
-        local target="$1"
-        if [[ -e "$target" || -L "$target" ]]; then
-            if ! $dry_run; then
-                rm -rf -- "$target"
-            fi
+    shell_target_path_is_safe() {
+        local path="$1" traversal_root="$2" current part relative
+        local IFS='/'
+        if [[ "$traversal_root" = / ]]; then
+            current=/
+            relative="${path#/}"
+        else
+            [[ "$path" = "${traversal_root%/}/"* && ! -L "$traversal_root" ]] || return 1
+            current="$traversal_root"
+            relative="${path#"$traversal_root"}"
         fi
+        local -a parts
+        read -r -a parts <<<"${relative#/}"
+        for part in "${parts[@]}"; do
+            [[ -n "$part" ]] || continue
+            current="${current%/}/$part"
+            if [[ -L "$current" ]] && ! shell_is_macos_var_alias "$current"; then
+                return 1
+            fi
+        done
+        [[ ! -L "$path" ]]
+    }
+
+    shell_revalidate_retirement_targets() {
+        local index target traversal_root parent physical_identity parent_identity target_identity
+        for index in "${!planned_targets[@]}"; do
+            target="${planned_targets[$index]}"
+            traversal_root="${planned_target_roots[$index]}"
+            parent="${planned_target_parents[$index]}"
+            shell_target_path_is_safe "$target" "$traversal_root" || return 1
+            physical_identity="$(shell_physical_path "$target")" || return 1
+            [[ "$physical_identity" = "${planned_target_identities[$index]}" ]] || return 1
+            if [[ "${planned_target_parent_present[$index]}" = true ]]; then
+                [[ -d "$parent" && ! -L "$parent" ]] || return 1
+                parent_identity="$(shell_directory_identity "$parent" 2>/dev/null)" || return 1
+                [[ "$parent_identity" = "${planned_target_parent_identities[$index]}" ]] || return 1
+            else
+                [[ ! -e "$parent" && ! -L "$parent" ]] || return 1
+            fi
+            if [[ "${planned_target_present[$index]}" = true ]]; then
+                [[ -d "$target" && ! -L "$target" ]] || return 1
+                target_identity="$(shell_directory_identity "$target" 2>/dev/null)" || return 1
+                [[ "$target_identity" = "${planned_target_directory_identities[$index]}" ]] || return 1
+            else
+                [[ ! -e "$target" && ! -L "$target" ]] || return 1
+            fi
+        done
+    }
+
+    shell_retire_directory() {
+        local index="$1" parent="${planned_target_parents[$1]}" basename="${planned_target_basenames[$1]}"
+        local parent_identity="${planned_target_parent_identities[$1]}" target_identity="${planned_target_directory_identities[$1]}" original_dir retire_status
+        shell_retire_guard_failed=false
+        [[ "${planned_target_present[$index]}" = true ]] || return 0
+        $dry_run && return 0
+        original_dir="$(pwd -P)" || { shell_retire_guard_failed=true; return 1; }
+        if ! cd -P -- "$parent"; then
+            shell_retire_guard_failed=true
+            return 1
+        fi
+        if [[ "$(shell_directory_identity . 2>/dev/null)" != "$parent_identity" ]] \
+            || [[ ! -d "$basename" || -L "$basename" ]] \
+            || [[ "$(shell_directory_identity "$basename" 2>/dev/null)" != "$target_identity" ]]; then
+            shell_retire_guard_failed=true
+            cd -P -- "$original_dir" || true
+            return 1
+        fi
+        if ! shell_revalidate_relevant_files; then
+            shell_retire_guard_failed=true
+            cd -P -- "$original_dir" || true
+            return 1
+        fi
+        if rm -rf -- "$basename"; then
+            retire_status=0
+        else
+            retire_status=$?
+        fi
+        cd -P -- "$original_dir" || [[ "$retire_status" -ne 0 ]] || return 1
+        return "$retire_status"
     }
 
     shell_append_retirement_target() {
-        local target="$1" purpose="$2" traversal_root="$3" identity index
+        local target="$1" purpose="$2" traversal_root="$3" identity index parent target_present parent_present parent_identity target_identity
         shell_validate_retire_directory "$target" "$purpose" "$traversal_root"
         identity="$(shell_physical_path "$target")" || {
             echo "Error: Refusing unresolved retired $purpose target: $target" >&2
@@ -226,12 +450,41 @@ else
         for index in "${!planned_target_identities[@]}"; do
             [[ "${planned_target_identities[$index]}" = "$identity" ]] && return
         done
+        parent="${target%/*}"
+        target_present=false
+        parent_present=false
+        parent_identity=""
+        target_identity=""
+        if [[ -e "$target" || -L "$target" ]]; then
+            target_present=true
+            target_identity="$(shell_directory_identity "$target" 2>/dev/null)" || shell_require_python
+        fi
+        if [[ -e "$parent" || -L "$parent" ]]; then
+            [[ -d "$parent" && ! -L "$parent" ]] || shell_require_python
+            parent_present=true
+            parent_identity="$(shell_directory_identity "$parent" 2>/dev/null)" || shell_require_python
+        fi
         planned_targets+=("$target")
         planned_target_identities+=("$identity")
+        planned_target_roots+=("$traversal_root")
+        planned_target_purposes+=("$purpose")
+        planned_target_parents+=("$parent")
+        planned_target_basenames+=("${target##*/}")
+        planned_target_present+=("$target_present")
+        planned_target_parent_present+=("$parent_present")
+        planned_target_parent_identities+=("$parent_identity")
+        planned_target_directory_identities+=("$target_identity")
     }
 
     agents=("$agent_filter")
     [[ -n "$agent_filter" ]] || agents=(claude codex gemini)
+    shell_snapshot_dir=""
+    shell_snapshot_directory_identity=""
+    shell_relevant_paths=()
+    shell_relevant_roots=()
+    shell_relevant_present=()
+    shell_relevant_identities=()
+    shell_relevant_snapshots=()
     for agent in "${agents[@]}"; do
         external=false
         if [[ "$agent" = codex && -n "$cleanup_codex_home" ]]; then
@@ -259,16 +512,29 @@ else
             else
                 config_traversal_root="$agent_home"
             fi
-            shell_preflight_relevant_file "$config_path" "relevant configuration or instructions" "$config_traversal_root"
-            if shell_requires_structured_edit "$config_path"; then
-                echo "Error: Python 3 is required before retiring legacy TOML, JSON, or managed instruction markers; preserved unchanged." >&2
+            if ! shell_relevant_path_is_safe "$config_path" "$config_traversal_root"; then
+                echo "Error: Refusing unsafe relevant configuration or instructions file: $config_path" >&2
                 exit 1
+            fi
+            shell_capture_relevant_file "$config_path" "$config_traversal_root" || shell_require_python
+            config_index=$((${#shell_relevant_paths[@]} - 1))
+            if [[ "${shell_relevant_present[$config_index]}" = true ]] \
+                && shell_requires_structured_edit "$config_path" "${shell_relevant_snapshots[$config_index]}"; then
+                shell_require_python
             fi
         done
     done
 
     planned_targets=()
     planned_target_identities=()
+    planned_target_roots=()
+    planned_target_purposes=()
+    planned_target_parents=()
+    planned_target_basenames=()
+    planned_target_present=()
+    planned_target_parent_present=()
+    planned_target_parent_identities=()
+    planned_target_directory_identities=()
     # Plan every exact deletion before mutating any selected agent. In
     # particular, a later unsafe target must not permit partial retirement of
     # an earlier otherwise-safe agent installation.
@@ -310,8 +576,16 @@ else
         if $purge_data; then shell_append_retirement_target "$agent_home/memory" "memory data" "$traversal_root"; fi
     done
 
-    for target in "${planned_targets[@]}"; do
-        shell_retire_directory "$target"
+    shell_revalidate_relevant_files || shell_require_python
+    shell_revalidate_retirement_targets || shell_require_python
+    for target_index in "${!planned_targets[@]}"; do
+        if shell_retire_directory "$target_index"; then
+            :
+        else
+            retire_status=$?
+            $shell_retire_guard_failed && shell_require_python
+            exit "$retire_status"
+        fi
     done
     for agent in "${agents[@]}"; do
         if $dry_run; then echo "[dry-run] Retire Memory Graph artifacts for $agent"; fi
