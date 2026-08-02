@@ -291,15 +291,18 @@ fields:
     required: false
     enum_values: [inline, journal]
     description: "Whether workflow state stays in the current response/plan packet or is persisted in the durable task journal."
-    validation: "inline is valid for light work and standard work that does not need persistence. journal is required when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
+    validation: "inline is valid when uncertainty_shape == bounded for light or standard work that does not need persistence. For progressive uncertainty, inline is only the equivalent carried-state fallback when local state artifacts are unavailable or policy-disallowed. journal is required when uncertainty_shape == progressive and local state artifacts are configured and policy allows them, or when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
     default: inline
     on_missing: infer
     infer_from: >
-      Use journal when the task enters clarification wait, uses delegated workflow roles,
-      is expected to cross sessions or compaction boundaries, explicitly requests persisted
+      Use journal when uncertainty_shape == progressive and local state artifacts are configured
+      and policy allows them, or when the task enters clarification wait, uses delegated workflow
+      roles, is expected to cross sessions or compaction boundaries, explicitly requests persisted
       workflow state, uses controller_intensity == strict, harness_capable == true, or
-      qa_evaluation_mode == required. Otherwise use inline, including small low-risk work and
-      ordinary standard work whose approved plan and evidence fit safely in the active packet.
+      qa_evaluation_mode == required. When progressive local state artifacts are unavailable or
+      policy-disallowed, use inline with the equivalent carried-state fallback. Otherwise use
+      inline only when uncertainty_shape == bounded, including small low-risk work and ordinary
+      standard work whose approved plan and evidence fit safely in the active packet.
 
   - name: manual_verification_mode
     type: enum

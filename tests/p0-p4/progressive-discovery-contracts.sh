@@ -263,6 +263,36 @@ else
     fail "progressive decision state contract missing: ${state_missing[*]}"
 fi
 
+test_start "workflow aligns progressive uncertainty with durable state-mode inference"
+state_mode_missing=()
+
+for term in \
+    "uncertainty_shape == progressive" \
+    "local state artifacts are configured and policy allows them" \
+    "equivalent carried-state fallback" \
+    "uncertainty_shape == bounded"; do
+    if ! input_field_has_text "workflow_state_mode" "$term" "$input_contract"; then
+        state_mode_missing+=("contracts/input.yaml workflow_state_mode missing $term")
+    fi
+done
+
+for artifact in triage_result completion_policy; do
+    for term in \
+        "uncertainty_shape == progressive" \
+        "equivalent carried-state fallback" \
+        "uncertainty_shape == bounded"; do
+        if ! output_artifact_has_text "$artifact" "$term" "$output_contract"; then
+            state_mode_missing+=("contracts/output.yaml $artifact missing $term")
+        fi
+    done
+done
+
+if [[ "${#state_mode_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive state-mode inference contract missing: ${state_mode_missing[*]}"
+fi
+
 test_start "workflow gates progressive safety recomputation and route clearance"
 safety_missing=()
 phase_gates="$workflow_dir/contracts/phase-gates.yaml"

@@ -73,7 +73,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline, journal]
-        validation: "journal is selected only when persistence, delegation, cross-session continuation, clarification wait, strict, harness, required QA, or explicit durable-state criteria apply; size alone does not require it"
+        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger; size alone does not require journal"
       - name: manual_verification_mode
         type: enum
         required: true
@@ -162,6 +162,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline, journal]
+        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger"
       - name: manual_verification_mode
         type: enum
         required: true
