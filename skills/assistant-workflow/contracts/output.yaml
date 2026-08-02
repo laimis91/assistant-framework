@@ -1632,10 +1632,10 @@ artifacts:
   - name: decision_resolution
     type: object[]
     required: conditional
-    condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear]"
+    condition: "uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs; human_confirmation_ref is required conditionally for human_required decisions."
-    on_fail: "Record the canonical resolution and its evidence/downstream effects before advancing the frontier."
+    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. human_confirmation_ref is required conditionally for human_required decisions."
+    on_fail: "Record the missing canonical resolution or repair duplicate decision_item_ref entries; preserve non-empty prior resolution history when a later decision is blocked before advancing the frontier."
     object_fields:
       - name: decision_item_ref
         type: string

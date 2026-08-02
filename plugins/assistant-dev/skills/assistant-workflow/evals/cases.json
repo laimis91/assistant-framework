@@ -1179,6 +1179,53 @@
       }
     },
     {
+      "id": "progressive-resolved-then-blocked-recovery",
+      "title": "Blocked progressive work retains earlier resolution history",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a later blocked decision retains exactly one canonical resolution for an already resolved predecessor.",
+      "prompt": "A retention predecessor has status=resolved with one recorded decision_resolution. Its dependent consent decision now lacks legal evidence and must become blocked. Persist the state for resumption; do not retry, plan, or mutate anything.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=blocked.",
+        "The predecessor has status=resolved and exactly one canonical decision_resolution.",
+        "The dependent decision needs legal evidence that is not available."
+      ],
+      "expected_behavior": [
+        "Keeps status=resolved and its decision_resolution with exactly one matching resolution via decision_item_ref.",
+        "Retains non-empty prior history while marking the dependent decision status=blocked.",
+        "Records blocker_kind, blocker_reason, and unblock_condition on the blocked decision.",
+        "Keeps the workflow in progressive Discover with next_route=progressive_discover until the unblock condition is evidenced."
+      ],
+      "pass_criteria": [
+        "The existing resolution is retained rather than duplicated or dropped.",
+        "The blocked decision has typed recovery state.",
+        "The response does not resume delivery work while the blocker remains."
+      ],
+      "fail_signals": [
+        "Drops or duplicates the predecessor resolution.",
+        "Retries the blocked decision without the required evidence.",
+        "Advances to Plan or performs a mutation while blocked."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "status=resolved",
+          "decision_resolution",
+          "exactly one matching resolution via decision_item_ref",
+          "non-empty prior history",
+          "status=blocked",
+          "blocker_kind",
+          "blocker_reason",
+          "unblock_condition",
+          "next_route=progressive_discover"
+        ],
+        "forbidden_substrings": [
+          "retry the blocked decision",
+          "advance to Plan",
+          "drop the prior resolution"
+        ]
+      }
+    },
+    {
       "id": "progressive-mapping-single-active-negative",
       "title": "Progressive mapping rejects two active decision items",
       "category": "progressive_discovery",

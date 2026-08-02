@@ -88,6 +88,45 @@ progressive_artifact_selector_has_name() {
     ' "$file"
 }
 
+workflow_invariant_selector_has_name() {
+    local expected="$1"
+    local file="$2"
+
+    awk -v expected="$expected" '
+        $0 == "  current_phase:" { in_set = 1; next }
+        in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+        in_set && $0 == "      - id: workflow-phase-invariants" { in_selector = 1; next }
+        in_selector && /^      - id: / { exit }
+        in_selector && $0 == "        path: contracts/phase-gates.yaml" { phase_gates_path = 1; next }
+        in_selector && $0 == "        section: invariants" { invariants_section = 1; next }
+        in_selector && /^        names:/ {
+            values = $0
+            sub(/^        names:[[:space:]]*\[/, "", values)
+            sub(/\][[:space:]]*$/, "", values)
+            count = split(values, names, ",")
+            for (item_index = 1; item_index <= count; item_index++) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", names[item_index])
+                if (names[item_index] == expected) found = 1
+            }
+        }
+        END { exit in_selector && phase_gates_path && invariants_section && found ? 0 : 1 }
+    ' "$file"
+}
+
+output_artifact_has_exact_property_value() {
+    local artifact="$1"
+    local property="$2"
+    local expected="$3"
+    local file="$4"
+
+    awk -v artifact="$artifact" -v property="$property" -v expected="$expected" '
+        $0 == "  - name: " artifact { in_artifact = 1; next }
+        in_artifact && /^  - name: / { exit }
+        in_artifact && $0 == "    " property ": \"" expected "\"" { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 eval_case_has_machine_term() {
     local fixture="$1"
     local case_id="$2"
@@ -411,6 +450,7 @@ for term in \
     "INV_PROGRESSIVE_DISCOVERY_BOUNDARY" \
     "INV_PROGRESSIVE_SINGLE_ACTIVE" \
     "INV_PROGRESSIVE_HUMAN_EVIDENCE" \
+    "INV_PROGRESSIVE_BLOCKED_RECOVERY" \
     "INV_PROGRESSIVE_RECOMPUTATION" \
     "INV_PROGRESSIVE_ROUTE_CLEAR"; do
     if ! load_set_has_text "current_phase" "$term" "$index_contract"; then
@@ -451,6 +491,64 @@ if [[ "${#safety_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive safety and clearance contract missing: ${safety_missing[*]}"
+fi
+
+test_start "workflow loads blocked recovery and retains prior resolutions"
+recovery_missing=()
+
+if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_BLOCKED_RECOVERY" "$index_contract"; then
+    recovery_missing+=("contracts/index.yaml workflow-phase-invariants.names missing INV_PROGRESSIVE_BLOCKED_RECOVERY")
+fi
+
+decision_resolution_condition='uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))'
+if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$decision_resolution_condition" "$output_contract"; then
+    recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
+fi
+
+decision_resolution_validation='Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. human_confirmation_ref is required conditionally for human_required decisions.'
+if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
+    recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
+fi
+
+if [[ "${#recovery_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive blocked recovery loading/history contract missing: ${recovery_missing[*]}"
+fi
+
+test_start "workflow retains resolved history when a later decision blocks"
+resolved_then_blocked_missing=()
+resolved_then_blocked_case="progressive-resolved-then-blocked-recovery"
+eval_fixture="$workflow_dir/evals/cases.json"
+
+for term in \
+    "status=resolved" \
+    "decision_resolution" \
+    "exactly one matching resolution via decision_item_ref" \
+    "non-empty prior history" \
+    "status=blocked" \
+    "blocker_kind" \
+    "blocker_reason" \
+    "unblock_condition" \
+    "next_route=progressive_discover"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$resolved_then_blocked_case" "$term"; then
+        resolved_then_blocked_missing+=("eval case $resolved_then_blocked_case missing machine expectation $term")
+    fi
+done
+
+for term in \
+    "retry the blocked decision" \
+    "advance to Plan" \
+    "drop the prior resolution"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$resolved_then_blocked_case" "$term"; then
+        resolved_then_blocked_missing+=("eval case $resolved_then_blocked_case must forbid $term")
+    fi
+done
+
+if [[ "${#resolved_then_blocked_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "resolved-then-blocked progressive recovery eval missing: ${resolved_then_blocked_missing[*]}"
 fi
 
 test_start "workflow serializes mapping decision items before frontier creation"

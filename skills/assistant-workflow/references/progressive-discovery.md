@@ -37,7 +37,8 @@ cleared decisions, constraints, exclusions, and acceptance seed back toward
 bounded Discover. Every blocked item records blocker_kind, blocker_reason, and
 unblock_condition. The blocked_item_refs resolve to decision_item entries so a
 resumed journal knows why work stopped and what evidence or state change permits
-retry.
+retry. If a later decision becomes blocked after another resolves, keep the
+canonical decision resolutions so resumption preserves the prior history.
 
 ## Repeated Resolution Readiness
 
