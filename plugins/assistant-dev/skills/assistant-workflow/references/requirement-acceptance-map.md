@@ -16,6 +16,7 @@ Requirement Acceptance Map:
 - assumptions_and_defaults: [explicit inferred choices]
 - open_material_questions: [none before Plan, or unresolved blockers]
 - non_goals: [explicit exclusions]
+- source_route_clear_handoff_ref: [conditional: source route-clear handoff when progressive route clearance is consumed]
 - entries:
   - requirement_id: R1
     source: [user request, accepted default, policy, or local contract]
@@ -43,3 +44,11 @@ Requirement Acceptance Map:
   explicit approved exclusion with a reason.
 - Updating a requirement updates this map first, then affected slices, tests,
   and handoffs. Do not silently fork acceptance criteria.
+- When this map consumes progressive route clearance, its
+  `source_route_clear_handoff_ref` resolves to the source handoff and that
+  handoff's `consumed_by_requirement_acceptance_map_ref` resolves back to this
+  consuming map; these reciprocal references are not equal values. The handoff
+  decisions and constraints are traced into applicable accepted map state;
+  exclusions appear in non_goals or entries with status=approved_exclusion; and
+  each acceptance_seed becomes an entries[].acceptance_criterion with binary
+  acceptance.

@@ -74,7 +74,7 @@ Candidate scope scan:
 - Unknowns: [none, or one short scope/risk unknown per line]
 Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
-- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; otherwise compact ref with loop_type/trigger/verifier/stop/max_iterations/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
@@ -108,6 +108,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Requirement Acceptance Map
 [paste or reference the canonical map from `references/requirement-acceptance-map.md`; every accepted requirement id must end passed or approved_exclusion]
+- source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map]
 
 ## Progressive Discovery
 [N/A for bounded work. Keep compact refs here or in the equivalent carried state; do not duplicate full schemas.]

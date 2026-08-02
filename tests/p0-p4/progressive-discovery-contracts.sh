@@ -493,6 +493,98 @@ else
     fail "progressive safety and clearance contract missing: ${safety_missing[*]}"
 fi
 
+test_start "workflow retains route-clear handoff until a requirement map durably consumes it"
+handoff_consumption_missing=()
+eval_fixture="$workflow_dir/evals/cases.json"
+requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
+
+for term in \
+    "consumption_state" \
+    "enum_values: [pending, consumed]" \
+    "consumed_by_requirement_acceptance_map_ref" \
+    "consumption_state == consumed"; do
+    if ! output_artifact_has_text "route_clear_handoff" "$term" "$output_contract"; then
+        handoff_consumption_missing+=("contracts/output.yaml route_clear_handoff missing $term")
+    fi
+done
+
+for contract in "$input_contract" "$output_contract"; do
+    if ! input_field_has_text "requirement_acceptance_map" "source_route_clear_handoff_ref" "$contract"; then
+        handoff_consumption_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map missing source_route_clear_handoff_ref")
+    fi
+    for term in \
+        "Resolves to the source route_clear_handoff" \
+        "reciprocal back-reference" \
+        "decisions and constraints are traced into applicable accepted map state" \
+        "exclusions appear in non_goals or entries with status=approved_exclusion" \
+        "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance"; do
+        if ! output_artifact_field_has_text "requirement_acceptance_map" "source_route_clear_handoff_ref" "$term" "$contract"; then
+            handoff_consumption_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.source_route_clear_handoff_ref missing $term")
+        fi
+    done
+done
+
+for term in \
+    "Resolves to the consuming Requirement Acceptance Map" \
+    "reciprocal back-reference"; do
+    if ! output_artifact_field_has_text "route_clear_handoff" "consumed_by_requirement_acceptance_map_ref" "$term" "$output_contract"; then
+        handoff_consumption_missing+=("contracts/output.yaml route_clear_handoff.consumed_by_requirement_acceptance_map_ref missing $term")
+    fi
+done
+
+for term in \
+    "source_route_clear_handoff_ref" \
+    "conditional" \
+    "decisions and constraints are traced into applicable accepted map state" \
+    "exclusions appear in non_goals or entries with status=approved_exclusion" \
+    "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance"; do
+    if ! p0p4_contains_text "$requirement_map_ref" "$term"; then
+        handoff_consumption_missing+=("references/requirement-acceptance-map.md missing $term")
+    fi
+done
+
+for file_and_term in \
+    "$phase_gates::consumption_state=pending" \
+    "$phase_gates::source_route_clear_handoff_ref" \
+    "$phase_gates::typed progressive route_clear persists" \
+    "$phase_gates::atomic typed-state transition" \
+    "$phase_gates::bounded/not_applicable" \
+    "$phase_gates::Decompose, Plan, or Build" \
+    "$progressive_ref::consumption_state=pending" \
+    "$progressive_ref::source_route_clear_handoff_ref" \
+    "$progressive_ref::atomic typed-state" \
+    "$progressive_ref::Decompose, Plan, or Build" \
+    "$journal_template::source_route_clear_handoff_ref"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        handoff_consumption_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+for term in \
+    "consumption_state=pending" \
+    "progressive_discovery_state=route_clear" \
+    "source_route_clear_handoff_ref" \
+    "source_route_clear_handoff_ref resolves to the source route_clear_handoff" \
+    "consumed_by_requirement_acceptance_map_ref resolves to the consuming Requirement Acceptance Map" \
+    "reciprocal back-reference" \
+    "decisions and constraints are traced into applicable accepted map state" \
+    "exclusions appear in non_goals or entries with status=approved_exclusion" \
+    "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance" \
+    "consumption_state=consumed" \
+    "atomic typed-state transition"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "progressive-resolution-route-clear" "$term"; then
+        handoff_consumption_missing+=("eval case progressive-resolution-route-clear missing $term")
+    fi
+done
+
+if [[ "${#handoff_consumption_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "route-clear handoff consumption contract missing: ${handoff_consumption_missing[*]}"
+fi
+
 test_start "workflow loads blocked recovery and retains prior resolutions"
 recovery_missing=()
 
@@ -530,7 +622,7 @@ for term in \
     "blocker_kind" \
     "blocker_reason" \
     "unblock_condition" \
-    "next_route=progressive_discover"; do
+    "progressive_discovery_state=blocked"; do
     if ! eval_case_has_machine_term "$eval_fixture" "$resolved_then_blocked_case" "$term"; then
         resolved_then_blocked_missing+=("eval case $resolved_then_blocked_case missing machine expectation $term")
     fi
@@ -575,30 +667,30 @@ for term in \
     fi
 done
 
-case_id="progressive-mapping-single-active-negative"
+mapping_case="progressive-mapping-single-active-negative"
 for term in \
     "invalid mapping state" \
     "serialize decision_item entries to one active item" \
     "decision_frontier is not required during mapping" \
     "remain in progressive Discover" \
-    "next_route=progressive_discover"; do
-    if ! eval_case_has_machine_term "$eval_fixture" "$case_id" "$term"; then
-        mapping_missing+=("eval case $case_id missing machine expectation $term")
+    "progressive_discovery_state=mapping"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$mapping_case" "$term"; then
+        mapping_missing+=("eval case $mapping_case missing machine expectation $term")
     fi
 done
 
 for term in \
     "two active decision_item entries are allowed" \
     "advance to Decompose from mapping" \
-    "next_route=plan"; do
-    if ! eval_case_forbids_machine_term "$eval_fixture" "$case_id" "$term"; then
-        mapping_missing+=("eval case $case_id must forbid $term")
+    "change progressive_discovery_state=mapping to route_clear"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$mapping_case" "$term"; then
+        mapping_missing+=("eval case $mapping_case must forbid $term")
     fi
 done
 
-ordered_mapping_terms='["invalid mapping state", "serialize decision_item entries to one active item", "remain in progressive Discover", "next_route=progressive_discover"]'
-if ! eval_case_has_ordered_terms "$eval_fixture" "$case_id" "$ordered_mapping_terms"; then
-    mapping_missing+=("eval case $case_id must order invalid state and serialization before the progressive Discover route token")
+ordered_mapping_terms='["invalid mapping state", "serialize decision_item entries to one active item", "remain in progressive Discover", "progressive_discovery_state=mapping"]'
+if ! eval_case_has_ordered_terms "$eval_fixture" "$mapping_case" "$ordered_mapping_terms"; then
+    mapping_missing+=("eval case $mapping_case must order correction before the declared mapping state")
 fi
 
 if [[ "${#mapping_missing[@]}" -eq 0 ]]; then
@@ -607,64 +699,87 @@ else
     fail "mapping decision serialization contract missing: ${mapping_missing[*]}"
 fi
 
-test_start "workflow mapping eval grades polarity and ordered safety semantics"
-mapping_compliant_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-mapping-compliant.XXXXXX")"
-mapping_fake_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-mapping-fake.XXXXXX")"
-mapping_compliant_output="$(mktemp "${TMPDIR:-/tmp}/progressive-mapping-compliant-output.XXXXXX")"
-mapping_fake_output="$(mktemp "${TMPDIR:-/tmp}/progressive-mapping-fake-output.XXXXXX")"
+test_start "workflow evals grade declared progressive state without undeclared routes"
+state_eval_missing=()
+eval_fixture="$workflow_dir/evals/cases.json"
+resolved_then_blocked_case="progressive-resolved-then-blocked-recovery"
+mapping_case="progressive-mapping-single-active-negative"
+
+for case_and_state in \
+    "$resolved_then_blocked_case::progressive_discovery_state=blocked" \
+    "$mapping_case::progressive_discovery_state=mapping"; do
+    case_id="${case_and_state%%::*}"
+    expected_state="${case_and_state#*::}"
+    if ! eval_case_has_machine_term "$eval_fixture" "$case_id" "$expected_state"; then
+        state_eval_missing+=("eval case $case_id missing required declared state $expected_state")
+    fi
+    if jq -e --arg case_id "$case_id" '
+        .cases[] | select(.id == $case_id) |
+        ([.expected_behavior[], .pass_criteria[], .fail_signals[], .machine_expectations.required_substrings[], .machine_expectations.forbidden_substrings[], (.machine_expectations.ordered_substrings[]?[])] | any(test("next_route=(progressive_discover|plan)")))
+    ' "$eval_fixture" >/dev/null; then
+        state_eval_missing+=("eval case $case_id retains an undeclared next_route marker")
+    fi
+done
+
+state_compliant_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-state-compliant.XXXXXX")"
+state_fake_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-state-fake.XXXXXX")"
+state_compliant_output="$(mktemp "${TMPDIR:-/tmp}/progressive-state-compliant-output.XXXXXX")"
+state_fake_output="$(mktemp "${TMPDIR:-/tmp}/progressive-state-fake-output.XXXXXX")"
 p0p4_register_cleanup \
-    "$mapping_compliant_dir" \
-    "$mapping_fake_dir" \
-    "$mapping_compliant_output" \
-    "$mapping_fake_output"
+    "$state_compliant_dir" \
+    "$state_fake_dir" \
+    "$state_compliant_output" \
+    "$state_fake_output"
 
-write_workflow_eval_responses "$mapping_compliant_dir" "$eval_fixture"
-write_workflow_eval_responses "$mapping_fake_dir" "$eval_fixture"
+write_workflow_eval_responses "$state_compliant_dir" "$eval_fixture"
+write_workflow_eval_responses "$state_fake_dir" "$eval_fixture"
 
+jq -r --arg case_id "$resolved_then_blocked_case" '
+    .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+    select(. != "progressive_discovery_state=blocked")
+' "$eval_fixture" >"$state_fake_dir/assistant-workflow/$resolved_then_blocked_case.txt"
 printf '%s\n' \
-    'This is an invalid mapping state: two active decision_item entries have status=active.' \
-    'Do not allow two active items.' \
-    'Serialize decision_item entries to one active item; leave all other decision items non-active.' \
-    'A decision_frontier is not required during mapping. Do not require a decision_frontier during mapping.' \
-    'Remain in progressive Discover while unresolved work stays mapped.' \
-    'next_route=progressive_discover' \
-    >"$mapping_compliant_dir/assistant-workflow/$case_id.txt"
+    'The response is keyword-rich and Plan is premature while evidence is absent.' \
+    'Keep the blocked decision recoverable after compaction.' \
+    >>"$state_fake_dir/assistant-workflow/$resolved_then_blocked_case.txt"
 
+jq -r --arg case_id "$mapping_case" '
+    .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+    select(. != "progressive_discovery_state=mapping")
+' "$eval_fixture" >"$state_fake_dir/assistant-workflow/$mapping_case.txt"
 printf '%s\n' \
-    'This is an invalid mapping state.' \
-    'Serialize decision_item entries to one active item.' \
-    'A decision_frontier is not required during mapping.' \
-    'Remain in progressive Discover.' \
-    'Continue to Plan.' \
-    >"$mapping_fake_dir/assistant-workflow/$case_id.txt"
+    'The response is keyword-rich and Plan is premature while mapping remains incomplete.' \
+    'Keep the decision frontier absent until mapping is complete.' \
+    >>"$state_fake_dir/assistant-workflow/$mapping_case.txt"
 
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-workflow_fake_pass_count=$((workflow_case_count - 1))
-mapping_compliant_status=0
-mapping_fake_status=0
-if ! "$skill_eval_runner" --responses "$mapping_compliant_dir" --skill assistant-workflow >"$mapping_compliant_output" 2>&1; then
-    mapping_compliant_status=1
+workflow_fake_pass_count=$((workflow_case_count - 2))
+state_compliant_status=0
+state_fake_status=0
+if ! "$skill_eval_runner" --responses "$state_compliant_dir" --skill assistant-workflow >"$state_compliant_output" 2>&1; then
+    state_compliant_status=1
 fi
-if "$skill_eval_runner" --responses "$mapping_fake_dir" --skill assistant-workflow >"$mapping_fake_output" 2>&1; then
-    mapping_fake_status=1
+if "$skill_eval_runner" --responses "$state_fake_dir" --skill assistant-workflow >"$state_fake_output" 2>&1; then
+    state_fake_status=1
 fi
 
-if [[ "$mapping_compliant_status" -eq 0 ]] \
-    && grep -Fq $'PASS\tassistant-workflow\tprogressive-mapping-single-active-negative' "$mapping_compliant_output" \
-    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_case_count failed=0" "$mapping_compliant_output" \
-    && [[ "$mapping_fake_status" -eq 0 ]] \
-    && grep -Fq $'FAIL\tassistant-workflow\tprogressive-mapping-single-active-negative' "$mapping_fake_output" \
-    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_fake_pass_count failed=1" "$mapping_fake_output" \
-    && grep -Fq "missing required substring" "$mapping_fake_output" \
-    && grep -Fq "missing_required_substrings=1" "$mapping_fake_output" \
-    && ! grep -Fq "forbidden substring hit" "$mapping_fake_output"; then
+if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
+    && [[ "$state_compliant_status" -eq 0 ]] \
+    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_case_count failed=0" "$state_compliant_output" \
+    && [[ "$state_fake_status" -eq 0 ]] \
+    && grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolved-then-blocked-recovery' "$state_fake_output" \
+    && grep -Fq $'FAIL\tassistant-workflow\tprogressive-mapping-single-active-negative' "$state_fake_output" \
+    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_fake_pass_count failed=2" "$state_fake_output" \
+    && grep -Fq "missing required substring" "$state_fake_output" \
+    && grep -Fq "missing_required_substrings=2" "$state_fake_output" \
+    && ! grep -Fq "forbidden substring hit" "$state_fake_output"; then
     pass
 else
-    fail "mapping eval must reject the original Continue to Plan bypass for missing next_route=progressive_discover"
+    fail "progressive state evals must require declared blocked/mapping state and reject both keyword-rich premature-Plan responses only for their missing state"
 fi
 
-test_start "workflow bounds repeated progressive resolution with readiness evidence"
+test_start "workflow gives progressive decision sequences one cumulative non-resettable readiness record"
 readiness_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 plan_template="$workflow_dir/references/plan-template.md"
@@ -676,15 +791,42 @@ fi
 
 for term in \
     "second/sequential progressive decision activation" \
-    "sequential progressive resolution"; do
+    "sequential progressive resolution" \
+    "readiness_assessment_id" \
+    "progressive_decision_map_ref" \
+    "cumulative_activation_count" \
+    "activated_decision_item_refs" \
+    "resolved_decision_item_refs"; do
     if ! output_artifact_has_text "loop_readiness_assessment" "$term" "$output_contract"; then
         readiness_missing+=("contracts/output.yaml loop_readiness_assessment missing $term")
     fi
 done
 
-for template in "$plan_template" "$task_journal_template"; do
-    if ! p0p4_contains_text "$template" "sequential progressive decision activation"; then
-        readiness_missing+=("${template#"$FRAMEWORK_DIR/"} missing sequential progressive decision activation")
+for term in \
+    "loop_type=progressive_decision_sequence" \
+    "readiness_assessment_id" \
+    "progressive_decision_map_ref" \
+    "cumulative_activation_count" \
+    "activated_decision_item_refs" \
+    "resolved_decision_item_refs"; do
+    if ! p0p4_contains_text "$task_journal_template" "$term"; then
+        readiness_missing+=("${task_journal_template#"$FRAMEWORK_DIR/"} missing $term")
+    fi
+done
+
+for field_and_term in \
+    "loop_type::enum_values: [repeat, optimization, experiment, progressive_decision_sequence]" \
+    "readiness_assessment_id::loop_type == progressive_decision_sequence" \
+    "progressive_decision_map_ref::loop_type == progressive_decision_sequence" \
+    "cumulative_activation_count::loop_type == progressive_decision_sequence" \
+    "activated_decision_item_refs::loop_type == progressive_decision_sequence" \
+    "resolved_decision_item_refs::loop_type == progressive_decision_sequence" \
+    "resolved_decision_item_refs::Every activated_decision_item_ref whose canonical decision_item.status=resolved appears in resolved_decision_item_refs" \
+    "resolved_decision_item_refs::exactly once to canonical decision_resolution.decision_item_ref"; do
+    field="${field_and_term%%::*}"
+    term="${field_and_term#*::}"
+    if ! output_artifact_field_has_text "loop_readiness_assessment" "$field" "$term" "$output_contract"; then
+        readiness_missing+=("contracts/output.yaml loop_readiness_assessment.$field missing $term")
     fi
 done
 
@@ -700,6 +842,12 @@ for term in \
     "tool_error_handling" \
     "low_confidence_escalation" \
     "existing journal/equivalent state tracking" \
+    "readiness_assessment_id" \
+    "progressive_decision_map_ref" \
+    "cumulative_activation_count" \
+    "append-only" \
+    "immutable" \
+    "equality or inconsistency" \
     "blocked/escalation" \
     "INV_PROGRESSIVE_REPEAT_READINESS"; do
     if ! p0p4_contains_text "$phase_gates" "$term"; then
@@ -713,6 +861,9 @@ for term in \
     "max_iterations" \
     "budget_limit" \
     "unchanged frontier" \
+    "readiness_assessment_id" \
+    "cumulative_activation_count" \
+    "append-only" \
     "blocked/escalation"; do
     if ! p0p4_contains_text "$progressive_ref" "$term"; then
         readiness_missing+=("progressive-discovery.md missing $term")
@@ -721,7 +872,19 @@ done
 
 for term in \
     "loop_readiness_assessment" \
+    "loop_type=progressive_decision_sequence" \
+    "readiness_assessment_id" \
+    "progressive_decision_map_ref" \
     "max_iterations" \
+    "cumulative_activation_count" \
+    "activated_decision_item_refs" \
+    "resolved_decision_item_refs" \
+    "immutable max_iterations" \
+    "first activation counted" \
+    "ordered unique append-only activated_decision_item_refs" \
+    "cumulative_activation_count < max_iterations before activation" \
+    "equality or inconsistency fails closed to blocked/escalation" \
+    "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref" \
     "budget_limit" \
     "route-clear" \
     "no-progress" \
@@ -731,10 +894,72 @@ for term in \
     fi
 done
 
+eval_enforcement_missing=()
+route_clear_case="progressive-resolution-route-clear"
+readiness_case="progressive-sequential-resolution-readiness"
+route_clear_consumer_term="consumed_by_requirement_acceptance_map_ref resolves to the consuming Requirement Acceptance Map"
+readiness_below_cap_term="cumulative_activation_count < max_iterations before activation"
+
+for case_and_term in \
+    "$route_clear_case::source_route_clear_handoff_ref resolves to the source route_clear_handoff" \
+    "$route_clear_case::$route_clear_consumer_term" \
+    "$route_clear_case::reciprocal back-reference" \
+    "$route_clear_case::decisions and constraints are traced into applicable accepted map state" \
+    "$route_clear_case::exclusions appear in non_goals or entries with status=approved_exclusion" \
+    "$route_clear_case::each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance" \
+    "$readiness_case::immutable max_iterations" \
+    "$readiness_case::first activation counted" \
+    "$readiness_case::ordered unique append-only activated_decision_item_refs" \
+    "$readiness_case::$readiness_below_cap_term" \
+    "$readiness_case::equality or inconsistency fails closed to blocked/escalation" \
+    "$readiness_case::every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref"; do
+    case_id="${case_and_term%%::*}"
+    term="${case_and_term#*::}"
+    if ! eval_case_has_machine_term "$eval_fixture" "$case_id" "$term"; then
+        eval_enforcement_missing+=("eval case $case_id missing machine enforcement $term")
+    fi
+done
+
+eval_enforcement_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-eval-enforcement.XXXXXX")"
+eval_enforcement_output="$(mktemp "${TMPDIR:-/tmp}/progressive-eval-enforcement-output.XXXXXX")"
+p0p4_register_cleanup "$eval_enforcement_dir" "$eval_enforcement_output"
+write_workflow_eval_responses "$eval_enforcement_dir" "$eval_fixture"
+
+jq -r --arg case_id "$route_clear_case" --arg term "$route_clear_consumer_term" '
+    .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+    select(. != $term)
+' "$eval_fixture" >"$eval_enforcement_dir/assistant-workflow/$route_clear_case.txt"
+
+jq -r --arg case_id "$readiness_case" --arg term "$readiness_below_cap_term" '
+    .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+    select(. != $term)
+' "$eval_fixture" >"$eval_enforcement_dir/assistant-workflow/$readiness_case.txt"
+printf '%s\n' \
+    'Propose another activation at equality despite the finite cap.' \
+    >>"$eval_enforcement_dir/assistant-workflow/$readiness_case.txt"
+
+skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+eval_enforcement_status=0
+if "$skill_eval_runner" --responses "$eval_enforcement_dir" --skill assistant-workflow >"$eval_enforcement_output" 2>&1; then
+    eval_enforcement_status=1
+fi
+
+eval_enforcement_expected_pass_count=$((workflow_case_count - 2))
+if [[ "${#eval_enforcement_missing[@]}" -ne 0 ]] \
+    || [[ "$eval_enforcement_status" -ne 0 ]] \
+    || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolution-route-clear' "$eval_enforcement_output" \
+    || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-sequential-resolution-readiness' "$eval_enforcement_output" \
+    || ! grep -Fq "Summary: total=$workflow_case_count passed=$eval_enforcement_expected_pass_count failed=2" "$eval_enforcement_output" \
+    || ! grep -Fq "missing_required_substrings=2" "$eval_enforcement_output" \
+    || grep -Fq "forbidden substring hit" "$eval_enforcement_output"; then
+    readiness_missing+=("real eval enforcement must reject only the missing route-clear consumer target and below-cap readiness invariant: ${eval_enforcement_missing[*]}")
+fi
+
 if [[ "${#readiness_missing[@]}" -eq 0 ]]; then
     pass
 else
-    fail "progressive repeated-resolution readiness contract missing: ${readiness_missing[*]}"
+    fail "progressive cumulative readiness contract missing: ${readiness_missing[*]}"
 fi
 
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"

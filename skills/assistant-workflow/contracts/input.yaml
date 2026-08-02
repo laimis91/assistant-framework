@@ -182,6 +182,13 @@ fields:
         required: true
         description: "Explicit exclusions; may be empty"
         on_missing: fail
+      - name: source_route_clear_handoff_ref
+        type: string
+        required: conditional
+        condition: "requirement_acceptance_map is populated from progressive route clearance"
+        description: "Durable source reference to the consumed progressive route-clear handoff"
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        on_missing: fail
       - name: entries
         type: object[]
         required: true

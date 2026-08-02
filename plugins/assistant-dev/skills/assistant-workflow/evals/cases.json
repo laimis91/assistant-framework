@@ -1062,7 +1062,7 @@
         "Records downstream_effects from the resolved predecessor.",
         "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff only after remaining active items are clear, then returns to bounded Discover and the Requirement Acceptance Map."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1080,8 +1080,19 @@
           "newly_precise_item_refs",
           "superseded_item_refs",
           "route_clear_handoff",
+          "consumption_state=pending",
+          "progressive_discovery_state=route_clear",
           "bounded Discover",
-          "Requirement Acceptance Map"
+          "Requirement Acceptance Map",
+          "source_route_clear_handoff_ref",
+          "source_route_clear_handoff_ref resolves to the source route_clear_handoff",
+          "consumed_by_requirement_acceptance_map_ref resolves to the consuming Requirement Acceptance Map",
+          "reciprocal back-reference",
+          "decisions and constraints are traced into applicable accepted map state",
+          "exclusions appear in non_goals or entries with status=approved_exclusion",
+          "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance",
+          "consumption_state=consumed",
+          "atomic typed-state transition"
         ],
         "forbidden_substrings": [
           "skip route recomputation",
@@ -1101,10 +1112,10 @@
         "No route-clear handoff exists yet because the dependent item remains active."
       ],
       "expected_behavior": [
-        "Allows one active item and the sequential activation only after loop_readiness_assessment is ready.",
-        "Records finite max_iterations, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection.",
+        "Allows one active item and the sequential activation only after a loop_readiness_assessment with loop_type=progressive_decision_sequence is ready.",
+        "Records stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection.",
         "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
-        "Fails closed to blocked/escalation at exhaustion instead of repeatedly activating decisions."
+        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
       ],
       "pass_criteria": [
         "The response distinguishes a safe bounded sequential resolution from an unbounded loop.",
@@ -1119,7 +1130,19 @@
       "machine_expectations": {
         "required_substrings": [
           "loop_readiness_assessment",
+          "loop_type=progressive_decision_sequence",
+          "readiness_assessment_id",
+          "progressive_decision_map_ref",
           "max_iterations",
+          "cumulative_activation_count",
+          "activated_decision_item_refs",
+          "resolved_decision_item_refs",
+          "immutable max_iterations",
+          "first activation counted",
+          "ordered unique append-only activated_decision_item_refs",
+          "cumulative_activation_count < max_iterations before activation",
+          "equality or inconsistency fails closed to blocked/escalation",
+          "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref",
           "budget_limit",
           "route-clear",
           "no-progress",
@@ -1194,7 +1217,7 @@
         "Keeps status=resolved and its decision_resolution with exactly one matching resolution via decision_item_ref.",
         "Retains non-empty prior history while marking the dependent decision status=blocked.",
         "Records blocker_kind, blocker_reason, and unblock_condition on the blocked decision.",
-        "Keeps the workflow in progressive Discover with next_route=progressive_discover until the unblock condition is evidenced."
+        "Keeps progressive_discovery_state=blocked in progressive Discover until the unblock condition is evidenced."
       ],
       "pass_criteria": [
         "The existing resolution is retained rather than duplicated or dropped.",
@@ -1216,7 +1239,7 @@
           "blocker_kind",
           "blocker_reason",
           "unblock_condition",
-          "next_route=progressive_discover"
+          "progressive_discovery_state=blocked"
         ],
         "forbidden_substrings": [
           "retry the blocked decision",
@@ -1240,7 +1263,7 @@
       "expected_behavior": [
         "Rejects the two active items because at most one status=active is allowed across decision_item entries.",
         "Uses decision_item statuses to serialize the mapping state without creating a decision_frontier.",
-        "Preserves unresolved work and returns to progressive Discover with at most one active item."
+        "Preserves progressive_discovery_state=mapping in Discover with at most one active item."
       ],
       "pass_criteria": [
         "The response identifies two active decision items as invalid during mapping.",
@@ -1258,19 +1281,19 @@
           "serialize decision_item entries to one active item",
           "decision_frontier is not required during mapping",
           "remain in progressive Discover",
-          "next_route=progressive_discover"
+          "progressive_discovery_state=mapping"
         ],
         "forbidden_substrings": [
           "two active decision_item entries are allowed",
           "advance to Decompose from mapping",
-          "next_route=plan"
+          "change progressive_discovery_state=mapping to route_clear"
         ],
         "ordered_substrings": [
           [
             "invalid mapping state",
             "serialize decision_item entries to one active item",
             "remain in progressive Discover",
-            "next_route=progressive_discover"
+            "progressive_discovery_state=mapping"
           ]
         ]
       }

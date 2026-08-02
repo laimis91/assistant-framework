@@ -588,6 +588,12 @@ artifacts:
         type: string[]
         required: true
         on_missing: fail
+      - name: source_route_clear_handoff_ref
+        type: string
+        required: conditional
+        condition: "requirement_acceptance_map is populated from progressive route clearance"
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        on_missing: fail
       - name: entries
         type: object[]
         required: true
@@ -1665,9 +1671,9 @@ artifacts:
     type: object
     required: conditional
     condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
-    description: "Compact handoff from progressive Discover back toward bounded Discover"
-    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit."
-    on_fail: "Return to progressive Discover and record the missing map reference or carried-forward planning inputs."
+    description: "Compact progressive route-clear handoff used to prepare the bounded-Discover Requirement Acceptance Map"
+    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff remains required while consumption_state == pending and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values; handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance. Record that durable consumption before the atomic typed-state transition to bounded/not_applicable, after which the handoff may be omitted."
+    on_fail: "Return to progressive Discover and repair the pending handoff, map cross-reference, or carried-forward planning inputs before any bounded/not_applicable transition."
     object_fields:
       - name: decision_map_ref
         type: string
@@ -1684,6 +1690,16 @@ artifacts:
       - name: acceptance_seed
         type: string[]
         required: true
+      - name: consumption_state
+        type: enum
+        required: true
+        enum_values: [pending, consumed]
+        validation: "pending retains typed progressive route_clear while the bounded-Discover Requirement Acceptance Map is prepared; consumed requires the matching map reference before the atomic transition to bounded/not_applicable"
+      - name: consumed_by_requirement_acceptance_map_ref
+        type: string
+        required: conditional
+        condition: "consumption_state == consumed"
+        validation: "Resolves to the consuming Requirement Acceptance Map, whose source_route_clear_handoff_ref resolves to this source route_clear_handoff; together they validate the reciprocal back-reference rather than equal values"
       - name: open_item_refs
         type: string[]
         required: true
@@ -1846,13 +1862,23 @@ artifacts:
     required: conditional
     condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover"
     description: "Pre-loop/readiness gate for repeat/optimization loops and sequential progressive resolution; not required for one-pass work or the normal required review loop."
-    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
+    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. For loop_type == progressive_decision_sequence, one stable readiness_assessment_id and progressive_decision_map_ref identify the sequence; max_iterations is immutable; cumulative_activation_count equals the ordered unique append-only activated_decision_item_refs including the first activation; resolved_decision_item_refs are ordered unique subset entries and contain every activated ref whose canonical decision_item.status=resolved; and each such ref maps exactly once to decision_resolution.decision_item_ref. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
+    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. For progressive_decision_sequence, preserve the stable identity and cumulative history; when count equals max_iterations or evidence is inconsistent, fail closed to blocked/escalation. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
     object_fields:
       - name: loop_type
         type: enum
         required: true
-        enum_values: [repeat, optimization, experiment]
+        enum_values: [repeat, optimization, experiment, progressive_decision_sequence]
+      - name: readiness_assessment_id
+        type: string
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Stable identity for one progressive decision map across continuation, compaction, and redispatch"
+      - name: progressive_decision_map_ref
+        type: string
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Canonical decision_map reference paired with readiness_assessment_id"
       - name: loop_trigger
         type: string
         required: true
@@ -1873,7 +1899,23 @@ artifacts:
       - name: max_iterations
         type: int
         required: true
-        validation: "Positive finite cap"
+        validation: "Positive finite cap; immutable for one readiness_assessment_id and progressive_decision_map_ref pair when loop_type == progressive_decision_sequence"
+      - name: cumulative_activation_count
+        type: int
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Equals the number of ordered unique append-only activated_decision_item_refs, including the first activation; never decreases or resets across continuation or compaction"
+      - name: activated_decision_item_refs
+        type: string[]
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        min_items: 1
+        validation: "Ordered unique append-only decision_item refs; another activation atomically appends one ref and increments cumulative_activation_count only while the count is below max_iterations"
+      - name: resolved_decision_item_refs
+        type: string[]
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Ordered unique subset of activated_decision_item_refs. Every activated_decision_item_ref whose canonical decision_item.status=resolved appears in resolved_decision_item_refs and maps exactly once to canonical decision_resolution.decision_item_ref"
       - name: budget_limit
         type: string
         required: true

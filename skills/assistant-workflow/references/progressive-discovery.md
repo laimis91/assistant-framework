@@ -38,19 +38,39 @@ bounded Discover. Every blocked item records blocker_kind, blocker_reason, and
 unblock_condition. The blocked_item_refs resolve to decision_item entries so a
 resumed journal knows why work stopped and what evidence or state change permits
 retry. If a later decision becomes blocked after another resolves, keep the
-canonical decision resolutions so resumption preserves the prior history.
+canonical decision resolutions so resumption preserves the prior history. At
+route clear, create `route_clear_handoff` with `consumption_state=pending` and
+keep typed `uncertainty_shape=progressive` / `progressive_discovery_state=route_clear`
+while preparing the bounded-Discover Requirement Acceptance Map. The map must
+trace the handoff decisions and constraints into applicable accepted map state,
+place exclusions in `non_goals` or entries with `status=approved_exclusion`,
+turn each acceptance seed into an `entries[].acceptance_criterion` with binary
+acceptance, then record `source_route_clear_handoff_ref` resolving to the
+source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref`
+resolving back to the consuming map; these are reciprocal pointers, not equal
+values. Record that consumption_state=consumed before the atomic typed-state
+transition to bounded/not_applicable; the handoff may then be omitted because
+the map is the downstream source of truth.
 
 ## Repeated Resolution Readiness
 
 One active item and multiple sequential resolutions remain allowed. Before a
-second/sequential activation, record a ready `loop_readiness_assessment` in the
-existing journal/equivalent state tracking. It must set finite `max_iterations`
-and `budget_limit`, name route-clear, cap, stagnation, or failure stop
-conditions, detect an unchanged frontier/no-progress result, and specify
+second/sequential activation, record one ready `loop_readiness_assessment` with
+`loop_type=progressive_decision_sequence` in the existing journal/equivalent
+state tracking. Its stable `readiness_assessment_id` and
+`progressive_decision_map_ref` identify one cumulative sequence across
+continuation or compaction. It must set immutable finite `max_iterations`,
+`cumulative_activation_count`, ordered unique append-only
+`activated_decision_item_refs` including the first activation, and ordered
+unique `resolved_decision_item_refs` as a subset mapped exactly once to
+canonical decision resolutions. It must set `budget_limit`, name route-clear,
+cap, stagnation, or failure stop conditions, detect an unchanged
+frontier/no-progress result, and specify
 `retry_or_empty_result_handling`, `tool_error_handling`, and
-`low_confidence_escalation`. At any exhausted limit or failed evidence route,
-fail closed to `blocked/escalation`; do not activate another item or reset the
-cap.
+`low_confidence_escalation`. Another activation atomically appends one ref and
+increments the cumulative count only while it remains below the cap. At equality,
+inconsistency, an exhausted limit, or failed evidence route, fail closed to
+`blocked/escalation`; do not activate another item or reset the cap.
 
 ## Safety and Clearance
 
@@ -61,8 +81,13 @@ Any mutating prerequisite must run in a separate approved workflow and return
 evidence; do not perform it inside progressive Discover. Recompute the frontier
 after each resolution. Route clearance requires no open or blocked items and no
 remaining deferred uncertainty except explicitly retired or excluded entries.
-After clearance, carry the compact handoff to bounded Discover, where the normal
-Requirement Acceptance Map and current gates still apply.
+After clearance, use the pending compact handoff to prepare the bounded-Discover
+Requirement Acceptance Map while typed progressive route_clear persists. Do not
+record the atomic bounded/not_applicable transition or omit the handoff until
+the map records its source reference resolving to the handoff and the handoff
+records the reciprocal consuming-map reference, then consumes the carried
+decisions, constraints, exclusions, and acceptance seed. Until then, do not enter
+Decompose, Plan, or Build.
 
 After the predecessor resolves enough context to state the unknown precisely,
 return to bounded Discover and continue through the existing clarification and
