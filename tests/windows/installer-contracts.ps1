@@ -1843,11 +1843,42 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $locker = [System.Management.Automation.PowerShell]::Create()
             [void]$locker.AddScript({
                 param($RetirementMutationSignal, $ConfigPath, $LockedSignal, $ReleaseSignal)
+                function Test-RetirementInstructionPending {
+                    param([string]$LiteralPath)
+                    if (-not [System.IO.File]::Exists($LiteralPath)) { return $true }
+
+                    $stream = $null
+                    try {
+                        # The observer must not block the atomic replacement it is
+                        # waiting to detect. In particular, share deletion on Windows.
+                        $stream = [System.IO.File]::Open(
+                            $LiteralPath,
+                            [System.IO.FileMode]::Open,
+                            [System.IO.FileAccess]::Read,
+                            ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                        )
+                        $reader = New-Object System.IO.StreamReader($stream)
+                        try {
+                            return $reader.ReadToEnd().Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')
+                        }
+                        finally {
+                            $reader.Dispose()
+                        }
+                    }
+                    catch [System.IO.IOException] {
+                        # Atomic replacement may briefly move the observed path.
+                        return $true
+                    }
+                    finally {
+                        if ($null -ne $stream) { $stream.Dispose() }
+                    }
+                }
+
                 $deadline = [DateTime]::UtcNow.AddSeconds(30)
-                while ((-not [System.IO.File]::Exists($RetirementMutationSignal) -or [System.IO.File]::ReadAllText($RetirementMutationSignal).Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')) -and [DateTime]::UtcNow -lt $deadline) {
+                while ((Test-RetirementInstructionPending -LiteralPath $RetirementMutationSignal) -and [DateTime]::UtcNow -lt $deadline) {
                     Start-Sleep -Milliseconds 10
                 }
-                if (-not [System.IO.File]::Exists($RetirementMutationSignal) -or [System.IO.File]::ReadAllText($RetirementMutationSignal).Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')) {
+                if (Test-RetirementInstructionPending -LiteralPath $RetirementMutationSignal) {
                     throw "Timed out waiting for the retirement instruction mutation signal: $RetirementMutationSignal"
                 }
                 $stream = [System.IO.File]::Open(
