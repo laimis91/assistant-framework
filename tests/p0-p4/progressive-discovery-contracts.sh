@@ -7,6 +7,16 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 progressive_ref="$workflow_dir/references/progressive-discovery.md"
+skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+skill_eval_invocation_count=0
+
+run_workflow_eval() {
+    local responses_dir="$1"
+    local output_path="$2"
+
+    skill_eval_invocation_count=$((skill_eval_invocation_count + 1))
+    "$skill_eval_runner" --responses "$responses_dir" --skill assistant-workflow >"$output_path" 2>&1
+}
 
 input_field_has_text() {
     local field="$1"
@@ -274,6 +284,37 @@ write_workflow_eval_responses() {
             done < <(jq -c --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.ordered_substrings[]?' "$fixture")
         } >"$response_path"
     done < <(jq -r '.cases[].id' "$fixture")
+}
+
+workflow_forbidden_terms_are_rejected() {
+    local fixture="$1"
+    local case_id="$2"
+    local temp_prefix="$3"
+    local expected_forbidden_hits="$4"
+    shift 4
+    local workflow_case_count
+    local expected_pass_count
+    local eval_dir
+    local eval_output
+    local eval_status=0
+
+    workflow_case_count="$(jq '.cases | length' "$fixture")"
+    expected_pass_count=$((workflow_case_count - 1))
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/${temp_prefix}.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/${temp_prefix}-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    write_workflow_eval_responses "$eval_dir" "$fixture"
+    printf '%s\n' "$@" >>"$eval_dir/assistant-workflow/$case_id.txt"
+
+    if run_workflow_eval "$eval_dir" "$eval_output"; then
+        eval_status=1
+    fi
+
+    [[ "$eval_status" -eq 0 ]] \
+        && grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$eval_output" \
+        && grep -Fq "Summary: total=$workflow_case_count passed=$expected_pass_count failed=1" "$eval_output" \
+        && grep -Fq "missing_required_substrings=0" "$eval_output" \
+        && grep -Fq "forbidden_substring_hits=$expected_forbidden_hits" "$eval_output"
 }
 
 test_start "workflow routes dependency-shaped uncertainty through conditional Discover"
@@ -658,28 +699,14 @@ for term in "${route_clear_boundary_forbidden_terms[@]}"; do
     fi
 done
 
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-route_clear_boundary_expected_pass_count=$((workflow_case_count - 1))
-skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
-for term in "${route_clear_boundary_forbidden_terms[@]}"; do
-    route_clear_boundary_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-route-clear-boundary.XXXXXX")"
-    route_clear_boundary_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-route-clear-boundary-output.XXXXXX")"
-    p0p4_register_cleanup "$route_clear_boundary_eval_dir" "$route_clear_boundary_eval_output"
-    write_workflow_eval_responses "$route_clear_boundary_eval_dir" "$eval_fixture"
-    printf '%s\n' "$term" >>"$route_clear_boundary_eval_dir/assistant-workflow/$route_clear_boundary_case.txt"
-
-    route_clear_boundary_eval_status=0
-    if "$skill_eval_runner" --responses "$route_clear_boundary_eval_dir" --skill assistant-workflow >"$route_clear_boundary_eval_output" 2>&1; then
-        route_clear_boundary_eval_status=1
-    fi
-    if [[ "$route_clear_boundary_eval_status" -ne 0 ]] \
-        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$route_clear_boundary_case" "$route_clear_boundary_eval_output" \
-        || ! grep -Fq "Summary: total=$workflow_case_count passed=$route_clear_boundary_expected_pass_count failed=1" "$route_clear_boundary_eval_output" \
-        || ! grep -Fq "missing_required_substrings=0" "$route_clear_boundary_eval_output" \
-        || ! grep -Fq "forbidden substring hit" "$route_clear_boundary_eval_output"; then
-        route_clear_boundary_missing+=("real eval enforcement must reject only the route-clear mutation $term")
-    fi
-done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$route_clear_boundary_case" \
+    "progressive-route-clear-boundary" \
+    "${#route_clear_boundary_forbidden_terms[@]}" \
+    "${route_clear_boundary_forbidden_terms[@]}"; then
+    route_clear_boundary_missing+=("real eval enforcement must reject every route-clear mutation in one isolated corpus")
+fi
 
 if [[ "${#route_clear_boundary_missing[@]}" -eq 0 ]]; then
     pass
@@ -1042,15 +1069,14 @@ printf '%s\n' \
     'Keep the decision frontier absent until mapping is complete.' \
     >>"$state_fake_dir/assistant-workflow/$mapping_case.txt"
 
-skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
 workflow_fake_pass_count=$((workflow_case_count - 2))
 state_compliant_status=0
 state_fake_status=0
-if ! "$skill_eval_runner" --responses "$state_compliant_dir" --skill assistant-workflow >"$state_compliant_output" 2>&1; then
+if ! run_workflow_eval "$state_compliant_dir" "$state_compliant_output"; then
     state_compliant_status=1
 fi
-if "$skill_eval_runner" --responses "$state_fake_dir" --skill assistant-workflow >"$state_fake_output" 2>&1; then
+if run_workflow_eval "$state_fake_dir" "$state_fake_output"; then
     state_fake_status=1
 fi
 
@@ -1300,10 +1326,9 @@ printf '%s\n' \
     'Propose another activation at equality despite the finite cap.' \
     >>"$eval_enforcement_dir/assistant-workflow/$readiness_case.txt"
 
-skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
 eval_enforcement_status=0
-if "$skill_eval_runner" --responses "$eval_enforcement_dir" --skill assistant-workflow >"$eval_enforcement_output" 2>&1; then
+if run_workflow_eval "$eval_enforcement_dir" "$eval_enforcement_output"; then
     eval_enforcement_status=1
 fi
 
@@ -1388,34 +1413,18 @@ for term in "${closed_readiness_forbidden_terms[@]}"; do
     fi
 done
 
-closed_readiness_variant_names=(omission reset)
 closed_readiness_variant_payloads=(
     "The closed readiness record is omitted after compaction."
     $'readiness_assessment_id=retention-sequence-reset\nmax_iterations=1'
 )
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-closed_readiness_expected_pass_count=$((workflow_case_count - 1))
-for variant_index in "${!closed_readiness_variant_names[@]}"; do
-    variant_name="${closed_readiness_variant_names[$variant_index]}"
-    closed_readiness_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-closed-readiness-${variant_name}.XXXXXX")"
-    closed_readiness_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-closed-readiness-${variant_name}-output.XXXXXX")"
-    p0p4_register_cleanup "$closed_readiness_eval_dir" "$closed_readiness_eval_output"
-    write_workflow_eval_responses "$closed_readiness_eval_dir" "$eval_fixture"
-    printf '%s\n' "${closed_readiness_variant_payloads[$variant_index]}" \
-        >>"$closed_readiness_eval_dir/assistant-workflow/$closed_readiness_case.txt"
-
-    closed_readiness_eval_status=0
-    if "$skill_eval_runner" --responses "$closed_readiness_eval_dir" --skill assistant-workflow >"$closed_readiness_eval_output" 2>&1; then
-        closed_readiness_eval_status=1
-    fi
-    if [[ "$closed_readiness_eval_status" -ne 0 ]] \
-        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$closed_readiness_case" "$closed_readiness_eval_output" \
-        || ! grep -Fq "Summary: total=$workflow_case_count passed=$closed_readiness_expected_pass_count failed=1" "$closed_readiness_eval_output" \
-        || ! grep -Fq "missing_required_substrings=0" "$closed_readiness_eval_output" \
-        || ! grep -Fq "forbidden substring hit" "$closed_readiness_eval_output"; then
-        closed_readiness_missing+=("real eval enforcement must reject the keyword-complete closed-readiness $variant_name variant through a forbidden unsafe state")
-    fi
-done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$closed_readiness_case" \
+    "progressive-closed-readiness" \
+    "${#closed_readiness_forbidden_terms[@]}" \
+    "${closed_readiness_variant_payloads[@]}"; then
+    closed_readiness_missing+=("real eval enforcement must reject every keyword-complete closed-readiness variant through a forbidden unsafe state")
+fi
 
 if [[ "${#closed_readiness_missing[@]}" -eq 0 ]]; then
     pass
@@ -1498,36 +1507,20 @@ for term in "${current_map_forbidden_terms[@]}"; do
     fi
 done
 
-current_map_variant_names=(empty duplicate dangling partial)
 current_map_variant_payloads=(
     $'decision_item_refs=[]\ndeferred_uncertainty_refs=[]'
     "decision_item_refs=[retention-decision, retention-decision]"
     "deferred_uncertainty_refs=[missing-consent-uncertainty]"
     "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]"
 )
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-current_map_expected_pass_count=$((workflow_case_count - 1))
-for variant_index in "${!current_map_variant_names[@]}"; do
-    variant_name="${current_map_variant_names[$variant_index]}"
-    current_map_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-current-map-${variant_name}.XXXXXX")"
-    current_map_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-current-map-${variant_name}-output.XXXXXX")"
-    p0p4_register_cleanup "$current_map_eval_dir" "$current_map_eval_output"
-    write_workflow_eval_responses "$current_map_eval_dir" "$eval_fixture"
-    printf '%s\n' "${current_map_variant_payloads[$variant_index]}" \
-        >>"$current_map_eval_dir/assistant-workflow/$route_clear_case.txt"
-
-    current_map_eval_status=0
-    if "$skill_eval_runner" --responses "$current_map_eval_dir" --skill assistant-workflow >"$current_map_eval_output" 2>&1; then
-        current_map_eval_status=1
-    fi
-    if [[ "$current_map_eval_status" -ne 0 ]] \
-        || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolution-route-clear' "$current_map_eval_output" \
-        || ! grep -Fq "Summary: total=$workflow_case_count passed=$current_map_expected_pass_count failed=1" "$current_map_eval_output" \
-        || ! grep -Fq "missing_required_substrings=0" "$current_map_eval_output" \
-        || ! grep -Fq "forbidden substring hit" "$current_map_eval_output"; then
-        current_map_missing+=("real eval enforcement must reject the keyword-complete route-clear $variant_name current-map variant through a forbidden unsafe state")
-    fi
-done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$route_clear_case" \
+    "progressive-current-map" \
+    "${#current_map_forbidden_terms[@]}" \
+    "${current_map_variant_payloads[@]}"; then
+    current_map_missing+=("real eval enforcement must reject every keyword-complete route-clear current-map variant through a forbidden unsafe state")
+fi
 
 if [[ "${#current_map_missing[@]}" -eq 0 ]]; then
     pass
@@ -1578,7 +1571,7 @@ printf '%s\n' "$retained_state_forbidden" >>"$retained_state_eval_dir/assistant-
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
 retained_state_expected_pass_count=$((workflow_case_count - 1))
 retained_state_eval_status=0
-if "$skill_eval_runner" --responses "$retained_state_eval_dir" --skill assistant-workflow >"$retained_state_eval_output" 2>&1; then
+if run_workflow_eval "$retained_state_eval_dir" "$retained_state_eval_output"; then
     retained_state_eval_status=1
 fi
 if [[ "$retained_state_eval_status" -ne 0 ]] \
@@ -1668,27 +1661,14 @@ for term in "${retained_chain_forbidden_terms[@]}"; do
     fi
 done
 
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-retained_chain_expected_pass_count=$((workflow_case_count - 1))
-for term in "${retained_chain_forbidden_terms[@]}"; do
-    retained_chain_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-retained-chain.XXXXXX")"
-    retained_chain_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-retained-chain-output.XXXXXX")"
-    p0p4_register_cleanup "$retained_chain_eval_dir" "$retained_chain_eval_output"
-    write_workflow_eval_responses "$retained_chain_eval_dir" "$eval_fixture"
-    printf '%s\n' "$term" >>"$retained_chain_eval_dir/assistant-workflow/$retained_chain_case.txt"
-
-    retained_chain_eval_status=0
-    if "$skill_eval_runner" --responses "$retained_chain_eval_dir" --skill assistant-workflow >"$retained_chain_eval_output" 2>&1; then
-        retained_chain_eval_status=1
-    fi
-    if [[ "$retained_chain_eval_status" -ne 0 ]] \
-        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$retained_chain_case" "$retained_chain_eval_output" \
-        || ! grep -Fq "Summary: total=$workflow_case_count passed=$retained_chain_expected_pass_count failed=1" "$retained_chain_eval_output" \
-        || ! grep -Fq "missing_required_substrings=0" "$retained_chain_eval_output" \
-        || ! grep -Fq "forbidden substring hit" "$retained_chain_eval_output"; then
-        retained_chain_missing+=("real eval enforcement must reject the keyword-complete retained-chain omission $term")
-    fi
-done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$retained_chain_case" \
+    "progressive-retained-chain" \
+    "${#retained_chain_forbidden_terms[@]}" \
+    "${retained_chain_forbidden_terms[@]}"; then
+    retained_chain_missing+=("real eval enforcement must reject every keyword-complete retained-chain omission")
+fi
 
 if [[ "${#retained_chain_missing[@]}" -eq 0 ]]; then
     pass
@@ -1795,27 +1775,14 @@ for term in "${dependency_forbidden_terms[@]}"; do
     fi
 done
 
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-dependency_expected_pass_count=$((workflow_case_count - 1))
-for term in "${dependency_forbidden_terms[@]}"; do
-    dependency_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-dependency-order.XXXXXX")"
-    dependency_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-dependency-order-output.XXXXXX")"
-    p0p4_register_cleanup "$dependency_eval_dir" "$dependency_eval_output"
-    write_workflow_eval_responses "$dependency_eval_dir" "$eval_fixture"
-    printf '%s\n' "$term" >>"$dependency_eval_dir/assistant-workflow/$dependency_case.txt"
-
-    dependency_eval_status=0
-    if "$skill_eval_runner" --responses "$dependency_eval_dir" --skill assistant-workflow >"$dependency_eval_output" 2>&1; then
-        dependency_eval_status=1
-    fi
-    if [[ "$dependency_eval_status" -ne 0 ]] \
-        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$dependency_case" "$dependency_eval_output" \
-        || ! grep -Fq "Summary: total=$workflow_case_count passed=$dependency_expected_pass_count failed=1" "$dependency_eval_output" \
-        || ! grep -Fq "missing_required_substrings=0" "$dependency_eval_output" \
-        || ! grep -Fq "forbidden substring hit" "$dependency_eval_output"; then
-        dependency_order_missing+=("real eval enforcement must reject the keyword-complete unsafe dependency state $term")
-    fi
-done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$dependency_case" \
+    "progressive-dependency-order" \
+    "${#dependency_forbidden_terms[@]}" \
+    "${dependency_forbidden_terms[@]}"; then
+    dependency_order_missing+=("real eval enforcement must reject every keyword-complete unsafe dependency state")
+fi
 
 if [[ "${#dependency_order_missing[@]}" -eq 0 ]]; then
     pass
@@ -1889,6 +1856,14 @@ if [[ "${#alignment_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive discovery publication/distribution contract missing: ${alignment_missing[*]}"
+fi
+
+test_start "workflow keeps full-corpus eval enforcement proportional"
+full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
+if [[ "$skill_eval_invocation_count" -eq 9 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+    pass
+else
+    fail "expected 9 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
