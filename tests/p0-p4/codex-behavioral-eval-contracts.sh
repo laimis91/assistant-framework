@@ -654,12 +654,12 @@ plausible_static_output="$fixture_root/plausible-static-output"
 plausible_static_error="$fixture_root/plausible-static-error.txt"
 cp -R "$candidate" "$plausible_static_candidate"
 jq '
-  .static_measurement.baseline_selected_initial_words += 1
-  | .static_measurement.candidate_selected_initial_words += 1
-  | .static_measurement.baseline_total_initial_words += 1
-  | .static_measurement.candidate_total_initial_words += 1
-  | .static_measurement.baseline_selected_entry_words += 1
-  | .static_measurement.candidate_selected_entry_words += 1
+  .static_measurement.baseline_selected_initial_words -= 1
+  | .static_measurement.candidate_selected_initial_words -= 1
+  | .static_measurement.baseline_total_initial_words -= 1
+  | .static_measurement.candidate_total_initial_words -= 1
+  | .static_measurement.baseline_selected_entry_words -= 1
+  | .static_measurement.candidate_selected_entry_words -= 1
 ' "$plausible_static_candidate/manifest.json" >"$plausible_static_candidate/manifest.tmp"
 mv "$plausible_static_candidate/manifest.tmp" "$plausible_static_candidate/manifest.json"
 rm -f "$capture"/*

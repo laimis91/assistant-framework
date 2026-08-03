@@ -31,13 +31,13 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [uncertainty_shape, progressive_discovery_state]
+        names: [uncertainty_shape, progressive_discovery_state, progressive_route_clear_consumption_state, requirement_acceptance_map, workflow_state_mode]
       - id: workflow-progressive-discovery-artifacts
         path: contracts/output.yaml
         section: artifacts
         key: name
         names: [decision_map, decision_item,deferred_uncertainty,decision_frontier,decision_resolution,route_clear_handoff,loop_readiness_assessment]
-    budget_words: 4262
+    budget_words: 4971
   delegation:
     selectors:
       - id: workflow-delegation-fields

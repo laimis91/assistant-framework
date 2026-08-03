@@ -567,7 +567,7 @@ artifacts:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]"
     description: "Completion traceability from accepted requirements to verification evidence"
     validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
@@ -1672,7 +1672,7 @@ artifacts:
     required: conditional
     condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
     description: "Compact progressive route-clear handoff used to prepare the bounded-Discover Requirement Acceptance Map"
-    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff remains required while consumption_state == pending and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values; handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance. Record that durable consumption before the atomic typed-state transition to bounded/not_applicable, after which the handoff may be omitted."
+    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff remains required while consumption_state == pending mirrors progressive_route_clear_consumption_state=pending and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values; progressive_route_clear_consumption_state=consumed records that reciprocal map consumption and remains after the atomic typed-state transition to bounded/not_applicable so the map remains required. Handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
     on_fail: "Return to progressive Discover and repair the pending handoff, map cross-reference, or carried-forward planning inputs before any bounded/not_applicable transition."
     object_fields:
       - name: decision_map_ref
@@ -1694,7 +1694,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [pending, consumed]
-        validation: "pending retains typed progressive route_clear while the bounded-Discover Requirement Acceptance Map is prepared; consumed requires the matching map reference before the atomic transition to bounded/not_applicable"
+        validation: "pending mirrors progressive_route_clear_consumption_state=pending while typed progressive route_clear prepares the bounded-Discover Requirement Acceptance Map; consumed requires reciprocal map consumption and progressive_route_clear_consumption_state=consumed before the atomic transition to bounded/not_applicable"
       - name: consumed_by_requirement_acceptance_map_ref
         type: string
         required: conditional

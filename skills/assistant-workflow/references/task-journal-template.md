@@ -112,6 +112,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Progressive Discovery
 [N/A for bounded work. Keep compact refs here or in the equivalent carried state; do not duplicate full schemas.]
+- progressive_route_clear_consumption_state: [not_applicable | pending | consumed; pending mirrors route_clear_handoff, consumed remains after bounded/not_applicable only after reciprocal map consumption]
 - Decision items ref: [journal/packet ref]
 - Deferred uncertainty ref: [journal/packet ref]
 - Decision frontier ref: [journal/packet ref]

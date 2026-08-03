@@ -157,7 +157,7 @@ fields:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]"
     description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion"
     validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
     on_missing: fail
@@ -393,6 +393,16 @@ fields:
     default: not_applicable
     on_missing: infer
     infer_from: "Use not_applicable for bounded uncertainty. For progressive uncertainty, use mapping until a decision map exists, resolving while the frontier has work, route_clear when the route can return to bounded Discover, or blocked when the next required decision cannot proceed."
+
+  - name: progressive_route_clear_consumption_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, pending, consumed]
+    description: "Durable state for Requirement Acceptance Map consumption of a progressive route-clear handoff"
+    validation: "not_applicable applies to ordinary bounded work with no route_clear_handoff. pending mirrors route_clear_handoff.consumption_state=pending while progressive route_clear prepares the map. consumed requires reciprocal map consumption and remains consumed after the bounded/not_applicable transition so requirement_acceptance_map remains required."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable for ordinary bounded/no-handoff work. Use pending when route_clear_handoff.consumption_state=pending. Use consumed only after requirement_acceptance_map.source_route_clear_handoff_ref and route_clear_handoff.consumed_by_requirement_acceptance_map_ref form reciprocal map consumption; retain consumed after the atomic bounded/not_applicable transition."
 
   - name: clarification_status
     type: enum

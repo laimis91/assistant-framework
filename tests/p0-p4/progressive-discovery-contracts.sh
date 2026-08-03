@@ -88,6 +88,73 @@ progressive_artifact_selector_has_name() {
     ' "$file"
 }
 
+progressive_shape_selector_has_name() {
+    local expected="$1"
+    local file="$2"
+
+    awk -v expected="$expected" '
+        $0 == "  progressive_discovery:" { in_set = 1; next }
+        in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+        in_set && $0 == "      - id: workflow-progressive-discovery-shape" { in_selector = 1; next }
+        in_selector && /^      - id: / { exit }
+        in_selector && $0 == "        path: contracts/input.yaml" { input_path = 1; next }
+        in_selector && $0 == "        section: fields" { fields_section = 1; next }
+        in_selector && /^        names:/ {
+            values = $0
+            sub(/^        names:[[:space:]]*\[/, "", values)
+            sub(/\][[:space:]]*$/, "", values)
+            count = split(values, names, ",")
+            for (item_index = 1; item_index <= count; item_index++) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", names[item_index])
+                if (names[item_index] == expected) found = 1
+            }
+        }
+        END { exit in_selector && input_path && fields_section && found ? 0 : 1 }
+    ' "$file"
+}
+
+top_level_named_item_has_exact_property_value() {
+    local item="$1"
+    local property="$2"
+    local expected="$3"
+    local file="$4"
+
+    awk -v item="$item" -v property="$property" -v expected="$expected" '
+        $0 == "  - name: " item { in_item = 1; next }
+        in_item && /^  - name: / { exit }
+        in_item && $0 == "    " property ": \"" expected "\"" { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
+phase_gate_has_exact_property_value() {
+    local gate="$1"
+    local property="$2"
+    local expected="$3"
+    local file="$4"
+
+    awk -v gate="$gate" -v property="$property" -v expected="$expected" '
+        $0 == "      - id: " gate { in_gate = 1; next }
+        in_gate && /^      - id: / { exit }
+        in_gate && $0 == "        " property ": \"" expected "\"" { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
+workflow_invariant_has_exact_property_value() {
+    local invariant="$1"
+    local property="$2"
+    local expected="$3"
+    local file="$4"
+
+    awk -v invariant="$invariant" -v property="$property" -v expected="$expected" '
+        $0 == "  - id: " invariant { in_invariant = 1; next }
+        in_invariant && /^  - id: / { exit }
+        in_invariant && $0 == "    " property ": \"" expected "\"" { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 workflow_invariant_selector_has_name() {
     local expected="$1"
     local file="$2"
@@ -321,6 +388,10 @@ fi
 test_start "workflow aligns progressive uncertainty with durable state-mode inference"
 state_mode_missing=()
 
+if ! progressive_shape_selector_has_name "workflow_state_mode" "$index_contract"; then
+    state_mode_missing+=("contracts/index.yaml workflow-progressive-discovery-shape.names missing workflow_state_mode")
+fi
+
 for term in \
     "uncertainty_shape == progressive" \
     "local state artifacts are configured and policy allows them" \
@@ -497,6 +568,41 @@ test_start "workflow retains route-clear handoff until a requirement map durably
 handoff_consumption_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
+route_clear_map_condition='size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]'
+route_clear_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed]'
+
+for term in \
+    "type: enum" \
+    "enum_values: [not_applicable, pending, consumed]" \
+    "default: not_applicable" \
+    "route_clear_handoff" \
+    "reciprocal map consumption" \
+    "remains consumed after the bounded/not_applicable transition" \
+    "ordinary bounded work"; do
+    if ! input_field_has_text "progressive_route_clear_consumption_state" "$term" "$input_contract"; then
+        handoff_consumption_missing+=("contracts/input.yaml progressive_route_clear_consumption_state missing $term")
+    fi
+done
+
+for selector_name in progressive_route_clear_consumption_state requirement_acceptance_map; do
+    if ! progressive_shape_selector_has_name "$selector_name" "$index_contract"; then
+        handoff_consumption_missing+=("contracts/index.yaml workflow-progressive-discovery-shape.names missing $selector_name")
+    fi
+done
+
+for contract in "$input_contract" "$output_contract"; do
+    if ! top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$contract"; then
+        handoff_consumption_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.condition does not retain small route-clear consumption")
+    fi
+done
+
+if ! phase_gate_has_exact_property_value "D_REQUIREMENT_ACCEPTANCE_MAP" "condition" "$route_clear_map_condition" "$phase_gates"; then
+    handoff_consumption_missing+=("contracts/phase-gates.yaml D_REQUIREMENT_ACCEPTANCE_MAP.condition does not retain small route-clear consumption")
+fi
+
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_ROUTE_CLEAR" "condition" "$route_clear_invariant_condition" "$phase_gates"; then
+    handoff_consumption_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_ROUTE_CLEAR.condition does not retain post-transition map consumption")
+fi
 
 for term in \
     "consumption_state" \
@@ -545,15 +651,20 @@ done
 
 for file_and_term in \
     "$phase_gates::consumption_state=pending" \
+    "$phase_gates::progressive_route_clear_consumption_state=pending" \
+    "$phase_gates::progressive_route_clear_consumption_state=consumed" \
     "$phase_gates::source_route_clear_handoff_ref" \
     "$phase_gates::typed progressive route_clear persists" \
     "$phase_gates::atomic typed-state transition" \
     "$phase_gates::bounded/not_applicable" \
     "$phase_gates::Decompose, Plan, or Build" \
     "$progressive_ref::consumption_state=pending" \
+    "$progressive_ref::progressive_route_clear_consumption_state=pending" \
+    "$progressive_ref::progressive_route_clear_consumption_state=consumed" \
     "$progressive_ref::source_route_clear_handoff_ref" \
     "$progressive_ref::atomic typed-state" \
     "$progressive_ref::Decompose, Plan, or Build" \
+    "$journal_template::progressive_route_clear_consumption_state" \
     "$journal_template::source_route_clear_handoff_ref"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
@@ -563,7 +674,13 @@ for file_and_term in \
 done
 
 for term in \
+    "size=small" \
+    "Requirement Acceptance Map is required" \
     "consumption_state=pending" \
+    "progressive_route_clear_consumption_state=pending" \
+    "progressive_route_clear_consumption_state=consumed" \
+    "remains consumed after bounded/not_applicable" \
+    "ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable" \
     "progressive_discovery_state=route_clear" \
     "source_route_clear_handoff_ref" \
     "source_route_clear_handoff_ref resolves to the source route_clear_handoff" \
@@ -578,6 +695,21 @@ for term in \
         handoff_consumption_missing+=("eval case progressive-resolution-route-clear missing $term")
     fi
 done
+
+route_clear_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-route-clear-mutation.XXXXXX")"
+p0p4_register_cleanup "$route_clear_mutation_dir"
+fake_index="$route_clear_mutation_dir/index.yaml"
+fake_input="$route_clear_mutation_dir/input.yaml"
+fake_output="$route_clear_mutation_dir/output.yaml"
+sed 's/progressive_route_clear_consumption_state/progressive_route_clear_consumption_state_removed/g' "$index_contract" >"$fake_index"
+sed 's/ or progressive_route_clear_consumption_state in \[pending, consumed\]//' "$input_contract" >"$fake_input"
+sed 's/ or progressive_route_clear_consumption_state in \[pending, consumed\]//' "$output_contract" >"$fake_output"
+
+if progressive_shape_selector_has_name "progressive_route_clear_consumption_state" "$fake_index" \
+    || top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$fake_input" \
+    || top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$fake_output"; then
+    handoff_consumption_missing+=("typed route-clear marker, progressive selector, and post-transition map requiredness mutation must not pass")
+fi
 
 if [[ "${#handoff_consumption_missing[@]}" -eq 0 ]]; then
     pass
@@ -784,6 +916,17 @@ readiness_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 plan_template="$workflow_dir/references/plan-template.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
+repeat_readiness_condition='uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation'
+
+for contract_item in D_PROGRESSIVE_REPEAT_READINESS INV_PROGRESSIVE_REPEAT_READINESS; do
+    if [[ "$contract_item" == D_* ]]; then
+        if ! phase_gate_has_exact_property_value "$contract_item" "condition" "$repeat_readiness_condition" "$phase_gates"; then
+            readiness_missing+=("contracts/phase-gates.yaml $contract_item.condition does not cover every subsequent activation after any prior activation")
+        fi
+    elif ! workflow_invariant_has_exact_property_value "$contract_item" "condition" "$repeat_readiness_condition" "$phase_gates"; then
+        readiness_missing+=("contracts/phase-gates.yaml $contract_item.condition does not cover every subsequent activation after any prior activation")
+    fi
+done
 
 if ! progressive_artifact_selector_has_name "loop_readiness_assessment" "$index_contract"; then
     readiness_missing+=("contracts/index.yaml progressive_discovery must select loop_readiness_assessment from contracts/output.yaml artifacts")
@@ -832,7 +975,7 @@ done
 
 for term in \
     "D_PROGRESSIVE_REPEAT_READINESS" \
-    "repeated progressive resolution" \
+    "every second/subsequent progressive decision activation" \
     "max_iterations" \
     "budget_limit" \
     "route-clear, cap, stagnation, or failure" \
@@ -846,6 +989,9 @@ for term in \
     "progressive_decision_map_ref" \
     "cumulative_activation_count" \
     "append-only" \
+    "prior activated items may be resolved, superseded, or excluded" \
+    "cumulative activated refs remain append-only" \
+    "superseded/excluded refs are not classified as resolved" \
     "immutable" \
     "equality or inconsistency" \
     "blocked/escalation" \
@@ -882,6 +1028,10 @@ for term in \
     "immutable max_iterations" \
     "first activation counted" \
     "ordered unique append-only activated_decision_item_refs" \
+    "superseded/excluded first activated item" \
+    "prior activated items may be resolved, superseded, or excluded" \
+    "cumulative activated refs remain append-only" \
+    "superseded/excluded refs are not classified as resolved" \
     "cumulative_activation_count < max_iterations before activation" \
     "equality or inconsistency fails closed to blocked/escalation" \
     "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref" \
@@ -910,6 +1060,10 @@ for case_and_term in \
     "$readiness_case::immutable max_iterations" \
     "$readiness_case::first activation counted" \
     "$readiness_case::ordered unique append-only activated_decision_item_refs" \
+    "$readiness_case::superseded/excluded first activated item" \
+    "$readiness_case::prior activated items may be resolved, superseded, or excluded" \
+    "$readiness_case::cumulative activated refs remain append-only" \
+    "$readiness_case::superseded/excluded refs are not classified as resolved" \
     "$readiness_case::$readiness_below_cap_term" \
     "$readiness_case::equality or inconsistency fails closed to blocked/escalation" \
     "$readiness_case::every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref"; do

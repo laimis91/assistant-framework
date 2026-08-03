@@ -40,17 +40,22 @@ resumed journal knows why work stopped and what evidence or state change permits
 retry. If a later decision becomes blocked after another resolves, keep the
 canonical decision resolutions so resumption preserves the prior history. At
 route clear, create `route_clear_handoff` with `consumption_state=pending` and
-keep typed `uncertainty_shape=progressive` / `progressive_discovery_state=route_clear`
-while preparing the bounded-Discover Requirement Acceptance Map. The map must
+set `progressive_route_clear_consumption_state=pending` to mirror that handoff
+while keeping typed `uncertainty_shape=progressive` /
+`progressive_discovery_state=route_clear` while preparing the bounded-Discover
+Requirement Acceptance Map. The map must
 trace the handoff decisions and constraints into applicable accepted map state,
 place exclusions in `non_goals` or entries with `status=approved_exclusion`,
 turn each acceptance seed into an `entries[].acceptance_criterion` with binary
 acceptance, then record `source_route_clear_handoff_ref` resolving to the
 source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref`
 resolving back to the consuming map; these are reciprocal pointers, not equal
-values. Record that consumption_state=consumed before the atomic typed-state
-transition to bounded/not_applicable; the handoff may then be omitted because
-the map is the downstream source of truth.
+values. Record that consumption_state=consumed and
+`progressive_route_clear_consumption_state=consumed` before the atomic typed-state
+transition to bounded/not_applicable. The marker remains consumed after that
+transition so the map stays required; the handoff may then be omitted because
+the map is the downstream source of truth. Ordinary bounded small work stays
+`progressive_route_clear_consumption_state=not_applicable`.
 
 ## Repeated Resolution Readiness
 
