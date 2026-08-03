@@ -44,6 +44,7 @@ Requirement Acceptance Map:
   explicit approved exclusion with a reason.
 - Updating a requirement updates this map first, then affected slices, tests,
   and handoffs. Do not silently fork acceptance criteria.
+- During small progressive route clearance, Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; use the pending handoff and its current decision references to prepare the completed map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed.
 - When this map consumes progressive route clearance, its
   `source_route_clear_handoff_ref` resolves to the source handoff and that
   handoff's `consumed_by_requirement_acceptance_map_ref` resolves back to this

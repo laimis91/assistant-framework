@@ -514,7 +514,7 @@ workflow_root="$workflow_dir/SKILL.md"
 
 for term in \
     "D_PROGRESSIVE_DISCOVERY_HOLD" \
-    "progressive_discovery_state in [mapping, resolving, blocked]" \
+    "progressive_discovery_state in [mapping, resolving, route_clear, blocked]" \
     "remain in Discover" \
     "Decompose, Plan, Build" \
     "project/source mutation" \
@@ -590,13 +590,112 @@ else
     fail "progressive safety and clearance contract missing: ${safety_missing[*]}"
 fi
 
-test_start "workflow retains route-clear handoff until a requirement map durably consumes it"
+test_start "workflow keeps route-clear inside the progressive no-execution boundary"
+route_clear_boundary_missing=()
+eval_fixture="$workflow_dir/evals/cases.json"
+route_clear_boundary_condition='uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]'
+route_clear_boundary_case='progressive-resolution-route-clear'
+route_clear_boundary_required_terms=(
+    "route_clear remains in the no-execution boundary"
+    "project/source mutation"
+    "external writes"
+    "branch creation"
+    "credential-location recording"
+    "framework-owned journal/equivalent carried-state update"
+    "separate approved workflow"
+)
+route_clear_boundary_forbidden_terms=(
+    "start project/source mutation while progressive_discovery_state=route_clear"
+    "write to an external system while progressive_discovery_state=route_clear"
+    "create a branch while progressive_discovery_state=route_clear"
+    "record a credential location while progressive_discovery_state=route_clear"
+)
+
+if ! phase_gate_has_exact_property_value "D_PROGRESSIVE_DISCOVERY_HOLD" "condition" "$route_clear_boundary_condition" "$phase_gates"; then
+    route_clear_boundary_missing+=("contracts/phase-gates.yaml D_PROGRESSIVE_DISCOVERY_HOLD omits route_clear from the exact no-execution condition")
+fi
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_DISCOVERY_BOUNDARY" "condition" "$route_clear_boundary_condition" "$phase_gates"; then
+    route_clear_boundary_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_DISCOVERY_BOUNDARY omits route_clear from the exact no-execution condition")
+fi
+
+for gate in D_PROGRESSIVE_DISCOVERY_HOLD INV_PROGRESSIVE_DISCOVERY_BOUNDARY; do
+    for term in "route_clear" "framework-owned journal/equivalent carried-state update"; do
+        if [[ "$gate" == D_* ]]; then
+            if ! phase_gate_has_text "$gate" "$term" "$phase_gates"; then
+                route_clear_boundary_missing+=("contracts/phase-gates.yaml $gate missing $term")
+            fi
+        elif ! workflow_invariant_has_text "$gate" "$term" "$phase_gates"; then
+            route_clear_boundary_missing+=("contracts/phase-gates.yaml $gate missing $term")
+        fi
+    done
+done
+
+for term in \
+    "mapping, resolving, route_clear, or blocked" \
+    "framework-owned journal/equivalent carried-state update" \
+    "project/source mutation" \
+    "external writes" \
+    "branch creation" \
+    "credential-location recording" \
+    "separate approved workflow"; do
+    if ! p0p4_contains_text "$progressive_ref" "$term"; then
+        route_clear_boundary_missing+=("${progressive_ref#$FRAMEWORK_DIR/} missing route-clear no-execution term $term")
+    fi
+done
+
+if ! p0p4_contains_text "$phases_reference" "mapping, resolving, route_clear, or blocked"; then
+    route_clear_boundary_missing+=("${phases_reference#$FRAMEWORK_DIR/} omits route_clear from the no-execution boundary")
+fi
+
+for term in "${route_clear_boundary_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$route_clear_boundary_case" "$term"; then
+        route_clear_boundary_missing+=("eval case $route_clear_boundary_case missing route-clear no-execution expectation $term")
+    fi
+done
+for term in "${route_clear_boundary_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$route_clear_boundary_case" "$term"; then
+        route_clear_boundary_missing+=("eval case $route_clear_boundary_case does not forbid route-clear mutation $term")
+    fi
+done
+
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+route_clear_boundary_expected_pass_count=$((workflow_case_count - 1))
+skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+for term in "${route_clear_boundary_forbidden_terms[@]}"; do
+    route_clear_boundary_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-route-clear-boundary.XXXXXX")"
+    route_clear_boundary_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-route-clear-boundary-output.XXXXXX")"
+    p0p4_register_cleanup "$route_clear_boundary_eval_dir" "$route_clear_boundary_eval_output"
+    write_workflow_eval_responses "$route_clear_boundary_eval_dir" "$eval_fixture"
+    printf '%s\n' "$term" >>"$route_clear_boundary_eval_dir/assistant-workflow/$route_clear_boundary_case.txt"
+
+    route_clear_boundary_eval_status=0
+    if "$skill_eval_runner" --responses "$route_clear_boundary_eval_dir" --skill assistant-workflow >"$route_clear_boundary_eval_output" 2>&1; then
+        route_clear_boundary_eval_status=1
+    fi
+    if [[ "$route_clear_boundary_eval_status" -ne 0 ]] \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$route_clear_boundary_case" "$route_clear_boundary_eval_output" \
+        || ! grep -Fq "Summary: total=$workflow_case_count passed=$route_clear_boundary_expected_pass_count failed=1" "$route_clear_boundary_eval_output" \
+        || ! grep -Fq "missing_required_substrings=0" "$route_clear_boundary_eval_output" \
+        || ! grep -Fq "forbidden substring hit" "$route_clear_boundary_eval_output"; then
+        route_clear_boundary_missing+=("real eval enforcement must reject only the route-clear mutation $term")
+    fi
+done
+
+if [[ "${#route_clear_boundary_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "route-clear no-execution boundary contract missing: ${route_clear_boundary_missing[*]}"
+fi
+
+test_start "workflow allows a pending route-clear handoff before requirement-map consumption"
 handoff_consumption_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
-route_clear_map_condition='size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]'
+route_clear_map_condition='size in [medium, large, mega] or progressive_route_clear_consumption_state == consumed'
 route_clear_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed]'
 route_clear_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or progressive_route_clear_consumption_state in [pending, consumed]'
+route_clear_pending_map_term='Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending'
+route_clear_consumed_map_term='Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed'
 
 for term in \
     "type: enum" \
@@ -619,12 +718,12 @@ done
 
 for contract in "$input_contract" "$output_contract"; do
     if ! top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$contract"; then
-        handoff_consumption_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.condition does not retain small route-clear consumption")
+        handoff_consumption_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.condition does not wait for small route-clear consumption")
     fi
 done
 
 if ! phase_gate_has_exact_property_value "D_REQUIREMENT_ACCEPTANCE_MAP" "condition" "$route_clear_map_condition" "$phase_gates"; then
-    handoff_consumption_missing+=("contracts/phase-gates.yaml D_REQUIREMENT_ACCEPTANCE_MAP.condition does not retain small route-clear consumption")
+    handoff_consumption_missing+=("contracts/phase-gates.yaml D_REQUIREMENT_ACCEPTANCE_MAP.condition does not wait for small route-clear consumption")
 fi
 
 if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_ROUTE_CLEAR" "condition" "$route_clear_invariant_condition" "$phase_gates"; then
@@ -646,6 +745,14 @@ if ! output_artifact_has_exact_property_value "route_clear_handoff" "condition" 
 fi
 
 for file_and_term in \
+    "$phase_gates::$route_clear_pending_map_term" \
+    "$phase_gates::$route_clear_consumed_map_term" \
+    "$progressive_ref::$route_clear_pending_map_term" \
+    "$progressive_ref::$route_clear_consumed_map_term" \
+    "$requirement_map_ref::$route_clear_pending_map_term" \
+    "$requirement_map_ref::$route_clear_consumed_map_term" \
+    "$journal_template::$route_clear_pending_map_term" \
+    "$journal_template::$route_clear_consumed_map_term" \
     "$phase_gates::route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]" \
     "$progressive_ref::route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]" \
     "$journal_template::route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]"; do
@@ -717,7 +824,8 @@ done
 
 for term in \
     "size=small" \
-    "Requirement Acceptance Map is required" \
+    "$route_clear_pending_map_term" \
+    "$route_clear_consumed_map_term" \
     "consumption_state=pending" \
     "progressive_route_clear_consumption_state=pending" \
     "progressive_route_clear_consumption_state=consumed" \
@@ -747,8 +855,8 @@ fake_index="$route_clear_mutation_dir/index.yaml"
 fake_input="$route_clear_mutation_dir/input.yaml"
 fake_output="$route_clear_mutation_dir/output.yaml"
 sed 's/progressive_route_clear_consumption_state/progressive_route_clear_consumption_state_removed/g' "$index_contract" >"$fake_index"
-sed 's/ or progressive_route_clear_consumption_state in \[pending, consumed\]//' "$input_contract" >"$fake_input"
-sed 's/ or progressive_route_clear_consumption_state in \[pending, consumed\]//' "$output_contract" >"$fake_output"
+sed 's/ or progressive_route_clear_consumption_state == consumed//' "$input_contract" >"$fake_input"
+sed 's/ or progressive_route_clear_consumption_state == consumed//' "$output_contract" >"$fake_output"
 
 if progressive_shape_selector_has_name "progressive_route_clear_consumption_state" "$fake_index" \
     || top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$fake_input" \

@@ -157,8 +157,8 @@ fields:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]"
-    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion"
+    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state == consumed"
+    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
     validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
     on_missing: fail
     object_fields:

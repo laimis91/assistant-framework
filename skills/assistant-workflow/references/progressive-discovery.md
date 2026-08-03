@@ -56,7 +56,7 @@ route clear, create `route_clear_handoff` with `consumption_state=pending` and
 set `progressive_route_clear_consumption_state=pending` to mirror that handoff
 while keeping typed `uncertainty_shape=progressive` /
 `progressive_discovery_state=route_clear` while preparing the bounded-Discover
-Requirement Acceptance Map. The map must
+Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; that marker carries the handoff and preparation state rather than a completed map. The map must
 trace the handoff decisions and constraints into applicable accepted map state,
 place exclusions in `non_goals` or entries with `status=approved_exclusion`,
 turn each acceptance seed into an `entries[].acceptance_criterion` with binary
@@ -65,7 +65,7 @@ source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref
 resolving back to the consuming map; these are reciprocal pointers, not equal
 values. Record that consumption_state=consumed and
 `progressive_route_clear_consumption_state=consumed` before the atomic typed-state
-transition to bounded/not_applicable. The marker remains consumed after that
+transition to bounded/not_applicable. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed. The marker remains consumed after that
 transition so the map stays required. route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]. After
 bounded/not_applicable, retain the consumed handoff and both reciprocal refs in
 active/resumable continuation. Omit it only after explicit task termination or
@@ -115,9 +115,10 @@ decision-map record.
 
 ## Safety and Clearance
 
-Progressive Discover is a no-execution boundary while mapping, resolving, or
-blocked. Do not enter Decompose, Plan, or Build, and do not perform project/source
-mutation, external writes, branch creation, or credential-location recording.
+Progressive Discover is a no-execution boundary while mapping, resolving, route_clear, or blocked. Do not enter Decompose, Plan, or Build, and do not
+perform project/source mutation, external writes, branch creation, or
+credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it is
+not project/source mutation or an external write.
 Any mutating prerequisite must run in a separate approved workflow and return
 evidence; do not perform it inside progressive Discover. Recompute the frontier
 after each resolution. Route clearance requires no open or blocked items and no

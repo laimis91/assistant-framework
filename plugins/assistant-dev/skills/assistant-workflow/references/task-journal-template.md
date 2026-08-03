@@ -108,7 +108,7 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 [paste approved plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths]
 
 ## Requirement Acceptance Map
-[paste or reference the canonical map from `references/requirement-acceptance-map.md`; every accepted requirement id must end passed or approved_exclusion]
+[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work or after route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed]
 - source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map]
 
 ## Progressive Discovery

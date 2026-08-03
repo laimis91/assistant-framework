@@ -567,8 +567,8 @@ artifacts:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state in [pending, consumed]"
-    description: "Completion traceability from accepted requirements to verification evidence"
+    condition: "size in [medium, large, mega] or progressive_route_clear_consumption_state == consumed"
+    description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
     validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:

@@ -59,11 +59,14 @@ unknown is unlocked by a predecessor; then load
 answerable questions and deterministic safe defaults stay in the existing
 workflow clarification path.
 
-For progressive mapping, resolving, or blocked state, `references/progressive-discovery.md`
-defines the no-execution boundary. Do not enter Decompose, Plan, or Build and
-do not run a mutating prerequisite in this substate; use a separate approved
-workflow that returns evidence. After route clearance, return to bounded
-Discover for the normal Requirement Acceptance Map and current gates.
+For progressive mapping, resolving, route_clear, or blocked state,
+`references/progressive-discovery.md` defines the no-execution boundary. The
+only permitted local state update is the framework-owned journal/equivalent
+carried-state update required to record progressive state; it never authorizes
+project/source mutation or an external write. Do not enter Decompose, Plan, or
+Build and do not run a mutating prerequisite in this substate; use a separate
+approved workflow that returns evidence. After route clearance, return to
+bounded Discover for the normal Requirement Acceptance Map and current gates.
 
 Print: `>> Dispatching Code Mapper → context map` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Code Mapper responsibility → context map` (when `subagent_execution_mode=direct_fallback`)

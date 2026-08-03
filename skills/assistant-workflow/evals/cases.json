@@ -1057,13 +1057,13 @@
         "The assistant-workflow skill instructions are active.",
         "A recorded progressive decision map has active, deferred, and superseded decision items.",
         "The predecessor selection is evidenced and no execution has occurred.",
-        "Even though size=small, route-clear consumption requires the Requirement Acceptance Map before the bounded/not_applicable transition."
+        "Even though size=small, the pending route-clear handoff prepares the Requirement Acceptance Map; it becomes required only after reciprocal consumption."
       ],
       "expected_behavior": [
         "Records downstream_effects from the resolved predecessor.",
         "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. For this size=small route-clear handoff, the Requirement Acceptance Map is required, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1082,7 +1082,8 @@
           "superseded_item_refs",
           "route_clear_handoff",
           "size=small",
-          "Requirement Acceptance Map is required",
+          "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
+          "Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed",
           "consumption_state=pending",
           "progressive_route_clear_consumption_state=pending",
           "progressive_route_clear_consumption_state=consumed",
@@ -1108,7 +1109,14 @@
           "exclusions appear in non_goals or entries with status=approved_exclusion",
           "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance",
           "consumption_state=consumed",
-          "atomic typed-state transition"
+          "atomic typed-state transition",
+          "route_clear remains in the no-execution boundary",
+          "project/source mutation",
+          "external writes",
+          "branch creation",
+          "credential-location recording",
+          "framework-owned journal/equivalent carried-state update",
+          "separate approved workflow"
         ],
       "forbidden_substrings": [
         "skip route recomputation",
@@ -1117,7 +1125,11 @@
         "deferred_uncertainty_refs=[]",
         "decision_item_refs=[retention-decision, retention-decision]",
         "deferred_uncertainty_refs=[missing-consent-uncertainty]",
-        "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]"
+        "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]",
+        "start project/source mutation while progressive_discovery_state=route_clear",
+        "write to an external system while progressive_discovery_state=route_clear",
+        "create a branch while progressive_discovery_state=route_clear",
+        "record a credential location while progressive_discovery_state=route_clear"
         ]
       }
     },
