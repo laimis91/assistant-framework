@@ -28,6 +28,9 @@ Keep progressive state in the existing task journal or equivalent carried
 state. `progressive_discovery_state` is `mapping`, `resolving`, `route_clear`,
 or `blocked`; bounded work is `not_applicable`. The decision map holds outcome
 and scope anchors plus compact refs to decision items and deferred uncertainty.
+The current map decision_item_refs and deferred_uncertainty_refs are non-empty,
+ordered unique, and each resolves exactly once to its canonical typed entry;
+retired, excluded, or history entries may remain outside current refs.
 Each deferred uncertainty names its unlock condition. In every progressive
 state where decision items exist, including mapping, at most one item may have
 `status=active`. A decision frontier snapshot is not required during mapping;
@@ -80,11 +83,14 @@ frontier/no-progress result, and specify
 increments the cumulative count only while it remains below the cap. At equality,
 inconsistency, an exhausted limit, or failed evidence route, fail closed to
 `blocked/escalation`; do not activate another item or reset the cap. While
-active, retain the same record through pause, blocked state, compaction,
-continuation, route-clear preparation, and third+ activation proposals. Set
-`progressive_sequence_readiness_state=closed` only after durable route-clear
-consumption or explicit task termination/final archival; closed cannot reopen or
-reset the same decision-map record.
+active, retain the same readiness record through pause, blocked state,
+compaction, continuation, route-clear preparation, third+ activation proposals,
+and durable route-clear consumption. Only then set
+`progressive_sequence_readiness_state=closed`. After
+progressive_sequence_readiness_state becomes closed, retain the same record
+while the task remains active/resumable or compacts; only explicit final
+archival/termination permits omission. Closed cannot reopen or reset the same
+decision-map record.
 
 ## Safety and Clearance
 
@@ -97,7 +103,9 @@ after each resolution. Route clearance requires no open or blocked items and no
 remaining deferred uncertainty except explicitly retired or excluded entries.
 After clearance, use the pending compact handoff to prepare the bounded-Discover
 Requirement Acceptance Map while typed progressive route_clear persists. Do not
-record the atomic bounded/not_applicable transition or omit the handoff until
+allow empty, duplicate, dangling, or partially resolvable current map refs to
+reach route clear or bounded planning, record the atomic bounded/not_applicable
+transition, or omit the handoff until
 the map records its source reference resolving to the handoff and the handoff
 records the reciprocal consuming-map reference, then consumes the carried
 decisions, constraints, exclusions, and acceptance seed. Until then, do not enter

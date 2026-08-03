@@ -1063,7 +1063,7 @@
         "Records downstream_effects from the resolved predecessor.",
         "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. For this size=small route-clear handoff, the Requirement Acceptance Map is required, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. For this size=small route-clear handoff, the Requirement Acceptance Map is required, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1092,6 +1092,12 @@
           "only explicit task termination/final archival permits omission",
           "ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable",
           "progressive_discovery_state=route_clear",
+          "current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once",
+          "decision_item_refs=[retention-decision]",
+          "decision_id=retention-decision",
+          "deferred_uncertainty_refs=[consent-uncertainty]",
+          "uncertainty_id=consent-uncertainty",
+          "each current ref resolves exactly once",
           "bounded Discover",
           "Requirement Acceptance Map",
           "source_route_clear_handoff_ref",
@@ -1104,9 +1110,14 @@
           "consumption_state=consumed",
           "atomic typed-state transition"
         ],
-        "forbidden_substrings": [
-          "skip route recomputation",
-          "start Build before route clearance"
+      "forbidden_substrings": [
+        "skip route recomputation",
+        "start Build before route clearance",
+        "decision_item_refs=[]",
+        "deferred_uncertainty_refs=[]",
+        "decision_item_refs=[retention-decision, retention-decision]",
+        "deferred_uncertainty_refs=[missing-consent-uncertainty]",
+        "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]"
         ]
       }
     },
@@ -1125,7 +1136,7 @@
         "Before second activation, atomically sets progressive_sequence_readiness_state=active with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
         "Retains the same record with stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection through pause, blocked state, compaction, continuation, and third+ activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
         "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
-        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref. Close only after durable route-clear consumption or explicit task termination/final archival; closed cannot reopen or reset the same decision-map record."
+        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
       ],
       "pass_criteria": [
         "The response distinguishes a safe bounded sequential resolution from an unbounded loop.",
@@ -1160,8 +1171,6 @@
           "superseded/excluded refs are not classified as resolved",
           "cumulative_activation_count < max_iterations before activation",
           "third+ activation",
-          "cannot reopen or reset",
-          "close only after durable route-clear consumption or explicit task termination/final archival",
           "equality or inconsistency fails closed to blocked/escalation",
           "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref",
           "budget_limit",
@@ -1176,6 +1185,55 @@
           "activate every unlocked item",
           "reset the iteration cap",
           "continue after no-progress"
+        ]
+      }
+    },
+    {
+      "id": "progressive-closed-readiness-retention",
+      "title": "Closed progressive readiness remains durable until final archival",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a consumed progressive decision sequence retains its one closed readiness record when work remains active or resumes after compaction.",
+      "prompt": "Two progressive decisions already used one readiness assessment. Route-clear consumption completed and progressive_sequence_readiness_state is now closed. The task remains active/resumable, then compacts and resumes before final archival. Show the retained closed record; do not activate another decision or reopen the sequence.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Durable route-clear consumption completed before progressive_sequence_readiness_state became closed.",
+        "The task is not terminated or finally archived, so future continuation and reference resolution remain possible."
+      ],
+      "expected_behavior": [
+        "Keeps progressive_sequence_readiness_state=closed after durable route-clear consumption while the task remains active/resumable, compacts, and resumes before final archival.",
+        "Retains the same loop_readiness_assessment with readiness_assessment_id=retention-sequence-1, progressive_decision_map_ref=retention-map, immutable max_iterations=3, cumulative_activation_count=2, activated_decision_item_refs=[retention-decision, consent-decision], and resolved_decision_item_refs=[retention-decision, consent-decision].",
+        "Makes no new activation, cannot reopen or reset the closed sequence, and permits omission only after explicit final archival/termination."
+      ],
+      "pass_criteria": [
+        "The closed record remains concrete and unchanged after compaction/resumption.",
+        "The response distinguishes closure from final archival.",
+        "The response does not activate another decision."
+      ],
+      "fail_signals": [
+        "Drops the closed readiness record because route-clear was consumed.",
+        "Resets the readiness identity, cap, or cumulative history.",
+        "Treats a closed sequence as permission for a new activation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_sequence_readiness_state=closed",
+          "durable route-clear consumption",
+          "task remains active/resumable, compacts, and resumes before final archival",
+          "readiness_assessment_id=retention-sequence-1",
+          "progressive_decision_map_ref=retention-map",
+          "max_iterations=3",
+          "cumulative_activation_count=2",
+          "activated_decision_item_refs=[retention-decision, consent-decision]",
+          "resolved_decision_item_refs=[retention-decision, consent-decision]",
+          "no new activation",
+          "cannot reopen or reset",
+          "only explicit final archival/termination permits omission"
+        ],
+      "forbidden_substrings": [
+        "The closed readiness record is omitted after compaction.",
+        "readiness_assessment_id=retention-sequence-reset",
+        "max_iterations=1",
+          "activate another decision after closure"
         ]
       }
     },

@@ -141,6 +141,19 @@ phase_gate_has_exact_property_value() {
     ' "$file"
 }
 
+phase_gate_has_text() {
+    local gate="$1"
+    local expected="$2"
+    local file="$3"
+
+    awk -v gate="$gate" -v expected="$expected" '
+        $0 == "      - id: " gate { in_gate = 1; next }
+        in_gate && /^      - id: / { exit }
+        in_gate && index($0, expected) { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 workflow_invariant_has_exact_property_value() {
     local invariant="$1"
     local property="$2"
@@ -151,6 +164,19 @@ workflow_invariant_has_exact_property_value() {
         $0 == "  - id: " invariant { in_invariant = 1; next }
         in_invariant && /^  - id: / { exit }
         in_invariant && $0 == "    " property ": \"" expected "\"" { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
+workflow_invariant_has_text() {
+    local invariant="$1"
+    local expected="$2"
+    local file="$3"
+
+    awk -v invariant="$invariant" -v expected="$expected" '
+        $0 == "  - id: " invariant { in_invariant = 1; next }
+        in_invariant && /^  - id: / { exit }
+        in_invariant && index($0, expected) { found = 1; exit }
         END { exit found ? 0 : 1 }
     ' "$file"
 }
@@ -941,8 +967,8 @@ eval_fixture="$workflow_dir/evals/cases.json"
 plan_template="$workflow_dir/references/plan-template.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
 repeat_readiness_condition='uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation'
-readiness_lifecycle_condition='uncertainty_shape == progressive and (a second/subsequent decision activation is proposed after any prior activation or progressive_sequence_readiness_state == active)'
-readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or when progressive_sequence_readiness_state == active'
+readiness_lifecycle_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or progressive_sequence_readiness_state in [active, closed]'
+readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or when progressive_sequence_readiness_state in [active, closed]'
 
 for term in \
     "type: enum" \
@@ -1097,9 +1123,7 @@ for term in \
     "before second activation" \
     "same record" \
     "same record through pause, blocked state, compaction, and continuation" \
-    "close only after durable route-clear consumption or explicit task termination/final archival" \
     "third+ activation" \
-    "cannot reopen or reset" \
     "equality or inconsistency fails closed to blocked/escalation" \
     "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref" \
     "budget_limit" \
@@ -1119,7 +1143,6 @@ readiness_below_cap_term="cumulative_activation_count < max_iterations before ac
 readiness_active_term="progressive_sequence_readiness_state=active"
 route_clear_terminal_omission_term="only explicit task termination/final archival permits omission"
 readiness_retention_term="same record through pause, blocked state, compaction, and continuation"
-readiness_close_term="close only after durable route-clear consumption or explicit task termination/final archival"
 
 for case_and_term in \
     "$route_clear_case::source_route_clear_handoff_ref resolves to the source route_clear_handoff" \
@@ -1141,9 +1164,7 @@ for case_and_term in \
     "$readiness_case::before second activation" \
     "$readiness_case::same record" \
     "$readiness_case::$readiness_retention_term" \
-    "$readiness_case::$readiness_close_term" \
     "$readiness_case::third+ activation" \
-    "$readiness_case::cannot reopen or reset" \
     "$readiness_case::equality or inconsistency fails closed to blocked/escalation" \
     "$readiness_case::every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref"; do
     case_id="${case_and_term%%::*}"
@@ -1163,9 +1184,9 @@ jq -r --arg case_id "$route_clear_case" --arg consumer_term "$route_clear_consum
     select(. != $consumer_term and . != $terminal_term)
 ' "$eval_fixture" >"$eval_enforcement_dir/assistant-workflow/$route_clear_case.txt"
 
-jq -r --arg case_id "$readiness_case" --arg below_cap_term "$readiness_below_cap_term" --arg active_term "$readiness_active_term" --arg retention_term "$readiness_retention_term" --arg close_term "$readiness_close_term" '
+jq -r --arg case_id "$readiness_case" --arg below_cap_term "$readiness_below_cap_term" --arg active_term "$readiness_active_term" --arg retention_term "$readiness_retention_term" '
     .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
-    select(. != $below_cap_term and . != $active_term and . != $retention_term and . != $close_term)
+    select(. != $below_cap_term and . != $active_term and . != $retention_term)
 ' "$eval_fixture" >"$eval_enforcement_dir/assistant-workflow/$readiness_case.txt"
 printf '%s\n' \
     'Propose another activation at equality despite the finite cap.' \
@@ -1184,7 +1205,7 @@ if [[ "${#eval_enforcement_missing[@]}" -ne 0 ]] \
     || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolution-route-clear' "$eval_enforcement_output" \
     || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-sequential-resolution-readiness' "$eval_enforcement_output" \
     || ! grep -Fq "Summary: total=$workflow_case_count passed=$eval_enforcement_expected_pass_count failed=2" "$eval_enforcement_output" \
-    || ! grep -Fq "missing_required_substrings=6" "$eval_enforcement_output" \
+    || ! grep -Fq "missing_required_substrings=5" "$eval_enforcement_output" \
     || grep -Fq "forbidden substring hit" "$eval_enforcement_output"; then
     readiness_missing+=("real eval enforcement must reject only the missing route-clear consumer target and readiness lifecycle invariants: ${eval_enforcement_missing[*]}")
 fi
@@ -1193,6 +1214,217 @@ if [[ "${#readiness_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive cumulative readiness contract missing: ${readiness_missing[*]}"
+fi
+
+test_start "workflow retains closed progressive readiness records across resumable continuation"
+closed_readiness_missing=()
+closed_readiness_case="progressive-closed-readiness-retention"
+closed_readiness_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or progressive_sequence_readiness_state in [active, closed]'
+closed_readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or when progressive_sequence_readiness_state in [active, closed]'
+closed_readiness_terms=(
+    "progressive_sequence_readiness_state=closed"
+    "durable route-clear consumption"
+    "task remains active/resumable, compacts, and resumes before final archival"
+    "readiness_assessment_id=retention-sequence-1"
+    "progressive_decision_map_ref=retention-map"
+    "max_iterations=3"
+    "cumulative_activation_count=2"
+    "activated_decision_item_refs=[retention-decision, consent-decision]"
+    "resolved_decision_item_refs=[retention-decision, consent-decision]"
+    "no new activation"
+    "cannot reopen or reset"
+    "only explicit final archival/termination permits omission"
+)
+closed_readiness_forbidden_terms=(
+    "The closed readiness record is omitted after compaction."
+    "readiness_assessment_id=retention-sequence-reset"
+    "max_iterations=1"
+)
+
+for contract_item in D_PROGRESSIVE_REPEAT_READINESS INV_PROGRESSIVE_REPEAT_READINESS; do
+    if [[ "$contract_item" == D_* ]]; then
+        if ! phase_gate_has_exact_property_value "$contract_item" "condition" "$closed_readiness_condition" "$phase_gates"; then
+            closed_readiness_missing+=("contracts/phase-gates.yaml $contract_item.condition does not retain readiness while closed")
+        fi
+    elif ! workflow_invariant_has_exact_property_value "$contract_item" "condition" "$closed_readiness_condition" "$phase_gates"; then
+        closed_readiness_missing+=("contracts/phase-gates.yaml $contract_item.condition does not retain readiness while closed")
+    fi
+done
+
+if ! output_artifact_has_exact_property_value "loop_readiness_assessment" "condition" "$closed_readiness_artifact_condition" "$output_contract"; then
+    closed_readiness_missing+=("contracts/output.yaml loop_readiness_assessment.condition does not retain a closed record")
+fi
+
+for file_and_term in \
+    "$progressive_ref::progressive_sequence_readiness_state becomes closed" \
+    "$progressive_ref::task remains active/resumable or compacts" \
+    "$progressive_ref::archival/termination permits omission" \
+    "$task_journal_template::After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission." \
+    "$plan_template::After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission."; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        closed_readiness_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+for term in "${closed_readiness_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$closed_readiness_case" "$term"; then
+        closed_readiness_missing+=("eval case $closed_readiness_case missing machine expectation $term")
+    fi
+done
+
+for term in "${closed_readiness_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$closed_readiness_case" "$term"; then
+        closed_readiness_missing+=("eval case $closed_readiness_case does not forbid $term")
+    fi
+done
+
+closed_readiness_variant_names=(omission reset)
+closed_readiness_variant_payloads=(
+    "The closed readiness record is omitted after compaction."
+    $'readiness_assessment_id=retention-sequence-reset\nmax_iterations=1'
+)
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+closed_readiness_expected_pass_count=$((workflow_case_count - 1))
+for variant_index in "${!closed_readiness_variant_names[@]}"; do
+    variant_name="${closed_readiness_variant_names[$variant_index]}"
+    closed_readiness_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-closed-readiness-${variant_name}.XXXXXX")"
+    closed_readiness_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-closed-readiness-${variant_name}-output.XXXXXX")"
+    p0p4_register_cleanup "$closed_readiness_eval_dir" "$closed_readiness_eval_output"
+    write_workflow_eval_responses "$closed_readiness_eval_dir" "$eval_fixture"
+    printf '%s\n' "${closed_readiness_variant_payloads[$variant_index]}" \
+        >>"$closed_readiness_eval_dir/assistant-workflow/$closed_readiness_case.txt"
+
+    closed_readiness_eval_status=0
+    if "$skill_eval_runner" --responses "$closed_readiness_eval_dir" --skill assistant-workflow >"$closed_readiness_eval_output" 2>&1; then
+        closed_readiness_eval_status=1
+    fi
+    if [[ "$closed_readiness_eval_status" -ne 0 ]] \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$closed_readiness_case" "$closed_readiness_eval_output" \
+        || ! grep -Fq "Summary: total=$workflow_case_count passed=$closed_readiness_expected_pass_count failed=1" "$closed_readiness_eval_output" \
+        || ! grep -Fq "missing_required_substrings=0" "$closed_readiness_eval_output" \
+        || ! grep -Fq "forbidden substring hit" "$closed_readiness_eval_output"; then
+        closed_readiness_missing+=("real eval enforcement must reject the keyword-complete closed-readiness $variant_name variant through a forbidden unsafe state")
+    fi
+done
+
+if [[ "${#closed_readiness_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "closed progressive readiness retention contract missing: ${closed_readiness_missing[*]}"
+fi
+
+test_start "workflow requires non-empty resolvable current progressive decision-map refs before route clearance"
+current_map_missing=()
+route_clear_case="progressive-resolution-route-clear"
+current_map_ref_term="current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once"
+current_map_gate_term="Empty, duplicate, dangling, or partially resolvable current map refs cannot reach route_clear, bounded planning, Decompose, Plan, or Build"
+current_map_concrete_terms=(
+    "decision_item_refs=[retention-decision]"
+    "decision_id=retention-decision"
+    "deferred_uncertainty_refs=[consent-uncertainty]"
+    "uncertainty_id=consent-uncertainty"
+    "each current ref resolves exactly once"
+)
+current_map_forbidden_terms=(
+    "decision_item_refs=[]"
+    "deferred_uncertainty_refs=[]"
+    "decision_item_refs=[retention-decision, retention-decision]"
+    "deferred_uncertainty_refs=[missing-consent-uncertainty]"
+    "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]"
+)
+
+for field in decision_item_refs deferred_uncertainty_refs; do
+    for term in "min_items: 1" "Ordered unique" "exactly once"; do
+        if ! output_artifact_field_has_text "decision_map" "$field" "$term" "$output_contract"; then
+            current_map_missing+=("contracts/output.yaml decision_map.$field missing $term")
+        fi
+    done
+done
+
+for artifact in decision_item deferred_uncertainty; do
+    if ! output_artifact_has_text "$artifact" "min_items: 1" "$output_contract"; then
+        current_map_missing+=("contracts/output.yaml $artifact missing min_items: 1")
+    fi
+done
+
+for term in \
+    "does not require exhaustive coverage of global historical typed entries" \
+    "referenced entry resolves exactly once"; do
+    if ! output_artifact_has_text "decision_map" "$term" "$output_contract"; then
+        current_map_missing+=("contracts/output.yaml decision_map missing $term")
+    fi
+done
+
+if ! phase_gate_has_text "D_PROGRESSIVE_ROUTE_CLEAR" "$current_map_gate_term" "$phase_gates"; then
+    current_map_missing+=("contracts/phase-gates.yaml D_PROGRESSIVE_ROUTE_CLEAR missing binary current-map gate")
+fi
+if ! workflow_invariant_has_text "INV_PROGRESSIVE_ROUTE_CLEAR" "$current_map_gate_term" "$phase_gates"; then
+    current_map_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_ROUTE_CLEAR missing binary current-map gate")
+fi
+
+for file_and_term in \
+    "$progressive_ref::$current_map_ref_term" \
+    "$journal_template::$current_map_ref_term" \
+    "$plan_template::$current_map_ref_term"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        current_map_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+if ! eval_case_has_machine_term "$eval_fixture" "$route_clear_case" "$current_map_ref_term"; then
+    current_map_missing+=("eval case $route_clear_case missing machine expectation $current_map_ref_term")
+fi
+for term in "${current_map_concrete_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$route_clear_case" "$term"; then
+        current_map_missing+=("eval case $route_clear_case missing machine expectation $term")
+    fi
+done
+
+for term in "${current_map_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$route_clear_case" "$term"; then
+        current_map_missing+=("eval case $route_clear_case does not forbid $term")
+    fi
+done
+
+current_map_variant_names=(empty duplicate dangling partial)
+current_map_variant_payloads=(
+    $'decision_item_refs=[]\ndeferred_uncertainty_refs=[]'
+    "decision_item_refs=[retention-decision, retention-decision]"
+    "deferred_uncertainty_refs=[missing-consent-uncertainty]"
+    "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]"
+)
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+current_map_expected_pass_count=$((workflow_case_count - 1))
+for variant_index in "${!current_map_variant_names[@]}"; do
+    variant_name="${current_map_variant_names[$variant_index]}"
+    current_map_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-current-map-${variant_name}.XXXXXX")"
+    current_map_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-current-map-${variant_name}-output.XXXXXX")"
+    p0p4_register_cleanup "$current_map_eval_dir" "$current_map_eval_output"
+    write_workflow_eval_responses "$current_map_eval_dir" "$eval_fixture"
+    printf '%s\n' "${current_map_variant_payloads[$variant_index]}" \
+        >>"$current_map_eval_dir/assistant-workflow/$route_clear_case.txt"
+
+    current_map_eval_status=0
+    if "$skill_eval_runner" --responses "$current_map_eval_dir" --skill assistant-workflow >"$current_map_eval_output" 2>&1; then
+        current_map_eval_status=1
+    fi
+    if [[ "$current_map_eval_status" -ne 0 ]] \
+        || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolution-route-clear' "$current_map_eval_output" \
+        || ! grep -Fq "Summary: total=$workflow_case_count passed=$current_map_expected_pass_count failed=1" "$current_map_eval_output" \
+        || ! grep -Fq "missing_required_substrings=0" "$current_map_eval_output" \
+        || ! grep -Fq "forbidden substring hit" "$current_map_eval_output"; then
+        current_map_missing+=("real eval enforcement must reject the keyword-complete route-clear $variant_name current-map variant through a forbidden unsafe state")
+    fi
+done
+
+if [[ "${#current_map_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "current progressive decision-map reference contract missing: ${current_map_missing[*]}"
 fi
 
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"
