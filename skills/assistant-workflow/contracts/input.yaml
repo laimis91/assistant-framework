@@ -404,6 +404,16 @@ fields:
     on_missing: infer
     infer_from: "Use not_applicable for ordinary bounded/no-handoff work. Use pending when route_clear_handoff.consumption_state=pending. Use consumed only after requirement_acceptance_map.source_route_clear_handoff_ref and route_clear_handoff.consumed_by_requirement_acceptance_map_ref form reciprocal map consumption; retain consumed after the atomic bounded/not_applicable transition."
 
+  - name: progressive_sequence_readiness_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, active, closed]
+    description: "External lifecycle applicability for one progressive decision-map sequence readiness record"
+    validation: "not_applicable applies before a second progressive activation and to ordinary bounded or generic loops. Set active atomically with loop_readiness_assessment before the second activation; while active, the same readiness_assessment_id, progressive_decision_map_ref, immutable cap, and cumulative activation/resolution history remain required through pause, blocked state, compaction, continuation, route-clear preparation, and third+ activation proposals. Set closed only after durable route-clear consumption or explicit task termination/final archival; closed is terminal for the same decision map and cannot reopen or reset its record."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable unless a progressive decision sequence has reached its second activation. Set active atomically with the existing readiness assessment before that activation and retain it until durable route-clear consumption or explicit task termination/final archival. Then set closed; never reopen or reset closed for the same decision map."
+
   - name: clarification_status
     type: enum
     required: true

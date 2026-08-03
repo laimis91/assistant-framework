@@ -1063,7 +1063,7 @@
         "Records downstream_effects from the resolved predecessor.",
         "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. For this size=small route-clear handoff, the Requirement Acceptance Map is required, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. For this size=small route-clear handoff, the Requirement Acceptance Map is required, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1087,6 +1087,9 @@
           "progressive_route_clear_consumption_state=pending",
           "progressive_route_clear_consumption_state=consumed",
           "remains consumed after bounded/not_applicable",
+          "route_clear_handoff remains required after bounded/not_applicable",
+          "both reciprocal refs remain resolvable",
+          "only explicit task termination/final archival permits omission",
           "ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable",
           "progressive_discovery_state=route_clear",
           "bounded Discover",
@@ -1111,18 +1114,18 @@
       "id": "progressive-sequential-resolution-readiness",
       "title": "Sequential progressive resolution is bounded by readiness evidence",
       "category": "progressive_discovery",
-      "purpose": "Checks that a second decision activation remains allowed only with bounded loop readiness, append-only activation history, state tracking, and a fail-closed exit even when the first item did not resolve.",
-      "prompt": "The first progressive retention decision was activated, then became superseded/excluded before a canonical resolution; its ref remains in cumulative activation history. A consent decision is now eligible. Before activating that second decision, show the bounded readiness needed for a safe sequential resolution; do not turn the decision frontier into an open-ended loop.",
+      "purpose": "Checks that readiness is established before activation two after a superseded/excluded first activation, then retained as one bounded record through pause, blocked state, compaction, continuation, and a third+ proposal.",
+      "prompt": "The first progressive retention decision was activated, then became superseded/excluded before a canonical resolution; its ref remains in cumulative activation history. A consent decision is eligible. Before second activation, establish the bounded readiness state and assessment atomically. That second activation then pauses, compacts, and resumes in a blocked state. A third decision is now eligible. Show the same record needed for that third+ activation; do not turn the decision frontier into an open-ended loop.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "The superseded/excluded first activated item is not resolved and remains in ordered unique append-only activated_decision_item_refs.",
-        "No route-clear handoff exists yet because the dependent item remains active."
+        "Before second activation, progressive_sequence_readiness_state=active and loop_readiness_assessment must be set atomically; the same record must retain its identity, map, immutable cap, and history after pause, compaction, and blocked continuation. No route-clear handoff exists yet because the dependent item remains active."
       ],
       "expected_behavior": [
-        "Allows one active item and the sequential activation only after a loop_readiness_assessment with loop_type=progressive_decision_sequence is ready.",
-        "Records stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
+        "Before second activation, atomically sets progressive_sequence_readiness_state=active with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
+        "Retains the same record with stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection through pause, blocked state, compaction, continuation, and third+ activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
         "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
-        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
+        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref. Close only after durable route-clear consumption or explicit task termination/final archival; closed cannot reopen or reset the same decision-map record."
       ],
       "pass_criteria": [
         "The response distinguishes a safe bounded sequential resolution from an unbounded loop.",
@@ -1138,6 +1141,10 @@
         "required_substrings": [
           "loop_readiness_assessment",
           "loop_type=progressive_decision_sequence",
+          "progressive_sequence_readiness_state=active",
+          "before second activation",
+          "same record",
+          "same record through pause, blocked state, compaction, and continuation",
           "readiness_assessment_id",
           "progressive_decision_map_ref",
           "max_iterations",
@@ -1152,6 +1159,9 @@
           "cumulative activated refs remain append-only",
           "superseded/excluded refs are not classified as resolved",
           "cumulative_activation_count < max_iterations before activation",
+          "third+ activation",
+          "cannot reopen or reset",
+          "close only after durable route-clear consumption or explicit task termination/final archival",
           "equality or inconsistency fails closed to blocked/escalation",
           "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref",
           "budget_limit",

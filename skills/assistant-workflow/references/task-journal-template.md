@@ -74,7 +74,7 @@ Candidate scope scan:
 - Unknowns: [none, or one short scope/risk unknown per line]
 Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
-- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active atomically with readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage, retain the same record through pause/blocked/compaction/continuation/route-clear/third+ activation, and set closed only after durable consumption or explicit final archival without reopening or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
@@ -113,11 +113,12 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 ## Progressive Discovery
 [N/A for bounded work. Keep compact refs here or in the equivalent carried state; do not duplicate full schemas.]
 - progressive_route_clear_consumption_state: [not_applicable | pending | consumed; pending mirrors route_clear_handoff, consumed remains after bounded/not_applicable only after reciprocal map consumption]
+- progressive_sequence_readiness_state: [not_applicable | active | closed; active retains the one progressive decision-map readiness record across pause/blocked/compaction/continuation and third+ activation; closed only after durable route-clear consumption or explicit task termination/final archival and cannot reopen/reset]
 - Decision items ref: [journal/packet ref]
 - Deferred uncertainty ref: [journal/packet ref]
 - Decision frontier ref: [journal/packet ref]
 - Decision resolutions ref: [journal/packet ref]
-- Route-clear handoff ref: [journal/packet ref]
+- Route-clear handoff ref: [journal/packet ref; route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed], with both reciprocal map refs resolvable during active/resumable continuation]
 
 ## Key Decisions
 - [decision]: [why] (Step N)

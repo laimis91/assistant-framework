@@ -53,8 +53,11 @@ resolving back to the consuming map; these are reciprocal pointers, not equal
 values. Record that consumption_state=consumed and
 `progressive_route_clear_consumption_state=consumed` before the atomic typed-state
 transition to bounded/not_applicable. The marker remains consumed after that
-transition so the map stays required; the handoff may then be omitted because
-the map is the downstream source of truth. Ordinary bounded small work stays
+transition so the map stays required. route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]. After
+bounded/not_applicable, retain the consumed handoff and both reciprocal refs in
+active/resumable continuation. Omit it only after explicit task termination or
+final archival where continuation and reference resolution are impossible.
+Ordinary bounded small work stays
 `progressive_route_clear_consumption_state=not_applicable`.
 
 ## Repeated Resolution Readiness
@@ -62,7 +65,8 @@ the map is the downstream source of truth. Ordinary bounded small work stays
 One active item and multiple sequential resolutions remain allowed. Before a
 second/sequential activation, record one ready `loop_readiness_assessment` with
 `loop_type=progressive_decision_sequence` in the existing journal/equivalent
-state tracking. Its stable `readiness_assessment_id` and
+state tracking and atomically set
+`progressive_sequence_readiness_state=active`. Its stable `readiness_assessment_id` and
 `progressive_decision_map_ref` identify one cumulative sequence across
 continuation or compaction. It must set immutable finite `max_iterations`,
 `cumulative_activation_count`, ordered unique append-only
@@ -75,7 +79,12 @@ frontier/no-progress result, and specify
 `low_confidence_escalation`. Another activation atomically appends one ref and
 increments the cumulative count only while it remains below the cap. At equality,
 inconsistency, an exhausted limit, or failed evidence route, fail closed to
-`blocked/escalation`; do not activate another item or reset the cap.
+`blocked/escalation`; do not activate another item or reset the cap. While
+active, retain the same record through pause, blocked state, compaction,
+continuation, route-clear preparation, and third+ activation proposals. Set
+`progressive_sequence_readiness_state=closed` only after durable route-clear
+consumption or explicit task termination/final archival; closed cannot reopen or
+reset the same decision-map record.
 
 ## Safety and Clearance
 

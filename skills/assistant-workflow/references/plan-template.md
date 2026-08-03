@@ -76,7 +76,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Loop / Experiment Routing:
   - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
   - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
-  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise ref with retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
+  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise ref with progressive_sequence_readiness_state=active, stable identity/cap/history through pause/blocked/compaction/continuation/third+ activation, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
   - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
 - Harness routing: [N/A unless harness_capable=true or QA criteria independently apply; otherwise refs to appendix, Done Contract, Harness Recipe, run state, trace/replay, artifact ledger]
 - Deviation / rollback rule:
@@ -215,7 +215,7 @@ require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact
 Reference Ledger, or QA evaluation.
 
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
-- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise compact ref with loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
+- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise compact ref with progressive_sequence_readiness_state=active, stable readiness identity/map/immutable cap/cumulative history through pause/blocked/compaction/continuation/route-clear/third+ activation, closure only after durable consumption or explicit final archival without reopen/reset, loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
 
 ## Harness Appendix Routing
 
