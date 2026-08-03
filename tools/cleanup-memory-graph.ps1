@@ -118,6 +118,33 @@ function Assert-FileAvailableForExclusiveUpdate {
     }
 }
 
+function Invoke-TestLateLockBarrier {
+    param([string]$CompletedUpdatePath)
+    $eventBase = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE', 'Process')
+    if ([string]::IsNullOrWhiteSpace($eventBase) -or [System.IO.Path]::GetFileName($CompletedUpdatePath) -cne 'AGENTS.md') { return }
+    if ($eventBase -notmatch '^Local\\AssistantFrameworkLateLock-[0-9a-fA-F]{32}$') {
+        throw 'Invalid deterministic late-lock test event identifier.'
+    }
+
+    $readyEvent = $null
+    $continueEvent = $null
+    try {
+        $readyEvent = [System.Threading.EventWaitHandle]::OpenExisting($eventBase + '-ready')
+        $continueEvent = [System.Threading.EventWaitHandle]::OpenExisting($eventBase + '-continue')
+        [void]$readyEvent.Set()
+        if (-not $continueEvent.WaitOne([TimeSpan]::FromSeconds(30))) {
+            throw 'Timed out waiting for deterministic late-lock coordinator.'
+        }
+    }
+    catch {
+        throw "Late-lock test barrier failed: $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $continueEvent) { $continueEvent.Dispose() }
+        if ($null -ne $readyEvent) { $readyEvent.Dispose() }
+    }
+}
+
 function Assert-RegularFileNoFollow {
     param([string]$LiteralPath, [string]$Purpose)
     try { $item = Get-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop }
@@ -1174,7 +1201,10 @@ function Invoke-Retirement {
             throw "Planned update source changed before mutation: $($update.Path)"
         }
     }
-    foreach ($update in $updates) { Write-AtomicUtf8 $update.Path $update.Content $update.HasBom $update.BaseBytes }
+    foreach ($update in $updates) {
+        Write-AtomicUtf8 $update.Path $update.Content $update.HasBom $update.BaseBytes
+        Invoke-TestLateLockBarrier -CompletedUpdatePath $update.Path
+    }
     foreach ($plan in $plans) {
         foreach ($target in $plan.Targets) {
             if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }

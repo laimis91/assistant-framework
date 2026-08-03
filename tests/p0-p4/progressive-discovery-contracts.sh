@@ -1427,6 +1427,193 @@ else
     fail "current progressive decision-map reference contract missing: ${current_map_missing[*]}"
 fi
 
+test_start "workflow loads retained progressive state after bounded route clearance"
+retained_state_missing=()
+retained_state_case="progressive-closed-readiness-retention"
+retained_state_route_terms=(
+    "progressive_route_clear_consumption_state in [pending, consumed]"
+    "progressive_sequence_readiness_state in [active, closed]"
+    "uncertainty_shape=bounded"
+)
+
+for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+    for term in "${retained_state_route_terms[@]}"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            retained_state_missing+=("${file#$FRAMEWORK_DIR/} missing retained-state routing term $term")
+        fi
+    done
+done
+
+for term in \
+    "uncertainty_shape=bounded" \
+    "progressive_route_clear_consumption_state=consumed" \
+    "progressive_sequence_readiness_state=closed" \
+    "load retained progressive-discovery state" \
+    "route_clear_handoff remains resolvable" \
+    "loop_readiness_assessment"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$retained_state_case" "$term"; then
+        retained_state_missing+=("eval case $retained_state_case missing machine expectation $term")
+    fi
+done
+
+retained_state_forbidden="skip retained progressive state because uncertainty_shape=bounded"
+if ! eval_case_forbids_machine_term "$eval_fixture" "$retained_state_case" "$retained_state_forbidden"; then
+    retained_state_missing+=("eval case $retained_state_case does not forbid bounded-state retained-artifact omission")
+fi
+
+retained_state_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-retained-state.XXXXXX")"
+retained_state_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-retained-state-output.XXXXXX")"
+p0p4_register_cleanup "$retained_state_eval_dir" "$retained_state_eval_output"
+write_workflow_eval_responses "$retained_state_eval_dir" "$eval_fixture"
+printf '%s\n' "$retained_state_forbidden" >>"$retained_state_eval_dir/assistant-workflow/$retained_state_case.txt"
+
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+retained_state_expected_pass_count=$((workflow_case_count - 1))
+retained_state_eval_status=0
+if "$skill_eval_runner" --responses "$retained_state_eval_dir" --skill assistant-workflow >"$retained_state_eval_output" 2>&1; then
+    retained_state_eval_status=1
+fi
+if [[ "$retained_state_eval_status" -ne 0 ]] \
+    || ! grep -Fq $'FAIL\tassistant-workflow\t'"$retained_state_case" "$retained_state_eval_output" \
+    || ! grep -Fq "Summary: total=$workflow_case_count passed=$retained_state_expected_pass_count failed=1" "$retained_state_eval_output" \
+    || ! grep -Fq "missing_required_substrings=0" "$retained_state_eval_output" \
+    || ! grep -Fq "forbidden substring hit" "$retained_state_eval_output"; then
+    retained_state_missing+=("real eval enforcement must reject the keyword-complete bounded-state retained-artifact omission")
+fi
+
+if [[ "${#retained_state_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retained progressive-state routing contract missing: ${retained_state_missing[*]}"
+fi
+
+test_start "workflow validates ordered progressive decision dependencies before frontier eligibility"
+dependency_order_missing=()
+dependency_case="progressive-dependency-ordering"
+dependency_invariant="INV_PROGRESSIVE_DEPENDENCY_ORDER"
+dependency_invariant_condition='uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]'
+dependency_contract_terms=(
+    "Ordered unique"
+    "another canonical decision_item.decision_id"
+    "exactly once"
+    "no self dependency"
+    "circular dependency"
+    "eligible or active"
+    "status=resolved"
+)
+
+for term in "${dependency_contract_terms[@]}"; do
+    if ! output_artifact_field_has_text "decision_item" "dependencies" "$term" "$output_contract"; then
+        dependency_order_missing+=("contracts/output.yaml decision_item.dependencies missing $term")
+    fi
+done
+
+for term in \
+    "dependencies" \
+    "exactly once" \
+    "no self dependency" \
+    "circular dependency" \
+    "eligible or active" \
+    "status=resolved"; do
+    if ! output_artifact_has_text "decision_item" "$term" "$output_contract"; then
+        dependency_order_missing+=("contracts/output.yaml decision_item missing dependency rule $term")
+    fi
+done
+
+for term in \
+    "eligible_item_refs" \
+    "active_item_ref" \
+    "dependencies" \
+    "status=resolved"; do
+    if ! output_artifact_has_text "decision_frontier" "$term" "$output_contract"; then
+        dependency_order_missing+=("contracts/output.yaml decision_frontier missing dependency eligibility rule $term")
+    fi
+done
+
+if ! workflow_invariant_has_exact_property_value "$dependency_invariant" "condition" "$dependency_invariant_condition" "$phase_gates"; then
+    dependency_order_missing+=("contracts/phase-gates.yaml $dependency_invariant has no progressive dependency-order condition")
+fi
+if ! workflow_invariant_selector_has_name "$dependency_invariant" "$index_contract"; then
+    dependency_order_missing+=("contracts/index.yaml workflow-phase-invariants.names missing $dependency_invariant")
+fi
+for term in \
+    "ordered unique" \
+    "exactly once" \
+    "no self dependency or circular dependency" \
+    "eligible or active" \
+    "status=resolved"; do
+    if ! workflow_invariant_has_text "$dependency_invariant" "$term" "$phase_gates"; then
+        dependency_order_missing+=("contracts/phase-gates.yaml $dependency_invariant missing $term")
+    fi
+done
+
+for term in \
+    "ordered unique canonical decision_id refs" \
+    "no self dependency or circular dependency" \
+    "eligible or active only after every dependency has status=resolved"; do
+    if ! p0p4_contains_text "$progressive_ref" "$term"; then
+        dependency_order_missing+=("${progressive_ref#$FRAMEWORK_DIR/} missing dependency routing rule $term")
+    fi
+done
+
+dependency_required_terms=(
+    "dependencies=[retention-decision]"
+    "decision_id=retention-decision"
+    "status=resolved"
+    "decision_id=consent-decision"
+    "dependency refs resolve exactly once to canonical decision_item.decision_id"
+    "no self dependency or circular dependency"
+    "eligible or active only after every dependency has status=resolved"
+    "consent-decision is eligible"
+)
+dependency_forbidden_terms=(
+    "dependencies=[missing-decision]"
+    "dependencies=[consent-decision]"
+    "dependencies=[retention-decision, retention-decision]"
+    "dependencies cycle retention-decision -> consent-decision -> retention-decision"
+    "consent-decision is eligible while retention-decision is pending"
+    "consent-decision active while retention-decision is pending"
+)
+
+for term in "${dependency_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$dependency_case" "$term"; then
+        dependency_order_missing+=("eval case $dependency_case missing machine expectation $term")
+    fi
+done
+for term in "${dependency_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$dependency_case" "$term"; then
+        dependency_order_missing+=("eval case $dependency_case does not forbid $term")
+    fi
+done
+
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+dependency_expected_pass_count=$((workflow_case_count - 1))
+for term in "${dependency_forbidden_terms[@]}"; do
+    dependency_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-dependency-order.XXXXXX")"
+    dependency_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-dependency-order-output.XXXXXX")"
+    p0p4_register_cleanup "$dependency_eval_dir" "$dependency_eval_output"
+    write_workflow_eval_responses "$dependency_eval_dir" "$eval_fixture"
+    printf '%s\n' "$term" >>"$dependency_eval_dir/assistant-workflow/$dependency_case.txt"
+
+    dependency_eval_status=0
+    if "$skill_eval_runner" --responses "$dependency_eval_dir" --skill assistant-workflow >"$dependency_eval_output" 2>&1; then
+        dependency_eval_status=1
+    fi
+    if [[ "$dependency_eval_status" -ne 0 ]] \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$dependency_case" "$dependency_eval_output" \
+        || ! grep -Fq "Summary: total=$workflow_case_count passed=$dependency_expected_pass_count failed=1" "$dependency_eval_output" \
+        || ! grep -Fq "missing_required_substrings=0" "$dependency_eval_output" \
+        || ! grep -Fq "forbidden substring hit" "$dependency_eval_output"; then
+        dependency_order_missing+=("real eval enforcement must reject the keyword-complete unsafe dependency state $term")
+    fi
+done
+
+if [[ "${#dependency_order_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive decision dependency-order contract missing: ${dependency_order_missing[*]}"
+fi
+
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"
 alignment_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"

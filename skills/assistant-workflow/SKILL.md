@@ -38,7 +38,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Do not ask ritual questions when code/context makes the next safe action clear.
 - Ask bounded clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification.
 - assistant-clarify owns prompt-level ambiguity when its routing matches; clear prompts do not invoke it. Existing workflow clarification owns precise, answerable questions and safe defaults.
-- Load `references/progressive-discovery.md` only when `uncertainty_shape=progressive`; fully specified tasks stay bounded, and size alone is not a trigger.
+- Load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, `progressive_route_clear_consumption_state in [pending, consumed]`, or `progressive_sequence_readiness_state in [active, closed]`; the retained markers keep active/resumable progressive state available after `uncertainty_shape=bounded`. Fully specified tasks with `not_applicable` markers stay bounded, and size alone is not a trigger.
 - Progressive Discover is a no-execution boundary; any mutating prerequisite uses a separate approved workflow that returns evidence before normal workflow gates continue.
 - Keep scope changes explicit and tied to correctness, security, safety, or verification.
 - Do not install tools, upload code, call external services, or paste proprietary content into third-party systems unless the user explicitly approved that path.
@@ -50,7 +50,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 Canonical contracts are authoritative. Read `contracts/index.yaml` first, validate at enforcement, and load only the contract selector applicable to the current boundary:
 
 - `entry`: load the exact entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
-- `progressive_discovery`: load `references/progressive-discovery.md` only when `uncertainty_shape=progressive`.
+- `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, `progressive_route_clear_consumption_state in [pending, consumed]`, or `progressive_sequence_readiness_state in [active, closed]`; retained markers remain applicable after `uncertainty_shape=bounded`.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
 - `selected_handoff`: `contracts/handoffs.yaml` before dispatch and return validation.

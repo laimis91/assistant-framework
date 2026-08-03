@@ -1837,84 +1837,70 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [System.IO.File]::WriteAllText($instructionsFile, $originalInstructions, (New-Object System.Text.UTF8Encoding($false)))
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
 
-            $retirementMutationSignal = $instructionsFile
-            $lockedSignal = Join-Path $root 'late-lock-acquired.signal'
-            $releaseSignal = Join-Path $root 'late-lock-release.signal'
+            $eventBase = 'Local\AssistantFrameworkLateLock-' + [Guid]::NewGuid().ToString('N')
+            $readyEventName = $eventBase + '-ready'
+            $continueEventName = $eventBase + '-continue'
+            $releaseEventName = $eventBase + '-release'
+            $readyEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, $readyEventName)
+            $continueEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, $continueEventName)
+            $releaseEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, $releaseEventName)
+            $savedLateLockEventBase = [Environment]::GetEnvironmentVariable('ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE', 'Process')
             $locker = [System.Management.Automation.PowerShell]::Create()
-            [void]$locker.AddScript({
-                param($RetirementMutationSignal, $ConfigPath, $LockedSignal, $ReleaseSignal)
-                function Test-RetirementInstructionPending {
-                    param([string]$LiteralPath)
-                    if (-not [System.IO.File]::Exists($LiteralPath)) { return $true }
-
+            $asyncLock = $null
+            $lockerFailure = $null
+            try {
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE', $eventBase, 'Process')
+                [void]$locker.AddScript({
+                    param($ReadyEventName, $ContinueEventName, $ReleaseEventName, $ConfigPath)
+                    $readyEvent = $null
+                    $continueEvent = $null
+                    $releaseEvent = $null
                     $stream = $null
                     try {
-                        # The observer must not block the atomic replacement it is
-                        # waiting to detect. In particular, share deletion on Windows.
+                        $readyEvent = [System.Threading.EventWaitHandle]::OpenExisting($ReadyEventName)
+                        $continueEvent = [System.Threading.EventWaitHandle]::OpenExisting($ContinueEventName)
+                        $releaseEvent = [System.Threading.EventWaitHandle]::OpenExisting($ReleaseEventName)
+                        if (-not $readyEvent.WaitOne([TimeSpan]::FromSeconds(30))) {
+                            throw 'Timed out waiting for the deterministic late-lock barrier.'
+                        }
                         $stream = [System.IO.File]::Open(
-                            $LiteralPath,
+                            $ConfigPath,
                             [System.IO.FileMode]::Open,
-                            [System.IO.FileAccess]::Read,
-                            ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                            [System.IO.FileAccess]::ReadWrite,
+                            [System.IO.FileShare]::None
                         )
-                        $reader = New-Object System.IO.StreamReader($stream)
-                        try {
-                            return $reader.ReadToEnd().Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')
+                        [void]$continueEvent.Set()
+                        if (-not $releaseEvent.WaitOne([TimeSpan]::FromSeconds(30))) {
+                            throw 'Timed out waiting to release the deterministic late lock.'
                         }
-                        finally {
-                            $reader.Dispose()
-                        }
-                    }
-                    catch [System.IO.IOException] {
-                        # Atomic replacement may briefly move the observed path.
-                        return $true
                     }
                     finally {
                         if ($null -ne $stream) { $stream.Dispose() }
+                        if ($null -ne $releaseEvent) { $releaseEvent.Dispose() }
+                        if ($null -ne $continueEvent) { $continueEvent.Dispose() }
+                        if ($null -ne $readyEvent) { $readyEvent.Dispose() }
                     }
-                }
-
-                $deadline = [DateTime]::UtcNow.AddSeconds(30)
-                while ((Test-RetirementInstructionPending -LiteralPath $RetirementMutationSignal) -and [DateTime]::UtcNow -lt $deadline) {
-                    Start-Sleep -Milliseconds 10
-                }
-                if (Test-RetirementInstructionPending -LiteralPath $RetirementMutationSignal) {
-                    throw "Timed out waiting for the retirement instruction mutation signal: $RetirementMutationSignal"
-                }
-                $stream = [System.IO.File]::Open(
-                    $ConfigPath,
-                    [System.IO.FileMode]::Open,
-                    [System.IO.FileAccess]::ReadWrite,
-                    [System.IO.FileShare]::None
-                )
-                try {
-                    [System.IO.File]::WriteAllText($LockedSignal, 'locked')
-                    while (-not [System.IO.File]::Exists($ReleaseSignal) -and [DateTime]::UtcNow -lt $deadline) {
-                        Start-Sleep -Milliseconds 10
-                    }
-                }
-                finally {
-                    $stream.Dispose()
-                }
-            }).AddArgument($retirementMutationSignal).AddArgument($configFile).AddArgument($lockedSignal).AddArgument($releaseSignal)
-            $asyncLock = $locker.BeginInvoke()
-            $lockerFailure = $null
-            try {
+                }).AddArgument($readyEventName).AddArgument($continueEventName).AddArgument($releaseEventName).AddArgument($configFile)
+                $asyncLock = $locker.BeginInvoke()
                 $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
             }
             finally {
-                [System.IO.File]::WriteAllText($releaseSignal, 'release')
+                [void]$readyEvent.Set()
+                [void]$releaseEvent.Set()
                 try {
-                    [void]$locker.EndInvoke($asyncLock)
+                    if ($null -ne $asyncLock) { [void]$locker.EndInvoke($asyncLock) }
                 }
                 catch {
                     $lockerFailure = $_.Exception.Message
                 }
                 $locker.Dispose()
+                [Environment]::SetEnvironmentVariable('ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE', $savedLateLockEventBase, 'Process')
+                $releaseEvent.Dispose()
+                $continueEvent.Dispose()
+                $readyEvent.Dispose()
             }
 
             Assert-True ([string]::IsNullOrWhiteSpace($lockerFailure)) "Late-lock coordinator failed: $lockerFailure"
-            Assert-True ([System.IO.File]::Exists($lockedSignal)) 'Late-lock coordinator never acquired the Codex config lock'
             Assert-True ($result.ExitCode -ne 0) "Late-lock install reported success: $($result.Output)"
             Assert-Contains $result.Output 'Partial installation:' 'Late-lock failure was not identified as a partial installation'
             Assert-Contains $result.Output 'some managed Assistant Framework files may already have been updated' 'Late-lock diagnostic did not explain the partial state'

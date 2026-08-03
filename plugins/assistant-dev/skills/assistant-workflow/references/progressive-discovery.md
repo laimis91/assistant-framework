@@ -1,8 +1,12 @@
 # Progressive Discovery
 
-Load this reference only when `uncertainty_shape=progressive`. It is a
-conditional Discover substate inside `assistant-workflow`, not a new skill or
-workflow phase.
+Load this reference when `uncertainty_shape=progressive`,
+`progressive_route_clear_consumption_state in [pending, consumed]`, or
+`progressive_sequence_readiness_state in [active, closed]`. The retained
+markers remain active/resumable after `uncertainty_shape=bounded`; fully
+specified bounded work with `not_applicable` markers does not load this
+reference. It is a conditional Discover substate inside `assistant-workflow`,
+not a new skill or workflow phase.
 
 ## Routing
 
@@ -31,6 +35,12 @@ and scope anchors plus compact refs to decision items and deferred uncertainty.
 The current map decision_item_refs and deferred_uncertainty_refs are non-empty,
 ordered unique, and each resolves exactly once to its canonical typed entry;
 retired, excluded, or history entries may remain outside current refs.
+Each decision_item.dependencies list is ordered unique canonical decision_id
+refs. Every dependency ref resolves exactly once to another canonical
+decision_item.decision_id; no self dependency or circular dependency is
+allowed. An item is eligible or active only after every dependency has
+status=resolved; otherwise leave it pending or blocked and recompute the
+frontier after the predecessor resolves.
 Each deferred uncertainty names its unlock condition. In every progressive
 state where decision items exist, including mapping, at most one item may have
 `status=active`. A decision frontier snapshot is not required during mapping;

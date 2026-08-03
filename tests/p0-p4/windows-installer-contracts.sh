@@ -71,6 +71,16 @@ if [[ -f "$cleanup_script" ]]; then
         || failures+=("Memory Graph cleanup does not read back repaired owner/group/protection/ordered DACL through the committed handle")
     grep -Fq -- 'Atomic rollback ACL verification failed' "$cleanup_script" \
         || failures+=("Memory Graph cleanup lacks rollback ACL readback verification")
+    grep -Fq -- 'function Invoke-TestLateLockBarrier' "$cleanup_script" \
+        || failures+=("Memory Graph cleanup lacks the deterministic late-lock test barrier")
+    grep -Fq -- 'ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE' "$cleanup_script" \
+        || failures+=("Memory Graph cleanup lacks the opt-in late-lock event identifier")
+    grep -Fq -- '[System.Threading.EventWaitHandle]::OpenExisting' "$cleanup_script" \
+        || failures+=("Memory Graph cleanup late-lock barrier does not open only pre-created events")
+    grep -Fq -- 'WaitOne([TimeSpan]::FromSeconds(30))' "$cleanup_script" \
+        || failures+=("Memory Graph cleanup late-lock barrier lacks a bounded wait")
+    grep -Fq -- 'Invoke-TestLateLockBarrier -CompletedUpdatePath $update.Path' "$cleanup_script" \
+        || failures+=("Memory Graph cleanup does not synchronize after the completed retirement update")
     if grep -Eqi -- 'Invoke-Expression|Set-ExecutionPolicy|ExecutionPolicy[[:space:]]+Bypass' "$cleanup_script"; then
         failures+=("Memory Graph cleanup contains a forbidden execution surface")
     fi
@@ -101,6 +111,12 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks locked Codex update-file preflight coverage")
     grep -Fq -- 'late retirement-managed config lock reports a recoverable partial installation' "$native_suite" \
         || failures+=("native suite lacks late-lock partial-install recovery coverage")
+    grep -Fq -- 'ASSISTANT_FRAMEWORK_TEST_LATE_LOCK_EVENT_BASE' "$native_suite" \
+        || failures+=("native suite does not opt into the deterministic late-lock barrier")
+    grep -Fq -- 'EventWaitHandle' "$native_suite" \
+        || failures+=("native suite does not coordinate the late lock with named events")
+    grep -Fq -- 'Late-lock coordinator failed' "$native_suite" \
+        || failures+=("native suite does not verify the deterministic late-lock coordinator")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then

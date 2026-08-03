@@ -1200,6 +1200,7 @@
         "The task is not terminated or finally archived, so future continuation and reference resolution remain possible."
       ],
       "expected_behavior": [
+        "After the atomic transition, keeps uncertainty_shape=bounded with progressive_route_clear_consumption_state=consumed, but loads retained progressive-discovery state so route_clear_handoff remains resolvable alongside loop_readiness_assessment.",
         "Keeps progressive_sequence_readiness_state=closed after durable route-clear consumption while the task remains active/resumable, compacts, and resumes before final archival.",
         "Retains the same loop_readiness_assessment with readiness_assessment_id=retention-sequence-1, progressive_decision_map_ref=retention-map, immutable max_iterations=3, cumulative_activation_count=2, activated_decision_item_refs=[retention-decision, consent-decision], and resolved_decision_item_refs=[retention-decision, consent-decision].",
         "Makes no new activation, cannot reopen or reset the closed sequence, and permits omission only after explicit final archival/termination."
@@ -1218,6 +1219,11 @@
         "required_substrings": [
           "progressive_sequence_readiness_state=closed",
           "durable route-clear consumption",
+          "uncertainty_shape=bounded",
+          "progressive_route_clear_consumption_state=consumed",
+          "load retained progressive-discovery state",
+          "route_clear_handoff remains resolvable",
+          "loop_readiness_assessment",
           "task remains active/resumable, compacts, and resumes before final archival",
           "readiness_assessment_id=retention-sequence-1",
           "progressive_decision_map_ref=retention-map",
@@ -1230,10 +1236,59 @@
           "only explicit final archival/termination permits omission"
         ],
       "forbidden_substrings": [
-        "The closed readiness record is omitted after compaction.",
-        "readiness_assessment_id=retention-sequence-reset",
-        "max_iterations=1",
-          "activate another decision after closure"
+          "The closed readiness record is omitted after compaction.",
+          "readiness_assessment_id=retention-sequence-reset",
+          "max_iterations=1",
+          "activate another decision after closure",
+          "skip retained progressive state because uncertainty_shape=bounded"
+        ]
+      }
+    },
+    {
+      "id": "progressive-dependency-ordering",
+      "title": "Progressive dependencies gate frontier eligibility",
+      "category": "progressive_discovery",
+      "purpose": "Checks that typed decision dependencies resolve to canonical predecessors and prevent a dependent from becoming eligible or active too early.",
+      "prompt": "The retention decision has resolved. Its dependent consent decision is now precise. Record the progressive decision state and frontier without allowing the dependent to bypass its predecessor.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=resolving.",
+        "retention-decision is the predecessor of consent-decision."
+      ],
+      "expected_behavior": [
+        "Records decision_id=retention-decision with status=resolved before considering the dependent.",
+        "Records decision_id=consent-decision with dependencies=[retention-decision].",
+        "Requires dependency refs to resolve exactly once to canonical decision_item.decision_id with no self dependency or circular dependency.",
+        "Makes the dependent eligible or active only after every dependency has status=resolved; here consent-decision is eligible."
+      ],
+      "pass_criteria": [
+        "The predecessor and dependent ids are concrete and distinct.",
+        "The frontier does not make a dependent eligible or active while a predecessor remains unresolved.",
+        "The response keeps dependency validation separate from the single-active limit."
+      ],
+      "fail_signals": [
+        "Uses a missing, duplicate, self, or cyclic dependency ref.",
+        "Makes the dependent eligible or active while its predecessor is pending.",
+        "Resolves the dependent before the predecessor."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "dependencies=[retention-decision]",
+          "decision_id=retention-decision",
+          "status=resolved",
+          "decision_id=consent-decision",
+          "dependency refs resolve exactly once to canonical decision_item.decision_id",
+          "no self dependency or circular dependency",
+          "eligible or active only after every dependency has status=resolved",
+          "consent-decision is eligible"
+        ],
+        "forbidden_substrings": [
+          "dependencies=[missing-decision]",
+          "dependencies=[consent-decision]",
+          "dependencies=[retention-decision, retention-decision]",
+          "dependencies cycle retention-decision -> consent-decision -> retention-decision",
+          "consent-decision is eligible while retention-decision is pending",
+          "consent-decision active while retention-decision is pending"
         ]
       }
     },
