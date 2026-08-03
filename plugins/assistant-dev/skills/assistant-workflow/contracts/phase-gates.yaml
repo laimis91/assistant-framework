@@ -745,3 +745,9 @@ invariants:
     condition: "progressive_route_clear_consumption_state in [pending, consumed]"
     scope: all_phases
     on_fail: "Return to progressive Discover, repair unresolved/deferred refs or the handoff/map cross-reference, and do not enter bounded/not_applicable state or Decompose, Plan, or Build until durable consumption."
+
+  - id: INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN
+    check: "While progressive_route_clear_consumption_state is pending or consumed, or progressive_sequence_readiness_state is active or closed, preserve the retained canonical reference chain: decision_map; every referenced decision_item and deferred_uncertainty; and every canonical decision_resolution for a resolved item. route_clear_handoff.decision_map_ref and loop_readiness_assessment references must resolve to those retained canonical artifacts throughout active/resumable continuation or compaction. decision_frontier remains transient after live progressive state ends. Omission is allowed only after explicit final archival/termination makes continuation and reference resolution impossible."
+    condition: "progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
+    scope: all_phases
+    on_fail: "Restore the retained canonical reference chain before continuing, keep decision_frontier limited to live progressive state, and do not discard artifacts while durable markers permit resumption."

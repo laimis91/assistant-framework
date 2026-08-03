@@ -216,7 +216,7 @@ Reference Ledger, or QA evaluation.
 
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
 - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise compact ref with progressive_sequence_readiness_state=active, stable readiness identity/map/immutable cap/cumulative history; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission. Never reopen or reset, loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
-- Progressive current map: [N/A unless uncertainty_shape=progressive; current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; retired/excluded/history entries may remain outside current refs]
+- Progressive current map: [N/A only for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; retired/excluded/history entries may remain outside current refs]
 
 ## Harness Appendix Routing
 

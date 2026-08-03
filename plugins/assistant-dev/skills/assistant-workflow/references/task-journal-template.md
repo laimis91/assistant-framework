@@ -76,7 +76,7 @@ Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
 - loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active atomically with readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission. Never reopen or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
-- Progressive current map: [N/A unless uncertainty_shape=progressive; current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; retired/excluded/history entries may remain outside current refs]
+- Progressive current map: [N/A only for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; retired/excluded/history entries may remain outside current refs]
 Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Agent Dispatch Log
@@ -112,13 +112,14 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map]
 
 ## Progressive Discovery
-[N/A for bounded work. Keep compact refs here or in the equivalent carried state; do not duplicate full schemas.]
+[N/A only for ordinary bounded work with both durable markers not_applicable. Keep compact refs for the retained canonical reference chain here or in the equivalent carried state; do not duplicate full schemas.]
 - progressive_route_clear_consumption_state: [not_applicable | pending | consumed; pending mirrors route_clear_handoff, consumed remains after bounded/not_applicable only after reciprocal map consumption]
 - progressive_sequence_readiness_state: [not_applicable | active | closed; active retains the one progressive decision-map readiness record across pause/blocked/compaction/continuation and third+ activation; closed only after durable route-clear consumption or explicit task termination/final archival and cannot reopen/reset]
-- Decision items ref: [journal/packet ref]
-- Deferred uncertainty ref: [journal/packet ref]
-- Decision frontier ref: [journal/packet ref]
-- Decision resolutions ref: [journal/packet ref]
+- Decision map ref: [journal/packet ref; retain while either durable marker is pending/consumed or active/closed, so route_clear_handoff.decision_map_ref and loop_readiness_assessment refs resolve]
+- Decision items ref: [journal/packet ref; retain every map-referenced canonical decision_item]
+- Deferred uncertainty ref: [journal/packet ref; retain every map-referenced canonical deferred_uncertainty]
+- Decision frontier ref: [journal/packet ref only for live progressive state; it remains transient after that state ends]
+- Decision resolutions ref: [journal/packet ref; retain one canonical decision_resolution for every resolved item referenced by loop readiness]
 - Route-clear handoff ref: [journal/packet ref; route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed], with both reciprocal map refs resolvable during active/resumable continuation]
 
 ## Key Decisions

@@ -1527,10 +1527,10 @@ artifacts:
   - name: decision_map
     type: object
     required: conditional
-    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Canonical progressive Discover map that anchors the intended outcome and scope"
-    validation: "Contains target_outcome, scope_anchor, decision_item_refs, and deferred_uncertainty_refs; current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical decision_item.decision_id or deferred_uncertainty.uncertainty_id. This does not require exhaustive coverage of global historical typed entries: retired, excluded, or history entries may exist outside current refs, but each referenced entry resolves exactly once."
-    on_fail: "Return to progressive Discover, repair empty, duplicate, dangling, or partially resolvable current refs, and do not treat the route as clear or prepare bounded planning."
+    validation: "Contains target_outcome, scope_anchor, decision_item_refs, and deferred_uncertainty_refs; current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical decision_item.decision_id or deferred_uncertainty.uncertainty_id. This does not require exhaustive coverage of global historical typed entries: retired, excluded, or history entries may exist outside current refs, but each referenced entry resolves exactly once. During durable route-clear consumption or active/closed readiness, retain this canonical map so route_clear_handoff.decision_map_ref and loop_readiness_assessment.progressive_decision_map_ref remain resolvable until explicit final archival/termination."
+    on_fail: "Return to progressive Discover, repair empty, duplicate, dangling, or partially resolvable current refs, and do not treat the route as clear or prepare bounded planning. Restore the retained canonical map before resumable continuation."
     object_fields:
       - name: target_outcome
         type: string
@@ -1552,7 +1552,7 @@ artifacts:
   - name: decision_item
     type: object[]
     required: conditional
-    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Typed register item for a precise progressive Discover decision"
     validation: "Contains interaction_mode, dependencies, and status. dependencies are ordered unique decision_id refs; every dependency resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. An eligible or active item requires every dependency status=resolved. status=blocked additionally requires blocker_kind, blocker_reason, and unblock_condition. At most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
     on_fail: "Record the missing decision item fields, including typed blocker recovery state when blocked; keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
@@ -1596,7 +1596,7 @@ artifacts:
   - name: deferred_uncertainty
     type: object[]
     required: conditional
-    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Outcome-shaping uncertainty that cannot yet be stated as a decision item"
     validation: "Contains unlock_condition. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
     on_fail: "State the missing unlock condition or move a precise question into decision_item or workflow clarification before continuing."
@@ -1645,10 +1645,10 @@ artifacts:
   - name: decision_resolution
     type: object[]
     required: conditional
-    condition: "uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))"
+    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. human_confirmation_ref is required conditionally for human_required decisions."
-    on_fail: "Record the missing canonical resolution or repair duplicate decision_item_ref entries; preserve non-empty prior resolution history when a later decision is blocked before advancing the frontier."
+    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. During durable route-clear consumption or active/closed readiness, preserve that one-to-one canonical history so loop_readiness_assessment.resolved_decision_item_refs remain resolvable. human_confirmation_ref is required conditionally for human_required decisions."
+    on_fail: "Record the missing canonical resolution or repair duplicate decision_item_ref entries; preserve non-empty prior resolution history when a later decision is blocked before advancing the frontier. Restore retained canonical resolution history before resumable continuation."
     object_fields:
       - name: decision_item_ref
         type: string

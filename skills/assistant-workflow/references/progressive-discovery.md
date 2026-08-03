@@ -70,6 +70,17 @@ transition so the map stays required. route_clear_handoff remains required while
 bounded/not_applicable, retain the consumed handoff and both reciprocal refs in
 active/resumable continuation. Omit it only after explicit task termination or
 final archival where continuation and reference resolution are impossible.
+While either durable marker is pending/consumed or active/closed, retain the
+**retained canonical reference chain**: the `decision_map`; every referenced
+`decision_item` and `deferred_uncertainty`; and each canonical
+`decision_resolution` for a resolved item. The
+`route_clear_handoff.decision_map_ref` and every applicable
+`loop_readiness_assessment` reference must continue to resolve to those
+canonical artifacts across compaction and active/resumable continuation. The
+`decision_frontier` remains transient after live progressive state ends; it is
+not part of the retained chain. This entire chain may be omitted only after
+explicit final archival/termination makes continuation and reference resolution
+impossible.
 Ordinary bounded small work stays
 `progressive_route_clear_consumption_state=not_applicable`.
 

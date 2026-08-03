@@ -1203,15 +1203,18 @@
         "After the atomic transition, keeps uncertainty_shape=bounded with progressive_route_clear_consumption_state=consumed, but loads retained progressive-discovery state so route_clear_handoff remains resolvable alongside loop_readiness_assessment.",
         "Keeps progressive_sequence_readiness_state=closed after durable route-clear consumption while the task remains active/resumable, compacts, and resumes before final archival.",
         "Retains the same loop_readiness_assessment with readiness_assessment_id=retention-sequence-1, progressive_decision_map_ref=retention-map, immutable max_iterations=3, cumulative_activation_count=2, activated_decision_item_refs=[retention-decision, consent-decision], and resolved_decision_item_refs=[retention-decision, consent-decision].",
+        "Retains the canonical decision map, map-referenced decision items and deferred uncertainty, and exactly one canonical resolution for each resolved item so every retained reference remains resolvable after compaction.",
         "Makes no new activation, cannot reopen or reset the closed sequence, and permits omission only after explicit final archival/termination."
       ],
       "pass_criteria": [
         "The closed record remains concrete and unchanged after compaction/resumption.",
+        "The retained canonical reference chain remains resolvable after bounded transition and compaction.",
         "The response distinguishes closure from final archival.",
         "The response does not activate another decision."
       ],
       "fail_signals": [
         "Drops the closed readiness record because route-clear was consumed.",
+        "Drops canonical progressive artifacts while their retained references remain active.",
         "Resets the readiness identity, cap, or cumulative history.",
         "Treats a closed sequence as permission for a new activation."
       ],
@@ -1231,12 +1234,20 @@
           "cumulative_activation_count=2",
           "activated_decision_item_refs=[retention-decision, consent-decision]",
           "resolved_decision_item_refs=[retention-decision, consent-decision]",
+          "decision_map_ref=retention-map resolves to retained canonical decision_map",
+          "activated_decision_item_refs=[retention-decision, consent-decision] resolve to retained canonical decision_item entries",
+          "deferred_uncertainty_refs=[consent-uncertainty] resolve to a retained canonical deferred_uncertainty",
+          "resolved_decision_item_refs=[retention-decision, consent-decision] resolve exactly once to retained canonical decision_resolution entries",
           "no new activation",
           "cannot reopen or reset",
           "only explicit final archival/termination permits omission"
         ],
       "forbidden_substrings": [
           "The closed readiness record is omitted after compaction.",
+          "The canonical decision map is omitted after compaction.",
+          "The canonical decision items are omitted after compaction.",
+          "The canonical deferred uncertainty is omitted after compaction.",
+          "The canonical decision resolutions are omitted after compaction.",
           "readiness_assessment_id=retention-sequence-reset",
           "max_iterations=1",
           "activate another decision after closure",

@@ -774,12 +774,12 @@ if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_BLOCKED_RECOVERY" "$i
     recovery_missing+=("contracts/index.yaml workflow-phase-invariants.names missing INV_PROGRESSIVE_BLOCKED_RECOVERY")
 fi
 
-decision_resolution_condition='uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))'
+decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
 if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$decision_resolution_condition" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
 
-decision_resolution_validation='Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. human_confirmation_ref is required conditionally for human_required decisions.'
+decision_resolution_validation='Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. During durable route-clear consumption or active/closed readiness, preserve that one-to-one canonical history so loop_readiness_assessment.resolved_decision_item_refs remain resolvable. human_confirmation_ref is required conditionally for human_required decisions.'
 if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
 fi
@@ -1485,6 +1485,107 @@ if [[ "${#retained_state_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "retained progressive-state routing contract missing: ${retained_state_missing[*]}"
+fi
+
+test_start "workflow retains canonical progressive reference chain after bounded route clearance"
+retained_chain_missing=()
+retained_chain_case="progressive-closed-readiness-retention"
+retained_chain_invariant="INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN"
+retained_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+retained_chain_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+
+for artifact in decision_map decision_item deferred_uncertainty; do
+    if ! output_artifact_has_exact_property_value "$artifact" "condition" "$retained_chain_condition" "$output_contract"; then
+        retained_chain_missing+=("contracts/output.yaml $artifact does not retain the canonical chain through durable marker state")
+    fi
+done
+if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$retained_resolution_condition" "$output_contract"; then
+    retained_chain_missing+=("contracts/output.yaml decision_resolution does not retain resolved history through durable marker state")
+fi
+if ! output_artifact_has_exact_property_value "decision_frontier" "condition" 'uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear, blocked]' "$output_contract"; then
+    retained_chain_missing+=("contracts/output.yaml decision_frontier is no longer limited to live progressive state")
+fi
+
+if ! workflow_invariant_has_exact_property_value "$retained_chain_invariant" "condition" "$retained_chain_invariant_condition" "$phase_gates"; then
+    retained_chain_missing+=("contracts/phase-gates.yaml $retained_chain_invariant has no durable retained-reference condition")
+fi
+if ! workflow_invariant_selector_has_name "$retained_chain_invariant" "$index_contract"; then
+    retained_chain_missing+=("contracts/index.yaml workflow-phase-invariants.names missing $retained_chain_invariant")
+fi
+for term in \
+    "decision_map" \
+    "decision_item" \
+    "deferred_uncertainty" \
+    "decision_resolution" \
+    "route_clear_handoff.decision_map_ref" \
+    "loop_readiness_assessment" \
+    "final archival/termination" \
+    "decision_frontier remains transient"; do
+    if ! workflow_invariant_has_text "$retained_chain_invariant" "$term" "$phase_gates"; then
+        retained_chain_missing+=("contracts/phase-gates.yaml $retained_chain_invariant missing $term")
+    fi
+done
+
+for file in \
+    "$progressive_ref" \
+    "$workflow_dir/references/task-journal-template.md" \
+    "$workflow_dir/references/plan-template.md"; do
+    if ! p0p4_contains_text "$file" "retained canonical reference chain"; then
+        retained_chain_missing+=("${file#$FRAMEWORK_DIR/} does not guide retained canonical reference-chain persistence")
+    fi
+done
+
+retained_chain_required_terms=(
+    "decision_map_ref=retention-map resolves to retained canonical decision_map"
+    "activated_decision_item_refs=[retention-decision, consent-decision] resolve to retained canonical decision_item entries"
+    "deferred_uncertainty_refs=[consent-uncertainty] resolve to a retained canonical deferred_uncertainty"
+    "resolved_decision_item_refs=[retention-decision, consent-decision] resolve exactly once to retained canonical decision_resolution entries"
+)
+retained_chain_forbidden_terms=(
+    "The canonical decision map is omitted after compaction."
+    "The canonical decision items are omitted after compaction."
+    "The canonical deferred uncertainty is omitted after compaction."
+    "The canonical decision resolutions are omitted after compaction."
+)
+
+for term in "${retained_chain_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$retained_chain_case" "$term"; then
+        retained_chain_missing+=("eval case $retained_chain_case missing retained-chain expectation $term")
+    fi
+done
+for term in "${retained_chain_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$retained_chain_case" "$term"; then
+        retained_chain_missing+=("eval case $retained_chain_case does not forbid $term")
+    fi
+done
+
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+retained_chain_expected_pass_count=$((workflow_case_count - 1))
+for term in "${retained_chain_forbidden_terms[@]}"; do
+    retained_chain_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-retained-chain.XXXXXX")"
+    retained_chain_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-retained-chain-output.XXXXXX")"
+    p0p4_register_cleanup "$retained_chain_eval_dir" "$retained_chain_eval_output"
+    write_workflow_eval_responses "$retained_chain_eval_dir" "$eval_fixture"
+    printf '%s\n' "$term" >>"$retained_chain_eval_dir/assistant-workflow/$retained_chain_case.txt"
+
+    retained_chain_eval_status=0
+    if "$skill_eval_runner" --responses "$retained_chain_eval_dir" --skill assistant-workflow >"$retained_chain_eval_output" 2>&1; then
+        retained_chain_eval_status=1
+    fi
+    if [[ "$retained_chain_eval_status" -ne 0 ]] \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$retained_chain_case" "$retained_chain_eval_output" \
+        || ! grep -Fq "Summary: total=$workflow_case_count passed=$retained_chain_expected_pass_count failed=1" "$retained_chain_eval_output" \
+        || ! grep -Fq "missing_required_substrings=0" "$retained_chain_eval_output" \
+        || ! grep -Fq "forbidden substring hit" "$retained_chain_eval_output"; then
+        retained_chain_missing+=("real eval enforcement must reject the keyword-complete retained-chain omission $term")
+    fi
+done
+
+if [[ "${#retained_chain_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retained progressive canonical reference-chain contract missing: ${retained_chain_missing[*]}"
 fi
 
 test_start "workflow validates ordered progressive decision dependencies before frontier eligibility"
