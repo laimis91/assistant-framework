@@ -1064,7 +1064,7 @@
         "Records downstream_effects from the resolved predecessor.",
         "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs. newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded], while superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending and progressive_artifact_retention_state=retained, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1089,6 +1089,7 @@
           "Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed",
           "consumption_state=pending",
           "progressive_route_clear_consumption_state=pending",
+          "progressive_artifact_retention_state=retained",
           "progressive_route_clear_consumption_state=consumed",
           "remains consumed after bounded/not_applicable",
           "route_clear_handoff remains required after bounded/not_applicable",
@@ -1155,7 +1156,7 @@
       ],
       "expected_behavior": [
         "The first activation provenance is set atomically as activation_ordinal=1 and retained after superseded/excluded status and compaction before the second proposal.",
-        "Before second activation, reconstructs activated_decision_item_refs=[retention-decision] before second activation, then atomically sets progressive_sequence_readiness_state=active with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
+        "Before second activation, reconstructs activated_decision_item_refs=[retention-decision] before second activation, then atomically sets progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
         "Retains the same record with stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection through pause, blocked state, compaction, continuation, and third+ activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
         "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
         "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
@@ -1175,6 +1176,7 @@
           "loop_readiness_assessment",
           "loop_type=progressive_decision_sequence",
           "progressive_sequence_readiness_state=active",
+          "progressive_artifact_retention_state=retained",
           "before second activation",
           "same record",
           "same record through pause, blocked state, compaction, and continuation",
@@ -1229,6 +1231,7 @@
       ],
       "expected_behavior": [
         "After the atomic transition, keeps uncertainty_shape=bounded with progressive_route_clear_consumption_state=consumed, but loads retained progressive-discovery state so route_clear_handoff remains resolvable alongside loop_readiness_assessment.",
+        "Keeps progressive_artifact_retention_state=retained; Task state: completed does not qualify as final archival while continuation or reference resolution remains possible.",
         "Keeps progressive_sequence_readiness_state=closed after durable route-clear consumption while the task remains active/resumable, compacts, and resumes before final archival.",
         "Retains the same loop_readiness_assessment with readiness_assessment_id=retention-sequence-1, progressive_decision_map_ref=retention-map, immutable max_iterations=3, cumulative_activation_count=2, activated_decision_item_refs=[retention-decision, consent-decision], and resolved_decision_item_refs=[retention-decision, consent-decision].",
         "Retains the canonical decision map, map-referenced decision items and deferred uncertainty, and exactly one canonical resolution for each resolved item so every retained reference remains resolvable after compaction.",
@@ -1252,6 +1255,8 @@
           "durable route-clear consumption",
           "uncertainty_shape=bounded",
           "progressive_route_clear_consumption_state=consumed",
+          "progressive_artifact_retention_state=retained",
+          "Task state: completed does not qualify as final archival",
           "load retained progressive-discovery state",
           "route_clear_handoff remains resolvable",
           "loop_readiness_assessment",
@@ -1280,6 +1285,58 @@
           "max_iterations=1",
           "activate another decision after closure",
           "skip retained progressive state because uncertainty_shape=bounded"
+        ]
+      }
+    },
+    {
+      "id": "progressive-terminal-archival-omission",
+      "title": "Explicit terminal archival releases retained progressive artifacts",
+      "category": "progressive_discovery",
+      "purpose": "Checks that one typed terminal archival marker releases only the durable progressive artifact chain while medium+ Requirement Acceptance Maps remain independently required.",
+      "prompt": "A small completed task has consumed route clearance and closed sequence readiness. Final archival evidence now proves this exact task and decision map cannot continue and no retained reference can be resolved again. Record the typed archival transition and show what may be omitted.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "progressive_route_clear_consumption_state=consumed and progressive_sequence_readiness_state=closed; neither marker is pending or active.",
+        "Explicit terminal evidence establishes that continuation and reference resolution are impossible, rather than relying only on task completion."
+      ],
+      "expected_behavior": [
+        "Sets progressive_artifact_retention_state=terminally_archived only from explicit final archival/termination evidence that continuation and reference resolution are impossible.",
+        "States that route_clear_handoff may be omitted, loop_readiness_assessment may be omitted, and the retained canonical reference chain may be omitted.",
+        "States that source_route_clear_handoff_ref may be omitted and consumed_by_requirement_acceptance_map_ref may be omitted; medium+ Requirement Acceptance Map remains required independently.",
+        "Treats terminal archival as terminal and cannot revert to retained for the same task and decision map.",
+        "States that Task state: completed does not qualify as final archival on its own and refuses archival while route consumption is pending or sequence readiness is active."
+      ],
+      "pass_criteria": [
+        "The response relies on explicit terminal evidence rather than task completion.",
+        "The response releases the durable progressive chain and reciprocal refs.",
+        "The response preserves the independent medium+ map requirement.",
+        "The response makes the archival transition irreversible."
+      ],
+      "fail_signals": [
+        "Treats ordinary completion as terminal archival evidence.",
+        "Archives while a progressive marker remains pending or active.",
+        "Allows the same task and decision map to return to retained state.",
+        "Drops the independent medium+ Requirement Acceptance Map."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_artifact_retention_state=terminally_archived",
+          "explicit final archival/termination evidence",
+          "continuation and reference resolution are impossible",
+          "route_clear_handoff may be omitted",
+          "loop_readiness_assessment may be omitted",
+          "retained canonical reference chain may be omitted",
+          "source_route_clear_handoff_ref may be omitted",
+          "consumed_by_requirement_acceptance_map_ref may be omitted",
+          "terminal and cannot revert",
+          "Task state: completed does not qualify as final archival",
+          "medium+ Requirement Acceptance Map remains required"
+        ],
+        "forbidden_substrings": [
+          "Task state: completed is final archival evidence",
+          "progressive_artifact_retention_state can revert to retained",
+          "Sets progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending",
+          "Sets progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active"
         ]
       }
     },

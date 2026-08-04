@@ -1,12 +1,12 @@
 # Progressive Discovery
 
 Load this reference when `uncertainty_shape=progressive`,
-`progressive_route_clear_consumption_state in [pending, consumed]`, or
-`progressive_sequence_readiness_state in [active, closed]`. The retained
-markers remain active/resumable after `uncertainty_shape=bounded`; fully
-specified bounded work with `not_applicable` markers does not load this
-reference. It is a conditional Discover substate inside `assistant-workflow`,
-not a new skill or workflow phase.
+`progressive_route_clear_consumption_state in [pending, consumed]`,
+`progressive_sequence_readiness_state in [active, closed]`, or
+`progressive_artifact_retention_state=terminally_archived`. The durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained, so invalid carried state fails closed instead of releasing artifacts. Retained state remains active/resumable after
+`uncertainty_shape=bounded`; fully specified bounded work with `not_applicable`
+markers does not load this reference. It is a conditional Discover substate
+inside `assistant-workflow`, not a new skill or workflow phase.
 
 ## Routing
 
@@ -66,7 +66,8 @@ this state before another activation, keep the proposed item inactive as
 `status=blocked`, use `blocker_kind=readiness_exhausted`, and record a concrete
 reason and unblock condition rather than persisting a sequence-only stop. At
 route clear, create `route_clear_handoff` with `consumption_state=pending` and
-set `progressive_route_clear_consumption_state=pending` to mirror that handoff
+set `progressive_route_clear_consumption_state=pending` plus
+`progressive_artifact_retention_state=retained` to mirror that handoff
 while keeping typed `uncertainty_shape=progressive` /
 `progressive_discovery_state=route_clear` while preparing the bounded-Discover
 Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; that marker carries the handoff and preparation state rather than a completed map. The map must
@@ -78,12 +79,12 @@ source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref
 resolving back to the consuming map; these are reciprocal pointers, not equal
 values. Record that consumption_state=consumed and
 `progressive_route_clear_consumption_state=consumed` before the atomic typed-state
-transition to bounded/not_applicable. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed. The marker remains consumed after that
-transition so the map stays required. route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed]. After
-bounded/not_applicable, retain the consumed handoff and both reciprocal refs in
-active/resumable continuation. Omit it only after explicit task termination or
-final archival where continuation and reference resolution are impossible.
-While either durable marker is pending/consumed or active/closed, retain the
+transition to bounded/not_applicable. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained. The marker remains consumed after that
+transition. route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed] and progressive_artifact_retention_state=retained. After
+bounded/not_applicable, retained state keeps the consumed handoff and both
+reciprocal refs in active/resumable continuation.
+While `progressive_artifact_retention_state=retained` and either durable marker
+is pending/consumed or active/closed, retain the
 **retained canonical reference chain**: the `decision_map`; every referenced
 `decision_item` and `deferred_uncertainty`; and each canonical
 `decision_resolution` for a resolved item. The
@@ -91,9 +92,14 @@ While either durable marker is pending/consumed or active/closed, retain the
 `loop_readiness_assessment` reference must continue to resolve to those
 canonical artifacts across compaction and active/resumable continuation. The
 `decision_frontier` remains transient after live progressive state ends; it is
-not part of the retained chain. This entire chain may be omitted only after
-explicit final archival/termination makes continuation and reference resolution
-impossible.
+not part of the retained chain. Set
+`progressive_artifact_retention_state=terminally_archived`, and then omit the
+handoff, reciprocal refs, readiness assessment, and retained chain, only after
+explicit final archival/termination evidence proves continuation and reference
+resolution are impossible. `Task state: completed` does not qualify as that
+evidence. `terminally_archived` is invalid while route consumption is pending
+or sequence readiness is active, is terminal, and cannot revert to `retained`
+for the same task and decision map.
 Ordinary bounded small work stays
 `progressive_route_clear_consumption_state=not_applicable`.
 
@@ -111,7 +117,8 @@ first item was active. Before a
 second/sequential activation, record one ready `loop_readiness_assessment` with
 `loop_type=progressive_decision_sequence` in the existing journal/equivalent
 state tracking and atomically set
-`progressive_sequence_readiness_state=active`. Its stable `readiness_assessment_id` and
+`progressive_sequence_readiness_state=active` plus
+`progressive_artifact_retention_state=retained`. Its stable `readiness_assessment_id` and
 `progressive_decision_map_ref` identify one cumulative sequence across
 continuation or compaction. It must set immutable finite `max_iterations`,
 `cumulative_activation_count`, ordered unique append-only
@@ -130,9 +137,11 @@ compaction, continuation, route-clear preparation, third+ activation proposals,
 and durable route-clear consumption. Only then set
 `progressive_sequence_readiness_state=closed`. After
 progressive_sequence_readiness_state becomes closed, retain the same record
-while the task remains active/resumable or compacts; only explicit final
-archival/termination permits omission. Closed cannot reopen or reset the same
-decision-map record.
+while `progressive_artifact_retention_state=retained` and the task remains
+active/resumable or compacts. Only the explicit final archival/termination
+transition to `terminally_archived` permits omission. `Task state: completed`
+does not qualify, and terminally archived retention cannot revert. Closed cannot
+reopen or reset the same decision-map record.
 
 ## Safety and Clearance
 

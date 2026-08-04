@@ -16,7 +16,7 @@ Requirement Acceptance Map:
 - assumptions_and_defaults: [explicit inferred choices]
 - open_material_questions: [none before Plan, or unresolved blockers]
 - non_goals: [explicit exclusions]
-- source_route_clear_handoff_ref: [conditional: source route-clear handoff when progressive route clearance is consumed]
+- source_route_clear_handoff_ref: [conditional: source route-clear handoff when progressive route clearance is consumed and progressive_artifact_retention_state=retained]
 - entries:
   - requirement_id: R1
     source: [user request, accepted default, policy, or local contract]
@@ -44,7 +44,7 @@ Requirement Acceptance Map:
   explicit approved exclusion with a reason.
 - Updating a requirement updates this map first, then affected slices, tests,
   and handoffs. Do not silently fork acceptance criteria.
-- During small progressive route clearance, Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; use the pending handoff and its current decision references to prepare the completed map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed.
+- During small progressive route clearance, Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; use the pending handoff and its current decision references to prepare the completed map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained. Medium+ work still requires its map regardless of this progressive retention lifecycle.
 - When this map consumes progressive route clearance, its
   `source_route_clear_handoff_ref` resolves to the source handoff and that
   handoff's `consumed_by_requirement_acceptance_map_ref` resolves back to this
@@ -53,3 +53,11 @@ Requirement Acceptance Map:
   exclusions appear in non_goals or entries with status=approved_exclusion; and
   each acceptance_seed becomes an entries[].acceptance_criterion with binary
   acceptance.
+- Keep both reciprocal references while
+  `progressive_artifact_retention_state=retained`. After explicit final
+  archival/termination evidence proves continuation and reference resolution
+  are impossible, set
+  `progressive_artifact_retention_state=terminally_archived`; then the
+  progressive reciprocal refs may be omitted even when a medium+ Requirement
+  Acceptance Map itself remains required. `Task state: completed` does not
+  qualify as final archival, and `terminally_archived` cannot revert.

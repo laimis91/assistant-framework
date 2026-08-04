@@ -778,9 +778,9 @@ test_start "workflow allows a pending route-clear handoff before requirement-map
 handoff_consumption_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
-route_clear_map_condition='size in [medium, large, mega] or progressive_route_clear_consumption_state == consumed'
-route_clear_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed]'
-route_clear_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or progressive_route_clear_consumption_state in [pending, consumed]'
+route_clear_map_condition='size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)'
+route_clear_invariant_condition='progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed]'
+route_clear_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])'
 route_clear_pending_map_term='Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending'
 route_clear_consumed_map_term='Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed'
 
@@ -942,8 +942,8 @@ fake_index="$route_clear_mutation_dir/index.yaml"
 fake_input="$route_clear_mutation_dir/input.yaml"
 fake_output="$route_clear_mutation_dir/output.yaml"
 sed 's/progressive_route_clear_consumption_state/progressive_route_clear_consumption_state_removed/g' "$index_contract" >"$fake_index"
-sed 's/ or progressive_route_clear_consumption_state == consumed//' "$input_contract" >"$fake_input"
-sed 's/ or progressive_route_clear_consumption_state == consumed//' "$output_contract" >"$fake_output"
+sed 's/ and progressive_artifact_retention_state != terminally_archived//' "$input_contract" >"$fake_input"
+sed 's/ and progressive_artifact_retention_state != terminally_archived//' "$output_contract" >"$fake_output"
 
 if progressive_shape_selector_has_name "progressive_route_clear_consumption_state" "$fake_index" \
     || top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$fake_input" \
@@ -951,7 +951,7 @@ if progressive_shape_selector_has_name "progressive_route_clear_consumption_stat
     handoff_consumption_missing+=("typed route-clear marker, progressive selector, and post-transition map requiredness mutation must not pass")
 fi
 
-sed 's/ or progressive_route_clear_consumption_state in \[pending, consumed\]//' "$output_contract" >"$fake_output"
+sed 's/ or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in \[pending, consumed\])//' "$output_contract" >"$fake_output"
 if output_artifact_has_exact_property_value "route_clear_handoff" "condition" "$route_clear_handoff_condition" "$fake_output"; then
     handoff_consumption_missing+=("post-consumption handoff omission mutation must not pass")
 fi
@@ -969,7 +969,7 @@ if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_BLOCKED_RECOVERY" "$i
     recovery_missing+=("contracts/index.yaml workflow-phase-invariants.names missing INV_PROGRESSIVE_BLOCKED_RECOVERY")
 fi
 
-decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$decision_resolution_condition" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
@@ -1082,7 +1082,7 @@ eval_fixture="$workflow_dir/evals/cases.json"
 journal_template="$workflow_dir/references/task-journal-template.md"
 plan_template="$workflow_dir/references/plan-template.md"
 deferred_unlock_validation='Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status is unlocked, retired, or excluded, that predecessor has status=resolved and maps exactly once to canonical decision_resolution.decision_item_ref. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification.'
-mapping_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+mapping_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 mapping_recomputation_condition='uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == mapping and any decision_item has status=resolved))'
 
 for term in "type: string" "required: true" "Resolves exactly once to a canonical decision_item.decision_id."; do
@@ -1246,8 +1246,8 @@ eval_fixture="$workflow_dir/evals/cases.json"
 plan_template="$workflow_dir/references/plan-template.md"
 task_journal_template="$workflow_dir/references/task-journal-template.md"
 repeat_readiness_condition='uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation'
-readiness_lifecycle_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or progressive_sequence_readiness_state in [active, closed]'
-readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or when progressive_sequence_readiness_state in [active, closed]'
+readiness_lifecycle_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
+readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
 
 for term in \
     "type: enum" \
@@ -1689,8 +1689,8 @@ fi
 test_start "workflow retains closed progressive readiness records across resumable continuation"
 closed_readiness_missing=()
 closed_readiness_case="progressive-closed-readiness-retention"
-closed_readiness_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or progressive_sequence_readiness_state in [active, closed]'
-closed_readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or when progressive_sequence_readiness_state in [active, closed]'
+closed_readiness_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
+closed_readiness_artifact_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
 closed_readiness_terms=(
     "progressive_sequence_readiness_state=closed"
     "durable route-clear consumption"
@@ -1728,9 +1728,9 @@ fi
 for file_and_term in \
     "$progressive_ref::progressive_sequence_readiness_state becomes closed" \
     "$progressive_ref::task remains active/resumable or compacts" \
-    "$progressive_ref::archival/termination permits omission" \
-    "$task_journal_template::After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission." \
-    "$plan_template::After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination permits omission."; do
+    "$progressive_ref::explicit final archival/termination" \
+    "$task_journal_template::only explicit final archival/termination transition to terminally_archived permits omission" \
+    "$plan_template::only explicit final archival/termination transition to terminally_archived permits omission"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if ! p0p4_contains_text "$file" "$term"; then
@@ -1929,9 +1929,9 @@ test_start "workflow retains canonical progressive reference chain after bounded
 retained_chain_missing=()
 retained_chain_case="progressive-closed-readiness-retention"
 retained_chain_invariant="INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN"
-retained_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
-retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
-retained_chain_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+retained_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+retained_chain_invariant_condition='progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed])'
 
 for artifact in decision_map decision_item deferred_uncertainty; do
     if ! output_artifact_has_exact_property_value "$artifact" "condition" "$retained_chain_condition" "$output_contract"; then
@@ -2127,6 +2127,249 @@ else
     fail "progressive decision dependency-order contract missing: ${dependency_order_missing[*]}"
 fi
 
+test_start "workflow encodes final archival in progressive artifact retention state"
+archival_retention_missing=()
+archival_retention_case="progressive-terminal-archival-omission"
+archival_retained_case="progressive-closed-readiness-retention"
+archival_marker="progressive_artifact_retention_state"
+archival_map_condition='size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)'
+archival_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+archival_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+archival_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])'
+archival_readiness_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
+archival_repeat_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
+archival_route_invariant_condition='progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed]'
+archival_chain_invariant_condition='progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed])'
+archival_state_invariant="INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE"
+archival_state_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed] or progressive_artifact_retention_state == terminally_archived'
+
+for term in \
+    "type: enum" \
+    "enum_values: [not_applicable, retained, terminally_archived]" \
+    "default: not_applicable" \
+    "explicit final archival/termination evidence" \
+    "continuation and reference resolution are impossible" \
+    "Task state: completed" \
+    "cannot revert"; do
+    if ! input_field_has_text "$archival_marker" "$term" "$input_contract"; then
+        archival_retention_missing+=("contracts/input.yaml $archival_marker missing $term")
+    fi
+done
+
+if ! progressive_shape_selector_has_name "$archival_marker" "$index_contract"; then
+    archival_retention_missing+=("contracts/index.yaml workflow-progressive-discovery-shape.names missing $archival_marker")
+fi
+
+for contract in "$input_contract" "$output_contract"; do
+    if ! top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$archival_map_condition" "$contract"; then
+        archival_retention_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.condition does not distinguish retained consumed state from terminal archival")
+    fi
+    if ! output_artifact_field_has_text "requirement_acceptance_map" "source_route_clear_handoff_ref" 'condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"' "$contract"; then
+        archival_retention_missing+=("${contract#$FRAMEWORK_DIR/} requirement_acceptance_map.source_route_clear_handoff_ref remains required after terminal archival")
+    fi
+done
+
+if ! phase_gate_has_exact_property_value "D_REQUIREMENT_ACCEPTANCE_MAP" "condition" "$archival_map_condition" "$phase_gates"; then
+    archival_retention_missing+=("contracts/phase-gates.yaml D_REQUIREMENT_ACCEPTANCE_MAP.condition does not preserve medium+ maps while releasing archived small progressive maps")
+fi
+
+for artifact in decision_map decision_item deferred_uncertainty; do
+    if ! output_artifact_has_exact_property_value "$artifact" "condition" "$archival_chain_condition" "$output_contract"; then
+        archival_retention_missing+=("contracts/output.yaml $artifact does not gate durable retention on the typed retained marker")
+    fi
+done
+if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$archival_resolution_condition" "$output_contract"; then
+    archival_retention_missing+=("contracts/output.yaml decision_resolution does not gate durable retention on the typed retained marker")
+fi
+if ! output_artifact_has_exact_property_value "route_clear_handoff" "condition" "$archival_handoff_condition" "$output_contract"; then
+    archival_retention_missing+=("contracts/output.yaml route_clear_handoff does not permit typed terminal archival omission")
+fi
+if ! output_artifact_has_exact_property_value "loop_readiness_assessment" "condition" "$archival_readiness_condition" "$output_contract"; then
+    archival_retention_missing+=("contracts/output.yaml loop_readiness_assessment does not permit typed terminal archival omission")
+fi
+if ! output_artifact_field_has_text "route_clear_handoff" "consumed_by_requirement_acceptance_map_ref" 'condition: "consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"' "$output_contract"; then
+    archival_retention_missing+=("contracts/output.yaml route_clear_handoff.consumed_by_requirement_acceptance_map_ref remains required after terminal archival")
+fi
+
+for contract_item in D_PROGRESSIVE_REPEAT_READINESS INV_PROGRESSIVE_REPEAT_READINESS; do
+    if [[ "$contract_item" == D_* ]]; then
+        if ! phase_gate_has_exact_property_value "$contract_item" "condition" "$archival_repeat_condition" "$phase_gates"; then
+            archival_retention_missing+=("contracts/phase-gates.yaml $contract_item.condition does not gate durable readiness on retained state")
+        fi
+    elif ! workflow_invariant_has_exact_property_value "$contract_item" "condition" "$archival_repeat_condition" "$phase_gates"; then
+        archival_retention_missing+=("contracts/phase-gates.yaml $contract_item.condition does not gate durable readiness on retained state")
+    fi
+done
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_ROUTE_CLEAR" "condition" "$archival_route_invariant_condition" "$phase_gates"; then
+    archival_retention_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_ROUTE_CLEAR.condition does not gate durable handoff retention on retained state")
+fi
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN" "condition" "$archival_chain_invariant_condition" "$phase_gates"; then
+    archival_retention_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN.condition does not permit typed terminal archival omission")
+fi
+
+if ! workflow_invariant_selector_has_name "$archival_state_invariant" "$index_contract"; then
+    archival_retention_missing+=("contracts/index.yaml workflow-phase-invariants.names missing $archival_state_invariant")
+fi
+if ! workflow_invariant_has_exact_property_value "$archival_state_invariant" "condition" "$archival_state_invariant_condition" "$phase_gates"; then
+    archival_retention_missing+=("contracts/phase-gates.yaml $archival_state_invariant.condition does not validate every durable or terminal retention state")
+fi
+for term in \
+    "not_applicable" \
+    "pending or consumed" \
+    "active or closed" \
+    "explicit final archival/termination evidence" \
+    "Task state: completed" \
+    "consumed" \
+    "closed" \
+    "compaction" \
+    "cannot revert"; do
+    if ! workflow_invariant_has_text "$archival_state_invariant" "$term" "$phase_gates"; then
+        archival_retention_missing+=("contracts/phase-gates.yaml $archival_state_invariant missing $term")
+    fi
+done
+
+for file in \
+    "$workflow_dir/SKILL.md" \
+    "$progressive_ref" \
+    "$requirement_map_ref" \
+    "$journal_template" \
+    "$workflow_dir/references/plan-template.md"; do
+    for term in \
+        "$archival_marker" \
+        "terminally_archived" \
+        "Task state: completed" \
+        "explicit final archival/termination"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            archival_retention_missing+=("${file#$FRAMEWORK_DIR/} missing archival retention guidance $term")
+        fi
+    done
+done
+
+for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+    for term in \
+        "durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained" \
+        "progressive_artifact_retention_state=terminally_archived"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            archival_retention_missing+=("${file#$FRAMEWORK_DIR/} missing fail-closed progressive retention routing term $term")
+        fi
+    done
+done
+
+for field in loop_readiness_assessment progressive_artifact_retention_state loop_harness_routing; do
+    nested_count="$(grep -Ec '^  - '"$field"':' "$workflow_dir/references/plan-template.md" || true)"
+    top_level_count="$(grep -Ec '^- '"$field"':' "$workflow_dir/references/plan-template.md" || true)"
+    if [[ "$nested_count" -ne 1 || "$top_level_count" -ne 1 ]]; then
+        archival_retention_missing+=("references/plan-template.md $field must appear once as a nested sibling and once as a top-level sibling")
+    fi
+done
+
+for term in \
+    "progressive_artifact_retention_state=retained" \
+    "Task state: completed does not qualify as final archival"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$archival_retained_case" "$term"; then
+        archival_retention_missing+=("eval case $archival_retained_case missing retained-state expectation $term")
+    fi
+done
+
+for case_id in progressive-resolution-route-clear progressive-sequential-resolution-readiness; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$case_id" "progressive_artifact_retention_state=retained"; then
+        archival_retention_missing+=("eval case $case_id missing progressive_artifact_retention_state=retained")
+    fi
+done
+
+archival_required_terms=(
+    "progressive_artifact_retention_state=terminally_archived"
+    "explicit final archival/termination evidence"
+    "continuation and reference resolution are impossible"
+    "route_clear_handoff may be omitted"
+    "loop_readiness_assessment may be omitted"
+    "retained canonical reference chain may be omitted"
+    "source_route_clear_handoff_ref may be omitted"
+    "consumed_by_requirement_acceptance_map_ref may be omitted"
+    "terminal and cannot revert"
+    "Task state: completed does not qualify as final archival"
+    "medium+ Requirement Acceptance Map remains required"
+)
+archival_forbidden_terms=(
+    "Task state: completed is final archival evidence"
+    "progressive_artifact_retention_state can revert to retained"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active"
+)
+for term in "${archival_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$archival_retention_case" "$term"; then
+        archival_retention_missing+=("eval case $archival_retention_case missing machine expectation $term")
+    fi
+done
+for term in "${archival_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$archival_retention_case" "$term"; then
+        archival_retention_missing+=("eval case $archival_retention_case does not forbid $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$archival_retention_case" \
+    "progressive-terminal-archival" \
+    "${#archival_forbidden_terms[@]}" \
+    "${archival_forbidden_terms[@]}"; then
+    archival_retention_missing+=("real eval enforcement must reject every keyword-complete invalid terminal-archival claim")
+fi
+
+archival_required_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-archival-required.XXXXXX")"
+archival_required_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-archival-required-output.XXXXXX")"
+p0p4_register_cleanup "$archival_required_eval_dir" "$archival_required_eval_output"
+write_workflow_eval_responses "$archival_required_eval_dir" "$eval_fixture"
+for case_and_term in \
+    "progressive-resolution-route-clear::progressive_artifact_retention_state=retained" \
+    "progressive-sequential-resolution-readiness::progressive_artifact_retention_state=retained" \
+    "progressive-terminal-archival-omission::medium+ Requirement Acceptance Map remains required"; do
+    case_id="${case_and_term%%::*}"
+    term="${case_and_term#*::}"
+    jq -r --arg case_id "$case_id" --arg term "$term" '
+        .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+        select(. != $term)
+    ' "$eval_fixture" >"$archival_required_eval_dir/assistant-workflow/$case_id.txt"
+done
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+archival_required_expected_pass_count=$((workflow_case_count - 3))
+archival_required_eval_status=0
+if run_workflow_eval "$archival_required_eval_dir" "$archival_required_eval_output"; then
+    archival_required_eval_status=1
+fi
+if [[ "$archival_required_eval_status" -ne 0 ]]; then
+    archival_retention_missing+=("required-term omission corpus unexpectedly passed")
+fi
+if ! grep -Fq "Summary: total=$workflow_case_count passed=$archival_required_expected_pass_count failed=3" "$archival_required_eval_output"; then
+    archival_retention_missing+=("required-term omission corpus must fail exactly three cases")
+fi
+for case_id in progressive-resolution-route-clear progressive-sequential-resolution-readiness progressive-terminal-archival-omission; do
+    if ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$archival_required_eval_output"; then
+        archival_retention_missing+=("required-term omission corpus did not fail $case_id")
+    fi
+done
+if grep -Fq 'forbidden substring hit' "$archival_required_eval_output"; then
+    archival_retention_missing+=("required-term omission corpus failed through an unrelated forbidden substring")
+fi
+
+archival_denial_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-archival-denial.XXXXXX")"
+archival_denial_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-archival-denial-output.XXXXXX")"
+p0p4_register_cleanup "$archival_denial_eval_dir" "$archival_denial_eval_output"
+write_workflow_eval_responses "$archival_denial_eval_dir" "$eval_fixture"
+printf '%s\n' \
+    "Do not set progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending." \
+    "Do not set progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active." \
+    >>"$archival_denial_eval_dir/assistant-workflow/$archival_retention_case.txt"
+if ! run_workflow_eval "$archival_denial_eval_dir" "$archival_denial_eval_output" \
+    || ! grep -Fq "Summary: total=$workflow_case_count passed=$workflow_case_count failed=0" "$archival_denial_eval_output"; then
+    archival_retention_missing+=("compliant terminal-archival denial wording must pass the real eval grader")
+fi
+
+if [[ "${#archival_retention_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive terminal-archival retention contract missing: ${archival_retention_missing[*]}"
+fi
+
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"
 alignment_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
@@ -2200,10 +2443,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 13 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 16 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 13 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 16 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
