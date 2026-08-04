@@ -1494,6 +1494,198 @@ else
     fail "progressive cumulative readiness contract missing: ${readiness_missing[*]}"
 fi
 
+test_start "workflow persists first activation provenance before readiness starts"
+first_activation_missing=()
+first_activation_case="progressive-sequential-resolution-readiness"
+first_activation_invariant="INV_PROGRESSIVE_ACTIVATION_PROVENANCE"
+
+for term in \
+    "type: int" \
+    "required: conditional" \
+    "item has ever been activated" \
+    "set atomically on first activation" \
+    "positive" \
+    "immutable" \
+    "unique" \
+    "retained canonical decision-map history" \
+    "outside current-map refs" \
+    "Never-activated items omit" \
+    "superseded" \
+    "excluded" \
+    "compaction" \
+    "activated_decision_item_refs"; do
+    if ! output_artifact_field_has_text "decision_item" "activation_ordinal" "$term" "$output_contract"; then
+        first_activation_missing+=("contracts/output.yaml decision_item.activation_ordinal missing $term")
+    fi
+done
+
+if ! workflow_invariant_selector_has_name "$first_activation_invariant" "$index_contract"; then
+    first_activation_missing+=("contracts/index.yaml workflow-phase-invariants.names missing $first_activation_invariant")
+fi
+if ! workflow_invariant_has_exact_property_value "$first_activation_invariant" "condition" "uncertainty_shape == progressive" "$phase_gates"; then
+    first_activation_missing+=("contracts/phase-gates.yaml $first_activation_invariant condition must cover every progressive state")
+fi
+for term in \
+    "activation_ordinal" \
+    "Every decision item that has ever been activated" \
+    "first activation" \
+    "atomically" \
+    "immutable" \
+    "never-activated items omit" \
+    "unique across retained canonical decision-map history" \
+    "outside current-map refs" \
+    "superseded" \
+    "excluded" \
+    "compaction" \
+    "before the second" \
+    "activated_decision_item_refs"; do
+    if ! workflow_invariant_has_text "$first_activation_invariant" "$term" "$phase_gates"; then
+        first_activation_missing+=("contracts/phase-gates.yaml $first_activation_invariant missing $term")
+    fi
+done
+
+for file in \
+    "$progressive_ref" \
+    "$workflow_dir/references/task-journal-template.md" \
+    "$workflow_dir/references/plan-template.md"; do
+    for term in "activation_ordinal" "first activation" "before the second" "compaction"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            first_activation_missing+=("${file#$FRAMEWORK_DIR/} missing first-activation persistence term $term")
+        fi
+    done
+done
+
+first_activation_required_terms=(
+    "activation_ordinal=1"
+    "first activation provenance is set atomically"
+    "retained after superseded/excluded status and compaction before the second proposal"
+    "reconstructs activated_decision_item_refs=[retention-decision] before second activation"
+)
+first_activation_forbidden_terms=(
+    "first activation provenance is omitted before the second proposal"
+    "activation_ordinal is discarded after superseded/excluded compaction"
+)
+
+for term in "${first_activation_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$first_activation_case" "$term"; then
+        first_activation_missing+=("eval case $first_activation_case missing machine expectation $term")
+    fi
+done
+for term in "${first_activation_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$first_activation_case" "$term"; then
+        first_activation_missing+=("eval case $first_activation_case does not forbid $term")
+    fi
+done
+
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$first_activation_case" \
+    "progressive-first-activation" \
+    "${#first_activation_forbidden_terms[@]}" \
+    "${first_activation_forbidden_terms[@]}"; then
+    first_activation_missing+=("real eval enforcement must reject every keyword-complete first-activation omission")
+fi
+
+if [[ "${#first_activation_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive first-activation provenance contract missing: ${first_activation_missing[*]}"
+fi
+
+test_start "workflow makes globally blocked progressive state canonically recoverable"
+global_blocked_missing=()
+global_blocked_case="progressive-readiness-exhaustion-blocked-recovery"
+global_blocked_invariant="INV_PROGRESSIVE_BLOCKED_RECOVERY"
+global_blocked_condition='uncertainty_shape == progressive and (progressive_discovery_state == blocked or (progressive_discovery_state in [resolving, route_clear] and any decision_item has status=blocked))'
+
+for term in \
+    "progressive_discovery_state == blocked" \
+    "non-empty" \
+    "status=blocked" \
+    "blocker_kind" \
+    "blocker_reason" \
+    "unblock_condition"; do
+    if ! output_artifact_field_has_text "decision_frontier" "blocked_item_refs" "$term" "$output_contract"; then
+        global_blocked_missing+=("contracts/output.yaml decision_frontier.blocked_item_refs missing global recovery rule $term")
+    fi
+done
+
+if ! workflow_invariant_has_exact_property_value "$global_blocked_invariant" "condition" "$global_blocked_condition" "$phase_gates"; then
+    global_blocked_missing+=("contracts/phase-gates.yaml $global_blocked_invariant must cover global blocked state without requiring decision_frontier during mapping")
+fi
+for term in \
+    "progressive_discovery_state=blocked" \
+    "at least one" \
+    "blocked_item_refs" \
+    "status=blocked" \
+    "blocker_kind" \
+    "blocker_reason" \
+    "unblock_condition"; do
+    if ! workflow_invariant_has_text "$global_blocked_invariant" "$term" "$phase_gates"; then
+        global_blocked_missing+=("contracts/phase-gates.yaml $global_blocked_invariant missing $term")
+    fi
+done
+
+for term in "status=blocked" "readiness_exhausted" "blocked_item_refs"; do
+    if ! phase_gate_has_text "D_PROGRESSIVE_REPEAT_READINESS" "$term" "$phase_gates"; then
+        global_blocked_missing+=("contracts/phase-gates.yaml D_PROGRESSIVE_REPEAT_READINESS missing blocked recovery term $term")
+    fi
+done
+
+for file in \
+    "$progressive_ref" \
+    "$workflow_dir/references/task-journal-template.md" \
+    "$workflow_dir/references/plan-template.md"; do
+    for term in "progressive_discovery_state=blocked" "non-empty blocked_item_refs" "readiness_exhausted"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            global_blocked_missing+=("${file#$FRAMEWORK_DIR/} missing global-blocked recovery term $term")
+        fi
+    done
+done
+
+global_blocked_required_terms=(
+    "progressive_discovery_state=blocked"
+    "status=blocked"
+    "blocker_kind=readiness_exhausted"
+    "blocker_reason"
+    "unblock_condition"
+    "blocked_item_refs=[consent-decision]"
+    "consent-decision remains inactive"
+    "activation_ordinal is omitted because consent-decision was never activated"
+)
+global_blocked_forbidden_terms=(
+    "progressive_discovery_state=blocked with blocked_item_refs=[]"
+    "readiness exhaustion blocks the sequence without a blocked decision item"
+    "activate consent-decision despite readiness exhaustion"
+    "consent-decision receives activation_ordinal despite never being activated"
+)
+
+for term in "${global_blocked_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$global_blocked_case" "$term"; then
+        global_blocked_missing+=("eval case $global_blocked_case missing machine expectation $term")
+    fi
+done
+for term in "${global_blocked_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$global_blocked_case" "$term"; then
+        global_blocked_missing+=("eval case $global_blocked_case does not forbid $term")
+    fi
+done
+
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$global_blocked_case" \
+    "progressive-global-blocked" \
+    "${#global_blocked_forbidden_terms[@]}" \
+    "${global_blocked_forbidden_terms[@]}"; then
+    global_blocked_missing+=("real eval enforcement must reject every keyword-complete globally blocked recovery omission")
+fi
+
+if [[ "${#global_blocked_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive global blocked recovery contract missing: ${global_blocked_missing[*]}"
+fi
+
 test_start "workflow retains closed progressive readiness records across resumable continuation"
 closed_readiness_missing=()
 closed_readiness_case="progressive-closed-readiness-retention"
@@ -2008,10 +2200,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 11 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 13 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 11 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 13 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

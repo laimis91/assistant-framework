@@ -1554,8 +1554,8 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Typed register item for a precise progressive Discover decision"
-    validation: "Contains interaction_mode, dependencies, and status. dependencies are ordered unique decision_id refs; every dependency resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. An eligible or active item requires every dependency status=resolved. status=blocked additionally requires blocker_kind, blocker_reason, and unblock_condition. At most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
-    on_fail: "Record the missing decision item fields, including typed blocker recovery state when blocked; keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
+    validation: "Contains interaction_mode, dependencies, and status. dependencies are ordered unique decision_id refs; every dependency resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. An eligible or active item requires every dependency status=resolved. Every item that has ever been activated sets activation_ordinal atomically on first activation; the ordinal remains positive, immutable, and unique across retained canonical decision-map history, including activation-marked items outside current-map refs, and is retained across resolved, blocked, superseded, or excluded status and compaction. Before second activation, ascending activation_ordinal values reconstruct the ordered unique activated_decision_item_refs. Never-activated items omit activation_ordinal. status=blocked additionally requires blocker_kind, blocker_reason, and unblock_condition. At most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
+    on_fail: "Record the missing decision item fields, restore first-activation provenance before another activation, including typed blocker recovery state when blocked; keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
     min_items: 1
     object_fields:
       - name: decision_id
@@ -1576,6 +1576,11 @@ artifacts:
         type: enum
         required: true
         enum_values: [pending, active, resolved, blocked, superseded, excluded]
+      - name: activation_ordinal
+        type: int
+        required: conditional
+        condition: "item has ever been activated"
+        validation: "Required as a positive ordinal set atomically on first activation; immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs. Retain it across resolved, blocked, superseded, or excluded status and compaction. Never-activated items omit it. Before second activation, ascending activation_ordinal values reconstruct exactly the ordered unique loop_readiness_assessment.activated_decision_item_refs."
       - name: blocker_kind
         type: enum
         required: conditional
@@ -1629,8 +1634,8 @@ artifacts:
     required: conditional
     condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear, blocked]"
     description: "Current eligible, active, and blocked progressive decision state"
-    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. eligible_item_refs and active_item_ref resolve only to decision_item entries whose dependencies each resolve exactly once to canonical decision_item.decision_id values with status=resolved. The blocked_item_refs resolve to decision_item entries carrying blocker_kind, blocker_reason, and unblock_condition. It allows at most one active item while multiple sequential resolutions per session are allowed."
-    on_fail: "Recompute the frontier, leave no more than one active item, and preserve each blocked item reference with its typed reason and unblock condition."
+    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. eligible_item_refs and active_item_ref resolve only to decision_item entries whose dependencies each resolve exactly once to canonical decision_item.decision_id values with status=resolved. The blocked_item_refs resolve to decision_item entries carrying status=blocked, blocker_kind, blocker_reason, and unblock_condition. When progressive_discovery_state == blocked, blocked_item_refs is non-empty and resolves to at least one canonical status=blocked item. It allows at most one active item while multiple sequential resolutions per session are allowed."
+    on_fail: "Recompute the frontier, leave no more than one active item, and preserve each blocked item reference with its typed reason and unblock condition. If progressive_discovery_state is blocked, restore at least one canonical blocked item and its non-empty reference before resumption."
     object_fields:
       - name: computed_from
         type: string[]
@@ -1645,6 +1650,7 @@ artifacts:
       - name: blocked_item_refs
         type: string[]
         required: true
+        validation: "When progressive_discovery_state == blocked, this collection is non-empty and every ref resolves exactly once to a canonical decision_item with status=blocked, blocker_kind, blocker_reason, and unblock_condition. Empty is allowed only while the progressive state is not blocked and no item is blocked."
 
   - name: decision_resolution
     type: object[]

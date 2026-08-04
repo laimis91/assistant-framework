@@ -60,6 +60,11 @@ unblock_condition. The blocked_item_refs resolve to decision_item entries so a
 resumed journal knows why work stopped and what evidence or state change permits
 retry. If a later decision becomes blocked after another resolves, keep the
 canonical decision resolutions so resumption preserves the prior history. At
+`progressive_discovery_state=blocked`, require non-empty blocked_item_refs to at
+least one canonical `status=blocked` item. When readiness exhaustion selects
+this state before another activation, keep the proposed item inactive as
+`status=blocked`, use `blocker_kind=readiness_exhausted`, and record a concrete
+reason and unblock condition rather than persisting a sequence-only stop. At
 route clear, create `route_clear_handoff` with `consumption_state=pending` and
 set `progressive_route_clear_consumption_state=pending` to mirror that handoff
 while keeping typed `uncertainty_shape=progressive` /
@@ -94,7 +99,15 @@ Ordinary bounded small work stays
 
 ## Repeated Resolution Readiness
 
-One active item and multiple sequential resolutions remain allowed. Before a
+One active item and multiple sequential resolutions remain allowed. On first
+activation, set a positive `activation_ordinal` atomically on the canonical
+decision item; never-activated items omit it. Retain that immutable ordinal
+across resolved, blocked, superseded, or excluded status and compaction.
+Ordinals stay unique across retained canonical decision-map history, including
+activation-marked items outside current-map refs. Use ascending ordinals before
+the second activation to reconstruct the ordered unique
+`activated_decision_item_refs`, so status alone never has to prove that the
+first item was active. Before a
 second/sequential activation, record one ready `loop_readiness_assessment` with
 `loop_type=progressive_decision_sequence` in the existing journal/equivalent
 state tracking and atomically set

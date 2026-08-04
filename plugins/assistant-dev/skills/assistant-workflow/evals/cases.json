@@ -1146,15 +1146,16 @@
       "id": "progressive-sequential-resolution-readiness",
       "title": "Sequential progressive resolution is bounded by readiness evidence",
       "category": "progressive_discovery",
-      "purpose": "Checks that readiness is established before activation two after a superseded/excluded first activation, then retained as one bounded record through pause, blocked state, compaction, continuation, and a third+ proposal.",
-      "prompt": "The first progressive retention decision was activated, then became superseded/excluded before a canonical resolution; its ref remains in cumulative activation history. A consent decision is eligible. Before second activation, establish the bounded readiness state and assessment atomically. That second activation then pauses, compacts, and resumes in a blocked state. A third decision is now eligible. Show the same record needed for that third+ activation; do not turn the decision frontier into an open-ended loop.",
+      "purpose": "Checks that first-activation provenance survives superseded/excluded compaction before readiness exists, then readiness is established for activation two and retained as one bounded record through later continuation.",
+      "prompt": "The first progressive retention decision was activated with activation_ordinal=1, then became superseded/excluded before a canonical resolution. The workflow compacts before any second activation is proposed. Preserve enough provenance to reconstruct its cumulative activation history. A consent decision is then eligible. Before second activation, establish the bounded readiness state and assessment atomically. That second activation later pauses, compacts, and resumes in a blocked state. A third decision is now eligible. Show the same record needed for that third+ activation; do not turn the decision frontier into an open-ended loop.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
-        "The superseded/excluded first activated item is not resolved and remains in ordered unique append-only activated_decision_item_refs.",
+        "Before readiness exists, the superseded/excluded first activated item retains activation_ordinal=1 through compaction even if it leaves current-map refs.",
         "Before second activation, progressive_sequence_readiness_state=active and loop_readiness_assessment must be set atomically; the same record must retain its identity, map, immutable cap, and history after pause, compaction, and blocked continuation. No route-clear handoff exists yet because the dependent item remains active."
       ],
       "expected_behavior": [
-        "Before second activation, atomically sets progressive_sequence_readiness_state=active with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
+        "The first activation provenance is set atomically as activation_ordinal=1 and retained after superseded/excluded status and compaction before the second proposal.",
+        "Before second activation, reconstructs activated_decision_item_refs=[retention-decision] before second activation, then atomically sets progressive_sequence_readiness_state=active with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
         "Retains the same record with stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection through pause, blocked state, compaction, continuation, and third+ activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
         "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
         "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
@@ -1187,6 +1188,10 @@
           "first activation counted",
           "ordered unique append-only activated_decision_item_refs",
           "superseded/excluded first activated item",
+          "activation_ordinal=1",
+          "first activation provenance is set atomically",
+          "retained after superseded/excluded status and compaction before the second proposal",
+          "reconstructs activated_decision_item_refs=[retention-decision] before second activation",
           "prior activated items may be resolved, superseded, or excluded",
           "cumulative activated refs remain append-only",
           "superseded/excluded refs are not classified as resolved",
@@ -1205,7 +1210,9 @@
         "forbidden_substrings": [
           "activate every unlocked item",
           "reset the iteration cap",
-          "continue after no-progress"
+          "continue after no-progress",
+          "first activation provenance is omitted before the second proposal",
+          "activation_ordinal is discarded after superseded/excluded compaction"
         ]
       }
     },
@@ -1411,6 +1418,54 @@
           "retry the blocked decision",
           "advance to Plan",
           "drop the prior resolution"
+        ]
+      }
+    },
+    {
+      "id": "progressive-readiness-exhaustion-blocked-recovery",
+      "title": "Readiness exhaustion persists canonical blocked recovery",
+      "category": "progressive_discovery",
+      "purpose": "Checks that sequence-level readiness exhaustion cannot persist global progressive blocked state without a canonical blocked decision and typed recovery path.",
+      "prompt": "A retained progressive sequence has cumulative_activation_count equal to max_iterations before consent-decision can be activated. Fail closed without activating it, persist an actionable blocked snapshot for compaction and resumption, and do not advance to planning.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive; the sequence readiness record is retained and its finite activation cap is exhausted.",
+        "consent-decision is the proposed next item but has not been activated."
+      ],
+      "expected_behavior": [
+        "Sets progressive_discovery_state=blocked while consent-decision remains inactive as status=blocked.",
+        "Omits activation_ordinal because consent-decision was never activated before readiness exhaustion.",
+        "Records blocker_kind=readiness_exhausted, a concrete blocker_reason, and an unblock_condition on the canonical decision item.",
+        "Persists blocked_item_refs=[consent-decision] so the global blocked snapshot remains actionable after compaction.",
+        "Does not activate the item, reset the cap, or enter Decompose or Plan."
+      ],
+      "pass_criteria": [
+        "The global blocked state has a canonical non-empty recovery reference.",
+        "The proposed item is not activated and has no activation ordinal after readiness exhaustion.",
+        "Resumption knows why the sequence stopped and what permits recovery."
+      ],
+      "fail_signals": [
+        "Persists global blocked state with no blocked item.",
+        "Activates the proposed decision despite the exhausted cap.",
+        "Assigns activation provenance to the never-activated proposed decision.",
+        "Stores no concrete unblock condition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_discovery_state=blocked",
+          "status=blocked",
+          "blocker_kind=readiness_exhausted",
+          "blocker_reason",
+          "unblock_condition",
+          "blocked_item_refs=[consent-decision]",
+          "consent-decision remains inactive",
+          "activation_ordinal is omitted because consent-decision was never activated"
+        ],
+        "forbidden_substrings": [
+          "progressive_discovery_state=blocked with blocked_item_refs=[]",
+          "readiness exhaustion blocks the sequence without a blocked decision item",
+          "activate consent-decision despite readiness exhaustion",
+          "consent-decision receives activation_ordinal despite never being activated"
         ]
       }
     },
