@@ -893,12 +893,12 @@
       ],
       "expected_behavior": [
         "Classifies the uncertainty as dependency-shaped and records uncertainty_shape=progressive.",
-        "Creates a decision_map with active decisions, deferred_uncertainty, and a decision_frontier tied to unlock conditions.",
+        "Creates a decision_map with active decisions, deferred_uncertainty, and a decision_frontier tied to unlock conditions; the deferred uncertainty records unlocking_decision_item_ref=retention-decision.",
         "Keeps unresolved work in Discover until the predecessor unlocks the dependent question.",
         "Does not enter Decompose, Plan, or Build while the progressive decision state remains unresolved."
       ],
       "pass_criteria": [
-        "The response identifies the predecessor relationship and explains the unlock condition.",
+        "The response identifies the predecessor relationship, records unlocking_decision_item_ref=retention-decision, and explains the unlock condition.",
         "The response records only outcome-shaping unknowns in the progressive state.",
         "The response says unresolved progressive work must remain in Discover."
       ],
@@ -914,6 +914,7 @@
           "deferred_uncertainty",
           "decision_frontier",
           "unlock_condition",
+          "unlocking_decision_item_ref=retention-decision",
           "remain in Discover"
         ],
         "forbidden_substrings": [
@@ -1460,6 +1461,49 @@
             "remain in progressive Discover",
             "progressive_discovery_state=mapping"
           ]
+        ]
+      }
+    },
+    {
+      "id": "progressive-mapping-resolution-retention",
+      "title": "Progressive mapping retains a first resolution",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a mapping-state resolution is canonical before a dependent can use it without requiring a frontier snapshot.",
+      "prompt": "During progressive mapping, retention-decision just changed to status=resolved. The consent question remains deferred behind it, and no decision_frontier exists yet. Record the safe state before any dependent becomes eligible or active.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=mapping.",
+        "retention-decision has status=resolved; consent-decision remains deferred behind unlocking_decision_item_ref=retention-decision.",
+        "No decision_frontier snapshot exists because mapping is still in progress."
+      ],
+      "expected_behavior": [
+        "Records exactly one decision_resolution with decision_item_ref=retention-decision, evidence and downstream effects before dependent eligibility.",
+        "Keeps progressive_discovery_state=mapping and remains in progressive Discover; a frontier snapshot is still not required.",
+        "Does not activate the dependent or advance into delivery work before the canonical history exists."
+      ],
+      "pass_criteria": [
+        "The response retains the predecessor resolution rather than treating status=resolved as sufficient evidence.",
+        "The response records evidence and downstream effects before dependent eligibility.",
+        "The response keeps the mapping state inside Discover without requiring a frontier."
+      ],
+      "fail_signals": [
+        "Omits the canonical resolution during mapping.",
+        "Makes the dependent active before the predecessor resolution is recorded.",
+        "Advances to Decompose or another delivery phase."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_discovery_state=mapping",
+          "decision_resolution",
+          "decision_item_ref=retention-decision",
+          "evidence and downstream effects",
+          "before dependent eligibility",
+          "remain in progressive Discover"
+        ],
+        "forbidden_substrings": [
+          "omit decision_resolution during mapping",
+          "make consent-decision active",
+          "advance to Decompose"
         ]
       }
     },

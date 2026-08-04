@@ -41,14 +41,20 @@ decision_item.decision_id; no self dependency or circular dependency is
 allowed. An item is eligible or active only after every dependency has
 status=resolved; otherwise leave it pending or blocked and recompute the
 frontier after the predecessor resolves.
-Each deferred uncertainty names its unlock condition. In every progressive
-state where decision items exist, including mapping, at most one item may have
+Each deferred uncertainty names its unlock condition and
+`unlocking_decision_item_ref`. Every current-map uncertainty points to a
+current-map predecessor, and every ref resolves exactly once to a canonical
+decision item. When an uncertainty is unlocked, retired, or excluded, retain
+that predecessor's canonical decision resolution. In every progressive state
+where decision items exist, including mapping, at most one item may have
 `status=active`. A decision frontier snapshot is not required during mapping;
 once it exists, it reflects that same limit while recording multiple sequential
-resolutions in one session. Keep decision resolutions canonical and carry the
-cleared decisions, constraints, exclusions, and acceptance seed back toward
-bounded Discover. Keep ordered unique canonical effect refs: newly precise not
-superseded/excluded; superseded status=superseded.
+resolutions in one session. When a mapping item becomes resolved, retain its
+canonical decision resolution with evidence and effects before dependent
+eligibility or frontier recomputation. Carry cleared decisions, constraints,
+exclusions, and the acceptance seed back toward bounded Discover. Keep ordered
+unique canonical effect refs: newly precise not superseded/excluded; superseded
+status=superseded.
 Every blocked item records blocker_kind, blocker_reason, and
 unblock_condition. The blocked_item_refs resolve to decision_item entries so a
 resumed journal knows why work stopped and what evidence or state change permits

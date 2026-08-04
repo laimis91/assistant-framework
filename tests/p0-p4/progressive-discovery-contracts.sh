@@ -969,12 +969,12 @@ if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_BLOCKED_RECOVERY" "$i
     recovery_missing+=("contracts/index.yaml workflow-phase-invariants.names missing INV_PROGRESSIVE_BLOCKED_RECOVERY")
 fi
 
-decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
 if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$decision_resolution_condition" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
 
-decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
+decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a mapping or blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
 if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
 fi
@@ -1074,6 +1074,91 @@ if [[ "${#mapping_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "mapping decision serialization contract missing: ${mapping_missing[*]}"
+fi
+
+test_start "workflow links deferred uncertainty and retains mapping resolutions"
+deferred_link_missing=()
+eval_fixture="$workflow_dir/evals/cases.json"
+journal_template="$workflow_dir/references/task-journal-template.md"
+plan_template="$workflow_dir/references/plan-template.md"
+deferred_unlock_validation='Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status is unlocked, retired, or excluded, that predecessor has status=resolved and maps exactly once to canonical decision_resolution.decision_item_ref. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification.'
+mapping_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+mapping_recomputation_condition='uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == mapping and any decision_item has status=resolved))'
+
+for term in "type: string" "required: true" "Resolves exactly once to a canonical decision_item.decision_id."; do
+    if ! output_artifact_field_has_text "deferred_uncertainty" "unlocking_decision_item_ref" "$term" "$output_contract"; then
+        deferred_link_missing+=("contracts/output.yaml deferred_uncertainty.unlocking_decision_item_ref missing $term")
+    fi
+done
+if ! output_artifact_has_exact_property_value "deferred_uncertainty" "validation" "$deferred_unlock_validation" "$output_contract"; then
+    deferred_link_missing+=("contracts/output.yaml deferred_uncertainty does not bind an advanced uncertainty to its predecessor resolution")
+fi
+if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$mapping_resolution_condition" "$output_contract"; then
+    deferred_link_missing+=("contracts/output.yaml decision_resolution does not retain a mapping-state resolution")
+fi
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_RECOMPUTATION" "condition" "$mapping_recomputation_condition" "$phase_gates"; then
+    deferred_link_missing+=("phase-gates.yaml recomputation invariant does not cover a mapping-state resolution")
+fi
+for term in \
+    "unlocking_decision_item_ref" \
+    "canonical decision resolution" \
+    "mapping item becomes resolved"; do
+    if ! p0p4_contains_text "$progressive_ref" "$term"; then
+        deferred_link_missing+=("references/progressive-discovery.md missing $term")
+    fi
+done
+for file_and_term in \
+    "$journal_template::unlocking_decision_item_ref to a current-map predecessor" \
+    "$journal_template::mapping-state predecessor" \
+    "$plan_template::unlocking_decision_item_ref to a current-map predecessor"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        deferred_link_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+activation_case="progressive-dependency-shaped-activation"
+for term in \
+    "unlocking_decision_item_ref=retention-decision"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$activation_case" "$term"; then
+        deferred_link_missing+=("eval case $activation_case missing machine expectation $term")
+    fi
+done
+
+mapping_resolution_case="progressive-mapping-resolution-retention"
+for term in \
+    "progressive_discovery_state=mapping" \
+    "decision_resolution" \
+    "decision_item_ref=retention-decision" \
+    "evidence and downstream effects" \
+    "before dependent eligibility" \
+    "remain in progressive Discover"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$mapping_resolution_case" "$term"; then
+        deferred_link_missing+=("eval case $mapping_resolution_case missing machine expectation $term")
+    fi
+done
+for term in \
+    "omit decision_resolution during mapping" \
+    "make consent-decision active" \
+    "advance to Decompose"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$mapping_resolution_case" "$term"; then
+        deferred_link_missing+=("eval case $mapping_resolution_case must forbid $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$mapping_resolution_case" \
+    "progressive-mapping-resolution-retention" \
+    1 \
+    "omit decision_resolution during mapping"; then
+    deferred_link_missing+=("real eval enforcement must reject mapping resolution omission")
+fi
+
+if [[ "${#deferred_link_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "deferred uncertainty linkage and mapping-resolution retention contract missing: ${deferred_link_missing[*]}"
 fi
 
 test_start "workflow evals grade declared progressive state without undeclared routes"
@@ -1653,7 +1738,7 @@ retained_chain_missing=()
 retained_chain_case="progressive-closed-readiness-retention"
 retained_chain_invariant="INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN"
 retained_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
-retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
+retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
 retained_chain_invariant_condition='progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]'
 
 for artifact in decision_map decision_item deferred_uncertainty; do
@@ -1866,7 +1951,10 @@ for case_and_term in \
     "progressive-dependency-shaped-activation::decision_map" \
     "progressive-dependency-shaped-activation::deferred_uncertainty" \
     "progressive-dependency-shaped-activation::decision_frontier" \
+    "progressive-dependency-shaped-activation::unlocking_decision_item_ref=retention-decision" \
     "progressive-dependency-shaped-activation::remain in Discover" \
+    "progressive-mapping-resolution-retention::decision_resolution" \
+    "progressive-mapping-resolution-retention::before dependent eligibility" \
     "progressive-fully-specified-large-bounded::uncertainty_shape=bounded" \
     "progressive-fully-specified-large-bounded::size alone is not a trigger" \
     "progressive-clarification-ownership::assistant-clarify" \
@@ -1920,10 +2008,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 10 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 11 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 10 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 11 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

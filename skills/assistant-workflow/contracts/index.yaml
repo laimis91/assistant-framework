@@ -37,7 +37,7 @@ load_sets:
         section: artifacts
         key: name
         names: [decision_map, decision_item,deferred_uncertainty,decision_frontier,decision_resolution,route_clear_handoff,loop_readiness_assessment]
-    budget_words: 5937
+    budget_words: 6056
   delegation:
     selectors:
       - id: workflow-delegation-fields

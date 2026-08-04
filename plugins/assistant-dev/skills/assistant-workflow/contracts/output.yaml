@@ -1598,8 +1598,8 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Outcome-shaping uncertainty that cannot yet be stated as a decision item"
-    validation: "Contains unlock_condition. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
-    on_fail: "State the missing unlock condition or move a precise question into decision_item or workflow clarification before continuing."
+    validation: "Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status is unlocked, retired, or excluded, that predecessor has status=resolved and maps exactly once to canonical decision_resolution.decision_item_ref. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
+    on_fail: "Add the typed predecessor ref, restore its canonical resolution before advancing the uncertainty, or move a precise question into decision_item or workflow clarification."
     min_items: 1
     object_fields:
       - name: uncertainty_id
@@ -1611,6 +1611,10 @@ artifacts:
       - name: unlock_condition
         type: string
         required: true
+      - name: unlocking_decision_item_ref
+        type: string
+        required: true
+        validation: "Resolves exactly once to a canonical decision_item.decision_id."
       - name: status
         type: enum
         required: true
@@ -1645,10 +1649,10 @@ artifacts:
   - name: decision_resolution
     type: object[]
     required: conditional
-    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
+    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
-    on_fail: "Repair missing resolutions or invalid effect refs; retain prior history if later blocked; restore it before continuation."
+    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a mapping or blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
+    on_fail: "Repair missing resolutions or invalid effect refs; retain prior history during mapping or if later blocked; restore it before continuation."
     object_fields:
       - name: decision_item_ref
         type: string
