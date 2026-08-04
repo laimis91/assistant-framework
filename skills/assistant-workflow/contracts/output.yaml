@@ -1647,8 +1647,8 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == blocked and any decision_item has status=resolved))) or progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. During durable route-clear consumption or active/closed readiness, preserve that one-to-one canonical history so loop_readiness_assessment.resolved_decision_item_refs remain resolvable. human_confirmation_ref is required conditionally for human_required decisions."
-    on_fail: "Record the missing canonical resolution or repair duplicate decision_item_ref entries; preserve non-empty prior resolution history when a later decision is blocked before advancing the frontier. Restore retained canonical resolution history before resumable continuation."
+    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
+    on_fail: "Repair missing resolutions or invalid effect refs; retain prior history if later blocked; restore it before continuation."
     object_fields:
       - name: decision_item_ref
         type: string
@@ -1670,9 +1670,11 @@ artifacts:
       - name: newly_precise_item_refs
         type: string[]
         required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs resolving exactly once to items not superseded or excluded."
       - name: superseded_item_refs
         type: string[]
         required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs resolving exactly once to superseded items."
 
   - name: route_clear_handoff
     type: object

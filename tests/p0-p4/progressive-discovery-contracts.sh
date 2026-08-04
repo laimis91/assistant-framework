@@ -631,6 +631,66 @@ else
     fail "progressive safety and clearance contract missing: ${safety_missing[*]}"
 fi
 
+test_start "workflow validates resolution-effect refs before recomputing the frontier"
+resolution_effect_missing=()
+resolution_effect_case="progressive-resolution-route-clear"
+eval_fixture="$workflow_dir/evals/cases.json"
+newly_precise_item_refs_validation='Ordered unique canonical decision_item.decision_id refs resolving exactly once to items not superseded or excluded.'
+superseded_item_refs_validation='Ordered unique canonical decision_item.decision_id refs resolving exactly once to superseded items.'
+resolution_effect_forbidden_terms=(
+    "newly_precise_item_refs=[missing-consent-decision]"
+    "newly_precise_item_refs=[consent-decision, consent-decision]"
+    "newly_precise_item_refs=[obsolete-decision]"
+    "superseded_item_refs=[consent-decision]"
+    "superseded_item_refs=[missing-consent-decision]"
+    "superseded_item_refs=[obsolete-decision, obsolete-decision]"
+)
+
+if ! output_artifact_field_has_text "decision_resolution" "newly_precise_item_refs" "$newly_precise_item_refs_validation" "$output_contract"; then
+    resolution_effect_missing+=("contracts/output.yaml newly_precise_item_refs does not require ordered unique actionable canonical refs")
+fi
+if ! output_artifact_field_has_text "decision_resolution" "superseded_item_refs" "$superseded_item_refs_validation" "$output_contract"; then
+    resolution_effect_missing+=("contracts/output.yaml superseded_item_refs does not require ordered unique canonical superseded refs")
+fi
+for term in \
+    "newly_precise_item_refs" \
+    "superseded_item_refs" \
+    "ordered-unique canonical field validations"; do
+    if ! workflow_invariant_has_text "INV_PROGRESSIVE_RECOMPUTATION" "$term" "$phase_gates"; then
+        resolution_effect_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_RECOMPUTATION missing $term")
+    fi
+done
+if ! p0p4_contains_text "$progressive_ref" "ordered unique canonical effect refs"; then
+    resolution_effect_missing+=("progressive-discovery.md does not preserve resolution-effect reference integrity")
+fi
+
+for term in \
+    "newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded]" \
+    "superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$resolution_effect_case" "$term"; then
+        resolution_effect_missing+=("eval case $resolution_effect_case missing resolution-effect expectation $term")
+    fi
+done
+for term in "${resolution_effect_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$resolution_effect_case" "$term"; then
+        resolution_effect_missing+=("eval case $resolution_effect_case does not forbid unsafe resolution-effect state $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$resolution_effect_case" \
+    "progressive-resolution-effects" \
+    "${#resolution_effect_forbidden_terms[@]}" \
+    "${resolution_effect_forbidden_terms[@]}"; then
+    resolution_effect_missing+=("real eval enforcement must reject every unsafe resolution-effect reference state")
+fi
+
+if [[ "${#resolution_effect_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive resolution-effect reference contract missing: ${resolution_effect_missing[*]}"
+fi
+
 test_start "workflow keeps route-clear inside the progressive no-execution boundary"
 route_clear_boundary_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
@@ -914,7 +974,7 @@ if ! output_artifact_has_exact_property_value "decision_resolution" "condition" 
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
 
-decision_resolution_validation='Contains decision_item_ref, resolution, evidence, downstream_effects, newly_precise_item_refs, and superseded_item_refs. Every decision_item with status=resolved has exactly one decision_resolution matched by decision_item_ref; the collection is non-empty when progressive_discovery_state == blocked and any decision_item has status=resolved, but may remain empty before the first resolution during resolving. During durable route-clear consumption or active/closed readiness, preserve that one-to-one canonical history so loop_readiness_assessment.resolved_decision_item_refs remain resolvable. human_confirmation_ref is required conditionally for human_required decisions.'
+decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
 if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
 fi
@@ -1860,10 +1920,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 9 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 10 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 9 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 10 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

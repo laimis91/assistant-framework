@@ -735,10 +735,10 @@ invariants:
     on_fail: "Keep the item blocked, record its typed reason and concrete unblock condition, repair the frontier reference, and do not retry or advance until the condition is evidenced."
 
   - id: INV_PROGRESSIVE_RECOMPUTATION
-    check: "Each decision_resolution records downstream effects, newly precise items, and superseded/invalidated items before recomputing the frontier."
+    check: "Before recomputing the frontier, each decision_resolution records downstream effects, newly precise items, superseded/invalidated items, and effect refs; newly_precise_item_refs and superseded_item_refs meet their ordered-unique canonical field validations."
     condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear]"
     scope: all_phases
-    on_fail: "Record the missing resolution effects and refs, then recompute the frontier before selecting another item."
+    on_fail: "Repair missing, duplicate, dangling, or status-misclassified effects/refs, then recompute the frontier."
 
   - id: INV_PROGRESSIVE_ROUTE_CLEAR
     check: "When progressive_route_clear_consumption_state=pending, route_clear requires no open/blocked items and no remaining deferred uncertainty except retired/excluded entries. Empty, duplicate, dangling, or partially resolvable current map refs cannot reach route_clear, bounded planning, Decompose, Plan, or Build. route_clear_handoff.next_route is bounded_discover and consumption_state=pending mirrors the typed marker while the handoff prepares the Requirement Acceptance Map from its decisions, constraints, exclusions, and acceptance_seed. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. Its source_route_clear_handoff_ref resolves to the source handoff and that handoff's consumed_by_requirement_acceptance_map_ref resolves back to the consuming map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed. Reciprocal map consumption records progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable; route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed], and both reciprocal refs remain resolvable during active/resumable continuation."
