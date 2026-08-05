@@ -1603,7 +1603,7 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
     description: "Outcome-shaping uncertainty that cannot yet be stated as a decision item"
-    validation: "Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status is unlocked, retired, or excluded, that predecessor has status=resolved and maps exactly once to canonical decision_resolution.decision_item_ref. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
+    validation: "Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status=unlocked, that predecessor has status=resolved and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. Every current-map retired/excluded deferred uncertainty predecessor has status in [resolved, superseded, excluded] and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. When status=unlocked, converted_decision_item_ref resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
     on_fail: "Add the typed predecessor ref, restore its canonical resolution before advancing the uncertainty, or move a precise question into decision_item or workflow clarification."
     min_items: 1
     object_fields:
@@ -1619,15 +1619,16 @@ artifacts:
       - name: unlocking_decision_item_ref
         type: string
         required: true
-        validation: "Resolves exactly once to a canonical decision_item.decision_id."
+        validation: "Resolves exactly once to a canonical decision_item.decision_id. For status in [retired, excluded], its exact retained canonical decision_resolution permits predecessor status in [resolved, superseded, excluded]."
       - name: status
         type: enum
         required: true
         enum_values: [deferred, unlocked, retired, excluded]
       - name: converted_decision_item_ref
         type: string
-        required: false
-        condition: "status == unlocked and a precise decision item was created"
+        required: conditional
+        condition: "status == unlocked"
+        validation: "Resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs."
 
   - name: decision_frontier
     type: object
@@ -1655,9 +1656,9 @@ artifacts:
   - name: decision_resolution
     type: object[]
     required: conditional
-    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
+    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a mapping or blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
+    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
     on_fail: "Repair missing resolutions or invalid effect refs; retain prior history during mapping or if later blocked; restore it before continuation."
     object_fields:
       - name: decision_item_ref
@@ -1691,7 +1692,7 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])"
     description: "Compact progressive route-clear handoff used to prepare the bounded-Discover Requirement Acceptance Map"
-    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff remains required while progressive_artifact_retention_state=retained and progressive_route_clear_consumption_state in [pending, consumed]. While pending, consumption_state=pending mirrors the marker and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values. After bounded/not_applicable, retained keeps the consumed handoff and both reciprocal refs resolvable during active/resumable continuation. Only progressive_artifact_retention_state=terminally_archived permits their omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff.decisions and exclusions exactly partition current decision_map.decision_item_refs: every current-map status=resolved decision appears exactly once through its canonical decision_resolution.decision_item_ref in decisions, and every current-map status=superseded or excluded decision appears exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. route_clear_handoff remains required while progressive_artifact_retention_state=retained and progressive_route_clear_consumption_state in [pending, consumed]. While pending, consumption_state=pending mirrors the marker and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values. After bounded/not_applicable, retained keeps the consumed handoff and both reciprocal refs resolvable during active/resumable continuation. Only progressive_artifact_retention_state=terminally_archived permits their omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
     on_fail: "Return to progressive Discover and repair the retained handoff, map cross-reference, or carried-forward planning inputs before any bounded/not_applicable transition or resumable continuation."
     object_fields:
       - name: decision_map_ref
@@ -1700,12 +1701,14 @@ artifacts:
       - name: decisions
         type: string[]
         required: true
+        validation: "Ordered unique canonical decision_resolution.decision_item_ref values. Covers every current decision_map.decision_item_refs whose canonical decision_item status=resolved exactly once. decisions is non-empty when any current-map decision has status=resolved and empty only when every current-map decision is superseded or excluded. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions."
       - name: constraints
         type: string[]
         required: true
       - name: exclusions
         type: string[]
         required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs. Covers every current decision_map.decision_item_refs whose canonical decision_item status is superseded or excluded exactly once."
       - name: acceptance_seed
         type: string[]
         required: true

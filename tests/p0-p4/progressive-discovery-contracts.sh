@@ -191,6 +191,19 @@ workflow_invariant_has_text() {
     ' "$file"
 }
 
+plan_section_has_text() {
+    local heading="$1"
+    local expected="$2"
+    local file="$3"
+
+    awk -v heading="$heading" -v expected="$expected" '
+        $0 == heading { in_section = 1; next }
+        in_section && /^## / { exit }
+        in_section && index($0, expected) { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 workflow_invariant_selector_has_name() {
     local expected="$1"
     local file="$2"
@@ -969,12 +982,12 @@ if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_BLOCKED_RECOVERY" "$i
     recovery_missing+=("contracts/index.yaml workflow-phase-invariants.names missing INV_PROGRESSIVE_BLOCKED_RECOVERY")
 fi
 
-decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+decision_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$decision_resolution_condition" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
 
-decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. With a mapping or blocked resolved item, collection is non-empty; it may be empty before first resolution. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
+decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
 if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
 fi
@@ -1081,8 +1094,8 @@ deferred_link_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 journal_template="$workflow_dir/references/task-journal-template.md"
 plan_template="$workflow_dir/references/plan-template.md"
-deferred_unlock_validation='Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status is unlocked, retired, or excluded, that predecessor has status=resolved and maps exactly once to canonical decision_resolution.decision_item_ref. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification.'
-mapping_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+deferred_unlock_validation='Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status=unlocked, that predecessor has status=resolved and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. Every current-map retired/excluded deferred uncertainty predecessor has status in [resolved, superseded, excluded] and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. When status=unlocked, converted_decision_item_ref resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification.'
+mapping_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 mapping_recomputation_condition='uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == mapping and any decision_item has status=resolved))'
 
 for term in "type: string" "required: true" "Resolves exactly once to a canonical decision_item.decision_id."; do
@@ -1096,6 +1109,7 @@ fi
 if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$mapping_resolution_condition" "$output_contract"; then
     deferred_link_missing+=("contracts/output.yaml decision_resolution does not retain a mapping-state resolution")
 fi
+
 if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_RECOMPUTATION" "condition" "$mapping_recomputation_condition" "$phase_gates"; then
     deferred_link_missing+=("phase-gates.yaml recomputation invariant does not cover a mapping-state resolution")
 fi
@@ -1159,6 +1173,138 @@ if [[ "${#deferred_link_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "deferred uncertainty linkage and mapping-resolution retention contract missing: ${deferred_link_missing[*]}"
+fi
+
+test_start "workflow requires retired or excluded current-map lineage in mapping and blocked state"
+retired_lineage_missing=()
+retired_lineage_condition="$mapping_resolution_condition"
+retired_lineage_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-retired-lineage.XXXXXX")"
+retired_lineage_fake_output="$retired_lineage_mutation_dir/output.yaml"
+p0p4_register_cleanup "$retired_lineage_mutation_dir"
+
+if ! output_artifact_has_exact_property_value "decision_resolution" "condition" "$retired_lineage_condition" "$output_contract"; then
+    retired_lineage_missing+=("contracts/output.yaml decision_resolution does not activate for mapping/blocked retired or excluded current-map deferred uncertainty lineage")
+fi
+
+sed 's/ or any current-map deferred_uncertainty has status in \[retired, excluded\]//' "$output_contract" >"$retired_lineage_fake_output"
+if output_artifact_has_exact_property_value "decision_resolution" "condition" "$retired_lineage_condition" "$retired_lineage_fake_output"; then
+    retired_lineage_missing+=("omitted retired/excluded current-map lineage must not leave decision_resolution requiredness passing")
+fi
+
+if [[ "${#retired_lineage_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired/excluded current-map lineage requiredness contract missing: ${retired_lineage_missing[*]}; mapping/blocked regression: no current decision_item is resolved and no durable-retention predicate applies"
+fi
+
+test_start "workflow evals require retired current-map lineage without resolved or durable state"
+retired_lineage_eval_missing=()
+retired_lineage_eval_case="progressive-mapping-retired-lineage-requiredness"
+retired_lineage_eval_required_terms=(
+    "uncertainty_shape=progressive"
+    "progressive_discovery_state=mapping"
+    "decision_item_refs=[obsolete-decision]"
+    "decision_id=obsolete-decision"
+    "status=superseded"
+    "deferred_uncertainty_refs=[obsolete-uncertainty]"
+    "status=retired"
+    "unlocking_decision_item_ref=obsolete-decision"
+    "no current decision_item has status=resolved"
+    "progressive_route_clear_consumption_state=not_applicable"
+    "progressive_sequence_readiness_state=not_applicable"
+    "progressive_artifact_retention_state=not_applicable"
+    "decision_resolution.decision_item_ref=obsolete-decision"
+)
+retired_lineage_eval_forbidden="decision_resolution is omitted for obsolete-decision"
+
+for term in "${retired_lineage_eval_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$retired_lineage_eval_case" "$term"; then
+        retired_lineage_eval_missing+=("eval case $retired_lineage_eval_case missing retired-lineage required state $term")
+    fi
+done
+if ! eval_case_forbids_machine_term "$eval_fixture" "$retired_lineage_eval_case" "$retired_lineage_eval_forbidden"; then
+    retired_lineage_eval_missing+=("eval case $retired_lineage_eval_case does not forbid omitted retained lineage resolution")
+fi
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$retired_lineage_eval_case" \
+    "progressive-retired-lineage-requiredness" \
+    1 \
+    "$retired_lineage_eval_forbidden"; then
+    retired_lineage_eval_missing+=("real eval enforcement must reject the retired-lineage resolution omission only through its owning case")
+fi
+
+if [[ "${#retired_lineage_eval_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired current-map lineage eval contract missing: ${retired_lineage_eval_missing[*]}; mapping state has no resolved current decision and no durable-retention predicate"
+fi
+
+test_start "workflow converts every unlocked deferred uncertainty through its predecessor resolution"
+unlocked_conversion_missing=()
+unlocked_conversion_case="progressive-resolution-route-clear"
+unlocked_conversion_validation="Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status=unlocked, that predecessor has status=resolved and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. Every current-map retired/excluded deferred uncertainty predecessor has status in [resolved, superseded, excluded] and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. When status=unlocked, converted_decision_item_ref resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
+
+if ! output_artifact_has_exact_property_value "deferred_uncertainty" "validation" "$unlocked_conversion_validation" "$output_contract"; then
+    unlocked_conversion_missing+=("contracts/output.yaml deferred_uncertainty does not require exact converted-decision linkage for unlocked uncertainty")
+fi
+for term in \
+    "required: conditional" \
+    'condition: "status == unlocked"' \
+    "Resolves exactly once to an actionable canonical decision_item.decision_id" \
+    "appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs"; do
+    if ! output_artifact_field_has_text "deferred_uncertainty" "converted_decision_item_ref" "$term" "$output_contract"; then
+        unlocked_conversion_missing+=("contracts/output.yaml deferred_uncertainty.converted_decision_item_ref missing $term")
+    fi
+done
+for file_and_term in \
+    "$phase_gates::converted_decision_item_ref" \
+    "$phase_gates::unlocking predecessor decision_resolution.newly_precise_item_refs" \
+    "$progressive_ref::converted_decision_item_ref" \
+    "$progressive_ref::unlocking predecessor decision_resolution.newly_precise_item_refs" \
+    "$journal_template::converted_decision_item_ref" \
+    "$plan_template::converted_decision_item_ref"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        unlocked_conversion_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+for term in \
+    "converted_decision_item_ref=consent-decision" \
+    "appears exactly once in newly_precise_item_refs" \
+    "actionable canonical decision_item"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$unlocked_conversion_case" "$term"; then
+        unlocked_conversion_missing+=("eval case $unlocked_conversion_case missing unlocked-conversion expectation $term")
+    fi
+done
+
+unlocked_conversion_forbidden_terms=(
+    "status=unlocked without converted_decision_item_ref=consent-decision"
+    "converted_decision_item_ref=[missing-consent-decision]"
+    "converted_decision_item_ref=[obsolete-decision]"
+    "converted_decision_item_ref=[excluded-decision] while excluded-decision has status=excluded"
+    "converted_decision_item_ref=consent-decision with wrong predecessor"
+    "converted_decision_item_ref=consent-decision absent from newly_precise_item_refs"
+)
+for term in "${unlocked_conversion_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$unlocked_conversion_case" "$term"; then
+        unlocked_conversion_missing+=("eval case $unlocked_conversion_case does not forbid unsafe unlocked conversion $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$unlocked_conversion_case" \
+    "progressive-unlocked-conversion" \
+    "${#unlocked_conversion_forbidden_terms[@]}" \
+    "${unlocked_conversion_forbidden_terms[@]}"; then
+    unlocked_conversion_missing+=("real eval enforcement must reject every unsafe unlocked conversion")
+fi
+
+if [[ "${#unlocked_conversion_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "unlocked deferred-uncertainty conversion contract missing: ${unlocked_conversion_missing[*]}"
 fi
 
 test_start "workflow evals grade declared progressive state without undeclared routes"
@@ -1865,6 +2011,77 @@ else
     fail "current progressive decision-map reference contract missing: ${current_map_missing[*]}"
 fi
 
+test_start "workflow partitions cleared current-map decisions through the route-clear handoff"
+handoff_partition_missing=()
+handoff_partition_case="progressive-resolution-route-clear"
+handoff_decisions_validation="Ordered unique canonical decision_resolution.decision_item_ref values. Covers every current decision_map.decision_item_refs whose canonical decision_item status=resolved exactly once. decisions is non-empty when any current-map decision has status=resolved and empty only when every current-map decision is superseded or excluded. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions."
+handoff_exclusions_validation="Ordered unique canonical decision_item.decision_id refs. Covers every current decision_map.decision_item_refs whose canonical decision_item status is superseded or excluded exactly once."
+
+if ! output_artifact_field_has_text "route_clear_handoff" "decisions" "$handoff_decisions_validation" "$output_contract"; then
+    handoff_partition_missing+=("contracts/output.yaml route_clear_handoff.decisions does not exactly cover cleared current-map resolutions")
+fi
+if ! output_artifact_field_has_text "route_clear_handoff" "exclusions" "$handoff_exclusions_validation" "$output_contract"; then
+    handoff_partition_missing+=("contracts/output.yaml route_clear_handoff.exclusions does not exactly account for superseded/excluded current-map decisions")
+fi
+for file_and_term in \
+    "$phase_gates::route_clear_handoff.decisions" \
+    "$phase_gates::superseded or excluded" \
+    "$progressive_ref::route_clear_handoff.decisions" \
+    "$progressive_ref::every current-map decision" \
+    "$journal_template::route_clear_handoff.decisions" \
+    "$plan_template::route_clear_handoff.decisions" \
+    "$requirement_map_ref::route_clear_handoff.decisions"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        handoff_partition_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+handoff_partition_required_terms=(
+    "route_clear_handoff.decisions=[retention-decision]"
+    "canonical decision_resolution.decision_item_ref"
+    "every current-map status=resolved decision exactly once"
+    "current-map superseded/excluded decisions appear exactly once in exclusions"
+    "decisions is non-empty when any current-map decision has status=resolved"
+    "Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions"
+    "all-excluded route-clear handoff may use decisions=[]"
+)
+handoff_partition_forbidden_terms=(
+    "route_clear_handoff.decisions=[arbitrary-decision]"
+    "route_clear_handoff.decisions=[retention-decision, retention-decision]"
+    "route_clear_handoff.decisions=[] while retention-decision is resolved"
+    "route_clear_handoff.decisions=[retention-decision] while consent-decision is resolved"
+    "route_clear_handoff.exclusions=[] while obsolete-decision is superseded"
+    "exclusions=[obsolete-decision, obsolete-decision]"
+    "exclusions=[missing-decision]"
+    "exclusions=[retention-decision] while retention-decision is resolved"
+)
+for term in "${handoff_partition_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$handoff_partition_case" "$term"; then
+        handoff_partition_missing+=("eval case $handoff_partition_case missing handoff-partition expectation $term")
+    fi
+done
+for term in "${handoff_partition_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$handoff_partition_case" "$term"; then
+        handoff_partition_missing+=("eval case $handoff_partition_case does not forbid $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$handoff_partition_case" \
+    "progressive-route-clear-partition" \
+    "${#handoff_partition_forbidden_terms[@]}" \
+    "${handoff_partition_forbidden_terms[@]}"; then
+    handoff_partition_missing+=("real eval enforcement must reject arbitrary, duplicate, empty, partial, and unexcluded route-clear handoff decisions")
+fi
+
+if [[ "${#handoff_partition_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "route-clear decision partition contract missing: ${handoff_partition_missing[*]}"
+fi
+
 test_start "workflow loads retained progressive state after bounded route clearance"
 retained_state_missing=()
 retained_state_case="progressive-closed-readiness-retention"
@@ -1930,7 +2147,7 @@ retained_chain_missing=()
 retained_chain_case="progressive-closed-readiness-retention"
 retained_chain_invariant="INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN"
 retained_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
-retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+retained_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 retained_chain_invariant_condition='progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed])'
 
 for artifact in decision_map decision_item deferred_uncertainty; do
@@ -2134,7 +2351,7 @@ archival_retained_case="progressive-closed-readiness-retention"
 archival_marker="progressive_artifact_retention_state"
 archival_map_condition='size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)'
 archival_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
-archival_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and any decision_item has status=resolved))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
+archival_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 archival_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])'
 archival_readiness_condition='before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
 archival_repeat_condition='(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])'
@@ -2370,6 +2587,212 @@ else
     fail "progressive terminal-archival retention contract missing: ${archival_retention_missing[*]}"
 fi
 
+test_start "workflow makes terminal archival an atomic bounded transition"
+archival_atomic_missing=()
+archival_atomic_case="progressive-terminal-archival-omission"
+archival_atomic_validation="not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; it atomically requires uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
+archival_atomic_invariant="When durable markers are pending or consumed, or active or closed, progressive_artifact_retention_state must be retained unless a valid terminally_archived transition has occurred; not_applicable or missing state fails closed and never releases an artifact. terminally_archived is valid only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. It is invalid while route-clear consumption is pending or sequence readiness is active. It requires explicit final archival/termination evidence proving continuation and reference resolution are impossible. Task state: completed, consumed route clearance, closed readiness, or compaction alone is insufficient evidence. terminally_archived is terminal for the same task and decision map and cannot revert to retained."
+
+if ! input_field_has_text "progressive_artifact_retention_state" "$archival_atomic_validation" "$input_contract"; then
+    archival_atomic_missing+=("contracts/input.yaml progressive_artifact_retention_state does not require atomic bounded/not_applicable archival")
+fi
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE" "check" "$archival_atomic_invariant" "$phase_gates"; then
+    archival_atomic_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE does not serialize atomic archival")
+fi
+for file_and_term in \
+    "$progressive_ref::one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable" \
+    "$journal_template::one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable" \
+    "$plan_template::one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable" \
+    "$requirement_map_ref::one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        archival_atomic_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+
+archival_atomic_required_terms=(
+    "one atomic transition"
+    "uncertainty_shape=bounded"
+    "progressive_discovery_state=not_applicable"
+    "terminally_archived requires all three states atomically"
+    "progressive_route_clear_consumption_state=consumed remains historical"
+    "progressive_sequence_readiness_state=closed remains historical"
+)
+archival_atomic_forbidden_terms=(
+    "Sets progressive_artifact_retention_state=terminally_archived while uncertainty_shape=progressive"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=route_clear"
+    "Sets progressive_artifact_retention_state=terminally_archived from Task state: completed alone"
+    "terminally_archived resets progressive_route_clear_consumption_state=not_applicable"
+    "terminally_archived resets progressive_sequence_readiness_state=not_applicable"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=mapping"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=resolving"
+    "Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=blocked"
+)
+for term in "${archival_atomic_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$archival_atomic_case" "$term"; then
+        archival_atomic_missing+=("eval case $archival_atomic_case missing atomic-archival expectation $term")
+    fi
+done
+for term in "${archival_atomic_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$archival_atomic_case" "$term"; then
+        archival_atomic_missing+=("eval case $archival_atomic_case does not forbid $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$archival_atomic_case" \
+    "progressive-atomic-archival" \
+    "${#archival_atomic_forbidden_terms[@]}" \
+    "${archival_atomic_forbidden_terms[@]}"; then
+    archival_atomic_missing+=("real eval enforcement must reject contradictory live progressive archival states and completion-only archival")
+fi
+
+if [[ "${#archival_atomic_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "atomic progressive terminal-archival contract missing: ${archival_atomic_missing[*]}"
+fi
+
+test_start "workflow preserves all-excluded clearance and complete review-repair negatives"
+review_repair_missing=()
+review_repair_case="progressive-all-excluded-route-clear"
+all_excluded_inherited_required_terms=(
+    "uncertainty_shape=progressive"
+    "progressive_discovery_state=route_clear"
+    "progressive_route_clear_consumption_state=pending"
+    "progressive_artifact_retention_state=retained"
+    "open_item_refs=[]"
+    "blocked_item_refs=[]"
+    "remaining_deferred_uncertainty_refs=[]"
+    "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]"
+    "next_route=bounded_discover"
+    "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending"
+    "route_clear remains in the no-execution boundary"
+    "project/source mutation"
+    "external writes"
+    "branch creation"
+    "credential-location recording"
+    "framework-owned journal/equivalent carried-state update"
+    "separate approved workflow"
+)
+
+for term in \
+    "status in [retired, excluded]" \
+    "status in [resolved, superseded, excluded]" \
+    "exact retained canonical decision_resolution"; do
+    if ! output_artifact_has_text "deferred_uncertainty" "$term" "$output_contract"; then
+        review_repair_missing+=("contracts/output.yaml deferred_uncertainty missing all-excluded lineage term $term")
+    fi
+done
+for file_and_term in \
+    "$phase_gates::all-excluded route" \
+    "$progressive_ref::all-excluded route" \
+    "$journal_template::all-excluded route"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        review_repair_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+for file_and_term in \
+    "$output_contract::Every current-map retired/excluded deferred uncertainty predecessor" \
+    "$phase_gates::must retain an exact canonical decision_resolution" \
+    "$phase_gates::decisions is non-empty when any current-map decision has status=resolved" \
+    "$progressive_ref::decisions is non-empty when any current-map decision has status=resolved" \
+    "$journal_template::must retain its exact canonical predecessor resolution" \
+    "$journal_template::every current-map retired/excluded deferred uncertainty predecessor" \
+    "$requirement_map_ref::decisions is non-empty when any current-map decision has status=resolved"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        review_repair_missing+=("${file#$FRAMEWORK_DIR/} missing mandatory all-excluded semantics $term")
+    fi
+done
+
+for heading in "- Loop / Experiment Routing:" "## Loop / Experiment Routing"; do
+    for term in \
+        "progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; terminally_archived only after explicit final archival/termination evidence proves continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert]" \
+        "converted_decision_item_ref" \
+        "route_clear_handoff.decisions"; do
+        if ! plan_section_has_text "$heading" "$term" "$plan_template"; then
+            review_repair_missing+=("$plan_template $heading missing independently checked term $term")
+        fi
+    done
+done
+
+for term in \
+    "decision_item_refs=[obsolete-decision]" \
+    "decision_id=obsolete-decision" \
+    "status=superseded" \
+    "deferred_uncertainty_refs=[obsolete-uncertainty]" \
+    "status=excluded" \
+    "unlocking_decision_item_ref=obsolete-decision" \
+    "decision_resolution.decision_item_ref=obsolete-decision" \
+    "route_clear_handoff.decisions=[]" \
+    "exclusions=[obsolete-decision]"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$review_repair_case" "$term"; then
+        review_repair_missing+=("eval case $review_repair_case missing all-excluded state term $term")
+    fi
+done
+for term in "${all_excluded_inherited_required_terms[@]}"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$review_repair_case" "$term"; then
+        review_repair_missing+=("eval case $review_repair_case missing inherited route-clear expectation $term")
+    fi
+done
+
+review_repair_forbidden_terms=(
+    "decision_item_refs=[]"
+    "current-map deferred_uncertainty_refs=[]"
+    "decision_resolution is omitted for obsolete-decision"
+    "exclusions=[obsolete-decision, obsolete-decision]"
+    "exclusions=[missing-decision]"
+    "exclusions=[retention-decision] while retention-decision is resolved"
+    "exclusions=[] while obsolete-decision is superseded"
+)
+for term in "${review_repair_forbidden_terms[@]}"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$review_repair_case" "$term"; then
+        review_repair_missing+=("eval case $review_repair_case does not forbid its own invalid state $term")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$review_repair_case" \
+    "progressive-review-repair" \
+    "${#review_repair_forbidden_terms[@]}" \
+    "${review_repair_forbidden_terms[@]}"; then
+    review_repair_missing+=("real eval enforcement must reject the complete review-repair unsafe-state matrix")
+fi
+
+all_excluded_required_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-all-excluded-required.XXXXXX")"
+all_excluded_required_eval_output="$(mktemp "${TMPDIR:-/tmp}/progressive-all-excluded-required-output.XXXXXX")"
+p0p4_register_cleanup "$all_excluded_required_eval_dir" "$all_excluded_required_eval_output"
+write_workflow_eval_responses "$all_excluded_required_eval_dir" "$eval_fixture"
+all_excluded_inherited_required_terms_json="$(printf '%s\n' "${all_excluded_inherited_required_terms[@]}" | jq -R . | jq -s .)"
+jq -r --arg case_id "$review_repair_case" --argjson omissions "$all_excluded_inherited_required_terms_json" '
+        .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
+        select(. as $term | $omissions | index($term) | not)
+    ' "$eval_fixture" >"$all_excluded_required_eval_dir/assistant-workflow/$review_repair_case.txt"
+workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+all_excluded_required_expected_pass_count=$((workflow_case_count - 1))
+all_excluded_required_eval_status=0
+if run_workflow_eval "$all_excluded_required_eval_dir" "$all_excluded_required_eval_output"; then
+    all_excluded_required_eval_status=1
+fi
+if [[ "$all_excluded_required_eval_status" -ne 0 ]] \
+    || ! grep -Fq $'FAIL\tassistant-workflow\t'"$review_repair_case" "$all_excluded_required_eval_output" \
+    || ! grep -Fq "Summary: total=$workflow_case_count passed=$all_excluded_required_expected_pass_count failed=1" "$all_excluded_required_eval_output" \
+    || ! grep -Fq "missing_required_substrings=${#all_excluded_inherited_required_terms[@]}" "$all_excluded_required_eval_output" \
+    || grep -Fq 'forbidden substring hit' "$all_excluded_required_eval_output"; then
+    review_repair_missing+=("required-only all-excluded inheritance omission must fail only the owning eval case through every missing inherited obligation")
+fi
+
+if [[ "${#review_repair_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive review-repair contract missing: ${review_repair_missing[*]}"
+fi
+
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"
 alignment_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
@@ -2443,10 +2866,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 16 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 22 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 16 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 22 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

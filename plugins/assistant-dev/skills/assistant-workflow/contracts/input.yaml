@@ -419,10 +419,10 @@ fields:
     required: false
     enum_values: [not_applicable, retained, terminally_archived]
     description: "Typed lifecycle for durable progressive artifacts carried after live progressive Discover ends"
-    validation: "not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
+    validation: "not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; it atomically requires uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
     default: not_applicable
     on_missing: infer
-    infer_from: "Use retained whenever either durable progressive marker requires resumable artifacts and no final archival evidence applies. Use terminally_archived only from explicit final archival/termination evidence proving continuation and reference resolution are impossible. Never infer terminally_archived from Task state: completed."
+    infer_from: "Use retained whenever either durable progressive marker requires resumable artifacts and no final archival evidence applies. Use terminally_archived only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable from explicit final archival/termination evidence proving continuation and reference resolution are impossible. Never infer terminally_archived from Task state: completed."
 
   - name: clarification_status
     type: enum

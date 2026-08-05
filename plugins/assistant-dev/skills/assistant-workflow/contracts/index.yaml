@@ -37,7 +37,7 @@ load_sets:
         section: artifacts
         key: name
         names: [decision_map, decision_item,deferred_uncertainty,decision_frontier,decision_resolution,route_clear_handoff,loop_readiness_assessment]
-    budget_words: 6795
+    budget_words: 7250
   delegation:
     selectors:
       - id: workflow-delegation-fields
@@ -69,7 +69,7 @@ load_sets:
         section: invariants
         key: id
         names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_REPEAT_READINESS]
-    budget_words: 5176
+    budget_words: 5400
   selected_handoff:
     selectors:
       - id: workflow-selected-handoff

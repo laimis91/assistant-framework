@@ -1062,9 +1062,9 @@
       ],
       "expected_behavior": [
         "Records downstream_effects from the resolved predecessor.",
-        "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs. newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded], while superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded.",
+        "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs. The now-unlocked consent uncertainty records converted_decision_item_ref=consent-decision, resolving exactly once to an actionable canonical decision_item and appearing exactly once in its unlocking predecessor's newly_precise_item_refs. newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded], while superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded.",
         "Recomputes the decision frontier rather than assuming the old route remains valid.",
-        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending and progressive_artifact_retention_state=retained, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending and progressive_artifact_retention_state=retained, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. route_clear_handoff.decisions=[retention-decision] contains the canonical decision_resolution.decision_item_ref for every current-map status=resolved decision exactly once; current-map superseded/excluded decisions appear exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved, while an all-excluded route-clear handoff may use decisions=[]. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
       ],
       "pass_criteria": [
         "The response accounts for newly unlocked and superseded items separately.",
@@ -1080,10 +1080,20 @@
         "required_substrings": [
           "downstream_effects",
           "newly_precise_item_refs",
+          "converted_decision_item_ref=consent-decision",
+          "actionable canonical decision_item",
+          "appears exactly once in newly_precise_item_refs",
           "superseded_item_refs",
           "newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded]",
           "superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded",
           "route_clear_handoff",
+          "route_clear_handoff.decisions=[retention-decision]",
+          "canonical decision_resolution.decision_item_ref",
+          "every current-map status=resolved decision exactly once",
+          "current-map superseded/excluded decisions appear exactly once in exclusions",
+          "decisions is non-empty when any current-map decision has status=resolved",
+          "Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions",
+          "all-excluded route-clear handoff may use decisions=[]",
           "size=small",
           "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
           "Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed",
@@ -1133,6 +1143,20 @@
         "newly_precise_item_refs=[missing-consent-decision]",
         "newly_precise_item_refs=[consent-decision, consent-decision]",
         "newly_precise_item_refs=[obsolete-decision]",
+        "route_clear_handoff.decisions=[arbitrary-decision]",
+        "route_clear_handoff.decisions=[retention-decision, retention-decision]",
+        "route_clear_handoff.decisions=[] while retention-decision is resolved",
+        "route_clear_handoff.decisions=[retention-decision] while consent-decision is resolved",
+        "route_clear_handoff.exclusions=[] while obsolete-decision is superseded",
+        "exclusions=[obsolete-decision, obsolete-decision]",
+        "exclusions=[missing-decision]",
+        "exclusions=[retention-decision] while retention-decision is resolved",
+        "status=unlocked without converted_decision_item_ref=consent-decision",
+        "converted_decision_item_ref=[missing-consent-decision]",
+        "converted_decision_item_ref=[obsolete-decision]",
+        "converted_decision_item_ref=[excluded-decision] while excluded-decision has status=excluded",
+        "converted_decision_item_ref=consent-decision with wrong predecessor",
+        "converted_decision_item_ref=consent-decision absent from newly_precise_item_refs",
         "superseded_item_refs=[consent-decision]",
         "superseded_item_refs=[missing-consent-decision]",
         "superseded_item_refs=[obsolete-decision, obsolete-decision]",
@@ -1289,6 +1313,124 @@
       }
     },
     {
+      "id": "progressive-all-excluded-route-clear",
+      "title": "All-excluded progressive route clearance remains concrete",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a non-empty current map may clear with no resolved decisions only when its retired/excluded uncertainty must retain its predecessor resolution, the exclusion is exact, and ordinary route-clear safety remains in force.",
+      "prompt": "A progressive map's only predecessor was previously resolved, then superseded. Its dependent uncertainty is now excluded. Show the concrete all-excluded route-clear handoff without dropping the current map or its retained resolution, while preserving the ordinary pending route-clear state and no-execution boundary.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The route is clear: no active, blocked, or remaining deferred uncertainty exists beyond the excluded entry.",
+        "The predecessor resolution remains retained canonically."
+      ],
+      "expected_behavior": [
+        "Keeps decision_item_refs=[obsolete-decision] with decision_id=obsolete-decision and status=superseded.",
+        "Keeps deferred_uncertainty_refs=[obsolete-uncertainty] with status=excluded and unlocking_decision_item_ref=obsolete-decision.",
+        "Retains decision_resolution.decision_item_ref=obsolete-decision exactly once.",
+        "Emits route_clear_handoff.decisions=[] and exclusions=[obsolete-decision] as the exact all-excluded partition.",
+        "Keeps uncertainty_shape=progressive, progressive_discovery_state=route_clear, progressive_route_clear_consumption_state=pending, progressive_artifact_retention_state=retained, open_item_refs=[], blocked_item_refs=[], remaining_deferred_uncertainty_refs=[], retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty], and next_route=bounded_discover while the Requirement Acceptance Map is prepared.",
+        "Keeps route_clear in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited; only the framework-owned journal/equivalent carried-state update may record the handoff, and any mutating prerequisite uses a separate approved workflow."
+      ],
+      "pass_criteria": [
+        "Current map refs remain non-empty and canonical.",
+        "The predecessor resolution remains available despite its superseded status.",
+        "The handoff has no arbitrary or partial decision/exclusion state."
+      ],
+      "fail_signals": [
+        "Drops the current map to make decisions empty.",
+        "Drops the predecessor resolution after supersession.",
+        "Uses a missing, duplicate, or status-misclassified exclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "decision_item_refs=[obsolete-decision]",
+          "decision_id=obsolete-decision",
+          "status=superseded",
+          "deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "status=excluded",
+          "unlocking_decision_item_ref=obsolete-decision",
+          "decision_resolution.decision_item_ref=obsolete-decision",
+          "route_clear_handoff.decisions=[]",
+          "exclusions=[obsolete-decision]",
+          "uncertainty_shape=progressive",
+          "progressive_discovery_state=route_clear",
+          "progressive_route_clear_consumption_state=pending",
+          "progressive_artifact_retention_state=retained",
+          "open_item_refs=[]",
+          "blocked_item_refs=[]",
+          "remaining_deferred_uncertainty_refs=[]",
+          "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "next_route=bounded_discover",
+          "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
+          "route_clear remains in the no-execution boundary",
+          "project/source mutation",
+          "external writes",
+          "branch creation",
+          "credential-location recording",
+          "framework-owned journal/equivalent carried-state update",
+          "separate approved workflow"
+        ],
+        "forbidden_substrings": [
+          "decision_item_refs=[]",
+          "current-map deferred_uncertainty_refs=[]",
+          "decision_resolution is omitted for obsolete-decision",
+          "exclusions=[obsolete-decision, obsolete-decision]",
+          "exclusions=[missing-decision]",
+          "exclusions=[retention-decision] while retention-decision is resolved",
+          "exclusions=[] while obsolete-decision is superseded"
+        ]
+      }
+    },
+    {
+      "id": "progressive-mapping-retired-lineage-requiredness",
+      "title": "Mapping retains retired current-map lineage without resolved or durable state",
+      "category": "progressive_discovery",
+      "purpose": "Checks that mapping requires the exact retained predecessor resolution when the only current decision is superseded and its current-map deferred uncertainty is retired.",
+      "prompt": "A progressive mapping has no current status=resolved decision. Its only current predecessor was resolved earlier and is now superseded; its only current-map deferred uncertainty is retired. No route-clear consumption or readiness retention marker applies. Show the required retained lineage without advancing the workflow.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The current decision map contains obsolete-decision and obsolete-uncertainty.",
+        "No durable route-clear or readiness retention predicate applies."
+      ],
+      "expected_behavior": [
+        "Keeps uncertainty_shape=progressive and progressive_discovery_state=mapping.",
+        "Keeps decision_item_refs=[obsolete-decision] with decision_id=obsolete-decision and status=superseded.",
+        "Keeps deferred_uncertainty_refs=[obsolete-uncertainty] with status=retired and unlocking_decision_item_ref=obsolete-decision.",
+        "Records that no current decision_item has status=resolved while progressive_route_clear_consumption_state=not_applicable, progressive_sequence_readiness_state=not_applicable, and progressive_artifact_retention_state=not_applicable.",
+        "Retains decision_resolution.decision_item_ref=obsolete-decision exactly once and remains in progressive Discover."
+      ],
+      "pass_criteria": [
+        "The retired current-map lineage remains concrete without a currently resolved decision.",
+        "The response does not rely on a durable retention marker to require the resolution.",
+        "Mapping remains non-executing."
+      ],
+      "fail_signals": [
+        "Omits the predecessor resolution because its decision is superseded.",
+        "Treats the absence of a resolved current decision as permission to drop lineage.",
+        "Advances from mapping."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "uncertainty_shape=progressive",
+          "progressive_discovery_state=mapping",
+          "decision_item_refs=[obsolete-decision]",
+          "decision_id=obsolete-decision",
+          "status=superseded",
+          "deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "status=retired",
+          "unlocking_decision_item_ref=obsolete-decision",
+          "no current decision_item has status=resolved",
+          "progressive_route_clear_consumption_state=not_applicable",
+          "progressive_sequence_readiness_state=not_applicable",
+          "progressive_artifact_retention_state=not_applicable",
+          "decision_resolution.decision_item_ref=obsolete-decision"
+        ],
+        "forbidden_substrings": [
+          "decision_resolution is omitted for obsolete-decision"
+        ]
+      }
+    },
+    {
       "id": "progressive-terminal-archival-omission",
       "title": "Explicit terminal archival releases retained progressive artifacts",
       "category": "progressive_discovery",
@@ -1300,7 +1442,8 @@
         "Explicit terminal evidence establishes that continuation and reference resolution are impossible, rather than relying only on task completion."
       ],
       "expected_behavior": [
-        "Sets progressive_artifact_retention_state=terminally_archived only from explicit final archival/termination evidence that continuation and reference resolution are impossible.",
+        "Sets progressive_artifact_retention_state=terminally_archived only from explicit final archival/termination evidence that continuation and reference resolution are impossible, as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. terminally_archived requires all three states atomically.",
+        "Keeps progressive_route_clear_consumption_state=consumed remains historical and progressive_sequence_readiness_state=closed remains historical through terminal archival.",
         "States that route_clear_handoff may be omitted, loop_readiness_assessment may be omitted, and the retained canonical reference chain may be omitted.",
         "States that source_route_clear_handoff_ref may be omitted and consumed_by_requirement_acceptance_map_ref may be omitted; medium+ Requirement Acceptance Map remains required independently.",
         "Treats terminal archival as terminal and cannot revert to retained for the same task and decision map.",
@@ -1321,6 +1464,12 @@
       "machine_expectations": {
         "required_substrings": [
           "progressive_artifact_retention_state=terminally_archived",
+          "one atomic transition",
+          "uncertainty_shape=bounded",
+          "progressive_discovery_state=not_applicable",
+          "terminally_archived requires all three states atomically",
+          "progressive_route_clear_consumption_state=consumed remains historical",
+          "progressive_sequence_readiness_state=closed remains historical",
           "explicit final archival/termination evidence",
           "continuation and reference resolution are impossible",
           "route_clear_handoff may be omitted",
@@ -1337,6 +1486,14 @@
           "progressive_artifact_retention_state can revert to retained",
           "Sets progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending",
           "Sets progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while uncertainty_shape=progressive"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=route_clear"
+          ,"Sets progressive_artifact_retention_state=terminally_archived from Task state: completed alone"
+          ,"terminally_archived resets progressive_route_clear_consumption_state=not_applicable"
+          ,"terminally_archived resets progressive_sequence_readiness_state=not_applicable"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=mapping"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=resolving"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=blocked"
         ]
       }
     },

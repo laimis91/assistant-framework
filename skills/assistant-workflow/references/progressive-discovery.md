@@ -45,7 +45,10 @@ Each deferred uncertainty names its unlock condition and
 `unlocking_decision_item_ref`. Every current-map uncertainty points to a
 current-map predecessor, and every ref resolves exactly once to a canonical
 decision item. When an uncertainty is unlocked, retired, or excluded, retain
-that predecessor's canonical decision resolution. In every progressive state
+that predecessor's canonical decision resolution. An unlocked uncertainty also
+records `converted_decision_item_ref`, which resolves exactly once to an
+actionable canonical decision item and appears exactly once in the unlocking
+predecessor decision_resolution.newly_precise_item_refs. In every progressive state
 where decision items exist, including mapping, at most one item may have
 `status=active`. A decision frontier snapshot is not required during mapping;
 once it exists, it reflects that same limit while recording multiple sequential
@@ -70,7 +73,7 @@ set `progressive_route_clear_consumption_state=pending` plus
 `progressive_artifact_retention_state=retained` to mirror that handoff
 while keeping typed `uncertainty_shape=progressive` /
 `progressive_discovery_state=route_clear` while preparing the bounded-Discover
-Requirement Acceptance Map. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; that marker carries the handoff and preparation state rather than a completed map. The map must
+Requirement Acceptance Map. Every current-map retired/excluded deferred uncertainty must retain its exact canonical predecessor decision_resolution even when that predecessor is superseded or excluded. route_clear_handoff.decisions and exclusions account for every current-map decision: each status=resolved decision appears exactly once through its canonical decision_resolution.decision_item_ref, and each superseded or excluded decision appears exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; that marker carries the handoff and preparation state rather than a completed map. The map must
 trace the handoff decisions and constraints into applicable accepted map state,
 place exclusions in `non_goals` or entries with `status=approved_exclusion`,
 turn each acceptance seed into an `entries[].acceptance_criterion` with binary
@@ -87,7 +90,8 @@ While `progressive_artifact_retention_state=retained` and either durable marker
 is pending/consumed or active/closed, retain the
 **retained canonical reference chain**: the `decision_map`; every referenced
 `decision_item` and `deferred_uncertainty`; and each canonical
-`decision_resolution` for a resolved item. The
+`decision_resolution` for a resolved item and every exact retained predecessor
+resolution required by a current-map retired/excluded deferred uncertainty. The
 `route_clear_handoff.decision_map_ref` and every applicable
 `loop_readiness_assessment` reference must continue to resolve to those
 canonical artifacts across compaction and active/resumable continuation. The
@@ -96,7 +100,7 @@ not part of the retained chain. Set
 `progressive_artifact_retention_state=terminally_archived`, and then omit the
 handoff, reciprocal refs, readiness assessment, and retained chain, only after
 explicit final archival/termination evidence proves continuation and reference
-resolution are impossible. `Task state: completed` does not qualify as that
+resolution are impossible. This is one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain durable lifecycle history. `Task state: completed` does not qualify as that
 evidence. `terminally_archived` is invalid while route consumption is pending
 or sequence readiness is active, is terminal, and cannot revert to `retained`
 for the same task and decision map.

@@ -45,7 +45,13 @@ Requirement Acceptance Map:
 - Updating a requirement updates this map first, then affected slices, tests,
   and handoffs. Do not silently fork acceptance criteria.
 - During small progressive route clearance, Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; use the pending handoff and its current decision references to prepare the completed map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained. Medium+ work still requires its map regardless of this progressive retention lifecycle.
-- When this map consumes progressive route clearance, its
+- When this map consumes progressive route clearance, the source
+  `route_clear_handoff.decisions` contains every current-map resolved decision
+  exactly once through canonical decision_resolution.decision_item_ref values,
+  while superseded/excluded current-map decisions appear exactly once in
+  exclusions. decisions is non-empty when any current-map decision has
+  status=resolved; retained historical resolutions for superseded/excluded
+  current-map items are lineage evidence only and do not appear in decisions. Its
   `source_route_clear_handoff_ref` resolves to the source handoff and that
   handoff's `consumed_by_requirement_acceptance_map_ref` resolves back to this
   consuming map; these reciprocal references are not equal values. The handoff
@@ -57,7 +63,7 @@ Requirement Acceptance Map:
   `progressive_artifact_retention_state=retained`. After explicit final
   archival/termination evidence proves continuation and reference resolution
   are impossible, set
-  `progressive_artifact_retention_state=terminally_archived`; then the
+  `progressive_artifact_retention_state=terminally_archived` as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; then the
   progressive reciprocal refs may be omitted even when a medium+ Requirement
   Acceptance Map itself remains required. `Task state: completed` does not
   qualify as final archival, and `terminally_archived` cannot revert.
