@@ -2,7 +2,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
-p0p4_enable_codex_semantic_fixture
 
 p0p4_file_mode_octal() {
     local path="$1"
@@ -465,20 +464,25 @@ else
     fail "interrupted Gemini retired memory protocol was not preserved with a fail-closed diagnostic"
 fi
 
-test_start "installer reinstall removes stale installed tool build artifacts"
+test_start "installer removes stale build artifacts only from managed tools"
 INSTALL_HOME_SEVEN="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SEVEN"
 if HOME="$INSTALL_HOME_SEVEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-tools-1.out 2>/tmp/p0p4-install-tools-1.err; then
-    stale_publish="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/.publish"
-    stale_bin="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/bin"
-    stale_obj="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/obj"
-    mkdir -p "$stale_publish" "$stale_bin" "$stale_obj"
-    touch "$stale_publish/MemoryGraph" "$stale_bin/stale.dll" "$stale_obj/stale.dll"
+    stale_publish="$INSTALL_HOME_SEVEN/.codex/tools/evals/.publish"
+    stale_bin="$INSTALL_HOME_SEVEN/.codex/tools/evals/bin"
+    stale_obj="$INSTALL_HOME_SEVEN/.codex/tools/evals/obj"
+    legacy_publish="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/.publish"
+    legacy_bin="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/bin"
+    legacy_obj="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/obj"
+    mkdir -p "$stale_publish" "$stale_bin" "$stale_obj" "$legacy_publish" "$legacy_bin" "$legacy_obj"
+    touch "$stale_publish/managed" "$stale_bin/managed.dll" "$stale_obj/managed.dll"
+    touch "$legacy_publish/MemoryGraph" "$legacy_bin/stale.dll" "$legacy_obj/stale.dll"
     if HOME="$INSTALL_HOME_SEVEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-tools-2.out 2>/tmp/p0p4-install-tools-2.err; then
-        if [[ ! -e "$stale_publish" && ! -e "$stale_bin" && ! -e "$stale_obj" ]]; then
+        if [[ ! -e "$stale_publish" && ! -e "$stale_bin" && ! -e "$stale_obj" \
+            && -e "$legacy_publish/MemoryGraph" && -e "$legacy_bin/stale.dll" && -e "$legacy_obj/stale.dll" ]]; then
             pass
         else
-            fail "expected stale memory-graph .publish, bin, and obj artifacts to be removed after reinstall"
+            fail "expected managed build artifacts to be removed without altering the legacy Memory Graph tool tree"
         fi
     else
         fail "second install for stale tool cleanup failed; see /tmp/p0p4-install-tools-2.err"
@@ -487,7 +491,7 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
-test_start "Codex reinstall retires stale memory-graph MCP config, preserves no-hooks profile, and file mode"
+test_start "Codex reinstall preserves legacy Memory Graph MCP config without a Codex CLI"
 INSTALL_HOME_NINE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_NINE"
 mkdir -p "$INSTALL_HOME_NINE/.codex"
@@ -514,22 +518,18 @@ hooks = false
 codex_hooks = false
 STALE_CODEX_MCP
 chmod 600 "$INSTALL_HOME_NINE/.codex/config.toml"
+cp "$INSTALL_HOME_NINE/.codex/config.toml" "$INSTALL_HOME_NINE/original-config.toml"
 if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-stale-codex-mcp.out 2>/tmp/p0p4-install-stale-codex-mcp.err; then
     config_file="$INSTALL_HOME_NINE/.codex/config.toml"
     config_mode="$(p0p4_file_mode_octal "$config_file")"
-    if grep -q '^\[mcp_servers\.memory-graph\]' "$config_file" \
-        || grep -q "/stale/memory-graph" "$config_file" \
-        || ! grep -q '^model = "test-model"$' "$config_file" \
-        || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
-        || ! grep -q '^hooks = false$' "$config_file" \
-        || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
+    if ! cmp -s "$config_file" "$INSTALL_HOME_NINE/original-config.toml" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph registration to retire while preserving unrelated config, disabled hooks profile, and file mode"
+        fail "expected legacy Codex MCP configuration to remain byte-for-byte unchanged with its file mode preserved"
     else
         pass
     fi
 else
-    fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
+    fail "Codex install with legacy memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
 fi
 
 test_start "clean install keeps legacy offline evals but excludes source-only promotion evaluators"
@@ -655,5 +655,4 @@ else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
-p0p4_disable_codex_semantic_fixture
 p0p4_finish_suite "${BASH_SOURCE[0]}"

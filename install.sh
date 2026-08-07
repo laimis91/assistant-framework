@@ -520,24 +520,29 @@ substitute_agent_paths_in_file() {
 
 cleanup_installed_tool_build_artifacts() {
     local tools_target="$1"
-    local artifact_dir
+    local tools_source="$2"
+    local artifact_dir source_directory target_directory
     local found=false
 
-    if [[ ! -d "$tools_target" ]]; then
+    if [[ ! -d "$tools_target" || ! -d "$tools_source" ]]; then
         if $DRY_RUN; then
-            dry "Would remove stale tool build artifacts under $tools_target/*/: .publish, bin, obj"
+            dry "Would remove stale build artifacts from managed tool directories under $tools_target"
         fi
         return 0
     fi
 
-    while IFS= read -r artifact_dir; do
-        found=true
-        if $DRY_RUN; then
-            dry "Remove stale tool build artifact: $artifact_dir"
-        else
-            rm -rf "$artifact_dir"
-        fi
-    done < <(find "$tools_target" -mindepth 2 -type d \( -name ".publish" -o -name "bin" -o -name "obj" \) -prune -print)
+    while IFS= read -r source_directory; do
+        target_directory="$tools_target/${source_directory##*/}"
+        [[ -d "$target_directory" ]] || continue
+        while IFS= read -r artifact_dir; do
+            found=true
+            if $DRY_RUN; then
+                dry "Remove stale tool build artifact: $artifact_dir"
+            else
+                rm -rf "$artifact_dir"
+            fi
+        done < <(find "$target_directory" -mindepth 1 -type d \( -name ".publish" -o -name "bin" -o -name "obj" \) -prune -print)
+    done < <(find "$tools_source" -mindepth 1 -maxdepth 1 -type d -print)
 
     if $DRY_RUN && ! $found; then
         dry "No stale tool build artifacts found under $tools_target"
@@ -622,24 +627,6 @@ if [[ -n "$PLUGIN_PROFILE" ]] && $DRY_RUN; then
 fi
 
 # ── Install skills ────────────────────────────────────────────────────────────
-
-# The standalone tombstone validates every targeted path and configuration
-# before mutation. Run it before syncing so a stale runtime cannot be restored.
-MEMORY_RETIREMENT_TOOL="$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh"
-[[ -f "$MEMORY_RETIREMENT_TOOL" ]] || fail "Memory Graph retirement tool not found: $MEMORY_RETIREMENT_TOOL"
-RETIREMENT_CODEX_HOME=""
-if [[ "$AGENT" == "codex" ]]; then
-    RETIREMENT_CODEX_HOME="${CODEX_HOME:-}"
-fi
-if $DRY_RUN; then
-    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT" --dry-run; then
-        fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
-    fi
-else
-    if ! HOME="$HOME" CODEX_HOME="$RETIREMENT_CODEX_HOME" bash "$MEMORY_RETIREMENT_TOOL" --agent "$AGENT"; then
-        fail "Retired Memory Graph cleanup is incomplete; installation stopped before syncing files."
-    fi
-fi
 
 for skill in "${SKILLS[@]}"; do
     source_dir="$SKILLS_SOURCE/$skill"
@@ -759,7 +746,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     if $DRY_RUN; then
         dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
-        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
+        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"
     else
         mkdir -p "$TOOLS_TARGET"
         rsync -a --delete \
@@ -767,20 +754,19 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='.publish' \
             --exclude='bin' \
             --exclude='obj' \
+            --exclude='/memory-graph' \
             --exclude='/context-budget-report.sh' \
             --exclude='/evals/run-codex-framework-evals.sh' \
             --exclude='/evals/finalize-workflow-kernel-review.sh' \
             --exclude='/evals/lib/context-budget-evidence.sh' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
-        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET"
+        cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"
 
         # Make scripts executable
         if compgen -G "$TOOLS_TARGET"/*/*.sh >/dev/null 2>&1; then
             chmod +x "$TOOLS_TARGET"/*/*.sh
         fi
-        [[ ! -f "$TOOLS_TARGET/cleanup-memory-graph.sh" ]] || chmod +x "$TOOLS_TARGET/cleanup-memory-graph.sh"
-
         ok "Tools -> $TOOLS_TARGET/"
     fi
 fi

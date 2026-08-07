@@ -2276,15 +2276,12 @@ function Invoke-AssistantFrameworkInstall {
         'evals/finalize-workflow-kernel-review.sh',
         'evals/lib/context-budget-evidence.sh'
     )
-    [void](Assert-SafeUserFile -LiteralPath $settingsFile -ManagedRoot $agentHome -Purpose 'agent settings')
+    # Legacy hook retirement is the only remaining operation that reads agent
+    # configuration. Do not inspect unrelated user-owned files such as Codex
+    # config.toml or Claude's top-level .claude.json.
     [void](Assert-SafeUserFile -LiteralPath $legacySettings -ManagedRoot $agentHome -Purpose 'legacy hook settings')
     [void](Assert-SafeUserFile -LiteralPath $instructionsFile -ManagedRoot $agentHome -Purpose 'agent instructions' -RequireExclusiveUpdatePreflight:($agentName -eq 'codex'))
-    Assert-JsonFilePropertyIdentitySafe -LiteralPath $settingsFile
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $legacySettings
-    if ($agentName -eq 'claude') {
-        $claudeConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $script:UserHome '.claude.json') -ManagedRoot $script:UserHome -Purpose 'Claude configuration'
-        Assert-JsonFilePropertyIdentitySafe -LiteralPath $claudeConfigFile
-    }
 
     foreach ($skillName in $selectedSkills) {
         [void](Assert-ManagedDirectoryCopySafe -Source (Join-Path $skillsSource $skillName) -Target (Join-Path $skillsTarget $skillName) -ManagedRoot $skillsTarget -Label $skillName)
@@ -2304,16 +2301,8 @@ function Invoke-AssistantFrameworkInstall {
     }
     Assert-LegacyHookCleanupSafe -HooksTarget $hooksTarget
 
-    $retirementTool = Join-Path $script:FrameworkDir 'tools/cleanup-memory-graph.ps1'
-    if (-not (Test-Path -LiteralPath $retirementTool -PathType Leaf)) {
-        throw "Memory Graph retirement tool not found: $retirementTool"
-    }
     $installedAgentFiles = @()
     try {
-        & $retirementTool -Agent $agentName -DryRun:$DryRun
-        $retirementSucceeded = $?
-        if (-not $retirementSucceeded) { throw 'Memory Graph retirement cleanup failed before installation.' }
-
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
         }

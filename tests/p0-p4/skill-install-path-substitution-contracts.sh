@@ -25,8 +25,6 @@ mkdir -p "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/contracts" \
     "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/references" \
     "$FIXTURE_FRAMEWORK/tools"
 cp "$FRAMEWORK_DIR/install.sh" "$FIXTURE_FRAMEWORK/install.sh"
-cp "$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh" "$FIXTURE_FRAMEWORK/tools/cleanup-memory-graph.sh"
-chmod +x "$FIXTURE_FRAMEWORK/tools/cleanup-memory-graph.sh"
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/SKILL.md" <<'SKILL_FIXTURE'
 ---
 name: path-substitution-contract

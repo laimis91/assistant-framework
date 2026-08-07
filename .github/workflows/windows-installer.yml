@@ -7,8 +7,6 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
-      - 'tools/cleanup-memory-graph.sh'
-      - 'tools/cleanup-memory-graph.ps1'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -17,7 +15,6 @@ on:
       - 'skills/**'
       - 'tests/windows/**'
       - 'tests/p0-p4/windows-installer-contracts.sh'
-      - 'tests/p0-p4/memory-retirement-contracts.sh'
       - 'tools/**'
   push:
     branches:
@@ -27,8 +24,6 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
-      - 'tools/cleanup-memory-graph.sh'
-      - 'tools/cleanup-memory-graph.ps1'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -37,7 +32,6 @@ on:
       - 'skills/**'
       - 'tests/windows/**'
       - 'tests/p0-p4/windows-installer-contracts.sh'
-      - 'tests/p0-p4/memory-retirement-contracts.sh'
       - 'tools/**'
 
 permissions:

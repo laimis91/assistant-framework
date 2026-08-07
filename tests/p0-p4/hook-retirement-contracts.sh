@@ -329,9 +329,9 @@ for agent in claude codex gemini; do
         migration_failures+=("$agent migration did not preserve settings file mode")
     fi
     if [[ "$agent" == "claude" ]] \
-        && ! jq -e '(.mcpServers | has("memory-graph") | not) and .mcpServers["custom-server"].command == "custom-server-command"' \
+        && ! jq -e '.mcpServers["memory-graph"].command == "stale-memory-command" and .mcpServers["custom-server"].command == "custom-server-command"' \
             "$migration_config" >/dev/null 2>&1; then
-        migration_failures+=("claude migration did not preserve custom MCP settings while removing the stale entry")
+        migration_failures+=("claude migration changed legacy Memory Graph or custom MCP settings")
     fi
     for custom_command in \
         "/tmp/$agent-custom-first.sh" \

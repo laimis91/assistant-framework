@@ -59,31 +59,13 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 ./install.sh --agent gemini
 ```
 
-For one compatibility release, a normal install also retires older Assistant Framework lifecycle registrations safely. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. Potentially relevant or ambiguous structured configuration is left unchanged and cleanup stops before deleting retired artifacts. Without Python, cleanup may preserve an unrelated structured configuration only after conservatively ruling out the retired identity; it does not validate provider syntax. Editing a potentially relevant Codex `config.toml` requires the Codex CLI; if it is unavailable or the semantic result is ambiguous, the config, runtime, and provider data are preserved and installation stops. Correct the configuration or make the Codex CLI available, then rerun the install. Restart the agent after migrating an older install. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
-
-### Retiring an older installation
-
-On an older or other machine, run the standalone cleanup tool from this checked-out repository before reinstalling. Start with a dry run; normal cleanup removes only framework-owned registrations and installed artifacts while preserving provider data. Editing a potentially relevant existing Codex `config.toml` requires the Codex CLI; unavailable or ambiguous semantic results preserve configuration, runtime, and provider data, then stop cleanup. `--purge-data` is optional and destructive.
-
-```bash
-tools/cleanup-memory-graph.sh --dry-run
-tools/cleanup-memory-graph.sh
-tools/cleanup-memory-graph.sh --purge-data
-tools/cleanup-memory-graph.sh --agent codex --dry-run
-```
-
-```powershell
-.\tools\cleanup-memory-graph.ps1 -DryRun
-.\tools\cleanup-memory-graph.ps1
-.\tools\cleanup-memory-graph.ps1 -PurgeData
-.\tools\cleanup-memory-graph.ps1 -Agent codex -DryRun
-```
+For one compatibility release, a normal install retires only older Assistant Framework lifecycle hook registrations. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. It does not inspect or alter legacy Memory Graph configuration, runtime, or provider data. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
 
 ### Native Windows installation
 
 Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7.
 
-Close Codex App before installing or updating Codex so it releases `config.toml` and `AGENTS.md`. The installer checks existing copies of both files before it starts changing managed files. If either file is locked, close Codex App and rerun the same command. If a file becomes unavailable after that check, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
+Close Codex App before installing or updating Codex so it releases `AGENTS.md` and managed framework files. The installer leaves `config.toml` untouched and does not invoke the Codex CLI. If a managed file is locked, close Codex App and rerun the same command. If a file becomes unavailable after preflight, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
 
 Install the complete release inventory for one agent:
 
@@ -129,12 +111,11 @@ Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy
 
 1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
 2. Close Codex App, run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
-3. Resolve the Codex configuration root and confirm its configuration and global instructions exist:
+3. Resolve the Codex configuration root and confirm its global instructions were installed. Existing `config.toml` content is left unchanged:
 
    ```powershell
    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-   Test-Path -LiteralPath (Join-Path $codexHome 'config.toml')
-   Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
+    Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
    Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
    ```
 
