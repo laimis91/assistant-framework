@@ -12,7 +12,7 @@ gates:
         on_fail: "Ask for the missing symptom or extract it from the supplied logs, error, failing command, or test output"
       - id: SC2
         check: "Scope is bounded to files, command, test, endpoint, workflow, or subsystem before diagnostics begin"
-        on_fail: "Inspect local context to infer scope or ask one material narrowing question"
+        on_fail: "Inspect local context to infer scope or ask every remaining material, non-discoverable narrowing question grouped by topic"
       - id: SC3
         check: "Safety constraints and destructive/production boundaries are recorded before commands run"
         on_fail: "Record constraints and avoid destructive or production-affecting diagnostics until approved"

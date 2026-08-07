@@ -35,6 +35,8 @@ Task type: [feature | bugfix | refactor | migration | rewrite | config | infra |
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
+Architecture design mode: [not_applicable | lightweight | required | review_intensive]
+Architecture Decision Pack ref: [ref, or N/A with concrete reason]
 Slice promotion mode: [local | review_gated]
 Slice topology: target_branch=[ref] | task_branch=[feature/<task>] | slice_branch format=[slice/<task>/<slice-id>]
 Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REVIEW_STALE plus evidence refs]
@@ -53,7 +55,6 @@ Clarification defaults:
   Rationale: [why safe/reversible and not scope-changing]
 Clarification confidence: [low | medium | high]
 Clarification questions asked: [0+]
-Clarification question cap: [0+; maximum, not quota]
 Clarification admissibility: [satisfied | needs_clarification | not_applicable]
 Unresolved clarification topics:
 - [none, or one short topic per line]
@@ -112,6 +113,14 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 ## Requirement Acceptance Map
 [paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work or retained route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
 - source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance while progressive_artifact_retention_state=retained; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map; terminally_archived permits omission]
+
+## Architecture Decision Pack
+[N/A only when architecture_design_mode=not_applicable with a concrete reason. Otherwise retain a typed reference, not a duplicate narrative.]
+- Pack id / mode: [ref/id | lightweight | required | review_intensive]
+- Freshness: [branch/HEAD or greenfield basis, source refs, invalidated_by]
+- Boundary / design-pressure / Type Ledger / quality scenario refs: [compact refs]
+- Material questions: [none before Plan, or grouped refs]
+- Plan/task packet/review refs: [typed locations]
 
 ## Progressive Discovery
 [N/A only for ordinary bounded work with both durable markers and progressive_artifact_retention_state not_applicable, or after typed terminal archival. Keep compact refs for the retained canonical reference chain here or in the equivalent carried state; do not duplicate full schemas.]
@@ -294,7 +303,7 @@ do not start the next slice until the current one is `VERIFIED`
 
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
-3. **Clarification** caps are maximums, not quotas. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
+3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
 4. **Decompose/Plan** persists the slice manifest for medium+ work. Plan is omitted only for eligible `plan_mode=none`, inline mode records a no-wait compact plan, and approval-required mode captures approval.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
 6. **Review** owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.

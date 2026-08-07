@@ -210,8 +210,8 @@
       }
     },
     {
-      "id": "clarification-cap-is-not-question-quota",
-      "title": "Clarification cap is not question quota",
+      "id": "clarification-is-material-not-capped",
+      "title": "Clarification is material, not capped",
       "category": "clarification_admissibility",
       "purpose": "Checks that clear medium+ tasks can proceed with zero clarification questions while ambiguous risky tasks block before planning.",
       "prompt": "Implement the approved runtime integration contract test exactly as described in the issue, using the named files and expected assertion text.",
@@ -222,7 +222,7 @@
       ],
       "expected_behavior": [
         "Records clarification questions asked as 0 when context is sufficient.",
-        "States the question cap is a maximum, not a quota.",
+        "States that no numeric cap or quota suppresses material questions.",
         "Does not ask a random medium-task question.",
         "If ambiguity appears later, returns to Discover instead of guessing."
       ],
@@ -233,20 +233,72 @@
       ],
       "fail_signals": [
         "Asks a random question solely because the task is medium.",
-        "Treats question cap as a required question count.",
+        "Suppresses a material question to satisfy a numeric quota.",
         "Builds despite unresolved implementation-shaping ambiguity."
       ],
       "machine_expectations": {
         "required_substrings": [
           "Clarification questions asked: 0",
-          "cap is maximum, not quota",
+          "no numeric cap or quota",
           "admissible",
           "high"
         ],
         "forbidden_substrings": [
           "medium tasks must ask at least one question",
-          "question quota",
-          "I will guess"
+          "I will guess",
+          "I will limit material questions to three"
+        ]
+      }
+    },
+    {
+      "id": "architecture-pack-resists-premature-abstraction",
+      "title": "Architecture Pack resists premature abstraction",
+      "category": "architecture_design_pressure",
+      "purpose": "Checks that the workflow makes a source-backed architecture decision without inventing a generic engine or hiding resource ownership behind generic primitives.",
+      "prompt": "Design infrastructure for algorithms that process decoded files sequentially in one pass. Existing decoders have two real shapes: block decoders own a format-sized buffer, while streaming decoders can adapt to a caller buffer. Files can expand to hundreds of megabytes and the server handles concurrent requests. One algorithm runs per pass, formats and algorithms will grow, and some algorithms may finish early. Do not write code until the design is approved.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Local source contains the two decoder shapes and their current ownership behavior.",
+        "The task has resource, lifecycle, extension, and public interface consequences."
+      ],
+      "expected_behavior": [
+        "Triages architecture_design_mode as required or review_intensive and creates a fresh Architecture Decision Pack.",
+        "Records design_pressure_checks for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path.",
+        "Identifies material questions or evidence about cancellation/early completion, buffer and stream ownership, disposal, concurrent memory bounds, registration/selection, and a concrete decoder-to-algorithm path.",
+        "Uses a Type Ledger to prefer named domain/request/result types over unexplained generic strings, integers, callbacks, or collections.",
+        "Keeps any push/pull or orchestration choice provisional until it is justified by the representative path and failure/cancellation behavior.",
+        "Defines workload, budget or explicit unknown, measurement, and failure condition before claiming memory efficiency or performance."
+      ],
+      "pass_criteria": [
+        "The response names the Architecture Decision Pack and its freshness basis.",
+        "The response resolves or asks every material design question without a numeric cap.",
+        "The response gives explicit ownership, lifecycle, extension, and verification evidence before plan approval.",
+        "The response does not manufacture a generic engine merely because later algorithms may exist."
+      ],
+      "fail_signals": [
+        "Commits to a generic push accumulator or outer engine without a concrete consumer path.",
+        "Leaves buffer, stream, cancellation, or disposal ownership implicit.",
+        "Hardcodes a closed list of formats despite the stated extension requirement.",
+        "Claims memory efficiency without a workload, bound, measurement, and failure condition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Architecture Decision Pack",
+          "design_pressure_checks",
+          "control_and_early_exit",
+          "ownership_and_disposal",
+          "resource_envelope",
+          "extension_registration",
+          "representative_path",
+          "Type Ledger",
+          "workload",
+          "failure condition"
+        ],
+        "forbidden_substrings": [
+          "generic push accumulator",
+          "hardcode all formats",
+          "unbounded buffer",
+          "assume the outer engine"
         ]
       }
     },

@@ -66,3 +66,20 @@ fields:
     description: "Current thinking or position to challenge, validate, or build on"
     validation: "Describes a stance, hypothesis, or preliminary conclusion"
     on_missing: skip
+
+  - name: architecture_design_mode
+    type: enum
+    required: false
+    enum_values: [not_applicable, lightweight, required, review_intensive]
+    description: "Workflow Architecture Decision Pack mode when the reasoning is challenging an architecture decision"
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use the carried workflow mode when an Architecture Decision Pack is present; otherwise not_applicable. Do not create a Pack or architecture ceremony for an ordinary local decision."
+
+  - name: architecture_decision_pack_ref
+    type: string
+    required: conditional
+    condition: "architecture_design_mode != not_applicable"
+    description: "Fresh workflow Architecture Decision Pack reference or durable decision record being challenged"
+    validation: "Non-empty and traceable to its source revision/context; if stale, identify refresh rather than reasoning from an assumed current design"
+    on_missing: ask

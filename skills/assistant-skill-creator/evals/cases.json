@@ -82,7 +82,7 @@
         "Uses the existing skill shortcut and reads the existing SKILL.md instead of asking for all capture fields again.",
         "Enters DESIGN using the existing skill purpose, category, and triggers.",
         "Builds the contract files required for the inferred skill category.",
-        "Runs VALIDATE against the 12 contract design guide rules.",
+        "Runs VALIDATE against the 14 contract design guide rules.",
         "Checks compact Goal, Success criteria, Constraints, Output, and Stop rules for non-trivial skills.",
         "Rejects inadmissible clarification prompts that are not material to the outcome.",
         "Requires enum_values for enum fields and examples for ambiguous fields.",
@@ -91,7 +91,7 @@
       "pass_criteria": [
         "The response names existing_skill_path or existing skill shortcut behavior.",
         "The response includes the VALIDATE phase and validation summary.",
-        "The response references all 12 contract design guide rules.",
+        "The response references all 14 contract design guide rules.",
         "The response fixes missing enum_values or examples before completion.",
         "The response does not claim validation passed with known failures."
       ],
@@ -108,7 +108,7 @@
           "--- PHASE: BUILD ---",
           "--- PHASE: VALIDATE ---",
           "validation summary",
-          "12 contract design guide rules",
+          "14 contract design guide rules",
           "Success criteria",
           "Stop rules",
           "admissible",
@@ -170,6 +170,53 @@
           "one run is enough",
           "save task progress",
           "verification is optional"
+        ]
+      }
+    },
+    {
+      "id": "skill-contract-design-preserves-semantic-interface-types",
+      "title": "Skill contract design preserves semantic interface types",
+      "category": "semantic_interface_design",
+      "purpose": "Checks that contract design does not hide domain or public-contract meaning behind generic primitive parameters merely for future convenience.",
+      "prompt": "Design a skill contract for import records. Use string id, int status, IEnumerable<int> selectedRows, and Action<string> onComplete everywhere so future expansion is easy.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "Record identity, status state, row selection, and completion outcome have domain/public semantics.",
+        "The API will be reused by consumers outside the initial implementation."
+      ],
+      "expected_behavior": [
+        "Applies Rule 13, Semantic interfaces retain domain meaning.",
+        "Proposes named types such as ImportRecordId, ImportStatus, SelectedImportRows, and ImportCompletion or a cohesive ImportRequest/ImportResult contract when appropriate.",
+        "Allows raw primitive transport only at a documented local temporary, wire/storage, foreign/framework, or no-domain-semantics boundary with conversion and validation.",
+        "Requires a compatibility/versioning, adapter, or migration path for public or serialized contract evolution.",
+        "Requires a representative producer-consumer path and applicable early-exit, ownership/disposal, resource-envelope, or registration checks before introducing a generic orchestration abstraction.",
+        "Does not ask fewer material questions merely to satisfy a numeric question limit."
+      ],
+      "pass_criteria": [
+        "The response names Rule 13 or semantic interface types.",
+        "The response distinguishes named types from an explicit primitive exception.",
+        "The response describes conversion/validation, public-contract evolution, and a representative path or explicit not-applicable reason."
+      ],
+      "fail_signals": [
+        "Accepts generic primitives solely because they might expand later.",
+        "Bans all primitive transport without considering boundary exceptions.",
+        "Omits compatibility planning for a public/serialized contract."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Rule 13",
+          "semantic type",
+          "primitive exception",
+          "conversion",
+          "validation",
+          "compatibility",
+          "migration",
+          "representative path"
+        ],
+        "forbidden_substrings": [
+          "string is fine everywhere",
+          "int is always enough",
+          "no compatibility plan needed"
         ]
       }
     },

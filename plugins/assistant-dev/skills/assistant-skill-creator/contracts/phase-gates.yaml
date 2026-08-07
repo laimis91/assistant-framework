@@ -60,6 +60,9 @@ gates:
       - id: SD6
         check: "Policy/runtime assumptions are explicit, optional/configurable, and have fallback behavior"
         on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, automation, subagents, state paths, external tools, and sensitive examples"
+      - id: SD7
+        check: "Domain/public/lifecycle/unit/extension-bearing interfaces use named semantic types, every primitive exception has a stated boundary plus conversion/validation, and any control/resource/extension abstraction has a representative path with applicable early-exit, ownership/disposal, bounded-resource, and registration checks"
+        on_fail: "Replace generic interface primitives with semantic types or document the permitted local temporary, wire/storage, foreign/framework, or no-domain-semantics exception and its validation boundary; add a representative path and applicable design-pressure checks before approving a generic engine or interface"
 
 
   - phase: VERIFIED_DISTILLATION
@@ -133,6 +136,9 @@ gates:
         check: "At least one cross-phase invariant exists"
         condition: "skill_category is process or analysis"
         on_fail: "Add at least one invariant with scope: all_phases"
+      - id: SV1k
+        check: "Semantic interface types, primitive exceptions, and applicable representative-path/design-pressure checks comply with Rule 13"
+        on_fail: "Add named semantic types where meaning is erased, or document the permitted exception, conversion/validation, public-contract evolution plan, and applicable early-exit/ownership/resource/registration evidence"
       - id: SV2
         check: "SKILL.md body is under 500 lines"
         on_fail: "Split content into sub-files under references/"

@@ -48,6 +48,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 - Findings are severity-ranked with evidence and confidence.
 - Every Reviewer return names the non-empty `reviewed_scope` actually inspected.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
+- When a carried Architecture Decision Pack applies, the review checks its freshness, ownership/dependency boundary, semantic type ledger, falsifiable quality scenarios, compatibility/extension seam, and verification handoff.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
 - Validation and a fresh review follow fixes.
 - QA evaluation runs after code-review/build evidence when `qa_evaluation_mode=required`, returns score progression and a final acceptance verdict, and does not replace code-reviewer.
@@ -90,6 +91,7 @@ The fresh Reviewer context bundle points to `references/review-checklists.md` an
 - Agentic loop flag -> Agentic Loop Safety Checklist -> `agentic_loop_safety_checks`.
 - Behavioral flag -> Behavioral Contract Review Checklist -> `behavioral_contract_checks`.
 - Semantic flag -> Semantic Contract Review Checklist -> `semantic_contract_checks`.
+- Architecture Decision Pack flag -> Architecture Decision Pack Review Checklist -> `architecture_decision_pack_checks`.
 
 ## Refactor-Related Findings
 
@@ -106,6 +108,10 @@ Use refactor-related findings only for concrete actionable risk. Allowed risk ca
 Every refactor-related finding MUST state the risk category, affected surface, evidence from the review material, and the smallest durable fix that addresses the risk within the normal finding text.
 
 Use concrete risk framing instead of generic convention, style, cleanliness, or improvement language. Request broad cleanup only when a smaller durable fix cannot remove the risk.
+
+## Architecture Decision Pack Review
+
+Review a Pack only when workflow metadata or review material says one applies. It is a compact, durable decision record, not a permanent architect role or global memory. Require source/revision freshness and every material question that could invalidate the decision; group questions with why, risk if guessed, and a safe default where available. Check control/early-exit behavior, ownership/disposal, bounded resource envelope, extension registration, and the representative producer-consumer path before accepting an interface or engine. Treat generic `string`, numeric, collection, or callback interfaces as a finding when they erase domain/public/lifecycle semantics without an explicit local-boundary primitive exception and conversion/validation. Do not approve memory, performance, or extensibility claims without workload, budget, measurement method, and failure condition; mark absent evidence as unknown or a verification gap.
 
 ## Principle and Readability Lens
 

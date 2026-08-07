@@ -45,7 +45,7 @@ gates:
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
       - id: S7
-        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, one follow-up question, and evidence status before contradiction mapping"
+        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, every material follow-up question prompted by evidence or a recorded none-needed decision, and evidence status before contradiction mapping"
         condition: "research_method == five_lens_briefing"
         on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
 

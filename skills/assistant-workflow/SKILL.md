@@ -27,6 +27,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
+- When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels through Plan, task packets, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
 - Review, QA, and security routing apply when triggered.
 - Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
@@ -36,7 +37,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals.
 - Do not skip applicable phases; Plan is inapplicable only when the explicit `plan_mode=none` eligibility gate passes.
 - Do not ask ritual questions when code/context makes the next safe action clear.
-- Ask bounded clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification.
+- Ask every material clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification. Group questions by topic; never impose an arbitrary numeric question cap.
 - assistant-clarify owns prompt-level ambiguity when its routing matches; clear prompts do not invoke it. Existing workflow clarification owns precise, answerable questions and safe defaults.
 - Load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, `progressive_route_clear_consumption_state in [pending, consumed]`, `progressive_sequence_readiness_state in [active, closed]`, or `progressive_artifact_retention_state=terminally_archived`. The durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained, so invalid carried state fails closed instead of releasing artifacts. Retained state keeps active/resumable progressive artifacts available after `uncertainty_shape=bounded`. `terminally_archived` is allowed only after explicit final archival/termination evidence proves continuation and reference resolution are impossible; `Task state: completed` does not qualify by itself, and terminally archived state cannot revert. Fully specified tasks with `not_applicable` markers stay bounded, and size alone is not a trigger.
 - Progressive Discover is a no-execution boundary; any mutating prerequisite uses a separate approved workflow that returns evidence before normal workflow gates continue.
@@ -50,6 +51,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 Canonical contracts are authoritative. Read `contracts/index.yaml` first, validate at enforcement, and load only the contract selector applicable to the current boundary:
 
 - `entry`: load the exact entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
+- `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -117,17 +119,17 @@ plan mode, subagent state, and search mode. Ideas need binary criteria.
 [Design] = UI only.
 
 Print: `>> Triaged as: [SIZE] — phases: [list]`
-Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | plan=[plan_mode] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
+Print: `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | architecture=[architecture_design_mode] | plan=[plan_mode] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`
 
 If scope exceeds initial triage during any phase, stop and re-triage. Use `references/candidate-search.md` only when `search_mode: candidate_search` is selected.
 
 ## Phase Routing
 
-Load `references/phases.md` for the current phase. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. Use `references/context-budget-and-pattern-retrieval.md` for large material or framework patterns, `references/artifact-first-output-contract.md` before Plan, `references/decomposition-plan-review.md` before medium+ Decompose exits, `references/plan-template.md` during Plan, and `references/context-handoff-templates.md` for non-standard continuations.
+Load `references/phases.md` for the current phase. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. Load `references/architecture-decision-pack.md` only when `architecture_design_mode != not_applicable`. Use `references/context-budget-and-pattern-retrieval.md` for large material or framework patterns, `references/artifact-first-output-contract.md` before Plan, `references/decomposition-plan-review.md` before medium+ Decompose exits, `references/plan-template.md` during Plan, and `references/context-handoff-templates.md` for non-standard continuations.
 
 | Phase | When | Key Actions |
 |---|---|---|
-| Discover | All | Inspect request/repo and unknowns; medium+: Code Mapper; unknown-cause bugfixes: load `assistant-debugging`. |
+| Discover | All | Inspect request/repo and unknowns; create a source map only when the current file/boundary cannot be resolved directly; unknown-cause bugfixes: load `assistant-debugging`. |
 | Decompose | Medium+ | Smallest slices with acceptance and verification. |
 | Plan | `plan_mode != none` | Inline stays concise; approval-required waits for approved scope, packets, files, checks, and risks. |
 | Design | UI only | Direction, checklist, approval. |

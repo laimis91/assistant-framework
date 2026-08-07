@@ -21,6 +21,7 @@ safe fallback behavior, and offline validation.
 - The skill uses the correct Process, Analysis, or Utility contract tier.
 - Root instructions state Goal, Success Criteria, Constraints, Output, and Stop Rules.
 - Missing inputs ask only when outcome-shaping and otherwise infer, skip, or fail.
+- Interfaces preserve domain, public-contract, lifecycle, and unit semantics with named types; primitive transport is allowed only at an explicit local temporary, wire/storage, foreign/framework, or no-domain-semantics boundary with conversion/validation.
 - Evals cover positive routing plus a false-positive or unsafe behavior case.
 
 ## Constraints
@@ -29,6 +30,7 @@ safe fallback behavior, and offline validation.
 - Analysis and Utility skills do not gain subagent handoffs.
 - Memory, metrics, automation, subagents, external tools, and state paths stay
   optional/configurable and policy-gated unless the skill explicitly owns them.
+- Ask every material design question, grouped by topic with why/risk/default; no fixed question quota may hide a material uncertainty.
 - Keep examples agent-agnostic and free of secrets, private endpoints, customer
   data, and workplace-specific confidential details.
 
@@ -101,7 +103,7 @@ templates; add references only when they reduce root load.
 
 ### VALIDATE
 
-Load `validation`; run the 13 contract design guide rules plus company-safety,
+Load `validation`; run the 14 contract design guide rules plus company-safety,
 source validation, eval validation, sync checks, and relevant P0-P4 contracts.
 Fix failures before reporting `VALIDATE COMPLETE`.
 

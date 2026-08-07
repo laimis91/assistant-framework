@@ -33,6 +33,6 @@ This skill is based on a small set of durable communication and counseling findi
 ## Translation into agent behavior
 
 - Reflect the likely goal in plain language before executing
-- Ask no more than 1-3 high-yield questions
+- Ask every high-yield material question that remains after applying safe defaults; group questions by decision topic and keep them concise
 - Prefer multiple-choice or recommended defaults when possible
 - End the clarification loop with a confirmed structured brief

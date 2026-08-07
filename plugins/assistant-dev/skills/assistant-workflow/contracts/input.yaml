@@ -56,8 +56,8 @@ fields:
   - name: required_agents
     type: string[]
     required: false
-    description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Separated role names remain Code Writer, Builder/Tester, and Code Reviewer. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
+    description: "Agent or skill roles required by concrete task uncertainty, task type, risk tier, and explicit user/project routing"
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect are selected only for a concrete mapping, lifecycle, or Architecture Decision Pack uncertainty, not from size alone. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
     default: []
     on_missing: skip
 
@@ -358,6 +358,26 @@ fields:
     on_missing: infer
     infer_from: "Use candidate_search for explicit alternatives, open-ended architecture/design, optimization-heavy work, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots; use lightweight for ordinary tasks with 1-3 obvious options; otherwise none."
 
+  - name: architecture_design_mode
+    type: enum
+    required: false
+    enum_values: [not_applicable, lightweight, required, review_intensive]
+    description: "Whether the task needs a typed Architecture Decision Pack before executable planning"
+    validation: "not_applicable requires a concrete reason that the change has one evidenced local path and no meaningful changed boundary, data lifecycle, public contract, resource target, extension seam, or competing design. lightweight records one bounded design decision. required covers new systems, cross-boundary/public contracts, persistent data lifecycle, material extensibility/resource targets, or genuinely viable designs. review_intensive adds independent challenge for high-risk or conflicting drivers. Size alone is never a trigger."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use required when the task creates a system or changes a cross-boundary/public contract, persistent data lifecycle, material memory/performance/reliability/extensibility target, or has genuinely viable architectures. Use lightweight for one local owner/dependency/type/verification decision. Use review_intensive only for high-risk or conflicting drivers that need independent challenge. Otherwise use not_applicable and record the concrete reason."
+
+  - name: architecture_design_trigger_reasons
+    type: string[]
+    required: conditional
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    description: "Concrete architecture triggers selected during Triage"
+    validation: "Each entry names an observed trigger such as cross-boundary contract, data lifecycle, resource target, extension seam, genuinely viable alternative, or conflicting driver. Empty only when architecture_design_mode=not_applicable."
+    default: []
+    on_missing: infer
+    infer_from: "Derive from the request and candidate scope scan; record only triggers supported by local or user evidence."
+
   - name: candidate_search_goal
     type: string
     required: false
@@ -450,14 +470,6 @@ fields:
     default: 0
     on_missing: skip
 
-  - name: clarification_question_cap
-    type: int
-    required: false
-    description: "Maximum allowed clarification questions for the current size/risk, never a quota"
-    validation: "Must be zero or greater. The cap limits questions; it never requires questions."
-    default: 0
-    on_missing: skip
-
   - name: clarification_admissibility
     type: enum
     required: false
@@ -513,9 +525,9 @@ fields:
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.
-# 2. If on_missing=ask: present ONE focused question, wait for answer
+# 2. If on_missing=ask: group and present every material, non-discoverable question, then wait for the answers
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
-# 5. Clarification question caps are maximums, not quotas. Never ask a ritual question just because a task is medium+.
+# 5. Clarification has no numeric cap or quota. Ask every admissible material question, grouped by topic; never ask a ritual question because of task size.
 # 6. Apply deterministic safe defaults immediately, record source/rationale, and set clarification_defaults_applied=true. If clarification_status=needs_clarification, carry only topics with no safe default into Discover and stop for explicit answers; `defaults` remains an acceptance shorthand for displayed recommendations.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

@@ -39,7 +39,7 @@ Generate diagrams that make real code structure or behavior easier to understand
 ## Constraints
 
 - Ask only when diagram type or scope materially changes the result and cannot be inferred from prompt/context.
-- If multiple diagram types are plausible, choose the best fit from source evidence or ask one bounded question.
+- If multiple diagram types are plausible, choose the best fit from source evidence or ask every material, non-discoverable question needed to select safely; group them by decision topic.
 - Do not add aspirational boxes, future architecture, or unlabeled relationships unless the user explicitly asks for a proposed design.
 
 ## Available Diagram Types
@@ -129,6 +129,6 @@ Return:
 
 ## Stop Rules
 
-- Stop and ask one focused question when neither scope nor diagram type can be inferred safely.
+- Stop and ask every material, non-discoverable question when neither scope nor diagram type can be inferred safely; group them by decision topic and keep each concise.
 - Stop and report gaps when required source files or relationships cannot be inspected.
 - Do not finalize if the diagram contains elements without source evidence.

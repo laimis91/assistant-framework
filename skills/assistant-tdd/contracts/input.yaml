@@ -67,6 +67,27 @@ fields:
         required: true
         enum_values: [high, medium, low]
 
+  - name: architecture_test_obligations
+    type: object[]
+    required: false
+    default: []
+    description: "Testable obligations carried from an applicable workflow Architecture Decision Pack; this is not a request to create architecture work for every TDD cycle"
+    validation: "Each obligation names its Pack reference, behavior, and verification. Quality scenarios include workload, budget/explicit unknown, measurement, and failure condition. Design-pressure obligations cover control/early exit, ownership/disposal, resource envelope, extension registration, or representative path behavior."
+    object_fields:
+      - name: architecture_decision_pack_ref
+        type: string
+        required: true
+      - name: obligation_kind
+        type: enum
+        required: true
+        enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+      - name: behavior
+        type: string
+        required: true
+      - name: verification
+        type: string
+        required: true
+
   - name: test_framework
     type: string
     required: true
@@ -86,7 +107,7 @@ fields:
       - "UI layout with no logic"
 
 # Validation behavior:
-# 1. Resolve all fields before writing any test or production code
+# 1. Resolve all fields and conditional architecture_test_obligations before writing any test or production code
 # 2. If behaviors list is empty, ask user what to implement
 # 3. Add constraint to task journal: "TDD: active (Red-Green-Refactor enforced)"
 # 4. Log: >> TDD active | {count} behaviors | framework: {test_framework}

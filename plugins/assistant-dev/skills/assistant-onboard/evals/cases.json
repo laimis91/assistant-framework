@@ -28,7 +28,8 @@
         "Requires or infers project_path and defaults depth to standard when unspecified.",
         "Prints onboarding progress steps for Surface scan, Architecture mapping, Pattern recognition, Identifying unknowns, and Generating project orientation.",
         "Reads README, agent instructions, gitignore, root listing, build files, and CI/CD config before deeper mapping.",
-        "Uses Code Mapper when available and records an adapter-aware fallback when delegation is unavailable.",
+        "Builds the architecture map from local evidence and uses Code Mapper only when the user or an applicable instruction specifically requires delegated mapping.",
+        "Identifies evidence-backed ownership/lifecycle boundaries and semantic type candidates or explicit primitive-boundary exceptions without redesigning the project.",
         "Samples representative files for conventions instead of reading every file.",
         "Returns project_summary, key_files, conventions, artifacts, gaps, and status.",
         "Uses project-local orientation as an artifact."
@@ -37,6 +38,8 @@
         "The response includes the required onboarding phases.",
         "The response outputs key_files with path and purpose.",
         "The response outputs conventions with pattern and example.",
+        "The response outputs semantic_type_candidates with evidence or an inspected empty list.",
+        "The response outputs design_pressure_candidates with evidence or an inspected empty list.",
         "The response records artifact_updated accurately.",
         "The response lists specific gaps or questions."
       ],
@@ -50,10 +53,12 @@
         "required_substrings": [
           "Surface scan",
           "Architecture mapping",
-          "adapter-aware",
+          "local evidence",
           "Pattern recognition",
           "key_files",
           "conventions",
+          "semantic_type_candidates",
+          "design_pressure_candidates",
           "artifact_updated",
           "questions",
           "Status"

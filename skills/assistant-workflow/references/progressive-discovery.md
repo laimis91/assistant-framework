@@ -12,7 +12,10 @@ inside `assistant-workflow`, not a new skill or workflow phase.
 
 Prompt-level ambiguity belongs to `assistant-clarify` when its routing matches.
 Clear prompts do not invoke it. Precise, answerable implementation questions
-and deterministic safe defaults remain owned by workflow Discover.
+and deterministic safe defaults remain owned by workflow Discover. When an
+Architecture Decision Pack applies, use the same progressive decision items for
+predecessor-unlocked design unknowns; do not create a second decision graph or
+a permanent architecture memory.
 
 ## Classification
 

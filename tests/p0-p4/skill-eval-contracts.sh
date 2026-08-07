@@ -218,12 +218,12 @@ test_start "skill eval runner list includes covered skill case rows"
 default_case_count="$(p0p4_skill_eval_default_case_count)"
 if list_output="$("$skill_eval_runner" --list)" \
     && [[ "$(printf '%s\n' "$list_output" | grep -c .)" -eq "$default_case_count" ]] \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-bounded-clarification\tambiguous_multi_intent\tMulti-intent prompt asks bounded clarification' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tclarification-cap-is-not-question-quota\tclarification_admissibility\tClarification cap is not question quota' \
+    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tclarification-is-material-not-capped\tclarification_admissibility\tClarification is material, not capped' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
     && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' \
@@ -245,7 +245,7 @@ test_start "skill eval runner list honors targeted skill selection"
 clarify_case_count="$(jq '.cases | length' "$clarify_fixture")"
 if targeted_list_output="$("$skill_eval_runner" --list --skill assistant-clarify)" \
     && [[ "$(printf '%s\n' "$targeted_list_output" | grep -c .)" -eq "$clarify_case_count" ]] \
-    && printf '%s\n' "$targeted_list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-bounded-clarification\tambiguous_multi_intent\tMulti-intent prompt asks bounded clarification' \
+    && printf '%s\n' "$targeted_list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' \
     && printf '%s\n' "$targeted_list_output" | grep -Fq $'assistant-clarify\tcompressed-request-produces-structured-brief\tstructured_brief\tCompressed request produces structured brief' \
     && ! printf '%s\n' "$targeted_list_output" | grep -Fq "assistant-thinking" \
     && ! printf '%s\n' "$targeted_list_output" | grep -Fq "architecture-decision-selects-perspectives"; then
@@ -272,11 +272,11 @@ prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-prompts.XXXXXX")"
 p0p4_register_cleanup "$prompt_dir"
 if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && [[ "$(find "$prompt_dir" -type f -name '*.md' | wc -l | tr -d ' ')" -eq "$default_case_count" ]] \
-    && grep -Fq "Skill: assistant-clarify" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
-    && grep -Fq "Case ID: multi-intent-prompt-asks-bounded-clarification" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
-    && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
-    && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
-    && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" \
+    && grep -Fq "Skill: assistant-clarify" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
+    && grep -Fq "Case ID: multi-intent-prompt-asks-material-clarification" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
+    && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
+    && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
+    && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
     && grep -Fq "Skill: assistant-debugging" "$prompt_dir/assistant-debugging/bugfix-reproduces-before-patching.md" \
     && grep -Fq "Skill: assistant-diagrams" "$prompt_dir/assistant-diagrams/architecture-diagram-derived-from-code.md" \
     && grep -Fq "Skill: assistant-docs" "$prompt_dir/assistant-docs/architecture-doc-uses-code-evidence.md" \
@@ -305,10 +305,10 @@ targeted_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-targeted-prompts.XX
 p0p4_register_cleanup "$targeted_prompt_dir"
 if "$skill_eval_runner" --emit-prompts "$targeted_prompt_dir" --skill assistant-clarify >/dev/null \
     && [[ "$(find "$targeted_prompt_dir" -type f -name '*.md' | wc -l | tr -d ' ')" -eq "$clarify_case_count" ]] \
-    && [[ -f "$targeted_prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md" ]] \
+    && [[ -f "$targeted_prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" ]] \
     && [[ -f "$targeted_prompt_dir/assistant-clarify/compressed-request-produces-structured-brief.md" ]] \
     && [[ ! -d "$targeted_prompt_dir/assistant-thinking" ]] \
-    && grep -Fq "Skill: assistant-clarify" "$targeted_prompt_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.md"; then
+    && grep -Fq "Skill: assistant-clarify" "$targeted_prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md"; then
     pass
 else
     fail "skill eval runner --emit-prompts --skill assistant-clarify did not emit only assistant-clarify prompt packets"
@@ -319,11 +319,11 @@ response_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-responses.XXXXXX")"
 response_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-response-output.XXXXXX")"
 p0p4_register_cleanup "$response_dir" "$response_output"
 mkdir -p "$response_dir/assistant-clarify"
-: >"$response_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.txt"
+: >"$response_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.txt"
 if "$skill_eval_runner" --responses "$response_dir" >"$response_output" 2>&1; then
     fail "skill eval runner --responses unexpectedly passed with empty or missing responses"
 elif grep -Fq "Heuristic/local grading only" "$response_output" \
-    && grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-bounded-clarification' "$response_output" \
+    && grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$response_output" \
     && grep -Fq "empty response file" "$response_output" \
     && grep -Fq "missing response file" "$response_output"; then
     pass
@@ -335,11 +335,11 @@ test_start "skill eval runner fails for missing required substrings"
 missing_required_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-missing-required.XXXXXX")"
 missing_required_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-missing-required-output.XXXXXX")"
 p0p4_register_cleanup "$missing_required_dir" "$missing_required_output"
-omitted_required="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-bounded-clarification") | .machine_expectations.required_substrings[0]' "$clarify_fixture")"
-p0p4_write_skill_eval_responses "$missing_required_dir" "assistant-clarify" "multi-intent-prompt-asks-bounded-clarification" "$omitted_required"
+omitted_required="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-material-clarification") | .machine_expectations.required_substrings[0]' "$clarify_fixture")"
+p0p4_write_skill_eval_responses "$missing_required_dir" "assistant-clarify" "multi-intent-prompt-asks-material-clarification" "$omitted_required"
 if "$skill_eval_runner" --responses "$missing_required_dir" >"$missing_required_output" 2>&1; then
     fail "skill eval runner --responses unexpectedly passed with a missing required substring"
-elif grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-bounded-clarification' "$missing_required_output" \
+elif grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$missing_required_output" \
     && grep -Fq "missing required substring" "$missing_required_output" \
     && grep -Fq "missing_required_substrings=" "$missing_required_output"; then
     pass
@@ -351,12 +351,12 @@ test_start "skill eval runner fails for forbidden substrings"
 forbidden_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-forbidden.XXXXXX")"
 forbidden_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-forbidden-output.XXXXXX")"
 p0p4_register_cleanup "$forbidden_dir" "$forbidden_output"
-forbidden_substring="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-bounded-clarification") | .machine_expectations.forbidden_substrings[0]' "$clarify_fixture")"
+forbidden_substring="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-material-clarification") | .machine_expectations.forbidden_substrings[0]' "$clarify_fixture")"
 p0p4_write_skill_eval_responses "$forbidden_dir"
-printf '%s\n' "$forbidden_substring" >>"$forbidden_dir/assistant-clarify/multi-intent-prompt-asks-bounded-clarification.txt"
+printf '%s\n' "$forbidden_substring" >>"$forbidden_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.txt"
 if "$skill_eval_runner" --responses "$forbidden_dir" >"$forbidden_output" 2>&1; then
     fail "skill eval runner --responses unexpectedly passed with a forbidden substring"
-elif grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-bounded-clarification' "$forbidden_output" \
+elif grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$forbidden_output" \
     && grep -Fq "forbidden substring hit" "$forbidden_output" \
     && grep -Fq "forbidden_substring_hits=" "$forbidden_output"; then
     pass
@@ -462,7 +462,7 @@ p0p4_write_skill_eval_flat_responses "$flat_response_dir" "$clarify_fixture"
 if "$skill_eval_runner" --responses "$flat_response_dir" --skill assistant-clarify >"$flat_response_output" 2>&1 \
     && grep -Fq "Summary: total=$clarify_case_count passed=$clarify_case_count failed=0" "$flat_response_output" \
     && grep -Fq "skills=1" "$flat_response_output" \
-    && grep -Fq $'PASS\tassistant-clarify\tmulti-intent-prompt-asks-bounded-clarification' "$flat_response_output" \
+    && grep -Fq $'PASS\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$flat_response_output" \
     && grep -Fq $'PASS\tassistant-clarify\tcompressed-request-produces-structured-brief' "$flat_response_output" \
     && ! grep -Fq "assistant-thinking" "$flat_response_output" \
     && [[ ! -d "$flat_response_dir/assistant-clarify" ]]; then

@@ -70,6 +70,10 @@ gates:
         check: "plan_mode=none is used only for trivial localized reversible low-risk work with an obvious path and verification; inline is used only for bounded small no-approval work; approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests"
         on_fail: "Promote plan_mode to inline or approval_required. Do not skip Plan when size, risk, uncertainty, policy, or user intent requires it."
 
+      - id: T_ARCHITECTURE_DESIGN_MODE
+        check: "architecture_design_mode is not_applicable, lightweight, required, or review_intensive and has concrete trigger evidence; not_applicable records why no boundary, lifecycle, public contract, resource target, extension seam, or viable design choice needs a pack; size alone is not a trigger"
+        on_fail: "Load references/architecture-decision-pack.md, inspect the candidate scope scan, select the proportional architecture design mode, and record trigger reasons or a concrete not-applicable reason."
+
       - id: T6
         check: "required_gates includes common gates plus every applicable task-category gate pack"
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
@@ -141,8 +145,8 @@ gates:
         on_fail: "Create or update the orchestrator-owned {agent_state_dir}/task.md state artifact when a local state directory is configured and policy allows it; otherwise include Clarification status, defaults applied, and unresolved topics in the response before printing the clarification wait message or continuing"
 
       - id: D4A
-        check: "Clarification question cap is treated as a maximum, not a quota; clear medium+ tasks may complete Discover with zero questions when confidence is high"
-        on_fail: "Do not ask ritual questions. Record questions_asked=0, clarification_confidence=high, and clarification_admissibility=not_applicable or satisfied when prompt plus code/context are sufficient."
+        check: "Clarification has no numeric cap or quota; clear tasks may complete Discover with zero questions, while every admissible material question is grouped by topic and asked before planning"
+        on_fail: "Do not ask ritual questions or suppress material ones. Record questions_asked=0 with high confidence when source/context is sufficient; otherwise group and ask every admissible unresolved decision."
 
       - id: D4B
         check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
@@ -168,10 +172,15 @@ gates:
         condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
+      - id: D_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
+
       - id: D5
-        check: "For medium+ tasks: context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Code Mapper or perform local mapping, then persist the context map to {agent_state_dir}/context-map.md when allowed; otherwise carry the context map content forward in the plan packet"
+        check: "When the candidate scope scan cannot resolve relevant files/boundaries directly or architecture_design_mode != not_applicable: a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Perform local mapping or dispatch Code Mapper only when routing permits, then persist the compact map to {agent_state_dir}/context-map.md when allowed; otherwise carry it forward in the plan packet"
 
       - id: D7
         check: "constraints list is captured (may be empty, but must be explicitly set)"
@@ -182,14 +191,14 @@ gates:
         on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
 
       - id: D8
-        check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Produce a context map using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
+        check: "When a context map is required: it was produced by Code Mapper only when delegated mapping is selected, or produced directly with equivalent local evidence"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Produce a compact context map directly or with an explicitly selected delegated mapper; record the evidence and routing path without inventing an automatic role"
 
       - id: D8A
-        check: "For medium+ tasks: context map includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces, or explicit not-applicable/deferred reasons"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Re-dispatch Code Mapper or complete direct-fallback mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
+        check: "When a context map is required: it includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces, or explicit not-applicable/deferred reasons"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Complete direct or delegated mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
 
       - id: D_REUSE_SEARCH
         check: "For rule-like changes involving business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details: reuse_search records bounded existing-capability searches before implementation, then candidates or no_candidate_reason, decision, and rationale. not_applicable records a concrete reason without search ceremony."
@@ -197,9 +206,9 @@ gates:
         on_fail: "Search the accepted task area before implementation, record the reuse_search result in the context map and task packet, or record a concrete not_applicable reason. Do not substitute candidate_search for this bounded capability check."
 
       - id: D9
-        check: "For large+ tasks: execution paths were traced by Explorer subagent when subagent_execution_mode=delegated, or traced directly in fallback mode with equivalent evidence"
-        condition: "size in [large, mega]"
-        on_fail: "Trace execution paths using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
+        check: "When an unresolved lifecycle, failure, coupling, or behavior question remains after mapping: execution paths were traced by Explorer only when delegated analysis is selected, or traced directly with equivalent evidence"
+        condition: "unresolved lifecycle, failure, coupling, or behavior question remains after mapping"
+        on_fail: "Trace the specific execution path directly or with explicitly selected delegation; record the evidence and stop once the current decision is resolved"
 
     guidance_assertions:
 
@@ -277,6 +286,11 @@ gates:
       - id: P_ARTIFACT_CONTRACT
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
+
+      - id: P_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: Plan references the current Architecture Decision Pack, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets."
 
       - id: P_DONE_CONTRACT
         check: "For medium+ harness-capable work: accepted Done Contract exists before Build with done_when, not_done_when, verification, owner/consumer, acceptance_criteria, and debate_record with at least two perspectives; delegated mode uses subagent perspectives when available"
@@ -464,6 +478,11 @@ gates:
         check: "When workflow_state_mode is journal, the task journal is current; when inline, the carried-forward packet contains progress and evidence for completed steps"
         on_fail: "Update the selected state surface without creating a task journal solely because the task is medium+."
 
+      - id: B_ARCHITECTURE_PACK_ALIGNMENT
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: Build preserves the current Architecture Decision Pack boundary ownership, semantic type commitments or primitive exceptions, public compatibility strategy, and quality verification; a changed decision uses the normal plan-deviation/reapproval path"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Stop the affected Build step, refresh the Architecture Decision Pack, record a plan deviation, and obtain reapproval before implementing a changed design."
+
       - id: B12
         check: "For medium+ tasks: every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
         condition: "size in [medium, large, mega]"
@@ -575,6 +594,11 @@ gates:
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
         condition: "size in [medium, large, mega]"
         on_fail: "Use references/requirement-acceptance-map.md to run missing verification, repair failed behavior, or obtain explicit approval for an exclusion; do not infer coverage from aggregate test success"
+
+      - id: R_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario verification, and scope propagation"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Provide the current pack and changed scope to assistant-review, run the Architecture Decision Pack Review Checklist, fix concrete findings, and refresh validation before Document."
 
       - id: R3A
         check: "For bugfixes, review material includes reproduction/root-cause evidence or an explicit not_applicable/blocker rationale, and verifies that regression coverage follows from that evidence"
@@ -697,6 +721,18 @@ invariants:
     check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
+
+  - id: INV_ARCHITECTURE_PACK_FRESHNESS
+    check: "When architecture_design_mode is not not_applicable, the Architecture Decision Pack remains tied to the current repository revision or stated greenfield basis. A changed HEAD, requirement, public contract, quality target, or contradictory source fact invalidates and refreshes the pack before Build or Review relies on it."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Return to Discover or Plan, refresh the Architecture Decision Pack with current source evidence and invalidation state, then reapprove if the selected design, scope, behavior, risk, or verification changed."
+
+  - id: INV_SEMANTIC_TYPE_BOUNDARIES
+    check: "When the Architecture Decision Pack introduces or changes a domain/public/lifecycle/unit/validation/ownership/extension concept, its Type Ledger uses a semantic type or records a concrete primitive exception with an owned conversion/validation boundary. Public or serialized changes retain compatibility/versioning/adapters and rollback evidence."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Repair the Type Ledger and affected interface/task packet before implementation; do not hide domain meaning in unexplained generic primitives or introduce wrapper-only types without an owned semantic boundary."
 
   - id: INV_PROGRESSIVE_DISCOVERY_BOUNDARY
     check: "Progressive mapping, resolving, route_clear, or blocked state remains in Discover and is a no-execution boundary: no Decompose, Plan, Build, project/source mutation, external writes, branch creation, or credential-location recording occurs. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."

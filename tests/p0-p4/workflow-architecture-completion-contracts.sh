@@ -271,4 +271,42 @@ else
     pass
 fi
 
+test_start "workflow architecture decision pack is conditional, typed, fresh, and reviewable"
+architecture_pack="$workflow_dir/references/architecture-decision-pack.md"
+architecture_pack_failures=()
+for file_and_term in \
+    "$workflow_skill::architecture_design_mode" \
+    "$workflow_index::architecture_design" \
+    "$input_contract::architecture_design_trigger_reasons" \
+    "$output_contract::- name: architecture_decision_pack" \
+    "$output_contract::design_pressure_checks" \
+    "$phase_gates::D_ARCHITECTURE_DECISION_PACK" \
+    "$phase_gates::INV_ARCHITECTURE_PACK_FRESHNESS" \
+    "$workflow_handoffs::architecture_decision_pack_ref" \
+    "$architecture_pack::not_applicable" \
+    "$architecture_pack::Type Ledger" \
+    "$architecture_pack::Design-pressure checks" \
+    "$architecture_pack::primitive exception" \
+    "$architecture_pack::workload" \
+    "$architecture_pack::failure condition" \
+    "$workflow_dir/references/plan-template.md::Architecture Decision Pack" \
+    "$workflow_dir/references/task-journal-template.md::Architecture Decision Pack" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md::Architecture Decision Pack Review Checklist" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json::architecture-pack-resists-premature-abstraction" \
+    "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md::Architecture Decision Pack and skill surface audit"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        architecture_pack_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if grep -Fq 'clarification_question_cap' "$input_contract"; then
+    architecture_pack_failures+=("skills/assistant-workflow/contracts/input.yaml: obsolete clarification_question_cap field")
+fi
+if [[ ${#architecture_pack_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow Architecture Decision Pack contract is incomplete: ${architecture_pack_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -58,8 +58,8 @@ For each lens:
 - ask at least one lens-specific research question that lens would naturally ask
 - answer it with source-grounded evidence when tools/sources are available
 - record sources or verified URLs used for the answer
-- ask one follow-up question prompted by the first answer, contradiction, or gap
-- answer the follow-up when evidence is available; otherwise mark it as an open gap
+- ask every material follow-up prompted by the first answer, contradiction, or gap; do not impose a numeric cap
+- answer each follow-up when evidence is available; otherwise mark it as an open gap
 - label whether each answer is source-backed, inference-only, or unresolved
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.

@@ -48,14 +48,14 @@ worker_status_protocol:
 artifact_reference_protocol:
   description: "Typed Artifact Reference entries are the compact producer/consumer ledger for harness task packets and worker returns; use them instead of ad hoc string refs when passing artifacts between agents."
   required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]
-  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
   validation_statuses: [pending, valid, invalid, stale, not_applicable]
   packet_rules:
     - "Artifact Reference entries must include artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary."
     - "location_ref is the typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable external artifact ref."
     - "Producer responsibility: create or update the artifact, assign artifact_id, set artifact_type, location_ref, schema_or_contract, validation_status, and summary."
     - "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref; stale, invalid, or missing refs block phase advancement or trigger re-dispatch."
-    - "CodeWriter and BuilderTester task packets receive artifact_refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
+    - "CodeWriter and BuilderTester task packets receive artifact_refs for the Architecture Decision Pack, Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
     - "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable."
     - "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation."
 
@@ -409,6 +409,17 @@ handoffs:
         type: string
         required: true
         description: "Stable requirement ids, criteria, verification methods, manual scenarios/N/A, assumptions, and non-goals from Discover"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether the Architect must consume a typed Architecture Decision Pack"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Current Architecture Decision Pack reference; Architect consumes it rather than rediscovering its facts"
+        validation: "Resolves to a fresh pack with boundaries, design-pressure checks, Type Ledger, quality scenarios, verification, and invalidation conditions"
       - name: context_map
         type: string
         required: true
@@ -586,6 +597,17 @@ handoffs:
         type: string
         required: true
         description: "Approved traceability spine; task packets and slice criteria must reference these requirement ids"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether task packets must carry Architecture Decision Pack commitments"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Fresh typed Architecture Decision Pack reference"
+        validation: "Resolves to the pack that owns the current selected design, design-pressure conclusions, semantic type decisions, quality scenarios, and review scope"
       - name: context_map
         type: string
         required: true
@@ -805,6 +827,12 @@ handoffs:
             required: true
             min_items: 1
             description: "Requirement Acceptance Map ids implemented by this packet"
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
           - name: files
             type: string[]
             required: false
@@ -1059,6 +1087,11 @@ handoffs:
         type: int
         required: true
         description: "Which step(s) to implement"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether the current task packet is constrained by an Architecture Decision Pack"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1087,6 +1120,12 @@ handoffs:
             type: string[]
             required: true
             min_items: 1
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Current Architecture Decision Pack reference that constrains this Build step"
+            validation: "Resolves to the current design, including design-pressure checks, and must be refreshed before deviation"
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1489,6 +1528,11 @@ handoffs:
         type: string[]
         required: true
         description: "Test projects or files to run"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether verification must consume Architecture Decision Pack commitments"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1513,6 +1557,12 @@ handoffs:
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Architecture Decision Pack reference whose design-pressure, quality, and type commitments this verification checks"
+            validation: "Resolves to the fresh selected-design pack"
           - name: acceptance_criteria
             type: string[]
             required: true

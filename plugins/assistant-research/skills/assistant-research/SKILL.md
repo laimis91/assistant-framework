@@ -77,7 +77,7 @@ artifacts only when that method ran.
 
 ## Stop Rules
 
-- Ask at most one focused question when missing scope changes interpretation.
+- Ask every material, non-discoverable question when missing scope changes interpretation; group them by topic and keep them concise.
 - Report a gap when sources are inaccessible, stale, conflicting, or too weak.
 - Do not finalize with any unverified URL.
 - Do not present candidate mechanisms as causes without executed validation.

@@ -289,6 +289,58 @@ fields:
       tool-calling loops, multi-agent orchestration, background jobs, subagent dispatch loops, or repeated model/API calls.
       false when no autonomous/repeated execution path is present unless the user requests loop-safety review.
 
+  - name: architecture_decision_pack_review_required
+    type: boolean
+    required: false
+    default: false
+    description: "Whether a carried Architecture Decision Pack must receive the Architecture Decision Pack Review Checklist"
+    on_missing: infer
+    infer_from: >
+      true when the review packet carries architecture_design_mode other than not_applicable, an Architecture Decision Pack,
+      or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or
+      cross-boundary claims. False for work with no applicable architecture decision record; never invent a Pack merely to review.
+
+  - name: architecture_decision_pack
+    type: object
+    required: conditional
+    condition: "architecture_decision_pack_review_required is true"
+    description: "Compact fresh review projection of the workflow Architecture Decision Pack; it is evidence for one decision, not global memory"
+    validation: "Contains a source/revision freshness basis, decision facts and assumptions, boundary/design-pressure/type/quality/verification evidence, and invalidators. A stale Pack is a review finding or blocker, not an assumed current design."
+    on_missing: fail
+    object_fields:
+      - name: ref
+        type: string
+        required: true
+      - name: mode
+        type: enum
+        required: true
+        enum_values: [lightweight, required, review_intensive]
+      - name: freshness_basis
+        type: string
+        required: true
+      - name: facts_and_assumptions
+        type: string[]
+        required: true
+      - name: boundaries_and_dependencies
+        type: string[]
+        required: true
+      - name: design_pressure_checks
+        type: string[]
+        required: true
+        description: "Control/early-exit, ownership/disposal, resource-envelope, extension-registration, and representative-path conclusions or explicit not-applicable evidence"
+      - name: type_ledger
+        type: string[]
+        required: true
+      - name: quality_scenarios
+        type: string[]
+        required: true
+      - name: verification_and_rollback
+        type: string[]
+        required: true
+      - name: invalidators
+        type: string[]
+        required: true
+
   - name: task_journal_path
     type: string
     required: false
@@ -312,7 +364,7 @@ fields:
         validation: ">= 1 and <= 10"
 
 # Validation behavior:
-# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required before entering the loop
+# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
 # 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch
-# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
+# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | architecture_pack_review: {architecture_decision_pack_review_required} | files: {count}

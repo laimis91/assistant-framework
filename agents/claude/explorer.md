@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: Deep codebase analyst for tracing execution paths, understanding design decisions, analyzing coupling and hidden dependencies. Use during discovery phase on large/mega tasks when you need to understand WHY code works the way it does, not just WHERE things are.
+description: Deep codebase analyst for tracing execution paths, understanding design decisions, and analyzing coupling/hidden dependencies when a compact map leaves a material lifecycle, failure, or behavior question.
 tools: Read, Grep, Glob, LS
 model: sonnet
 ---

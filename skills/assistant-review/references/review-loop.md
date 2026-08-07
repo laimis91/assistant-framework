@@ -31,7 +31,7 @@ while round <= 10:
        - `reuse_search_instruction`: independently during review, conduct the bounded capability search for rule-like changes; Carried Mapper/task-packet evidence alone cannot satisfy review
        - `references/review-principles.md`
        - `references/review-rubric.md` for the medium+ Reviewer
-       - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, and/or Agentic Loop Safety Checklist
+       - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, Agentic Loop Safety Checklist, and/or Architecture Decision Pack Review Checklist
      - Exclude every untriggered checklist section. If no checklist flag is true, include no checklist section.
      - In delegated mode, dispatch a fresh Reviewer with this bundle. In direct fallback, start a fresh isolated pass with the same bounded bundle and record fresh-context evidence; do not claim a subagent dispatch.
      - Treat speculative or low-evidence concerns as non-blocking Observations. Do not re-report previously_fixed items. If security-sensitive surfaces are present, hand off to `assistant-security`.

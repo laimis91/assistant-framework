@@ -158,6 +158,16 @@ separate approved workflow and returned evidence. Once the route is clear, it
 returns through bounded Discover to the normal Requirement Acceptance Map and
 phase gates.
 
+When a task changes a meaningful boundary, data lifecycle, public contract,
+resource target, extension seam, or has genuinely competing designs, workflow
+creates a conditional **Architecture Decision Pack**. It is source-backed and
+freshness-checked, captures semantic interface types and justified primitive
+exceptions, checks control/early exit, ownership/disposal, bounded resources,
+extension registration, and a representative path before premature abstraction,
+makes quality claims falsifiable with workload/budget/measurement, and travels
+through the plan, task handoff, and independent review. It does not
+add a permanent architect agent or force architecture ceremony onto local work.
+
 For multi-slice work, Assistant Workflow infers the repository's current local
 target branch unless explicitly supplied, then uses a portable task branch
 (`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`)

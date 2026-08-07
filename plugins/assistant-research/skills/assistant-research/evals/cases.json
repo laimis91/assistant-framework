@@ -134,7 +134,7 @@
       "expected_behavior": [
         "Resolves research_method as five_lens_briefing and tier as extensive or deep when decision risk warrants it.",
         "Runs the five required lenses: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
-        "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis.",
+        "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, every material evidence-prompted follow-up or an explicit none-needed decision, and evidence status before synthesis.",
         "Builds a contradiction map before synthesis.",
         "Produces a recommendation no stronger than the verified evidence supports.",
         "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",

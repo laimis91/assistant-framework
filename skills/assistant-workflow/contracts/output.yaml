@@ -17,20 +17,20 @@ completion_tiers:
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, architecture_decision_pack, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, architecture_decision_pack, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -39,8 +39,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
+    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, architecture_design_mode and trigger reasons, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, architecture design mode/reasons, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -64,6 +64,15 @@ artifacts:
         required: true
         enum_values: [none, inline, approval_required]
         validation: "Matches task size, risk, uncertainty, reversibility, approval policy, and the input contract eligibility rules"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        validation: "Matches concrete architecture trigger evidence; size alone is not a trigger"
+      - name: architecture_design_trigger_reasons
+        type: string[]
+        required: true
+        validation: "Non-empty for lightweight, required, or review_intensive; concrete not-applicable reason otherwise"
       - name: build_execution_lane
         type: enum
         required: true
@@ -143,8 +152,8 @@ artifacts:
     required: true
     condition: "always"
     description: "Compact adaptive-completion selection carried in the inline packet or task journal."
-    validation: "Records controller intensity, plan mode, and execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
-    on_fail: "Resolve and record controller_intensity, plan_mode, workflow_state_mode, and manual_verification_mode before completion."
+    validation: "Records controller intensity, plan mode, architecture design mode, and execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
+    on_fail: "Resolve and record controller_intensity, plan_mode, architecture_design_mode, workflow_state_mode, and manual_verification_mode before completion."
     object_fields:
       - name: controller_intensity
         type: enum
@@ -158,6 +167,10 @@ artifacts:
         type: enum
         required: true
         enum_values: [none, inline, approval_required]
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
       - name: workflow_state_mode
         type: enum
         required: true
@@ -639,6 +652,307 @@ artifacts:
             condition: "status == approved_exclusion"
             on_missing: fail
 
+  - name: architecture_decision_pack
+    type: object
+    required: conditional
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
+    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios; selected design, viable alternatives only when real, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
+    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
+    object_fields:
+      - name: pack_id
+        type: string
+        required: true
+        description: "Stable task-scoped pack identity"
+        on_missing: fail
+      - name: mode
+        type: enum
+        required: true
+        enum_values: [lightweight, required, review_intensive]
+        description: "Selected architecture design depth"
+        on_missing: fail
+      - name: single_goal
+        type: string
+        required: true
+        description: "One implementation outcome, not a broad project rewrite"
+        validation: "Non-empty and scoped to the approved task"
+        on_missing: fail
+      - name: freshness
+        type: object
+        required: true
+        description: "Evidence basis and conditions that invalidate the decision"
+        object_fields:
+          - name: basis_kind
+            type: enum
+            required: true
+            enum_values: [repository, greenfield]
+          - name: branch_or_project_state
+            type: string
+            required: true
+          - name: revision_or_context_ref
+            type: string
+            required: true
+            description: "Repository HEAD/branch or explicit greenfield context reference"
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Commands, paths, symbols, or supplied material that support current facts"
+          - name: invalidated_by
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Requirement, revision, contract, quality-target, or contradiction changes requiring refresh"
+      - name: facts
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Observed source-backed facts, never unstated inferences"
+        object_fields:
+          - name: claim
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: true
+          - name: verified_against
+            type: string
+            required: true
+      - name: assumptions
+        type: object[]
+        required: true
+        description: "Defaults, pending questions, or explicit unknowns kept separate from facts"
+        object_fields:
+          - name: statement
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [safe_default, pending_question, validated, deferred]
+          - name: rationale_or_impact
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+      - name: material_questions
+        type: object[]
+        required: true
+        description: "All remaining material design questions; empty only when none block the next phase"
+        object_fields:
+          - name: question_id
+            type: string
+            required: true
+          - name: topic
+            type: string
+            required: true
+            description: "Decision group such as ownership, public contract, resource envelope, or rollout"
+          - name: question
+            type: string
+            required: true
+            description: "One answerable design decision"
+          - name: why_needed
+            type: string
+            required: true
+          - name: risk_if_guessed
+            type: string
+            required: true
+          - name: recommended_default_or_none
+            type: string
+            required: true
+          - name: source_checked
+            type: string[]
+            required: true
+            min_items: 1
+          - name: status
+            type: enum
+            required: true
+            enum_values: [open, answered, safe_default, deferred]
+      - name: boundaries
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Owned boundaries and dependencies affected by the goal"
+        object_fields:
+          - name: boundary
+            type: string
+            required: true
+          - name: owner
+            type: string
+            required: true
+          - name: lifecycle_or_data_flow
+            type: string
+            required: true
+          - name: dependency_direction
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
+      - name: design_pressure_checks
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Evidence-backed checks that prevent a premature interface, orchestration, or extension abstraction"
+        validation: "Covers control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; each is resolved, not_applicable with evidence, open, or deferred, and records its decision implication and revalidation point."
+        object_fields:
+          - name: concern
+            type: enum
+            required: true
+            enum_values: [control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, representative_path]
+          - name: status
+            type: enum
+            required: true
+            enum_values: [resolved, not_applicable, open, deferred]
+          - name: evidence_or_material_question
+            type: string
+            required: true
+          - name: decision_implication
+            type: string
+            required: true
+          - name: revalidation_point
+            type: string
+            required: true
+            description: "First real use, benchmark, integration, or explicit none with reason"
+      - name: type_ledger
+        type: object[]
+        required: true
+        description: "Semantic types, justified primitive exceptions, and extension/validation seams"
+        object_fields:
+          - name: concept
+            type: string
+            required: true
+          - name: representation_policy
+            type: enum
+            required: true
+            enum_values: [semantic_type, primitive_exception, not_applicable]
+          - name: representation
+            type: string
+            required: true
+            description: "Named domain/request/result/event type or the retained primitive representation"
+          - name: boundary
+            type: string
+            required: true
+          - name: semantics_or_exception_reason
+            type: string
+            required: true
+          - name: conversion_or_validation_point
+            type: string
+            required: true
+          - name: extension_seam
+            type: string
+            required: true
+          - name: primitive_exception_kind
+            type: enum
+            required: conditional
+            condition: "representation_policy == primitive_exception"
+            enum_values: [local_temporary, wire_or_storage, foreign_interface, framework_required, no_domain_semantics]
+      - name: interface_contracts
+        type: object[]
+        required: true
+        description: "Interfaces whose input, output, failure, owner, or evolution shape matters"
+        object_fields:
+          - name: consumer_or_owner
+            type: string
+            required: true
+          - name: exposure
+            type: enum
+            required: true
+            enum_values: [internal, public, wire, storage]
+          - name: input_type
+            type: string
+            required: true
+          - name: output_or_failure_type
+            type: string
+            required: true
+          - name: evolution_strategy
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
+      - name: quality_scenarios
+        type: object[]
+        required: true
+        description: "Falsifiable quality claims or explicit unknowns"
+        object_fields:
+          - name: attribute
+            type: enum
+            required: true
+            enum_values: [memory, performance, scalability, extensibility, reliability, security, operability, other]
+          - name: scenario
+            type: string
+            required: true
+          - name: workload
+            type: string
+            required: true
+          - name: budget_or_explicit_unknown
+            type: string
+            required: true
+          - name: measurement
+            type: string
+            required: true
+          - name: failure_condition
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [pending, verified, unknown]
+      - name: alternatives
+        type: object[]
+        required: true
+        description: "Only genuinely viable alternatives; an empty list records an evidenced single path"
+        object_fields:
+          - name: option
+            type: string
+            required: true
+          - name: tradeoffs
+            type: string
+            required: true
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [selected, rejected]
+      - name: selected_design
+        type: string
+        required: true
+      - name: selected_design_rationale
+        type: string
+        required: true
+      - name: verification
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: claim_or_constraint
+            type: string
+            required: true
+          - name: method
+            type: string
+            required: true
+          - name: success_signal
+            type: string
+            required: true
+          - name: failure_condition
+            type: string
+            required: true
+      - name: handoff_refs
+        type: object
+        required: true
+        object_fields:
+          - name: context_or_journal_ref
+            type: string
+            required: true
+          - name: plan_or_task_packet_ref
+            type: string
+            required: true
+          - name: review_scope_ref
+            type: string
+            required: true
+
   - name: build_repair_state
     type: object
     required: conditional
@@ -700,7 +1014,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega]"
     description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
-    validation: "Includes changed behavior/areas, architecture decisions and rationale, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
+    validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
     on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
     object_fields:
       - name: changed_behavior_and_areas
@@ -712,6 +1026,13 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
+        on_missing: fail
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Current reviewed Architecture Decision Pack reference"
+        validation: "Resolves to the pack that was fresh for the final verified revision"
         on_missing: fail
       - name: rejected_alternatives_and_tradeoffs
         type: string[]

@@ -30,13 +30,15 @@
         "Updates or proposes documentation with files_updated entries.",
         "Returns Evidence tied to source files, not memory.",
         "Returns doc_coverage with documented areas and remaining gaps.",
-        "Lists inferred architecture claims in review_items and includes evidence_sources plus safety_notes."
+        "Lists inferred architecture claims in review_items and includes evidence_sources plus safety_notes.",
+        "When an Architecture Decision Pack applies, preserves its freshness, facts versus assumptions, design-pressure checks, semantic type or primitive-boundary rationale, and quality verification rather than asserting unmeasured benefits."
       ],
       "pass_criteria": [
         "The response names doc_type, scope, and source_files or evidence.",
         "The response includes files_updated, evidence_sources, doc_coverage, review_items, and safety_notes.",
         "The response cites actual tools/evals files.",
         "The response flags inferred claims or gaps for review.",
+        "The response treats memory, performance, or extensibility claims as review-needed unless workload, budget or explicit unknown, measurement, and failure condition are documented.",
         "The response does not document hallucinated features."
       ],
       "fail_signals": [
@@ -54,6 +56,8 @@
           "doc_coverage",
           "review_items",
           "evidence_sources",
+          "workload",
+          "measurement",
           "tools/evals"
         ],
         "forbidden_substrings": [

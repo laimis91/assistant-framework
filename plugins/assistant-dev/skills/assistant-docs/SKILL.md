@@ -33,13 +33,14 @@ Produce documentation that is accurate, maintainable, and traceable to source ev
 ## Success Criteria
 
 - Every concrete claim is backed by code, git history, existing docs, or user-provided source material.
+- When documenting an applicable architecture decision, the document preserves the fresh Architecture Decision Pack reference, facts versus assumptions, semantic type/primitive-boundary rationale, and falsifiable quality verification rather than rewriting generic design claims.
 - Review-needed items identify inferred or stale claims instead of silently presenting them as fact.
 - The selected doc mode, scope, output files, evidence, and remaining gaps are explicit.
 
 ## Constraints
 
 - Do not invent features, issue numbers, versions, metrics, roadmap status, or examples to make docs sound stronger.
-- Ask only when missing audience, scope, target file, or doc type materially changes the output and cannot be inferred from the request or repo.
+- Ask every material question when missing audience, scope, target file, doc type, or architecture claim changes the output and cannot be inferred; group questions by topic with why, risk if guessed, and a safe default where available rather than enforcing a numeric quota.
 - If evidence is weak, write generic wording with placeholders or mark the claim for review.
 - Prefer local files, repo-native commands, and git history as documentation truth. Do not call external documentation generators, SaaS analyzers, or upload proprietary code without explicit approval.
 - Do not include secrets, tokens, private endpoints, customer data, or internal-only details unless the target document is explicitly approved for that audience.
@@ -112,6 +113,7 @@ Report staleness to user. Offer to update.
 - For .NET: generate XML doc comments for public APIs when the project uses them
 - For APIs: include request/response examples from tests, fixtures, schemas, or clearly labeled illustrative data
 - For architecture: include Mermaid diagrams only if the project already accepts Mermaid or the user approves; otherwise use text outlines
+- For architecture decisions: do not claim memory, performance, or extensibility benefit without a workload, budget/explicit unknown, measurement method, and failure condition; point to the verification evidence or mark the claim for review.
 - Keep docs concise — verbose docs don't get read
 - Prefer links to existing canonical docs over duplicating content
 
@@ -126,6 +128,6 @@ Report staleness to user. Offer to update.
 
 ## Stop Rules
 
-- Stop and ask one focused question only when the missing answer changes audience, scope, target artifact, public contract wording, or verification.
+- Stop and ask every material, non-discoverable question only when the missing answer changes audience, scope, target artifact, public contract wording, or verification; group them by topic and keep them concise.
 - Stop and report gaps when required source files, git history, or docs cannot be accessed.
 - Do not finalize docs until changed claims have source evidence or are clearly marked for review.

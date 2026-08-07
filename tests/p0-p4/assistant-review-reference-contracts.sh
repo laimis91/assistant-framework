@@ -49,6 +49,7 @@ for file_and_term in \
     "$review_skill::Agentic Loop Safety Checklist" \
     "$review_skill::Behavioral Contract Review Checklist" \
     "$review_skill::Semantic Contract Review Checklist" \
+    "$review_skill::Architecture Decision Pack Review Checklist" \
     "$review_evals::review-checklists-reference-is-mandatory" \
     "$review_evals::references/review-checklists.md" \
     "$review_evals::Agentic Loop Safety Checklist" \
@@ -97,6 +98,43 @@ if [[ "${#review_checklist_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
+fi
+
+test_start "assistant-review checks applicable Architecture Decision Packs"
+architecture_pack_review_failures=()
+for file_and_term in \
+    "$review_checklists::## Architecture Decision Pack Review Checklist" \
+    "$review_checklists::Freshness, facts, and material questions" \
+    "$review_checklists::Ownership, dependency, and lifecycle boundary" \
+    "$review_checklists::Design-pressure checks" \
+    "$review_checklists::Semantic type ledger and primitive exceptions" \
+    "$review_checklists::Falsifiable quality scenarios" \
+    "$review_checklists::Compatibility, extension, and verification handoff" \
+    "$review_index::architecture_decision_pack_review_required" \
+    "$review_phase_gates::RS10" \
+    "$review_evals::architecture-decision-pack-review-is-fresh-and-falsifiable"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        architecture_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for section_and_term in \
+    "## Architecture Decision Pack Review Checklist::Freshness, facts, and material questions" \
+    "## Architecture Decision Pack Review Checklist::Design-pressure checks" \
+    "## Architecture Decision Pack Review Checklist::Semantic type ledger and primitive exceptions" \
+    "## Architecture Decision Pack Review Checklist::Falsifiable quality scenarios" \
+    "## Architecture Decision Pack Review Checklist::Compatibility, extension, and verification handoff"; do
+    section="${section_and_term%%::*}"
+    term="${section_and_term#*::}"
+    if ! p0p4_reference_section_has_term "$review_checklists" "$section" "$term"; then
+        architecture_pack_review_failures+=("skills/assistant-review/references/review-checklists.md $section missing $term")
+    fi
+done
+if [[ ${#architecture_pack_review_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Architecture Decision Pack reference is incomplete: ${architecture_pack_review_failures[*]}"
 fi
 
 test_start "assistant-review does not use rubric score alone to force round 3 or stronger claims"

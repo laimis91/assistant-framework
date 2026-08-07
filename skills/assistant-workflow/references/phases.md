@@ -23,7 +23,7 @@ Print: `--- PHASE: DISCOVER ---`
 
 **Goal:** Zero untracked unknowns. No planning or coding until ambiguity is resolved.
 
-For medium+ tasks or large review/research inputs, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. Resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_trigger_scope` before spawning any subagent. For medium+ tasks, add Code Mapper to `Required agents` and produce a **Code Mapper** context map (see `references/context-map-template.md`) by dispatching Code Mapper only when `subagent_execution_mode=delegated`; otherwise produce the same map directly in fallback mode and record Code Mapper direct evidence. The Code Mapper maps likely modified areas and behaviorally relevant references: callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces that can affect or describe the change. The Code Mapper returns context map markdown; if local state artifacts are configured and policy-allowed, the orchestrator persists that markdown to `{agent_state_dir}/context-map.md`. Otherwise, carry the context map forward in the plan/task packet. Code Writer and Architect use the map instead of re-exploring the codebase. For large/mega tasks, also add Explorer to `Required agents` and trace execution paths with Explorer in delegated mode or direct fallback in non-delegated mode.
+For material that cannot be faithfully inspected in the current working context, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. Create a **Code Mapper** context map (see `references/context-map-template.md`) only when the candidate scope scan, public/ownership boundary, or changed files cannot be resolved directly from local source. Resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_trigger_scope` before any requested/required subagent spawn; otherwise create the same compact map directly. The map covers likely modified areas and behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces. If local state artifacts are configured and policy-allowed, persist the map to `{agent_state_dir}/context-map.md`; otherwise carry it in the plan/task packet. Trace deeper execution paths with Explorer only when an unresolved lifecycle, failure, coupling, or behavior question remains after the compact map. Size can signal likely work, but neither role is automatic ceremony.
 
 When `workflow_state_mode=journal`, create or update
 `{agent_state_dir}/task.md` during Discover when local state artifacts are
@@ -36,14 +36,16 @@ does not require a task journal. Persist:
 - `Clarification defaults applied: true | false`
 - `Clarification confidence: low | medium | high`
 - `Clarification questions asked: N`
-- `Clarification question cap: N` where the cap is a maximum, never a quota
+- `Clarification question policy: every admissible material question; no numeric cap or quota`
 - `Clarification admissibility: satisfied | needs_clarification | not_applicable`
 - `Unresolved clarification topics:` as a markdown list
 - `Controller intensity: light | standard | strict`
+- `Architecture design mode: not_applicable | lightweight | required | review_intensive`
+- `Architecture Decision Pack ref: [current ref or N/A with concrete reason]`
 - `Search mode: none | lightweight | candidate_search`
 - `Candidate archive: {agent_state_dir}/candidate-search.md | inline | N/A`
 
-For medium+ tasks, keep the task journal or equivalent carried-forward state for the full task lifecycle even when Discover resolves without a clarification wait.
+For tasks needing durable state, keep the task journal or equivalent carried-forward state for the full task lifecycle even when Discover resolves without a clarification wait. Size alone does not create a journal requirement.
 
 Workflow state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and `{agent_state_dir}/working-buffer.md`) are framework-owned, ignored state when an agent state directory is configured and policy allows local state files. The orchestrator may create and update them directly. If state files are unavailable, carry the equivalent state in the response/plan packet. This exception never applies to project source, docs, tests, config, or generated app artifacts.
 
@@ -68,10 +70,10 @@ Build and do not run a mutating prerequisite in this substate; use a separate
 approved workflow that returns evidence. After route clearance, return to
 bounded Discover for the normal Requirement Acceptance Map and current gates.
 
-Print: `>> Dispatching Code Mapper → context map` (when `subagent_execution_mode=delegated`)
-Print: `>> Direct fallback Code Mapper responsibility → context map` (when `subagent_execution_mode=direct_fallback`)
-Print: `>> Dispatching Explorer` (when `subagent_execution_mode=delegated`)
-Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mode=direct_fallback`)
+Print: `>> Dispatching Code Mapper → context map` only when a context map is required and delegated mapping is selected.
+Print: `>> Direct local context map` when a context map is required but mapping remains direct.
+Print: `>> Dispatching Explorer` only when an unresolved execution/lifecycle question remains and delegated analysis is selected.
+Print: `>> Direct execution-path trace` when that question remains but analysis stays direct.
 
 1. Read repo: README, CLAUDE.md, AGENTS.md, key files. Batch independent file reads/searches when the active tool policy supports parallel calls; use sequential reads otherwise.
 2. Compare current state against request
@@ -85,10 +87,11 @@ Print: `>> Direct fallback Explorer responsibility` (when `subagent_execution_mo
    - Observability in place? (logging, telemetry, health checks)
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
-5. For each unresolved implementation-shaping field, apply and record a deterministic safe default without asking when repository evidence, policy, or a stable local convention makes one available. Record topic, value, source, and rationale; set `Clarification defaults applied: true`. Ask structured clarification Q&A only when the question is admissible: the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed.
-6. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, or small work promoted by ambiguity, risk, or multiple material requirements, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
-7. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
-8. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
+5. For each unresolved implementation-shaping field, apply and record a deterministic safe default without asking when repository evidence, policy, or a stable local convention makes one available. Record topic, value, source, and rationale; set `Clarification defaults applied: true`. Ask every remaining admissible clarification, grouped by decision topic: the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed. There is no numeric question cap.
+6. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and create or refresh the typed pack from the context map. Its facts name source evidence; its assumptions and questions remain explicit; and it records boundary ownership, Type Ledger, interface evolution, falsifiable quality scenarios, verification, invalidation, and the plan/review handoff refs. For predecessor-unlocked design uncertainty, use the existing progressive decision map rather than a second architecture workflow.
+7. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, or small work promoted by ambiguity, risk, or multiple material requirements, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
+8. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Architecture design mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
+9. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
 **Clarification format:**
 ```
@@ -105,8 +108,8 @@ Reply with: "1b 2a" or "defaults" (`defaults` accepts the displayed recommendati
 
 **Clarification state rules:**
 - For any task entering clarification wait, if no task journal/state packet exists yet, create one when local state artifacts are configured and policy-allowed; otherwise include the same state in the response before printing clarification questions or the clarification wait message.
-- Question caps are maximums, not quotas. Small tasks usually ask 0-1 questions; medium tasks may ask 0-4; large/mega tasks may ask more only when each question is admissible. A well-specified medium+ task can and should record `Clarification questions asked: 0`.
-- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, preserve the existing `Clarification defaults applied` value and recorded default entries, set `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification question cap: N`, `Clarification admissibility: needs_clarification`, and list only topics with no deterministic safe default.
+- There is no question cap or quota. A well-specified task can and should record `Clarification questions asked: 0`; when questions are needed, ask every admissible material decision and group them by topic rather than truncating the set.
+- Before printing questions, keep the workflow `Status` in Discover, update the task journal to `Clarification status: needs_clarification`, preserve the existing `Clarification defaults applied` value and recorded default entries, set `Clarification confidence: low | medium`, `Clarification questions asked: N`, `Clarification admissibility: needs_clarification`, and list only topics with no deterministic safe default.
 - Print: `>> WAITING: Clarification answers required`
 - Stop after the wait message. Do not continue into Decompose or Plan while clarification is pending.
 - On resume, accept only:
@@ -122,7 +125,7 @@ Reply with: "1b 2a" or "defaults" (`defaults` accepts the displayed recommendati
 **Rules:**
 - No commands, edits, or plans that depend on unknowns
 - Read-only discovery (search, git log, browsing) is allowed
-- Small tasks: 0-1 questions. Mega: full Q&A.
+- Keep interaction concise by resolving one goal or file-oriented decision at a time, not by suppressing material questions.
 
 Print: `--- PHASE: DISCOVER COMPLETE ---`
 
@@ -138,7 +141,7 @@ A slice is not a layer, folder, module, broad feature bucket, setup step, or bro
 
 **Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
-For medium+ tasks, produce Architect-level slice boundaries based on the context map, Requirement Acceptance Map, risk tier, required gate packs, and the Context Budget note. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform direct fallback with equivalent criteria and evidence. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
+When decomposition is needed because the task has multiple coherent slices, a Pack-backed boundary, or unresolved cross-slice acceptance risk, produce bounded slice boundaries from the context map, Requirement Acceptance Map, risk tier, required gate packs, Context Budget note, and the Architecture Decision Pack when it applies. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform the same direct design work with equivalent criteria and evidence. The Architect consumes the Pack rather than recreating its facts, and each affected slice carries the Pack reference. Task size can signal possible decomposition, but never creates an Architect role by itself. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
 Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
@@ -212,21 +215,21 @@ Print: `--- PHASE: PLAN ---`
 
 **Goal:** Concrete, reviewable implementation plan.
 
-For large tasks, produce an Architect-level implementation blueprint from existing patterns and Code Mapper/Explorer output. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise produce the same blueprint directly in fallback mode.
+When `architecture_design_mode` is `required` or `review_intensive`, or when a concrete unresolved boundary cannot be represented by the ordinary plan, produce an Architect-level implementation blueprint from existing patterns and the compact map. Dispatch **Architect** only when delegation is explicitly requested or otherwise applicable; otherwise perform the same bounded design work directly. Do not introduce an Architect role merely because the task is large.
 
 Print: `>> Dispatching Architect` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_mode=direct_fallback`)
 
-**Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation.
+**Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation. When architecture design applies, the Architecture Decision Pack must also be fresh for the current revision and have no unresolved blocking material questions.
 
-Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
+Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
 - `inline`: compact small plan (goal, files, risks, tests); do not wait.
 - `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
 - `approval_required` large/mega: full plan (all sections including Security and Operability).
 
 1. Research codebase: modules, patterns, entrypoints
-2. Evaluate architecture (see `playbooks/*.md` for project-type rules)
-3. Analyze 1-3 options with tradeoffs, pick one
+2. Evaluate architecture proportionally: use the Architecture Decision Pack when triggered, otherwise record a concrete not-applicable reason
+3. Analyze only genuine viable options with tradeoffs; use one evidenced path when alternatives are not real
 4. Identify risks and edge cases
 5. Put the Artifact Contract before task packets and map every medium+ task packet to at least one required artifact or acceptance criterion
 6. For medium+ harness-capable work, put compact refs for Done Contract, Harness Recipe, run-state/trace/replay artifacts, and Artifact Reference Ledger before Build; load `references/plan-harness-appendix.md` for the full schemas. The base plan keeps `N/A: [reason]` for non-harness work.
@@ -368,7 +371,7 @@ For standard/strict work, run the stages in order:
 1. Print `>> Stage 1: Spec Review`; load `references/prompts/spec-review.md`
    and require Spec Review PASS before quality review.
 2. Print `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`;
-   load and follow `assistant-review` SKILL.md and contracts. Add Code Reviewer
+   load and follow `assistant-review` SKILL.md and contracts. When an Architecture Decision Pack applies, pass its fresh compact review projection, including design-pressure checks, and require `architecture_decision_pack_review_required=true`; assistant-review then owns the checklist result. Add Code Reviewer
    to `Required agents` before Stage 2; assistant-review solely owns Reviewer
    and QAEvaluator packet schemas and any Reviewer compatibility routing.
 3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.

@@ -73,6 +73,14 @@ triggered; dispatch Code Reviewer and record `Code Reviewer dispatch` plus
 `Code Reviewer result` evidence, or `Reviewer dispatch` plus `Reviewer result`
 only for compatibility routing.
 
+When `architecture_design_mode != not_applicable`, pass the current compact
+Architecture Decision Pack projection (reference, freshness basis,
+facts/assumptions, boundaries, design-pressure checks, Type Ledger, quality scenarios,
+verification/rollback, and invalidators) to assistant-review and set
+`architecture_decision_pack_review_required=true`. The reviewer must return the
+canonical Pack review evidence; workflow consumes its validated result rather
+than duplicating the reviewer schema.
+
 In direct fallback, preserve fresh-review evidence and record
 `Code Reviewer direct evidence`; `Reviewer direct evidence` is compatibility
 evidence only.

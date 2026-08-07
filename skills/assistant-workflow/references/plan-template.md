@@ -23,6 +23,7 @@ No separate plan document needed. Include directly in your response:
 - Owner/consumer: [who uses it]
 - Non-goals/exclusions: [what not to produce]
 **Files:** [list of files to change]
+**Architecture Decision Pack:** [ref, or N/A with concrete reason]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
 **SRP check:** [single responsibility confirmed / split needed]
@@ -40,6 +41,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
+- Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
 - Behavior / acceptance criteria:
   - [R#] [binary observable behavior]
   - [R#] [binary observable behavior]
@@ -143,6 +145,8 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
 - Plan mode: [approval_required]
+- Architecture design mode: [not_applicable | lightweight | required | review_intensive]
+- Architecture trigger reasons: [concrete evidence, or N/A reason]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
@@ -156,6 +160,19 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
 - Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
+
+## Architecture Decision Pack
+- Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
+- Freshness: [branch/HEAD or greenfield basis; source refs; invalidation conditions]
+- Facts versus assumptions: [compact refs]
+- Design-pressure checks: [control/early exit, ownership/disposal, resource envelope, extension registration, representative path]
+- Material design questions: [none before approval, or grouped question refs]
+- Boundaries / ownership / lifecycle: [compact table or ref]
+- Type Ledger: [semantic types, primitive exceptions with conversion points, and extension seams]
+- Interface evolution: [consumer/owner, input, output/failure, compatibility/versioning/adapters]
+- Quality scenarios: [attribute, workload, budget or explicit unknown, measurement, failure condition]
+- Selected design / genuine alternatives: [decision and trade-offs]
+- Verification / review scope: [command or method, success signal, failure condition, reviewer checks]
 
 ## Research (current state)
 - Modules/subprojects: ...

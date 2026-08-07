@@ -17,27 +17,30 @@
       "id": "architecture-decision-selects-perspectives",
       "title": "Architecture decision selects perspectives",
       "category": "tool_selection_methodology",
-      "purpose": "Checks that an architecture tradeoff uses the perspectives methodology before recommending a path.",
-      "prompt": "Think through whether we should replace the shell-based skill validator with a C# service. I need a structured recommendation, not just pros and cons.",
+      "purpose": "Checks that a genuinely contested architecture tradeoff uses the smallest useful perspectives method and returns a falsifiable Architecture Decision Pack update.",
+      "prompt": "Think through whether we should replace the shell-based skill validator with a C# service. The fresh Architecture Decision Pack has two viable alternatives, a public CLI compatibility constraint, and a target to reduce memory under a stated batch workload. I need a structured recommendation, not just pros and cons.",
       "setup_context": [
         "The assistant-thinking skill instructions are active.",
-        "The user asks for an architecture decision with real tradeoffs.",
+        "The user asks for an architecture decision with two viable alternatives and real tradeoffs.",
+        "A fresh Architecture Decision Pack reference is available.",
         "No implementation work is requested; the expected output is structured reasoning."
       ],
       "expected_behavior": [
         "Selects the perspectives thinking tool for an architecture and design decision.",
         "States the tool selection before analysis and follows the perspectives methodology.",
-        "Includes distinct viewpoints such as architect, pragmatist, skeptic, and user advocate or equivalent roles.",
-        "Resolves and records whether perspective roles were delegated or run sequentially in fallback.",
+        "Uses only the distinct viewpoints needed to challenge the actual tradeoffs rather than a mandatory four-role council.",
+        "Resolves and records whether selected independent perspectives were delegated or run directly when they are actually needed.",
         "Synthesizes convergences and tensions before giving a recommendation.",
         "Includes key insights, a recommendation, confidence, and a genuine dissenting view.",
-        "Does not present unsupported free-form pros and cons as the full analysis."
+        "Returns an Architecture Pack update with freshness, design-pressure, type-boundary, and quality-scenario implications.",
+        "Does not present unsupported free-form pros and cons as the full analysis or create a permanent architect/memory role."
       ],
       "pass_criteria": [
         "The response names the selected tool as perspectives.",
-        "The response uses perspective-based roles or rounds rather than ad-hoc reasoning.",
+        "The response uses only necessary perspective-based roles or rounds rather than ad-hoc reasoning.",
         "The recommendation is grounded in the structured analysis.",
-        "The response records the delegation path for the perspective roles.",
+        "The response records the delegation path for selected perspective roles when they are used.",
+        "The response records architecture_pack_update with workload, budget, measurement, and failure-condition implications or explicit unknowns.",
         "The confidence level reflects evidence and uncertainty instead of defaulting to high.",
         "The dissenting view is a real counterpoint to the recommendation."
       ],
@@ -45,14 +48,18 @@
         "Skips tool selection and writes generic pros and cons.",
         "Gives a recommendation without any methodology.",
         "Omits confidence or dissenting view.",
-        "Claims high confidence without acknowledging tradeoffs or evidence gaps."
+        "Claims high confidence without acknowledging tradeoffs or evidence gaps.",
+        "Claims a memory benefit without workload, budget, measurement, and failure condition."
       ],
       "machine_expectations": {
         "required_substrings": [
           "perspectives",
-          "architect",
-          "pragmatist",
-          "skeptic",
+          "Architecture Pack update",
+          "freshness",
+          "workload",
+          "budget",
+          "measurement",
+          "failure condition",
           "key insights",
           "delegation path",
           "recommendation",
@@ -63,7 +70,48 @@
           "No tool selection needed",
           "generic pros and cons",
           "No dissenting view needed",
-          "high confidence without evidence"
+          "high confidence without evidence",
+          "permanent architect agent"
+        ]
+      }
+    },
+    {
+      "id": "architecture-one-path-does-not-create-council",
+      "title": "One evidenced architecture path does not create council",
+      "category": "conditional_architecture_reasoning",
+      "purpose": "Checks that a clear local architecture decision uses the workflow Pack directly instead of manufacturing a multi-agent debate or permanent role.",
+      "prompt": "The code already has one established domain identifier type and one local conversion boundary. Add a validation rule in the same file and explain the design decision.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "There is one evidenced local path, no conflicting quality driver, and no viable architectural alternative.",
+        "The workflow Architecture Decision Pack mode is lightweight or not_applicable."
+      ],
+      "expected_behavior": [
+        "Does not invoke Perspectives merely because the request mentions design.",
+        "Records the direct Pack outcome or not_applicable reason concisely.",
+        "Retains the semantic type and conversion boundary without proposing generic primitives or a permanent memory system."
+      ],
+      "pass_criteria": [
+        "The response says Perspectives is not needed or architecture_design_mode is not_applicable/lightweight.",
+        "The response names the local semantic type or conversion boundary.",
+        "The response keeps the decision scoped to the current file/goal."
+      ],
+      "fail_signals": [
+        "Creates a mandatory four-role council.",
+        "Proposes a permanent architect agent or global memory system.",
+        "Replaces the domain type with a generic string."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Perspectives is not needed",
+          "architecture_design_mode",
+          "semantic type",
+          "conversion boundary"
+        ],
+        "forbidden_substrings": [
+          "mandatory four-role council",
+          "permanent architect agent",
+          "global memory system"
         ]
       }
     },

@@ -35,8 +35,8 @@ gates:
         on_fail: "Default to review-fix unless user explicitly requested audit"
 
       - id: E5
-        check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required are resolved before review starts"
-        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
+        check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required are resolved before review starts"
+        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, agentic_loop_safety_review_required=true for autonomous/repeated loop changes, and architecture_decision_pack_review_required=true only when a carried Pack or relevant architecture decision record applies."
 
       - id: E6
         check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
@@ -122,6 +122,11 @@ gates:
         check: "When agentic_loop_safety_review_required is true: Reviewer or direct-fallback review applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
         condition: "agentic_loop_safety_review_required is true"
         on_fail: "In delegated mode, re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation. In direct fallback mode, complete those agentic_loop_safety_checks before declaring clean."
+
+      - id: RS10
+        check: "When architecture_decision_pack_review_required is true: Reviewer or direct-fallback review applied the Architecture Decision Pack Review Checklist and returned architecture_decision_pack_checks"
+        condition: "architecture_decision_pack_review_required is true"
+        on_fail: "Review the Pack's source/revision freshness, material questions and invalidators, boundaries/lifecycle, control/early-exit and ownership/disposal decisions, resource envelope, extension-registration and representative-path checks, semantic type and primitive-exception ledger, falsifiable quality scenarios, compatibility/extension seam, and verification/rollback before declaring clean."
 
       - id: RS_RULE_DISTILLATION
         check: "When blocker/must-fix findings or recurring contract/checklist/eval gaps exist: review_finding_rule_distillation classifies them as one_off_fix, permanent_rule_candidate, or no_action with evidence and promotion decision"
@@ -373,6 +378,12 @@ invariants:
     scope: all_rounds
     condition: "round >= 3"
     on_fail: "Stop before dispatch and either record allowed new evidence from changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis, or exit with residual risk."
+
+  - id: INV11
+    check: "An applicable Architecture Decision Pack is reviewed as a fresh, falsifiable decision record rather than generic architecture advice or a permanent global memory"
+    scope: all_rounds
+    condition: "architecture_decision_pack_review_required is true"
+    on_fail: "Report stale facts, erased semantic types, undocumented primitive exceptions, unmeasured quality claims, compatibility gaps, or missing verification as evidence-backed findings or explicit unknowns."
 
   - id: INV_QA1
     check: "QA evaluation never replaces Code Reviewer or Reviewer compatibility review"

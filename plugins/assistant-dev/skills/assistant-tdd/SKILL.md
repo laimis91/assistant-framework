@@ -21,12 +21,13 @@ behavior-neutral REFACTOR evidence before production code is trusted.
 - Production code is limited to the smallest change that makes that test pass.
 - Targeted and relevant regression tests pass before the next cycle.
 - RED/GREEN/REFACTOR evidence is recorded in the task journal or output.
+- When a workflow Architecture Decision Pack carries semantic type, primitive-boundary, public compatibility, or quality-scenario obligations, tests prove those obligations rather than merely compiling wrappers.
 
 ## Constraints
 
 - Never treat syntax, import, environment, or flaky failures as valid RED.
 - Do not write production code before RED evidence exists.
-- Ask only when behavior or acceptable test scope materially changes the test.
+- Ask every material question when behavior or acceptable test scope changes the test; group questions by topic with why, risk if guessed, and a safe default where available rather than enforcing a numeric quota.
 
 ## Progressive Contract Loading
 
@@ -63,6 +64,8 @@ Required RED evidence before production implementation:
 - Command run
 - Failure summary
 - Why the failure proves the intended missing behaviour
+
+When a workflow Architecture Decision Pack applies, bring only its testable obligations into the cycle: semantic type validation, primitive-boundary conversion, public-contract compatibility, a stated quality scenario, or a design-pressure check such as early exit, ownership/disposal, bounded resources, extension registration, or representative-path behavior. Do not invent a Pack or benchmark for ordinary local behavior. A memory, performance, or extensibility claim remains an explicit unknown until a workload, budget/threshold, measurement method, and failure condition are testable.
 
 If TDD is active and RED evidence is missing, the selected production owner
 must return `NEEDS_CONTEXT` and make no production changes.

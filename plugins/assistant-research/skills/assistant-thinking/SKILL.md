@@ -39,7 +39,7 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 - A dissenting view or counterpoint is included when confidence matters.
 - The recommendation includes confidence and the gaps that limit it.
 - For debugging/investigation, at least three distinct falsifiable hypotheses are considered before pursuing one.
-- For planning/architecture, trade-offs are tied to concrete constraints, not generic preferences.
+- For planning/architecture, trade-offs are tied to concrete constraints, source-backed facts, explicit ownership/lifecycle boundaries, design-pressure checks (control/early exit, ownership/disposal, resource envelope, extension registration, representative path), and falsifiable quality scenarios rather than generic preferences.
 
 ## Constraints
 
@@ -50,7 +50,7 @@ and covered work without a second permission question.
 
 - Do not invoke deep reasoning for simple execution tasks.
 - Do not use this skill for broad brainstorming; route option generation to `assistant-ideate`.
-- Ask only when missing context would materially change the selected method or recommendation.
+- Ask every material question that would change the selected method or recommendation. Group questions by decision topic, state why and risk if guessed, and give a safe default where one exists; do not suppress a material question to satisfy a numeric limit.
 - For `Perspectives` and high-stakes `Stress Test`, resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. A direct user request or applicable `AGENTS.md` or active-skill instruction triggers `delegation_triggered`: infer the covered roles and dispatch without a separate permission question. Sequential fallback requires explicit user opt-out, a real unavailability failure or supported configuration proof, or policy-disallowed evidence; `policy_disallowed` requires an exact blocking rule with no applicable trigger exception. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
 - Do not invent evidence. Mark unverified claims as assumptions and identify how to validate them.
 - Do not paste secrets, proprietary source, customer data, or sensitive logs into external tools as part of reasoning.
@@ -60,7 +60,7 @@ and covered work without a second permission question.
 | Tool | File | When to use |
 |---|---|---|
 | **Clarify** | `clarify.md` | Stuck or challenging assumptions. Classifies hard vs soft constraints. |
-| **Perspectives** | `perspectives.md` | Architecture/design decisions. Multi-agent debate (4 roles, 3 rounds). |
+| **Perspectives** | `perspectives.md` | Challenge a genuinely contested architecture/design decision; use only the perspectives and rounds that change the decision. |
 | **Stress Test** | `stress-test.md` | Validating important decisions. Steelman + counter-argument. |
 | **Deep Think** | `deep-think.md` | Requirements discovery. Multiple analytical lenses (8 lenses). |
 | **Hypothesize** | `hypothesize.md` | Debugging, investigation. Goal-first + hypothesis plurality (3+ hypotheses). |
@@ -74,7 +74,7 @@ Read the relevant tool file when the situation calls for it. These are tools, no
 - Decision feels uncertain or high-stakes -> Stress Test or Perspectives
 - Stuck on a problem -> Clarify or Hypothesize
 - Need to explore options broadly -> Creative or Deep Think
-- Architecture/design choice -> Perspectives (multi-agent debate)
+- Architecture/design choice with genuinely viable alternatives or conflicting quality drivers -> Perspectives; otherwise use the workflow Architecture Decision Pack directly.
 - Debugging with multiple possible causes -> Hypothesize
 
 **When NOT to use:**
@@ -85,7 +85,7 @@ Read the relevant tool file when the situation calls for it. These are tools, no
 
 Pick the smallest method that changes the outcome:
 - **Clarify**: assumptions/constraints are tangled, but the main goal is visible.
-- **Perspectives**: several architecture/design options are viable and trade-offs matter.
+- **Perspectives**: several architecture/design options are viable, quality drivers conflict, or an Architecture Decision Pack needs an independent challenge.
 - **Stress Test**: a proposal is likely to be accepted unless actively challenged.
 - **Deep Think**: requirements are incomplete or stakeholder/failure modes are hidden.
 - **Hypothesize**: root cause is unknown; generate 3+ testable hypotheses before testing.
@@ -114,6 +114,7 @@ For architecture/planning decisions, include:
 - recommendation
 - dissenting view
 - validation step or rollback trigger
+- when a workflow Architecture Decision Pack applies: freshness status, boundary/type-ledger implications, and a measurable quality scenario or an explicit unknown
 
 ## Output
 
@@ -125,6 +126,7 @@ Return:
 - **Gaps** - assumptions, unknowns, or questions that limit confidence.
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
+- **Architecture Pack update** - when supplied: the Pack reference, whether it remains fresh, questions or claims it invalidates, semantic type/primitive-exception findings, and quality-scenario verification implications.
 - **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and trigger scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.
 

@@ -27,6 +27,9 @@ gates:
       - id: A3
         check: "For perspectives and high-stakes stress_test: subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, and conditional policy_blocking_source are resolved before any subagent spawn. A direct user, applicable AGENTS.md, or active skill instruction triggers delegation_triggered and dispatch without a separate permission question. Sequential fallback is recorded only for explicit opt-out, real unavailability or supported configuration proof, or policy-disallowed with an exact active blocking rule and no applicable trigger exception."
         on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced sequential fallback state; do not overwrite explicit opt-out."
+      - id: A4
+        check: "When architecture_design_mode is not_applicable no Architecture Decision Pack is manufactured; otherwise the analysis checks the supplied Pack's freshness, material questions, design-pressure checks, semantic type/primitive-exception boundaries, and quality-scenario evidence."
+        on_fail: "Use the carried Pack as the decision record, ask or record every material unknown, check control/early exit, ownership/disposal, resource envelope, extension registration, and representative path as applicable, and require workload/budget/measurement/failure evidence before accepting a memory, performance, or extensibility claim."
 
   - phase: SYNTHESIS
     checkpoint_start: "--- PHASE: SYNTHESIS ---"
@@ -55,3 +58,7 @@ invariants:
     check: "The analysis never claims subagents were used unless subagent_execution_mode=delegated"
     scope: all_phases
     on_fail: "Correct the synthesis to distinguish delegated execution from sequential fallback"
+  - id: INV4
+    check: "Thinking output never replaces a workflow Architecture Decision Pack with generic advice or a permanent architect/memory role"
+    scope: all_phases
+    on_fail: "Return a compact Pack update with freshness and falsifiable implications, or mark architecture_design_mode=not_applicable"

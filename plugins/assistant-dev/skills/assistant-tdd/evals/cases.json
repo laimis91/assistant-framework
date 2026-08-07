@@ -116,6 +116,55 @@
       }
     },
     {
+      "id": "tdd-covers-carried-architecture-obligations",
+      "title": "TDD covers carried architecture obligations",
+      "category": "architecture_decision_pack_testing",
+      "purpose": "Checks that TDD turns a carried Architecture Decision Pack into focused semantic and quality verification rather than generic wrapper tests or unsupported quality claims.",
+      "prompt": "Use TDD for an import API that replaces string record IDs with ImportRecordId and claims its batch path uses less memory.",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "architecture_test_obligations includes semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, and ownership_or_disposal obligations from a fresh Pack.",
+        "The memory claim has a representative workload but no agreed budget or failure condition yet."
+      ],
+      "expected_behavior": [
+        "Starts with focused RED tests for semantic validation/conversion and compatibility behavior.",
+        "Does not treat a type wrapper that compiles as sufficient coverage.",
+        "Adds focused behavior evidence for early exit and ownership/disposal when those Pack obligations apply.",
+        "Marks the memory claim as blocked or explicit_unknown until workload, budget or explicit unknown, measurement method, and failure condition are defined.",
+        "Returns architecture_obligation_coverage with Pack reference and evidence/outcome."
+      ],
+      "pass_criteria": [
+        "The response mentions architecture_test_obligations and architecture_obligation_coverage.",
+        "The response names semantic type, conversion or validation, compatibility, early exit, ownership or disposal, workload, budget, measurement, and failure condition.",
+        "The response preserves RED-GREEN-REFACTOR ordering."
+      ],
+      "fail_signals": [
+        "Claims the memory improvement from an unmeasured architecture choice.",
+        "Uses compilation of a wrapper as the only test.",
+        "Skips RED because the Pack already chose the design."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_test_obligations",
+          "architecture_obligation_coverage",
+          "semantic type",
+          "compatibility",
+          "control_or_early_exit",
+          "ownership_or_disposal",
+          "workload",
+          "budget",
+          "measurement",
+          "failure condition",
+          "RED"
+        ],
+        "forbidden_substrings": [
+          "wrapper compiles so it is covered",
+          "memory improvement is guaranteed",
+          "skip RED"
+        ]
+      }
+    },
+    {
       "id": "unknown-cause-bugfix-waits-for-debugging-evidence",
       "title": "Unknown-cause bugfix waits for debugging evidence",
       "category": "debugging_bridge",

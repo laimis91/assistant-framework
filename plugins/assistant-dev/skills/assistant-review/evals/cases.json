@@ -934,6 +934,60 @@
       }
     },
     {
+      "id": "architecture-decision-pack-review-is-fresh-and-falsifiable",
+      "title": "Architecture Decision Pack review is fresh and falsifiable",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an applicable workflow Architecture Decision Pack is reviewed as a fresh, evidence-backed decision record rather than generic architecture advice or a permanent memory role.",
+      "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "architecture_decision_pack_review_required is true and the Pack contains a revision reference, fact/assumption list, boundaries, Type Ledger, quality scenarios, invalidators, and verification handoff.",
+        "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
+        "The changed repository revision is newer than the Pack's recorded revision."
+      ],
+      "expected_behavior": [
+        "Applies the Architecture Decision Pack Review Checklist alongside other applicable review checklists.",
+        "Flags the stale Pack and requests a refresh before treating its facts as current.",
+        "Flags generic string cache-key usage when it erases a domain/public identity and requires a named semantic type or an explicit boundary-local primitive exception with conversion and validation.",
+        "Does not approve memory efficiency or extensibility claims without workload, budget or explicit unknown, measurement method, and failure condition.",
+        "Checks ownership/lifecycle/dependency boundary, control/early-exit behavior, ownership/disposal, resource envelope, registration/representative-path evidence, compatibility/versioning or adapter plan, extension seam or explicit none, verification, rollback, and handoff.",
+        "Keeps the Pack scoped to the current decision and does not introduce a permanent architect agent or global memory system."
+      ],
+      "pass_criteria": [
+        "The response includes Architecture Decision Pack Review Checklist or architecture_decision_pack_checks.",
+        "The response identifies freshness, design-pressure checks, semantic type or primitive exception, workload, budget, measurement, failure condition, compatibility, and verification/rollback.",
+        "Any unresolved item is reported as a concrete finding, explicit unknown, or material question with why/risk/default rather than silently assumed."
+      ],
+      "fail_signals": [
+        "Approves the cache as memory efficient or extensible without a measurable scenario.",
+        "Accepts a generic string key solely because it is easy to add parameters later.",
+        "Treats an old Pack revision as current without a refresh.",
+        "Recommends a permanent architect agent or global memory store."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Architecture Decision Pack Review Checklist",
+          "freshness",
+          "design-pressure",
+          "semantic type",
+          "primitive exception",
+          "workload",
+          "budget",
+          "measurement",
+          "failure condition",
+          "compatibility",
+          "verification",
+          "rollback"
+        ],
+        "forbidden_substrings": [
+          "memory efficient by design",
+          "string is always sufficient",
+          "permanent architect agent",
+          "global memory system"
+        ]
+      }
+    },
+    {
       "id": "review-finding-distills-permanent-rule-candidates",
       "title": "Review finding distills permanent rule candidates",
       "category": "review_finding_rule_distillation",

@@ -11,7 +11,8 @@ Record these fields in the task journal for medium+ tasks and in the inline comp
 - `Triaged as`: `small`, `medium`, `large`, or `mega`
 - `Controller intensity`: `light`, `standard`, or `strict`
 - `Plan mode`: `none`, `inline`, or `approval_required`
-- `Required agents`: the roles required by size and risk
+- `Architecture design mode`: `not_applicable`, `lightweight`, `required`, or `review_intensive`, plus concrete trigger reasons or a concrete not-applicable reason
+- `Required agents`: the roles required by concrete uncertainty, task type, risk, and explicit user/project routing
 - `Subagent policy state`: `not_required`, `delegation_triggered`, `delegation_opted_out`, `subagents_unavailable`, or `policy_disallowed`
 - `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
 - `Subagent trigger scope`: direct-user, applicable-`AGENTS.md`, or active-skill provenance plus covered roles/phases/actions; infer it without asking when delegation is relevant
@@ -83,6 +84,28 @@ Use `search_mode` to decide how much pre-code option exploration is useful. Keep
 
 When `candidate_search` is selected, load `references/candidate-search.md`. The goal tree must decompose existing acceptance criteria and slice acceptance/verification criteria; the archive is stored at `{agent_state_dir}/candidate-search.md` only when local state is configured and policy-allowed, otherwise inline in the plan/task packet.
 
+## Architecture Design Mode Rules
+
+Use `architecture_design_mode` to decide whether an Architecture Decision Pack
+is needed before executable planning. It is not a size-based ceremony.
+
+- `not_applicable`: one evidenced local path; no meaningful changed boundary,
+  data lifecycle, public contract, resource target, extension seam, or viable
+  design choice. Record the concrete reason.
+- `lightweight`: one bounded decision about ownership, dependency direction,
+  semantic type, interface, or verification needs an explicit record.
+- `required`: a new system, cross-boundary/public contract, persistent data
+  lifecycle, material memory/performance/reliability/extensibility target, or
+  genuinely viable design choice is present.
+- `review_intensive`: high-risk or conflicting drivers need an independent
+  challenge after the pack is formed.
+
+When mode is not `not_applicable`, load
+`references/architecture-decision-pack.md`. The pack owns source facts versus
+assumptions, material design questions, semantic types and primitive
+exceptions, quality scenarios, verification, freshness, and handoff. It does
+not create a permanent architect role or replace the normal plan approval.
+
 ## Common Gates
 
 Apply to every code task:
@@ -134,7 +157,7 @@ Apply to every code task:
 
 ## Required Agents
 
-Start from the size table in `references/subagent-dispatch.md`, then add risk-driven roles:
+Start from the concrete decision/mapping need in `references/subagent-dispatch.md`, then add risk-driven roles:
 
 - `security` gate: load `assistant-security`
 - `refactor/migration/rewrite` gate: include Explorer for behavior tracing when parity is not fully test-covered

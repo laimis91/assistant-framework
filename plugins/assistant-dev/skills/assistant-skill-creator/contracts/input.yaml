@@ -88,6 +88,6 @@ fields:
 
 # Validation behavior:
 # 1. Resolve required fields before printing --- PHASE: CAPTURE ---
-# 2. If on_missing=ask: present ONE focused question, wait for answer
+# 2. If on_missing=ask: group and present every material, non-discoverable question, then wait for the answers
 # 3. If on_missing=infer: state the inference ("I'm categorizing this as a utility skill")
 # 4. If on_missing=skip: proceed with default value

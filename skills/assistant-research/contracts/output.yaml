@@ -125,7 +125,7 @@ artifacts:
     condition: "research_method == five_lens_briefing"
     description: "STORM-style per-lens question trace and evidence ledger before contradiction mapping"
     min_items: 5
-    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, a follow-up question, and evidence status."
+    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, every material evidence-prompted follow-up question or an explicit none-needed decision, and evidence status."
     on_fail: "Build the question trace/evidence ledger before contradiction mapping or synthesis; do not synthesize directly from fixed lenses."
     object_fields:
       - name: lens
