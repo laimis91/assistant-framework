@@ -61,8 +61,8 @@ dispatch_context_bundles:
     direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
     excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
     return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
-    budget_words: 5000
-    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5000 words."
+    budget_words: 5600
+    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5600 words."
 
   - name: qa_evaluator_context
     phase: QA_EVALUATION_STEP

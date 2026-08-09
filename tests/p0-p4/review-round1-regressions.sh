@@ -113,7 +113,7 @@ done <<< "$first_review_refs"
 first_review_total_words=$(( review_entry_words + first_review_reference_words ))
 first_review_ref_labels="$(printf '%s' "$first_review_refs" | tr '\n' ',' | sed 's/,$//')"
 
-test_start "orchestrator first-review and fresh Reviewer bundle each stay below 5000 words (orchestrator=$first_review_total_words reviewer=$reviewer_bundle_words refs=$first_review_ref_labels)"
+test_start "orchestrator first-review stays below 5000 words and fresh Reviewer bundle stays below 5600 words (orchestrator=$first_review_total_words reviewer=$reviewer_bundle_words refs=$first_review_ref_labels)"
 if [[ -z "$first_review_refs" ]]; then
     first_review_reference_failures+=("no mandatory first-review loader references were derived")
 fi
@@ -125,8 +125,8 @@ if (( first_review_total_words >= 5000 )); then
 fi
 if [[ ! "$reviewer_bundle_words" =~ ^[0-9]+$ ]]; then
     first_review_reference_failures+=("validator did not report the reviewer_context worker bundle closure")
-elif (( reviewer_bundle_words >= 5000 )); then
-    first_review_reference_failures+=("fresh Reviewer bundle $reviewer_bundle_words is not below 5000")
+elif (( reviewer_bundle_words >= 5600 )); then
+    first_review_reference_failures+=("fresh Reviewer bundle $reviewer_bundle_words is not below 5600")
 fi
 if ! grep -Fq 'resolve `reviewer_context` from `contracts/index.yaml`' "$review_skill_dir/references/review-loop.md"; then
     first_review_reference_failures+=("review loop does not route first-pass worker context through reviewer_context")

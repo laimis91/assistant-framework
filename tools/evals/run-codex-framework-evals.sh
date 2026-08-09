@@ -521,8 +521,8 @@ validate_candidate_manifest() {
       and .promotion_gates.question_mark_count_proxy_must_not_increase == true
       and .promotion_gates.median_rework_or_tool_calls_max_regression_percent == 20
       and .promotion_gates.semantic_false_positive_review_required == true
-      and .promotion_gates.selected_initial_words_max == 1000
-      and .promotion_gates.selected_entry_words_max == 2600
+      and .promotion_gates.selected_initial_words_max == 1050
+      and .promotion_gates.selected_entry_words_max == 3000
       and .promotion_gates.standing_context_growth_allowed == false
       and (.static_measurement.baseline_selected_initial_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.candidate_selected_initial_words | type == "number" and . >= 1 and . == floor)

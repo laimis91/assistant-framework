@@ -133,7 +133,7 @@ done
 
 if [[ -f "$clarify_input" ]]; then
     for term in \
-        'schema_version: "1.0"' \
+        'schema_version: "2.0"' \
         "contract: input" \
         "skill: assistant-clarify" \
         "on_missing:"; do
@@ -149,7 +149,7 @@ fi
 
 if [[ -f "$clarify_output" ]]; then
     for term in \
-        'schema_version: "1.0"' \
+        'schema_version: "2.0"' \
         "contract: output" \
         "skill: assistant-clarify" \
         "on_fail:"; do

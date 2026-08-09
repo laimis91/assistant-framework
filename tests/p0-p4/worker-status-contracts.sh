@@ -54,11 +54,11 @@ missing_typed_artifact_terms=()
 for term in \
     "artifact_reference_protocol:" \
     "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
-    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]" \
+    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]" \
     "location_ref is the typed location/ref pointer" \
     "Producer responsibility: create or update the artifact" \
     "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
-    "CodeWriter and BuilderTester task packets receive artifact_refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
+    "CodeWriter and BuilderTester task packets receive artifact_refs for the Architecture Decision Pack, Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
     "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable." \
     "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation." \
     "- name: artifact_refs" \
@@ -78,12 +78,25 @@ for term in \
     "schema_or_contract" \
     "validation_status" \
     "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]" \
+    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]" \
     "- name: pivot_restart_decision"; do
     if ! grep -Fq -- "$term" "$output_contract"; then
         missing_typed_artifact_terms+=("output.yaml: $term")
     fi
 done
+canonical_artifact_types="$(sed -n 's/^  artifact_types: //p' "$handoffs_file" | head -n 1)"
+concrete_artifact_enum_count=0
+for artifact_contract_file in "$handoffs_file" "$output_contract"; do
+    while IFS= read -r concrete_artifact_enum; do
+        concrete_artifact_enum_count=$((concrete_artifact_enum_count + 1))
+        if [[ "${concrete_artifact_enum#*enum_values: }" != "$canonical_artifact_types" ]]; then
+            missing_typed_artifact_terms+=("$artifact_contract_file: concrete artifact_type enum differs from artifact_reference_protocol")
+        fi
+    done < <(grep -F "enum_values: [done_contract" "$artifact_contract_file")
+done
+if [[ "$concrete_artifact_enum_count" -ne 6 ]]; then
+    missing_typed_artifact_terms+=("expected five handoff and one output concrete artifact_type enums; found $concrete_artifact_enum_count")
+fi
 for term in \
     "## Harness Appendix Routing" \
     "references/plan-harness-appendix.md" \

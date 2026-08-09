@@ -80,9 +80,8 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks legacy-state preservation coverage")
     grep -Fq -- 'locked Codex instructions fail preflight before installation changes' "$native_suite" \
         || failures+=("native suite lacks locked Codex update-file preflight coverage")
-    if grep -Fq -- 'cleanup-memory-graph' "$native_suite"; then
-        failures+=("native suite retains the removed cleanup-script contract")
-    fi
+    grep -Fq -- "Assert-NotContains \$combined 'cleanup-memory-graph' 'Installer retains the retired cleanup-script dependency'" "$native_suite" \
+        || failures+=("native suite lacks Assert-NotContains coverage for the retired cleanup-script dependency")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then

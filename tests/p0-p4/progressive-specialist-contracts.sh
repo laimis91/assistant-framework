@@ -213,7 +213,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::user review before BUILD" \
     "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::verifier_result: approved" \
     "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::references/harness-patterns.md" \
-    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::13 contract design guide rules"; do
+    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::14 contract design guide rules"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if ! grep -Fq -- "$term" "$file"; then

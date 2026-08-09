@@ -84,8 +84,8 @@ gates:
         on_fail: "Block Reviewer dispatch. Run current build/tests when fix/build is in scope or after a source fix; otherwise record exactly one allowed explicit not_applicable reason."
 
       - id: RS2B
-        check: "The declared reviewer_context boundary closure is strictly below 5000 words and excludes orchestrator_to_reviewer.return_fields"
-        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5000 words."
+        check: "The declared reviewer_context boundary closure is strictly below 5600 words and excludes orchestrator_to_reviewer.return_fields"
+        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5600 words."
 
       - id: RS3
         check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"

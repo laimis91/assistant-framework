@@ -1215,7 +1215,7 @@ artifacts:
       - name: artifact_type
         type: enum
         required: true
-        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
         validation: "Classifies the artifact without requiring prose parsing"
         on_missing: fail
       - name: producer

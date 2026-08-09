@@ -432,7 +432,7 @@ else
     fail "${dry_run_failures[*]}"
 fi
 
-test_start "python fallback retires valid registrations and fails closed for malformed Claude/Gemini settings"
+test_start "python fallback retires valid registrations and preserves malformed or non-object settings with warnings"
 fallback_failures=()
 fallback_bin="$(mktemp -d)"
 p0p4_register_cleanup "$fallback_bin"
@@ -485,21 +485,10 @@ else
                 printf '%s\n' '[]' > "$fallback_config"
             fi
             cp "$fallback_config" "$fallback_before"
-            if [[ "$agent" != "codex" && "$fallback_invalid_kind" != "hooks_array" ]]; then
-                if PATH="$fallback_bin" run_agent_install \
-                    "$agent" "$fallback_home" "$fallback_codex_home" "$fallback_out" "$fallback_err"; then
-                    fallback_failures+=("$agent python fallback should fail closed for $fallback_invalid_kind settings")
-                elif ! cmp -s "$fallback_before" "$fallback_config"; then
-                    fallback_failures+=("$agent python fallback mutated $fallback_invalid_kind settings after failing closed")
-                fi
-            elif ! PATH="$fallback_bin" run_agent_install \
+            if ! PATH="$fallback_bin" run_agent_install \
                 "$agent" "$fallback_home" "$fallback_codex_home" "$fallback_out" "$fallback_err"; then
                 fallback_failures+=("$agent python fallback failed for $fallback_invalid_kind settings")
-            elif [[ "$fallback_invalid_kind" == "hooks_array" ]] \
-                && ! jq -e '.hooks == []' "$fallback_config" >/dev/null 2>&1; then
-                fallback_failures+=("$agent python fallback changed the unexpected hooks array")
-            elif [[ "$fallback_invalid_kind" != "hooks_array" ]] \
-                && ! cmp -s "$fallback_before" "$fallback_config"; then
+            elif ! cmp -s "$fallback_before" "$fallback_config"; then
                 fallback_failures+=("$agent python fallback changed $fallback_invalid_kind settings")
             elif ! rg -qi 'warning.*invalid.*json|invalid.*json.*preserv' "$fallback_out" "$fallback_err"; then
                 fallback_failures+=("$agent python fallback did not warn for $fallback_invalid_kind settings")
@@ -530,7 +519,7 @@ else
     fail "${fallback_failures[*]}"
 fi
 
-test_start "stale hook state becomes inert shims while malformed Claude/Gemini settings fail closed"
+test_start "stale hook state becomes inert shims while malformed or non-object settings are preserved with warnings"
 shim_failures=()
 for agent in claude codex gemini; do
     shim_home="$(mktemp -d)"
@@ -587,15 +576,7 @@ for agent in claude codex gemini; do
     invalid_entrypoint_before="$invalid_home/skill-router.before"
     cp "$invalid_dir/skill-router.sh" "$invalid_entrypoint_before"
 
-    if [[ "$agent" != "codex" ]]; then
-        if run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
-            shim_failures+=("$agent invalid-JSON retirement should fail closed")
-        elif ! cmp -s "$invalid_before" "$invalid_config"; then
-            shim_failures+=("$agent invalid-JSON retirement mutated the invalid settings file after failing closed")
-        elif ! cmp -s "$invalid_entrypoint_before" "$invalid_dir/skill-router.sh"; then
-            shim_failures+=("$agent invalid-JSON retirement mutated the stale entrypoint after failing closed")
-        fi
-    elif ! run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
+    if ! run_agent_install "$agent" "$invalid_home" "" "$invalid_out" "$invalid_err"; then
         shim_failures+=("$agent invalid-JSON retirement should warn and continue without rewriting the file")
     elif ! cmp -s "$invalid_before" "$invalid_config"; then
         shim_failures+=("$agent invalid-JSON retirement changed the invalid settings file")
@@ -616,24 +597,25 @@ for agent in claude codex gemini; do
     non_object_before="$non_object_home/settings.before"
     non_object_out="$non_object_home/install.out"
     non_object_err="$non_object_home/install.err"
-    mkdir -p "$(dirname "$non_object_config")"
+    non_object_dir="$non_object_agent_home/hooks/assistant"
+    mkdir -p "$(dirname "$non_object_config")" "$non_object_dir"
     printf '%s\n' '[]' > "$non_object_config"
     cp "$non_object_config" "$non_object_before"
+    printf '%s\n' '#!/usr/bin/env bash' 'echo stale-framework-output' > "$non_object_dir/skill-router.sh"
+    chmod +x "$non_object_dir/skill-router.sh"
 
-    if [[ "$agent" != "codex" ]]; then
-        if run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
-            shim_failures+=("$agent non-object settings retirement should fail closed")
-        elif ! cmp -s "$non_object_before" "$non_object_config"; then
-            shim_failures+=("$agent non-object settings retirement mutated settings after failing closed")
-        elif [[ -e "$non_object_agent_home/hooks/assistant" ]]; then
-            shim_failures+=("$agent non-object settings retirement created hook state after failing closed")
-        fi
-    elif ! run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
+    if ! run_agent_install "$agent" "$non_object_home" "" "$non_object_out" "$non_object_err"; then
         shim_failures+=("$agent non-object settings retirement should warn and continue")
     elif ! cmp -s "$non_object_before" "$non_object_config"; then
         shim_failures+=("$agent non-object settings retirement changed the settings file")
     elif ! rg -qi 'warning.*invalid.*json|invalid.*json.*preserv' "$non_object_out" "$non_object_err"; then
         shim_failures+=("$agent non-object settings retirement did not emit a preservation warning")
+    else
+        non_object_shim_out="$non_object_home/shim.out"
+        non_object_shim_err="$non_object_home/shim.err"
+        if ! file_is_inert_shim "$non_object_dir/skill-router.sh" "$non_object_shim_out" "$non_object_shim_err"; then
+            shim_failures+=("$agent non-object settings retirement did not neutralize the detected stale entrypoint file")
+        fi
     fi
 
     unexpected_hooks_home="$(mktemp -d)"

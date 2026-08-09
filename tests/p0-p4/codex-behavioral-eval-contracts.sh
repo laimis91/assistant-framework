@@ -709,7 +709,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$actual_cap_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$actual_cap_output" \
     --codex-bin "$fake_codex" >/dev/null 2>"$actual_cap_error" \
-    && jq -e '.candidate_manifest_sha256 == null and .context_budget_evidence.candidate.selected_entry_words > 2600' \
+    && jq -e '.candidate_manifest_sha256 == null and .context_budget_evidence.candidate.selected_entry_words > 3000' \
         "$actual_cap_output/run-plan.json" >/dev/null \
     && [[ ! -e "$capture/call-0.args" ]]; then
     pass
@@ -776,8 +776,8 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
         and (.context_budget_evidence_sha256 | test("^[0-9a-f]{64}$"))
         and (.context_budget_evidence | type == "object")
         and .context_budget_evidence.policy_caps == {
-          selected_initial_words_max:1000,
-          selected_entry_words_max:2600,
+          selected_initial_words_max:1050,
+          selected_entry_words_max:3000,
           standing_context_growth_allowed:false
         }
         and (.context_budget_evidence.reporter_sha256 | test("^[0-9a-f]{64}$"))

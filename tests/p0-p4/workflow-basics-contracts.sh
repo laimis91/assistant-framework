@@ -223,7 +223,7 @@ for term in \
 done
 for term in \
     "D8A" \
-    "context map includes references_checked" \
+    "When a context map is required: it includes references_checked" \
     "behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_reference_mapping_terms+=("phase-gates.yaml: $term")
@@ -489,15 +489,14 @@ for term in \
     "framework-owned, ignored state" \
     "The orchestrator may create and update them directly" \
     "This exception never applies to project source" \
-    "The Code Mapper returns context map markdown" \
-    "persists that markdown"; do
+    "If state files are unavailable, carry the equivalent state in the response/plan packet."; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
         missing_state_terms+=("phases.md: $term")
     fi
 done
 for term in \
     "orchestrator-owned {agent_state_dir}/task.md state artifact" \
-    "persist the context map to {agent_state_dir}/context-map.md when allowed"; do
+    "a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_state_terms+=("phase-gates.yaml: $term")
     fi

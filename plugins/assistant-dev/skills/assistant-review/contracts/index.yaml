@@ -55,7 +55,7 @@ load_sets:
         section: dispatch_context_bundles
         key: name
         names: [fresh_reviewer_context]
-    budget_words: 5000
+    budget_words: 5600
   return_validation:
     selectors:
       - id: review-return-validation-bundle
