@@ -120,8 +120,8 @@ gates:
         on_fail: "Write a requirements summary before proceeding"
 
       - id: D_REQUIREMENT_ACCEPTANCE_MAP
-        check: "For medium+ work, or progressive_route_clear_consumption_state=consumed with progressive_artifact_retention_state=retained, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
-        condition: "size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)"
+        check: "For medium+ work, small required/review_intensive architecture work, or progressive_route_clear_consumption_state=consumed with progressive_artifact_retention_state=retained, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
+        condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
         on_fail: "Load references/requirement-acceptance-map.md, map every accepted requirement, resolve material questions, and do not decompose from an untraceable criteria list"
 
       - id: D1A
@@ -173,7 +173,7 @@ gates:
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
       - id: D_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs"
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
 
@@ -215,7 +215,7 @@ gates:
       - id: D6
         severity: guidance
         check: "For medium+ tasks: agent readiness score was assessed and printed when subagent routing is uncertain"
-        condition: "size in [medium, large, mega]"
+        condition: "size in [medium, large, mega] or architecture_design_mode in [required, review_intensive]"
         on_fail: "Run agent readiness check when delegation choice is material; otherwise record direct execution/fallback rationale"
 
   # ─────────────────────────────────────────────
@@ -288,7 +288,7 @@ gates:
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
 
       - id: P_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: Plan references the current Architecture Decision Pack, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope"
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: Plan references the current Architecture Decision Pack, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets."
 
@@ -592,11 +592,11 @@ gates:
 
       - id: R_REQUIREMENT_COVERAGE
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
-        condition: "size in [medium, large, mega]"
+        condition: "size in [medium, large, mega] or architecture_design_mode in [required, review_intensive]"
         on_fail: "Use references/requirement-acceptance-map.md to run missing verification, repair failed behavior, or obtain explicit approval for an exclusion; do not infer coverage from aggregate test success"
 
       - id: R_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario verification, and scope propagation"
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario verification, and scope propagation; review_intensive includes independent challenge evidence."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Provide the current pack and changed scope to assistant-review, run the Architecture Decision Pack Review Checklist, fix concrete findings, and refresh validation before Document."
 

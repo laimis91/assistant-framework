@@ -75,8 +75,10 @@ only for compatibility routing.
 
 When `architecture_design_mode != not_applicable`, pass the current compact
 Architecture Decision Pack projection (reference, freshness basis,
-facts/assumptions, boundaries, design-pressure checks, Type Ledger, quality scenarios,
-verification/rollback, and invalidators) to assistant-review and set
+sourced facts, status/rationale/impact/source-ref assumptions,
+material-question topic/why/risk/default/status, boundaries, design-pressure
+checks, Type Ledger, quality scenarios, verification/rollback, invalidators, and
+review-intensive challenge evidence) to assistant-review and set
 `architecture_decision_pack_review_required=true`. The reviewer must return the
 canonical Pack review evidence; workflow consumes its validated result rather
 than duplicating the reviewer schema.

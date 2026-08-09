@@ -384,7 +384,7 @@ try {
         }
         Assert-Contains $combined '-LiteralPath' 'Literal-path operations are not present'
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
-        Assert-NotContains $combined 'cleanup-memory-graph' 'Installer retains the retired cleanup-script dependency'
+        Assert-NotContains $combined 'memory-graph\\run-memory-graph' 'Installer retains a retired Memory Graph launcher dependency'
     }
     Invoke-Contract 'child PowerShell output preserves raw long diagnostics across runtimes' {
         $harnessSource = [System.IO.File]::ReadAllText($PSCommandPath)
@@ -1336,18 +1336,20 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'reinstall retires exact source-only tools and preserves unrelated top-level siblings' {
-        Use-IsolatedEnvironment 'source-only upgrade cleanup' {
+    Invoke-Contract 'reinstall retires exact managed targets and preserves unrelated top-level siblings' {
+        Use-IsolatedEnvironment 'managed target retirement cleanup' {
             param($root, $isolatedUserProfile)
             $codexHome = Join-Path $root 'Codex Source-Only Upgrade Home'
             $toolsRoot = Join-Path $codexHome 'tools'
-            $sourceOnlyTargets = @(
+            $retiredManagedTargets = @(
                 'context-budget-report.sh',
                 'evals\run-codex-framework-evals.sh',
                 'evals\finalize-workflow-kernel-review.sh',
-                'evals\lib\context-budget-evidence.sh'
+                'evals\lib\context-budget-evidence.sh',
+                'cleanup-memory-graph.ps1',
+                'cleanup-memory-graph.sh'
             )
-            foreach ($relativePath in $sourceOnlyTargets) {
+            foreach ($relativePath in $retiredManagedTargets) {
                 $target = Join-Path $toolsRoot $relativePath
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $target))
                 [System.IO.File]::WriteAllText($target, 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
@@ -1358,17 +1360,20 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
 
             $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
-            Assert-Equal 0 $dryRun.ExitCode "Source-only cleanup dry run failed: $($dryRun.Output)"
-            Assert-Contains $dryRun.Output 'Remove source-only installed target' 'Dry run omitted exact source-only cleanup'
-            foreach ($relativePath in $sourceOnlyTargets) {
-                Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed source-only target: $relativePath"
+            Assert-Equal 0 $dryRun.ExitCode "Managed target retirement dry run failed: $($dryRun.Output)"
+            Assert-Contains $dryRun.Output 'Remove managed installed target for source-only tools' 'Dry run omitted exact source-only cleanup'
+            Assert-Contains $dryRun.Output 'Remove managed installed target for retired managed tools' 'Dry run omitted exact retired-target cleanup'
+            Assert-Contains $dryRun.Output 'cleanup-memory-graph.ps1' 'Dry run omitted the retired PowerShell cleanup target'
+            Assert-Contains $dryRun.Output 'cleanup-memory-graph.sh' 'Dry run omitted the retired Bash cleanup target'
+            foreach ($relativePath in $retiredManagedTargets) {
+                Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed managed target: $relativePath"
             }
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Dry run changed unrelated tools sibling'
 
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $result.ExitCode "Source-only cleanup reinstall failed: $($result.Output)"
-            foreach ($relativePath in $sourceOnlyTargets) {
-                Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Source-only target survived reinstall: $relativePath"
+            Assert-Equal 0 $result.ExitCode "Managed target retirement reinstall failed: $($result.Output)"
+            foreach ($relativePath in $retiredManagedTargets) {
+                Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Managed target survived reinstall: $relativePath"
             }
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Reinstall changed unrelated top-level tools sibling'
         }

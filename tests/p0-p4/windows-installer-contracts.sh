@@ -36,9 +36,10 @@ if [[ -f "$installer" ]]; then
         || failures+=("missing deep JSON preservation")
     grep -Fq -- '[Environment]::OSVersion.Platform' "$installer" \
         || failures+=("security decisions do not use the host platform API")
-    if grep -Fq -- 'cleanup-memory-graph' "$installer"; then
-        failures+=("installer retains the retired Memory Graph cleanup dependency")
-    fi
+    grep -Fq -- "'cleanup-memory-graph.ps1'" "$installer" \
+        || failures+=("installer does not retire the exact PowerShell cleanup target")
+    grep -Fq -- "'cleanup-memory-graph.sh'" "$installer" \
+        || failures+=("installer does not retire the exact Bash cleanup target")
     if rg -n -e '^function .*(MemoryGraph|GraphSeed)' "$installer" >/tmp/p0p4-windows-retired-installer-functions.out; then
         failures+=("installer retains retired Memory Graph registration, build, or seed functions")
     fi
@@ -80,8 +81,10 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks legacy-state preservation coverage")
     grep -Fq -- 'locked Codex instructions fail preflight before installation changes' "$native_suite" \
         || failures+=("native suite lacks locked Codex update-file preflight coverage")
-    grep -Fq -- "Assert-NotContains \$combined 'cleanup-memory-graph' 'Installer retains the retired cleanup-script dependency'" "$native_suite" \
-        || failures+=("native suite lacks Assert-NotContains coverage for the retired cleanup-script dependency")
+    grep -Fq -- "'cleanup-memory-graph.ps1'" "$native_suite" \
+        || failures+=("native suite lacks exact PowerShell cleanup retirement coverage")
+    grep -Fq -- "'cleanup-memory-graph.sh'" "$native_suite" \
+        || failures+=("native suite lacks exact Bash cleanup retirement coverage")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then

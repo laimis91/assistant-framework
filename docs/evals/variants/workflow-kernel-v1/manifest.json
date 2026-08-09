@@ -27,8 +27,8 @@
     "selected_initial_word_delta": -908,
     "baseline_total_initial_words": 2536,
     "candidate_total_initial_words": 1628,
-    "baseline_selected_entry_words": 3875,
-    "candidate_selected_entry_words": 2967,
+    "baseline_selected_entry_words": 3884,
+    "candidate_selected_entry_words": 2976,
     "selected_entry_word_delta": -908,
     "standing_context_growth": 0,
     "measured_with": "tools/context-budget-report.sh --skill-overlay"

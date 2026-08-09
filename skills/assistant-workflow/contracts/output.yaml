@@ -72,6 +72,7 @@ artifacts:
       - name: architecture_design_trigger_reasons
         type: string[]
         required: true
+        min_items: 1
         validation: "Non-empty for lightweight, required, or review_intensive; concrete not-applicable reason otherwise"
       - name: build_execution_lane
         type: enum
@@ -580,7 +581,7 @@ artifacts:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)"
+    condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
     validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
@@ -770,6 +771,26 @@ artifacts:
             type: enum
             required: true
             enum_values: [open, answered, safe_default, deferred]
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "mode == review_intensive"
+        description: "Independent challenge evidence for conflicting or high-risk architectural drivers"
+        validation: "Names the independent challenge, dissent or validation result, and how it changed or confirmed the selected design"
+        on_missing: fail
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
       - name: boundaries
         type: object[]
         required: true

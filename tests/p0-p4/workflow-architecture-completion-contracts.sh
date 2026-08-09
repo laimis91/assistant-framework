@@ -36,6 +36,85 @@ contract_field_block() {
     ' "$file"
 }
 
+test_start "Architecture packs preserve challenge evidence and small required traceability"
+workflow_missing=()
+trigger_reasons_block="$(contract_field_block "$input_contract" architecture_design_trigger_reasons)"
+input_map_block="$(contract_field_block "$input_contract" requirement_acceptance_map)"
+output_map_block="$(contract_field_block "$output_contract" requirement_acceptance_map)"
+output_pack_block="$(contract_field_block "$output_contract" architecture_decision_pack)"
+discover_block="$(phase_block DISCOVER)"
+review_block="$(phase_block REVIEW)"
+
+for term in \
+    'required: true' \
+    'min_items: 1' \
+    'Non-empty.' \
+    'when architecture_design_mode=not_applicable, record the concrete evidenced local-path reason' \
+    'Concrete reason required even when architecture_design_mode=not_applicable'; do
+    if ! grep -Fq -- "$term" <<<"$trigger_reasons_block"; then workflow_missing+=("trigger rationale: $term"); fi
+done
+for contract_and_block in "input::$input_map_block" "output::$output_map_block"; do
+    label="${contract_and_block%%::*}"
+    block="${contract_and_block#*::}"
+    if ! grep -Fq -- 'architecture_design_mode in [required, review_intensive]' <<<"$block"; then
+        workflow_missing+=("$label Requirement Acceptance Map small architecture condition")
+    fi
+done
+for phase_and_block in "Discover::$discover_block" "Review::$review_block"; do
+    label="${phase_and_block%%::*}"
+    block="${phase_and_block#*::}"
+    if ! grep -Fq -- 'architecture_design_mode in [required, review_intensive]' <<<"$block"; then
+        workflow_missing+=("$label Requirement Acceptance Map gate")
+    fi
+done
+for term in \
+    '      - name: independent_challenge_evidence' \
+    '          - name: challenge_ref' \
+    '          - name: dissent_or_validation' \
+    '          - name: resolution' \
+    '          - name: selected_design_impact'; do
+    if ! grep -Fq -- "$term" <<<"$output_pack_block"; then workflow_missing+=("challenge evidence: $term"); fi
+done
+for handoff in orchestrator_to_architect_decompose orchestrator_to_architect; do
+    if ! handoff_return_field_present "$workflow_handoffs" "$handoff" architecture_decision_pack_update; then
+        workflow_missing+=("$handoff architecture_decision_pack_update")
+        continue
+    fi
+    if ! handoff_return_field_has_condition "$workflow_handoffs" "$handoff" architecture_decision_pack_update 'refreshed source evidence changes the Pack'; then
+        workflow_missing+=("$handoff Pack update condition")
+    fi
+    for nested_check in \
+        'source_pack_ref::required: true' \
+        'updated_pack_ref::required: true' \
+        'changed_sections::min_items: 1' \
+        'evidence_refs::min_items: 1' \
+        'merge_action::enum_values: [replace_current_pack]'; do
+        nested="${nested_check%%::*}"
+        expected="${nested_check#*::}"
+        if ! handoff_return_object_field_has_line "$workflow_handoffs" "$handoff" architecture_decision_pack_update "$nested" "$expected"; then
+            workflow_missing+=("$handoff $nested: $expected")
+        fi
+    done
+done
+if ! grep -Fq -- 'size == small and architecture_design_mode in [required, review_intensive]' "$workflow_dir/references/requirement-acceptance-map.md"; then
+    workflow_missing+=("small required/review-intensive Requirement Acceptance Map reference")
+fi
+for term in challenge_ref dissent_or_validation resolution selected_design_impact; do
+    if ! grep -Fq -- "\`$term\`" "$workflow_dir/references/architecture-decision-pack.md"; then
+        workflow_missing+=("independent challenge reference field: $term")
+    fi
+done
+for term in \
+    'sourced facts' \
+    'status/rationale/impact/source-ref assumptions' \
+    'material-question topic/why/risk/default/status' \
+    'review-intensive challenge evidence'; do
+    if ! grep -Fq -- "$term" "$review_router"; then
+        workflow_missing+=("review router Pack projection: $term")
+    fi
+done
+if [[ ${#workflow_missing[@]} -eq 0 ]]; then pass; else fail "architecture Pack propagation/traceability contract gaps: ${workflow_missing[*]}"; fi
+
 test_start "Build gates defer independent Code Reviewer evidence to Review"
 build_block="$(phase_block BUILD)"
 if [[ -z "$build_block" ]]; then

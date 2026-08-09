@@ -543,6 +543,10 @@ artifacts:
       - name: material_questions_and_invalidators
         type: string
         required: true
+      - name: independent_challenge_evidence
+        type: string
+        required: conditional
+        condition: "architecture_decision_pack.mode == review_intensive"
       - name: ownership_dependency_and_lifecycle_boundary
         type: string
         required: true

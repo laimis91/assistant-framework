@@ -293,7 +293,7 @@ fields:
     type: boolean
     required: false
     default: false
-    description: "Whether a carried Architecture Decision Pack must receive the Architecture Decision Pack Review Checklist"
+    description: "Whether a carried Architecture Decision Pack or equivalent standalone architecture decision record must receive the Architecture Decision Pack Review Checklist"
     on_missing: infer
     infer_from: >
       true when the review packet carries architecture_design_mode other than not_applicable, an Architecture Decision Pack,
@@ -304,9 +304,10 @@ fields:
     type: object
     required: conditional
     condition: "architecture_decision_pack_review_required is true"
-    description: "Compact fresh review projection of the workflow Architecture Decision Pack; it is evidence for one decision, not global memory"
-    validation: "Contains a source/revision freshness basis, decision facts and assumptions, boundary/design-pressure/type/quality/verification evidence, and invalidators. A stale Pack is a review finding or blocker, not an assumed current design."
-    on_missing: fail
+    description: "Compact fresh review projection of a workflow Pack or standalone equivalent architecture decision record; it is evidence for one decision, not global memory"
+    validation: "Contains a source/revision freshness basis, separate facts, assumptions, and material questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent challenge evidence. A stale Pack is a review finding or blocker, not an assumed current design."
+    on_missing: infer
+    infer_from: "Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record. If a workflow Pack is required but absent, or the standalone record cannot support the required typed facts, fail instead of inventing evidence."
     object_fields:
       - name: ref
         type: string
@@ -318,9 +319,61 @@ fields:
       - name: freshness_basis
         type: string
         required: true
-      - name: facts_and_assumptions
-        type: string[]
+      - name: facts
+        type: object[]
         required: true
+        min_items: 1
+        object_fields:
+          - name: claim
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: true
+      - name: assumptions
+        type: object[]
+        required: true
+        object_fields:
+          - name: statement
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [safe_default, pending_question, validated, deferred]
+          - name: rationale_or_impact
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+      - name: material_questions
+        type: object[]
+        required: true
+        object_fields:
+          - name: question_id
+            type: string
+            required: true
+          - name: topic
+            type: string
+            required: true
+          - name: question
+            type: string
+            required: true
+          - name: why_needed
+            type: string
+            required: true
+          - name: risk_if_guessed
+            type: string
+            required: true
+          - name: recommended_default_or_none
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [open, answered, safe_default, deferred]
       - name: boundaries_and_dependencies
         type: string[]
         required: true
@@ -328,6 +381,25 @@ fields:
         type: string[]
         required: true
         description: "Control/early-exit, ownership/disposal, resource-envelope, extension-registration, and representative-path conclusions or explicit not-applicable evidence"
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "mode == review_intensive"
+        description: "Independent challenge dissent/validation and resolution carried from a review-intensive Pack"
+        on_missing: fail
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
       - name: type_ledger
         type: string[]
         required: true

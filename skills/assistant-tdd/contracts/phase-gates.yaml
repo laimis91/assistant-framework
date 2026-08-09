@@ -33,7 +33,7 @@ gates:
         on_fail: "Delete any production code written before the test failed. Start GREEN phase cleanly."
 
       - id: RED5
-        check: "When architecture_test_obligations are present, the RED behavior names the carried semantic type, primitive boundary, public compatibility, or quality scenario it can falsify"
+        check: "When architecture_test_obligations are present, each has a unique stable obligation_id and the RED behavior names the carried semantic type, primitive boundary, public compatibility, or quality scenario it can falsify"
         condition: "architecture_test_obligations is non-empty"
         on_fail: "Add a focused testable obligation or record the architecture claim as blocked/explicit_unknown; do not replace it with a wrapper-only test."
 
@@ -102,7 +102,7 @@ invariants:
     on_fail: "Investigate: does the behavior already exist? Is the test wrong? Resolve before continuing."
 
   - id: INV5
-    check: "Architecture Decision Pack obligations are not claimed covered unless test evidence proves semantic validation/conversion/compatibility or a quality scenario's workload, budget, measurement, and failure condition"
+    check: "Architecture Decision Pack obligations are not claimed covered unless test evidence proves semantic validation/conversion/compatibility or a quality scenario's workload, budget, measurement, and failure condition; architecture_obligation_coverage binds every input obligation exactly once by obligation_id with no unknown or duplicate coverage id"
     scope: all_cycles
     condition: "architecture_test_obligations is non-empty"
     on_fail: "Record the missing evidence as blocked or explicit_unknown and return it to the workflow Pack/review handoff."

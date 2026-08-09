@@ -74,6 +74,11 @@ fields:
     description: "Testable obligations carried from an applicable workflow Architecture Decision Pack; this is not a request to create architecture work for every TDD cycle"
     validation: "Each obligation names its Pack reference, behavior, and verification. Quality scenarios include workload, budget/explicit unknown, measurement, and failure condition. Design-pressure obligations cover control/early exit, ownership/disposal, resource envelope, extension registration, or representative path behavior."
     object_fields:
+      - name: obligation_id
+        type: string
+        required: true
+        description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+        validation: "Non-empty and unique within architecture_test_obligations"
       - name: architecture_decision_pack_ref
         type: string
         required: true

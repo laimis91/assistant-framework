@@ -934,6 +934,57 @@
       }
     },
     {
+      "id": "standalone-architecture-record-derives-review-projection",
+      "title": "Standalone architecture record derives a typed review projection",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an equivalent standalone architecture decision record is projected into review facts instead of being rejected for lacking workflow Pack packaging.",
+      "prompt": "Review this standalone ADR. It selects a bounded cache, labels repository evidence and assumptions, lists one material question with its impact and default, and records an independent challenge. There is no workflow Architecture Decision Pack artifact.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
+        "The supplied ADR has enough source-backed content to derive the compact review projection."
+      ],
+      "expected_behavior": [
+        "Derives a compact Architecture Decision Pack review projection from the standalone ADR instead of failing only because no workflow Pack artifact exists.",
+        "Preserves separate typed facts with source refs and assumptions with status, rationale or impact, and optional source refs.",
+        "Preserves material-question topic, why needed, risk if guessed, recommended default or none, and status.",
+        "Carries independent challenge reference, dissent or validation, resolution, and selected-design impact into review."
+      ],
+      "pass_criteria": [
+        "The response names the standalone ADR as the projection source.",
+        "The response distinguishes facts, assumptions, and material questions.",
+        "The response applies Architecture Decision Pack review without demanding duplicate workflow packaging."
+      ],
+      "fail_signals": [
+        "Fails solely because the record is not packaged as a workflow Pack.",
+        "Flattens facts and assumptions into untyped strings.",
+        "Drops material-question rationale or independent challenge outcomes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "standalone ADR",
+          "compact",
+          "facts",
+          "source ref",
+          "assumptions",
+          "status",
+          "rationale or impact",
+          "material question",
+          "why needed",
+          "risk if guessed",
+          "recommended default",
+          "independent challenge",
+          "selected-design impact"
+        ],
+        "forbidden_substrings": [
+          "workflow Pack artifact is required",
+          "cannot review a standalone ADR",
+          "facts and assumptions are interchangeable",
+          "drop the material questions"
+        ]
+      }
+    },
+    {
       "id": "architecture-decision-pack-review-is-fresh-and-falsifiable",
       "title": "Architecture Decision Pack review is fresh and falsifiable",
       "category": "architecture_decision_pack_review",
@@ -941,7 +992,7 @@
       "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "architecture_decision_pack_review_required is true and the Pack contains a revision reference, fact/assumption list, boundaries, Type Ledger, quality scenarios, invalidators, and verification handoff.",
+        "architecture_decision_pack_review_required is true and the Pack contains a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and review-intensive independent challenge evidence.",
         "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
         "The changed repository revision is newer than the Pack's recorded revision."
       ],
@@ -977,7 +1028,8 @@
           "failure condition",
           "compatibility",
           "verification",
-          "rollback"
+          "rollback",
+          "independent challenge"
         ],
         "forbidden_substrings": [
           "memory efficient by design",

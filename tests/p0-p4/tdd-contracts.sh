@@ -3,6 +3,36 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+contract_field_block() {
+    local file="$1"
+    local field="$2"
+    awk -v field="$field" '
+        $0 == "  - name: " field { inside = 1 }
+        inside && /^  - name: / && $0 != "  - name: " field { exit }
+        inside { print }
+    ' "$file"
+}
+
+test_start "TDD obligation coverage binds every stable obligation id exactly once"
+tdd_missing=()
+obligations_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" architecture_test_obligations)"
+coverage_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" architecture_obligation_coverage)"
+for term in \
+    '      - name: obligation_id' \
+    'Stable identifier used to bind this input obligation to exactly one coverage entry' \
+    'Non-empty and unique within architecture_test_obligations'; do
+    if ! grep -Fq -- "$term" <<<"$obligations_block"; then tdd_missing+=("input obligations: $term"); fi
+done
+for term in \
+    'min_items: 1' \
+    'Each input architecture_test_obligations obligation is represented exactly once by obligation_id' \
+    'no coverage entry has an unknown or duplicate id' \
+    '      - name: obligation_id' \
+    'Matches exactly one input architecture_test_obligations.obligation_id'; do
+    if ! grep -Fq -- "$term" <<<"$coverage_block"; then tdd_missing+=("coverage: $term"); fi
+done
+if [[ ${#tdd_missing[@]} -eq 0 ]]; then pass; else fail "TDD obligation identity/coverage contract gaps: ${tdd_missing[*]}"; fi
+
 test_start "Code Writer prompts require RED evidence before TDD production changes"
 missing_code_writer_terms=()
 for file in \

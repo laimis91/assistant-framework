@@ -180,5 +180,8 @@ hypothesis until its stated verification runs.
 
 For `review_intensive` packs, or when multiple viable alternatives have
 conflicting material drivers, use `assistant-thinking` Perspectives or Stress
-Test and retain its dissent/validation result. Do not invoke it merely because
-the task is medium or because an ADP exists.
+Test and retain its `independent_challenge_evidence` dissent/validation result.
+The typed evidence records `challenge_ref`, `dissent_or_validation`, `resolution`,
+and `selected_design_impact`.
+Carry that evidence in Discover, Plan, the journal, and the review projection.
+Do not invoke it merely because the task is medium or because an ADP exists.

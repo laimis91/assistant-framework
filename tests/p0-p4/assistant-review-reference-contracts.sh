@@ -3,6 +3,54 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+contract_field_block() {
+    local file="$1"
+    local field="$2"
+    awk -v field="$field" '
+        $0 == "  - name: " field { inside = 1 }
+        inside && /^  - name: / && $0 != "  - name: " field { exit }
+        inside { print }
+    ' "$file"
+}
+
+test_start "standalone architecture records can project complete typed review facts"
+review_missing=()
+review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_required_block="$(contract_field_block "$review_input" architecture_decision_pack_review_required)"
+review_pack_block="$(contract_field_block "$review_input" architecture_decision_pack)"
+for term in \
+    'equivalent standalone architecture decision record' \
+    'or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or'; do
+    if ! grep -Fq -- "$term" <<<"$review_required_block"; then review_missing+=("review trigger: $term"); fi
+done
+for term in \
+    'on_missing: infer' \
+    'Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record' \
+    'If a workflow Pack is required but absent' \
+    '      - name: facts' \
+    '          - name: claim' \
+    '      - name: assumptions' \
+    '          - name: statement' \
+    '          - name: rationale_or_impact' \
+    '      - name: material_questions' \
+    '          - name: topic' \
+    '          - name: why_needed' \
+    '          - name: risk_if_guessed' \
+    '          - name: recommended_default_or_none' \
+    '      - name: independent_challenge_evidence' \
+    '        on_missing: fail' \
+    '          - name: challenge_ref' \
+    '          - name: dissent_or_validation' \
+    '          - name: resolution' \
+    '          - name: selected_design_impact'; do
+    if ! grep -Fq -- "$term" <<<"$review_pack_block"; then review_missing+=("Pack projection: $term"); fi
+done
+if ! grep -Fq -- 'standalone equivalent records derive its compact Pack projection' "$review_handoffs"; then
+    review_missing+=("Reviewer handoff derivation rule")
+fi
+if [[ ${#review_missing[@]} -eq 0 ]]; then pass; else fail "assistant-review Pack projection gaps: ${review_missing[*]}"; fi
+
 p0p4_reference_section_has_term() {
     local file="$1"
     local heading="$2"

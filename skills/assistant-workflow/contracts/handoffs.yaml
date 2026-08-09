@@ -457,6 +457,36 @@ handoffs:
         condition: "search_mode == candidate_search"
         description: "Selected candidate, archive location, and constraints from references/candidate-search.md if Candidate Search already ran"
     return_fields:
+      - name: architecture_decision_pack_update
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
+        description: "Mergeable canonical Architecture Decision Pack update/ref returned when DECOMPOSE refreshes source evidence"
+        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_pack_ref
+            type: string
+            required: true
+          - name: updated_pack_ref
+            type: string
+            required: true
+            description: "Reference to the complete refreshed canonical Pack"
+          - name: freshness_basis
+            type: string
+            required: true
+          - name: changed_sections
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: merge_action
+            type: enum
+            required: true
+            enum_values: [replace_current_pack]
       - name: status
         type: enum
         required: true
@@ -753,6 +783,36 @@ handoffs:
             type: string
             required: true
     return_fields:
+      - name: architecture_decision_pack_update
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
+        description: "Mergeable canonical Architecture Decision Pack update/ref returned when PLAN refreshes source evidence"
+        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_pack_ref
+            type: string
+            required: true
+          - name: updated_pack_ref
+            type: string
+            required: true
+            description: "Reference to the complete refreshed canonical Pack"
+          - name: freshness_basis
+            type: string
+            required: true
+          - name: changed_sections
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: merge_action
+            type: enum
+            required: true
+            enum_values: [replace_current_pack]
       - name: status
         type: enum
         required: true

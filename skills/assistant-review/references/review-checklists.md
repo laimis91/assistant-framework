@@ -101,6 +101,7 @@ Use this checklist only when a workflow Architecture Decision Pack or equivalent
 1. **Freshness, facts, and material questions**
    - Verify the Pack binds its repository facts to a revision/branch/path or its greenfield facts to a stated context, and that changed requirements or source evidence invalidate it.
    - Ensure facts and assumptions are distinct. Ask or record every material question that changes the architecture choice; group it by topic, why it matters, risk if guessed, and safe default where one exists.
+   - For `review_intensive`, inspect the independent challenge evidence, dissent or validation, and selected-design impact rather than treating the Pack as independently confirmed.
 
 2. **Ownership, dependency, and lifecycle boundary**
    - Check ownership, data/resource lifecycle, dependency direction, failure/cancellation behavior, and public boundary against the actual changed code and consumers.

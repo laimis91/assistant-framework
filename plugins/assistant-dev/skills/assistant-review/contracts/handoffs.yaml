@@ -264,7 +264,7 @@ handoffs:
         type: object
         required: conditional
         condition: "architecture_decision_pack_review_required is true"
-        description: "Fresh compact Pack projection with source/revision, facts/assumptions, boundary/design-pressure/type/quality/verification evidence, and invalidators"
+        description: "Fresh compact Pack projection with source/revision, separate facts, assumptions, material_questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent_challenge_evidence; standalone equivalent records derive its compact Pack projection."
 
       - name: rubric_required
         type: boolean
@@ -464,6 +464,10 @@ handoffs:
           - name: material_questions_and_invalidators
             type: string
             required: true
+          - name: independent_challenge_evidence
+            type: string
+            required: conditional
+            condition: "architecture_decision_pack.mode == review_intensive"
           - name: ownership_dependency_and_lifecycle_boundary
             type: string
             required: true

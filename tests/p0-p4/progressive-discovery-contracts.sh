@@ -791,7 +791,7 @@ test_start "workflow allows a pending route-clear handoff before requirement-map
 handoff_consumption_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
-route_clear_map_condition='size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)'
+route_clear_map_condition='size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))'
 route_clear_invariant_condition='progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed]'
 route_clear_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])'
 route_clear_pending_map_term='Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending'
@@ -955,8 +955,8 @@ fake_index="$route_clear_mutation_dir/index.yaml"
 fake_input="$route_clear_mutation_dir/input.yaml"
 fake_output="$route_clear_mutation_dir/output.yaml"
 sed 's/progressive_route_clear_consumption_state/progressive_route_clear_consumption_state_removed/g' "$index_contract" >"$fake_index"
-sed 's/ and progressive_artifact_retention_state != terminally_archived//' "$input_contract" >"$fake_input"
-sed 's/ and progressive_artifact_retention_state != terminally_archived//' "$output_contract" >"$fake_output"
+sed 's/progressive_artifact_retention_state != terminally_archived and //' "$input_contract" >"$fake_input"
+sed 's/progressive_artifact_retention_state != terminally_archived and //' "$output_contract" >"$fake_output"
 
 if progressive_shape_selector_has_name "progressive_route_clear_consumption_state" "$fake_index" \
     || top_level_named_item_has_exact_property_value "requirement_acceptance_map" "condition" "$route_clear_map_condition" "$fake_input" \
@@ -2349,7 +2349,7 @@ archival_retention_missing=()
 archival_retention_case="progressive-terminal-archival-omission"
 archival_retained_case="progressive-closed-readiness-retention"
 archival_marker="progressive_artifact_retention_state"
-archival_map_condition='size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)'
+archival_map_condition='size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))'
 archival_chain_condition='(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 archival_resolution_condition='(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))'
 archival_handoff_condition='(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])'

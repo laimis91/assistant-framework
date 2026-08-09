@@ -24,6 +24,7 @@ No separate plan document needed. Include directly in your response:
 - Non-goals/exclusions: [what not to produce]
 **Files:** [list of files to change]
 **Architecture Decision Pack:** [ref, or N/A with concrete reason]
+- **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
 **SRP check:** [single responsibility confirmed / split needed]
@@ -165,6 +166,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
 - Freshness: [branch/HEAD or greenfield basis; source refs; invalidation conditions]
 - Facts versus assumptions: [compact refs]
+- Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
 - Design-pressure checks: [control/early exit, ownership/disposal, resource envelope, extension registration, representative path]
 - Material design questions: [none before approval, or grouped question refs]
 - Boundaries / ownership / lifecycle: [compact table or ref]

@@ -124,7 +124,7 @@ gates:
         on_fail: "In delegated mode, re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation. In direct fallback mode, complete those agentic_loop_safety_checks before declaring clean."
 
       - id: RS10
-        check: "When architecture_decision_pack_review_required is true: Reviewer or direct-fallback review applied the Architecture Decision Pack Review Checklist and returned architecture_decision_pack_checks"
+        check: "When architecture_decision_pack_review_required is true: Reviewer or direct-fallback review applied the Architecture Decision Pack Review Checklist and returned architecture_decision_pack_checks; review_intensive Pack projections include independent challenge evidence"
         condition: "architecture_decision_pack_review_required is true"
         on_fail: "Review the Pack's source/revision freshness, material questions and invalidators, boundaries/lifecycle, control/early-exit and ownership/disposal decisions, resource envelope, extension-registration and representative-path checks, semantic type and primitive-exception ledger, falsifiable quality scenarios, compatibility/extension seam, and verification/rollback before declaring clean."
 

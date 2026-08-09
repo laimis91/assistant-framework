@@ -157,7 +157,7 @@ fields:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or (progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived)"
+    condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
     validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
     on_missing: fail
@@ -370,13 +370,12 @@ fields:
 
   - name: architecture_design_trigger_reasons
     type: string[]
-    required: conditional
-    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-    description: "Concrete architecture triggers selected during Triage"
-    validation: "Each entry names an observed trigger such as cross-boundary contract, data lifecycle, resource target, extension seam, genuinely viable alternative, or conflicting driver. Empty only when architecture_design_mode=not_applicable."
-    default: []
+    required: true
+    min_items: 1
+    description: "Concrete architecture trigger reasons or not-applicable rationale selected during Triage"
+    validation: "Non-empty. Each entry names an observed trigger such as cross-boundary contract, data lifecycle, resource target, extension seam, genuinely viable alternative, or conflicting driver; when architecture_design_mode=not_applicable, record the concrete evidenced local-path reason."
     on_missing: infer
-    infer_from: "Derive from the request and candidate scope scan; record only triggers supported by local or user evidence."
+    infer_from: "Derive from the request and candidate scope scan; record only triggers supported by local or user evidence. Concrete reason required even when architecture_design_mode=not_applicable."
 
   - name: candidate_search_goal
     type: string

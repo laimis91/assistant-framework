@@ -37,6 +37,7 @@ Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
 Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 Architecture Decision Pack ref: [ref, or N/A with concrete reason]
+Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 Slice promotion mode: [local | review_gated]
 Slice topology: target_branch=[ref] | task_branch=[feature/<task>] | slice_branch format=[slice/<task>/<slice-id>]
 Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REVIEW_STALE plus evidence refs]
@@ -111,13 +112,14 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 [paste approved plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths]
 
 ## Requirement Acceptance Map
-[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work or retained route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
+[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work, small required/review_intensive Architecture Decision Pack work, or retained route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
 - source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance while progressive_artifact_retention_state=retained; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map; terminally_archived permits omission]
 
 ## Architecture Decision Pack
 [N/A only when architecture_design_mode=not_applicable with a concrete reason. Otherwise retain a typed reference, not a duplicate narrative.]
 - Pack id / mode: [ref/id | lightweight | required | review_intensive]
 - Freshness: [branch/HEAD or greenfield basis, source refs, invalidated_by]
+- Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
 - Boundary / design-pressure / Type Ledger / quality scenario refs: [compact refs]
 - Material questions: [none before Plan, or grouped refs]
 - Plan/task packet/review refs: [typed locations]

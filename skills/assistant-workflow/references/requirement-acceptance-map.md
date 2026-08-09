@@ -6,7 +6,10 @@ slices and task packets consume it instead of inventing a second source of
 truth.
 
 Small work may use the compact `acceptance_criteria` list unless ambiguity,
-risk, or multiple material requirements promote it to the durable map.
+risk, or multiple material requirements promote it to the durable map. When
+`size == small and architecture_design_mode in [required, review_intensive]`,
+Discover creates the canonical Requirement Acceptance Map so Architect PLAN's
+required traceability context is satisfiable without generic small-task ceremony.
 
 ## Required shape
 

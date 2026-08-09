@@ -259,10 +259,13 @@
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "Local source contains the two decoder shapes and their current ownership behavior.",
-        "The task has resource, lifecycle, extension, and public interface consequences."
+        "The task has resource, lifecycle, extension, and public interface consequences.",
+        "A selected implementation may fit one small slice; size does not waive required or review-intensive architecture traceability."
       ],
       "expected_behavior": [
-        "Triages architecture_design_mode as required or review_intensive and creates a fresh Architecture Decision Pack.",
+        "Triages architecture_design_mode as required or review_intensive, creates a fresh Architecture Decision Pack, and for review_intensive retains independent_challenge_evidence with selected_design_impact through planning and review.",
+        "Creates a Requirement Acceptance Map before Architect PLAN even if the accepted implementation is size=small.",
+        "Requires Architect DECOMPOSE or PLAN to return architecture_decision_pack_update when refreshed source evidence changes the Pack.",
         "Records design_pressure_checks for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path.",
         "Identifies material questions or evidence about cancellation/early completion, buffer and stream ownership, disposal, concurrent memory bounds, registration/selection, and a concrete decoder-to-algorithm path.",
         "Uses a Type Ledger to prefer named domain/request/result types over unexplained generic strings, integers, callbacks, or collections.",
@@ -284,6 +287,10 @@
       "machine_expectations": {
         "required_substrings": [
           "Architecture Decision Pack",
+          "independent_challenge_evidence",
+          "selected_design_impact",
+          "Requirement Acceptance Map",
+          "architecture_decision_pack_update",
           "design_pressure_checks",
           "control_and_early_exit",
           "ownership_and_disposal",
