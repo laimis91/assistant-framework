@@ -158,6 +158,12 @@ debugging first, then enter RED once the failure mechanism is understood.
 When `tdd_mode=true` or `tdd_applies=true`, preserve the behavior boundary in
 both lanes: valid RED evidence must exist before production code.
 
+When the task packet carries an Architecture Decision Pack, carry its typed
+`architecture_test_obligations` into the selected Build owner handoff. The
+selected owner returns `architecture_obligation_coverage` with each stable
+`obligation_id` exactly once; unknown or duplicate ids fail the Build evidence
+gate rather than being inferred from a passing wrapper test.
+
 - `bounded_executor`: the bounded executor writes/runs RED, records the
   right-reason failure, implements minimal GREEN, then runs focused and relevant
   regression verification.

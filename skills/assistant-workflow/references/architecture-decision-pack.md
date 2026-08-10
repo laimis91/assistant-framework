@@ -145,6 +145,12 @@ view follows this compact shape:
 | Attribute | Workload | Budget/threshold | Measurement | Failure condition |
 |---|---|---|---|---|
 
+### TDD test obligations
+When TDD applies, list each Pack-derived obligation with a stable `obligation_id`,
+one assistant-tdd obligation kind, the behavior to falsify, and verification.
+Carry this typed list unchanged into CodeWriter and BuilderTester task packets;
+the selected Build owner returns exact-once `architecture_obligation_coverage`.
+
 ### Decision and verification
 - Selected design: [choice and rationale]
 - Alternatives: [only genuine viable alternatives and trade-offs]

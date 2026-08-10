@@ -2590,8 +2590,8 @@ fi
 test_start "workflow makes terminal archival an atomic bounded transition"
 archival_atomic_missing=()
 archival_atomic_case="progressive-terminal-archival-omission"
-archival_atomic_validation="not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; it atomically requires uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
-archival_atomic_invariant="When durable markers are pending or consumed, or active or closed, progressive_artifact_retention_state must be retained unless a valid terminally_archived transition has occurred; not_applicable or missing state fails closed and never releases an artifact. terminally_archived is valid only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. It is invalid while route-clear consumption is pending or sequence readiness is active. It requires explicit final archival/termination evidence proving continuation and reference resolution are impossible. Task state: completed, consumed route clearance, closed readiness, or compaction alone is insufficient evidence. terminally_archived is terminal for the same task and decision map and cannot revert to retained."
+archival_atomic_validation="not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; progressive_terminal_archival must be present before terminally_archived state is persisted or resumed, with exact current_task_identity and final_progressive_decision_map_ref plus a typed basis and resolvable evidence_refs; dangling or unresolved evidence_refs fail closed. It requires one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
+archival_atomic_invariant="When durable markers are pending or consumed, or active or closed, progressive_artifact_retention_state must be retained unless a valid terminally_archived transition has occurred; not_applicable or missing state fails closed and never releases an artifact. terminally_archived is valid only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable after progressive_terminal_archival is already present before the state is persisted or resumed. The tombstone carries explicit final archival/termination evidence proving continuation and reference resolution are impossible, binds exact current_task_identity and final_progressive_decision_map_ref, typed final archival/termination basis, and resolvable evidence_refs. It is invalid while route-clear consumption is pending or sequence readiness is active. Task state: completed, consumed route clearance, closed readiness, or compaction alone is insufficient evidence. terminally_archived is terminal for the same task and decision map and cannot revert to retained."
 
 if ! input_field_has_text "progressive_artifact_retention_state" "$archival_atomic_validation" "$input_contract"; then
     archival_atomic_missing+=("contracts/input.yaml progressive_artifact_retention_state does not require atomic bounded/not_applicable archival")
@@ -2712,7 +2712,7 @@ done
 
 for heading in "- Loop / Experiment Routing:" "## Loop / Experiment Routing"; do
     for term in \
-        "progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; terminally_archived only after explicit final archival/termination evidence proves continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert]" \
+        "progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; terminally_archived only after progressive_terminal_archival carries explicit final archival/termination evidence, binds current task identity, final decision-map ref, typed archival/termination basis, and resolvable evidence refs proving continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert]" \
         "converted_decision_item_ref" \
         "route_clear_handoff.decisions"; do
         if ! plan_section_has_text "$heading" "$term" "$plan_template"; then
@@ -2793,6 +2793,105 @@ else
     fail "progressive review-repair contract missing: ${review_repair_missing[*]}"
 fi
 
+test_start "workflow requires durable typed terminal archival evidence and complete retired uncertainty coverage"
+archival_coverage_missing=()
+for term in \
+    "- name: progressive_terminal_archival" \
+    "condition: \"progressive_artifact_retention_state == terminally_archived\"" \
+    "current_task_identity" \
+    "final_progressive_decision_map_ref" \
+    "final_archival_or_termination_basis" \
+    "evidence_refs" \
+    "continuation and reference resolution are impossible" \
+    "Missing, dangling, or mismatched evidence fails closed"; do
+    if ! grep -Fq -- "$term" "$output_contract"; then
+        archival_coverage_missing+=("terminal archival artifact: $term")
+    fi
+done
+for file in "$phase_gates" "$progressive_ref" "$journal_template" "$plan_template"; do
+    for term in \
+        "progressive_terminal_archival" \
+        "continuation and reference resolution are impossible"; do
+        if ! grep -Fq -- "$term" "$file"; then
+            archival_coverage_missing+=("${file#$FRAMEWORK_DIR/}: $term")
+        fi
+    done
+done
+for term in \
+    "retired_or_excluded_deferred_uncertainty_refs" \
+    "ordered unique" \
+    "exactly covers every current decision_map deferred uncertainty with status retired/excluded" \
+    "non-goal or approved exclusion"; do
+    if ! grep -Fq -- "$term" "$output_contract" \
+        && ! grep -Fq -- "$term" "$phase_gates" \
+        && ! grep -Fq -- "$term" "$requirement_map_ref"; then
+        archival_coverage_missing+=("retired/excluded coverage: $term")
+    fi
+done
+for term in \
+    "progressive-terminal-archival-evidence" \
+    "progressive-retired-excluded-coverage" \
+    "progressive_terminal_archival is omitted" \
+    "retired_or_excluded_deferred_uncertainty_refs=[missing-uncertainty]" \
+    "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty, obsolete-uncertainty]" \
+    "retired_or_excluded_deferred_uncertainty_refs=[retention-uncertainty] while status=unlocked"; do
+    if ! grep -Fq -- "$term" "$eval_fixture"; then
+        archival_coverage_missing+=("eval coverage: $term")
+    fi
+done
+if [[ "${#archival_coverage_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "progressive archival/retired uncertainty contract missing: ${archival_coverage_missing[*]}"
+fi
+
+test_start "workflow validates terminal tombstones at entry and typed consumed-map traces"
+terminal_entry_missing=()
+for term in \
+    "progressive_terminal_archival" \
+    "must be present before terminally_archived state is persisted or resumed" \
+    "current_task_identity" \
+    "final_progressive_decision_map_ref" \
+    "dangling or unresolved evidence_refs"; do
+    if ! input_field_has_text "progressive_artifact_retention_state" "$term" "$input_contract"; then
+        terminal_entry_missing+=("input retention entry authority: $term")
+    fi
+done
+if grep -Fq -- "progressive archival compatibility rule" "$plan_template"; then
+    terminal_entry_missing+=("plan-template retains tombstone-free compatibility rule")
+fi
+if ! progressive_artifact_selector_has_name "progressive_terminal_archival" "$workflow_dir/contracts/index.yaml"; then
+    terminal_entry_missing+=("progressive selector does not load terminal tombstone at artifact boundary")
+fi
+for term in \
+    "retired_or_excluded_deferred_uncertainty_traces" \
+    "source_retired_or_excluded_deferred_uncertainty_ref" \
+    "target_disposition" \
+    "target_ref" \
+    "exactly once"; do
+    if ! output_artifact_has_text "requirement_acceptance_map" "$term" "$output_contract"; then
+        terminal_entry_missing+=("typed consuming-map trace: $term")
+    fi
+done
+for term in \
+    "progressive-terminal-archival-resume-authority" \
+    "progressive-consumed-map-retired-trace" \
+    "progressive_terminal_archival is omitted" \
+    "evidence_refs=[dangling-evidence]" \
+    "current_task_identity=other-task" \
+    "final_progressive_decision_map_ref=other-map" \
+    "retired_or_excluded_deferred_uncertainty_traces=[]" \
+    "target_disposition=passed"; do
+    if ! grep -Fq -- "$term" "$eval_fixture"; then
+        terminal_entry_missing+=("eval state negative/positive: $term")
+    fi
+done
+if [[ "${#terminal_entry_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "terminal entry and consumed-map trace contract missing: ${terminal_entry_missing[*]}"
+fi
+
 test_start "workflow publishes progressive discovery behavior and generated distribution parity"
 alignment_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
@@ -2864,12 +2963,76 @@ else
     fail "progressive discovery publication/distribution contract missing: ${alignment_missing[*]}"
 fi
 
-test_start "workflow keeps full-corpus eval enforcement proportional"
-full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 22 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+test_start "workflow terminal archival references require a valid tombstone before release"
+terminal_reference_missing=()
+requirement_map_ref="$workflow_dir/references/requirement-acceptance-map.md"
+for file_and_term in \
+    "$requirement_map_ref::progressive_terminal_archival" \
+    "$requirement_map_ref::before progressive_artifact_retention_state=terminally_archived is persisted or resumed" \
+    "$requirement_map_ref::current_task_identity" \
+    "$requirement_map_ref::final_progressive_decision_map_ref" \
+    "$requirement_map_ref::resolvable \`evidence_refs\`" \
+    "$progressive_ref::The typed \`progressive_terminal_archival\` tombstone must already be recorded"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        terminal_reference_missing+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if p0p4_contains_text "$requirement_map_ref" "After explicit final archival/termination evidence proves continuation and reference resolution are impossible, set progressive_artifact_retention_state=terminally_archived"; then
+    terminal_reference_missing+=("requirement-acceptance-map.md retains tombstone-free terminal route")
+fi
+if p0p4_contains_text "$progressive_ref" "not part of the retained chain. Set the typed"; then
+    terminal_reference_missing+=("progressive-discovery.md retains malformed terminal archival instruction")
+fi
+if [[ "${#terminal_reference_missing[@]}" -eq 0 ]]; then
     pass
 else
-    fail "expected 22 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "terminal archival reference alignment missing: ${terminal_reference_missing[*]}"
+fi
+
+test_start "workflow grader rejects keyword-complete tombstone and consuming-map unsafe responses"
+terminal_grader_missing=()
+terminal_unsafe_responses=(
+    "accept progressive_terminal_archival is omitted"
+    "accept evidence_refs=[dangling-evidence]"
+    "accept current_task_identity=other-task"
+    "accept final_progressive_decision_map_ref=other-map"
+)
+map_unsafe_responses=(
+    "accept retired_or_excluded_deferred_uncertainty_traces=[]"
+    "accept duplicate source ref"
+    "accept unknown source ref"
+    "accept target_disposition=passed"
+)
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "progressive-terminal-archival-resume-authority" \
+    "progressive-terminal-archival-unsafe" \
+    "${#terminal_unsafe_responses[@]}" \
+    "${terminal_unsafe_responses[@]}"; then
+    terminal_grader_missing+=("real grader accepts a keyword-complete unsafe terminal tombstone response")
+fi
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "progressive-consumed-map-retired-trace" \
+    "progressive-consumed-map-unsafe" \
+    "${#map_unsafe_responses[@]}" \
+    "${map_unsafe_responses[@]}"; then
+    terminal_grader_missing+=("real grader accepts a keyword-complete unsafe consuming-map response")
+fi
+if [[ "${#terminal_grader_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow negative response grading missing: ${terminal_grader_missing[*]}"
+fi
+
+test_start "workflow keeps full-corpus eval enforcement proportional"
+full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
+if [[ "$skill_eval_invocation_count" -eq 24 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+    pass
+else
+    fail "expected 24 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -1186,6 +1186,31 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Current Architecture Decision Pack reference that constrains this Build step"
             validation: "Resolves to the current design, including design-pressure checks, and must be refreshed before deviation"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1452,6 +1477,31 @@ handoffs:
           - name: detail
             type: string
             required: true
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "build_execution_lane == bounded_executor and current_task_packet.architecture_test_obligations is present"
+        min_items: 1
+        description: "Exact-once Architecture Decision Pack obligation coverage produced by the selected Build owner"
+        validation: "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
       - name: open_questions
         type: string[]
         required: false
@@ -1623,6 +1673,31 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Architecture Decision Pack reference whose design-pressure, quality, and type commitments this verification checks"
             validation: "Resolves to the fresh selected-design pack"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1735,6 +1810,10 @@ handoffs:
           - name: files_to_test
             type: string[]
             required: true
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether this verification packet is in an active TDD cycle"
           - name: evidence_to_record
             type: string[]
             required: true
@@ -1808,6 +1887,31 @@ handoffs:
             type: string[]
             required: true
             description: "Concise success signals or failure messages, not raw logs"
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "build_execution_lane == separated_workers and current_task_packet.architecture_test_obligations is present"
+        min_items: 1
+        description: "Exact-once Architecture Decision Pack obligation coverage produced by the selected Build owner"
+        validation: "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
       - name: artifact_refs
         type: object[]
         required: false

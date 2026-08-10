@@ -78,7 +78,9 @@ while keeping typed `uncertainty_shape=progressive` /
 `progressive_discovery_state=route_clear` while preparing the bounded-Discover
 Requirement Acceptance Map. Every current-map retired/excluded deferred uncertainty must retain its exact canonical predecessor decision_resolution even when that predecessor is superseded or excluded. route_clear_handoff.decisions and exclusions account for every current-map decision: each status=resolved decision appears exactly once through its canonical decision_resolution.decision_item_ref, and each superseded or excluded decision appears exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; that marker carries the handoff and preparation state rather than a completed map. The map must
 trace the handoff decisions and constraints into applicable accepted map state,
-place exclusions in `non_goals` or entries with `status=approved_exclusion`,
+bind every source `retired_or_excluded_deferred_uncertainty_refs` ref exactly
+once through `retired_or_excluded_deferred_uncertainty_traces` to a concrete
+`non_goals` or `entries` target with `status=approved_exclusion`,
 turn each acceptance seed into an `entries[].acceptance_criterion` with binary
 acceptance, then record `source_route_clear_handoff_ref` resolving to the
 source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref`
@@ -99,11 +101,15 @@ resolution required by a current-map retired/excluded deferred uncertainty. The
 `loop_readiness_assessment` reference must continue to resolve to those
 canonical artifacts across compaction and active/resumable continuation. The
 `decision_frontier` remains transient after live progressive state ends; it is
-not part of the retained chain. Set
-`progressive_artifact_retention_state=terminally_archived`, and then omit the
-handoff, reciprocal refs, readiness assessment, and retained chain, only after
-explicit final archival/termination evidence proves continuation and reference
-resolution are impossible. This is one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain durable lifecycle history. `Task state: completed` does not qualify as that
+not part of the retained chain. The typed `progressive_terminal_archival`
+tombstone must already be recorded before
+`progressive_artifact_retention_state=terminally_archived` is persisted or
+resumed. Only then omit the handoff, reciprocal refs, readiness assessment,
+and retained chain. The tombstone binds current task identity,
+final decision-map ref, typed final archival/termination basis, and resolvable
+evidence refs proving continuation and reference resolution are impossible.
+Missing, dangling, or mismatched tombstone evidence fails closed and cannot
+release the retained chain. This is one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain durable lifecycle history. `Task state: completed` does not qualify as that
 evidence. `terminally_archived` is invalid while route consumption is pending
 or sequence readiness is active, is terminal, and cannot revert to `retained`
 for the same task and decision map.
@@ -160,7 +166,11 @@ Any mutating prerequisite must run in a separate approved workflow and return
 evidence; do not perform it inside progressive Discover. Recompute the frontier
 after each resolution. Route clearance requires no open or blocked items and no
 remaining deferred uncertainty except explicitly retired or excluded entries.
-After clearance, use the pending compact handoff to prepare the bounded-Discover
+After clearance, `route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs`
+must be ordered unique, resolve exactly once, and exactly cover every current
+decision-map deferred uncertainty with status `retired` or `excluded`; it is
+empty if and only if none exist. Carry each reference into the consuming
+Requirement Acceptance Map as a non-goal or approved exclusion. Use the pending compact handoff to prepare the bounded-Discover
 Requirement Acceptance Map while typed progressive route_clear persists. Do not
 allow empty, duplicate, dangling, or partially resolvable current map refs to
 reach route clear or bounded planning, record the atomic bounded/not_applicable

@@ -13,6 +13,45 @@ contract_field_block() {
     ' "$file"
 }
 
+tdd_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+tdd_evals="$FRAMEWORK_DIR/skills/assistant-tdd/evals/cases.json"
+
+write_tdd_eval_responses() {
+    local output_dir="$1"
+    local case_id
+
+    mkdir -p "$output_dir/assistant-tdd"
+    while IFS= read -r case_id; do
+        jq -r --arg case_id "$case_id" '
+            .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
+        ' "$tdd_evals" >"$output_dir/assistant-tdd/$case_id.txt"
+    done < <(jq -r '.cases[].id' "$tdd_evals")
+}
+
+tdd_forbidden_response_is_rejected() {
+    local forbidden="$1"
+    local case_id="tdd-covers-carried-architecture-obligations"
+    local case_count
+    local eval_dir
+    local eval_output
+
+    case_count="$(jq '.cases | length' "$tdd_evals")"
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-tdd-negative.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-tdd-negative-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    write_tdd_eval_responses "$eval_dir"
+    printf '%s\n' "$forbidden" >>"$eval_dir/assistant-tdd/$case_id.txt"
+
+    if "$tdd_eval_runner" --responses "$eval_dir" --skill assistant-tdd >"$eval_output" 2>&1; then
+        return 1
+    fi
+
+    grep -Fq $'FAIL\tassistant-tdd\t'"$case_id" "$eval_output" \
+        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && grep -Fq "missing_required_substrings=0" "$eval_output" \
+        && grep -Fq "forbidden_substring_hits=1" "$eval_output"
+}
+
 test_start "TDD obligation coverage binds every stable obligation id exactly once"
 tdd_missing=()
 obligations_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" architecture_test_obligations)"
@@ -200,6 +239,111 @@ if [[ "${#missing_codewriter_red_evidence_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "CodeWriter current_task_packet must require BuilderTester RED evidence details only when TDD is active: ${missing_codewriter_red_evidence_terms[*]}"
+fi
+
+test_start "workflow task packets carry TDD Architecture Decision Pack obligations with exact-once coverage"
+packet_obligation_missing=()
+for term in \
+    "architecture_test_obligations" \
+    "condition: \"tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]\"" \
+    "Stable identifier used to bind this input obligation to exactly one coverage entry" \
+    "enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]"; do
+    if [[ "$(grep -Fc -- "$term" "$handoffs_file")" -lt 2 ]]; then
+        packet_obligation_missing+=("CodeWriter/BuilderTester packet parity: $term")
+    fi
+done
+for term in \
+    "architecture_obligation_coverage" \
+    "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id" \
+    "no coverage entry has an unknown or duplicate id" \
+    "build_execution_lane == bounded_executor and current_task_packet.architecture_test_obligations is present" \
+    "build_execution_lane == separated_workers and current_task_packet.architecture_test_obligations is present"; do
+    if ! grep -Fq -- "$term" "$handoffs_file"; then
+        packet_obligation_missing+=("Build return coverage: $term")
+    fi
+done
+if [[ "${#packet_obligation_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow Pack-backed TDD packet contract missing: ${packet_obligation_missing[*]}"
+fi
+
+test_start "workflow uses authoritative TDD mode outside task packets"
+tdd_authority_missing=()
+for term in \
+    "condition: \"tdd_mode is true and architecture_design_mode in [lightweight, required, review_intensive]\"" \
+    "condition: \"tdd_mode is true\""; do
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" \
+        && ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        tdd_authority_missing+=("workflow-level TDD authority: $term")
+    fi
+done
+if [[ "${#tdd_authority_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow output/gate must use canonical tdd_mode rather than task-packet tdd_applies: ${tdd_authority_missing[*]}"
+fi
+
+test_start "workflow completion aggregates the selected lane's full obligation coverage shape"
+completion_coverage_missing=()
+test_results_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" test_results)"
+workflow_completion_coverage_fields="$(awk '
+    $0 == "      - name: architecture_obligation_coverage" { inside = 1; next }
+    inside && /^      - name: / { exit }
+    inside && /^          - name: / { sub(/^          - name: /, ""); print }
+' <<<"$test_results_block")"
+tdd_coverage_fields="$(awk '
+    $0 == "  - name: architecture_obligation_coverage" { inside = 1; next }
+    inside && /^  - name: / { exit }
+    inside && /^      - name: / { sub(/^      - name: /, ""); print }
+' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml")"
+expected_coverage_fields=$'obligation_id\narchitecture_decision_pack_ref\nobligation_kind\nevidence\noutcome'
+if [[ "$workflow_completion_coverage_fields" != "$expected_coverage_fields" ]]; then
+    completion_coverage_missing+=("workflow completion coverage shape: $workflow_completion_coverage_fields")
+fi
+if [[ "$tdd_coverage_fields" != "$expected_coverage_fields" ]]; then
+    completion_coverage_missing+=("assistant-tdd coverage shape: $tdd_coverage_fields")
+fi
+for term in \
+    "selected Build owner return" \
+    "build_execution_lane == bounded_executor" \
+    "build_execution_lane == separated_workers" \
+    "no coverage entry has an unknown or duplicate id"; do
+    if ! grep -Fq -- "$term" <<<"$test_results_block"; then
+        completion_coverage_missing+=("completion authority: $term")
+    fi
+done
+for term in \
+    "workflow-architecture-obligation-completion-aggregation" \
+    "obligation_id=semantic-validation" \
+    "obligation_id=ownership-disposal" \
+    "missing obligation_id" \
+    "duplicate obligation_id" \
+    "unknown obligation_id"; do
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
+        completion_coverage_missing+=("completion eval fixture: $term")
+    fi
+done
+if [[ "${#completion_coverage_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow completion obligation aggregation contract missing: ${completion_coverage_missing[*]}"
+fi
+
+test_start "assistant-tdd grader rejects incomplete duplicate and unknown obligation coverage"
+tdd_negative_coverage=0
+for unsafe_response in \
+    "accept incomplete architecture_obligation_coverage" \
+    "accept duplicate obligation_id coverage" \
+    "accept unknown obligation_id coverage"; do
+    if ! tdd_forbidden_response_is_rejected "$unsafe_response"; then
+        tdd_negative_coverage=$((tdd_negative_coverage + 1))
+    fi
+done
+if [[ "$tdd_negative_coverage" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-tdd grader accepts $tdd_negative_coverage unsafe obligation coverage response(s)"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

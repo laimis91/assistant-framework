@@ -20,6 +20,7 @@ Requirement Acceptance Map:
 - open_material_questions: [none before Plan, or unresolved blockers]
 - non_goals: [explicit exclusions]
 - source_route_clear_handoff_ref: [conditional: source route-clear handoff when progressive route clearance is consumed and progressive_artifact_retention_state=retained]
+- retired_or_excluded_deferred_uncertainty_traces: [conditional: every source retired/excluded uncertainty ref exactly once -> target_disposition non_goal | approved_exclusion -> target_ref to a concrete non_goals element or entries element with status=approved_exclusion]
 - entries:
   - requirement_id: R1
     source: [user request, accepted default, policy, or local contract]
@@ -59,14 +60,27 @@ Requirement Acceptance Map:
   handoff's `consumed_by_requirement_acceptance_map_ref` resolves back to this
   consuming map; these reciprocal references are not equal values. The handoff
   decisions and constraints are traced into applicable accepted map state;
-  exclusions appear in non_goals or entries with status=approved_exclusion; and
+  exclusions appear in non_goals or entries with status=approved_exclusion;
+  every `retired_or_excluded_deferred_uncertainty_refs` entry appears exactly
+  once through `retired_or_excluded_deferred_uncertainty_traces` as a non-goal
+  or approved exclusion with a concrete target ref; and
   each acceptance_seed becomes an entries[].acceptance_criterion with binary
   acceptance.
 - Keep both reciprocal references while
-  `progressive_artifact_retention_state=retained`. After explicit final
-  archival/termination evidence proves continuation and reference resolution
-  are impossible, set
-  `progressive_artifact_retention_state=terminally_archived` as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; then the
-  progressive reciprocal refs may be omitted even when a medium+ Requirement
-  Acceptance Map itself remains required. `Task state: completed` does not
+  `progressive_artifact_retention_state=retained`. Before
+  `progressive_artifact_retention_state=terminally_archived` is persisted or
+  resumed, a present `progressive_terminal_archival` tombstone must bind the
+  exact `current_task_identity` and
+  `final_progressive_decision_map_ref`, record a typed final
+  archival/termination basis and explicit final archival/termination evidence,
+  and carry resolvable `evidence_refs` proving
+  continuation and reference resolution are impossible. It must be present
+  before progressive_artifact_retention_state=terminally_archived is persisted
+  or resumed. Only that
+  identity-valid, evidence-valid tombstone authorizes one atomic transition
+  with uncertainty_shape=bounded and
+  progressive_discovery_state=not_applicable;
+  then the progressive reciprocal refs may be omitted even when a medium+
+  Requirement Acceptance Map itself remains required. Missing, dangling, or
+  mismatched tombstone evidence fails closed. `Task state: completed` does not
   qualify as final archival, and `terminally_archived` cannot revert.

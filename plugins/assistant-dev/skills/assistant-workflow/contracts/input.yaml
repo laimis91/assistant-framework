@@ -159,7 +159,7 @@ fields:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
+    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason. Every consumed route_clear_handoff retired_or_excluded_deferred_uncertainty_refs entry is traced exactly once as a non-goal or approved exclusion."
     on_missing: fail
     object_fields:
       - name: intended_outcome
@@ -187,8 +187,27 @@ fields:
         required: conditional
         condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
         description: "Durable source reference to the consumed progressive route-clear handoff"
-        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; every retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non_goals element or entries element with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
         on_missing: fail
+      - name: retired_or_excluded_deferred_uncertainty_traces
+        type: object[]
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        min_items: 0
+        validation: "Binds every source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs ref exactly once to a concrete consuming target. Empty only when the source collection is empty; no unknown, duplicate, or wrong-disposition source ref is allowed."
+        object_fields:
+          - name: source_retired_or_excluded_deferred_uncertainty_ref
+            type: string
+            required: true
+            validation: "Resolves exactly once to one source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry"
+          - name: target_disposition
+            type: enum
+            required: true
+            enum_values: [non_goal, approved_exclusion]
+          - name: target_ref
+            type: string
+            required: true
+            validation: "Resolves to the concrete non_goals element for non_goal or entries element with status=approved_exclusion for approved_exclusion"
       - name: entries
         type: object[]
         required: true
@@ -438,10 +457,10 @@ fields:
     required: false
     enum_values: [not_applicable, retained, terminally_archived]
     description: "Typed lifecycle for durable progressive artifacts carried after live progressive Discover ends"
-    validation: "not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; it atomically requires uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
+    validation: "not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; progressive_terminal_archival must be present before terminally_archived state is persisted or resumed, with exact current_task_identity and final_progressive_decision_map_ref plus a typed basis and resolvable evidence_refs; dangling or unresolved evidence_refs fail closed. It requires one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
     default: not_applicable
     on_missing: infer
-    infer_from: "Use retained whenever either durable progressive marker requires resumable artifacts and no final archival evidence applies. Use terminally_archived only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable from explicit final archival/termination evidence proving continuation and reference resolution are impossible. Never infer terminally_archived from Task state: completed."
+    infer_from: "Use retained whenever either durable progressive marker requires resumable artifacts and no final archival evidence applies. Use terminally_archived only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable when progressive_terminal_archival is already present and its task identity, final map identity, typed basis, and every evidence_ref resolve exactly. Never infer terminally_archived from Task state: completed or generic archival evidence."
 
   - name: clarification_status
     type: enum

@@ -1373,7 +1373,7 @@
     },
     {
       "id": "progressive-all-excluded-route-clear",
-      "title": "All-excluded progressive route clearance remains concrete",
+      "title": "progressive-retired-excluded-coverage: all-excluded progressive route clearance remains concrete",
       "category": "progressive_discovery",
       "purpose": "Checks that a non-empty current map may clear with no resolved decisions only when its retired/excluded uncertainty must retain its predecessor resolution, the exclusion is exact, and ordinary route-clear safety remains in force.",
       "prompt": "A progressive map's only predecessor was previously resolved, then superseded. Its dependent uncertainty is now excluded. Show the concrete all-excluded route-clear handoff without dropping the current map or its retained resolution, while preserving the ordinary pending route-clear state and no-execution boundary.",
@@ -1419,6 +1419,7 @@
           "blocked_item_refs=[]",
           "remaining_deferred_uncertainty_refs=[]",
           "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs exactly covers every current decision_map deferred uncertainty with status retired/excluded",
           "next_route=bounded_discover",
           "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
           "route_clear remains in the no-execution boundary",
@@ -1436,7 +1437,10 @@
           "exclusions=[obsolete-decision, obsolete-decision]",
           "exclusions=[missing-decision]",
           "exclusions=[retention-decision] while retention-decision is resolved",
-          "exclusions=[] while obsolete-decision is superseded"
+          "exclusions=[] while obsolete-decision is superseded",
+          "retired_or_excluded_deferred_uncertainty_refs=[missing-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty, obsolete-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs=[retention-uncertainty] while status=unlocked"
         ]
       }
     },
@@ -1491,7 +1495,7 @@
     },
     {
       "id": "progressive-terminal-archival-omission",
-      "title": "Explicit terminal archival releases retained progressive artifacts",
+      "title": "progressive-terminal-archival-evidence: explicit terminal archival releases retained progressive artifacts",
       "category": "progressive_discovery",
       "purpose": "Checks that one typed terminal archival marker releases only the durable progressive artifact chain while medium+ Requirement Acceptance Maps remain independently required.",
       "prompt": "A small completed task has consumed route clearance and closed sequence readiness. Final archival evidence now proves this exact task and decision map cannot continue and no retained reference can be resolved again. Record the typed archival transition and show what may be omitted.",
@@ -1502,6 +1506,7 @@
       ],
       "expected_behavior": [
         "Sets progressive_artifact_retention_state=terminally_archived only from explicit final archival/termination evidence that continuation and reference resolution are impossible, as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. terminally_archived requires all three states atomically.",
+        "Records progressive_terminal_archival with current_task_identity, final_progressive_decision_map_ref, typed final_archival_or_termination_basis, and resolvable evidence_refs before releasing the retained chain.",
         "Keeps progressive_route_clear_consumption_state=consumed remains historical and progressive_sequence_readiness_state=closed remains historical through terminal archival.",
         "States that route_clear_handoff may be omitted, loop_readiness_assessment may be omitted, and the retained canonical reference chain may be omitted.",
         "States that source_route_clear_handoff_ref may be omitted and consumed_by_requirement_acceptance_map_ref may be omitted; medium+ Requirement Acceptance Map remains required independently.",
@@ -1531,6 +1536,11 @@
           "progressive_sequence_readiness_state=closed remains historical",
           "explicit final archival/termination evidence",
           "continuation and reference resolution are impossible",
+          "progressive_terminal_archival",
+          "current_task_identity",
+          "final_progressive_decision_map_ref",
+          "final_archival_or_termination_basis",
+          "evidence_refs",
           "route_clear_handoff may be omitted",
           "loop_readiness_assessment may be omitted",
           "retained canonical reference chain may be omitted",
@@ -1553,7 +1563,54 @@
           ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=mapping"
           ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=resolving"
           ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=blocked"
+          ,"progressive_terminal_archival is omitted"
+          ,"progressive_terminal_archival.final_progressive_decision_map_ref=mismatched-map"
         ]
+      }
+    },
+    {
+      "id": "workflow-architecture-obligation-completion-aggregation",
+      "title": "Workflow completion aggregates full Pack obligation coverage from the lane owner",
+      "category": "architecture_tdd",
+      "purpose": "Checks that completion retains the full assistant-tdd coverage shape and selects exactly one Build return owner by lane.",
+      "prompt": "Complete a TDD Architecture Decision Pack with semantic-validation and ownership-disposal obligations. Show bounded_executor and separated_workers completion evidence, then reject incomplete coverage.",
+      "setup_context": ["tdd_mode=true and architecture_design_mode=required.", "The Pack carries two stable obligations: semantic-validation and ownership-disposal."],
+      "expected_behavior": ["For build_execution_lane=bounded_executor, test_results.architecture_obligation_coverage aggregates CodeWriter coverage for both obligation_id values.", "For build_execution_lane=separated_workers, it aggregates BuilderTester coverage for both obligation_id values.", "Each coverage entry includes obligation_id, architecture_decision_pack_ref, obligation_kind, evidence, and outcome; missing, duplicate, or unknown IDs fail completion."],
+      "pass_criteria": ["Both valid lane fixtures cover the two Pack obligations exactly once.", "Completion keeps the full assistant-tdd coverage object rather than a summary string."],
+      "fail_signals": ["Uses CodeWriter as the separated_workers final coverage owner.", "Accepts one coverage entry for two obligations, a duplicate ID, or an unknown ID."],
+      "machine_expectations": {
+        "required_substrings": ["build_execution_lane=bounded_executor", "CodeWriter", "build_execution_lane=separated_workers", "BuilderTester", "obligation_id=semantic-validation", "obligation_id=ownership-disposal", "architecture_decision_pack_ref", "obligation_kind", "evidence", "outcome", "missing obligation_id", "duplicate obligation_id", "unknown obligation_id"],
+        "forbidden_substrings": ["separated_workers CodeWriter final coverage", "summary string replaces architecture_obligation_coverage"]
+      }
+    },
+    {
+      "id": "progressive-terminal-archival-resume-authority",
+      "title": "Terminal archival state is admitted only with its typed tombstone",
+      "category": "progressive_discovery",
+      "purpose": "Checks persisted and resumed terminal state against the exact task, map, basis, and irrecoverability evidence before retained artifacts may be released.",
+      "prompt": "Resume a persisted terminally_archived progressive task for task-17 and final map retention-map. Show the accepted state and reject plausible invalid persisted variants.",
+      "setup_context": ["The retained route-clear state was consumed and readiness was closed before archival.", "The valid tombstone evidence ref proves continuation and reference resolution are impossible."],
+      "expected_behavior": ["Accepts progressive_artifact_retention_state=terminally_archived only when progressive_terminal_archival is already present before the state is persisted or resumed, with current_task_identity=task-17, final_progressive_decision_map_ref=retention-map, typed basis, and evidence_refs=[terminal-evidence].", "Rejects progressive_terminal_archival is omitted, evidence_refs=[dangling-evidence], current_task_identity=other-task, and final_progressive_decision_map_ref=other-map; each invalid persisted state fails closed and restores retained artifacts."],
+      "pass_criteria": ["The valid tombstone has exact task/map identity and resolvable irrecoverability evidence.", "No generic archival evidence or delayed validation can release the retained chain."],
+      "fail_signals": ["Persists terminally_archived before the tombstone is recorded.", "Accepts dangling evidence or a tombstone for another task or final map."],
+      "machine_expectations": {
+        "required_substrings": ["progressive_terminal_archival", "current_task_identity=task-17", "final_progressive_decision_map_ref=retention-map", "evidence_refs=[terminal-evidence]", "progressive_terminal_archival is omitted", "evidence_refs=[dangling-evidence]", "current_task_identity=other-task", "final_progressive_decision_map_ref=other-map", "fails closed"],
+        "forbidden_substrings": ["persist terminally_archived before progressive_terminal_archival", "generic evidence releases retained chain", "accept progressive_terminal_archival is omitted", "accept evidence_refs=[dangling-evidence]", "accept current_task_identity=other-task", "accept final_progressive_decision_map_ref=other-map"]
+      }
+    },
+    {
+      "id": "progressive-consumed-map-retired-trace",
+      "title": "Consumed Requirement Acceptance Map traces every retired or excluded uncertainty",
+      "category": "progressive_discovery",
+      "purpose": "Checks exact source-to-concrete-target trace coverage after route-clear consumption.",
+      "prompt": "Consume a route-clear handoff whose only retired uncertainty is obsolete-uncertainty. Produce the Requirement Acceptance Map and demonstrate invalid trace variants.",
+      "setup_context": ["progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained.", "The source handoff retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]."],
+      "expected_behavior": ["Records retired_or_excluded_deferred_uncertainty_traces=[{source_retired_or_excluded_deferred_uncertainty_ref=obsolete-uncertainty, target_disposition=non_goal, target_ref=non_goals[0]}] exactly once.", "Rejects retired_or_excluded_deferred_uncertainty_traces=[], duplicate source refs, unknown source refs, and target_disposition=passed; pending route-clear alone is insufficient."],
+      "pass_criteria": ["Every source ref is consumed exactly once by a concrete non_goal or approved_exclusion target.", "The map cannot complete with missing, duplicate, unknown, or wrong-disposition traces."],
+      "fail_signals": ["Treats a prose non-goal without a target ref as coverage.", "Allows a pending handoff to stand in for the consuming map."],
+      "machine_expectations": {
+        "required_substrings": ["retired_or_excluded_deferred_uncertainty_traces", "source_retired_or_excluded_deferred_uncertainty_ref=obsolete-uncertainty", "target_disposition=non_goal", "target_ref=non_goals[0]", "retired_or_excluded_deferred_uncertainty_traces=[]", "duplicate source ref", "unknown source ref", "target_disposition=passed", "pending route-clear alone is insufficient"],
+        "forbidden_substrings": ["pending route-clear is consuming-map coverage", "target_disposition=passed is valid", "accept retired_or_excluded_deferred_uncertainty_traces=[]", "accept duplicate source ref", "accept unknown source ref", "accept target_disposition=passed"]
       }
     },
     {

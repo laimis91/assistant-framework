@@ -159,11 +159,14 @@
           "failure condition",
           "RED"
         ],
-        "forbidden_substrings": [
-          "wrapper compiles so it is covered",
-          "memory improvement is guaranteed",
-          "skip RED"
-        ]
+      "forbidden_substrings": [
+        "wrapper compiles so it is covered",
+        "memory improvement is guaranteed",
+        "skip RED",
+        "accept incomplete architecture_obligation_coverage",
+        "accept duplicate obligation_id coverage",
+        "accept unknown obligation_id coverage"
+      ]
       }
     },
     {

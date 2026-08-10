@@ -134,7 +134,7 @@
       "expected_behavior": [
         "Resolves research_method as five_lens_briefing and tier as extensive or deep when decision risk warrants it.",
         "Runs the five required lenses: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
-        "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, every material evidence-prompted follow-up or an explicit none-needed decision, and evidence status before synthesis.",
+        "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, every material evidence-prompted follow-up or an explicit none_needed decision, and evidence status before synthesis.",
         "Builds a contradiction map before synthesis.",
         "Produces a recommendation no stronger than the verified evidence supports.",
         "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",
@@ -181,7 +181,7 @@
           "investigate_further",
           "QUESTION TRACE / EVIDENCE LEDGER",
           "Question:",
-          "Follow-up question",
+          "Follow-ups",
           "Evidence status",
           "source-backed",
           "unresolved"
@@ -197,8 +197,24 @@
           "professional financial advice",
           "No question trace needed",
           "synthesize directly from lenses",
-          "source-grounded answers optional"
+          "source-grounded answers optional",
+          "follow_up_question"
         ]
+      }
+    },
+    {
+      "id": "five-lens-retains-all-material-follow-ups",
+      "title": "Five-lens question traces retain every material follow-up",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that the evidence ledger retains all material follow-ups rather than collapsing them into one singular field.",
+      "prompt": "Create a five-lens briefing where the practitioner answer produces two material follow-up questions and the skeptic answer produces no material follow-up.",
+      "setup_context": ["The assistant-research skill instructions are active.", "The question trace must remain source-backed or explicitly gap-marked before synthesis."],
+      "expected_behavior": ["Records follow_ups=[follow_up, follow_up] for every material practitioner follow-up with question, answer_or_gap, sources/verified URLs, and evidence status.", "Records decision=none_needed for the skeptic rather than omitting follow-up state; none_needed cannot coexist with material follow-ups for the same trace."],
+      "pass_criteria": ["The response retains every material follow-up and includes a none_needed decision only where none exists."],
+      "fail_signals": ["Collapses multiple follow-ups into follow_up_question or omits sources, status, or an answer/gap."],
+      "machine_expectations": {
+        "required_substrings": ["follow_ups=[follow_up, follow_up]", "question", "answer_or_gap", "sources_or_verified_urls", "evidence_status", "decision=none_needed", "none_needed cannot coexist with material follow-ups", "every material follow-up"],
+        "forbidden_substrings": ["follow_up_question", "follow_up_answer_or_gap", "follow-ups omitted", "accept follow_ups=[follow_up, none_needed] for the same trace"]
       }
     },
     {

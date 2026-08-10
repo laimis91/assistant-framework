@@ -262,7 +262,7 @@ artifacts:
     type: object
     required: true
     condition: "runnable tests exist or task changes behavior"
-    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. Use validation_results when tests are not applicable."
+    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. When TDD Architecture Decision Pack obligations apply, architecture_obligation_coverage aggregates the selected Build owner return: bounded_executor CodeWriter or separated_workers BuilderTester, with exact-once stable obligation_id coverage. Use validation_results when tests are not applicable."
     on_fail: "Re-run tests or move non-test verification to validation_results with explicit not-applicable reason for tests"
     object_fields:
       - name: passed
@@ -276,6 +276,30 @@ artifacts:
       - name: skipped
         type: int
         required: true
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "tdd_mode is true and architecture_design_mode in [lightweight, required, review_intensive]"
+        min_items: 1
+        validation: "Aggregates the selected Build owner return: build_execution_lane == bounded_executor uses CodeWriter coverage and build_execution_lane == separated_workers uses BuilderTester coverage. Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
 
   - name: validation_results
     type: object[]
@@ -583,7 +607,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -606,8 +630,27 @@ artifacts:
         type: string
         required: conditional
         condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
-        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; every retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non_goals element or entries element with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
         on_missing: fail
+      - name: retired_or_excluded_deferred_uncertainty_traces
+        type: object[]
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        min_items: 0
+        validation: "Binds every source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs ref exactly once to a concrete consuming target. Empty only when the source collection is empty; no unknown, duplicate, or wrong-disposition source ref is allowed."
+        object_fields:
+          - name: source_retired_or_excluded_deferred_uncertainty_ref
+            type: string
+            required: true
+            validation: "Resolves exactly once to one source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry"
+          - name: target_disposition
+            type: enum
+            required: true
+            enum_values: [non_goal, approved_exclusion]
+          - name: target_ref
+            type: string
+            required: true
+            validation: "Resolves to the concrete non_goals element for non_goal or entries element with status=approved_exclusion for approved_exclusion"
       - name: entries
         type: object[]
         required: true
@@ -658,7 +701,7 @@ artifacts:
     required: conditional
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
-    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios; selected design, viable alternatives only when real, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
+    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
     on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
     object_fields:
       - name: pack_id
@@ -922,6 +965,27 @@ artifacts:
             type: enum
             required: true
             enum_values: [pending, verified, unknown]
+      - name: architecture_test_obligations
+        type: object[]
+        required: conditional
+        condition: "tdd_mode is true"
+        description: "Pack-derived test obligations carried unchanged into active TDD task packets"
+        validation: "Each stable obligation_id is unique and testable; kinds match assistant-tdd input semantics and do not add a non-Pack claim."
+        min_items: 1
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: behavior
+            type: string
+            required: true
+          - name: verification
+            type: string
+            required: true
       - name: alternatives
         type: object[]
         required: true
@@ -2076,10 +2140,37 @@ artifacts:
       - name: retired_or_excluded_deferred_uncertainty_refs
         type: string[]
         required: true
+        validation: "Ordered unique refs resolving exactly once to current decision_map.deferred_uncertainty entries. Exactly covers every and only current decision_map deferred uncertainty with status retired or excluded; empty if and only if none have either status."
       - name: next_route
         type: enum
         required: true
         enum_values: [bounded_discover]
+
+  - name: progressive_terminal_archival
+    type: object
+    required: conditional
+    condition: "progressive_artifact_retention_state == terminally_archived"
+    description: "Durable terminal tombstone that authorizes release of retained progressive artifacts for one task and decision map"
+    validation: "Binds current_task_identity and final_progressive_decision_map_ref to the same terminally archived task/map, records a typed final archival or termination basis, and has one or more resolvable evidence_refs proving continuation and reference resolution are impossible. Missing, dangling, or mismatched evidence fails closed and cannot release the retained chain."
+    on_fail: "Restore progressive_artifact_retention_state=retained and the canonical reference chain; do not archive until the typed tombstone resolves every required identity and evidence ref."
+    object_fields:
+      - name: current_task_identity
+        type: string
+        required: true
+        validation: "Matches the current task identity exactly"
+      - name: final_progressive_decision_map_ref
+        type: string
+        required: true
+        validation: "Matches the final retained progressive decision_map identity exactly"
+      - name: final_archival_or_termination_basis
+        type: enum
+        required: true
+        enum_values: [task_terminated, archival_irrecoverable]
+      - name: evidence_refs
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Each ref resolves and proves continuation and reference resolution are impossible"
 
   - name: metrics_entry
     type: jsonl_line

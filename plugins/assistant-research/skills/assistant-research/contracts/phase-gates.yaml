@@ -2,7 +2,7 @@
 # Research has a search → synthesize → verify pipeline.
 # Gates ensure each stage completes before the next begins.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-research
 
@@ -45,9 +45,14 @@ gates:
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
       - id: S7
-        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, every material follow-up question prompted by evidence or a recorded none-needed decision, and evidence status before contradiction mapping"
+        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, typed follow_ups retaining every material follow-up or one none_needed decision, and evidence status before contradiction mapping"
         condition: "research_method == five_lens_briefing"
         on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
+
+      - id: SY_FIVE_LENS_FOLLOW_UPS
+        check: "For five_lens_briefing: every material follow-up remains in question_trace.follow_ups exactly once with question, answer_or_gap, sources_or_verified_urls, and evidence_status; a none_needed decision is allowed only when no material follow-up exists and cannot coexist with material follow-ups for the same trace"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Restore each omitted follow-up or replace the invalid empty collection with one evidence-backed none_needed decision before synthesis."
 
   # ─────────────────────────────────────────────
   # SYNTHESIZE → VERIFY

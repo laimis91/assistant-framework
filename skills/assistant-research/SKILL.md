@@ -47,6 +47,12 @@ Read `contracts/index.yaml` first and load only the active boundary:
 Missing or invalid selectors fall back to the full named canonical contract. Do
 not load every contract or research method at entry.
 
+Migration note: assistant-research contracts are v2.0. For
+`five_lens_briefing`, the required singular `follow_up_question` and
+`follow_up_answer_or_gap` fields are replaced by required typed `follow_ups`.
+Each collection retains every material follow-up, or one typed `none_needed`
+decision when none exists; v1 consumers must adapt before accepting v2 output.
+
 ## Ownership
 
 assistant-research owns source selection, evidence synthesis, confidence, and
