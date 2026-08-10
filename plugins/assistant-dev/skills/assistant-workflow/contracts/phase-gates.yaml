@@ -572,9 +572,9 @@ gates:
         on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow."
 
       - id: R_LIGHT_FRESH_REVIEW
-        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence"
+        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
         condition: "controller_intensity == light"
-        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence."
+        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary and architecture_decision_pack_review refs; do not require review_delegation_path for light direct fallback."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
         check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."

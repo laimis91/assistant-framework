@@ -15,12 +15,15 @@ triggers:
 
 | File | Purpose |
 |---|---|
-| [`contracts/input.yaml`](contracts/input.yaml) | doc_type, scope, source_files[], format |
-| [`contracts/output.yaml`](contracts/output.yaml) | files_updated[], evidence_sources[], doc_coverage, review_items[], safety_notes[] |
+| [`contracts/input.yaml`](contracts/input.yaml) | doc_type, scope, source_files[], format, conditional architecture_decision_pack |
+| [`contracts/output.yaml`](contracts/output.yaml) | files_updated[], evidence_sources[], doc_coverage, review_items[], safety_notes[], conditional architecture_decision_pack_trace |
 
 - `doc_type` and `scope` are required; `source_files` and `format` are inferred when absent
 - `files_updated` entries include path, change_type (created/modified), and description
 - `review_items` is non-empty when docs contain inferred, stale, conflicting, or audience-sensitive claims needing confirmation
+- Infer `architecture_design_mode` and conditional `architecture_decision_pack_status`. A current Pack requires the compact canonical `architecture_decision_pack` projection; resolve selected design and rationale through its current canonical ref and record them in `documented_decision_refs`. Missing, stale, and out-of-scope Pack states require issue/recovery evidence and an `architecture_decision_pack_trace` outcome. Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack.
+
+Migration note: v2 keeps files_updated required/non-empty for ordinary and current-Pack documentation, but permits its omission only for typed blocked_missing_pack/blocked_stale_pack/out_of_scope no-write recovery; v1 consumers must adapt before accepting v2.
 
 Covers the developer's documentation weakness by generating accurate, maintainable docs from code.
 
@@ -33,7 +36,8 @@ Produce documentation that is accurate, maintainable, and traceable to source ev
 ## Success Criteria
 
 - Every concrete claim is backed by code, git history, existing docs, or user-provided source material.
-- When documenting an applicable architecture decision, the document preserves the fresh Architecture Decision Pack reference, facts versus assumptions, semantic type/primitive-boundary rationale, and falsifiable quality verification rather than rewriting generic design claims.
+- When documenting an applicable architecture decision, the document resolves selected design and rationale from the fresh Architecture Decision Pack reference, records their documented decision refs, and preserves facts versus assumptions, semantic type/primitive-boundary rationale, and falsifiable quality verification rather than rewriting generic design claims.
+- Pack-backed architecture docs return `architecture_decision_pack_trace`: `documented` carries source Pack/decision/evidence refs; missing, stale, and out-of-scope states record only recovery action and review trace, never invented refs.
 - Review-needed items identify inferred or stale claims instead of silently presenting them as fact.
 - The selected doc mode, scope, output files, evidence, and remaining gaps are explicit.
 

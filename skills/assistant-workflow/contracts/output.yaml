@@ -324,7 +324,7 @@ artifacts:
     required: conditional
     condition: "controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path."
     on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
     object_fields:
       - name: result
@@ -341,6 +341,33 @@ artifacts:
       - name: evidence
         type: string
         required: true
+      - name: canonical_result_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated assistant-review final_summary for the light Pack review"
+        validation: "Resolves to a validated canonical assistant-review final_summary without requiring review_delegation_path for light direct fallback"
+      - name: canonical_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
+      - name: architecture_decision_pack_review_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated assistant-review Architecture Decision Pack review"
+        validation: "Resolves to the current Pack review for the carried architecture_decision_pack_ref"
+      - name: architecture_decision_pack_review_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#architecture_decision_pack_review"
+      - name: validation_status
+        type: enum
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        enum_values: [validated]
 
   - name: review_result
     type: object

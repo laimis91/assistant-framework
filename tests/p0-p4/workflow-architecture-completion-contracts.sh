@@ -16,6 +16,12 @@ phases_reference="$workflow_dir/references/phases.md"
 review_router="$workflow_dir/references/review-qa-router.md"
 assistant_review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 candidate_skill="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
+docs_dir="$FRAMEWORK_DIR/skills/assistant-docs"
+docs_input_contract="$docs_dir/contracts/input.yaml"
+docs_output_contract="$docs_dir/contracts/output.yaml"
+docs_skill="$docs_dir/SKILL.md"
+docs_architecture_reference="$docs_dir/architecture.md"
+docs_evals="$docs_dir/evals/cases.json"
 
 phase_block() {
     local phase="$1"
@@ -34,6 +40,120 @@ contract_field_block() {
         inside && /^  - name: / && $0 != "  - name: " field { exit }
         inside { print }
     ' "$file"
+}
+
+fresh_review_field_has_property() {
+    local file="$1"
+    local field="$2"
+    local property="$3"
+    awk -v field="$field" -v property="$property" '
+        $0 == "  - name: fresh_review_result" { in_artifact = 1; next }
+        in_artifact && /^  - name: / { exit }
+        in_artifact && $0 == "      - name: " field { in_field = 1; next }
+        in_field && $0 == "        " property { found = 1; exit }
+        in_field && /^      - name: / { exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
+fresh_review_pack_refs_are_declared() {
+    local file="$1"
+    local field
+    for field in canonical_result_ref architecture_decision_pack_review_ref; do
+        fresh_review_field_has_property "$file" "$field" 'type: string' \
+            && fresh_review_field_has_property "$file" "$field" 'required: conditional' \
+            && fresh_review_field_has_property "$file" "$field" 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
+            || return 1
+    done
+}
+
+without_fresh_review_pack_refs() {
+    local source="$1"
+    local destination="$2"
+    local fields="$3"
+    awk -v fields="$fields" '
+        BEGIN { count = split(fields, selected, ","); for (i = 1; i <= count; i++) omit[selected[i]] = 1 }
+        $0 == "  - name: fresh_review_result" { in_artifact = 1 }
+        in_artifact && /^  - name: / && $0 != "  - name: fresh_review_result" { in_artifact = 0 }
+        in_artifact && /^      - name: / {
+            field = $0
+            sub(/^      - name: /, "", field)
+            if (omit[field]) { skip = 1; next }
+            skip = 0
+        }
+        !skip { print }
+    ' "$source" >"$destination"
+}
+
+architecture_pack_projection_matches() {
+    local producer="$1"
+    local consumer="$2"
+    ruby -ryaml -e '
+        STRUCTURAL_KEYS = %w[name type required condition enum_values min_items].freeze
+
+        def architecture_decision_pack_projection(path)
+          fields = YAML.load_file(path).fetch("fields")
+          pack = fields.find { |field| field["name"] == "architecture_decision_pack" }
+          raise "architecture_decision_pack missing from #{path}" unless pack
+
+          pack.fetch("object_fields").map { |field| normalize(field) }
+        end
+
+        def normalize(field)
+          STRUCTURAL_KEYS.each_with_object({}) do |key, normalized|
+            normalized[key] = field[key] if field.key?(key)
+          end.tap do |normalized|
+            if field.key?("object_fields")
+              normalized["object_fields"] = field.fetch("object_fields").map { |nested| normalize(nested) }
+            end
+          end
+        end
+
+        exit architecture_decision_pack_projection(ARGV.fetch(0)) == architecture_decision_pack_projection(ARGV.fetch(1)) ? 0 : 1
+    ' "$producer" "$consumer"
+}
+
+mutate_docs_pack_projection() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        pack = document.fetch("fields").find { |field| field["name"] == "architecture_decision_pack" }
+        fields = pack.fetch("object_fields")
+
+        case ARGV.fetch(2)
+        when "extra_required_field"
+          fields << { "name" => "docs_only_selected_design", "type" => "string", "required" => true }
+        when "enum_drift"
+          fields.find { |field| field["name"] == "mode" }["enum_values"] = ["lightweight", "required"]
+        when "requiredness_drift"
+          fields.find { |field| field["name"] == "facts" }["required"] = false
+        else
+          raise "unknown projection mutation: #{ARGV.fetch(2)}"
+        end
+
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$mutation"
+}
+
+docs_eval_forbids() {
+    local fixture="$1"
+    local case_id="$2"
+    local forbidden="$3"
+    jq -e --arg case_id "$case_id" --arg forbidden "$forbidden" '
+        .cases[] | select(.id == $case_id) | .machine_expectations.forbidden_substrings | index($forbidden) != null
+    ' "$fixture" >/dev/null
+}
+
+without_docs_eval_forbidden() {
+    local source="$1"
+    local destination="$2"
+    local case_id="$3"
+    local forbidden="$4"
+    jq --arg case_id "$case_id" --arg forbidden "$forbidden" '
+        (.cases[] | select(.id == $case_id) | .machine_expectations.forbidden_substrings) |= map(select(. != $forbidden))
+    ' "$source" >"$destination"
 }
 
 test_start "Architecture packs preserve challenge evidence and small required traceability"
@@ -114,6 +234,180 @@ for term in \
     fi
 done
 if [[ ${#workflow_missing[@]} -eq 0 ]]; then pass; else fail "architecture Pack propagation/traceability contract gaps: ${workflow_missing[*]}"; fi
+
+test_start "assistant-docs Pack contracts parse as strict YAML in source and mirror"
+docs_yaml_parse_failures=()
+for docs_contract in \
+    "$docs_input_contract" \
+    "$docs_output_contract" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/input.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/output.yaml"; do
+    if ! ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0))' "$docs_contract" >/dev/null 2>&1; then
+        docs_yaml_parse_failures+=("${docs_contract#$FRAMEWORK_DIR/}")
+    fi
+done
+if [[ ${#docs_yaml_parse_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-docs Pack contracts are not strict YAML: ${docs_yaml_parse_failures[*]}"
+fi
+
+test_start "assistant-docs preserves the exact compact assistant-review Pack projection"
+docs_architecture_missing=()
+docs_mode_block="$(contract_field_block "$docs_input_contract" architecture_design_mode)"
+docs_pack_status_block="$(contract_field_block "$docs_input_contract" architecture_decision_pack_status)"
+docs_pack_block="$(contract_field_block "$docs_input_contract" architecture_decision_pack)"
+docs_pack_issue_block="$(contract_field_block "$docs_input_contract" architecture_decision_pack_issue)"
+docs_trace_block="$(contract_field_block "$docs_output_contract" architecture_decision_pack_trace)"
+docs_files_updated_block="$(contract_field_block "$docs_output_contract" files_updated)"
+for term in \
+    'type: enum' \
+    'enum_values: [not_applicable, lightweight, required, review_intensive]' \
+    'applicable modes require architecture_decision_pack_status. current requires the compact architecture_decision_pack projection and missing, stale, or out_of_scope require architecture_decision_pack_issue evidence' \
+    'on_missing: infer'; do
+    if ! grep -Fq -- "$term" <<<"$docs_mode_block"; then docs_architecture_missing+=("input architecture_design_mode: $term"); fi
+done
+for term in \
+    'condition: "architecture_decision_pack_status == current"' \
+    'on_missing: fail' \
+    'Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack.' \
+    'Must resolve against the current canonical Pack to the selected design and rationale'; do
+    if ! grep -Fq -- "$term" <<<"$docs_pack_block"; then docs_architecture_missing+=("input Pack projection: $term"); fi
+done
+if ! architecture_pack_projection_matches "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" "$docs_input_contract"; then
+    docs_architecture_missing+=("assistant-review compact Pack projection structural mismatch")
+fi
+for term in \
+    'enum_values: [current, missing, stale, out_of_scope]' \
+    'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
+    'on_missing: infer'; do
+    if ! grep -Fq -- "$term" <<<"$docs_pack_status_block"; then docs_architecture_missing+=("input Pack status: $term"); fi
+done
+for term in \
+    'condition: "architecture_decision_pack_status in [missing, stale, out_of_scope]"' \
+    'recovery_action' \
+    'evidence_refs'; do
+    if ! grep -Fq -- "$term" <<<"$docs_pack_issue_block"; then docs_architecture_missing+=("input Pack issue/recovery: $term"); fi
+done
+for term in \
+    'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
+    'enum_values: [documented, blocked_missing_pack, blocked_stale_pack, out_of_scope]' \
+    'architecture_decision_pack_status=current requires outcome=documented; missing requires blocked_missing_pack; stale requires blocked_stale_pack; out_of_scope requires outcome=out_of_scope' \
+    'source_pack_ref' \
+    'documented_decision_refs' \
+    'evidence_refs' \
+    'recovery_action' \
+    'review_trace'; do
+    if ! grep -Fq -- "$term" <<<"$docs_trace_block"; then docs_architecture_missing+=("output Pack trace: $term"); fi
+done
+if ! awk '
+    $0 == "      - name: review_trace" { in_field = 1; next }
+    in_field && $0 == "        min_items: 1" { found = 1; exit }
+    in_field && /^      - name: / { exit }
+    END { exit found ? 0 : 1 }
+' <<<"$docs_trace_block"; then
+    docs_architecture_missing+=("review_trace min_items: 1")
+fi
+if ! grep -Fq 'condition: "architecture_design_mode == not_applicable or architecture_decision_pack_status == current"' <<<"$docs_files_updated_block"; then
+    docs_architecture_missing+=("files_updated safe no-write recovery condition")
+fi
+if ! grep -Fq 'schema_version: "2.0"' "$docs_output_contract"; then
+    docs_architecture_missing+=("assistant-docs output v2 schema_version")
+fi
+for term in \
+    'v2 keeps files_updated required/non-empty for ordinary and current-Pack documentation' \
+    'permits its omission only for typed blocked_missing_pack/blocked_stale_pack/out_of_scope no-write recovery' \
+    'v1 consumers must adapt before accepting v2'; do
+    if ! grep -Fq -- "$term" "$docs_skill"; then docs_architecture_missing+=("assistant-docs v2 migration note: $term"); fi
+done
+for case_and_term in \
+    'architecture-doc-missing-pack-recovery|architecture_decision_pack_status=missing' \
+    'architecture-doc-missing-pack-recovery|outcome=blocked_missing_pack' \
+    'architecture-doc-missing-pack-recovery|recovery_action=request_current_pack' \
+    'architecture-doc-rejects-missing-or-stale-pack|architecture_decision_pack_status is stale' \
+    'architecture-doc-rejects-missing-or-stale-pack|outcome=blocked_stale_pack' \
+    'architecture-doc-rejects-missing-or-stale-pack|recovery_action' \
+    'architecture-doc-out-of-scope-pack-recovery|architecture_decision_pack_status=out_of_scope' \
+    'architecture-doc-out-of-scope-pack-recovery|outcome=out_of_scope' \
+    'architecture-doc-out-of-scope-pack-recovery|recovery_action=mark_decision_out_of_scope'; do
+    case_id="${case_and_term%%|*}"
+    term="${case_and_term#*|}"
+    if ! jq -e --arg case_id "$case_id" --arg term "$term" '
+        .cases[] | select(.id == $case_id) | tostring | contains($term)
+    ' "$docs_evals" >/dev/null; then
+        docs_architecture_missing+=("recovery eval $case_id: $term")
+    fi
+done
+for case_id in architecture-doc-missing-pack-recovery architecture-doc-out-of-scope-pack-recovery; do
+    for forbidden in files_updated source_pack_ref documented_decision_refs evidence_refs 'outcome=documented'; do
+        if ! docs_eval_forbids "$docs_evals" "$case_id" "$forbidden"; then
+            docs_architecture_missing+=("recovery eval $case_id forbids $forbidden")
+        fi
+    done
+done
+for forbidden in 'outcome=documented' 'source_pack_ref=' documented_decision_refs evidence_refs; do
+    if ! docs_eval_forbids "$docs_evals" architecture-doc-rejects-missing-or-stale-pack "$forbidden"; then
+        docs_architecture_missing+=("recovery eval architecture-doc-rejects-missing-or-stale-pack forbids $forbidden")
+    fi
+done
+for file_and_term in \
+    "$docs_skill::architecture_decision_pack_trace" \
+    "$docs_skill::Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack" \
+    "$docs_architecture_reference::architecture_decision_pack_trace" \
+    "$docs_architecture_reference::Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack" \
+    "$docs_evals::architecture-doc-pack-backed-decision-trace" \
+    "$docs_evals::safe_default" \
+    "$docs_evals::resolves selected design and rationale through the current canonical Pack ref" \
+    "$docs_evals::documented_decision_refs" \
+    "$docs_evals::blocked_stale_pack" \
+    "$docs_evals::stale Pack"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq -- "$term" "$file"; then docs_architecture_missing+=("${file#$FRAMEWORK_DIR/}: $term"); fi
+done
+if [[ ${#docs_architecture_missing[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-docs Pack-backed architecture documentation boundary gaps: ${docs_architecture_missing[*]}"
+fi
+
+test_start "assistant-docs Pack projection comparator rejects structural drift"
+docs_projection_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-docs-pack-projection.XXXXXX")"
+p0p4_register_cleanup "$docs_projection_mutation_dir"
+docs_projection_mutation_failures=()
+for mutation in extra_required_field enum_drift requiredness_drift; do
+    mutated_docs_input="$docs_projection_mutation_dir/$mutation.yaml"
+    mutate_docs_pack_projection "$docs_input_contract" "$mutated_docs_input" "$mutation"
+    if architecture_pack_projection_matches "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" "$mutated_docs_input"; then
+        docs_projection_mutation_failures+=("$mutation accepted")
+    fi
+done
+if [[ ${#docs_projection_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-docs Pack projection comparator false-passes: ${docs_projection_mutation_failures[*]}"
+fi
+
+test_start "stale Pack eval forbids every documented-only output guard"
+stale_pack_guard_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-docs-stale-pack-guard.XXXXXX")"
+p0p4_register_cleanup "$stale_pack_guard_mutation_dir"
+stale_pack_guard_failures=()
+for forbidden in 'outcome=documented' 'source_pack_ref=' documented_decision_refs evidence_refs; do
+    if ! docs_eval_forbids "$docs_evals" architecture-doc-rejects-missing-or-stale-pack "$forbidden"; then
+        stale_pack_guard_failures+=("missing $forbidden")
+        continue
+    fi
+    mutated_docs_evals="$stale_pack_guard_mutation_dir/${forbidden//=/-}.json"
+    without_docs_eval_forbidden "$docs_evals" "$mutated_docs_evals" architecture-doc-rejects-missing-or-stale-pack "$forbidden"
+    if docs_eval_forbids "$mutated_docs_evals" architecture-doc-rejects-missing-or-stale-pack "$forbidden"; then
+        stale_pack_guard_failures+=("$forbidden removal accepted")
+    fi
+done
+if [[ ${#stale_pack_guard_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "stale Pack documented-only guards are incomplete: ${stale_pack_guard_failures[*]}"
+fi
 
 test_start "Build gates defer independent Code Reviewer evidence to Review"
 build_block="$(phase_block BUILD)"
@@ -246,13 +540,59 @@ r3_block="$(awk '
     inside { print }
 ' "$phase_gates")"
 review_result_condition='controller_intensity in [standard, strict] or risk_tier in [high, critical]'
+fresh_review_block="$(contract_field_block "$output_contract" fresh_review_result)"
 if ! grep -Fq "condition: \"$review_result_condition\"" <<<"$r3_block"; then
     fail "R3 canonical review_result gate is not scoped to the artifact condition; valid light work would be blocked"
 elif ! grep -Fq 'controller_intensity == light' <<<"$(phase_block REVIEW)" \
     || ! grep -Fq 'R_LIGHT_FRESH_REVIEW' <<<"$(phase_block REVIEW)"; then
     fail "Review phase no longer preserves the distinct light fresh-review lane"
+elif ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' <<<"$fresh_review_block" \
+    || ! grep -Fq 'assistant-review/contracts/output.yaml#architecture_decision_pack_review' <<<"$fresh_review_block" \
+    || ! grep -Fq 'validation_status' <<<"$fresh_review_block"; then
+    fail "light Pack fresh_review_result does not retain validated canonical assistant-review output refs"
+elif grep -Fq '      - name: review_delegation_path' <<<"$fresh_review_block"; then
+    fail "light Pack fresh_review_result incorrectly requires review_delegation_path"
+elif ! grep -Fq 'architecture_decision_pack_review' <<<"$(phase_block REVIEW)" \
+    || ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' "$review_router" \
+    || ! p0p4_contains_text "$review_router" 'light direct fallback does not require'; then
+    fail "light Pack review routing does not preserve canonical refs without delegation-path fallback requirements"
 else
     pass
+fi
+
+test_start "light Pack fresh_review_result declares both conditional canonical references"
+fresh_review_ref_missing=()
+for field in canonical_result_ref architecture_decision_pack_review_ref; do
+    for property in \
+        'type: string' \
+        'required: conditional' \
+        'condition: "architecture_design_mode in [lightweight, required, review_intensive]"'; do
+        if ! fresh_review_field_has_property "$output_contract" "$field" "$property"; then
+            fresh_review_ref_missing+=("$field $property")
+        fi
+    done
+done
+if [[ ${#fresh_review_ref_missing[@]} -eq 0 ]]; then
+    pass
+else
+    fail "light Pack fresh_review_result reference declarations are incomplete: ${fresh_review_ref_missing[*]}"
+fi
+
+test_start "light Pack fresh_review_result rejects independent canonical-reference omissions"
+fresh_review_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-pack-ref.XXXXXX")"
+p0p4_register_cleanup "$fresh_review_mutation_dir"
+fresh_review_mutation_failures=()
+for omitted in canonical_result_ref architecture_decision_pack_review_ref canonical_result_ref,architecture_decision_pack_review_ref; do
+    mutated_output="$fresh_review_mutation_dir/${omitted//,/-}.yaml"
+    without_fresh_review_pack_refs "$output_contract" "$mutated_output" "$omitted"
+    if fresh_review_pack_refs_are_declared "$mutated_output"; then
+        fresh_review_mutation_failures+=("$omitted omission accepted")
+    fi
+done
+if [[ ${#fresh_review_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "light Pack fresh_review_result reference declaration guard false-passes: ${fresh_review_mutation_failures[*]}"
 fi
 
 test_start "assistant-review and every Reviewer prompt produce workflow v4 reviewed_scope"

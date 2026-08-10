@@ -268,6 +268,96 @@ else
     fail "workflow Pack-backed TDD packet contract missing: ${packet_obligation_missing[*]}"
 fi
 
+task_packet_obligation_schema() {
+    local file="$1"
+    local handoff="$2"
+    local packet_field="$3"
+    awk -v handoff="$handoff" -v packet_field="$packet_field" '
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && $0 == "      - name: " packet_field { in_packet = 1; next }
+        in_packet && $0 == "          - name: architecture_test_obligations" { in_obligations = 1 }
+        in_obligations && /^          - name: / && $0 != "          - name: architecture_test_obligations" { exit }
+        in_obligations {
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            if (line != "") print line
+        }
+    ' "$file"
+}
+
+task_packet_obligation_schemas_match() {
+    local file="$1"
+    local architect codewriter builder_tester
+    architect="$(task_packet_obligation_schema "$file" orchestrator_to_architect implementation_steps)"
+    codewriter="$(task_packet_obligation_schema "$file" orchestrator_to_code_writer current_task_packet)"
+    builder_tester="$(task_packet_obligation_schema "$file" orchestrator_to_builder_tester current_task_packet)"
+    [[ -n "$architect" && "$architect" == "$codewriter" && "$architect" == "$builder_tester" ]]
+}
+
+mutate_architect_obligation_schema() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    awk -v mutation="$mutation" '
+        $0 == "  - name: orchestrator_to_architect" { in_handoff = 1 }
+        in_handoff && /^  - name: / && $0 != "  - name: orchestrator_to_architect" { in_handoff = 0 }
+        in_handoff && $0 == "      - name: implementation_steps" { in_packet = 1 }
+        in_packet && $0 == "          - name: architecture_test_obligations" { in_obligations = 1 }
+        in_obligations && /^          - name: / && $0 != "          - name: architecture_test_obligations" { in_obligations = 0 }
+        in_obligations && !changed && mutation == "requiredness" && $0 == "            required: conditional" { sub("conditional", "false"); changed = 1 }
+        in_obligations && !changed && mutation == "condition" && $0 == "            condition: \"tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]\"" { sub("tdd_applies is true", "tdd_applies is false"); changed = 1 }
+        in_obligations && !changed && mutation == "enum" && $0 == "                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]" { sub("representative_path]", "representative_path, invented_kind]"); changed = 1 }
+        { print }
+    ' "$source" >"$destination"
+}
+
+test_start "Architect implementation packets exactly match both TDD Build consumer schemas"
+architect_obligation_schema="$(task_packet_obligation_schema "$handoffs_file" orchestrator_to_architect implementation_steps)"
+expected_packet_obligation_terms=(
+    'name: architecture_test_obligations'
+    'type: object[]'
+    'required: conditional'
+    'condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"'
+    'description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"'
+    'validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."'
+    'min_items: 1'
+    'name: obligation_id'
+    'description: "Stable identifier used to bind this input obligation to exactly one coverage entry"'
+    'enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]'
+)
+architect_packet_missing=()
+if ! task_packet_obligation_schemas_match "$handoffs_file"; then
+    architect_packet_missing+=("Architect/CodeWriter/BuilderTester normalized complete schema parity")
+fi
+for term in "${expected_packet_obligation_terms[@]}"; do
+    if ! grep -Fq -- "$term" <<<"$architect_obligation_schema"; then
+        architect_packet_missing+=("Architect implementation_steps: $term")
+    fi
+done
+if [[ "${#architect_packet_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "Architect Pack-backed TDD implementation packet contract missing: ${architect_packet_missing[*]}"
+fi
+
+test_start "TDD packet parity rejects requiredness condition and enum drift"
+packet_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-pack-obligation-parity.XXXXXX")"
+p0p4_register_cleanup "$packet_mutation_dir"
+packet_mutation_failures=()
+for mutation in requiredness condition enum; do
+    mutated_handoffs="$packet_mutation_dir/$mutation.yaml"
+    mutate_architect_obligation_schema "$handoffs_file" "$mutated_handoffs" "$mutation"
+    if task_packet_obligation_schemas_match "$mutated_handoffs"; then
+        packet_mutation_failures+=("$mutation mutation preserved parity")
+    fi
+done
+if [[ "${#packet_mutation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "TDD packet parity accepts schema drift: ${packet_mutation_failures[*]}"
+fi
+
 test_start "workflow uses authoritative TDD mode outside task packets"
 tdd_authority_missing=()
 for term in \

@@ -119,6 +119,188 @@
       }
     },
     {
+      "id": "architecture-doc-pack-backed-decision-trace",
+      "title": "Architecture docs trace a fresh Pack without copying it",
+      "category": "pack_backed_architecture_docs",
+      "purpose": "Checks that applicable architecture documentation consumes the compact fresh Pack projection and returns a trace instead of recreating architecture decisions.",
+      "prompt": "Document the architecture decision carried by the fresh workflow Architecture Decision Pack for the parser boundary.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "architecture_design_mode is required and architecture_decision_pack_status is current.",
+        "A fresh compact architecture_decision_pack projection has ref=pack/parser-boundary, mode=required, canonical freshness_basis, facts=[{claim,source_ref}], assumptions=[{statement=The current parser format remains supported,status=safe_default,rationale_or_impact=Existing callers rely on it,source_ref=null}], canonical material_questions, boundaries_and_dependencies, design_pressure_checks, type_ledger, quality_scenarios, verification_and_rollback, invalidators, and no review-intensive challenge evidence. The current canonical Pack ref resolves the selected design and rationale."
+      ],
+      "expected_behavior": [
+        "Uses the source Pack ref, matching mode, and canonical freshness basis before documenting the decision.",
+        "Preserves facts[{claim,source_ref}] and assumptions[{statement,status=safe_default,rationale_or_impact,source_ref=null}] without translating or dropping nullable source_ref.",
+        "Documents canonical material questions, boundaries/dependencies, design-pressure checks, Type Ledger, quality scenarios, verification/rollback, and invalidators without copying the full Pack.",
+        "Resolves selected design and rationale through the current canonical Pack ref and returns architecture_decision_pack_trace with source_pack_ref, documented_decision_refs, evidence_refs, and review_trace."
+      ],
+      "pass_criteria": [
+        "The response names architecture_design_mode, architecture_decision_pack_status=current, and architecture_decision_pack.",
+        "The response includes architecture_decision_pack_trace, source_pack_ref, and documented_decision_refs.",
+        "The response keeps unverified or stale decision claims in review_trace or review_items.",
+        "The response does not invent a new decision, freshness basis, or quality result."
+      ],
+      "fail_signals": [
+        "Reconstructs a Pack from memory or generic architecture prose.",
+        "Omits Pack source, evidence, or review trace.",
+        "Claims a quality benefit without the carried verification evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_design_mode",
+          "architecture_decision_pack",
+          "source_pack_ref",
+          "architecture_decision_pack_trace",
+          "evidence_refs",
+          "review_trace",
+          "freshness",
+          "safe_default",
+          "documented_decision_refs",
+          "resolves selected design and rationale through the current canonical Pack ref"
+        ],
+        "forbidden_substrings": [
+          "reconstruct the Pack",
+          "invented architecture decision",
+          "quality benefit confirmed without evidence"
+        ]
+      }
+    },
+    {
+      "id": "architecture-doc-rejects-missing-or-stale-pack",
+      "title": "Architecture docs reject a missing or stale Pack",
+      "category": "pack_freshness_recovery",
+      "purpose": "Checks that Pack-backed architecture documentation stops safely instead of inventing a decision when its Pack is unavailable or stale.",
+      "prompt": "Document the architecture decision, but the Pack ref is missing and its last revision predates a changed public contract.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "architecture_design_mode is review_intensive and architecture_decision_pack_status is stale.",
+        "The carried Pack is stale; a stale ref may be unavailable."
+      ],
+      "expected_behavior": [
+        "Does not reconstruct, infer, or invent a missing or stale Pack.",
+        "Stops documentation of the affected decision and returns architecture_decision_pack_trace outcome=blocked_stale_pack with recovery_action rather than invented refs.",
+        "Records the gap in review_items rather than presenting the stale decision as current."
+      ],
+      "pass_criteria": [
+        "The response identifies the stale Pack and does not write decision claims from it.",
+        "The response requests a fresh Pack or marks the decision out of scope without requiring source_pack_ref, documented_decision_refs, or evidence_refs.",
+        "The response includes review_items or review_trace for the unresolved decision."
+      ],
+      "fail_signals": [
+        "Reuses a stale Pack as current evidence.",
+        "Invents missing review-intensive challenge evidence.",
+        "Completes Pack-backed documentation without a source Pack ref."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "stale Pack",
+          "fresh Pack",
+          "do not reconstruct",
+          "review_items",
+          "blocked_stale_pack",
+          "recovery_action"
+        ],
+        "forbidden_substrings": [
+          "I reconstructed the Pack",
+          "stale Pack is current",
+          "invented challenge evidence",
+          "outcome=documented",
+          "source_pack_ref=",
+          "documented_decision_refs",
+          "evidence_refs"
+        ]
+      }
+    },
+    {
+      "id": "architecture-doc-missing-pack-recovery",
+      "title": "Architecture docs block a missing Pack without writing files",
+      "category": "pack_recovery",
+      "purpose": "Checks the typed no-write recovery path when an applicable Pack is unavailable.",
+      "prompt": "Document the carried architecture decision, but its Pack cannot be found.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "architecture_design_mode is required and architecture_decision_pack_status=missing.",
+        "architecture_decision_pack_issue has status=missing, concrete recovery evidence, and recovery_action=request_current_pack."
+      ],
+      "expected_behavior": [
+        "Returns architecture_decision_pack_trace outcome=blocked_missing_pack.",
+        "Returns recovery_action=request_current_pack with non-empty review_trace and recovery evidence.",
+        "Does not create documentation files or invent Pack, source, decision, or evidence refs."
+      ],
+      "pass_criteria": [
+        "The response names architecture_decision_pack_status=missing.",
+        "The response names outcome=blocked_missing_pack and recovery_action=request_current_pack.",
+        "The response records non-empty review_trace and recovery evidence.",
+        "The response omits files_updated."
+      ],
+      "fail_signals": [
+        "Documents the missing decision anyway.",
+        "Creates files_updated or invents a Pack reference.",
+        "Reports outcome=documented."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_decision_pack_status=missing",
+          "outcome=blocked_missing_pack",
+          "recovery_action=request_current_pack",
+          "review_trace",
+          "recovery evidence"
+        ],
+        "forbidden_substrings": [
+          "files_updated",
+          "source_pack_ref",
+          "documented_decision_refs",
+          "evidence_refs",
+          "outcome=documented"
+        ]
+      }
+    },
+    {
+      "id": "architecture-doc-out-of-scope-pack-recovery",
+      "title": "Architecture docs mark an out-of-scope Pack decision without writing files",
+      "category": "pack_recovery",
+      "purpose": "Checks the typed no-write recovery path when a Pack decision is explicitly out of scope.",
+      "prompt": "Document the architecture decision, but the carried decision is explicitly out of scope for this documentation request.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "architecture_design_mode is lightweight and architecture_decision_pack_status=out_of_scope.",
+        "architecture_decision_pack_issue has status=out_of_scope, concrete recovery evidence, and recovery_action=mark_decision_out_of_scope."
+      ],
+      "expected_behavior": [
+        "Returns architecture_decision_pack_trace outcome=out_of_scope.",
+        "Returns recovery_action=mark_decision_out_of_scope with non-empty review_trace and recovery evidence.",
+        "Does not create documentation files or invent Pack, source, decision, or evidence refs."
+      ],
+      "pass_criteria": [
+        "The response names architecture_decision_pack_status=out_of_scope.",
+        "The response names outcome=out_of_scope and recovery_action=mark_decision_out_of_scope.",
+        "The response records non-empty review_trace and recovery evidence.",
+        "The response omits files_updated."
+      ],
+      "fail_signals": [
+        "Documents the out-of-scope decision anyway.",
+        "Creates files_updated or invents a Pack reference.",
+        "Reports outcome=documented."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_decision_pack_status=out_of_scope",
+          "outcome=out_of_scope",
+          "recovery_action=mark_decision_out_of_scope",
+          "review_trace",
+          "recovery evidence"
+        ],
+        "forbidden_substrings": [
+          "files_updated",
+          "source_pack_ref",
+          "documented_decision_refs",
+          "evidence_refs",
+          "outcome=documented"
+        ]
+      }
+    },
+    {
       "id": "clear-doc-request-proceeds-without-ritual-question",
       "title": "Clear doc request proceeds without ritual question",
       "category": "clarification_admissibility",

@@ -2,7 +2,7 @@
 
 ## Protocol
 
-When the scope carries a workflow Architecture Decision Pack, read its fresh source/revision basis before drafting. Preserve the Pack reference and separate facts from assumptions; do not turn it into a permanent architect record or global project memory. If no Pack applies, do not manufacture one just to write a system overview.
+When the scope carries a workflow Architecture Decision Pack, infer `architecture_decision_pack_status` before drafting. For `current`, preserve only the compact canonical `architecture_decision_pack` projection: ref, mode, freshness basis, facts, assumptions, material questions, boundaries/dependencies, design-pressure checks, review-intensive challenge evidence, Type Ledger, quality scenarios, verification/rollback, and invalidators. Resolve the selected design and rationale through the current canonical Pack ref, then record the resulting decision refs in `documented_decision_refs`. Return `architecture_decision_pack_trace` with outcome `documented` and the source Pack/decision/evidence refs. If the ref cannot resolve those decisions or currentness cannot be proven, use `missing` or `stale` status and recovery. For `missing`, `stale`, or `out_of_scope`, stop that decision's documentation. Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack. Return the matching blocked/out-of-scope trace outcome with recovery action and review trace; include a stale ref only when it exists. Safe recovery may produce no documentation file. If no Pack applies, do not manufacture one just to write a system overview.
 
 ### Step 1: Map the System
 

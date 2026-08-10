@@ -31,7 +31,11 @@ record PASS plus the reviewed scope/evidence, and fix any findings before
 completion. Light work does not load the full rubric/QA loop unless risk or an
 independent trigger promotes it. This is a fresh self-review and does not
 require Code Reviewer, Reviewer, Code Writer, or Builder/Tester dispatch/direct
-fallback evidence.
+fallback evidence. When an Architecture Decision Pack applies, persist
+validated refs to `assistant-review/contracts/output.yaml#final_summary` and
+`assistant-review/contracts/output.yaml#architecture_decision_pack_review` in
+`fresh_review_result`; light direct fallback does not require
+`review_delegation_path`.
 
 ## Stage 1 - Spec Review
 
@@ -132,6 +136,11 @@ Enforce the review cycle before presenting results:
 - Standard/strict `review_result` must record validated refs to assistant-review
   `final_summary` and `review_delegation_path` plus their exact canonical
   contract ids; canonical review fields remain owned by assistant-review.
+- Light Pack-backed `fresh_review_result` must record validated refs to
+  `assistant-review/contracts/output.yaml#final_summary` and
+  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
+  light direct fallback does not require
+  `review_delegation_path`.
 - Independent Code Reviewer dispatch/result evidence, or allowed fresh
   direct-fallback evidence, must be created in Review after Build completes.
 - When `qa_evaluation_mode=required`, workflow must record validated refs to

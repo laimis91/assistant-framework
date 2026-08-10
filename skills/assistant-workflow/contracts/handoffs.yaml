@@ -893,6 +893,31 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Fresh Architecture Decision Pack reference carried into this executable packet"
             validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: files
             type: string[]
             required: false
@@ -1190,7 +1215,7 @@ handoffs:
             type: object[]
             required: conditional
             condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
-            description: "Testable Architecture Decision Pack obligations carried into the TDD Build handoff"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
             validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
             min_items: 1
             object_fields:
@@ -1677,7 +1702,7 @@ handoffs:
             type: object[]
             required: conditional
             condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
-            description: "Testable Architecture Decision Pack obligations carried into the TDD Build handoff"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
             validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
             min_items: 1
             object_fields:
