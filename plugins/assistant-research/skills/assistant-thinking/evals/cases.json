@@ -41,6 +41,7 @@
         "The recommendation is grounded in the structured analysis.",
         "The response records the delegation path for selected perspective roles when they are used.",
         "The response records architecture_pack_update with workload, budget, measurement, and failure-condition implications or explicit unknowns.",
+        "For review_intensive mode, the response records independent_challenge_evidence with challenge_ref, dissent_or_validation, resolution, and selected_design_impact.",
         "The confidence level reflects evidence and uncertainty instead of defaulting to high.",
         "The dissenting view is a real counterpoint to the recommendation."
       ],
@@ -55,6 +56,11 @@
         "required_substrings": [
           "perspectives",
           "Architecture Pack update",
+          "independent_challenge_evidence",
+          "challenge_ref",
+          "dissent_or_validation",
+          "resolution",
+          "selected_design_impact",
           "freshness",
           "workload",
           "budget",

@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: output
 skill: assistant-workflow
 
@@ -1054,16 +1054,26 @@ artifacts:
       - name: handoff_refs
         type: object
         required: true
+        description: "Discover records only durable context/journal state; Plan or the plan_mode=none pre-Build boundary atomically binds downstream refs before Build."
+        validation: "discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+        on_fail: "Refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
         object_fields:
+          - name: handoff_binding_state
+            type: enum
+            required: true
+            enum_values: [discover_only, downstream_bound]
+            description: "Whether the Pack has only Discover context or atomically bound downstream planning/review references"
           - name: context_or_journal_ref
             type: string
             required: true
           - name: plan_or_task_packet_ref
             type: string
-            required: true
+            required: conditional
+            condition: "handoff_binding_state == downstream_bound"
           - name: review_scope_ref
             type: string
-            required: true
+            required: conditional
+            condition: "handoff_binding_state == downstream_bound"
 
   - name: build_repair_state
     type: object

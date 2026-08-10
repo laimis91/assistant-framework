@@ -11,7 +11,7 @@ triggers:
 
 # Development Workflow
 
-Public routing contract; detailed mechanics live in references and contracts.
+Public routing contract; mechanics live in references and contracts.
 
 ## Goal
 
@@ -27,7 +27,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
-- When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels through Plan, task packets, handoff, and Review.
+- When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels from Discover-only context binding through atomic Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
 - Review, QA, and security routing apply when triggered.
 - Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
@@ -50,7 +50,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 
 Canonical contracts are authoritative. Read `contracts/index.yaml` first, validate at enforcement, and load only the contract selector applicable to the current boundary:
 
-- `entry`: load the exact entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
+- `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
@@ -58,14 +58,20 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 - `selected_handoff`: `contracts/handoffs.yaml` before dispatch and return validation.
 - `completion`: `contracts/output.yaml` at completion before final exit.
 
-Selectors resolve by unique id plus canonical path, exact section, key, and explicit names. Runtime selectors resolve `name_from` only through their declared `allowed_names`.
+Selectors resolve by unique id plus canonical path, section, key, and explicit names. Runtime selectors resolve `name_from` only through their declared `allowed_names`.
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: assistant-workflow contracts are v4. Direct-user, applicable
-`AGENTS.md`, or active-skill instructions trigger delegation; record the
-`subagent_trigger_scope` and dispatch without a
-separate permission question. Explicit opt-out, real unavailability, or an
+Migration note: assistant-workflow contracts are v5. v4 Pack consumers use
+`handoff_binding_state=discover_only` with context/journal only during
+Discover. Plan atomically binds plan/task-packet and review-scope refs as
+`downstream_bound` before Build when `plan_mode!=none`; plan_mode=none binds
+compact inline execution and review-scope refs at the pre-Build boundary.
+Material invalidation clears stale downstream refs through refresh, re-plan,
+and reapproval. Direct-user, applicable
+`AGENTS.md`, or active-skill instructions trigger delegation; record
+`subagent_trigger_scope` and dispatch without
+separate permission question. Explicit opt-out, unavailability, or
 exact policy block uses evidenced fallback. `verification_command` is non-empty
 argv `string[]`; assistant-review v3 owns Reviewer/QAEvaluator handoffs and
 returns `final_summary` / `qa_evaluation_result`; the `reviewed_scope` is non-empty.

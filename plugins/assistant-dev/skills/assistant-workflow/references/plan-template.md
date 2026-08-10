@@ -24,6 +24,7 @@ No separate plan document needed. Include directly in your response:
 - Non-goals/exclusions: [what not to produce]
 **Files:** [list of files to change]
 **Architecture Decision Pack:** [ref, or N/A with concrete reason]
+- **Pack handoff binding:** [`downstream_bound`; context/journal ref plus atomically bound task-packet and review-scope refs before Build]
 - **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
@@ -43,6 +44,8 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
+- Pack handoff binding: [discover_only only before Plan; otherwise downstream_bound | context/journal ref | plan/task-packet ref | review-scope ref]
+- Plan-mode-none Pack binding: [before Build, atomically set downstream_bound with compact inline task-packet/execution and inline review-scope refs]
 - Architecture test obligations: [when TDD applies to a Pack, carry each stable obligation_id, obligation kind, behavior, and verification into CodeWriter/BuilderTester; selected Build owner returns exact-once architecture_obligation_coverage]
 - Behavior / acceptance criteria:
   - [R#] [binary observable behavior]
@@ -168,6 +171,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 
 ## Architecture Decision Pack
 - Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
+- Handoff binding: [discover_only: context/journal ref only; downstream_bound: context/journal, plan/task-packet, and review-scope refs atomically bound before Build]
 - Freshness: [branch/HEAD or greenfield basis; source refs; invalidation conditions]
 - Facts versus assumptions: [compact refs]
 - Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]

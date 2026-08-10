@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -173,9 +173,14 @@ gates:
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
       - id: D_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs. Discover starts handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs while downstream targets do not yet exist. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
+
+      - id: D_ARCHITECTURE_PACK_NO_PLAN_BINDING
+        check: "atomically sets handoff_binding_state=downstream_bound with compact inline task-packet/execution and inline review-scope refs before Discover exits to Build."
+        condition: "plan_mode == none and architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Record both inline refs before Build."
 
       - id: D5
         check: "When the candidate scope scan cannot resolve relevant files/boundaries directly or architecture_design_mode != not_applicable: a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
@@ -288,7 +293,7 @@ gates:
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
 
       - id: P_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: Plan references the current Architecture Decision Pack, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive and plan_mode!=none: Plan references the current Architecture Decision Pack, atomically sets handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref before Build, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets."
 
@@ -479,9 +484,9 @@ gates:
         on_fail: "Update the selected state surface without creating a task journal solely because the task is medium+."
 
       - id: B_ARCHITECTURE_PACK_ALIGNMENT
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: Build preserves the current Architecture Decision Pack boundary ownership, semantic type commitments or primitive exceptions, public compatibility strategy, and quality verification; a changed decision uses the normal plan-deviation/reapproval path"
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: Build requires handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref. When plan_mode=none, the pre-Build boundary atomically sets those refs to compact inline task-packet/execution and inline review-scope refs before any Build action. Build preserves the current Architecture Decision Pack boundary ownership, semantic type commitments or primitive exceptions, public compatibility strategy, and quality verification; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        on_fail: "Stop the affected Build step, refresh the Architecture Decision Pack, record a plan deviation, and obtain reapproval before implementing a changed design."
+        on_fail: "Stop the affected Build step, clear stale downstream refs, refresh the Architecture Decision Pack, re-plan and obtain reapproval before implementing a changed design."
 
       - id: B_ARCHITECTURE_TDD_OBLIGATION_COVERAGE
         check: "When tdd_mode is true and an Architecture Decision Pack applies, the selected Build owner returns architecture_obligation_coverage that represents each carried architecture_test_obligations obligation exactly once by stable obligation_id, with no unknown or duplicate coverage id and evidence/outcome for every entry."
@@ -732,6 +737,12 @@ invariants:
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     scope: all_phases
     on_fail: "Return to Discover or Plan, refresh the Architecture Decision Pack with current source evidence and invalidation state, then reapprove if the selected design, scope, behavior, risk, or verification changed."
+
+  - id: INV_ARCHITECTURE_PACK_HANDOFF_BINDING
+    check: "Architecture Decision Packs use handoff_binding_state=discover_only with context_or_journal_ref only during Discover; Plan atomically binds plan_or_task_packet_ref and review_scope_ref as downstream_bound before Build when plan_mode!=none; when plan_mode=none, the pre-Build boundary atomically binds compact inline task-packet/execution and inline review-scope refs before any Build action; Build, Review, and completion retain downstream_bound; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Stop downstream work, clear stale refs, refresh the Pack, re-plan and reapprove the bound refs before Build, Review, or completion continues."
 
   - id: INV_SEMANTIC_TYPE_BOUNDARIES
     check: "When the Architecture Decision Pack introduces or changes a domain/public/lifecycle/unit/validation/ownership/extension concept, its Type Ledger uses a semantic type or records a concrete primitive exception with an owned conversion/validation boundary. Public or serialized changes retain compatibility/versioning/adapters and rollback evidence."

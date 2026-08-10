@@ -1,4 +1,4 @@
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-thinking
 
@@ -125,6 +125,26 @@ artifacts:
       - name: recommended_pack_change
         type: string
         required: true
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+        description: "Independent challenge or validation that changes, confirms, or bounds the selected Pack design"
+        validation: "All fields are required so review-intensive challenge evidence is traceable and cannot be reduced to a conclusion."
+        on_fail: "Return to the independent challenge and record every required field before merging the Pack update."
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
 
   - name: debug_artifacts
     type: object

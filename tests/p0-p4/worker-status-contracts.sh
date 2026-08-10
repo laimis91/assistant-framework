@@ -3,6 +3,17 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+handoff_context_field_required() {
+    local file="$1"
+    local handoff="$2"
+    local field="$3"
+    ruby -ryaml -e '
+        handoff = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").find { |entry| entry["name"] == ARGV.fetch(1) }
+        context = handoff && handoff.fetch("context_fields").find { |entry| entry["name"] == ARGV.fetch(2) }
+        exit context && context["required"] == true ? 0 : 1
+    ' "$file" "$handoff" "$field"
+}
+
 test_start "workflow handoffs define worker status protocol statuses and packet rules"
 handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
 missing_worker_status_terms=()
@@ -338,6 +349,107 @@ if [[ "${#missing_reviewer_status_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "Reviewer handoffs missing status/evidence or findings/verdict preservation terms: ${missing_reviewer_status_terms[*]}"
+fi
+
+test_start "CodeMapper receives architecture mode and returns bounded mapping evidence with prompt parity"
+code_mapper_pressure_contract_valid() {
+    local file="$1"
+    ruby -ryaml -e '
+        expected = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
+        handoff = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_code_mapper" }
+        evidence = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_mapping_evidence" }
+        pressure = evidence.fetch("object_fields").find { |field| field["name"] == "design_pressure_checks" }
+        concern = pressure.fetch("object_fields").find { |field| field["name"] == "concern" }
+        valid = evidence["required"] == "conditional" && evidence["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
+          pressure["type"] == "object[]" && pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
+          pressure.fetch("validation").include?("exactly one") && concern["enum_values"] == expected
+        exit valid ? 0 : 1
+    ' "$file"
+}
+
+mutate_code_mapper_pressure_enum() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        handoff = document.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_code_mapper" }
+        evidence = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_mapping_evidence" }
+        pressure = evidence.fetch("object_fields").find { |field| field["name"] == "design_pressure_checks" }
+        concern = pressure.fetch("object_fields").find { |field| field["name"] == "concern" }
+        case ARGV.fetch(2)
+        when "delete" then concern["enum_values"].shift
+        when "add" then concern["enum_values"] << "unexpected_concern"
+        when "duplicate" then concern["enum_values"] << concern.fetch("enum_values").first
+        else raise "unknown mutation"
+        end
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$mutation"
+}
+
+mapper_contract_failures=()
+mapper_handoff="orchestrator_to_code_mapper"
+for field in architecture_design_mode architecture_design_trigger_reasons; do
+    if ! handoff_context_field_required "$handoffs_file" "$mapper_handoff" "$field"; then
+        mapper_contract_failures+=("context $field required")
+    fi
+done
+if ! code_mapper_pressure_contract_valid "$handoffs_file"; then
+    mapper_contract_failures+=("architecture_mapping_evidence parsed pressure schema requires exact ordered five-concern enum and min/max items")
+else
+    mapper_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/code-mapper-pressure.XXXXXX")"
+    p0p4_register_cleanup "$mapper_mutation_dir"
+    for mutation in delete add duplicate; do
+        mutated_mapper_handoff="$mapper_mutation_dir/$mutation.yaml"
+        mutate_code_mapper_pressure_enum "$handoffs_file" "$mutated_mapper_handoff" "$mutation"
+        if code_mapper_pressure_contract_valid "$mutated_mapper_handoff"; then
+            mapper_contract_failures+=("$mutation concern enum mutation accepted")
+        fi
+    done
+fi
+for prompt in agents/codex/code-mapper.toml agents/claude/code-mapper.md; do
+    for term in architecture_design_mode architecture_design_trigger_reasons architecture_mapping_evidence 'maps evidence, never designs'; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$prompt"; then
+            mapper_contract_failures+=("$prompt: $term")
+        fi
+    done
+done
+if [[ ${#mapper_contract_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "CodeMapper architecture mapping contract/prompt gaps: ${mapper_contract_failures[*]}"
+fi
+
+mapper_not_applicable_omits_evidence() {
+    local response="$1"
+    jq -e 'has("architecture_mapping_evidence") | not' <<<"$response" >/dev/null
+}
+
+test_start "not-applicable CodeMapper eval forbids every architecture mapping evidence representation"
+mapper_eval_failures=()
+mapper_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+if ! jq -e '
+    .cases[] | select(.id == "code-mapper-not-applicable-omits-pack-evidence") |
+    (.machine_expectations.required_substrings | all(. != "architecture_mapping_evidence" and (. | contains("architecture_mapping_evidence") | not))) and
+    (.machine_expectations.forbidden_substrings | index("architecture_mapping_evidence") != null)
+' "$mapper_eval" >/dev/null; then
+    mapper_eval_failures+=("not-applicable fixture requires no evidence literal and forbids bare evidence token")
+fi
+if ! mapper_not_applicable_omits_evidence '{"context_map_markdown":"map"}'; then
+    mapper_eval_failures+=("absent evidence mutation rejected")
+fi
+for response in \
+    '{"architecture_mapping_evidence":null}' \
+    '{"architecture_mapping_evidence":[]}' \
+    '{"architecture_mapping_evidence":{"evidence_refs":["source"]}}'; do
+    if mapper_not_applicable_omits_evidence "$response"; then
+        mapper_eval_failures+=("present evidence mutation accepted: $response")
+    fi
+done
+if [[ ${#mapper_eval_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "not-applicable CodeMapper eval omission guards: ${mapper_eval_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

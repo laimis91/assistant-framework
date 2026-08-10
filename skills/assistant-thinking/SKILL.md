@@ -43,7 +43,10 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 
 ## Constraints
 
-Migration note: assistant-thinking contracts are v2. Applicable direct-user,
+Migration note: assistant-thinking contracts are v3. v2 consumers must add the
+typed independent challenge evidence for `review_intensive` Architecture
+Decision Pack updates: `challenge_ref`, `dissent_or_validation`, `resolution`,
+and `selected_design_impact`. Applicable direct-user,
 `AGENTS.md`, and active-skill instructions now trigger delegated Perspectives
 and high-stakes Stress Test work; `subagent_trigger_scope` records provenance
 and covered work without a second permission question.
@@ -127,6 +130,7 @@ Return:
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
 - **Architecture Pack update** - when supplied: the Pack reference, whether it remains fresh, questions or claims it invalidates, semantic type/primitive-exception findings, and quality-scenario verification implications.
+- **Independent challenge evidence** - for `review_intensive` Pack updates: challenge reference, dissent or validation, resolution, and effect on the selected design.
 - **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and trigger scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.
 

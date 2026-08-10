@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -83,6 +83,16 @@ handoffs:
         required: true
         enum_values: [low, moderate, high, critical]
         description: "Triage risk tier used to scale discovery depth"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Triage architecture mode; not_applicable keeps the mapper to ordinary structural mapping"
+      - name: architecture_design_trigger_reasons
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Concrete observed architecture triggers or not-applicable rationale that bound the mapper's evidence collection"
       - name: required_gates
         type: string[]
         required: true
@@ -297,6 +307,105 @@ handoffs:
         type: string
         required: true
         description: "Compact context map markdown for the orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or carry forward inline when file writes are unavailable"
+      - name: architecture_mapping_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Evidence-only Architecture Decision Pack mapping; the mapper maps evidence, never designs. Omit this field when architecture_design_mode=not_applicable."
+        validation: "Contains source-backed mapping evidence only. design_pressure_checks has exactly one entry per five concerns. Empty semantic_type_candidates or representative_paths arrays are valid only when a corresponding evidenced design-pressure entry is not_applicable or unresolved."
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_revision_or_context_ref
+            type: string
+            required: true
+          - name: ownership_lifecycle_boundaries
+            type: object[]
+            required: true
+            object_fields:
+              - name: boundary
+                type: string
+                required: true
+              - name: owner_or_unknown
+                type: string
+                required: true
+              - name: lifecycle_or_data_flow
+                type: string
+                required: true
+              - name: dependency_direction
+                type: string
+                required: true
+              - name: status
+                type: enum
+                required: true
+                enum_values: [observed, not_applicable, unresolved]
+              - name: evidence_ref
+                type: string
+                required: true
+          - name: design_pressure_checks
+            type: object[]
+            required: true
+            min_items: 5
+            max_items: 5
+            validation: "Contains exactly one per five concerns: control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; every entry has status/evidence_or_gap/source_ref."
+            object_fields:
+              - name: concern
+                type: enum
+                required: true
+                enum_values: [control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, representative_path]
+              - name: status
+                type: enum
+                required: true
+                enum_values: [observed, not_applicable, unresolved]
+              - name: evidence_or_gap
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: semantic_type_candidates
+            type: object[]
+            required: true
+            object_fields:
+              - name: concept
+                type: string
+                required: true
+              - name: current_representation
+                type: string
+                required: true
+              - name: boundary
+                type: enum
+                required: true
+                enum_values: [domain_or_public_semantic_type, local_temporary, wire_or_storage, foreign_or_framework, no_domain_semantics]
+              - name: finding_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_candidate, primitive_exception]
+              - name: evidence_ref
+                type: string
+                required: true
+          - name: representative_paths
+            type: object[]
+            required: true
+            object_fields:
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: failure_or_cancellation
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: unresolved_questions
+            type: string[]
+            required: true
     on_missing_field: "Re-dispatch CodeMapper with explicit request for the missing field"
 
   # ─────────────────────────────────────────────

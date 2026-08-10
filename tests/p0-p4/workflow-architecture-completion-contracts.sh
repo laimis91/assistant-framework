@@ -728,4 +728,259 @@ else
     fail "workflow Architecture Decision Pack contract is incomplete: ${architecture_pack_failures[*]}"
 fi
 
+architecture_pack_has_fields() {
+    local file="$1"
+    ruby -ryaml -e '
+        expected = %w[challenge_ref dissent_or_validation resolution selected_design_impact]
+        pack = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |artifact| artifact["name"] == "architecture_pack_update" }
+        challenge = pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+        exit 1 unless challenge
+        names = challenge.fetch("object_fields").select { |field| field["required"] == true }.map { |field| field["name"] }
+        exit challenge["required"] == "conditional" && challenge["condition"] == "architecture_design_mode == review_intensive" && names == expected ? 0 : 1
+    ' "$file"
+}
+
+thinking_input_has_no_independent_challenge() {
+    local file="$1"
+    ruby -ryaml -e '
+        fields = YAML.load_file(ARGV.fetch(0)).fetch("fields")
+        exit fields.none? { |field| field["name"] == "independent_challenge_evidence" } ? 0 : 1
+    ' "$file"
+}
+
+without_architecture_pack_field() {
+    local source="$1"
+    local destination="$2"
+    local omitted_field="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        pack = document.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_pack_update" }
+        challenge = pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+        challenge["object_fields"].reject! { |field| field["name"] == ARGV.fetch(2) }
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$omitted_field"
+}
+
+test_start "thinking review-intensive Pack challenges require all independent evidence fields"
+thinking_output="$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml"
+thinking_input="$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml"
+thinking_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-thinking-challenge.XXXXXX")"
+p0p4_register_cleanup "$thinking_mutation_dir"
+thinking_challenge_failures=()
+if ! architecture_pack_has_fields "$thinking_output"; then
+    thinking_challenge_failures+=("missing required review_intensive challenge schema")
+else
+    for challenge_field in challenge_ref dissent_or_validation resolution selected_design_impact; do
+        mutated_thinking_output="$thinking_mutation_dir/without-$challenge_field.yaml"
+        without_architecture_pack_field "$thinking_output" "$mutated_thinking_output" "$challenge_field"
+        if architecture_pack_has_fields "$mutated_thinking_output"; then
+            thinking_challenge_failures+=("$challenge_field mutation accepted")
+        fi
+    done
+fi
+if ! thinking_input_has_no_independent_challenge "$thinking_input"; then
+    thinking_challenge_failures+=("input must not require circular independent_challenge_evidence")
+fi
+if [[ ${#thinking_challenge_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-thinking review-intensive challenge contract gaps: ${thinking_challenge_failures[*]}"
+fi
+
+test_start "workflow Pack handoff binding supports Discover-only state and requires downstream references"
+workflow_handoff_binding_failures=()
+ruby -ryaml -e '
+    pack = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+    refs = pack.fetch("object_fields").find { |field| field["name"] == "handoff_refs" }
+    fields = refs.fetch("object_fields").to_h { |field| [field["name"], field] }
+    expected = {
+      "handoff_binding_state" => [true, nil, %w[discover_only downstream_bound]],
+      "context_or_journal_ref" => [true, nil, nil],
+      "plan_or_task_packet_ref" => ["conditional", "handoff_binding_state == downstream_bound", nil],
+      "review_scope_ref" => ["conditional", "handoff_binding_state == downstream_bound", nil]
+    }
+    valid = expected.all? do |name, (required, condition, enum_values)|
+      field = fields[name]
+      field && field["required"] == required && field["condition"] == condition && (enum_values.nil? || field["enum_values"] == enum_values)
+    end
+    exit valid ? 0 : 1
+' "$output_contract" || workflow_handoff_binding_failures+=("handoff_refs lacks stateful Discover/downstream binding")
+for term in \
+    'discover_only forbids invented plan_or_task_packet_ref and review_scope_ref' \
+    'plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action' \
+    'Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none' \
+    'Build, Review, and completion retain handoff_binding_state=downstream_bound' \
+    'material invalidation clears stale downstream refs through refresh, re-plan, and reapproval'; do
+    if ! rg -Fq -- "$term" "$workflow_skill" "$output_contract" "$phase_gates" "$workflow_dir/references/architecture-decision-pack.md"; then
+        workflow_handoff_binding_failures+=("missing lifecycle rule: $term")
+    fi
+done
+if [[ ${#workflow_handoff_binding_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow Pack handoff binding contract gaps: ${workflow_handoff_binding_failures[*]}"
+fi
+
+discover_no_plan_binding_gate_valid() {
+    local file="$1"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        discover = document.fetch("gates").find { |gate| gate["phase"] == "DISCOVER" }
+        assertion = discover.fetch("exit_assertions").find { |entry| entry["id"] == "D_ARCHITECTURE_PACK_NO_PLAN_BINDING" }
+        valid = assertion &&
+          assertion["condition"] == "plan_mode == none and architecture_design_mode in [lightweight, required, review_intensive]" &&
+          assertion.fetch("check").include?("atomically sets handoff_binding_state=downstream_bound") &&
+          assertion.fetch("check").include?("compact inline task-packet/execution") &&
+          assertion.fetch("check").include?("inline review-scope refs") &&
+          assertion.fetch("check").include?("before Discover exits to Build") &&
+          assertion.fetch("on_fail").include?("before Build") &&
+          !assertion.fetch("on_fail").include?("re-plan")
+        exit valid ? 0 : 1
+    ' "$file"
+}
+
+mutate_discover_no_plan_binding_gate() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        discover = document.fetch("gates").find { |gate| gate["phase"] == "DISCOVER" }
+        assertion = discover.fetch("exit_assertions").find { |entry| entry["id"] == "D_ARCHITECTURE_PACK_NO_PLAN_BINDING" }
+        case ARGV.fetch(2)
+        when "remove"
+          discover.fetch("exit_assertions").delete(assertion)
+        when "move"
+          discover.fetch("exit_assertions").delete(assertion)
+          document.fetch("gates").find { |gate| gate["phase"] == "BUILD" }.fetch("exit_assertions") << assertion
+        else
+          raise "unknown mutation"
+        end
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$mutation"
+}
+
+test_start "plan-mode-none Pack binding is a Discover exit transition"
+discover_no_plan_binding_failures=()
+if ! discover_no_plan_binding_gate_valid "$phase_gates"; then
+    discover_no_plan_binding_failures+=("missing exact Discover no-plan binding gate")
+else
+    discover_no_plan_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/discover-no-plan-binding.XXXXXX")"
+    p0p4_register_cleanup "$discover_no_plan_mutation_dir"
+    for mutation in remove move; do
+        mutated_phase_gates="$discover_no_plan_mutation_dir/$mutation.yaml"
+        mutate_discover_no_plan_binding_gate "$phase_gates" "$mutated_phase_gates" "$mutation"
+        if discover_no_plan_binding_gate_valid "$mutated_phase_gates"; then
+            discover_no_plan_binding_failures+=("$mutation gate mutation accepted")
+        fi
+    done
+fi
+if [[ ${#discover_no_plan_binding_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "plan-mode-none Discover transition gaps: ${discover_no_plan_binding_failures[*]}"
+fi
+
+test_start "onboarding project size gates inspected architecture candidates"
+onboard_input="$FRAMEWORK_DIR/skills/assistant-onboard/contracts/input.yaml"
+onboard_output="$FRAMEWORK_DIR/skills/assistant-onboard/contracts/output.yaml"
+onboard_size_failures=()
+ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field["name"], field] }
+    output = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").to_h { |artifact| [artifact["name"], artifact] }
+    input_has_project_size = input.key?("project_size")
+    project_size = output["project_size"]
+    candidates = %w[semantic_type_candidates design_pressure_candidates].map { |name| output[name] }
+    valid = !input_has_project_size && project_size && project_size["required"] == true && project_size["enum_values"] == %w[small medium large] && candidates.all? do |field|
+      field && field["required"] == "conditional" && field["condition"] == "project_size in [medium, large]" && field["on_fail"] && field["validation"].include?("explicit []")
+    end
+    exit valid ? 0 : 1
+' "$onboard_input" "$onboard_output" || onboard_size_failures+=("scan-derived output project_size and medium/large inspected candidate requirements")
+if ! ruby -e '
+    def valid?(project_size, candidates_present)
+      return true if project_size == "small"
+      candidates_present
+    end
+    exit valid?("medium", false) || !valid?("medium", true) || valid?("large", false) || !valid?("large", true) || !valid?("small", false) ? 1 : 0
+'; then
+    onboard_size_failures+=("medium/large omission, inspected empty, and small omission lifecycle")
+fi
+if ! rg -Fq -- 'discover_only with context_or_journal_ref only and forbids future refs' "$workflow_dir/references/phases.md"; then
+    onboard_size_failures+=("Discover reference requires discover_only context-only binding")
+fi
+if [[ ${#onboard_size_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-onboard project-size contract gaps: ${onboard_size_failures[*]}"
+fi
+
+test_start "onboarding project size is surface-scan-derived and generic medium eval is coherent"
+onboard_project_size_failures=()
+if ! rg -Fq -- 'surface-scan-derived' "$onboard_output"; then
+    onboard_project_size_failures+=("output project_size must be surface-scan-derived")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "new-repo-onboarding-produces-orientation") |
+    (.setup_context | index("The surface scan classifies the repository as medium.")) and
+    (.expected_behavior | index("Returns project_size=medium.")) and
+    (.machine_expectations.required_substrings | index("project_size=medium")) and
+    ([.pass_criteria[], .expected_behavior[]] | join(" ") | contains("small projects") | not)
+' "$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json" >/dev/null; then
+    onboard_project_size_failures+=("generic medium onboarding eval must not use small-project candidate semantics")
+fi
+if [[ ${#onboard_project_size_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "onboarding surface-derived project-size regressions: ${onboard_project_size_failures[*]}"
+fi
+
+onboard_small_eval_runner_proof() {
+    local temporary_skill_dir="$1"
+    local responses_dir="$2"
+    local response="$3"
+    local response_path="$responses_dir/assistant-onboard/small-onboarding-may-omit-architecture-candidates.txt"
+    local runner_output
+
+    printf '%s\n' "$response" >"$response_path"
+    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill_dir" 2>&1)"; then
+        return 1
+    fi
+
+    grep -Fq $'PASS\tassistant-onboard\tsmall-onboarding-may-omit-architecture-candidates' <<<"$runner_output" \
+        && grep -Fq 'Summary: total=1 passed=1 failed=0' <<<"$runner_output"
+}
+
+test_start "small onboarding eval accepts omitted or inspected candidate arrays"
+onboard_small_eval="$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json"
+onboard_small_eval_failures=()
+if ! jq -e '
+    .cases[] | select(.id == "small-onboarding-may-omit-architecture-candidates") |
+    (.machine_expectations.required_substrings | index("may omit") | not) and
+    (.expected_behavior | index("May omit semantic_type_candidates and design_pressure_candidates.")) and
+    (.pass_criteria | index("The response keeps the orientation proportional to a small project."))
+' "$onboard_small_eval" >/dev/null; then
+    onboard_small_eval_failures+=("small fixture turns optional candidate arrays into a required literal")
+fi
+onboard_small_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/onboard-small-eval.XXXXXX")"
+p0p4_register_cleanup "$onboard_small_eval_root"
+onboard_small_temp_skill="$onboard_small_eval_root/assistant-onboard"
+onboard_small_responses="$onboard_small_eval_root/responses"
+mkdir -p "$onboard_small_temp_skill/evals" "$onboard_small_responses/assistant-onboard"
+cp "$FRAMEWORK_DIR/skills/assistant-onboard/SKILL.md" "$onboard_small_temp_skill/SKILL.md"
+jq '
+    .cases = [.cases[] | select(.id == "small-onboarding-may-omit-architecture-candidates")]
+' "$onboard_small_eval" >"$onboard_small_temp_skill/evals/cases.json"
+for response in \
+    'project_size=small' \
+    $'project_size=small\nsemantic_type_candidates=[{"concept":"OrderId","evidence_ref":"src/order.rb"}]\ndesign_pressure_candidates=[{"concern":"representative_path","evidence_ref":"src/order.rb"}]'; do
+    if ! onboard_small_eval_runner_proof "$onboard_small_temp_skill" "$onboard_small_responses" "$response"; then
+        onboard_small_eval_failures+=("actual eval runner rejects a compliant small response")
+    fi
+done
+if [[ ${#onboard_small_eval_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "small onboarding eval grader semantics regressions: ${onboard_small_eval_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -264,6 +264,9 @@
       ],
       "expected_behavior": [
         "Triages architecture_design_mode as required or review_intensive, creates a fresh Architecture Decision Pack, and for review_intensive retains independent_challenge_evidence with selected_design_impact through planning and review.",
+        "Discover uses handoff_binding_state=discover_only with context_or_journal_ref only and does not invent future refs.",
+        "Plan atomically sets handoff_binding_state=downstream_bound with plan_or_task_packet_ref and review_scope_ref before Build.",
+        "For plan_mode=none, the Discover exit transition atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action.",
         "Creates a Requirement Acceptance Map before Architect PLAN even if the accepted implementation is size=small.",
         "Requires Architect DECOMPOSE or PLAN to return architecture_decision_pack_update when refreshed source evidence changes the Pack.",
         "Records design_pressure_checks for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path.",
@@ -289,6 +292,14 @@
           "Architecture Decision Pack",
           "independent_challenge_evidence",
           "selected_design_impact",
+          "handoff_binding_state=discover_only",
+          "context_or_journal_ref",
+          "handoff_binding_state=downstream_bound",
+          "plan_or_task_packet_ref",
+          "review_scope_ref",
+          "plan_mode=none",
+          "compact inline task-packet/execution",
+          "inline review-scope refs",
           "Requirement Acceptance Map",
           "architecture_decision_pack_update",
           "design_pressure_checks",
@@ -306,6 +317,113 @@
           "hardcode all formats",
           "unbounded buffer",
           "assume the outer engine"
+        ]
+      }
+    },
+    {
+      "id": "plan-mode-none-binds-pack-before-build",
+      "title": "Plan mode none binds Pack before Build",
+      "category": "architecture_pack_handoff_binding",
+      "purpose": "Checks that a lightweight Pack does not leave Discover-only refs when Plan is intentionally omitted.",
+      "prompt": "Apply plan_mode=none to this lightweight Architecture Decision Pack and begin Build.",
+      "setup_context": [
+        "plan_mode=none and architecture_design_mode=lightweight.",
+        "Discover has handoff_binding_state=discover_only and context_or_journal_ref.",
+        "The file scope, acceptance check, and verification argv are already evidenced."
+      ],
+      "expected_behavior": [
+        "Does not create a Plan checkpoint or plan_document.",
+        "Before any Build action, atomically changes handoff_binding_state to downstream_bound.",
+        "Records compact inline task-packet/execution and inline review-scope refs.",
+        "Retains downstream_bound through Build and Review."
+      ],
+      "pass_criteria": [
+        "The response names the Discover exit binding transition.",
+        "The response does not leave a Discover-only Pack in Build."
+      ],
+      "fail_signals": [
+        "Begins Build with handoff_binding_state=discover_only.",
+        "Invents a plan_document for plan_mode=none.",
+        "Omits either inline downstream reference."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "plan_mode=none",
+          "Discover exit",
+          "handoff_binding_state=downstream_bound",
+          "compact inline task-packet/execution",
+          "inline review-scope refs"
+        ],
+        "forbidden_substrings": [
+          "Build with handoff_binding_state=discover_only",
+          "plan_document required"
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-applicable-architecture-evidence",
+      "title": "Code Mapper returns applicable architecture evidence",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that applicable architecture mapping returns evidence rather than a design.",
+      "prompt": "Map the codebase for this required Architecture Decision Pack.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "architecture_design_trigger_reasons is non-empty.",
+        "Code Mapper is selected for Discover."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence.",
+        "Records exactly one check for each design-pressure concern.",
+        "Maps evidence and unresolved questions without selecting the design."
+      ],
+      "pass_criteria": [
+        "The response returns evidence for every required pressure concern."
+      ],
+      "fail_signals": [
+        "Selects or recommends an architecture instead of mapping evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "control_and_early_exit",
+          "ownership_and_disposal",
+          "resource_envelope",
+          "extension_registration",
+          "representative_path",
+          "maps evidence, never designs"
+        ],
+        "forbidden_substrings": [
+          "selected design"
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-not-applicable-omits-pack-evidence",
+      "title": "Code Mapper omits not-applicable Pack evidence",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that ordinary structural mapping does not manufacture Pack evidence.",
+      "prompt": "Map this local change with no architecture trigger.",
+      "setup_context": [
+        "architecture_design_mode=not_applicable.",
+        "architecture_design_trigger_reasons contains the evidenced local-path rationale."
+      ],
+      "expected_behavior": [
+        "Returns the ordinary context map.",
+        "Omits architecture_mapping_evidence."
+      ],
+      "pass_criteria": [
+        "The response keeps ordinary mapping separate from Pack evidence."
+      ],
+      "fail_signals": [
+        "Returns architecture_mapping_evidence for not_applicable mode."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_design_mode=not_applicable",
+          "context map"
+        ],
+        "forbidden_substrings": [
+          "architecture_mapping_evidence"
         ]
       }
     },

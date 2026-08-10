@@ -155,7 +155,7 @@ the selected Build owner returns exact-once `architecture_obligation_coverage`.
 - Selected design: [choice and rationale]
 - Alternatives: [only genuine viable alternatives and trade-offs]
 - Verification: [command/manual method, success signal, failure condition]
-- Handoff: [task-packet, context-map/journal, and review refs]
+- Handoff binding: [discover_only with context-map/journal ref, or downstream_bound with task-packet and review refs]
 ```
 
 ## Quality claims are falsifiable
@@ -175,9 +175,16 @@ hypothesis until its stated verification runs.
 - A changed HEAD, requirement, public contract, quality target, or discovered
   contradictory fact invalidates the pack. Refresh it before Build; do not
   rely on stale architecture prose.
-- Store or reference the pack in the context map, task journal/equivalent
-  carried state, plan, executable task packets, and reviewer context. Preserve
-  the typed reference rather than duplicating conflicting summaries.
+- During Discover, set `handoff_binding_state=discover_only` and retain only
+  `context_or_journal_ref`; discover_only forbids invented
+  `plan_or_task_packet_ref` and `review_scope_ref`. Plan atomically binds
+  `plan_or_task_packet_ref` and `review_scope_ref` before Build by setting
+  `handoff_binding_state=downstream_bound` when `plan_mode!=none`. For
+  `plan_mode=none`, the Discover exit transition atomically binds compact inline
+  task-packet/execution and inline review-scope refs before any Build action.
+  Build, Review, and completion
+  retain handoff_binding_state=downstream_bound. Material invalidation clears
+  stale downstream refs through refresh, re-plan, and reapproval.
 - A plan deviation that changes the selected design, semantic contract,
   resource budget, or verification target requires the normal deviation and
   re-approval path.

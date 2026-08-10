@@ -1,4 +1,4 @@
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-thinking
 
@@ -30,6 +30,9 @@ gates:
       - id: A4
         check: "When architecture_design_mode is not_applicable no Architecture Decision Pack is manufactured; otherwise the analysis checks the supplied Pack's freshness, material questions, design-pressure checks, semantic type/primitive-exception boundaries, and quality-scenario evidence."
         on_fail: "Use the carried Pack as the decision record, ask or record every material unknown, check control/early exit, ownership/disposal, resource envelope, extension registration, and representative path as applicable, and require workload/budget/measurement/failure evidence before accepting a memory, performance, or extensibility claim."
+      - id: A5
+        check: "When architecture_design_mode=review_intensive, the Architecture Pack update contains independent_challenge_evidence with challenge_ref, dissent_or_validation, resolution, and selected_design_impact."
+        on_fail: "Return to the independent challenge and record all four evidence fields before synthesis."
 
   - phase: SYNTHESIS
     checkpoint_start: "--- PHASE: SYNTHESIS ---"

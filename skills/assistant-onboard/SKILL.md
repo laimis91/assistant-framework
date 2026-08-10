@@ -16,9 +16,10 @@ triggers:
 | File | Purpose |
 |---|---|
 | [`contracts/input.yaml`](contracts/input.yaml) | project_path, focus_area, depth |
-| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], semantic_type_candidates[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, questions[] |
+| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, project_size, key_files[], conventions[], semantic_type_candidates[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, questions[] |
 
 - `project_path` is required; `depth` defaults to standard when not specified
+- Migration note: assistant-onboard contracts are v2. Output `project_size` is scan-derived and required; medium and large projects must return inspected semantic-type and design-pressure candidate arrays, while small projects may omit them.
 - `key_files` entries include path and purpose; `conventions` entries include pattern and example
 - `risky_areas` and `likely_change_points` make the orientation actionable for future development work
 - `questions` must be specific to unclear areas discovered during onboarding
@@ -44,6 +45,7 @@ Build a compact, evidence-based orientation for the project so future developmen
 - Build/test/run commands are identified from project files when available.
 - Risky areas and likely change points are called out for future development work.
 - Architecture mapping identifies meaningful ownership/lifecycle boundaries, design-pressure candidates (control/early exit, disposal/resources, registration, representative paths), and semantic type candidates or explicit primitive boundaries without inventing a redesign.
+- Medium and large onboarding never silently defaults architecture candidate arrays: explicit `[]` is valid only after inspection; small projects may omit them.
 - Questions are specific to discovered gaps, not generic prompts.
 - Orientation artifacts are reported accurately.
 
@@ -90,6 +92,8 @@ Extract:
 Print: `>> Onboarding: Architecture mapping`
 
 For medium+ projects, build the architecture map directly from local source. Use a **Code Mapper** only when the user or an applicable instruction specifically requires delegated mapping; otherwise do not create a persistent or automatic mapper role.
+
+Classify `project_size` from the surface scan as `small`, `medium`, or `large`. For medium and large projects, inspect and return both architecture candidate arrays; use explicit `[]` only when inspection found no candidates. Do not silently default either array. Small projects may omit these optional architecture arrays.
 
 Map:
 - **Entry points**: where execution starts

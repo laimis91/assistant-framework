@@ -88,7 +88,7 @@ Print: `>> Direct execution-path trace` when that question remains but analysis 
    Print: `>> Agent readiness: [N]/5` followed by any gaps found.
    If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
 5. For each unresolved implementation-shaping field, apply and record a deterministic safe default without asking when repository evidence, policy, or a stable local convention makes one available. Record topic, value, source, and rationale; set `Clarification defaults applied: true`. Ask every remaining admissible clarification, grouped by decision topic: the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed. There is no numeric question cap.
-6. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and create or refresh the typed pack from the context map. Its facts name source evidence; its assumptions and questions remain explicit; and it records boundary ownership, Type Ledger, interface evolution, falsifiable quality scenarios, verification, invalidation, and the plan/review handoff refs. For predecessor-unlocked design uncertainty, use the existing progressive decision map rather than a second architecture workflow.
+6. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and create or refresh the typed pack from the context map. Its facts name source evidence; its assumptions and questions remain explicit; it records boundary ownership, Type Ledger, interface evolution, falsifiable quality scenarios, verification, and invalidation. Discover uses discover_only with context_or_journal_ref only and forbids future refs. For predecessor-unlocked design uncertainty, use the existing progressive decision map rather than a second architecture workflow.
 7. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, small work promoted by ambiguity, risk, or multiple material requirements, or small work with architecture_design_mode required/review_intensive, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
 8. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Architecture design mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 9. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
@@ -208,8 +208,10 @@ Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 
 **Run condition:** `plan_mode` is `inline` or `approval_required`. When
 `plan_mode=none`, Discover carries the obvious file scope, constraints,
-acceptance check, and verification argv directly into Build; do not create a
-Plan checkpoint or `plan_document`.
+acceptance check, and verification argv directly into the Discover exit
+transition, which atomically sets `handoff_binding_state=downstream_bound` with compact
+inline task-packet/execution and inline review-scope refs before any Build
+action; do not create a Plan checkpoint or `plan_document`.
 
 Print: `--- PHASE: PLAN ---`
 
