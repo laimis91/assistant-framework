@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: input
 skill: assistant-review
 
@@ -300,12 +300,21 @@ fields:
       or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or
       cross-boundary claims. False for work with no applicable architecture decision record; never invent a Pack merely to review.
 
+  - name: architecture_design_mode
+    type: enum
+    required: conditional
+    condition: "architecture_decision_pack_review_required is true"
+    enum_values: [lightweight, required, review_intensive]
+    description: "Canonical architecture mode carried with an applicable Pack review"
+    validation: "Must be the canonical mode for the reviewed Pack; architecture_decision_pack.mode must equal architecture_design_mode."
+    on_missing: fail
+
   - name: architecture_decision_pack
     type: object
     required: conditional
     condition: "architecture_decision_pack_review_required is true"
     description: "Compact fresh review projection of a workflow Pack or standalone equivalent architecture decision record; it is evidence for one decision, not global memory"
-    validation: "Contains a source/revision freshness basis, separate facts, assumptions, and material questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent challenge evidence. A stale Pack is a review finding or blocker, not an assumed current design."
+    validation: "Contains a source/revision freshness basis, separate facts, assumptions, and material questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent challenge evidence. mode must equal canonical architecture_design_mode; review_intensive requires independent_challenge_evidence. A stale Pack is a review finding or blocker, not an assumed current design."
     on_missing: infer
     infer_from: "Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record. If a workflow Pack is required but absent, or the standalone record cannot support the required typed facts, fail instead of inventing evidence."
     object_fields:
@@ -316,6 +325,7 @@ fields:
         type: enum
         required: true
         enum_values: [lightweight, required, review_intensive]
+        validation: "Must equal canonical architecture_design_mode"
       - name: freshness_basis
         type: string
         required: true
@@ -384,7 +394,7 @@ fields:
       - name: independent_challenge_evidence
         type: object
         required: conditional
-        condition: "mode == review_intensive"
+        condition: "architecture_design_mode == review_intensive"
         description: "Independent challenge dissent/validation and resolution carried from a review-intensive Pack"
         on_missing: fail
         object_fields:

@@ -351,8 +351,8 @@ else
     fail "Reviewer handoffs missing status/evidence or findings/verdict preservation terms: ${missing_reviewer_status_terms[*]}"
 fi
 
-test_start "CodeMapper receives architecture mode and returns bounded mapping evidence with prompt parity"
-code_mapper_pressure_contract_valid() {
+test_start "CodeMapper receives architecture mode and returns cohesive semantic inspection evidence with prompt parity"
+code_mapper_semantic_inspection_contract_valid() {
     local file="$1"
     ruby -ryaml -e '
         expected = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
@@ -360,14 +360,27 @@ code_mapper_pressure_contract_valid() {
         evidence = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_mapping_evidence" }
         pressure = evidence.fetch("object_fields").find { |field| field["name"] == "design_pressure_checks" }
         concern = pressure.fetch("object_fields").find { |field| field["name"] == "concern" }
+        semantic = evidence.fetch("object_fields").find { |field| field["name"] == "semantic_type_inspection" }
+        representative_paths = evidence.fetch("object_fields").find { |field| field["name"] == "representative_paths" }
+        semantic_fields = semantic.fetch("object_fields").to_h { |field| [field["name"], field] }
+        outcome = semantic_fields.fetch("outcome")
+        candidates = semantic_fields.fetch("candidates")
+        candidate_fields = candidates.fetch("object_fields").map { |field| field["name"] }
         valid = evidence["required"] == "conditional" && evidence["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
           pressure["type"] == "object[]" && pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
-          pressure.fetch("validation").include?("exactly one") && concern["enum_values"] == expected
+          pressure.fetch("validation").include?("exactly one") && !pressure.fetch("validation").include?("semantic_type_candidates") && concern["enum_values"] == expected &&
+          semantic["type"] == "object" && semantic["required"] == true &&
+          outcome["enum_values"] == %w[candidates_found inspected_empty unresolved] &&
+          semantic_fields.fetch("evidence_or_gap")["required"] == true && semantic_fields.fetch("source_refs")["min_items"] == 1 &&
+          candidates["required"] == "conditional" && candidates["condition"] == "outcome == candidates_found" && candidates["min_items"] == 1 &&
+          candidate_fields == %w[concept current_representation boundary finding_kind evidence_ref] &&
+          representative_paths["type"] == "object[]" && representative_paths["required"] == true &&
+          evidence.fetch("object_fields").none? { |field| field["name"] == "semantic_type_candidates" }
         exit valid ? 0 : 1
     ' "$file"
 }
 
-mutate_code_mapper_pressure_enum() {
+mutate_code_mapper_semantic_inspection() {
     local source="$1"
     local destination="$2"
     local mutation="$3"
@@ -377,10 +390,12 @@ mutate_code_mapper_pressure_enum() {
         evidence = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_mapping_evidence" }
         pressure = evidence.fetch("object_fields").find { |field| field["name"] == "design_pressure_checks" }
         concern = pressure.fetch("object_fields").find { |field| field["name"] == "concern" }
+        semantic = evidence.fetch("object_fields").find { |field| field["name"] == "semantic_type_inspection" }
+        semantic_fields = semantic.fetch("object_fields").to_h { |field| [field["name"], field] }
         case ARGV.fetch(2)
-        when "delete" then concern["enum_values"].shift
-        when "add" then concern["enum_values"] << "unexpected_concern"
-        when "duplicate" then concern["enum_values"] << concern.fetch("enum_values").first
+        when "delete_pressure_concern" then concern["enum_values"].shift
+        when "weaken_candidate_condition" then semantic_fields.fetch("candidates")["condition"] = "outcome == inspected_empty"
+        when "restore_invalid_pressure_coupling" then pressure["validation"] += " Empty semantic_type_candidates require a matching pressure check."
         else raise "unknown mutation"
         end
         File.write(ARGV.fetch(1), YAML.dump(document))
@@ -394,30 +409,126 @@ for field in architecture_design_mode architecture_design_trigger_reasons; do
         mapper_contract_failures+=("context $field required")
     fi
 done
-if ! code_mapper_pressure_contract_valid "$handoffs_file"; then
-    mapper_contract_failures+=("architecture_mapping_evidence parsed pressure schema requires exact ordered five-concern enum and min/max items")
+if ! code_mapper_semantic_inspection_contract_valid "$handoffs_file"; then
+    mapper_contract_failures+=("architecture_mapping_evidence requires independent pressure checks and typed semantic inspection outcomes")
 else
-    mapper_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/code-mapper-pressure.XXXXXX")"
+    mapper_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/code-mapper-semantic-inspection.XXXXXX")"
     p0p4_register_cleanup "$mapper_mutation_dir"
-    for mutation in delete add duplicate; do
+    for mutation in delete_pressure_concern weaken_candidate_condition restore_invalid_pressure_coupling; do
         mutated_mapper_handoff="$mapper_mutation_dir/$mutation.yaml"
-        mutate_code_mapper_pressure_enum "$handoffs_file" "$mutated_mapper_handoff" "$mutation"
-        if code_mapper_pressure_contract_valid "$mutated_mapper_handoff"; then
-            mapper_contract_failures+=("$mutation concern enum mutation accepted")
+        mutate_code_mapper_semantic_inspection "$handoffs_file" "$mutated_mapper_handoff" "$mutation"
+        if code_mapper_semantic_inspection_contract_valid "$mutated_mapper_handoff"; then
+            mapper_contract_failures+=("$mutation semantic inspection mutation accepted")
         fi
     done
 fi
 for prompt in agents/codex/code-mapper.toml agents/claude/code-mapper.md; do
-    for term in architecture_design_mode architecture_design_trigger_reasons architecture_mapping_evidence 'maps evidence, never designs'; do
+    for term in architecture_design_mode architecture_design_trigger_reasons architecture_mapping_evidence semantic_type_inspection candidates_found inspected_empty unresolved representative_paths 'maps evidence, never designs'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$prompt"; then
             mapper_contract_failures+=("$prompt: $term")
         fi
     done
 done
+if ! jq -e '
+    (.cases[] | select(.id == "code-mapper-applicable-architecture-evidence") |
+      (.machine_expectations.required_substrings | index("semantic_type_inspection")) and
+      (.machine_expectations.required_substrings | index("inspected_empty") | not) and
+      (.machine_expectations.required_substrings | index("representative_paths")) and
+      (.machine_expectations.forbidden_substrings | index("empty semantic_type_candidates require a design-pressure check"))) and
+    (any(.cases[]; .id == "code-mapper-inspected-empty-requires-evidence" and
+        (.machine_expectations.required_substrings | index("outcome=inspected_empty") | not) and
+        (.machine_expectations.required_substrings | index("evidence_or_gap")) and
+        (.machine_expectations.required_substrings | index("source_refs")) and
+        any(.machine_expectations.structured_json_assertions[]; .operator == "equals" and .path == ["architecture_mapping_evidence", "semantic_type_inspection", "outcome"] and .expected == "inspected_empty")))
+' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >/dev/null; then
+    mapper_contract_failures+=("CodeMapper applicable eval does not distinguish semantic inspection from design-pressure checks")
+fi
 if [[ ${#mapper_contract_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "CodeMapper architecture mapping contract/prompt gaps: ${mapper_contract_failures[*]}"
+fi
+
+run_code_mapper_outcome_eval() {
+    local fixture="$1"
+    local case_id="$2"
+    local response="$3"
+    local expected_status="$4"
+    local eval_root
+    local temporary_skill
+    local responses_dir
+    local runner_output
+
+    eval_root="$(mktemp -d "${TMPDIR:-/tmp}/code-mapper-outcome-eval.XXXXXX")"
+    p0p4_register_cleanup "$eval_root"
+    temporary_skill="$eval_root/assistant-workflow"
+    responses_dir="$eval_root/responses"
+    mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
+    cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
+    jq --arg case_id "$case_id" '.cases = [.cases[] | select(.id == $case_id)]' "$fixture" >"$temporary_skill/evals/cases.json"
+    printf '%s\n' "$response" >"$responses_dir/assistant-workflow/$case_id.txt"
+    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
+        [[ "$expected_status" == "FAIL" ]] || return 1
+    elif [[ "$expected_status" == "FAIL" ]]; then
+        return 1
+    fi
+    grep -Fq $'\tassistant-workflow\t'"$case_id" <<<"$runner_output" \
+        && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
+}
+
+test_start "CodeMapper eval accepts every typed semantic inspection outcome and rejects empty evidence gaps"
+mapper_outcome_eval_failures=()
+mapper_applicable_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+mapper_common_response=$'architecture_mapping_evidence\ncontrol_and_early_exit\nownership_and_disposal\nresource_envelope\nextension_registration\nrepresentative_path\nsemantic_type_inspection\nrepresentative_paths\nmaps evidence, never designs'
+for response in \
+    $'outcome=candidates_found\nevidence_or_gap=src/order.rb\nsource_refs=[src/order.rb]\ncandidates=[OrderId]' \
+    $'outcome=inspected_empty\nevidence_or_gap=no domain concept crosses this boundary\nsource_refs=[src/order.rb]' \
+    $'outcome=unresolved\nevidence_or_gap=need owner clarification\nsource_refs=[src/order.rb]'; do
+    if ! run_code_mapper_outcome_eval "$mapper_applicable_eval" "code-mapper-applicable-architecture-evidence" "$mapper_common_response"$'\n'"$response" PASS; then
+        mapper_outcome_eval_failures+=("actual eval runner rejects a valid typed semantic inspection outcome")
+    fi
+done
+unsafe_empty_response=$'architecture_mapping_evidence\nsemantic_type_inspection\noutcome=inspected_empty\nsource_refs=[src/order.rb]\nrepresentative_paths=[src/order.rb]'
+if ! run_code_mapper_outcome_eval "$mapper_applicable_eval" "code-mapper-inspected-empty-requires-evidence" "$unsafe_empty_response" FAIL; then
+    mapper_outcome_eval_failures+=("actual eval runner accepts inspected_empty without evidence_or_gap")
+fi
+if [[ ${#mapper_outcome_eval_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "CodeMapper typed semantic inspection eval gaps: ${mapper_outcome_eval_failures[*]}"
+fi
+
+test_start "CodeMapper structured JSON rejects empty semantic inspection evidence"
+mapper_structured_json_failures=()
+if ! jq -e '
+    .cases[] | select(.id == "code-mapper-inspected-empty-requires-evidence") |
+    .machine_expectations.structured_json_assertions as $assertions |
+    ($assertions | type == "array") and
+    (any($assertions[]; .operator == "equals" and .path == ["architecture_mapping_evidence", "semantic_type_inspection", "outcome"] and .expected == "inspected_empty")) and
+    (any($assertions[]; .operator == "nonempty_string" and .path == ["architecture_mapping_evidence", "semantic_type_inspection", "evidence_or_gap"])) and
+    (any($assertions[]; .operator == "nonempty_array" and .path == ["architecture_mapping_evidence", "semantic_type_inspection", "source_refs"])) and
+    (.machine_expectations.required_substrings | index("outcome=inspected_empty") | not)
+' "$mapper_applicable_eval" >/dev/null; then
+    mapper_structured_json_failures+=("inspected-empty case lacks structured evidence assertions")
+fi
+mapper_structured_valid='{"architecture_mapping_evidence":{"semantic_type_inspection":{"outcome":"inspected_empty","evidence_or_gap":"no domain concept crosses this boundary","source_refs":["src/order.rb"]},"representative_paths":["src/order.rb"]}}'
+if ! run_code_mapper_outcome_eval "$mapper_applicable_eval" "code-mapper-inspected-empty-requires-evidence" "$mapper_structured_valid" PASS; then
+    mapper_structured_json_failures+=("actual runner rejects valid structured semantic inspection evidence")
+fi
+for mutation in \
+    '(.architecture_mapping_evidence.semantic_type_inspection.outcome) = "unresolved"' \
+    '(.architecture_mapping_evidence.semantic_type_inspection.evidence_or_gap) = ""' \
+    '(.architecture_mapping_evidence.semantic_type_inspection.evidence_or_gap) = "   "' \
+    '(.architecture_mapping_evidence.semantic_type_inspection.source_refs) = []'; do
+    unsafe_mapper_response="$(jq "$mutation" <<<"$mapper_structured_valid")"
+    if ! run_code_mapper_outcome_eval "$mapper_applicable_eval" "code-mapper-inspected-empty-requires-evidence" "$unsafe_mapper_response" FAIL; then
+        mapper_structured_json_failures+=("actual runner accepts $mutation")
+    fi
+done
+if [[ ${#mapper_structured_json_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "CodeMapper structured semantic inspection eval gaps: ${mapper_structured_json_failures[*]}"
 fi
 
 mapper_not_applicable_omits_evidence() {

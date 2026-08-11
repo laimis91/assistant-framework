@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "5.0"
+schema_version: "6.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -173,7 +173,7 @@ gates:
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
       - id: D_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs. Discover starts handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs while downstream targets do not yet exist. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios, selected design, verification, invalidation conditions, and handoff refs. Discover starts handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs while downstream targets do not yet exist. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
 
@@ -785,6 +785,12 @@ invariants:
     condition: "uncertainty_shape == progressive"
     scope: all_phases
     on_fail: "Keep the decision unresolved, request or record actual user evidence, and do not manufacture human confirmation."
+
+  - id: INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE
+    check: "A collaborative decision is a joint agent+human/user contribution. Before status=resolved or route_clear, its canonical decision_resolution has contributor_evidence with at least one agent and one human_or_user contribution, each with a concrete evidence_ref. human_required decisions retain their separate human_confirmation_ref requirement."
+    condition: "uncertainty_shape == progressive"
+    scope: all_phases
+    on_fail: "Keep the collaborative decision unresolved and outside route_clear, request or record the missing typed contributor evidence, and do not substitute an agent-only result for human/user participation."
 
   - id: INV_PROGRESSIVE_BLOCKED_RECOVERY
     check: "When progressive_discovery_state=blocked, at least one canonical decision_item has status=blocked and decision_frontier.blocked_item_refs is non-empty. Every decision_item status=blocked records blocker_kind, blocker_reason, and unblock_condition. Every blocked_item_refs entry resolves exactly once to a status=blocked item, and every status=blocked item is referenced so recovery knows why it stopped and what must change before retry."

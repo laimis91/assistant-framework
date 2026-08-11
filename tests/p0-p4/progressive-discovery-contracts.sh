@@ -10,12 +10,20 @@ progressive_ref="$workflow_dir/references/progressive-discovery.md"
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 skill_eval_invocation_count=0
 
+run_skill_eval() {
+    local responses_dir="$1"
+    local output_path="$2"
+    local skill="$3"
+
+    "$skill_eval_runner" --responses "$responses_dir" --skill "$skill" >"$output_path" 2>&1
+}
+
 run_workflow_eval() {
     local responses_dir="$1"
     local output_path="$2"
 
     skill_eval_invocation_count=$((skill_eval_invocation_count + 1))
-    "$skill_eval_runner" --responses "$responses_dir" --skill assistant-workflow >"$output_path" 2>&1
+    run_skill_eval "$responses_dir" "$output_path" assistant-workflow
 }
 
 input_field_has_text() {
@@ -283,10 +291,29 @@ write_workflow_eval_responses() {
     local response_path
     local required
     local ordered
+    local required_summary
 
     mkdir -p "$output_dir/assistant-workflow"
     while IFS= read -r case_id; do
         response_path="$output_dir/assistant-workflow/$case_id.txt"
+        required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
+        if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
+            case "$case_id" in
+                architecture-pack-resists-premature-abstraction)
+                    jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
+                    ;;
+                code-mapper-inspected-empty-requires-evidence)
+                    jq -n '{architecture_mapping_evidence: {semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "no domain concept crosses the inspected boundary", source_refs: ["src/order.rb"]}, representative_paths: ["src/order.rb"]}}' >"$response_path"
+                    ;;
+                progressive-collaborative-contributor-evidence)
+                    jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
+                    ;;
+                *)
+                    fail "unhandled structured assistant-workflow eval case: $case_id"
+                    ;;
+            esac
+            continue
+        fi
         {
             printf 'Local response for assistant-workflow/%s.\n' "$case_id"
             while IFS= read -r required; do
@@ -987,7 +1014,7 @@ if ! output_artifact_has_exact_property_value "decision_resolution" "condition" 
     recovery_missing+=("contracts/output.yaml decision_resolution.condition does not preserve blocked resolved history")
 fi
 
-decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions.'
+decision_resolution_validation='Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions. contributor_evidence required for collaborative decisions before resolved status or route_clear.'
 if ! output_artifact_has_exact_property_value "decision_resolution" "validation" "$decision_resolution_validation" "$output_contract"; then
     recovery_missing+=("contracts/output.yaml decision_resolution.validation missing one-to-one blocked-history completeness")
 fi
@@ -996,6 +1023,183 @@ if [[ "${#recovery_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive blocked recovery loading/history contract missing: ${recovery_missing[*]}"
+fi
+
+collaborative_resolution_contract_valid() {
+    local file="$1"
+    ruby -ryaml -e '
+        artifacts = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").to_h { |artifact| [artifact["name"], artifact] }
+        item_fields = artifacts.fetch("decision_item").fetch("object_fields").to_h { |field| [field["name"], field] }
+        resolution_fields = artifacts.fetch("decision_resolution").fetch("object_fields").to_h { |field| [field["name"], field] }
+        contributors = resolution_fields.fetch("contributor_evidence")
+        contributor_fields = contributors.fetch("object_fields").to_h { |field| [field["name"], field] }
+        valid = item_fields.fetch("interaction_mode").fetch("description").include?("joint agent+human/user contribution") &&
+          item_fields.fetch("interaction_mode").fetch("validation").include?("contributor_evidence") &&
+          contributors["type"] == "object[]" && contributors["required"] == "conditional" &&
+          contributors["condition"] == "decision item interaction_mode == collaborative" && contributors["min_items"] == 2 &&
+          contributors.fetch("validation").include?("at least one agent and one human_or_user") &&
+          contributor_fields.fetch("contributor_role")["enum_values"] == %w[agent human_or_user] &&
+          contributor_fields.fetch("contribution")["required"] == true && contributor_fields.fetch("evidence_ref")["required"] == true &&
+          resolution_fields.fetch("human_confirmation_ref")["condition"] == "decision item interaction_mode == human_required"
+        exit valid ? 0 : 1
+    ' "$file"
+}
+
+mutate_collaborative_resolution_contract() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        resolution = document.fetch("artifacts").find { |artifact| artifact["name"] == "decision_resolution" }
+        contributors = resolution.fetch("object_fields").find { |field| field["name"] == "contributor_evidence" }
+        case ARGV.fetch(2)
+        when "remove_human_contributor"
+          contributors.fetch("object_fields").find { |field| field["name"] == "contributor_role" }["enum_values"] = ["agent"]
+        when "weaken_collaborative_condition"
+          contributors["condition"] = "decision item interaction_mode == human_required"
+        else
+          raise "unknown mutation"
+        end
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$mutation"
+}
+
+test_start "collaborative decisions require joint typed contributor evidence before resolution or route clear"
+collaborative_evidence_missing=()
+if ! collaborative_resolution_contract_valid "$output_contract"; then
+    collaborative_evidence_missing+=("decision resolution does not require joint typed contributor evidence for collaborative decisions")
+else
+    collaborative_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/progressive-collaborative-evidence.XXXXXX")"
+    p0p4_register_cleanup "$collaborative_mutation_dir"
+    for mutation in remove_human_contributor weaken_collaborative_condition; do
+        mutated_output="$collaborative_mutation_dir/$mutation.yaml"
+        mutate_collaborative_resolution_contract "$output_contract" "$mutated_output" "$mutation"
+        if collaborative_resolution_contract_valid "$mutated_output"; then
+            collaborative_evidence_missing+=("$mutation accepted")
+        fi
+    done
+fi
+for file_and_term in \
+    "$phase_gates::INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE" \
+    "$phase_gates::joint agent+human/user contribution" \
+    "$phase_gates::contributor_evidence" \
+    "$progressive_ref::joint agent+human/user contribution" \
+    "$progressive_ref::contributor_evidence"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        collaborative_evidence_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
+    fi
+done
+if ! workflow_invariant_selector_has_name "INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE" "$index_contract"; then
+    collaborative_evidence_missing+=("contracts/index.yaml does not load collaborative contributor invariant")
+fi
+collaborative_eval_case="progressive-collaborative-contributor-evidence"
+for term in \
+    "contributor_evidence" \
+    "route_clear"; do
+    if ! eval_case_has_machine_term "$eval_fixture" "$collaborative_eval_case" "$term"; then
+        collaborative_evidence_missing+=("eval case $collaborative_eval_case missing $term")
+    fi
+done
+for unsafe in \
+    "resolve collaborative decision with agent-only contributor_evidence" \
+    "route_clear without human_or_user contributor_evidence" \
+    "collaborative contributor_evidence=[agent,agent]" \
+    "collaborative contributor_evidence has no human_or_user contribution" \
+    "collaborative human_or_user contributor missing contribution" \
+    "collaborative contributor missing evidence_ref" \
+    "route_clear before collaborative contributor_evidence"; do
+    if ! eval_case_forbids_machine_term "$eval_fixture" "$collaborative_eval_case" "$unsafe"; then
+        collaborative_evidence_missing+=("eval case $collaborative_eval_case does not forbid $unsafe")
+    fi
+done
+if ! workflow_forbidden_terms_are_rejected \
+    "$eval_fixture" \
+    "$collaborative_eval_case" \
+    "progressive-collaborative-unsafe" \
+    7 \
+    "resolve collaborative decision with agent-only contributor_evidence" \
+    "route_clear without human_or_user contributor_evidence" \
+    "collaborative contributor_evidence=[agent,agent]" \
+    "collaborative contributor_evidence has no human_or_user contribution" \
+    "collaborative human_or_user contributor missing contribution" \
+    "collaborative contributor missing evidence_ref" \
+    "route_clear before collaborative contributor_evidence"; then
+    collaborative_evidence_missing+=("actual grader accepts collaborative unsafe resolution or route-clear response")
+fi
+if [[ ${#collaborative_evidence_missing[@]} -eq 0 ]]; then
+    pass
+else
+    fail "collaborative progressive decision contract missing: ${collaborative_evidence_missing[*]}"
+fi
+
+run_collaborative_structured_eval() {
+    local fixture="$1"
+    local response="$2"
+    local expected_status="$3"
+    local eval_root
+    local temporary_skill
+    local responses_dir
+    local runner_output
+
+    eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-collaborative-structured-eval.XXXXXX")"
+    runner_output="$(mktemp "${TMPDIR:-/tmp}/workflow-collaborative-structured-eval-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_root" "$runner_output"
+    temporary_skill="$eval_root/assistant-workflow"
+    responses_dir="$eval_root/responses"
+    mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
+    cp "$workflow_dir/SKILL.md" "$temporary_skill/SKILL.md"
+    jq '.cases = [.cases[] | select(.id == "progressive-collaborative-contributor-evidence")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    printf '%s\n' "$response" >"$responses_dir/assistant-workflow/progressive-collaborative-contributor-evidence.txt"
+    if ! run_skill_eval "$responses_dir" "$runner_output" "$temporary_skill"; then
+        [[ "$expected_status" == "FAIL" ]] || return 1
+    elif [[ "$expected_status" == "FAIL" ]]; then
+        return 1
+    fi
+    grep -Fq $'\tassistant-workflow\tprogressive-collaborative-contributor-evidence' "$runner_output"
+}
+
+test_start "collaborative eval uses structured contributor evidence before route clear"
+collaborative_structured_json_failures=()
+if ! jq -e '
+    .cases[] | select(.id == "progressive-collaborative-contributor-evidence") |
+    .machine_expectations.structured_json_assertions as $assertions |
+    ($assertions | type == "array") and
+    (any($assertions[]; .operator == "equals" and .path == ["decision_item", "interaction_mode"] and .expected == "collaborative")) and
+    (any($assertions[]; .operator == "array_field_values_exact" and .path == ["decision_resolution", "contributor_evidence"] and .field == "contributor_role" and .expected_values == ["agent", "human_or_user"])) and
+    (any($assertions[]; .operator == "array_items_nonempty_fields" and .path == ["decision_resolution", "contributor_evidence"] and .fields == ["contribution", "evidence_ref"])) and
+    (any($assertions[]; .operator == "required_when_equals" and .when_path == ["decision_item", "interaction_mode"] and .value == "collaborative" and .path == ["decision_resolution", "contributor_evidence"] and .expected_type == "array")) and
+    (.machine_expectations.required_substrings | index("interaction_mode=collaborative") | not) and
+    (.machine_expectations.required_substrings | index("contributor_role=agent") | not) and
+    (.machine_expectations.required_substrings | index("contributor_role=human_or_user") | not)
+' "$eval_fixture" >/dev/null; then
+    collaborative_structured_json_failures+=("collaborative case lacks structured contributor assertions")
+fi
+collaborative_structured_valid="$(jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}')"
+if ! run_collaborative_structured_eval "$eval_fixture" "$collaborative_structured_valid" PASS; then
+    collaborative_structured_json_failures+=("actual runner rejects valid collaborative JSON")
+fi
+for mutation in \
+    'del(.decision_item.interaction_mode)' \
+    '(.decision_item.interaction_mode) = "agent_only"' \
+    'del(.decision_resolution.contributor_evidence)' \
+    '(.decision_resolution.contributor_evidence[1].contributor_role) = "agent"' \
+    '(.decision_resolution.contributor_evidence) = [.decision_resolution.contributor_evidence[0]]' \
+    '(.decision_resolution.contributor_evidence[1].contribution) = ""' \
+    '(.decision_resolution.contributor_evidence[1].contribution) = "   "' \
+    '(.decision_resolution.contributor_evidence[1].evidence_ref) = ""' \
+    '(.decision_resolution.contributor_evidence[1].evidence_ref) = "   "'; do
+    unsafe_collaborative_response="$(jq "$mutation" <<<"$collaborative_structured_valid")"
+    if ! run_collaborative_structured_eval "$eval_fixture" "$unsafe_collaborative_response" FAIL; then
+        collaborative_structured_json_failures+=("actual runner accepts $mutation before route_clear")
+    fi
+done
+if [[ ${#collaborative_structured_json_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "collaborative structured eval gaps: ${collaborative_structured_json_failures[*]}"
 fi
 
 test_start "workflow retains resolved history when a later decision blocks"
@@ -3029,10 +3233,10 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 24 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$skill_eval_invocation_count" -eq 25 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 24 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 25 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

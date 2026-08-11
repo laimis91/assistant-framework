@@ -107,12 +107,32 @@ p0p4_write_skill_eval_responses() {
     local id
     local response_path
     local required
+    local required_summary
 
     while IFS= read -r fixture_file; do
         skill_name="$(basename "$(dirname "$(dirname "$fixture_file")")")"
         mkdir -p "$output_dir/$skill_name"
         while IFS= read -r id; do
             response_path="$output_dir/$skill_name/$id.txt"
+            required_summary="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file" | paste -sd ' ' -)"
+            if [[ "$skill_name" == "assistant-workflow" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$id" in
+                    architecture-pack-resists-premature-abstraction)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
+                        ;;
+                    code-mapper-inspected-empty-requires-evidence)
+                        jq -n '{architecture_mapping_evidence: {semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "no domain concept crosses the inspected boundary", source_refs: ["src/order.rb"]}, representative_paths: ["src/order.rb"]}}' >"$response_path"
+                        ;;
+                    progressive-collaborative-contributor-evidence)
+                        jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
+                        ;;
+                    *)
+                        fail "unhandled structured assistant-workflow eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
             {
                 printf 'Local grading response for %s/%s.\n' "$skill_name" "$id"
                 while IFS= read -r required; do
@@ -277,6 +297,7 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "## Machine Expectations" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
     && grep -Fq "### Required Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
     && grep -Fq "### Forbidden Substrings" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
+    && ! grep -Fq "### Structured JSON Assertions" "$prompt_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" \
     && grep -Fq "Skill: assistant-debugging" "$prompt_dir/assistant-debugging/bugfix-reproduces-before-patching.md" \
     && grep -Fq "Skill: assistant-diagrams" "$prompt_dir/assistant-diagrams/architecture-diagram-derived-from-code.md" \
     && grep -Fq "Skill: assistant-docs" "$prompt_dir/assistant-docs/architecture-doc-uses-code-evidence.md" \
@@ -288,6 +309,10 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq "Skill: assistant-telos" "$prompt_dir/assistant-telos/create-personal-tcf-core-sections.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/unknown-cause-bugfix-routes-through-debugging-before-tdd.md" \
+    && grep -Fq "### Structured JSON Assertions" "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
+    && grep -Fq '"operator":"equals"' "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
+    && grep -Fq '"architecture_design_mode"' "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
+    && grep -Fq '"review_intensive"' "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
     && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
     && grep -Fq "## Seeded Defects / Measurable Assertions" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
     && grep -Fq "refund-special-case-bypasses-shared-guards" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
@@ -448,10 +473,100 @@ if "$skill_eval_runner" --responses "$passing_response_dir" >"$passing_response_
     && grep -Fq "missing_required_substrings=0" "$passing_response_output" \
     && grep -Fq "forbidden_substring_hits=0" "$passing_response_output" \
     && grep -Fq "seeded_defect_failures=0" "$passing_response_output" \
-    && grep -Fq "false_positive_marker_failures=0" "$passing_response_output"; then
+    && grep -Fq "false_positive_marker_failures=0" "$passing_response_output" \
+    && grep -Fq "structured_json_assertion_failures=0" "$passing_response_output"; then
     pass
 else
     fail "skill eval runner --responses did not pass generated all-required response set"
+fi
+
+test_start "skill eval runner validates safe structured JSON assertions and rejects unsafe JSON shapes"
+structured_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-structured.XXXXXX")"
+structured_skill="$structured_root/assistant-eval-structured"
+structured_responses="$structured_root/responses"
+structured_validation_err="$structured_root/validation.err"
+structured_output="$structured_root/structured.out"
+p0p4_register_cleanup "$structured_root"
+p0p4_write_skill_eval_fixture "$structured_skill"
+jq '
+  .cases[0].machine_expectations.structured_json_assertions = [
+    {"operator":"equals","path":["status"],"expected":"ready"},
+    {"operator":"nonempty_string","path":["semantic","evidence_or_gap"]},
+    {"operator":"nonempty_array","path":["semantic","source_refs"]},
+    {"operator":"equals_path","path":["architecture_design_mode"],"other_path":["architecture_decision_pack","mode"]},
+    {"operator":"required_when_equals","when_path":["architecture_design_mode"],"value":"review_intensive","path":["architecture_decision_pack","independent_challenge_evidence"],"expected_type":"object"},
+    {"operator":"array_field_values_exact","path":["contributors"],"field":"role","expected_values":["agent","human_or_user"]},
+    {"operator":"array_items_nonempty_fields","path":["contributors"],"fields":["contribution","evidence_ref"]}
+  ]
+' "$structured_skill/evals/cases.json" >"$structured_root/cases.json"
+mv "$structured_root/cases.json" "$structured_skill/evals/cases.json"
+if ! "$skill_eval_runner" --validate-fixture --skill "$structured_skill" > /dev/null 2>"$structured_validation_err"; then
+    fail "skill eval runner rejected valid structured JSON assertions: $(cat "$structured_validation_err")"
+else
+    mkdir -p "$structured_responses/assistant-eval-structured"
+    structured_valid='{"fixture":"fixture required fixture first fixture second","status":"ready","architecture_design_mode":"review_intensive","architecture_decision_pack":{"mode":"review_intensive","independent_challenge_evidence":{"ref":"challenge"}},"semantic":{"evidence_or_gap":"src/order.rb","source_refs":["src/order.rb"]},"contributors":[{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"human_or_user","contribution":"decision","evidence_ref":"decision-ref"}]}'
+    printf '%s\n' "$structured_valid" >"$structured_responses/assistant-eval-structured/fixture-case.txt"
+    if ! "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
+        || ! grep -Fq "structured_json_assertion_failures=0" "$structured_output"; then
+        fail "valid structured JSON response did not pass with a zero structured assertion count"
+    else
+        structured_negative_failures=()
+        for mutation in \
+            '(.semantic.evidence_or_gap) = ""' \
+            '(.semantic.evidence_or_gap) = "   "' \
+            '(.semantic.source_refs) = []' \
+            '(.architecture_decision_pack.mode) = "lightweight"' \
+            '(.architecture_decision_pack.independent_challenge_evidence) = null' \
+            '(.contributors) = [{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"agent","contribution":"decision","evidence_ref":"decision-ref"}]' \
+            '(.contributors[1].contribution) = ""' \
+            '(.contributors[1].evidence_ref) = ""'; do
+            jq "$mutation" <<<"$structured_valid" >"$structured_responses/assistant-eval-structured/fixture-case.txt"
+            if "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
+                || ! grep -Fq "structured_json_assertion_failures=1" "$structured_output"; then
+                structured_negative_failures+=("$mutation")
+            fi
+        done
+        printf '%s\n' 'fixture required fixture first fixture second' >"$structured_responses/assistant-eval-structured/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$structured_output"; then
+            structured_negative_failures+=("invalid JSON")
+        fi
+        printf '%s\n%s\n' "$structured_valid" "$structured_valid" >"$structured_responses/assistant-eval-structured/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$structured_output"; then
+            structured_negative_failures+=("multiple JSON values")
+        fi
+        if [[ ${#structured_negative_failures[@]} -eq 0 ]]; then
+            pass
+        else
+            fail "structured JSON grader accepted unsafe shapes or invalid JSON: ${structured_negative_failures[*]}"
+        fi
+    fi
+fi
+
+test_start "skill eval runner rejects unknown and malformed structured JSON assertion fixtures"
+structured_schema_failures=()
+for mutation in \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"arbitrary_jq","path":["status"]}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":"status","expected":"ready"}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":[-1],"expected":"ready"}]'; do
+    malformed_structured_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-structured-schema.XXXXXX")"
+    malformed_structured_skill="$malformed_structured_root/assistant-eval-structured-schema"
+    malformed_structured_err="$malformed_structured_root/validation.err"
+    p0p4_register_cleanup "$malformed_structured_root"
+    p0p4_write_skill_eval_fixture "$malformed_structured_skill"
+    jq "$mutation" "$malformed_structured_skill/evals/cases.json" >"$malformed_structured_root/cases.json"
+    mv "$malformed_structured_root/cases.json" "$malformed_structured_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$malformed_structured_skill" >/dev/null 2>"$malformed_structured_err"; then
+        structured_schema_failures+=("$mutation")
+    elif ! grep -Fq "structured_json_assertions" "$malformed_structured_err"; then
+        structured_schema_failures+=("unclear structured schema error for $mutation")
+    fi
+done
+if [[ ${#structured_schema_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "structured JSON assertion fixture schema accepted unsafe shapes: ${structured_schema_failures[*]}"
 fi
 
 test_start "skill eval runner grades flat targeted single-skill responses"

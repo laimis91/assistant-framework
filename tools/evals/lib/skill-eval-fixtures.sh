@@ -95,10 +95,62 @@ validate_fixture() {
           then empty
           else "case[\($index)] missing or invalid machine_expectations.\($name) non-empty string array" end;
 
+        def json_path:
+          type == "array" and length > 0
+          and all(.[]; (type == "string" and length > 0) or (type == "number" and . >= 0 and (. % 1) == 0));
+
+        def scalar:
+          type == "string" or type == "number" or type == "boolean" or type == "null";
+
+        def structured_assertion_error($index; $assertion_index):
+          if type != "object" then
+            "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] must be an object"
+          elif (.operator? | nonempty_string | not) then
+            "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] missing or invalid operator"
+          elif .operator == "equals" then
+            if (.path? | json_path | not) or (has("expected") | not) or (.expected | scalar | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid equals assertion"
+            else empty end
+          elif .operator == "nonempty_string" or .operator == "nonempty_array" then
+            if (.path? | json_path | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid \(.operator) path"
+            else empty end
+          elif .operator == "equals_path" then
+            if (.path? | json_path | not) or (.other_path? | json_path | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid equals_path assertion"
+            else empty end
+          elif .operator == "required_when_equals" then
+            .expected_type as $expected_type |
+            if (.when_path? | json_path | not) or (has("value") | not) or (.value | scalar | not) or (.path? | json_path | not) or (has("expected_type") and (($expected_type | type) != "string" or (["null", "boolean", "number", "string", "array", "object"] | index($expected_type) | not))) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid required_when_equals assertion"
+            else empty end
+          elif .operator == "array_field_values_exact" then
+            if (.path? | json_path | not) or (.field? | nonempty_string | not) or (.expected_values? | nonempty_string_array | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_field_values_exact assertion"
+            else empty end
+          elif .operator == "array_items_nonempty_fields" then
+            if (.path? | json_path | not) or (.fields? | nonempty_string_array | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_items_nonempty_fields assertion"
+            else empty end
+          else
+            "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] unsupported operator: \(.operator)"
+          end;
+
+        def case_structured_json_assertions($index):
+          if has("structured_json_assertions") then
+            if (.structured_json_assertions | type != "array") or (.structured_json_assertions | length == 0) then
+              "case[\($index)].machine_expectations.structured_json_assertions must be a non-empty array when present"
+            else
+              .structured_json_assertions | to_entries[] | .key as $assertion_index | .value |
+                structured_assertion_error($index; $assertion_index)
+            end
+          else empty end;
+
         def case_machine_expectations($index):
           if (.machine_expectations? | type == "object") then
             case_machine_expectation_array($index; "required_substrings"),
-            case_machine_expectation_array($index; "forbidden_substrings")
+            case_machine_expectation_array($index; "forbidden_substrings"),
+            (.machine_expectations | case_structured_json_assertions($index))
           else
             "case[\($index)] missing or invalid object field: machine_expectations"
           end;

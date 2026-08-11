@@ -62,8 +62,9 @@ Selectors resolve by unique id plus canonical path, section, key, and explicit n
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: assistant-workflow contracts are v5. v4 Pack consumers use
-`handoff_binding_state=discover_only` with context/journal only during
+Migration note: assistant-workflow contracts are v6; `semantic_type_inspection`;
+`contributor_evidence`. v4 consumers use `handoff_binding_state=discover_only`
+with context/journal during
 Discover. Plan atomically binds plan/task-packet and review-scope refs as
 `downstream_bound` before Build when `plan_mode!=none`; plan_mode=none binds
 compact inline execution and review-scope refs at the pre-Build boundary.
@@ -73,7 +74,7 @@ and reapproval. Direct-user, applicable
 `subagent_trigger_scope` and dispatch without
 separate permission question. Explicit opt-out, unavailability, or
 exact policy block uses evidenced fallback. `verification_command` is non-empty
-argv `string[]`; assistant-review v3 owns Reviewer/QAEvaluator handoffs and
+argv `string[]`; assistant-review v4 owns Reviewer/QAEvaluator handoffs and
 returns `final_summary` / `qa_evaluation_result`; the `reviewed_scope` is non-empty.
 
 ## Visible Checkpoints

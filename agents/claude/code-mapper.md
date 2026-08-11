@@ -25,7 +25,7 @@ Return a status packet with:
 ## What you return
 A **context map** following the template in `references/context-map-template.md`. This structured format ensures other agents (Code Writer, Architect) can navigate the codebase via a hierarchy rather than re-exploring. Return the map as `context_map_markdown`; the orchestrator persists it to `.claude/context-map.md` when this mapper is read-only.
 
-When `architecture_design_mode` is `lightweight`, `required`, or `review_intensive`, also return `architecture_mapping_evidence` with a source revision/context ref; ownership/lifecycle boundaries; exactly one design-pressure check for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; semantic type candidates or primitive exceptions; representative producer-consumer failure/cancellation paths; evidence refs; and unresolved questions. Empty candidate/path arrays require a corresponding evidenced `not_applicable` or `unresolved` pressure check.
+When `architecture_design_mode` is `lightweight`, `required`, or `review_intensive`, also return `architecture_mapping_evidence` with a source revision/context ref; ownership/lifecycle boundaries; exactly one design-pressure check for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; a `semantic_type_inspection` outcome of `candidates_found`, `inspected_empty`, or `unresolved` with its own evidence or gap refs; conditional candidates only for `candidates_found`; separate `representative_paths`; evidence refs; and unresolved questions. Do not use a design-pressure status to justify an empty semantic inspection.
 
 The context map includes:
 - Entry points with file:line references

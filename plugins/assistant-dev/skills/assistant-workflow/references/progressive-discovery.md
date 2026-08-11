@@ -54,6 +54,13 @@ actionable canonical decision item and appears exactly once in the unlocking
 predecessor decision_resolution.newly_precise_item_refs. In every progressive state
 where decision items exist, including mapping, at most one item may have
 `status=active`. A decision frontier snapshot is not required during mapping;
+
+`collaborative` means a joint agent+human/user contribution, not an agent
+decision awaiting a later acknowledgement. Before a collaborative decision is
+`status=resolved` or can enter route_clear, its canonical decision resolution
+records typed `contributor_evidence` with at least one `agent` and one
+`human_or_user` contribution, each tied to an evidence ref. `human_required`
+remains distinct: it requires `human_confirmation_ref` and cannot self-resolve.
 once it exists, it reflects that same limit while recording multiple sequential
 resolutions in one session. When a mapping item becomes resolved, retain its
 canonical decision resolution with evidence and effects before dependent

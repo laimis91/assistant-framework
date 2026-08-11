@@ -4,7 +4,7 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: handoffs
 skill: assistant-review
 
@@ -40,7 +40,7 @@ dispatch_context_bundles:
     review_evidence_pointer:
       required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
       validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_decision_pack, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -61,8 +61,8 @@ dispatch_context_bundles:
     direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
     excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
     return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
-    budget_words: 5600
-    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5600 words."
+    budget_words: 5619
+    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5619 words."
 
   - name: qa_evaluator_context
     phase: QA_EVALUATION_STEP
@@ -75,7 +75,7 @@ return_validation_bundles:
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
-    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -260,11 +260,19 @@ handoffs:
         description: "Whether Reviewer must apply the Architecture Decision Pack Review Checklist"
         notes: "Set true only when a carried workflow Architecture Decision Pack or equivalent architecture decision record applies; do not manufacture an architecture review for a local change."
 
+      - name: architecture_design_mode
+        type: enum
+        required: conditional
+        condition: "architecture_decision_pack_review_required is true"
+        enum_values: [lightweight, required, review_intensive]
+        description: "Canonical architecture mode Reviewer uses to validate the carried Pack"
+        validation: "architecture_decision_pack.mode must equal canonical architecture_design_mode"
+
       - name: architecture_decision_pack
         type: object
         required: conditional
         condition: "architecture_decision_pack_review_required is true"
-        description: "Fresh compact Pack projection with source/revision, separate facts, assumptions, material_questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent_challenge_evidence; standalone equivalent records derive its compact Pack projection."
+        description: "Fresh compact Pack projection whose mode must equal canonical architecture_design_mode, with source/revision, separate facts, assumptions, material_questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and review_intensive independent_challenge_evidence; standalone equivalent records derive its compact Pack projection."
 
       - name: rubric_required
         type: boolean
@@ -467,7 +475,7 @@ handoffs:
           - name: independent_challenge_evidence
             type: string
             required: conditional
-            condition: "architecture_decision_pack.mode == review_intensive"
+            condition: "architecture_design_mode == review_intensive"
           - name: ownership_dependency_and_lifecycle_boundary
             type: string
             required: true

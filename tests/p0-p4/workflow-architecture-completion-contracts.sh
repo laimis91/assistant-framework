@@ -485,18 +485,27 @@ else
     pass
 fi
 
-test_start "workflow v4 migration note covers every breaking producer contract"
+test_start "workflow v6 migration note covers every breaking producer contract"
 migration_note="$(awk '
     /^Migration note:/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
-if ! grep -Fq 'verification_command' <<<"$migration_note"; then
-    fail "v4 migration note does not explain verification_command argv migration"
+if ! grep -Fq 'assistant-workflow contracts are v6' <<<"$migration_note"; then
+    fail "v6 migration note does not declare the breaking contract version"
+elif ! grep -Fq 'semantic_type_inspection' <<<"$migration_note" \
+    || ! grep -Fq 'contributor_evidence' <<<"$migration_note"; then
+    fail "v6 migration note does not describe CodeMapper semantic inspection and collaborative contributor evidence migrations"
+elif ! ruby -ryaml -e '
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "6.0" }
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
+    fail "v6 migration does not bump every assistant-workflow canonical contract header"
+elif ! grep -Fq 'verification_command' <<<"$migration_note"; then
+    fail "v6 migration note no longer explains verification_command argv migration"
 elif ! grep -Fq 'assistant-review' <<<"$migration_note" \
     || ! grep -Eiq 'owns?' <<<"$migration_note" \
     || ! grep -Fq 'subagent_trigger_scope' <<<"$migration_note"; then
-    fail "v4 migration note does not cover assistant-review ownership and trigger-based delegation"
+    fail "v6 migration note does not preserve assistant-review ownership and trigger-based delegation"
 else
     pass
 fi
@@ -625,7 +634,7 @@ fi
 
 test_start "promotable workflow overlay preserves optional Plan ownership and v4 migration semantics"
 candidate_missing=()
-for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v3' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
+for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v4' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
     if ! grep -Fq -- "$term" "$candidate_skill"; then
         candidate_missing+=("$term")
     fi
@@ -785,6 +794,184 @@ if [[ ${#thinking_challenge_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "assistant-thinking review-intensive challenge contract gaps: ${thinking_challenge_failures[*]}"
+fi
+
+architecture_pack_mode_integrity_valid() {
+    local file="$1"
+    ruby -ryaml -e '
+        pack = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+        fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+        mode = fields.fetch("mode")
+        challenge = fields.fetch("independent_challenge_evidence")
+        expected_mode_validation = "Must equal canonical architecture_design_mode; review_intensive cannot use a weaker nested mode to evade independent_challenge_evidence."
+        expected_challenge_condition = "architecture_design_mode == review_intensive"
+        required_challenge_fields = %w[challenge_ref dissent_or_validation resolution selected_design_impact]
+        challenge_fields = challenge.fetch("object_fields").select { |field| field["required"] == true }.map { |field| field["name"] }
+        structural_valid = mode["validation"] == expected_mode_validation &&
+          challenge["condition"] == expected_challenge_condition &&
+          challenge_fields == required_challenge_fields
+
+        def instance_valid?(canonical_mode, nested_mode, challenge_present)
+          return false unless canonical_mode == nested_mode
+          return false if canonical_mode == "review_intensive" && !challenge_present
+
+          true
+        end
+
+        unsafe_instances_rejected = !instance_valid?("review_intensive", "lightweight", false) &&
+          !instance_valid?("review_intensive", "required", true) &&
+          !instance_valid?("review_intensive", "review_intensive", false)
+        exit structural_valid && unsafe_instances_rejected ? 0 : 1
+    ' "$file"
+}
+
+mutate_architecture_pack_mode_integrity() {
+    local source="$1"
+    local destination="$2"
+    local mutation="$3"
+    ruby -ryaml -e '
+        document = YAML.load_file(ARGV.fetch(0))
+        pack = document.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+        fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+        case ARGV.fetch(2)
+        when "weaken_nested_mode_validation"
+          fields.fetch("mode")["validation"] = "Selected architecture design depth"
+        when "nested_mode_controls_challenge"
+          fields.fetch("independent_challenge_evidence")["condition"] = "mode == review_intensive"
+        else
+          raise "unknown mutation"
+        end
+        File.write(ARGV.fetch(1), YAML.dump(document))
+    ' "$source" "$destination" "$mutation"
+}
+
+architecture_mode_evasion_is_rejected_by_eval_grader() {
+    local fixture="$1"
+    local case_id="architecture-pack-resists-premature-abstraction"
+    local malformed_instance="$2"
+    local responses_dir
+    local eval_output
+    local case_count
+
+    responses_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-pack-mode-eval.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/workflow-pack-mode-eval-output.XXXXXX")"
+    p0p4_register_cleanup "$responses_dir" "$eval_output"
+    mkdir -p "$responses_dir/assistant-workflow"
+    while IFS= read -r response_case_id; do
+        jq -r --arg case_id "$response_case_id" '
+            .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
+        ' "$fixture" >"$responses_dir/assistant-workflow/$response_case_id.txt"
+    done < <(jq -r '.cases[].id' "$fixture")
+    printf '%s\n' "$malformed_instance" \
+        >>"$responses_dir/assistant-workflow/$case_id.txt"
+    case_count="$(jq '.cases | length' "$fixture")"
+
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill assistant-workflow >"$eval_output" 2>&1; then
+        return 1
+    fi
+
+    grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$eval_output" \
+        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && grep -Fq "forbidden_substring_hits=1" "$eval_output"
+}
+
+test_start "workflow Pack mode cannot weaken review-intensive independent challenge evidence"
+pack_mode_integrity_failures=()
+if ! architecture_pack_mode_integrity_valid "$output_contract"; then
+    pack_mode_integrity_failures+=("canonical mode equality and review-intensive challenge condition")
+else
+    pack_mode_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-pack-mode-integrity.XXXXXX")"
+    p0p4_register_cleanup "$pack_mode_mutation_dir"
+    for mutation in weaken_nested_mode_validation nested_mode_controls_challenge; do
+        mutated_output="$pack_mode_mutation_dir/$mutation.yaml"
+        mutate_architecture_pack_mode_integrity "$output_contract" "$mutated_output" "$mutation"
+        if architecture_pack_mode_integrity_valid "$mutated_output"; then
+            pack_mode_integrity_failures+=("$mutation accepted")
+        fi
+    done
+fi
+if ! jq -e '
+    .cases[] | select(.id == "architecture-pack-resists-premature-abstraction") |
+    (.machine_expectations.required_substrings | index("architecture_decision_pack.mode=architecture_design_mode")) and
+    (.machine_expectations.required_substrings | index("review_intensive cannot use a weaker nested mode")) and
+    (.machine_expectations.forbidden_substrings | index("architecture_design_mode=review_intensive; architecture_decision_pack.mode=lightweight; independent_challenge_evidence=missing")) and
+    (.machine_expectations.forbidden_substrings | index("architecture_design_mode=review_intensive; architecture_decision_pack.mode=required; independent_challenge_evidence=missing"))
+' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pack_mode_integrity_failures+=("architecture Pack eval does not reject nested-mode challenge evasion")
+fi
+if [[ ${#pack_mode_integrity_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow Pack mode integrity gaps: ${pack_mode_integrity_failures[*]}"
+fi
+
+run_pack_structured_eval() {
+    local fixture="$1"
+    local response="$2"
+    local expected_status="$3"
+    local eval_root
+    local temporary_skill
+    local responses_dir
+    local runner_output
+
+    eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-pack-structured-eval.XXXXXX")"
+    p0p4_register_cleanup "$eval_root"
+    temporary_skill="$eval_root/assistant-workflow"
+    responses_dir="$eval_root/responses"
+    mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
+    cp "$workflow_skill" "$temporary_skill/SKILL.md"
+    jq '.cases = [.cases[] | select(.id == "architecture-pack-resists-premature-abstraction")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    printf '%s\n' "$response" >"$responses_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.txt"
+    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
+        [[ "$expected_status" == "FAIL" ]] || return 1
+    elif [[ "$expected_status" == "FAIL" ]]; then
+        return 1
+    fi
+    grep -Fq $'\tassistant-workflow\tarchitecture-pack-resists-premature-abstraction' <<<"$runner_output"
+}
+
+test_start "workflow Pack eval uses structured canonical mode and challenge assertions"
+pack_structured_json_failures=()
+if ! jq -e '
+    .cases[] | select(.id == "architecture-pack-resists-premature-abstraction") |
+    .machine_expectations.structured_json_assertions as $assertions |
+    ($assertions | type == "array") and
+    (any($assertions[]; .operator == "equals" and .path == ["architecture_design_mode"] and .expected == "review_intensive")) and
+    (any($assertions[]; .operator == "equals_path" and .path == ["architecture_design_mode"] and .other_path == ["architecture_decision_pack", "mode"])) and
+    (any($assertions[]; .operator == "required_when_equals" and .when_path == ["architecture_design_mode"] and .value == "review_intensive" and .path == ["architecture_decision_pack", "independent_challenge_evidence"] and .expected_type == "object")) and
+    (all(["challenge_ref", "dissent_or_validation", "resolution", "selected_design_impact"][]; . as $field | any($assertions[]; .operator == "nonempty_string" and .path == ["architecture_decision_pack", "independent_challenge_evidence", $field])))
+' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pack_structured_json_failures+=("Pack case lacks canonical mode equality and conditional challenge assertions")
+fi
+pack_required_summary="$(jq -r '.cases[] | select(.id == "architecture-pack-resists-premature-abstraction") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | jq -Rsc 'split("\n") | map(select(length > 0)) | join(" ")')"
+pack_structured_valid="$(jq -n --arg summary "$pack_required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge-1", dissent_or_validation: "challenged direct buffer ownership", resolution: "preserve decoder-specific ownership", selected_design_impact: "requires explicit disposal verification"}}}')"
+if ! run_pack_structured_eval "$workflow_dir/evals/cases.json" "$pack_structured_valid" PASS; then
+    pack_structured_json_failures+=("actual runner rejects valid structured review-intensive Pack")
+fi
+for mutation in \
+    '(.architecture_design_mode) = null' \
+    '(.architecture_design_mode) = "required"' \
+    '(.architecture_decision_pack.mode) = null' \
+    '(.architecture_decision_pack.mode) = "lightweight"' \
+    '(.architecture_decision_pack.independent_challenge_evidence) = null' \
+    '(.architecture_decision_pack.independent_challenge_evidence.challenge_ref) = ""' \
+    'del(.architecture_decision_pack.independent_challenge_evidence.challenge_ref)' \
+    '(.architecture_decision_pack.independent_challenge_evidence.challenge_ref) = "   "' \
+    'del(.architecture_decision_pack.independent_challenge_evidence.dissent_or_validation)' \
+    '(.architecture_decision_pack.independent_challenge_evidence.dissent_or_validation) = "   "' \
+    '(.architecture_decision_pack.independent_challenge_evidence.resolution) = "   "' \
+    'del(.architecture_decision_pack.independent_challenge_evidence.resolution)' \
+    '(.architecture_decision_pack.independent_challenge_evidence.selected_design_impact) = ""' \
+    'del(.architecture_decision_pack.independent_challenge_evidence.selected_design_impact)'; do
+    unsafe_pack_response="$(jq "$mutation" <<<"$pack_structured_valid")"
+    if ! run_pack_structured_eval "$workflow_dir/evals/cases.json" "$unsafe_pack_response" FAIL; then
+        pack_structured_json_failures+=("actual runner accepts $mutation")
+    fi
+done
+if [[ ${#pack_structured_json_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow Pack structured eval gaps: ${pack_structured_json_failures[*]}"
 fi
 
 test_start "workflow Pack handoff binding supports Discover-only state and requires downstream references"

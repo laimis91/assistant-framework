@@ -23,7 +23,7 @@ while round <= 10:
 
   1. REVIEW
      - Require the latest Spec Review result to be PASS before review dispatch.
-     - At the moment this pass begins, resolve `reviewer_context` from `contracts/index.yaml`; its declared boundary closure must remain below 5600 words.
+     - At the moment this pass begins, resolve `reviewer_context` from `contracts/index.yaml`; its declared boundary closure must remain below 5619 words.
      - Create one fresh `fresh_reviewer_context` bundle with:
        - selected `dispatch_context_ref` for `orchestrator_to_reviewer.context_fields`
        - `review_evidence_pointer` covering Spec Review PASS evidence, review material, and required `build_test_verification_ref`

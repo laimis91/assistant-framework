@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: output
 skill: assistant-review
 
@@ -535,7 +535,7 @@ artifacts:
     required: conditional
     condition: "architecture_decision_pack_review_required is true"
     description: "Evidence-backed review of a fresh Architecture Decision Pack"
-    validation: "Checks freshness, material questions, boundaries, design-pressure checks, semantic types/primitive exceptions, quality scenarios, compatibility/extension seam, and handoff/verification. Missing workload/budget/measurement/failure evidence cannot be reported as a confirmed quality benefit."
+    validation: "Checks freshness, material questions, boundaries, design-pressure checks, semantic types/primitive exceptions, quality scenarios, compatibility/extension seam, and handoff/verification. architecture_decision_pack.mode must equal canonical architecture_design_mode; review_intensive requires independent_challenge_evidence. Missing workload/budget/measurement/failure evidence cannot be reported as a confirmed quality benefit."
     object_fields:
       - name: freshness_and_facts
         type: string
@@ -546,7 +546,7 @@ artifacts:
       - name: independent_challenge_evidence
         type: string
         required: conditional
-        condition: "architecture_decision_pack.mode == review_intensive"
+        condition: "architecture_design_mode == review_intensive"
       - name: ownership_dependency_and_lifecycle_boundary
         type: string
         required: true

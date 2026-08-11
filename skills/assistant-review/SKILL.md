@@ -24,7 +24,9 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v3. Applicable direct-user,
+Migration note: assistant-review contracts are v4. Pack review now carries
+canonical `architecture_design_mode`; its nested Pack mode must match and
+review-intensive review requires independent challenge evidence. Applicable direct-user,
 `AGENTS.md`, and active-skill instructions trigger required Reviewer and QA
 roles; record their provenance and covered work in `subagent_trigger_scope`
 without a second permission question. Explicit opt-out, real unavailability,
@@ -111,7 +113,7 @@ Use concrete risk framing instead of generic convention, style, cleanliness, or 
 
 ## Architecture Decision Pack Review
 
-Review a Pack only when workflow metadata or review material says one applies. It is a compact, durable decision record, not a permanent architect role or global memory. Require source/revision freshness and every material question that could invalidate the decision; group questions with why, risk if guessed, and a safe default where available. Check control/early-exit behavior, ownership/disposal, bounded resource envelope, extension registration, and the representative producer-consumer path before accepting an interface or engine. Treat generic `string`, numeric, collection, or callback interfaces as a finding when they erase domain/public/lifecycle semantics without an explicit local-boundary primitive exception and conversion/validation. Do not approve memory, performance, or extensibility claims without workload, budget, measurement method, and failure condition; mark absent evidence as unknown or a verification gap.
+Review a Pack only when workflow metadata or review material says one applies. Its nested mode must equal canonical `architecture_design_mode`; review-intensive review requires independent challenge evidence. It is a compact, durable decision record, not a permanent architect role or global memory. Require source/revision freshness and every material question that could invalidate the decision; group questions with why, risk if guessed, and a safe default where available. Check control/early-exit behavior, ownership/disposal, bounded resource envelope, extension registration, and the representative producer-consumer path before accepting an interface or engine. Treat generic `string`, numeric, collection, or callback interfaces as a finding when they erase domain/public/lifecycle semantics without an explicit local-boundary primitive exception and conversion/validation. Do not approve memory, performance, or extensibility claims without workload, budget, measurement method, and failure condition; mark absent evidence as unknown or a verification gap.
 
 ## Principle and Readability Lens
 

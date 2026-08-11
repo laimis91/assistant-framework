@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "5.0"
+schema_version: "6.0"
 contract: output
 skill: assistant-workflow
 
@@ -741,6 +741,7 @@ artifacts:
         required: true
         enum_values: [lightweight, required, review_intensive]
         description: "Selected architecture design depth"
+        validation: "Must equal canonical architecture_design_mode; review_intensive cannot use a weaker nested mode to evade independent_challenge_evidence."
         on_missing: fail
       - name: single_goal
         type: string
@@ -844,7 +845,7 @@ artifacts:
       - name: independent_challenge_evidence
         type: object
         required: conditional
-        condition: "mode == review_intensive"
+        condition: "architecture_design_mode == review_intensive"
         description: "Independent challenge evidence for conflicting or high-risk architectural drivers"
         validation: "Names the independent challenge, dissent or validation result, and how it changed or confirmed the selected design"
         on_missing: fail
@@ -2011,6 +2012,8 @@ artifacts:
         type: enum
         required: true
         enum_values: [agent_only, human_required, collaborative]
+        description: "agent_only is an agent-owned decision; human_required is a human/user-owned decision; collaborative is a joint agent+human/user contribution."
+        validation: "A collaborative item can reach status=resolved only through a decision_resolution with contributor_evidence containing both agent and human_or_user evidence; human_required retains human_confirmation_ref."
       - name: dependencies
         type: string[]
         required: true
@@ -2101,7 +2104,7 @@ artifacts:
     required: conditional
     condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
     description: "Canonical record of one resolved progressive decision"
-    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions."
+    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions. contributor_evidence required for collaborative decisions before resolved status or route_clear."
     on_fail: "Repair missing resolutions or invalid effect refs; retain prior history during mapping or if later blocked; restore it before continuation."
     object_fields:
       - name: decision_item_ref
@@ -2116,6 +2119,23 @@ artifacts:
       - name: downstream_effects
         type: string[]
         required: true
+      - name: contributor_evidence
+        type: object[]
+        required: conditional
+        condition: "decision item interaction_mode == collaborative"
+        min_items: 2
+        validation: "Contains at least one agent and one human_or_user contribution, each with concrete evidence, before the collaborative decision is status=resolved or reaches route_clear."
+        object_fields:
+          - name: contributor_role
+            type: enum
+            required: true
+            enum_values: [agent, human_or_user]
+          - name: contribution
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
       - name: human_confirmation_ref
         type: string
         required: conditional

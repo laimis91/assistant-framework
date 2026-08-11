@@ -104,6 +104,10 @@ question. Keep the record to this goal; do not turn it into a broad redesign.
 Use the typed `architecture_decision_pack` contract. A readable plan/journal
 view follows this compact shape:
 
+The Pack `mode` must exactly equal canonical `architecture_design_mode`. In
+`review_intensive` mode, `independent_challenge_evidence` is mandatory and the
+nested Pack mode cannot be weakened to evade that evidence.
+
 ```markdown
 ## Architecture Decision Pack
 - Pack id / mode: [stable id] | [lightweight | required | review_intensive]

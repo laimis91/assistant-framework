@@ -185,6 +185,55 @@ else
     fail "assistant-review Architecture Decision Pack reference is incomplete: ${architecture_pack_review_failures[*]}"
 fi
 
+test_start "assistant-review binds Pack review to the canonical architecture mode"
+architecture_pack_mode_consumer_failures=()
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+if ! ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0))
+    handoffs = YAML.load_file(ARGV.fetch(1))
+    output = YAML.load_file(ARGV.fetch(2))
+    index = YAML.load_file(ARGV.fetch(3))
+    entry_names = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "review-entry-fields" }.fetch("names")
+    input_fields = input.fetch("fields").to_h { |field| [field["name"], field] }
+    canonical_mode = input_fields.fetch("architecture_design_mode")
+    pack = input_fields.fetch("architecture_decision_pack")
+    pack_fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+    handoff = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
+    context = handoff.fetch("context_fields").to_h { |field| [field["name"], field] }
+    reviewer_checks = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
+    reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+    output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
+    output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+    valid = input["schema_version"] == "4.0" && handoffs["schema_version"] == "4.0" && output["schema_version"] == "4.0" && index["schema_version"] == "4.0" &&
+      canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
+      canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
+      entry_names.include?("architecture_design_mode") &&
+      pack_fields.fetch("mode")["validation"] == "Must equal canonical architecture_design_mode" &&
+      pack_fields.fetch("independent_challenge_evidence")["condition"] == "architecture_design_mode == review_intensive" &&
+      context.fetch("architecture_design_mode")["required"] == "conditional" && context.fetch("architecture_design_mode")["condition"] == "architecture_decision_pack_review_required is true" &&
+      context.fetch("architecture_design_mode")["enum_values"] == %w[lightweight required review_intensive] &&
+      reviewer_challenge["condition"] == "architecture_design_mode == review_intensive" &&
+      output_challenge["condition"] == "architecture_design_mode == review_intensive"
+    exit valid ? 0 : 1
+' "$review_input" "$review_handoffs" "$review_output" "$review_index"; then
+    architecture_pack_mode_consumer_failures+=("canonical input, Reviewer context, and output Pack mode binding")
+fi
+for file_and_term in \
+    "$review_skill::Migration note: assistant-review contracts are v4" \
+    "$review_phase_gates::architecture_design_mode" \
+    "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        architecture_pack_mode_consumer_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ ${#architecture_pack_mode_consumer_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review canonical Pack mode consumer gaps: ${architecture_pack_mode_consumer_failures[*]}"
+fi
+
 test_start "assistant-review does not use rubric score alone to force round 3 or stronger claims"
 review_threshold_failures=()
 

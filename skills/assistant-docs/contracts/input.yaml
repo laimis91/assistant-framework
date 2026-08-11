@@ -175,7 +175,7 @@ fields:
       - name: independent_challenge_evidence
         type: object
         required: conditional
-        condition: "mode == review_intensive"
+        condition: "architecture_design_mode == review_intensive"
         description: "Independent challenge evidence retained only for review-intensive decisions"
         on_missing: fail
         object_fields:

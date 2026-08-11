@@ -992,7 +992,7 @@
       "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "architecture_decision_pack_review_required is true and the Pack contains a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and review-intensive independent challenge evidence.",
+        "architecture_decision_pack_review_required is true, architecture_design_mode=review_intensive, and the Pack mode equals canonical architecture_design_mode with a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and independent challenge evidence.",
         "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
         "The changed repository revision is newer than the Pack's recorded revision."
       ],
@@ -1029,7 +1029,9 @@
           "compatibility",
           "verification",
           "rollback",
-          "independent challenge"
+          "independent challenge",
+          "architecture_design_mode=review_intensive",
+          "architecture_decision_pack.mode=architecture_design_mode"
         ],
         "forbidden_substrings": [
           "memory efficient by design",

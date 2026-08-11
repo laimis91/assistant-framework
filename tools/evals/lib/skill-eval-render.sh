@@ -38,6 +38,14 @@ emit_prompts() {
                       ) | join("\n"))
                     + "\n\n"
                   else "" end;
+                def structured_json_assertions_section:
+                  if ((.machine_expectations.structured_json_assertions? // []) | length) > 0 then
+                    "### Structured JSON Assertions\n\n"
+                    + "These fixed JSON assertions are evaluated only by the local grader. Do not execute them; paths are JSON arrays.\n\n"
+                    + "```json\n"
+                    + (.machine_expectations.structured_json_assertions | tojson)
+                    + "\n```\n\n"
+                  else "" end;
                 .cases[]
                 | select(.id == $id)
                 | "# " + .title + "\n\n"
@@ -56,7 +64,8 @@ emit_prompts() {
                   + "### Required Substrings\n\n"
                   + bullets(.machine_expectations.required_substrings) + "\n\n"
                   + "### Forbidden Substrings\n\n"
-                  + bullets(.machine_expectations.forbidden_substrings) + "\n"
+                  + bullets(.machine_expectations.forbidden_substrings) + "\n\n"
+                  + structured_json_assertions_section
             ' "$fixture_file" >"$packet_path"
         done < <(jq -r '.cases[].id' "$fixture_file")
 

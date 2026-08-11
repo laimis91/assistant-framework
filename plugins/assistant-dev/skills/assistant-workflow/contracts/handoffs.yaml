@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "5.0"
+schema_version: "6.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -312,7 +312,7 @@ handoffs:
         required: conditional
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Evidence-only Architecture Decision Pack mapping; the mapper maps evidence, never designs. Omit this field when architecture_design_mode=not_applicable."
-        validation: "Contains source-backed mapping evidence only. design_pressure_checks has exactly one entry per five concerns. Empty semantic_type_candidates or representative_paths arrays are valid only when a corresponding evidenced design-pressure entry is not_applicable or unresolved."
+        validation: "Contains source-backed mapping evidence only. design_pressure_checks has exactly one entry per five concerns. semantic_type_inspection independently records candidates_found, inspected_empty, or unresolved with its own evidence or gap refs. representative_paths remains a separate producer-consumer mapping."
         on_missing: re-dispatch
         object_fields:
           - name: source_revision_or_context_ref
@@ -362,27 +362,46 @@ handoffs:
               - name: source_ref
                 type: string
                 required: true
-          - name: semantic_type_candidates
-            type: object[]
+          - name: semantic_type_inspection
+            type: object
             required: true
+            validation: "Records one cohesive semantic inspection outcome. candidates_found requires non-empty candidates; inspected_empty records the inspected scope and evidence; unresolved records the gap and follow-up without borrowing a design-pressure status."
             object_fields:
-              - name: concept
-                type: string
-                required: true
-              - name: current_representation
-                type: string
-                required: true
-              - name: boundary
+              - name: outcome
                 type: enum
                 required: true
-                enum_values: [domain_or_public_semantic_type, local_temporary, wire_or_storage, foreign_or_framework, no_domain_semantics]
-              - name: finding_kind
-                type: enum
-                required: true
-                enum_values: [semantic_type_candidate, primitive_exception]
-              - name: evidence_ref
+                enum_values: [candidates_found, inspected_empty, unresolved]
+              - name: evidence_or_gap
                 type: string
                 required: true
+              - name: source_refs
+                type: string[]
+                required: true
+                min_items: 1
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "outcome == candidates_found"
+                min_items: 1
+                validation: "Present only when outcome=candidates_found; each candidate is evidence-backed and does not select the design."
+                object_fields:
+                  - name: concept
+                    type: string
+                    required: true
+                  - name: current_representation
+                    type: string
+                    required: true
+                  - name: boundary
+                    type: enum
+                    required: true
+                    enum_values: [domain_or_public_semantic_type, local_temporary, wire_or_storage, foreign_or_framework, no_domain_semantics]
+                  - name: finding_kind
+                    type: enum
+                    required: true
+                    enum_values: [semantic_type_candidate, primitive_exception]
+                  - name: evidence_ref
+                    type: string
+                    required: true
           - name: representative_paths
             type: object[]
             required: true

@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "4.0"
 contract: index
 skill: assistant-review
 
@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_decision_pack, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, qa_evaluation_mode]
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, qa_evaluation_mode]
     budget_words: 5000
   current_round:
     selectors:
@@ -55,7 +55,7 @@ load_sets:
         section: dispatch_context_bundles
         key: name
         names: [fresh_reviewer_context]
-    budget_words: 5600
+    budget_words: 5619
   return_validation:
     selectors:
       - id: review-return-validation-bundle
