@@ -405,19 +405,25 @@ handoffs:
           - name: representative_paths
             type: object[]
             required: true
+            min_items: 0
+            validation: "For the exactly one design_pressure_checks entry with concern=representative_path, status=observed requires at least one detailed producer-consumer path. status in [not_applicable, unresolved] requires an empty array and retains the reason in that pressure entry's evidence_or_gap/source_ref."
             object_fields:
               - name: producer
                 type: string
                 required: true
+                validation: "Non-empty."
               - name: consumer
                 type: string
                 required: true
+                validation: "Non-empty."
               - name: failure_or_cancellation
                 type: string
                 required: true
+                validation: "Non-empty."
               - name: source_ref
                 type: string
                 required: true
+                validation: "Non-empty."
           - name: evidence_refs
             type: string[]
             required: true

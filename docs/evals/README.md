@@ -559,7 +559,9 @@ value. The local grader applies only the fixed provider-neutral operators:
 `required_when_equals`, `array_field_values_exact`, and
 `array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
-content: arbitrary jq, code, or expressions are not accepted.
+content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
+requires the target array to contain at least one object, and every listed field
+in every object must be a non-empty string.
 
 Include local-only skill experiments explicitly:
 

@@ -234,6 +234,7 @@ count_structured_json_assertion_failures() {
             elif $assertion.operator == "array_items_nonempty_fields" then
               path_exists($assertion.path)
               and (value_at($assertion.path) | type == "array")
+              and (value_at($assertion.path) | length > 0)
               and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | ($item[$field] | type == "string" and test("[^[:space:]]"))))
             else false end
         ' "$response_path" >/dev/null; then

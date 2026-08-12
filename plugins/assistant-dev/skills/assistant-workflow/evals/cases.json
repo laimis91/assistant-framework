@@ -415,6 +415,7 @@
       "expected_behavior": [
         "Returns architecture_mapping_evidence.",
         "Records exactly one check for each design-pressure concern.",
+        "For representative_path status=observed, records at least one detailed producer-consumer path with failure or cancellation and source evidence; not_applicable or unresolved keeps the path array empty and records the reason in the pressure evidence.",
         "Maps evidence and unresolved questions without selecting the design."
       ],
       "pass_criteria": [
@@ -433,11 +434,29 @@
           "representative_path",
           "semantic_type_inspection",
           "representative_paths",
+          "representative_path status=observed requires at least one detailed producer-consumer path",
           "maps evidence, never designs"
         ],
         "forbidden_substrings": [
       "selected design",
       "empty semantic_type_candidates require a design-pressure check"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "observed"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "representative_paths"],
+            "fields": ["producer", "consumer", "failure_or_cancellation", "source_ref"]
+          }
         ]
       }
     },

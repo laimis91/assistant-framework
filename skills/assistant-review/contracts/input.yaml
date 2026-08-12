@@ -307,7 +307,8 @@ fields:
     enum_values: [lightweight, required, review_intensive]
     description: "Canonical architecture mode carried with an applicable Pack review"
     validation: "Must be the canonical mode for the reviewed Pack; architecture_decision_pack.mode must equal architecture_design_mode."
-    on_missing: fail
+    on_missing: infer
+    infer_from: "Only for a standalone equivalent architecture decision record, infer the canonical mode from record evidence: infer lightweight for one local owner, dependency, type, or verification decision; infer required for a cross-boundary/public contract, persistent data lifecycle, material resource/extensibility target, or genuinely viable design; infer review_intensive when independent_challenge_evidence records high-risk or conflicting drivers. A carried workflow Pack or handoff missing its canonical top-level mode fails; do not infer it from a nested Pack mode."
 
   - name: architecture_decision_pack
     type: object

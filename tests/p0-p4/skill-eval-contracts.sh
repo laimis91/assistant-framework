@@ -121,6 +121,9 @@ p0p4_write_skill_eval_responses() {
                     architecture-pack-resists-premature-abstraction)
                         jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
                         ;;
+                    code-mapper-applicable-architecture-evidence)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed"}, {concern: "ownership_and_disposal", status: "observed"}, {concern: "resource_envelope", status: "observed"}, {concern: "extension_registration", status: "observed"}, {concern: "representative_path", status: "observed", evidence_or_gap: "producer reaches consumer", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}' >"$response_path"
+                        ;;
                     code-mapper-inspected-empty-requires-evidence)
                         jq -n '{architecture_mapping_evidence: {semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "no domain concept crosses the inspected boundary", source_refs: ["src/order.rb"]}, representative_paths: ["src/order.rb"]}}' >"$response_path"
                         ;;
@@ -542,6 +545,28 @@ else
             fail "structured JSON grader accepted unsafe shapes or invalid JSON: ${structured_negative_failures[*]}"
         fi
     fi
+fi
+
+test_start "structured array item assertions require a non-empty target array"
+nonempty_array_items_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-array-items.XXXXXX")"
+nonempty_array_items_skill="$nonempty_array_items_root/assistant-eval-array-items"
+nonempty_array_items_responses="$nonempty_array_items_root/responses"
+nonempty_array_items_output="$nonempty_array_items_root/array-items.out"
+p0p4_register_cleanup "$nonempty_array_items_root"
+p0p4_write_skill_eval_fixture "$nonempty_array_items_skill"
+jq '
+  .cases[0].machine_expectations.structured_json_assertions = [
+    {"operator":"array_items_nonempty_fields","path":["contributors"],"fields":["contribution","evidence_ref"]}
+  ]
+' "$nonempty_array_items_skill/evals/cases.json" >"$nonempty_array_items_root/cases.json"
+mv "$nonempty_array_items_root/cases.json" "$nonempty_array_items_skill/evals/cases.json"
+mkdir -p "$nonempty_array_items_responses/assistant-eval-array-items"
+printf '%s\n' '{"fixture":"fixture required fixture first fixture second","contributors":[]}' >"$nonempty_array_items_responses/assistant-eval-array-items/fixture-case.txt"
+if "$skill_eval_runner" --responses "$nonempty_array_items_responses" --skill "$nonempty_array_items_skill" >"$nonempty_array_items_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=1" "$nonempty_array_items_output"; then
+    fail "array_items_nonempty_fields accepted an empty target array"
+else
+    pass
 fi
 
 test_start "skill eval runner rejects unknown and malformed structured JSON assertion fixtures"

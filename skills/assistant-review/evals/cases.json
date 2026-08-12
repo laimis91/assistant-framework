@@ -942,10 +942,12 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
+        "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its independent challenge evidence.",
         "The supplied ADR has enough source-backed content to derive the compact review projection."
       ],
       "expected_behavior": [
         "Derives a compact Architecture Decision Pack review projection from the standalone ADR instead of failing only because no workflow Pack artifact exists.",
+        "Infers canonical architecture_design_mode=review_intensive from the standalone record's independent challenge evidence and keeps architecture_decision_pack.mode=architecture_design_mode.",
         "Preserves separate typed facts with source refs and assumptions with status, rationale or impact, and optional source refs.",
         "Preserves material-question topic, why needed, risk if guessed, recommended default or none, and status.",
         "Carries independent challenge reference, dissent or validation, resolution, and selected-design impact into review."
@@ -974,6 +976,8 @@
           "risk if guessed",
           "recommended default",
           "independent challenge",
+          "architecture_design_mode=review_intensive",
+          "architecture_decision_pack.mode=architecture_design_mode",
           "selected-design impact"
         ],
         "forbidden_substrings": [

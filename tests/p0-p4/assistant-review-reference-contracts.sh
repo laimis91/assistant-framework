@@ -207,6 +207,12 @@ if ! ruby -ryaml -e '
     valid = input["schema_version"] == "4.0" && handoffs["schema_version"] == "4.0" && output["schema_version"] == "4.0" && index["schema_version"] == "4.0" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
+      canonical_mode["on_missing"] == "infer" &&
+      canonical_mode.fetch("infer_from").include?("standalone equivalent architecture decision record") &&
+      canonical_mode.fetch("infer_from").include?("one local owner, dependency, type, or verification decision") &&
+      canonical_mode.fetch("infer_from").include?("cross-boundary/public contract") &&
+      canonical_mode.fetch("infer_from").include?("independent_challenge_evidence") &&
+      canonical_mode.fetch("infer_from").include?("workflow Pack or handoff") &&
       entry_names.include?("architecture_design_mode") &&
       pack_fields.fetch("mode")["validation"] == "Must equal canonical architecture_design_mode" &&
       pack_fields.fetch("independent_challenge_evidence")["condition"] == "architecture_design_mode == review_intensive" &&
@@ -217,6 +223,15 @@ if ! ruby -ryaml -e '
     exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$review_output" "$review_index"; then
     architecture_pack_mode_consumer_failures+=("canonical input, Reviewer context, and output Pack mode binding")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-architecture-record-derives-review-projection") |
+    (.setup_context | any(. == "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its independent challenge evidence.")) and
+    (.expected_behavior | any(. == "Infers canonical architecture_design_mode=review_intensive from the standalone record\u0027s independent challenge evidence and keeps architecture_decision_pack.mode=architecture_design_mode.")) and
+    (.machine_expectations.required_substrings | index("architecture_design_mode=review_intensive")) and
+    (.machine_expectations.required_substrings | index("architecture_decision_pack.mode=architecture_design_mode"))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone review eval does not prove review_intensive normalization")
 fi
 for file_and_term in \
     "$review_skill::Migration note: assistant-review contracts are v4" \
