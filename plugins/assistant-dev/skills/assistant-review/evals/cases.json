@@ -942,12 +942,12 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
-        "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its independent challenge evidence.",
+        "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.",
         "The supplied ADR has enough source-backed content to derive the compact review projection."
       ],
       "expected_behavior": [
         "Derives a compact Architecture Decision Pack review projection from the standalone ADR instead of failing only because no workflow Pack artifact exists.",
-        "Infers canonical architecture_design_mode=review_intensive from the standalone record's independent challenge evidence and keeps architecture_decision_pack.mode=architecture_design_mode.",
+        "Infers canonical architecture_design_mode=review_intensive from the standalone record's high-risk/conflicting drivers, keeps architecture_decision_pack.mode=architecture_design_mode, and treats independent challenge evidence as corroboration rather than the mode determinant.",
         "Preserves separate typed facts with source refs and assumptions with status, rationale or impact, and optional source refs.",
         "Preserves material-question topic, why needed, risk if guessed, recommended default or none, and status.",
         "Carries independent challenge reference, dissent or validation, resolution, and selected-design impact into review."
@@ -985,6 +985,73 @@
           "cannot review a standalone ADR",
           "facts and assumptions are interchangeable",
           "drop the material questions"
+        ]
+      }
+    },
+    {
+      "id": "standalone-high-risk-record-without-challenge-remains-review-intensive",
+      "title": "Standalone high-risk ADR without challenge remains review intensive",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that a standalone ADR with high-risk or conflicting record drivers resolves review_intensive before missing independent challenge evidence is validated.",
+      "prompt": "Review this standalone ADR. It selects a retention policy that trades memory use against throughput and makes an irreversible public-data deletion decision. It records facts, assumptions, material questions, decision, risk, and verification evidence, but no independent challenge evidence. There is no workflow Architecture Decision Pack artifact. Return exactly one valid JSON object with architecture_design_mode, architecture_decision_pack.mode, and validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The ADR makes memory, throughput, public-data, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
+        "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.",
+        "No workflow architecture_design_mode is supplied."
+      ],
+      "expected_behavior": [
+        "Infers architecture_design_mode=review_intensive from the ADR drivers before inspecting challenge evidence and does not downgrade to required.",
+        "Reports missing independent challenge evidence as a validation failure, finding, or blocker required by review_intensive mode.",
+        "Does not invent independent challenge evidence or reject the ADR solely because it is standalone."
+      ],
+      "pass_criteria": [
+        "The response preserves review_intensive mode despite the missing challenge evidence.",
+        "The response identifies the missing independent challenge evidence as actionable review work."
+      ],
+      "fail_signals": [
+        "Downgrades the ADR to required because challenge evidence is absent.",
+        "Uses independent challenge evidence as the determinant for review_intensive mode.",
+        "Silently accepts the missing challenge evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_design_mode=review_intensive",
+          "memory-versus-throughput",
+          "irreversible public-data decision",
+          "missing independent challenge evidence",
+          "validation failure"
+        ],
+        "forbidden_substrings": [
+          "architecture_design_mode=required",
+          "challenge evidence determines the mode",
+          "missing challenge evidence is acceptable"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_design_mode"],
+            "expected": "review_intensive"
+          },
+          {
+            "operator": "equals_path",
+            "path": ["architecture_design_mode"],
+            "other_path": ["architecture_decision_pack", "mode"]
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "status"],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "missing_field"],
+            "expected": "independent_challenge_evidence"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["validation_result", "evidence_or_gap"]
+          }
         ]
       }
     },

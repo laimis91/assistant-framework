@@ -136,6 +136,18 @@ p0p4_write_skill_eval_responses() {
                 esac
                 continue
             fi
+            if [[ "$skill_name" == "assistant-review" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$id" in
+                    standalone-high-risk-record-without-challenge-remains-review-intensive)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive"}, validation_result: {status: "blocked", missing_field: "independent_challenge_evidence", evidence_or_gap: "The standalone ADR lacks the independent challenge evidence required by review_intensive mode."}}' >"$response_path"
+                        ;;
+                    *)
+                        fail "unhandled structured assistant-review eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
             {
                 printf 'Local grading response for %s/%s.\n' "$skill_name" "$id"
                 while IFS= read -r required; do

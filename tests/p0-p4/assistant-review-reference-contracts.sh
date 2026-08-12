@@ -211,7 +211,11 @@ if ! ruby -ryaml -e '
       canonical_mode.fetch("infer_from").include?("standalone equivalent architecture decision record") &&
       canonical_mode.fetch("infer_from").include?("one local owner, dependency, type, or verification decision") &&
       canonical_mode.fetch("infer_from").include?("cross-boundary/public contract") &&
+      canonical_mode.fetch("infer_from").include?("high-risk or conflicting drivers") &&
+      canonical_mode.fetch("infer_from").include?("memory vs throughput") &&
+      canonical_mode.fetch("infer_from").include?("irreversible public/data decision") &&
       canonical_mode.fetch("infer_from").include?("independent_challenge_evidence") &&
+      canonical_mode.fetch("infer_from").include?("corroborate but must not determine") &&
       canonical_mode.fetch("infer_from").include?("workflow Pack or handoff") &&
       entry_names.include?("architecture_design_mode") &&
       pack_fields.fetch("mode")["validation"] == "Must equal canonical architecture_design_mode" &&
@@ -226,12 +230,55 @@ if ! ruby -ryaml -e '
 fi
 if ! jq -e '
     .cases[] | select(.id == "standalone-architecture-record-derives-review-projection") |
-    (.setup_context | any(. == "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its independent challenge evidence.")) and
-    (.expected_behavior | any(. == "Infers canonical architecture_design_mode=review_intensive from the standalone record\u0027s independent challenge evidence and keeps architecture_decision_pack.mode=architecture_design_mode.")) and
+    (.setup_context | any(. == "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.")) and
+    (.expected_behavior | any(. == "Infers canonical architecture_design_mode=review_intensive from the standalone record\u0027s high-risk/conflicting drivers, keeps architecture_decision_pack.mode=architecture_design_mode, and treats independent challenge evidence as corroboration rather than the mode determinant.")) and
     (.machine_expectations.required_substrings | index("architecture_design_mode=review_intensive")) and
     (.machine_expectations.required_substrings | index("architecture_decision_pack.mode=architecture_design_mode"))
 ' "$review_evals" >/dev/null; then
     architecture_pack_mode_consumer_failures+=("standalone review eval does not prove review_intensive normalization")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-high-risk-record-without-challenge-remains-review-intensive") |
+    (.setup_context | any(. == "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.")) and
+    (.expected_behavior | any(. == "Infers architecture_design_mode=review_intensive from the ADR drivers before inspecting challenge evidence and does not downgrade to required.")) and
+    (.expected_behavior | any(. == "Reports missing independent challenge evidence as a validation failure, finding, or blocker required by review_intensive mode.")) and
+    (.machine_expectations.required_substrings | index("architecture_design_mode=review_intensive")) and
+    (.machine_expectations.required_substrings | index("missing independent challenge evidence")) and
+    (.machine_expectations.forbidden_substrings | index("architecture_design_mode=required"))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone high-risk review eval does not retain review_intensive when challenge evidence is missing")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-high-risk-record-without-challenge-remains-review-intensive") |
+    (.prompt | contains("Return exactly one valid JSON object")) and
+    (.machine_expectations.structured_json_assertions | length == 5) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["architecture_design_mode"],"expected":"review_intensive"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals_path","path":["architecture_design_mode"],"other_path":["architecture_decision_pack","mode"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","status"],"expected":"blocked"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","missing_field"],"expected":"independent_challenge_evidence"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone high-risk review eval is missing structured mode and blocked-validation assertions")
+fi
+adversarial_review_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-structured-adversary.XXXXXX")"
+adversarial_review_responses="$adversarial_review_root/responses"
+adversarial_review_output="$adversarial_review_root/grader.out"
+p0p4_register_cleanup "$adversarial_review_root"
+mkdir -p "$adversarial_review_responses/assistant-review"
+while IFS= read -r adversarial_case_id; do
+    adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
+    adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
+    if [[ "$adversarial_case_id" == "standalone-high-risk-record-without-challenge-remains-review-intensive" ]]; then
+        jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
+    else
+        printf '%s\n' "$adversarial_required_summary" >"$adversarial_response_path"
+    fi
+done < <(jq -r '.cases[].id' "$review_evals")
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review >"$adversarial_review_output" 2>&1; then
+    architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response passed")
+elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-challenge-remains-review-intensive' "$adversarial_review_output" \
+    || ! grep -Fq "structured JSON assertion failure" "$adversarial_review_output"; then
+    architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
     "$review_skill::Migration note: assistant-review contracts are v4" \
