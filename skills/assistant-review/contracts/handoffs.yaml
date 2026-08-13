@@ -40,7 +40,7 @@ dispatch_context_bundles:
     review_evidence_pointer:
       required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
       validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -157,6 +157,12 @@ handoffs:
             default: null
             description: "Optional PR URL, task journal path, command, or user-provided label"
 
+      - name: scope_size
+        type: enum
+        required: true
+        enum_values: [trivial, small, medium, large]
+        description: "Resolved review-scope size; medium+ requires rubric scoring and the Design Coherence Pass"
+
       - name: round
         type: int
         required: true
@@ -225,7 +231,7 @@ handoffs:
         required: false
         default: true
         description: "Whether Reviewer must apply SOLID, KISS, DRY, YAGNI, and readability checks from references/review-principles.md"
-        notes: "Default true for every review. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
+        notes: "Default true for every review. Medium+ scope also requires the Design Coherence Pass. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
 
       - name: reuse_search_instruction
         type: string
@@ -497,9 +503,9 @@ handoffs:
 
       - name: principle_checks
         type: object
-        required: false
-        condition: "quality_principles_required is true"
-        description: "Compact confirmation that the clean-code principle lens was applied"
+        required: conditional
+        condition: "quality_principles_required is true or scope_size in [medium, large]"
+        description: "Compact confirmation that the clean-code principle lens was applied; medium+ includes the Design Coherence Pass"
         object_fields:
           - name: solid
             type: string
@@ -521,6 +527,11 @@ handoffs:
             type: string
             required: true
             description: "Readability observations or 'no concrete risk found'"
+          - name: design_coherence
+            type: string
+            required: conditional
+            condition: "scope_size in [medium, large]"
+            description: "Affected responsibility/boundary assessment with an evidence-backed risk or 'no concrete risk found'"
 
       - name: reuse_search
         type: object

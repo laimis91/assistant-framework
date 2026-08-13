@@ -281,6 +281,91 @@
       }
     },
     {
+      "id": "review-medium-scope-design-coherence",
+      "title": "Medium review checks responsibility-boundary coherence",
+      "category": "design_coherence",
+      "purpose": "Checks that a medium+ review assesses responsibility boundaries from concrete evidence instead of treating design principles as slogans.",
+      "prompt": "Review this medium change. DeliveryCoordinator now validates customer input, applies eligibility policy, sends HTTP requests, writes status records, and formats operator messages. Policy, transport, persistence, and presentation evolve independently.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope is medium.",
+        "The described concerns have different owners and independent reasons to change."
+      ],
+      "expected_behavior": [
+        "Runs the Design Coherence Pass.",
+        "Identifies the affected responsibility boundary and the independently changing concerns.",
+        "Reports a design-coherence finding only with concrete evidence of maintainability, testing, or behavior risk.",
+        "Records principle_checks.design_coherence with the assessment.",
+        "Recommends the smallest durable boundary or responsibility adjustment rather than a speculative redesign."
+      ],
+      "pass_criteria": [
+        "The response names the independent reasons to change or the boundary they cross.",
+        "The finding is tied to concrete risk and evidence.",
+        "The response includes principle_checks.design_coherence.",
+        "The proposed fix is the smallest durable change."
+      ],
+      "fail_signals": [
+        "Reports a generic SOLID slogan without an observed risk.",
+        "Requires a redesign without concrete evidence.",
+        "Skips the explicit design-coherence conclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Design Coherence Pass",
+          "principle_checks.design_coherence",
+          "independent reasons to change",
+          "concrete risk",
+          "smallest durable fix"
+        ],
+        "forbidden_substrings": [
+          "violates SOLID",
+          "always split every coordinator",
+          "architecture is bad"
+        ]
+      }
+    },
+    {
+      "id": "review-design-coherence-avoids-structural-heuristic",
+      "title": "Design coherence does not manufacture a finding",
+      "category": "design_coherence",
+      "purpose": "Checks that a medium+ review can conclude no concrete design risk when a detailed implementation remains cohesive and evidence does not show an unclear boundary.",
+      "prompt": "Review this medium change. InvoiceSummaryBuilder performs a detailed transformation from one normalized invoice into one summary. Every step contributes to that calculation, the output has one consumer, and no separate policy, I/O, persistence, or presentation concern is introduced.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope is medium.",
+        "The unit has one cohesive responsibility and the available evidence shows no independently changing concern."
+      ],
+      "expected_behavior": [
+        "Runs the Design Coherence Pass.",
+        "Recognizes the unit as cohesive from the available evidence.",
+        "Records principle_checks.design_coherence as no concrete risk found.",
+        "Does not infer a design finding from a structural description or familiar implementation pattern alone."
+      ],
+      "pass_criteria": [
+        "The response records no concrete risk found for design coherence.",
+        "The response explains that the assessed unit is cohesive or has one reason to change.",
+        "No design finding is manufactured without concrete evidence."
+      ],
+      "fail_signals": [
+        "Treats detailed implementation as proof of multiple responsibilities.",
+        "Flags a design problem solely from a familiar structural shape.",
+        "Fails to record the design-coherence conclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Design Coherence Pass",
+          "no concrete risk found",
+          "cohesive",
+          "concrete evidence"
+        ],
+        "forbidden_substrings": [
+          "long code is always a design defect",
+          "structural diff proves a violation",
+          "split it by default"
+        ]
+      }
+    },
+    {
       "id": "review-detects-null-encoded-state-transitions",
       "title": "Review distinguishes null-encoded state from optional data",
       "category": "state_and_extensibility_modeling",

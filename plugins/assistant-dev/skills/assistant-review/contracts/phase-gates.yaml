@@ -109,6 +109,11 @@ gates:
         check: "Reviewer or direct-fallback review applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
         on_fail: "In delegated mode, re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only. In direct fallback mode, complete principle_checks against the fresh review context."
 
+      - id: RS6A
+        check: "For medium+ scope: Reviewer or direct-fallback review completed the Design Coherence Pass from references/review-principles.md and returned principle_checks.design_coherence with either an evidence-backed responsibility/boundary risk or 'no concrete risk found'"
+        condition: "scope_size in [medium, large]"
+        on_fail: "In delegated mode, re-dispatch Reviewer with the current review material and require the Design Coherence Pass plus principle_checks.design_coherence. In direct fallback mode, complete the pass against the fresh review context. Do not manufacture a finding from a structural heuristic alone."
+
       - id: RS_REUSE_SEARCH
         check: "Reviewer or direct-fallback return includes reuse_search from a fresh independent capability search, not merely carried Mapper/task-packet evidence. When applicability=applicable, it records bounded searches, candidates or no_candidate_reason, decision, and decision_rationale; an applicable review cannot return clean without this evidence."
         on_fail: "Re-dispatch Reviewer or complete direct fallback with the fresh independent bounded reuse search. For not_applicable, record the concrete applicability_reason without search ceremony."

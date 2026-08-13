@@ -12,17 +12,17 @@ Apply SOLID primarily to object-oriented or dependency-heavy code:
 - Interface Segregation: consumers should not depend on methods or data they do not use. Flag broad interfaces when they force no-op implementations, fake dependencies in tests, or unrelated callers to change together.
 - Dependency Inversion: high-level policy should not be glued to low-level details at boundaries. Flag direct dependencies on infrastructure, time, randomness, network, filesystem, or framework APIs when they hide behavior or block testing.
 
+## Design Coherence Pass
+
+For every medium+ review, identify the affected unit, boundary, responsibility, and independent reasons to change. Assess hidden coupling/state and data/control flow. Record `principle_checks.design_coherence` as `no concrete risk found` or an evidence-backed finding with affected surface, risk, and smallest durable fix. Do not infer a finding from code size, structural diff shape, or familiar pattern alone; a cohesive unit may correctly conclude `no concrete risk found`.
+
 ## KISS
 
-Prefer the simplest design that satisfies the verified requirement. Flag unnecessary layers, generic abstractions, configuration, indirection, state, branching, concurrency, or patterns when they make the current behavior harder to read, test, or change.
-
-KISS does not mean under-design. If a small abstraction removes real duplication, isolates external side effects, or makes a current requirement safer, it may be the simpler design.
+Prefer the simplest design that satisfies the verified requirement. Flag needless layers, abstractions, configuration, indirection, state, branching, concurrency, or patterns that make current behavior harder to read, test, or change. A small abstraction that removes real duplication, isolates side effects, or makes a current requirement safer may be simpler.
 
 ## DRY
 
-DRY is about duplicated knowledge, not merely similar-looking code. Flag duplication when the same business rule, schema, validation rule, calculation, mapping, config, permission, or protocol detail has multiple authoritative representations that can diverge.
-
-Do not force DRY on coincidental resemblance. If two similar blocks serve different concepts or change for different reasons, merging them can create hidden coupling.
+DRY is about duplicated knowledge, not merely similar-looking code. Flag business rules, schemas, validation, calculations, mappings, config, permissions, or protocol details with multiple authoritative representations that can diverge. Do not merge coincidental or independently changing similarities into hidden coupling.
 
 ## Reuse Search and Authoritative Duplication
 
@@ -30,9 +30,7 @@ Before implementation and independently during review, search existing capabilit
 
 ## YAGNI
 
-Avoid building capability for imagined future requirements. Flag speculative extension points, unused abstractions, dormant config, unused parameters, anticipatory generic types, and future-only branches when they add complexity without serving the current task.
-
-YAGNI is not permission to neglect code health. Tests, refactoring that keeps the code malleable, and small seams around real side effects can be current needs.
+Avoid imagined-future capability: flag speculative extension points, unused abstractions/config/parameters, anticipatory generic types, and future-only branches that add current complexity. YAGNI is not permission to neglect code health; it permits tests, health refactoring, and small seams around real side effects.
 
 ## State and Extensibility Modeling
 
@@ -60,15 +58,15 @@ Readability is a human judgment of how easy code is to understand and safely mai
 - comments that explain why, tradeoffs, or invariants rather than restating what
 - tests that read as executable behavior examples
 
-When reporting readability, cite the specific comprehension burden: ambiguous name, mixed abstraction levels, non-local state, long conditional path, duplicated concept, misleading comment, or test intent that cannot be inferred.
+Report the specific comprehension burden: ambiguous name, mixed abstraction, non-local state, long conditional path, duplicated concept, misleading comment, or unclear test intent.
 
 ## Reporting Rule
 
 Principle findings must include:
 
-- lens: SOLID, KISS, DRY, YAGNI, readability, or a precise combination
+- lens: SOLID, KISS, DRY, YAGNI, readability, design coherence, or combination
 - risk category: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, poor extension seam, or readability/maintainability drag
 - evidence: file, line, and observed behavior
 - fix: the smallest durable change that removes the risk
 
-Do not report vague findings such as "not clean", "violates SOLID", "not DRY", or "hard to read" without evidence and risk.
+Do not report vague findings without evidence and risk.

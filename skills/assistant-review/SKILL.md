@@ -115,7 +115,7 @@ Review a Pack only when workflow metadata or review material says one applies. I
 
 ## Principle and Readability Lens
 
-The fresh Reviewer bundle includes `references/review-principles.md` for the SOLID, KISS, DRY, YAGNI, and readability lens. Report a principle finding only when evidence shows concrete correctness, coupling, duplication, complexity, or maintainability risk.
+The fresh Reviewer bundle includes `references/review-principles.md` for clean-code checks. For medium+ scope, run its Design Coherence Pass and return `principle_checks.design_coherence`: evidence-backed risk or `no concrete risk found`, never a structural heuristic. Report findings only with concrete risk.
 
 For each principle/readability finding, include the violated lens, affected surface, concrete evidence, risk category, and smallest durable fix. Do not report acronym-only findings such as "violates SOLID" without naming the observed behavior and the user-facing or maintainer risk.
 

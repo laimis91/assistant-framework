@@ -30,6 +30,7 @@ while round <= 10:
        - round number, `additional_round_reason` when round >= 3, previously_fixed, finding_filter_policy, and review-mode flags
        - `reuse_search_instruction`: independently during review, conduct the bounded capability search for rule-like changes; Carried Mapper/task-packet evidence alone cannot satisfy review
        - `references/review-principles.md`
+       - for medium+ scope, its Design Coherence Pass and a `principle_checks.design_coherence` conclusion of either an evidence-backed risk or `no concrete risk found`; do not create a finding from structural heuristics alone
        - `references/review-rubric.md` for the medium+ Reviewer
        - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, Agentic Loop Safety Checklist, and/or Architecture Decision Pack Review Checklist
      - Exclude every untriggered checklist section. If no checklist flag is true, include no checklist section.

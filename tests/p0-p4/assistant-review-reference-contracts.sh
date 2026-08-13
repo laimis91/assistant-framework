@@ -69,6 +69,7 @@ review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-chec
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
 review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
 review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
 
@@ -146,6 +147,77 @@ if [[ "${#review_checklist_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
+fi
+
+test_start "assistant-review requires evidence-bound medium-scope design coherence"
+design_coherence_failures=()
+for file_and_term in \
+    "$review_skill::Design Coherence Pass" \
+    "$review_loop::principle_checks.design_coherence" \
+    "$review_handoffs::scope_size" \
+    "$review_handoffs::design_coherence" \
+    "$review_phase_gates::RS6A" \
+    "$review_phase_gates::principle_checks.design_coherence" \
+    "$review_evals::review-medium-scope-design-coherence" \
+    "$review_evals::review-design-coherence-avoids-structural-heuristic"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        design_coherence_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for section_and_term in \
+    "## Design Coherence Pass::independent reasons to change" \
+    "## Design Coherence Pass::no concrete risk found" \
+    "## Design Coherence Pass::structural diff shape"; do
+    section="${section_and_term%%::*}"
+    term="${section_and_term#*::}"
+    if ! p0p4_reference_section_has_term "$review_principles" "$section" "$term"; then
+        design_coherence_failures+=("skills/assistant-review/references/review-principles.md $section missing $term")
+    fi
+done
+if ! awk '
+    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
+    in_bundle && /^  - name: / { exit }
+    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
+        fields = $0
+        sub(/^.*\[/, "", fields)
+        sub(/\].*$/, "", fields)
+        count = split(fields, items, ",")
+        for (item_index = 1; item_index <= count; item_index++) {
+            item = items[item_index]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+            if (item == "scope_size") found = 1
+        }
+    }
+    END { exit found ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing scope_size")
+fi
+if ! awk '
+    $0 == "      - name: principle_checks" { in_checks = 1; next }
+    in_checks && /^      - name: / { exit }
+    in_checks && $0 == "        required: conditional" { required = 1 }
+    in_checks && $0 == "        condition: \"quality_principles_required is true or scope_size in [medium, large]\"" { condition = 1 }
+    END { exit required && condition ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("principle_checks is not conditionally required for its applicable scope")
+fi
+if ! awk '
+    $0 == "      - name: principle_checks" { in_checks = 1; next }
+    in_checks && /^      - name: / { exit }
+    in_checks && $0 == "          - name: design_coherence" { in_design_coherence = 1; next }
+    in_design_coherence && /^          - name: / { exit }
+    in_design_coherence && $0 == "            required: conditional" { required = 1 }
+    in_design_coherence && $0 == "            condition: \"scope_size in [medium, large]\"" { condition = 1 }
+    END { exit required && condition ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("principle_checks.design_coherence is not conditionally required for medium/large scope")
+fi
+if [[ "${#design_coherence_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review medium-scope design-coherence contract is incomplete: ${design_coherence_failures[*]}"
 fi
 
 test_start "assistant-review checks applicable Architecture Decision Packs"
