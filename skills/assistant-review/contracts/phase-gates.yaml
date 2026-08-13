@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "3.0"
+schema_version: "6.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -35,8 +35,13 @@ gates:
         on_fail: "Default to review-fix unless user explicitly requested audit"
 
       - id: E5
-        check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required are resolved before review starts"
-        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, and agentic_loop_safety_review_required=true for autonomous/repeated loop changes"
+        check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"
+        on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, agentic_loop_safety_review_required=true for autonomous/repeated loop changes, and architecture_decision_pack_review_required=true only when a carried Pack or relevant architecture decision record applies; require its top-level canonical architecture_design_mode."
+
+      - id: E5A
+        check: "When architecture_decision_pack_review_required is true, the compact Pack projection has at least one boundary, exactly one design-pressure conclusion for each of the five canonical concerns, and a ref resolving against the current authoritative Pack to recover selected design, rationale, and viable alternatives/dispositions"
+        condition: "architecture_decision_pack_review_required is true"
+        on_fail: "Block review and request a repaired Pack projection with non-empty boundaries plus control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path conclusions and a current authoritative selected-decision ref; never invent missing evidence."
 
       - id: E6
         check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
@@ -84,8 +89,8 @@ gates:
         on_fail: "Block Reviewer dispatch. Run current build/tests when fix/build is in scope or after a source fix; otherwise record exactly one allowed explicit not_applicable reason."
 
       - id: RS2B
-        check: "The declared reviewer_context boundary closure is strictly below 5000 words and excludes orchestrator_to_reviewer.return_fields"
-        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5000 words."
+        check: "The declared reviewer_context boundary closure is strictly below 5653 words and excludes orchestrator_to_reviewer.return_fields"
+        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5653 words."
 
       - id: RS3
         check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"
@@ -103,6 +108,11 @@ gates:
       - id: RS6
         check: "Reviewer or direct-fallback review applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
         on_fail: "In delegated mode, re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only. In direct fallback mode, complete principle_checks against the fresh review context."
+
+      - id: RS6A
+        check: "For medium+ scope: Reviewer or direct-fallback review completed the Design Coherence Pass from references/review-principles.md and returned principle_checks.design_coherence with either an evidence-backed responsibility/boundary risk or 'no concrete risk found'"
+        condition: "scope_size in [medium, large]"
+        on_fail: "In delegated mode, re-dispatch Reviewer with the current review material and require the Design Coherence Pass plus principle_checks.design_coherence. In direct fallback mode, complete the pass against the fresh review context. Do not manufacture a finding from a structural heuristic alone."
 
       - id: RS_REUSE_SEARCH
         check: "Reviewer or direct-fallback return includes reuse_search from a fresh independent capability search, not merely carried Mapper/task-packet evidence. When applicability=applicable, it records bounded searches, candidates or no_candidate_reason, decision, and decision_rationale; an applicable review cannot return clean without this evidence."
@@ -122,6 +132,11 @@ gates:
         check: "When agentic_loop_safety_review_required is true: Reviewer or direct-fallback review applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
         condition: "agentic_loop_safety_review_required is true"
         on_fail: "In delegated mode, re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation. In direct fallback mode, complete those agentic_loop_safety_checks before declaring clean."
+
+      - id: RS10
+        check: "When architecture_decision_pack_review_required is true: Reviewer or direct-fallback review applied the Architecture Decision Pack Review Checklist and returned architecture_decision_pack_checks; architecture_decision_pack.mode equals canonical architecture_design_mode and review_intensive includes independent challenge evidence"
+        condition: "architecture_decision_pack_review_required is true"
+        on_fail: "Review the Pack's source/revision freshness, material questions and invalidators, boundaries/lifecycle, control/early-exit and ownership/disposal decisions, resource envelope, extension-registration and representative-path checks, semantic type and primitive-exception ledger, falsifiable quality scenarios, compatibility/extension seam, and verification/rollback before declaring clean."
 
       - id: RS_RULE_DISTILLATION
         check: "When blocker/must-fix findings or recurring contract/checklist/eval gaps exist: review_finding_rule_distillation classifies them as one_off_fix, permanent_rule_candidate, or no_action with evidence and promotion decision"
@@ -373,6 +388,12 @@ invariants:
     scope: all_rounds
     condition: "round >= 3"
     on_fail: "Stop before dispatch and either record allowed new evidence from changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis, or exit with residual risk."
+
+  - id: INV11
+    check: "An applicable Architecture Decision Pack is reviewed as a fresh, falsifiable decision record rather than generic architecture advice or a permanent global memory"
+    scope: all_rounds
+    condition: "architecture_decision_pack_review_required is true"
+    on_fail: "Report stale facts, erased semantic types, undocumented primitive exceptions, unmeasured quality claims, compatibility gaps, or missing verification as evidence-backed findings or explicit unknowns."
 
   - id: INV_QA1
     check: "QA evaluation never replaces Code Reviewer or Reviewer compatibility review"

@@ -93,3 +93,35 @@ Use this checklist when reviewing changes to skills, workflow docs, contracts, e
    - Generated installer/global instruction templates, automation, docs, references, and eval contract tests must be updated when they can drive the old behavior.
 
 Treat missing inherited artifacts, template-contract drift, evals that pass incomplete outputs, method-signature drift, high-stakes recommendation guard gaps, or mirror-surface drift as must-fix or should-fix depending on release risk.
+
+## Architecture Decision Pack Review Checklist
+
+Use this checklist only when a workflow Architecture Decision Pack or equivalent architecture decision record is carried into review. The Pack is a compact decision record for the current goal or file boundary, not a standing architect agent or global memory store.
+
+1. **Freshness, facts, and material questions**
+   - Verify the Pack binds its repository facts to a revision/branch/path or its greenfield facts to a stated context, and that changed requirements or source evidence invalidate it.
+   - Ensure facts and assumptions are distinct. Ask or record every material question that changes the architecture choice; group it by topic, why it matters, risk if guessed, and safe default where one exists.
+   - For `review_intensive`, inspect the independent challenge evidence, dissent or validation, and selected-design impact rather than treating the Pack as independently confirmed.
+
+2. **Ownership, dependency, and lifecycle boundary**
+   - Check ownership, data/resource lifecycle, dependency direction, failure/cancellation behavior, and public boundary against the actual changed code and consumers.
+   - Treat an unowned resource, ambiguous lifecycle, or a dependency direction that conflicts with the stated boundary as a concrete risk.
+
+3. **Design-pressure checks**
+   - Verify whether a consumer needs early exit, cancellation, seek, retry, or pull control before approving a push-based loop or outer engine.
+   - Verify buffer, stream, handle, cancellation, and disposal ownership; resource claims must name bounded item/buffer/concurrency envelopes.
+   - Require an actual extension registration/selection seam when implementations must grow, and a representative producer-consumer path before approving a generic interface, callback, collection, or engine.
+
+4. **Semantic type ledger and primitive exceptions**
+   - Require named semantic/domain types when parameter, return, collection, callback, or public-contract primitives erase a meaningful identity, unit, state, lifecycle, or extension seam.
+   - A primitive is acceptable only at an explicit local temporary, wire/storage, foreign/framework, or no-domain-semantics boundary, with conversion/validation near that boundary. Cohesive request/command types may evolve; public/serialized contracts need a compatibility/versioning/adaptor or migration plan.
+
+5. **Falsifiable quality scenarios**
+   - A memory, performance, or extensibility claim must state workload, budget/threshold (or explicit unknown), measurement method, and failure condition.
+   - Do not approve a qualitative benefit merely because an architecture sounds clean. If evidence is unavailable, report a verification task or unknown rather than a confirmed benefit.
+
+6. **Compatibility, extension, and verification handoff**
+   - Check the selected alternative’s compatibility/migration/rollback path, predicted extension seam (or explicit none), and the tests, benchmark, inspection, or manual method that could falsify it.
+   - Confirm the Pack reference and its unresolved risks reach the implementation packet, tests, review result, and final handoff without duplicating unrelated task memory.
+
+Treat stale source facts, hidden primitive leakage, undocumented exceptions, unmeasured quality claims, public-contract evolution gaps, and missing verification/rollback paths as must-fix or should-fix depending on affected risk.

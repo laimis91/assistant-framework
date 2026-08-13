@@ -1,5 +1,5 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-clarify
 
@@ -42,19 +42,31 @@ artifacts:
   - name: clarification_questions
     type: object[]
     required: true
-    description: "Zero to three high-yield questions with defaults or recommendations. Empty when safe defaults make the request ready to execute."
+    description: "Every material clarification question grouped by decision topic. Empty when safe defaults or evidence make the request ready to execute."
     min_items: 0
-    validation: "Contains no more than three questions; each question includes a recommended default or bounded choices. Empty list is allowed only when status is ready_to_execute."
-    on_fail: "Ask the smallest necessary set of zero to three clarification questions before proceeding."
+    validation: "Contains every unresolved material question that affects correctness, scope, behavior, public contract, data, security, rollout, or verification; each cannot be discovered from context, lacks a safe default, and includes topic, impact, risk if guessed, and a default or bounded recommendation. There is no numeric cap. Empty list is allowed only when status is ready_to_execute."
+    on_fail: "Inspect available context, apply safe defaults, then ask every remaining admissible question grouped by topic before proceeding."
     object_fields:
+      - name: topic
+        type: string
+        required: true
+        description: "Decision group such as scope, interface, data lifecycle, verification, or rollout"
       - name: question
         type: string
         required: true
         description: "Clarification question to ask the user"
+      - name: why_needed
+        type: string
+        required: true
+        description: "How the answer changes correctness, scope, behavior, safety, or verification"
+      - name: risk_if_guessed
+        type: string
+        required: true
+        description: "Concrete failure or rework risk if the agent assumes an answer"
       - name: default_or_recommendation
         type: string
         required: true
-        description: "Recommended answer, default path, or bounded choices that preserve momentum"
+        description: "Recommended answer, default path, bounded choices, or explicit none when no safe default exists"
 
   - name: execution_target
     type: string

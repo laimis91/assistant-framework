@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "4.0"
+schema_version: "8.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,14 +48,14 @@ worker_status_protocol:
 artifact_reference_protocol:
   description: "Typed Artifact Reference entries are the compact producer/consumer ledger for harness task packets and worker returns; use them instead of ad hoc string refs when passing artifacts between agents."
   required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]
-  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
   validation_statuses: [pending, valid, invalid, stale, not_applicable]
   packet_rules:
     - "Artifact Reference entries must include artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary."
     - "location_ref is the typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable external artifact ref."
     - "Producer responsibility: create or update the artifact, assign artifact_id, set artifact_type, location_ref, schema_or_contract, validation_status, and summary."
     - "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref; stale, invalid, or missing refs block phase advancement or trigger re-dispatch."
-    - "CodeWriter and BuilderTester task packets receive artifact_refs for Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
+    - "CodeWriter and BuilderTester task packets receive artifact_refs for the Architecture Decision Pack, Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
     - "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable."
     - "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation."
 
@@ -83,6 +83,16 @@ handoffs:
         required: true
         enum_values: [low, moderate, high, critical]
         description: "Triage risk tier used to scale discovery depth"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Triage architecture mode; not_applicable keeps the mapper to ordinary structural mapping"
+      - name: architecture_design_trigger_reasons
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Concrete observed architecture triggers or not-applicable rationale that bound the mapper's evidence collection"
       - name: required_gates
         type: string[]
         required: true
@@ -297,6 +307,130 @@ handoffs:
         type: string
         required: true
         description: "Compact context map markdown for the orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or carry forward inline when file writes are unavailable"
+      - name: architecture_mapping_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Evidence-only Architecture Decision Pack mapping; the mapper maps evidence, never designs. Omit this field when architecture_design_mode=not_applicable."
+        validation: "Contains source-backed mapping evidence only. design_pressure_checks has exactly one entry per five concerns. semantic_type_inspection independently records candidates_found, inspected_empty, or unresolved with its own evidence or gap refs. representative_paths remains a separate producer-consumer mapping."
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_revision_or_context_ref
+            type: string
+            required: true
+          - name: ownership_lifecycle_boundaries
+            type: object[]
+            required: true
+            object_fields:
+              - name: boundary
+                type: string
+                required: true
+              - name: owner_or_unknown
+                type: string
+                required: true
+              - name: lifecycle_or_data_flow
+                type: string
+                required: true
+              - name: dependency_direction
+                type: string
+                required: true
+              - name: status
+                type: enum
+                required: true
+                enum_values: [observed, not_applicable, unresolved]
+              - name: evidence_ref
+                type: string
+                required: true
+          - name: design_pressure_checks
+            type: object[]
+            required: true
+            min_items: 5
+            max_items: 5
+            validation: "Contains exactly one per five concerns: control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; every entry has status/evidence_or_gap/source_ref."
+            object_fields:
+              - name: concern
+                type: enum
+                required: true
+                enum_values: [control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, representative_path]
+              - name: status
+                type: enum
+                required: true
+                enum_values: [observed, not_applicable, unresolved]
+              - name: evidence_or_gap
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: semantic_type_inspection
+            type: object
+            required: true
+            validation: "Records one cohesive semantic inspection outcome. candidates_found requires non-empty candidates; inspected_empty records the inspected scope and evidence; unresolved records the gap and follow-up without borrowing a design-pressure status."
+            object_fields:
+              - name: outcome
+                type: enum
+                required: true
+                enum_values: [candidates_found, inspected_empty, unresolved]
+              - name: evidence_or_gap
+                type: string
+                required: true
+              - name: source_refs
+                type: string[]
+                required: true
+                min_items: 1
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "outcome == candidates_found"
+                min_items: 1
+                validation: "Present only when outcome=candidates_found; each candidate is evidence-backed and does not select the design."
+                object_fields:
+                  - name: concept
+                    type: string
+                    required: true
+                  - name: current_representation
+                    type: string
+                    required: true
+                  - name: boundary
+                    type: enum
+                    required: true
+                    enum_values: [domain_or_public_semantic_type, local_temporary, wire_or_storage, foreign_or_framework, no_domain_semantics]
+                  - name: finding_kind
+                    type: enum
+                    required: true
+                    enum_values: [semantic_type_candidate, primitive_exception]
+                  - name: evidence_ref
+                    type: string
+                    required: true
+          - name: representative_paths
+            type: object[]
+            required: true
+            min_items: 0
+            validation: "For the exactly one design_pressure_checks entry with concern=representative_path, status=observed requires at least one detailed producer-consumer path. status in [not_applicable, unresolved] requires an empty array and retains the reason in that pressure entry's evidence_or_gap/source_ref."
+            object_fields:
+              - name: producer
+                type: string
+                required: true
+                validation: "Non-empty."
+              - name: consumer
+                type: string
+                required: true
+                validation: "Non-empty."
+              - name: failure_or_cancellation
+                type: string
+                required: true
+                validation: "Non-empty."
+              - name: source_ref
+                type: string
+                required: true
+                validation: "Non-empty."
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: unresolved_questions
+            type: string[]
+            required: true
     on_missing_field: "Re-dispatch CodeMapper with explicit request for the missing field"
 
   # ─────────────────────────────────────────────
@@ -409,6 +543,17 @@ handoffs:
         type: string
         required: true
         description: "Stable requirement ids, criteria, verification methods, manual scenarios/N/A, assumptions, and non-goals from Discover"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether the Architect must consume a typed Architecture Decision Pack"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Current Architecture Decision Pack reference; Architect consumes it rather than rediscovering its facts"
+        validation: "Resolves to a fresh pack with boundaries, design-pressure checks, Type Ledger, quality scenarios, verification, and invalidation conditions"
       - name: context_map
         type: string
         required: true
@@ -446,6 +591,36 @@ handoffs:
         condition: "search_mode == candidate_search"
         description: "Selected candidate, archive location, and constraints from references/candidate-search.md if Candidate Search already ran"
     return_fields:
+      - name: architecture_decision_pack_update
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
+        description: "Mergeable canonical Architecture Decision Pack update/ref returned when DECOMPOSE refreshes source evidence"
+        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_pack_ref
+            type: string
+            required: true
+          - name: updated_pack_ref
+            type: string
+            required: true
+            description: "Reference to the complete refreshed canonical Pack"
+          - name: freshness_basis
+            type: string
+            required: true
+          - name: changed_sections
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: merge_action
+            type: enum
+            required: true
+            enum_values: [replace_current_pack]
       - name: status
         type: enum
         required: true
@@ -586,6 +761,17 @@ handoffs:
         type: string
         required: true
         description: "Approved traceability spine; task packets and slice criteria must reference these requirement ids"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether task packets must carry Architecture Decision Pack commitments"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Fresh typed Architecture Decision Pack reference"
+        validation: "Resolves to the pack that owns the current selected design, design-pressure conclusions, semantic type decisions, quality scenarios, and review scope"
       - name: context_map
         type: string
         required: true
@@ -731,6 +917,36 @@ handoffs:
             type: string
             required: true
     return_fields:
+      - name: architecture_decision_pack_update
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
+        description: "Mergeable canonical Architecture Decision Pack update/ref returned when PLAN refreshes source evidence"
+        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_pack_ref
+            type: string
+            required: true
+          - name: updated_pack_ref
+            type: string
+            required: true
+            description: "Reference to the complete refreshed canonical Pack"
+          - name: freshness_basis
+            type: string
+            required: true
+          - name: changed_sections
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: merge_action
+            type: enum
+            required: true
+            enum_values: [replace_current_pack]
       - name: status
         type: enum
         required: true
@@ -805,6 +1021,37 @@ handoffs:
             required: true
             min_items: 1
             description: "Requirement Acceptance Map ids implemented by this packet"
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: files
             type: string[]
             required: false
@@ -922,7 +1169,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1059,6 +1306,11 @@ handoffs:
         type: int
         required: true
         description: "Which step(s) to implement"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether the current task packet is constrained by an Architecture Decision Pack"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1087,6 +1339,37 @@ handoffs:
             type: string[]
             required: true
             min_items: 1
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Current Architecture Decision Pack reference that constrains this Build step"
+            validation: "Resolves to the current design, including design-pressure checks, and must be refreshed before deviation"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1175,7 +1458,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1353,6 +1636,31 @@ handoffs:
           - name: detail
             type: string
             required: true
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "build_execution_lane == bounded_executor and current_task_packet.architecture_test_obligations is present"
+        min_items: 1
+        description: "Exact-once Architecture Decision Pack obligation coverage produced by the selected Build owner"
+        validation: "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
       - name: open_questions
         type: string[]
         required: false
@@ -1416,7 +1724,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true
@@ -1489,6 +1797,11 @@ handoffs:
         type: string[]
         required: true
         description: "Test projects or files to run"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        description: "Whether verification must consume Architecture Decision Pack commitments"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1513,6 +1826,37 @@ handoffs:
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Architecture Decision Pack reference whose design-pressure, quality, and type commitments this verification checks"
+            validation: "Resolves to the fresh selected-design pack"
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1601,7 +1945,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1625,6 +1969,10 @@ handoffs:
           - name: files_to_test
             type: string[]
             required: true
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether this verification packet is in an active TDD cycle"
           - name: evidence_to_record
             type: string[]
             required: true
@@ -1698,6 +2046,31 @@ handoffs:
             type: string[]
             required: true
             description: "Concise success signals or failure messages, not raw logs"
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "build_execution_lane == separated_workers and current_task_packet.architecture_test_obligations is present"
+        min_items: 1
+        description: "Exact-once Architecture Decision Pack obligation coverage produced by the selected Build owner"
+        validation: "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
       - name: artifact_refs
         type: object[]
         required: false
@@ -1711,7 +2084,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true

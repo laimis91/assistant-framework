@@ -23,6 +23,9 @@ No separate plan document needed. Include directly in your response:
 - Owner/consumer: [who uses it]
 - Non-goals/exclusions: [what not to produce]
 **Files:** [list of files to change]
+**Architecture Decision Pack:** [ref, or N/A with concrete reason]
+- **Pack handoff binding:** [`downstream_bound`; context/journal ref plus atomically bound task-packet and review-scope refs before Build]
+- **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
 **Tests:** [how to verify]
 **SRP check:** [single responsibility confirmed / split needed]
@@ -40,6 +43,10 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
+- Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
+- Pack handoff binding: [discover_only only before Plan; otherwise downstream_bound | context/journal ref | plan/task-packet ref | review-scope ref]
+- Plan-mode-none Pack binding: [before Build, atomically set downstream_bound with compact inline task-packet/execution and inline review-scope refs]
+- Architecture test obligations: [when TDD applies to a Pack, carry each stable obligation_id, obligation kind, behavior, and verification into CodeWriter/BuilderTester; selected Build owner returns exact-once architecture_obligation_coverage]
 - Behavior / acceptance criteria:
   - [R#] [binary observable behavior]
   - [R#] [binary observable behavior]
@@ -55,6 +62,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason
   - RED command: [command or "N/A"]
   - Expected failure: [specific failing test/assertion or "N/A"]
+  - Architecture test obligations: [N/A unless tdd_applies=true and an Architecture Decision Pack applies; otherwise stable obligation_id, Pack ref, kind, behavior, verification]
 - Implementation notes / constraints:
   - implementation_notes:
     - [existing pattern to follow, dependency rule, non-goal, or boundary]
@@ -76,7 +84,14 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Loop / Experiment Routing:
   - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
   - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
-  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise ref with retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
+  - progressive_activation_provenance: [on first activation atomically set positive activation_ordinal; never-activated items omit it; keep ordinals immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs, so ascending ordinals reconstruct activated_decision_item_refs before the second activation]
+  - progressive_blocked_recovery: [when progressive_discovery_state=blocked retain non-empty blocked_item_refs to canonical status=blocked items with typed recovery; readiness exhaustion uses blocker_kind=readiness_exhausted and keeps the item inactive]
+  - loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise ref with progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained, stable identity/cap/history through pause/blocked/compaction/continuation/third+ activation, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation]
+  - progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; terminally_archived only after progressive_terminal_archival carries explicit final archival/termination evidence, binds current task identity, final decision-map ref, typed archival/termination basis, and resolvable evidence refs proving continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert]
+  - progressive_terminal_archival: [required when terminally_archived; typed tombstone with current_task_identity, final_progressive_decision_map_ref, final_archival_or_termination_basis, and evidence_refs; missing/dangling/mismatched evidence fails closed]
+  - route-clear retired/excluded coverage: [retired_or_excluded_deferred_uncertainty_refs is ordered unique, resolves exactly once, exactly covers current-map deferred uncertainty status retired/excluded, and is traced into the consuming Requirement Acceptance Map as a non-goal or approved exclusion]
+  - deferred uncertainty conversion: [each status=unlocked deferred_uncertainty records converted_decision_item_ref to an actionable canonical decision item appearing exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs]
+  - route-clear decision partition: [route_clear_handoff.decisions lists every current-map resolved decision exactly once through canonical decision_resolution.decision_item_ref values; superseded/excluded decisions appear exactly once in exclusions; decisions is non-empty when any current-map decision has status=resolved, and retained historical resolutions for superseded/excluded current-map items are lineage evidence only and do not appear in decisions; decisions is empty only for a legitimate all-excluded route]
   - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
 - Harness routing: [N/A unless harness_capable=true or QA criteria independently apply; otherwise refs to appendix, Done Contract, Harness Recipe, run state, trace/replay, artifact ledger]
 - Deviation / rollback rule:
@@ -138,6 +153,8 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
 - Plan mode: [approval_required]
+- Architecture design mode: [not_applicable | lightweight | required | review_intensive]
+- Architecture trigger reasons: [concrete evidence, or N/A reason]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
 - Required agents: [roles/skills selected from size, task type, and risk]
 - Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
@@ -151,6 +168,21 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
 - Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
+
+## Architecture Decision Pack
+- Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
+- Handoff binding: [discover_only: context/journal ref only; downstream_bound: context/journal, plan/task-packet, and review-scope refs atomically bound before Build]
+- Freshness: [branch/HEAD or greenfield basis; source refs; invalidation conditions]
+- Facts versus assumptions: [compact refs]
+- Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
+- Design-pressure checks: [control/early exit, ownership/disposal, resource envelope, extension registration, representative path]
+- Material design questions: [none before approval, or grouped question refs]
+- Boundaries / ownership / lifecycle: [compact table or ref]
+- Type Ledger: [semantic types, primitive exceptions with conversion points, and extension seams]
+- Interface evolution: [consumer/owner, input, output/failure, compatibility/versioning/adapters]
+- Quality scenarios: [attribute, workload, budget or explicit unknown, measurement, failure condition]
+- Selected design / genuine alternatives: [decision and trade-offs]
+- Verification / review scope: [command or method, success signal, failure condition, reviewer checks]
 
 ## Research (current state)
 - Modules/subprojects: ...
@@ -208,13 +240,21 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 
 ## Loop / Experiment Routing
 
-Only for explicit workflow experiments or explicit repeat/optimization loops.
+Only for explicit workflow experiments, explicit repeat/optimization loops, or a
+second/sequential progressive decision activation.
 Ordinary medium+ tasks keep `harness_capable=false`; loop artifacts alone do not
 require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact
 Reference Ledger, or QA evaluation.
 
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
-- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop; otherwise compact ref with loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
+- progressive_activation_provenance: [on first activation atomically set positive activation_ordinal; never-activated items omit it; keep ordinals immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs and across resolved/blocked/superseded/excluded status and compaction, so ascending ordinals reconstruct activated_decision_item_refs before the second activation]
+- progressive_blocked_recovery: [when progressive_discovery_state=blocked retain non-empty blocked_item_refs to canonical status=blocked items with blocker_kind/blocker_reason/unblock_condition; readiness exhaustion uses blocker_kind=readiness_exhausted and keeps the proposed item inactive]
+- loop_readiness_assessment: [N/A unless explicit repeat/optimization loop or second/sequential progressive decision activation; otherwise compact ref with progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained, stable readiness identity/map/immutable cap/cumulative history; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination transition to terminally_archived permits omission. Task state: completed does not qualify, and terminally_archived cannot revert. Never reopen or reset, loop type/trigger/verifier/stop/max iterations/budget/tool access/state tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness routing]
+- progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; terminally_archived only after progressive_terminal_archival carries explicit final archival/termination evidence, binds current task identity, final decision-map ref, typed archival/termination basis, and resolvable evidence refs proving continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert]
+- deferred uncertainty conversion: [each status=unlocked deferred_uncertainty records converted_decision_item_ref to an actionable canonical decision item appearing exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs]
+- route-clear decision partition: [route_clear_handoff.decisions lists every current-map resolved decision exactly once through canonical decision_resolution.decision_item_ref values; superseded/excluded decisions appear exactly once in exclusions; decisions is non-empty when any current-map decision has status=resolved, and retained historical resolutions for superseded/excluded current-map items are lineage evidence only and do not appear in decisions; decisions is empty only for a legitimate all-excluded route]
+- loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require harness/QA artifacts]
+- Progressive current map: [N/A for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable, or after progressive_artifact_retention_state=terminally_archived; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; every current-map deferred uncertainty retains unlocking_decision_item_ref to a current-map predecessor; retired/excluded/history entries may remain outside current refs]
 
 ## Harness Appendix Routing
 

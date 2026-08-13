@@ -1,8 +1,8 @@
 # Contract Design Checklist
 
-Validate every new or modified skill against these 13 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
+Validate every new or modified skill against these 14 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
 
-## The 13 Rules
+## The 14 Rules
 
 ### 1. Required fields have `on_missing` actions
 - [ ] Every field with `required: true` has an `on_missing:` value
@@ -65,9 +65,15 @@ Validate every new or modified skill against these 13 rules from the [contract d
 ### 12. Clarification prompts are admissible
 - [ ] `on_missing: ask` is used only for missing data that materially changes the outcome
 - [ ] The answer cannot be discovered from prompt, context, local files, or safe defaults
-- [ ] Question budgets are maximums, not quotas; clear prompts proceed without ritual questions
+- [ ] Ask every unresolved material question, grouped by topic with why/risk/default; clear prompts proceed without ritual questions and no numeric quota suppresses material uncertainty
 
-### 13. Loop controllers are explicit and bounded
+### 13. Semantic interfaces retain domain meaning
+- [ ] Public/domain/lifecycle/unit/extension-bearing parameters, returns, collections, and callbacks use named semantic types rather than generic primitives
+- [ ] A primitive exception is explicitly classified as local temporary, wire/storage, foreign/framework, or no-domain-semantics and has nearby conversion/validation
+- [ ] Cohesive request/command types may evolve; public/serialized contracts have a versioning, adapter, compatibility, or migration path
+- [ ] When an interface chooses control flow, resource ownership, or an extension seam, it records a representative producer-consumer path plus applicable early-exit, disposal, bounded-resource, and registration checks instead of inventing a generic engine
+
+### 14. Loop controllers are explicit and bounded
 - [ ] Loop-based Process skills define explicit bounded controller artifacts
 - [ ] Code review and QA remain distinct responsibilities and handoffs
 - [ ] Stagnation, repeated drift/regression, pivots, and blockers use explicit pivot/restart decisions

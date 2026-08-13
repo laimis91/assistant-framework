@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "3.0"
+schema_version: "6.0"
 contract: output
 skill: assistant-review
 
@@ -530,6 +530,45 @@ artifacts:
         type: string
         required: true
 
+  - name: architecture_decision_pack_review
+    type: object
+    required: conditional
+    condition: "architecture_decision_pack_review_required is true"
+    description: "Evidence-backed review of a fresh Architecture Decision Pack"
+    validation: "Checks freshness, material questions, boundaries, design-pressure checks, semantic types/primitive exceptions, quality scenarios, compatibility/extension seam, and handoff/verification. architecture_decision_pack.mode must equal canonical architecture_design_mode; review_intensive requires independent_challenge_evidence. Missing workload/budget/measurement/failure evidence cannot be reported as a confirmed quality benefit."
+    object_fields:
+      - name: freshness_and_facts
+        type: string
+        required: true
+      - name: material_questions_and_invalidators
+        type: string
+        required: true
+      - name: independent_challenge_evidence
+        type: string
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+      - name: ownership_dependency_and_lifecycle_boundary
+        type: string
+        required: true
+      - name: design_pressure_checks
+        type: string
+        required: true
+      - name: semantic_type_and_primitive_exception_ledger
+        type: string
+        required: true
+      - name: quality_scenario_falsifiability
+        type: string
+        required: true
+      - name: compatibility_and_extension_seam
+        type: string
+        required: true
+      - name: verification_handoff_and_rollback
+        type: string
+        required: true
+      - name: architecture_pack_findings_summary
+        type: string
+        required: true
+
   - name: bugfix_evidence_review
     type: object
     required: conditional
@@ -630,6 +669,7 @@ artifacts:
 # 5. If semantic_contract_review_required=true: semantic_contract_review is populated and semantic findings are included in final_summary/audit_report
 # 6. If behavioral_contract_review_required=true: behavioral_contract_review is populated and behavioral findings are included in final_summary/audit_report
 # 7. If agentic_loop_safety_review_required=true: agentic_loop_safety_review is populated and loop-safety findings are included in final_summary/audit_report
+# 8. If architecture_decision_pack_review_required=true: architecture_decision_pack_review is populated and Pack findings are included in final_summary/audit_report
 # 8. If qa_evaluation_mode=required: qa_evaluation_delegation_path and qa_evaluation_result are populated after build/test and code-review evidence; QA result does not replace final_summary or code-review artifacts
 # 9. If scoped domain rubrics were used: qa_evaluation_result includes selected_domain_rubrics and domain_quality_scores; if not scoped, no invented domain rubric output is required or accepted
 # 10. If review or QA triggered STAGNATION, repeated DRIFT, repeated REGRESSION, or pivot action: pivot_restart_decision is populated before any additional review/fix/QA/build dispatch

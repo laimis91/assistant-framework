@@ -210,8 +210,8 @@
       }
     },
     {
-      "id": "clarification-cap-is-not-question-quota",
-      "title": "Clarification cap is not question quota",
+      "id": "clarification-is-material-not-capped",
+      "title": "Clarification is material, not capped",
       "category": "clarification_admissibility",
       "purpose": "Checks that clear medium+ tasks can proceed with zero clarification questions while ambiguous risky tasks block before planning.",
       "prompt": "Implement the approved runtime integration contract test exactly as described in the issue, using the named files and expected assertion text.",
@@ -222,7 +222,7 @@
       ],
       "expected_behavior": [
         "Records clarification questions asked as 0 when context is sufficient.",
-        "States the question cap is a maximum, not a quota.",
+        "States that no numeric cap or quota suppresses material questions.",
         "Does not ask a random medium-task question.",
         "If ambiguity appears later, returns to Discover instead of guessing."
       ],
@@ -233,20 +233,452 @@
       ],
       "fail_signals": [
         "Asks a random question solely because the task is medium.",
-        "Treats question cap as a required question count.",
+        "Suppresses a material question to satisfy a numeric quota.",
         "Builds despite unresolved implementation-shaping ambiguity."
       ],
       "machine_expectations": {
         "required_substrings": [
           "Clarification questions asked: 0",
-          "cap is maximum, not quota",
+          "no numeric cap or quota",
           "admissible",
           "high"
         ],
         "forbidden_substrings": [
           "medium tasks must ask at least one question",
-          "question quota",
-          "I will guess"
+          "I will guess",
+          "I will limit material questions to three"
+        ]
+      }
+    },
+    {
+      "id": "architecture-pack-resists-premature-abstraction",
+      "title": "Architecture Pack resists premature abstraction",
+      "category": "architecture_design_pressure",
+      "purpose": "Checks that the workflow makes a source-backed architecture decision without inventing a generic engine or hiding resource ownership behind generic primitives.",
+    "prompt": "Design infrastructure for algorithms that process decoded files sequentially in one pass. Existing decoders have two real shapes: block decoders own a format-sized buffer, while streaming decoders can adapt to a caller buffer. Files can expand to hundreds of megabytes and the server handles concurrent requests. One algorithm runs per pass, formats and algorithms will grow, and some algorithms may finish early. Do not write code until the design is approved. Select architecture_design_mode=review_intensive and return the complete response as one valid JSON object.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Local source contains the two decoder shapes and their current ownership behavior.",
+        "The task has resource, lifecycle, extension, and public interface consequences.",
+        "A selected implementation may fit one small slice; size does not waive required or review-intensive architecture traceability."
+      ],
+      "expected_behavior": [
+        "Selects architecture_design_mode=review_intensive, creates a fresh Architecture Decision Pack, and retains independent_challenge_evidence with challenge_ref, dissent_or_validation, resolution, and selected_design_impact through planning and review.",
+        "Discover uses handoff_binding_state=discover_only with context_or_journal_ref only and does not invent future refs.",
+        "Plan atomically sets handoff_binding_state=downstream_bound with plan_or_task_packet_ref and review_scope_ref before Build.",
+        "For plan_mode=none, the Discover exit transition atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action.",
+        "Creates a Requirement Acceptance Map before Architect PLAN even if the accepted implementation is size=small.",
+        "Requires Architect DECOMPOSE or PLAN to return architecture_decision_pack_update when refreshed source evidence changes the Pack.",
+        "Records design_pressure_checks for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path.",
+        "Identifies material questions or evidence about cancellation/early completion, buffer and stream ownership, disposal, concurrent memory bounds, registration/selection, and a concrete decoder-to-algorithm path.",
+        "Uses a Type Ledger to prefer named domain/request/result types over unexplained generic strings, integers, callbacks, or collections.",
+        "Keeps any push/pull or orchestration choice provisional until it is justified by the representative path and failure/cancellation behavior.",
+      "Defines workload, budget or explicit unknown, measurement, and failure condition before claiming memory efficiency or performance."
+      ,"Returns the complete response as one valid JSON object, with architecture_design_mode and architecture_decision_pack.mode included as structured fields."
+      ],
+      "pass_criteria": [
+        "The response names the Architecture Decision Pack and its freshness basis.",
+        "The response resolves or asks every material design question without a numeric cap.",
+        "The response gives explicit ownership, lifecycle, extension, and verification evidence before plan approval.",
+        "The response does not manufacture a generic engine merely because later algorithms may exist."
+      ],
+      "fail_signals": [
+        "Commits to a generic push accumulator or outer engine without a concrete consumer path.",
+        "Leaves buffer, stream, cancellation, or disposal ownership implicit.",
+        "Hardcodes a closed list of formats despite the stated extension requirement.",
+        "Claims memory efficiency without a workload, bound, measurement, and failure condition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+      "Architecture Decision Pack",
+      "independent_challenge_evidence",
+      "selected_design_impact",
+      "architecture_decision_pack.mode=architecture_design_mode",
+      "review_intensive cannot use a weaker nested mode",
+          "handoff_binding_state=discover_only",
+          "context_or_journal_ref",
+          "handoff_binding_state=downstream_bound",
+          "plan_or_task_packet_ref",
+          "review_scope_ref",
+          "plan_mode=none",
+          "compact inline task-packet/execution",
+          "inline review-scope refs",
+          "Requirement Acceptance Map",
+          "architecture_decision_pack_update",
+          "design_pressure_checks",
+          "control_and_early_exit",
+          "ownership_and_disposal",
+          "resource_envelope",
+          "extension_registration",
+          "representative_path",
+          "Type Ledger",
+          "workload",
+          "failure condition"
+        ],
+        "forbidden_substrings": [
+      "generic push accumulator",
+      "hardcode all formats",
+      "unbounded buffer",
+      "assume the outer engine",
+      "outer review_intensive with nested lightweight mode and no independent_challenge_evidence",
+      "architecture_design_mode=review_intensive; architecture_decision_pack.mode=lightweight; independent_challenge_evidence=missing",
+      "architecture_design_mode=review_intensive; architecture_decision_pack.mode=required; independent_challenge_evidence=missing"
+    ],
+    "structured_json_assertions": [
+      {
+        "operator": "equals",
+        "path": ["architecture_design_mode"],
+        "expected": "review_intensive"
+      },
+      {
+        "operator": "equals_path",
+        "path": ["architecture_design_mode"],
+        "other_path": ["architecture_decision_pack", "mode"]
+      },
+      {
+        "operator": "required_when_equals",
+        "when_path": ["architecture_design_mode"],
+        "value": "review_intensive",
+        "path": ["architecture_decision_pack", "independent_challenge_evidence"],
+        "expected_type": "object"
+      },
+      {
+        "operator": "nonempty_string",
+        "path": ["architecture_decision_pack", "independent_challenge_evidence", "challenge_ref"]
+      },
+      {
+        "operator": "nonempty_string",
+        "path": ["architecture_decision_pack", "independent_challenge_evidence", "dissent_or_validation"]
+      },
+      {
+        "operator": "nonempty_string",
+        "path": ["architecture_decision_pack", "independent_challenge_evidence", "resolution"]
+      },
+      {
+        "operator": "nonempty_string",
+        "path": ["architecture_decision_pack", "independent_challenge_evidence", "selected_design_impact"]
+      }
+    ]
+      }
+    },
+    {
+      "id": "plan-mode-none-binds-pack-before-build",
+      "title": "Plan mode none binds Pack before Build",
+      "category": "architecture_pack_handoff_binding",
+      "purpose": "Checks that a lightweight Pack does not leave Discover-only refs when Plan is intentionally omitted.",
+      "prompt": "Apply plan_mode=none to this lightweight Architecture Decision Pack and begin Build.",
+      "setup_context": [
+        "plan_mode=none and architecture_design_mode=lightweight.",
+        "Discover has handoff_binding_state=discover_only and context_or_journal_ref.",
+        "The file scope, acceptance check, and verification argv are already evidenced."
+      ],
+      "expected_behavior": [
+        "Does not create a Plan checkpoint or plan_document.",
+        "Before any Build action, atomically changes handoff_binding_state to downstream_bound.",
+        "Records compact inline task-packet/execution and inline review-scope refs.",
+        "Retains downstream_bound through Build and Review."
+      ],
+      "pass_criteria": [
+        "The response names the Discover exit binding transition.",
+        "The response does not leave a Discover-only Pack in Build."
+      ],
+      "fail_signals": [
+        "Begins Build with handoff_binding_state=discover_only.",
+        "Invents a plan_document for plan_mode=none.",
+        "Omits either inline downstream reference."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "plan_mode=none",
+          "Discover exit",
+          "handoff_binding_state=downstream_bound",
+          "compact inline task-packet/execution",
+          "inline review-scope refs"
+        ],
+        "forbidden_substrings": [
+          "Build with handoff_binding_state=discover_only",
+          "plan_document required"
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-applicable-architecture-evidence",
+      "title": "Code Mapper returns applicable architecture evidence",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that applicable architecture mapping returns evidence rather than a design.",
+      "prompt": "Map the codebase for this required Architecture Decision Pack. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "architecture_design_trigger_reasons is non-empty.",
+        "Code Mapper is selected for Discover."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence.",
+        "Records exactly one check for each design-pressure concern.",
+        "For this observed representative path, records at least one detailed producer-consumer path with failure or cancellation and source evidence.",
+        "Maps evidence and unresolved questions without selecting the design."
+      ],
+      "pass_criteria": [
+        "The response returns evidence for every required pressure concern."
+      ],
+      "fail_signals": [
+        "Selects or recommends an architecture instead of mapping evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "control_and_early_exit",
+          "ownership_and_disposal",
+          "resource_envelope",
+          "extension_registration",
+          "representative_path",
+          "semantic_type_inspection",
+          "representative_paths",
+          "representative_path status=observed requires at least one detailed producer-consumer path",
+          "maps evidence, never designs"
+        ],
+        "forbidden_substrings": [
+      "selected design",
+      "empty semantic_type_candidates require a design-pressure check"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "observed"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "representative_paths"],
+            "fields": ["producer", "consumer", "failure_or_cancellation", "source_ref"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-representative-path-not-applicable",
+      "title": "Code Mapper preserves a not-applicable representative path",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that an applicable Pack mapping can record a source-backed not-applicable representative path without inventing producer-consumer details.",
+      "prompt": "Map this required Architecture Decision Pack boundary where source inspection proves no representative producer-consumer path applies. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "The other four design-pressure concerns have been inspected.",
+        "The representative_path concern has source-backed not-applicable evidence."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence with representative_path status=not_applicable.",
+        "Keeps architecture_mapping_evidence.representative_paths empty and records the reason and source in the representative_path pressure evidence.",
+        "Maps evidence and never designs."
+      ],
+      "pass_criteria": [
+        "The response preserves the typed not_applicable status without fabricating a representative path."
+      ],
+      "fail_signals": [
+        "Fabricates producer-consumer details for a not-applicable representative path."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "representative_path",
+          "not_applicable",
+          "representative_paths",
+          "evidence_or_gap"
+        ],
+        "forbidden_substrings": [
+          "invented representative path"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "not_applicable"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "evidence_or_gap"]
+          },
+          {
+            "operator": "empty_array",
+            "path": ["architecture_mapping_evidence", "representative_paths"]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-representative-path-unresolved",
+      "title": "Code Mapper preserves an unresolved representative path",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that an applicable Pack mapping can retain an unresolved representative path without fabricating producer-consumer details.",
+      "prompt": "Map this required Architecture Decision Pack boundary where the representative producer-consumer path remains unresolved after bounded source inspection. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "The other four design-pressure concerns have been inspected.",
+        "The representative_path concern has a concrete evidence gap and source reference."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence with representative_path status=unresolved.",
+        "Keeps architecture_mapping_evidence.representative_paths empty and records the evidence gap and source in the representative_path pressure evidence.",
+        "Maps evidence and never designs."
+      ],
+      "pass_criteria": [
+        "The response preserves the typed unresolved status without fabricating a representative path."
+      ],
+      "fail_signals": [
+        "Fabricates producer-consumer details for an unresolved representative path."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "representative_path",
+          "unresolved",
+          "representative_paths",
+          "evidence_or_gap"
+        ],
+        "forbidden_substrings": [
+          "invented representative path"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "unresolved"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "evidence_or_gap"]
+          },
+          {
+            "operator": "empty_array",
+            "path": ["architecture_mapping_evidence", "representative_paths"]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-inspected-empty-requires-evidence",
+      "title": "Code Mapper inspected-empty semantic outcome retains evidence",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that an inspected-empty semantic type result is evidence-backed rather than an unsupported omission.",
+    "prompt": "Map a required Architecture Decision Pack boundary where no semantic type candidate crosses the inspected path. Return the complete response as one valid JSON object using architecture_mapping_evidence.semantic_type_inspection.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "Code Mapper inspected the representative producer-consumer path."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence.semantic_type_inspection with outcome=inspected_empty.",
+      "Records evidence_or_gap and source_refs for the empty result under architecture_mapping_evidence.semantic_type_inspection."
+      ,"Uses architecture_mapping_evidence.semantic_type_inspection.evidence_or_gap and architecture_mapping_evidence.semantic_type_inspection.source_refs as structured JSON fields."
+      ],
+      "pass_criteria": [
+        "An empty candidate result is distinguishable from unresolved inspection and is source-backed."
+      ],
+      "fail_signals": [
+        "Claims inspected_empty without evidence_or_gap or source_refs."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "semantic_type_inspection",
+          "evidence_or_gap",
+          "source_refs",
+          "representative_paths"
+        ],
+        "forbidden_substrings": [
+      "inspected_empty without evidence_or_gap"
+    ],
+    "structured_json_assertions": [
+      {
+        "operator": "equals",
+        "path": ["architecture_mapping_evidence", "semantic_type_inspection", "outcome"],
+        "expected": "inspected_empty"
+      },
+      {
+        "operator": "nonempty_string",
+        "path": ["architecture_mapping_evidence", "semantic_type_inspection", "evidence_or_gap"]
+      },
+      {
+        "operator": "nonempty_array",
+        "path": ["architecture_mapping_evidence", "semantic_type_inspection", "source_refs"]
+      }
+    ]
+      }
+    },
+    {
+      "id": "code-mapper-not-applicable-omits-pack-evidence",
+      "title": "Code Mapper omits not-applicable Pack evidence",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that ordinary structural mapping does not manufacture Pack evidence.",
+      "prompt": "Map this local change with no architecture trigger.",
+      "setup_context": [
+        "architecture_design_mode=not_applicable.",
+        "architecture_design_trigger_reasons contains the evidenced local-path rationale."
+      ],
+      "expected_behavior": [
+        "Returns the ordinary context map.",
+        "Omits architecture_mapping_evidence."
+      ],
+      "pass_criteria": [
+        "The response keeps ordinary mapping separate from Pack evidence."
+      ],
+      "fail_signals": [
+        "Returns architecture_mapping_evidence for not_applicable mode."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_design_mode=not_applicable",
+          "context map"
+        ],
+        "forbidden_substrings": [
+          "architecture_mapping_evidence"
         ]
       }
     },
@@ -879,6 +1311,1167 @@
           "glab mr"
         ]
       }
+    },
+    {
+      "id": "progressive-dependency-shaped-activation",
+      "title": "Dependency-shaped uncertainty activates progressive Discover",
+      "category": "progressive_discovery",
+      "purpose": "Checks that an unknown dependent on a predecessor decision enters progressive Discover without allowing execution work.",
+      "prompt": "Plan a migration where the data-retention choice determines the consent model, but the product owner cannot answer the consent question until the retention options are mapped. Do not change the repository yet.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The retention decision is a predecessor for the outcome-shaping consent decision.",
+        "The dependent question cannot be made precise until the predecessor is resolved."
+      ],
+      "expected_behavior": [
+        "Classifies the uncertainty as dependency-shaped and records uncertainty_shape=progressive.",
+        "Creates a decision_map with active decisions, deferred_uncertainty, and a decision_frontier tied to unlock conditions; the deferred uncertainty records unlocking_decision_item_ref=retention-decision.",
+        "Keeps unresolved work in Discover until the predecessor unlocks the dependent question.",
+        "Does not enter Decompose, Plan, or Build while the progressive decision state remains unresolved."
+      ],
+      "pass_criteria": [
+        "The response identifies the predecessor relationship, records unlocking_decision_item_ref=retention-decision, and explains the unlock condition.",
+        "The response records only outcome-shaping unknowns in the progressive state.",
+        "The response says unresolved progressive work must remain in Discover."
+      ],
+      "fail_signals": [
+        "Treats task size or ordinary ambiguity as sufficient activation evidence.",
+        "Asks the dependent question before the predecessor can make it precise.",
+        "Starts implementation or moves to a later delivery phase."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "uncertainty_shape=progressive",
+          "decision_map",
+          "deferred_uncertainty",
+          "decision_frontier",
+          "unlock_condition",
+          "unlocking_decision_item_ref=retention-decision",
+          "remain in Discover"
+        ],
+        "forbidden_substrings": [
+          "size alone activates progressive",
+          "enter Build now",
+          "start project/source mutation"
+        ]
+      }
+    },
+    {
+      "id": "progressive-fully-specified-large-bounded",
+      "title": "Large specified work remains bounded",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a large request with a precise acceptance boundary does not create progressive discovery state merely because it is large.",
+      "prompt": "Plan the approved migration of 80 explicitly listed configuration files to the provided schema. The target files, transformations, acceptance checks, and exclusions are all specified.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Every outcome-shaping decision has an explicit answer in the request.",
+        "The work is large but has no predecessor-dependent unknown."
+      ],
+      "expected_behavior": [
+        "Keeps uncertainty_shape=bounded and follows ordinary decomposition and planning rules.",
+        "States that size alone is not a trigger for progressive discovery.",
+        "Does not create a decision map, deferred uncertainty list, or progressive state artifact.",
+        "Does not ask redundant clarification questions."
+      ],
+      "pass_criteria": [
+        "The response treats the request as a normal large bounded task.",
+        "The response preserves the supplied acceptance boundary without inventing an uncertainty loop.",
+        "The response records clarification questions asked: 0."
+      ],
+      "fail_signals": [
+        "Activates progressive discovery solely because the request spans many files.",
+        "Creates unresolved decision artifacts for already specified transformations.",
+        "Repeats a question whose answer is already precise."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "uncertainty_shape=bounded",
+          "size alone is not a trigger",
+          "clarification questions asked: 0"
+        ],
+        "forbidden_substrings": [
+          "uncertainty_shape=progressive",
+          "create a decision_map",
+          "deferred_uncertainty"
+        ]
+      }
+    },
+    {
+      "id": "progressive-clarification-ownership",
+      "title": "Clarification ownership remains distinct from progressive discovery",
+      "category": "progressive_discovery",
+      "purpose": "Checks that prompt-level ambiguity routes through assistant-clarify while clear requests do not acquire duplicate ceremony.",
+      "prompt": "First, route the ambiguous request 'make onboarding better'; then contrast it with the precise request 'replace the labelled welcome copy in the supplied file and verify the snapshot'.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The ambiguous request lacks an outcome boundary but has no established predecessor-dependent unknown.",
+        "The precise request supplies its file, change, and verification boundary."
+      ],
+      "expected_behavior": [
+        "Routes the ambiguous request to assistant-clarify for targeted material questions.",
+        "Keeps the precise request in the ordinary bounded workflow.",
+        "Records clarification questions asked: 0 for the precise request.",
+        "Explains that progressive discovery must not add duplicate ceremony to normal clarification."
+      ],
+      "pass_criteria": [
+        "The response distinguishes ordinary ambiguity from dependency-shaped uncertainty.",
+        "The response names the owning clarification route for the ambiguous request.",
+        "The response leaves the precise request without new progressive state."
+      ],
+      "fail_signals": [
+        "Uses progressive discovery as a replacement for assistant-clarify.",
+        "Asks questions for the already precise request.",
+        "Adds a second clarification process after a clear route is established."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assistant-clarify",
+          "clarification questions asked: 0",
+          "duplicate ceremony",
+          "ordinary ambiguity",
+          "dependency-shaped"
+        ],
+        "forbidden_substrings": [
+          "progressive discovery owns all clarification",
+          "ask another question for the precise request"
+        ]
+      }
+    },
+    {
+      "id": "progressive-human-evidence-no-execution",
+      "title": "Human evidence holds progressive discovery at the no-execution boundary",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a human-required decision waits for referenced confirmation and does not perform mutations or sensitive operational work.",
+      "prompt": "The legal owner must approve the retention option before the dependent migration plan can be specified. Record the decision state, but do not request, create, or change external systems.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The retention decision has interaction_mode=human_required.",
+        "No human confirmation or separate operational authorization has been returned."
+      ],
+      "expected_behavior": [
+        "Records the required human_confirmation_ref before resolving the human-owned decision.",
+        "Maintains the no-execution boundary while evidence is absent.",
+        "Prohibits project/source mutation, external writes, branch creation, and credential-location recording.",
+        "Routes any needed mutation through a separate approved workflow after returned evidence is available."
+      ],
+      "pass_criteria": [
+        "The response leaves the decision blocked or pending instead of self-resolving it.",
+        "The response names the prohibited side effects.",
+        "The response keeps any operational follow-up outside progressive discovery."
+      ],
+      "fail_signals": [
+        "Invents human approval or resolves the legal choice automatically.",
+        "Changes repository state, creates a branch, or writes to an external system.",
+        "Records credentials or their storage location while in Discover."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "human_confirmation_ref",
+          "project/source mutation",
+          "external writes",
+          "branch creation",
+          "credential-location recording",
+          "separate approved workflow"
+        ],
+        "forbidden_substrings": [
+          "self-resolve the human decision",
+          "create the branch now",
+          "write approval to the external system"
+        ]
+      }
+    },
+    {
+      "id": "progressive-collaborative-contributor-evidence",
+      "title": "Collaborative decisions require joint contributor evidence before route clear",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a collaborative resolution is jointly evidenced by an agent and a human or user before it can become resolved or clear the route.",
+    "prompt": "The agent analyzed retention option B with the product owner. Record the collaborative decision and determine whether progressive Discover can reach route clear. Return the complete response as one valid JSON object with decision_item.interaction_mode and decision_resolution.contributor_evidence.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The retention decision has decision_item.interaction_mode=collaborative.",
+        "The agent analysis and the product-owner contribution both have source evidence."
+      ],
+      "expected_behavior": [
+        "Records decision_item.interaction_mode=collaborative and decision_resolution.contributor_evidence before status=resolved.",
+        "Records contributor_role=agent and contributor_role=human_or_user under decision_resolution.contributor_evidence with concrete evidence refs.",
+      "Permits route_clear only after the joint contributor evidence is recorded."
+      ,"Uses decision_resolution.contributor_evidence structured JSON entries with contributor_role, contribution, and evidence_ref."
+      ],
+      "pass_criteria": [
+        "The response distinguishes a joint contribution from agent-only work.",
+        "The response blocks route_clear when either contributor evidence is absent."
+      ],
+      "fail_signals": [
+        "Treats an agent-only conclusion as a collaborative resolution.",
+        "Clears the route without the human or user contribution."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "contributor_evidence",
+          "route_clear"
+        ],
+        "forbidden_substrings": [
+          "resolve collaborative decision with agent-only contributor_evidence",
+          "route_clear without human_or_user contributor_evidence",
+          "collaborative contributor_evidence=[agent,agent]",
+          "collaborative contributor_evidence has no human_or_user contribution",
+          "collaborative human_or_user contributor missing contribution",
+          "collaborative contributor missing evidence_ref",
+      "route_clear before collaborative contributor_evidence"
+    ],
+    "structured_json_assertions": [
+      {
+        "operator": "equals",
+        "path": ["decision_item", "interaction_mode"],
+        "expected": "collaborative"
+      },
+      {
+        "operator": "required_when_equals",
+        "when_path": ["decision_item", "interaction_mode"],
+        "value": "collaborative",
+        "path": ["decision_resolution", "contributor_evidence"],
+        "expected_type": "array"
+      },
+      {
+        "operator": "array_field_values_exact",
+        "path": ["decision_resolution", "contributor_evidence"],
+        "field": "contributor_role",
+        "expected_values": ["agent", "human_or_user"]
+      },
+      {
+        "operator": "array_items_nonempty_fields",
+        "path": ["decision_resolution", "contributor_evidence"],
+        "fields": ["contribution", "evidence_ref"]
+      }
+    ]
+      }
+    },
+    {
+      "id": "progressive-resolution-route-clear",
+      "title": "Progressive resolution recomputes the route before ordinary workflow resumes",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a resolved predecessor recomputes its downstream effects, retires obsolete uncertainty, and returns only through a route-clear handoff.",
+      "prompt": "This is a size=small task. The product owner selected retention option B. Recompute the progressive decision state: the consent question is now precise, one earlier question is obsolete, and the normal workflow may resume only if all remaining blockers are clear.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A recorded progressive decision map has active, deferred, and superseded decision items.",
+        "The predecessor selection is evidenced and no execution has occurred.",
+        "Even though size=small, the pending route-clear handoff prepares the Requirement Acceptance Map; it becomes required only after reciprocal consumption."
+      ],
+      "expected_behavior": [
+        "Records downstream_effects from the resolved predecessor.",
+        "Moves newly precise questions into newly_precise_item_refs and retires obsolete ones through superseded_item_refs. The now-unlocked consent uncertainty records converted_decision_item_ref=consent-decision, resolving exactly once to an actionable canonical decision_item and appearing exactly once in its unlocking predecessor's newly_precise_item_refs. newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded], while superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded.",
+        "Recomputes the decision frontier rather than assuming the old route remains valid.",
+        "Emits route_clear_handoff with consumption_state=pending only after remaining active items are clear, mirrors it with progressive_route_clear_consumption_state=pending and progressive_artifact_retention_state=retained, and keeps progressive_discovery_state=route_clear while preparing the bounded-Discover Requirement Acceptance Map. route_clear_handoff.decisions=[retention-decision] contains the canonical decision_resolution.decision_item_ref for every current-map status=resolved decision exactly once; current-map superseded/excluded decisions appear exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved, while an all-excluded route-clear handoff may use decisions=[]. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The current map uses decision_item_refs=[retention-decision] resolving exactly once to canonical decision_id=retention-decision and deferred_uncertainty_refs=[consent-uncertainty] resolving exactly once to canonical uncertainty_id=consent-uncertainty; each current ref resolves exactly once, without requiring global exhaustive refs. Empty, duplicate, dangling, or partially resolvable current map refs fail closed before route clear or bounded planning. route_clear remains in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited. The only permitted local state update is the framework-owned journal/equivalent carried-state update needed to record the handoff or its consumption; any mutating prerequisite uses a separate approved workflow. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed, then records source_route_clear_handoff_ref resolving to the source route_clear_handoff and consumed_by_requirement_acceptance_map_ref resolving to the consuming Requirement Acceptance Map as a reciprocal back-reference. It traces decisions and constraints into applicable accepted map state, places exclusions in non_goals or entries with status=approved_exclusion, turns each acceptance_seed into an entries[].acceptance_criterion with binary acceptance, and records consumption_state=consumed plus progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable. route_clear_handoff remains required after bounded/not_applicable and both reciprocal refs remain resolvable during active/resumable continuation; only explicit task termination/final archival permits omission. It remains consumed after bounded/not_applicable, while ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable."
+      ],
+      "pass_criteria": [
+        "The response accounts for newly unlocked and superseded items separately.",
+        "The response keeps unresolved dependent work in Discover.",
+        "The response names the bounded route that resumes after clearance."
+      ],
+      "fail_signals": [
+        "Continues with stale downstream assumptions.",
+        "Drops obsolete items without a supersession record.",
+        "Moves directly to implementation without a route-clear handoff."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "downstream_effects",
+          "newly_precise_item_refs",
+          "converted_decision_item_ref=consent-decision",
+          "actionable canonical decision_item",
+          "appears exactly once in newly_precise_item_refs",
+          "superseded_item_refs",
+          "newly_precise_item_refs resolve exactly once to canonical decision_item.decision_id values with status not in [superseded, excluded]",
+          "superseded_item_refs resolve exactly once to canonical decision_item.decision_id values with status=superseded",
+          "route_clear_handoff",
+          "route_clear_handoff.decisions=[retention-decision]",
+          "canonical decision_resolution.decision_item_ref",
+          "every current-map status=resolved decision exactly once",
+          "current-map superseded/excluded decisions appear exactly once in exclusions",
+          "decisions is non-empty when any current-map decision has status=resolved",
+          "Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions",
+          "all-excluded route-clear handoff may use decisions=[]",
+          "size=small",
+          "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
+          "Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed",
+          "consumption_state=pending",
+          "progressive_route_clear_consumption_state=pending",
+          "progressive_artifact_retention_state=retained",
+          "progressive_route_clear_consumption_state=consumed",
+          "remains consumed after bounded/not_applicable",
+          "route_clear_handoff remains required after bounded/not_applicable",
+          "both reciprocal refs remain resolvable",
+          "only explicit task termination/final archival permits omission",
+          "ordinary bounded small work stays progressive_route_clear_consumption_state=not_applicable",
+          "progressive_discovery_state=route_clear",
+          "current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once",
+          "decision_item_refs=[retention-decision]",
+          "decision_id=retention-decision",
+          "deferred_uncertainty_refs=[consent-uncertainty]",
+          "uncertainty_id=consent-uncertainty",
+          "each current ref resolves exactly once",
+          "bounded Discover",
+          "Requirement Acceptance Map",
+          "source_route_clear_handoff_ref",
+          "source_route_clear_handoff_ref resolves to the source route_clear_handoff",
+          "consumed_by_requirement_acceptance_map_ref resolves to the consuming Requirement Acceptance Map",
+          "reciprocal back-reference",
+          "decisions and constraints are traced into applicable accepted map state",
+          "exclusions appear in non_goals or entries with status=approved_exclusion",
+          "each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance",
+          "consumption_state=consumed",
+          "atomic typed-state transition",
+          "route_clear remains in the no-execution boundary",
+          "project/source mutation",
+          "external writes",
+          "branch creation",
+          "credential-location recording",
+          "framework-owned journal/equivalent carried-state update",
+          "separate approved workflow"
+        ],
+      "forbidden_substrings": [
+        "skip route recomputation",
+        "start Build before route clearance",
+        "decision_item_refs=[]",
+        "deferred_uncertainty_refs=[]",
+        "decision_item_refs=[retention-decision, retention-decision]",
+        "deferred_uncertainty_refs=[missing-consent-uncertainty]",
+        "deferred_uncertainty_refs=[consent-uncertainty, missing-consent-uncertainty]",
+        "newly_precise_item_refs=[missing-consent-decision]",
+        "newly_precise_item_refs=[consent-decision, consent-decision]",
+        "newly_precise_item_refs=[obsolete-decision]",
+        "route_clear_handoff.decisions=[arbitrary-decision]",
+        "route_clear_handoff.decisions=[retention-decision, retention-decision]",
+        "route_clear_handoff.decisions=[] while retention-decision is resolved",
+        "route_clear_handoff.decisions=[retention-decision] while consent-decision is resolved",
+        "route_clear_handoff.exclusions=[] while obsolete-decision is superseded",
+        "exclusions=[obsolete-decision, obsolete-decision]",
+        "exclusions=[missing-decision]",
+        "exclusions=[retention-decision] while retention-decision is resolved",
+        "status=unlocked without converted_decision_item_ref=consent-decision",
+        "converted_decision_item_ref=[missing-consent-decision]",
+        "converted_decision_item_ref=[obsolete-decision]",
+        "converted_decision_item_ref=[excluded-decision] while excluded-decision has status=excluded",
+        "converted_decision_item_ref=consent-decision with wrong predecessor",
+        "converted_decision_item_ref=consent-decision absent from newly_precise_item_refs",
+        "superseded_item_refs=[consent-decision]",
+        "superseded_item_refs=[missing-consent-decision]",
+        "superseded_item_refs=[obsolete-decision, obsolete-decision]",
+        "start project/source mutation while progressive_discovery_state=route_clear",
+        "write to an external system while progressive_discovery_state=route_clear",
+        "create a branch while progressive_discovery_state=route_clear",
+        "record a credential location while progressive_discovery_state=route_clear"
+        ]
+      }
+    },
+    {
+      "id": "progressive-sequential-resolution-readiness",
+      "title": "Sequential progressive resolution is bounded by readiness evidence",
+      "category": "progressive_discovery",
+      "purpose": "Checks that first-activation provenance survives superseded/excluded compaction before readiness exists, then readiness is established for activation two and retained as one bounded record through later continuation.",
+      "prompt": "The first progressive retention decision was activated with activation_ordinal=1, then became superseded/excluded before a canonical resolution. The workflow compacts before any second activation is proposed. Preserve enough provenance to reconstruct its cumulative activation history. A consent decision is then eligible. Before second activation, establish the bounded readiness state and assessment atomically. That second activation later pauses, compacts, and resumes in a blocked state. A third decision is now eligible. Show the same record needed for that third+ activation; do not turn the decision frontier into an open-ended loop.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Before readiness exists, the superseded/excluded first activated item retains activation_ordinal=1 through compaction even if it leaves current-map refs.",
+        "Before second activation, progressive_sequence_readiness_state=active and loop_readiness_assessment must be set atomically; the same record must retain its identity, map, immutable cap, and history after pause, compaction, and blocked continuation. No route-clear handoff exists yet because the dependent item remains active."
+      ],
+      "expected_behavior": [
+        "The first activation provenance is set atomically as activation_ordinal=1 and retained after superseded/excluded status and compaction before the second proposal.",
+        "Before second activation, reconstructs activated_decision_item_refs=[retention-decision] before second activation, then atomically sets progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained with one ready loop_readiness_assessment using loop_type=progressive_decision_sequence; allows one active item and the third+ sequential activation only while that same record remains ready.",
+        "Retains the same record with stable readiness_assessment_id and progressive_decision_map_ref, immutable max_iterations, first activation counted, cumulative_activation_count, ordered unique append-only activated_decision_item_refs, resolved_decision_item_refs, budget_limit, route-clear, cap, stagnation, or failure stop conditions, and unchanged-frontier no-progress detection through pause, blocked state, compaction, continuation, and third+ activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved.",
+        "Uses existing journal/equivalent state tracking plus retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation.",
+        "Requires cumulative_activation_count < max_iterations before activation; equality or inconsistency fails closed to blocked/escalation, and every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref."
+      ],
+      "pass_criteria": [
+        "The response distinguishes a safe bounded sequential resolution from an unbounded loop.",
+        "The response keeps the frontier to one active item.",
+        "The response names a finite stop or escalation route before the second activation."
+      ],
+      "fail_signals": [
+        "Activates every newly unlocked item without readiness evidence.",
+        "Treats an unchanged frontier as progress or resets the cap.",
+        "Continues after the budget, stagnation, failure, or low-confidence exit applies."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "loop_readiness_assessment",
+          "loop_type=progressive_decision_sequence",
+          "progressive_sequence_readiness_state=active",
+          "progressive_artifact_retention_state=retained",
+          "before second activation",
+          "same record",
+          "same record through pause, blocked state, compaction, and continuation",
+          "readiness_assessment_id",
+          "progressive_decision_map_ref",
+          "max_iterations",
+          "cumulative_activation_count",
+          "activated_decision_item_refs",
+          "resolved_decision_item_refs",
+          "immutable max_iterations",
+          "first activation counted",
+          "ordered unique append-only activated_decision_item_refs",
+          "superseded/excluded first activated item",
+          "activation_ordinal=1",
+          "first activation provenance is set atomically",
+          "retained after superseded/excluded status and compaction before the second proposal",
+          "reconstructs activated_decision_item_refs=[retention-decision] before second activation",
+          "prior activated items may be resolved, superseded, or excluded",
+          "cumulative activated refs remain append-only",
+          "superseded/excluded refs are not classified as resolved",
+          "cumulative_activation_count < max_iterations before activation",
+          "third+ activation",
+          "equality or inconsistency fails closed to blocked/escalation",
+          "every canonically resolved activated ref maps exactly once to decision_resolution.decision_item_ref",
+          "budget_limit",
+          "route-clear",
+          "no-progress",
+          "blocked/escalation",
+          "retry_or_empty_result_handling",
+          "tool_error_handling",
+          "low_confidence_escalation"
+        ],
+        "forbidden_substrings": [
+          "activate every unlocked item",
+          "reset the iteration cap",
+          "continue after no-progress",
+          "first activation provenance is omitted before the second proposal",
+          "activation_ordinal is discarded after superseded/excluded compaction"
+        ]
+      }
+    },
+    {
+      "id": "progressive-closed-readiness-retention",
+      "title": "Closed progressive readiness remains durable until final archival",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a consumed progressive decision sequence retains its one closed readiness record when work remains active or resumes after compaction.",
+      "prompt": "Two progressive decisions already used one readiness assessment. Route-clear consumption completed and progressive_sequence_readiness_state is now closed. The task remains active/resumable, then compacts and resumes before final archival. Show the retained closed record; do not activate another decision or reopen the sequence.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "Durable route-clear consumption completed before progressive_sequence_readiness_state became closed.",
+        "The task is not terminated or finally archived, so future continuation and reference resolution remain possible."
+      ],
+      "expected_behavior": [
+        "After the atomic transition, keeps uncertainty_shape=bounded with progressive_route_clear_consumption_state=consumed, but loads retained progressive-discovery state so route_clear_handoff remains resolvable alongside loop_readiness_assessment.",
+        "Keeps progressive_artifact_retention_state=retained; Task state: completed does not qualify as final archival while continuation or reference resolution remains possible.",
+        "Keeps progressive_sequence_readiness_state=closed after durable route-clear consumption while the task remains active/resumable, compacts, and resumes before final archival.",
+        "Retains the same loop_readiness_assessment with readiness_assessment_id=retention-sequence-1, progressive_decision_map_ref=retention-map, immutable max_iterations=3, cumulative_activation_count=2, activated_decision_item_refs=[retention-decision, consent-decision], and resolved_decision_item_refs=[retention-decision, consent-decision].",
+        "Retains the canonical decision map, map-referenced decision items and deferred uncertainty, and exactly one canonical resolution for each resolved item so every retained reference remains resolvable after compaction.",
+        "Makes no new activation, cannot reopen or reset the closed sequence, and permits omission only after explicit final archival/termination."
+      ],
+      "pass_criteria": [
+        "The closed record remains concrete and unchanged after compaction/resumption.",
+        "The retained canonical reference chain remains resolvable after bounded transition and compaction.",
+        "The response distinguishes closure from final archival.",
+        "The response does not activate another decision."
+      ],
+      "fail_signals": [
+        "Drops the closed readiness record because route-clear was consumed.",
+        "Drops canonical progressive artifacts while their retained references remain active.",
+        "Resets the readiness identity, cap, or cumulative history.",
+        "Treats a closed sequence as permission for a new activation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_sequence_readiness_state=closed",
+          "durable route-clear consumption",
+          "uncertainty_shape=bounded",
+          "progressive_route_clear_consumption_state=consumed",
+          "progressive_artifact_retention_state=retained",
+          "Task state: completed does not qualify as final archival",
+          "load retained progressive-discovery state",
+          "route_clear_handoff remains resolvable",
+          "loop_readiness_assessment",
+          "task remains active/resumable, compacts, and resumes before final archival",
+          "readiness_assessment_id=retention-sequence-1",
+          "progressive_decision_map_ref=retention-map",
+          "max_iterations=3",
+          "cumulative_activation_count=2",
+          "activated_decision_item_refs=[retention-decision, consent-decision]",
+          "resolved_decision_item_refs=[retention-decision, consent-decision]",
+          "decision_map_ref=retention-map resolves to retained canonical decision_map",
+          "activated_decision_item_refs=[retention-decision, consent-decision] resolve to retained canonical decision_item entries",
+          "deferred_uncertainty_refs=[consent-uncertainty] resolve to a retained canonical deferred_uncertainty",
+          "resolved_decision_item_refs=[retention-decision, consent-decision] resolve exactly once to retained canonical decision_resolution entries",
+          "no new activation",
+          "cannot reopen or reset",
+          "only explicit final archival/termination permits omission"
+        ],
+      "forbidden_substrings": [
+          "The closed readiness record is omitted after compaction.",
+          "The canonical decision map is omitted after compaction.",
+          "The canonical decision items are omitted after compaction.",
+          "The canonical deferred uncertainty is omitted after compaction.",
+          "The canonical decision resolutions are omitted after compaction.",
+          "readiness_assessment_id=retention-sequence-reset",
+          "max_iterations=1",
+          "activate another decision after closure",
+          "skip retained progressive state because uncertainty_shape=bounded"
+        ]
+      }
+    },
+    {
+      "id": "progressive-all-excluded-route-clear",
+      "title": "progressive-retired-excluded-coverage: all-excluded progressive route clearance remains concrete",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a non-empty current map may clear with no resolved decisions only when its retired/excluded uncertainty must retain its predecessor resolution, the exclusion is exact, and ordinary route-clear safety remains in force.",
+      "prompt": "A progressive map's only predecessor was previously resolved, then superseded. Its dependent uncertainty is now excluded. Show the concrete all-excluded route-clear handoff without dropping the current map or its retained resolution, while preserving the ordinary pending route-clear state and no-execution boundary.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The route is clear: no active, blocked, or remaining deferred uncertainty exists beyond the excluded entry.",
+        "The predecessor resolution remains retained canonically."
+      ],
+      "expected_behavior": [
+        "Keeps decision_item_refs=[obsolete-decision] with decision_id=obsolete-decision and status=superseded.",
+        "Keeps deferred_uncertainty_refs=[obsolete-uncertainty] with status=excluded and unlocking_decision_item_ref=obsolete-decision.",
+        "Retains decision_resolution.decision_item_ref=obsolete-decision exactly once.",
+        "Emits route_clear_handoff.decisions=[] and exclusions=[obsolete-decision] as the exact all-excluded partition.",
+        "Keeps uncertainty_shape=progressive, progressive_discovery_state=route_clear, progressive_route_clear_consumption_state=pending, progressive_artifact_retention_state=retained, open_item_refs=[], blocked_item_refs=[], remaining_deferred_uncertainty_refs=[], retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty], and next_route=bounded_discover while the Requirement Acceptance Map is prepared.",
+        "Keeps route_clear in the no-execution boundary: project/source mutation, external writes, branch creation, and credential-location recording are prohibited; only the framework-owned journal/equivalent carried-state update may record the handoff, and any mutating prerequisite uses a separate approved workflow."
+      ],
+      "pass_criteria": [
+        "Current map refs remain non-empty and canonical.",
+        "The predecessor resolution remains available despite its superseded status.",
+        "The handoff has no arbitrary or partial decision/exclusion state."
+      ],
+      "fail_signals": [
+        "Drops the current map to make decisions empty.",
+        "Drops the predecessor resolution after supersession.",
+        "Uses a missing, duplicate, or status-misclassified exclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "decision_item_refs=[obsolete-decision]",
+          "decision_id=obsolete-decision",
+          "status=superseded",
+          "deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "status=excluded",
+          "unlocking_decision_item_ref=obsolete-decision",
+          "decision_resolution.decision_item_ref=obsolete-decision",
+          "route_clear_handoff.decisions=[]",
+          "exclusions=[obsolete-decision]",
+          "uncertainty_shape=progressive",
+          "progressive_discovery_state=route_clear",
+          "progressive_route_clear_consumption_state=pending",
+          "progressive_artifact_retention_state=retained",
+          "open_item_refs=[]",
+          "blocked_item_refs=[]",
+          "remaining_deferred_uncertainty_refs=[]",
+          "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs exactly covers every current decision_map deferred uncertainty with status retired/excluded",
+          "next_route=bounded_discover",
+          "Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending",
+          "route_clear remains in the no-execution boundary",
+          "project/source mutation",
+          "external writes",
+          "branch creation",
+          "credential-location recording",
+          "framework-owned journal/equivalent carried-state update",
+          "separate approved workflow"
+        ],
+        "forbidden_substrings": [
+          "decision_item_refs=[]",
+          "current-map deferred_uncertainty_refs=[]",
+          "decision_resolution is omitted for obsolete-decision",
+          "exclusions=[obsolete-decision, obsolete-decision]",
+          "exclusions=[missing-decision]",
+          "exclusions=[retention-decision] while retention-decision is resolved",
+          "exclusions=[] while obsolete-decision is superseded",
+          "retired_or_excluded_deferred_uncertainty_refs=[missing-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty, obsolete-uncertainty]",
+          "retired_or_excluded_deferred_uncertainty_refs=[retention-uncertainty] while status=unlocked"
+        ]
+      }
+    },
+    {
+      "id": "progressive-mapping-retired-lineage-requiredness",
+      "title": "Mapping retains retired current-map lineage without resolved or durable state",
+      "category": "progressive_discovery",
+      "purpose": "Checks that mapping requires the exact retained predecessor resolution when the only current decision is superseded and its current-map deferred uncertainty is retired.",
+      "prompt": "A progressive mapping has no current status=resolved decision. Its only current predecessor was resolved earlier and is now superseded; its only current-map deferred uncertainty is retired. No route-clear consumption or readiness retention marker applies. Show the required retained lineage without advancing the workflow.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The current decision map contains obsolete-decision and obsolete-uncertainty.",
+        "No durable route-clear or readiness retention predicate applies."
+      ],
+      "expected_behavior": [
+        "Keeps uncertainty_shape=progressive and progressive_discovery_state=mapping.",
+        "Keeps decision_item_refs=[obsolete-decision] with decision_id=obsolete-decision and status=superseded.",
+        "Keeps deferred_uncertainty_refs=[obsolete-uncertainty] with status=retired and unlocking_decision_item_ref=obsolete-decision.",
+        "Records that no current decision_item has status=resolved while progressive_route_clear_consumption_state=not_applicable, progressive_sequence_readiness_state=not_applicable, and progressive_artifact_retention_state=not_applicable.",
+        "Retains decision_resolution.decision_item_ref=obsolete-decision exactly once and remains in progressive Discover."
+      ],
+      "pass_criteria": [
+        "The retired current-map lineage remains concrete without a currently resolved decision.",
+        "The response does not rely on a durable retention marker to require the resolution.",
+        "Mapping remains non-executing."
+      ],
+      "fail_signals": [
+        "Omits the predecessor resolution because its decision is superseded.",
+        "Treats the absence of a resolved current decision as permission to drop lineage.",
+        "Advances from mapping."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "uncertainty_shape=progressive",
+          "progressive_discovery_state=mapping",
+          "decision_item_refs=[obsolete-decision]",
+          "decision_id=obsolete-decision",
+          "status=superseded",
+          "deferred_uncertainty_refs=[obsolete-uncertainty]",
+          "status=retired",
+          "unlocking_decision_item_ref=obsolete-decision",
+          "no current decision_item has status=resolved",
+          "progressive_route_clear_consumption_state=not_applicable",
+          "progressive_sequence_readiness_state=not_applicable",
+          "progressive_artifact_retention_state=not_applicable",
+          "decision_resolution.decision_item_ref=obsolete-decision"
+        ],
+        "forbidden_substrings": [
+          "decision_resolution is omitted for obsolete-decision"
+        ]
+      }
+    },
+    {
+      "id": "progressive-terminal-archival-omission",
+      "title": "progressive-terminal-archival-evidence: explicit terminal archival releases retained progressive artifacts",
+      "category": "progressive_discovery",
+      "purpose": "Checks that one typed terminal archival marker releases only the durable progressive artifact chain while medium+ Requirement Acceptance Maps remain independently required.",
+      "prompt": "A small completed task has consumed route clearance and closed sequence readiness. Final archival evidence now proves this exact task and decision map cannot continue and no retained reference can be resolved again. Record the typed archival transition and show what may be omitted.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "progressive_route_clear_consumption_state=consumed and progressive_sequence_readiness_state=closed; neither marker is pending or active.",
+        "Explicit terminal evidence establishes that continuation and reference resolution are impossible, rather than relying only on task completion."
+      ],
+      "expected_behavior": [
+        "Sets progressive_artifact_retention_state=terminally_archived only from explicit final archival/termination evidence that continuation and reference resolution are impossible, as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. terminally_archived requires all three states atomically.",
+        "Records progressive_terminal_archival with current_task_identity, final_progressive_decision_map_ref, typed final_archival_or_termination_basis, and resolvable evidence_refs before releasing the retained chain.",
+        "Keeps progressive_route_clear_consumption_state=consumed remains historical and progressive_sequence_readiness_state=closed remains historical through terminal archival.",
+        "States that route_clear_handoff may be omitted, loop_readiness_assessment may be omitted, and the retained canonical reference chain may be omitted.",
+        "States that source_route_clear_handoff_ref may be omitted and consumed_by_requirement_acceptance_map_ref may be omitted; medium+ Requirement Acceptance Map remains required independently.",
+        "Treats terminal archival as terminal and cannot revert to retained for the same task and decision map.",
+        "States that Task state: completed does not qualify as final archival on its own and refuses archival while route consumption is pending or sequence readiness is active."
+      ],
+      "pass_criteria": [
+        "The response relies on explicit terminal evidence rather than task completion.",
+        "The response releases the durable progressive chain and reciprocal refs.",
+        "The response preserves the independent medium+ map requirement.",
+        "The response makes the archival transition irreversible."
+      ],
+      "fail_signals": [
+        "Treats ordinary completion as terminal archival evidence.",
+        "Archives while a progressive marker remains pending or active.",
+        "Allows the same task and decision map to return to retained state.",
+        "Drops the independent medium+ Requirement Acceptance Map."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_artifact_retention_state=terminally_archived",
+          "one atomic transition",
+          "uncertainty_shape=bounded",
+          "progressive_discovery_state=not_applicable",
+          "terminally_archived requires all three states atomically",
+          "progressive_route_clear_consumption_state=consumed remains historical",
+          "progressive_sequence_readiness_state=closed remains historical",
+          "explicit final archival/termination evidence",
+          "continuation and reference resolution are impossible",
+          "progressive_terminal_archival",
+          "current_task_identity",
+          "final_progressive_decision_map_ref",
+          "final_archival_or_termination_basis",
+          "evidence_refs",
+          "route_clear_handoff may be omitted",
+          "loop_readiness_assessment may be omitted",
+          "retained canonical reference chain may be omitted",
+          "source_route_clear_handoff_ref may be omitted",
+          "consumed_by_requirement_acceptance_map_ref may be omitted",
+          "terminal and cannot revert",
+          "Task state: completed does not qualify as final archival",
+          "medium+ Requirement Acceptance Map remains required"
+        ],
+        "forbidden_substrings": [
+          "Task state: completed is final archival evidence",
+          "progressive_artifact_retention_state can revert to retained",
+          "Sets progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending",
+          "Sets progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while uncertainty_shape=progressive"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=route_clear"
+          ,"Sets progressive_artifact_retention_state=terminally_archived from Task state: completed alone"
+          ,"terminally_archived resets progressive_route_clear_consumption_state=not_applicable"
+          ,"terminally_archived resets progressive_sequence_readiness_state=not_applicable"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=mapping"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=resolving"
+          ,"Sets progressive_artifact_retention_state=terminally_archived while progressive_discovery_state=blocked"
+          ,"progressive_terminal_archival is omitted"
+          ,"progressive_terminal_archival.final_progressive_decision_map_ref=mismatched-map"
+        ]
+      }
+    },
+    {
+      "id": "workflow-architecture-obligation-completion-aggregation",
+      "title": "Workflow completion aggregates full Pack obligation coverage from the lane owner",
+      "category": "architecture_tdd",
+      "purpose": "Checks that completion retains the full assistant-tdd coverage shape and selects exactly one Build return owner by lane.",
+      "prompt": "Complete a TDD Architecture Decision Pack with semantic-validation and ownership-disposal obligations. Show bounded_executor and separated_workers completion evidence, then reject incomplete coverage.",
+      "setup_context": ["tdd_mode=true and architecture_design_mode=required.", "The Pack carries two stable obligations: semantic-validation and ownership-disposal."],
+      "expected_behavior": ["For build_execution_lane=bounded_executor, test_results.architecture_obligation_coverage aggregates CodeWriter coverage for both obligation_id values.", "For build_execution_lane=separated_workers, it aggregates BuilderTester coverage for both obligation_id values.", "Each coverage entry includes obligation_id, architecture_decision_pack_ref, obligation_kind, evidence, and outcome; missing, duplicate, or unknown IDs fail completion."],
+      "pass_criteria": ["Both valid lane fixtures cover the two Pack obligations exactly once.", "Completion keeps the full assistant-tdd coverage object rather than a summary string."],
+      "fail_signals": ["Uses CodeWriter as the separated_workers final coverage owner.", "Accepts one coverage entry for two obligations, a duplicate ID, or an unknown ID."],
+      "machine_expectations": {
+        "required_substrings": ["build_execution_lane=bounded_executor", "CodeWriter", "build_execution_lane=separated_workers", "BuilderTester", "obligation_id=semantic-validation", "obligation_id=ownership-disposal", "architecture_decision_pack_ref", "obligation_kind", "evidence", "outcome", "missing obligation_id", "duplicate obligation_id", "unknown obligation_id"],
+        "forbidden_substrings": ["separated_workers CodeWriter final coverage", "summary string replaces architecture_obligation_coverage"]
+      }
+    },
+    {
+      "id": "progressive-terminal-archival-resume-authority",
+      "title": "Terminal archival state is admitted only with its typed tombstone",
+      "category": "progressive_discovery",
+      "purpose": "Checks persisted and resumed terminal state against the exact task, map, basis, and irrecoverability evidence before retained artifacts may be released.",
+      "prompt": "Resume a persisted terminally_archived progressive task for task-17 and final map retention-map. Show the accepted state and reject plausible invalid persisted variants.",
+      "setup_context": ["The retained route-clear state was consumed and readiness was closed before archival.", "The valid tombstone evidence ref proves continuation and reference resolution are impossible."],
+      "expected_behavior": ["Accepts progressive_artifact_retention_state=terminally_archived only when progressive_terminal_archival is already present before the state is persisted or resumed, with current_task_identity=task-17, final_progressive_decision_map_ref=retention-map, typed basis, and evidence_refs=[terminal-evidence].", "Rejects progressive_terminal_archival is omitted, evidence_refs=[dangling-evidence], current_task_identity=other-task, and final_progressive_decision_map_ref=other-map; each invalid persisted state fails closed and restores retained artifacts."],
+      "pass_criteria": ["The valid tombstone has exact task/map identity and resolvable irrecoverability evidence.", "No generic archival evidence or delayed validation can release the retained chain."],
+      "fail_signals": ["Persists terminally_archived before the tombstone is recorded.", "Accepts dangling evidence or a tombstone for another task or final map."],
+      "machine_expectations": {
+        "required_substrings": ["progressive_terminal_archival", "current_task_identity=task-17", "final_progressive_decision_map_ref=retention-map", "evidence_refs=[terminal-evidence]", "progressive_terminal_archival is omitted", "evidence_refs=[dangling-evidence]", "current_task_identity=other-task", "final_progressive_decision_map_ref=other-map", "fails closed"],
+        "forbidden_substrings": ["persist terminally_archived before progressive_terminal_archival", "generic evidence releases retained chain", "accept progressive_terminal_archival is omitted", "accept evidence_refs=[dangling-evidence]", "accept current_task_identity=other-task", "accept final_progressive_decision_map_ref=other-map"]
+      }
+    },
+    {
+      "id": "progressive-consumed-map-retired-trace",
+      "title": "Consumed Requirement Acceptance Map traces every retired or excluded uncertainty",
+      "category": "progressive_discovery",
+      "purpose": "Checks exact source-to-concrete-target trace coverage after route-clear consumption.",
+      "prompt": "Consume a route-clear handoff whose only retired uncertainty is obsolete-uncertainty. Produce the Requirement Acceptance Map and demonstrate invalid trace variants.",
+      "setup_context": ["progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained.", "The source handoff retired_or_excluded_deferred_uncertainty_refs=[obsolete-uncertainty]."],
+      "expected_behavior": ["Records retired_or_excluded_deferred_uncertainty_traces=[{source_retired_or_excluded_deferred_uncertainty_ref=obsolete-uncertainty, target_disposition=non_goal, target_ref=non_goals[0]}] exactly once.", "Rejects retired_or_excluded_deferred_uncertainty_traces=[], duplicate source refs, unknown source refs, and target_disposition=passed; pending route-clear alone is insufficient."],
+      "pass_criteria": ["Every source ref is consumed exactly once by a concrete non_goal or approved_exclusion target.", "The map cannot complete with missing, duplicate, unknown, or wrong-disposition traces."],
+      "fail_signals": ["Treats a prose non-goal without a target ref as coverage.", "Allows a pending handoff to stand in for the consuming map."],
+      "machine_expectations": {
+        "required_substrings": ["retired_or_excluded_deferred_uncertainty_traces", "source_retired_or_excluded_deferred_uncertainty_ref=obsolete-uncertainty", "target_disposition=non_goal", "target_ref=non_goals[0]", "retired_or_excluded_deferred_uncertainty_traces=[]", "duplicate source ref", "unknown source ref", "target_disposition=passed", "pending route-clear alone is insufficient"],
+        "forbidden_substrings": ["pending route-clear is consuming-map coverage", "target_disposition=passed is valid", "accept retired_or_excluded_deferred_uncertainty_traces=[]", "accept duplicate source ref", "accept unknown source ref", "accept target_disposition=passed"]
+      }
+    },
+    {
+      "id": "progressive-dependency-ordering",
+      "title": "Progressive dependencies gate frontier eligibility",
+      "category": "progressive_discovery",
+      "purpose": "Checks that typed decision dependencies resolve to canonical predecessors and prevent a dependent from becoming eligible or active too early.",
+      "prompt": "The retention decision has resolved. Its dependent consent decision is now precise. Record the progressive decision state and frontier without allowing the dependent to bypass its predecessor.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=resolving.",
+        "retention-decision is the predecessor of consent-decision."
+      ],
+      "expected_behavior": [
+        "Records decision_id=retention-decision with status=resolved before considering the dependent.",
+        "Records decision_id=consent-decision with dependencies=[retention-decision].",
+        "Requires dependency refs to resolve exactly once to canonical decision_item.decision_id with no self dependency or circular dependency.",
+        "Makes the dependent eligible or active only after every dependency has status=resolved; here consent-decision is eligible."
+      ],
+      "pass_criteria": [
+        "The predecessor and dependent ids are concrete and distinct.",
+        "The frontier does not make a dependent eligible or active while a predecessor remains unresolved.",
+        "The response keeps dependency validation separate from the single-active limit."
+      ],
+      "fail_signals": [
+        "Uses a missing, duplicate, self, or cyclic dependency ref.",
+        "Makes the dependent eligible or active while its predecessor is pending.",
+        "Resolves the dependent before the predecessor."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "dependencies=[retention-decision]",
+          "decision_id=retention-decision",
+          "status=resolved",
+          "decision_id=consent-decision",
+          "dependency refs resolve exactly once to canonical decision_item.decision_id",
+          "no self dependency or circular dependency",
+          "eligible or active only after every dependency has status=resolved",
+          "consent-decision is eligible"
+        ],
+        "forbidden_substrings": [
+          "dependencies=[missing-decision]",
+          "dependencies=[consent-decision]",
+          "dependencies=[retention-decision, retention-decision]",
+          "dependencies cycle retention-decision -> consent-decision -> retention-decision",
+          "consent-decision is eligible while retention-decision is pending",
+          "consent-decision active while retention-decision is pending"
+        ]
+      }
+    },
+    {
+      "id": "progressive-blocked-decision-recovery",
+      "title": "Blocked progressive decisions retain typed recovery state",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a blocked decision persists why it stopped and the exact condition required before retry or continuation.",
+      "prompt": "A progressive retention decision cannot continue because its required evidence is missing. Record a recoverable blocked state that will still be actionable after compaction; do not retry or advance to planning.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and the active decision lacks required evidence.",
+        "The task journal or equivalent carried state may be resumed after compaction."
+      ],
+      "expected_behavior": [
+        "Marks the decision item status=blocked with blocker_kind=missing_evidence.",
+        "Records a concrete blocker_reason and unblock_condition on the canonical decision item.",
+        "Keeps blocked_item_refs pointed at that item so the frontier does not duplicate or lose recovery state.",
+        "Remains in progressive Discover and does not retry until the unblock condition is evidenced."
+      ],
+      "pass_criteria": [
+        "The blocked item explains why it stopped and what must change before retry.",
+        "The frontier reference resolves to the canonical typed item.",
+        "The response does not treat compaction or continuation as permission to clear the blocker."
+      ],
+      "fail_signals": [
+        "Stores only a blocked reference with no reason.",
+        "Retries without an unblock condition or evidence.",
+        "Advances to planning while the blocked item remains unresolved."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "status=blocked",
+          "blocker_kind=missing_evidence",
+          "blocker_reason",
+          "unblock_condition",
+          "blocked_item_refs",
+          "remain in progressive Discover"
+        ],
+        "forbidden_substrings": [
+          "retry without an unblock condition",
+          "clear the blocker after compaction",
+          "advance to Plan while blocked"
+        ]
+      }
+    },
+    {
+      "id": "progressive-resolved-then-blocked-recovery",
+      "title": "Blocked progressive work retains earlier resolution history",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a later blocked decision retains exactly one canonical resolution for an already resolved predecessor.",
+      "prompt": "A retention predecessor has status=resolved with one recorded decision_resolution. Its dependent consent decision now lacks legal evidence and must become blocked. Persist the state for resumption; do not retry, plan, or mutate anything.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=blocked.",
+        "The predecessor has status=resolved and exactly one canonical decision_resolution.",
+        "The dependent decision needs legal evidence that is not available."
+      ],
+      "expected_behavior": [
+        "Keeps status=resolved and its decision_resolution with exactly one matching resolution via decision_item_ref.",
+        "Retains non-empty prior history while marking the dependent decision status=blocked.",
+        "Records blocker_kind, blocker_reason, and unblock_condition on the blocked decision.",
+        "Keeps progressive_discovery_state=blocked in progressive Discover until the unblock condition is evidenced."
+      ],
+      "pass_criteria": [
+        "The existing resolution is retained rather than duplicated or dropped.",
+        "The blocked decision has typed recovery state.",
+        "The response does not resume delivery work while the blocker remains."
+      ],
+      "fail_signals": [
+        "Drops or duplicates the predecessor resolution.",
+        "Retries the blocked decision without the required evidence.",
+        "Advances to Plan or performs a mutation while blocked."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "status=resolved",
+          "decision_resolution",
+          "exactly one matching resolution via decision_item_ref",
+          "non-empty prior history",
+          "status=blocked",
+          "blocker_kind",
+          "blocker_reason",
+          "unblock_condition",
+          "progressive_discovery_state=blocked"
+        ],
+        "forbidden_substrings": [
+          "retry the blocked decision",
+          "advance to Plan",
+          "drop the prior resolution"
+        ]
+      }
+    },
+    {
+      "id": "progressive-readiness-exhaustion-blocked-recovery",
+      "title": "Readiness exhaustion persists canonical blocked recovery",
+      "category": "progressive_discovery",
+      "purpose": "Checks that sequence-level readiness exhaustion cannot persist global progressive blocked state without a canonical blocked decision and typed recovery path.",
+      "prompt": "A retained progressive sequence has cumulative_activation_count equal to max_iterations before consent-decision can be activated. Fail closed without activating it, persist an actionable blocked snapshot for compaction and resumption, and do not advance to planning.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive; the sequence readiness record is retained and its finite activation cap is exhausted.",
+        "consent-decision is the proposed next item but has not been activated."
+      ],
+      "expected_behavior": [
+        "Sets progressive_discovery_state=blocked while consent-decision remains inactive as status=blocked.",
+        "Omits activation_ordinal because consent-decision was never activated before readiness exhaustion.",
+        "Records blocker_kind=readiness_exhausted, a concrete blocker_reason, and an unblock_condition on the canonical decision item.",
+        "Persists blocked_item_refs=[consent-decision] so the global blocked snapshot remains actionable after compaction.",
+        "Does not activate the item, reset the cap, or enter Decompose or Plan."
+      ],
+      "pass_criteria": [
+        "The global blocked state has a canonical non-empty recovery reference.",
+        "The proposed item is not activated and has no activation ordinal after readiness exhaustion.",
+        "Resumption knows why the sequence stopped and what permits recovery."
+      ],
+      "fail_signals": [
+        "Persists global blocked state with no blocked item.",
+        "Activates the proposed decision despite the exhausted cap.",
+        "Assigns activation provenance to the never-activated proposed decision.",
+        "Stores no concrete unblock condition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_discovery_state=blocked",
+          "status=blocked",
+          "blocker_kind=readiness_exhausted",
+          "blocker_reason",
+          "unblock_condition",
+          "blocked_item_refs=[consent-decision]",
+          "consent-decision remains inactive",
+          "activation_ordinal is omitted because consent-decision was never activated"
+        ],
+        "forbidden_substrings": [
+          "progressive_discovery_state=blocked with blocked_item_refs=[]",
+          "readiness exhaustion blocks the sequence without a blocked decision item",
+          "activate consent-decision despite readiness exhaustion",
+          "consent-decision receives activation_ordinal despite never being activated"
+        ]
+      }
+    },
+    {
+      "id": "progressive-mapping-single-active-negative",
+      "title": "Progressive mapping rejects two active decision items",
+      "category": "progressive_discovery",
+      "purpose": "Checks that mapping serializes decision_item activation before a decision_frontier snapshot exists.",
+      "prompt": "During progressive mapping, two decision_item entries were both marked active before a decision_frontier was created. Identify the invalid state and state the correction without requiring frontier creation during mapping.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=mapping.",
+        "Two decision_item entries have status=active.",
+        "No decision_frontier snapshot exists because mapping is still in progress."
+      ],
+      "expected_behavior": [
+        "Rejects the two active items because at most one status=active is allowed across decision_item entries.",
+        "Uses decision_item statuses to serialize the mapping state without creating a decision_frontier.",
+        "Preserves progressive_discovery_state=mapping in Discover with at most one active item."
+      ],
+      "pass_criteria": [
+        "The response identifies two active decision items as invalid during mapping.",
+        "The response keeps at most one status=active without requiring a frontier snapshot.",
+        "The response does not advance out of Discover."
+      ],
+      "fail_signals": [
+        "Allows two active items during mapping.",
+        "Requires decision_frontier creation before mapping can be valid.",
+        "Treats a missing frontier as permission for parallel activation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "invalid mapping state",
+          "serialize decision_item entries to one active item",
+          "decision_frontier is not required during mapping",
+          "remain in progressive Discover",
+          "progressive_discovery_state=mapping"
+        ],
+        "forbidden_substrings": [
+          "two active decision_item entries are allowed",
+          "advance to Decompose from mapping",
+          "change progressive_discovery_state=mapping to route_clear"
+        ],
+        "ordered_substrings": [
+          [
+            "invalid mapping state",
+            "serialize decision_item entries to one active item",
+            "remain in progressive Discover",
+            "progressive_discovery_state=mapping"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "progressive-mapping-resolution-retention",
+      "title": "Progressive mapping retains a first resolution",
+      "category": "progressive_discovery",
+      "purpose": "Checks that a mapping-state resolution is canonical before a dependent can use it without requiring a frontier snapshot.",
+      "prompt": "During progressive mapping, retention-decision just changed to status=resolved. The consent question remains deferred behind it, and no decision_frontier exists yet. Record the safe state before any dependent becomes eligible or active.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "uncertainty_shape=progressive and progressive_discovery_state=mapping.",
+        "retention-decision has status=resolved; consent-decision remains deferred behind unlocking_decision_item_ref=retention-decision.",
+        "No decision_frontier snapshot exists because mapping is still in progress."
+      ],
+      "expected_behavior": [
+        "Records exactly one decision_resolution with decision_item_ref=retention-decision, evidence and downstream effects before dependent eligibility.",
+        "Keeps progressive_discovery_state=mapping and remains in progressive Discover; a frontier snapshot is still not required.",
+        "Does not activate the dependent or advance into delivery work before the canonical history exists."
+      ],
+      "pass_criteria": [
+        "The response retains the predecessor resolution rather than treating status=resolved as sufficient evidence.",
+        "The response records evidence and downstream effects before dependent eligibility.",
+        "The response keeps the mapping state inside Discover without requiring a frontier."
+      ],
+      "fail_signals": [
+        "Omits the canonical resolution during mapping.",
+        "Makes the dependent active before the predecessor resolution is recorded.",
+        "Advances to Decompose or another delivery phase."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "progressive_discovery_state=mapping",
+          "decision_resolution",
+          "decision_item_ref=retention-decision",
+          "evidence and downstream effects",
+          "before dependent eligibility",
+          "remain in progressive Discover"
+        ],
+        "forbidden_substrings": [
+          "omit decision_resolution during mapping",
+          "make consent-decision active",
+          "advance to Decompose"
+        ]
+      }
+    },
+    {
+      "id": "standard-pack-review-result-retains-checklist",
+      "title": "Standard Pack review result retains the canonical checklist",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that a standard or strict Pack-backed review persists the canonical Pack checklist reference across handoff and compaction.",
+      "prompt": "Complete the standard review wrapper for this Pack-backed workflow after assistant-review returns validated final summary, delegation path, and Architecture Decision Pack review artifacts. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "controller_intensity=standard.",
+        "architecture_design_mode=required.",
+        "The assistant-review final_summary, review_delegation_path, and architecture_decision_pack_review artifacts are current and validated."
+      ],
+      "expected_behavior": [
+        "Records review_result canonical final-summary and delegation-path refs.",
+        "Records review_result.architecture_decision_pack_review_ref and its exact canonical assistant-review contract.",
+        "Marks review_result.validation_status=validated only after all three artifacts resolve."
+      ],
+      "pass_criteria": [
+        "The standard review wrapper remains reconstructable after handoff or compaction without duplicating assistant-review fields."
+      ],
+      "fail_signals": [
+        "Drops the Architecture Decision Pack review reference from a Pack-backed standard review_result."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "review_result",
+          "canonical_result_ref",
+          "delegation_path_ref",
+          "architecture_decision_pack_review_ref",
+          "assistant-review/contracts/output.yaml#architecture_decision_pack_review",
+          "validated"
+        ],
+        "forbidden_substrings": [
+          "Pack review reference is optional"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "canonical_result_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "canonical_contract"],
+            "expected": "assistant-review/contracts/output.yaml#final_summary"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "delegation_path_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "delegation_contract"],
+            "expected": "assistant-review/contracts/output.yaml#review_delegation_path"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "architecture_decision_pack_review_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "architecture_decision_pack_review_contract"],
+            "expected": "assistant-review/contracts/output.yaml#architecture_decision_pack_review"
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "validation_status"],
+            "expected": "validated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "architecture-pack-all-excluded-accepted-seed-blocks",
+      "title": "All-excluded route blocks accepted seed",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects entries=[] when a consumed all-excluded route carries an acceptance seed.",
+      "prompt": "Validate candidate route_clear_handoff.decisions=[], acceptance_seed=[ship-cache], entries=[], and complete exclusion traces. Return one JSON validation_result.",
+      "setup_context": ["The consumed route is otherwise all-excluded and its exclusion traces are complete."],
+      "expected_behavior": ["Blocks entries=[] because acceptance_seed is non-empty and requires an accepted entry."],
+      "pass_criteria": ["Returns blocked with missing_field=accepted_requirement_entry."],
+      "fail_signals": ["Accepts entries=[] with accepted seed."],
+      "machine_expectations": {"required_substrings": ["all-excluded", "acceptance_seed", "entries=[]"], "forbidden_substrings": ["accept entries=[] with accepted seed"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"accepted_requirement_entry"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-duplicate-alternative-id-blocks",
+      "title": "Pack blocks duplicate alternative identity",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects viable alternatives that reuse one alternative_id.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}, {alternative_id=cache, disposition=rejected}] and selected_alternative_id=cache. Return one JSON validation_result.",
+      "setup_context": ["The alternatives are otherwise viable and the selected design names cache."],
+      "expected_behavior": ["Blocks duplicate alternative_id before accepting selected binding."],
+      "pass_criteria": ["Returns blocked with missing_field=unique_alternative_id."],
+      "fail_signals": ["Accepts duplicate alternative_id."],
+      "machine_expectations": {"required_substrings": ["alternative_id", "duplicate", "selected_alternative_id"], "forbidden_substrings": ["accept duplicate alternative_id"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"unique_alternative_id"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-unknown-selected-alternative-blocks",
+      "title": "Pack blocks unknown selected alternative",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects selected_alternative_id that does not resolve to the selected alternative.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}] and selected_alternative_id=missing. Return one JSON validation_result.",
+      "setup_context": ["The one declared alternative is the sole selected choice."],
+      "expected_behavior": ["Blocks selected_alternative_id that resolves to no alternative."],
+      "pass_criteria": ["Returns blocked with missing_field=selected_alternative_resolution."],
+      "fail_signals": ["Accepts unknown selected_alternative_id."],
+      "machine_expectations": {"required_substrings": ["selected_alternative_id", "missing", "alternative_id"], "forbidden_substrings": ["accept unknown selected_alternative_id"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"selected_alternative_resolution"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-multiple-selected-alternatives-blocks",
+      "title": "Pack blocks multiple selected alternatives",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects alternatives with more than one selected disposition.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}, {alternative_id=stream, disposition=selected}] and selected_alternative_id=cache. Return one JSON validation_result.",
+      "setup_context": ["Both alternatives are viable but only one may be selected."],
+      "expected_behavior": ["Blocks multiple selected dispositions despite one selected_alternative_id."],
+      "pass_criteria": ["Returns blocked with missing_field=single_selected_alternative."],
+      "fail_signals": ["Accepts multiple selected dispositions."],
+      "machine_expectations": {"required_substrings": ["alternatives", "multiple", "disposition=selected"], "forbidden_substrings": ["accept multiple selected dispositions"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"single_selected_alternative"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-explicit-unknown-verified-quality-blocks",
+      "title": "Pack blocks verified explicit-unknown quality scenario",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects quality status=verified when budget_or_explicit_unknown is unknown.",
+      "prompt": "Validate candidate quality_scenario_id=memory-limit, budget_or_explicit_unknown=unknown, status=verified, verification_ref=memory-check. Return one JSON validation_result.",
+      "setup_context": ["The scenario has a stable identity and a verification reference but no concrete budget."],
+      "expected_behavior": ["Blocks explicit unknown quality evidence from claiming verified."],
+      "pass_criteria": ["Returns blocked with missing_field=concrete_quality_budget."],
+      "fail_signals": ["Accepts unknown verified quality scenario."],
+      "machine_expectations": {"required_substrings": ["budget_or_explicit_unknown", "unknown", "status=verified"], "forbidden_substrings": ["accept unknown verified quality scenario"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"concrete_quality_budget"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-dangling-quality-verification-blocks",
+      "title": "Pack blocks dangling quality verification ref",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects verified quality verification_ref without matching verification_id.",
+      "prompt": "Validate candidate quality_scenario_id=memory-limit, budget_or_explicit_unknown=128MB, status=verified, verification_ref=missing-check, verification=[{verification_id=memory-check}]. Return one JSON validation_result.",
+      "setup_context": ["The scenario has a concrete threshold and is otherwise eligible for verified status."],
+      "expected_behavior": ["Blocks dangling verification_ref rather than accepting verified quality evidence."],
+      "pass_criteria": ["Returns blocked with missing_field=verification_ref_resolution."],
+      "fail_signals": ["Accepts dangling verification_ref."],
+      "machine_expectations": {"required_substrings": ["verification_ref", "missing-check", "verification_id"], "forbidden_substrings": ["accept dangling verification_ref"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"verification_ref_resolution"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
     },
     {
       "id": "workflow-required-roles-dispatch-from-instruction-trigger",

@@ -35,11 +35,18 @@ Task type: [feature | bugfix | refactor | migration | rewrite | config | infra |
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
+Architecture design mode: [not_applicable | lightweight | required | review_intensive]
+Architecture Decision Pack ref: [ref, or N/A with concrete reason]
+Pack handoff binding: [discover_only: context/journal ref only | downstream_bound: context/journal + plan/task-packet + review-scope refs]
+Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 Slice promotion mode: [local | review_gated]
 Slice topology: target_branch=[ref] | task_branch=[feature/<task>] | slice_branch format=[slice/<task>/<slice-id>]
 Slice review evidence: [N/A | REVIEW_PENDING/REVIEW_APPROVED/REVIEW_REJECTED/REVIEW_STALE plus evidence refs]
 Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
+Uncertainty shape: [bounded | progressive]
+Progressive discovery state: [not_applicable | mapping | resolving | route_clear | blocked]
+Decision map ref: [N/A for bounded work | compact journal/packet ref]
 Manual verification mode: [not_required | optional | required]
 Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
@@ -50,7 +57,6 @@ Clarification defaults:
   Rationale: [why safe/reversible and not scope-changing]
 Clarification confidence: [low | medium | high]
 Clarification questions asked: [0+]
-Clarification question cap: [0+; maximum, not quota]
 Clarification admissibility: [satisfied | needs_clarification | not_applicable]
 Unresolved clarification topics:
 - [none, or one short topic per line]
@@ -71,8 +77,11 @@ Candidate scope scan:
 - Unknowns: [none, or one short scope/risk unknown per line]
 Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
-- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop; otherwise compact ref with loop_type/trigger/verifier/stop/max_iterations/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- Progressive activation provenance: [on first activation set positive activation_ordinal atomically on the canonical decision item; never-activated items omit it; keep ordinals immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs, so ascending ordinals reconstruct activated_decision_item_refs before the second activation]
+- Progressive blocked recovery: [when progressive_discovery_state=blocked retain non-empty blocked_item_refs resolving to canonical status=blocked items with blocker_kind/blocker_reason/unblock_condition; readiness exhaustion keeps the proposed item inactive with blocker_kind=readiness_exhausted]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically with readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination transition to terminally_archived permits omission. Task state: completed does not qualify, and terminally_archived cannot revert. Never reopen or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
+- Progressive current map: [N/A for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable, or after progressive_artifact_retention_state=terminally_archived; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; every current-map deferred uncertainty retains unlocking_decision_item_ref to a current-map predecessor; retired/excluded/history entries may remain outside current refs]
 Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Agent Dispatch Log
@@ -104,7 +113,32 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 [paste approved plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths]
 
 ## Requirement Acceptance Map
-[paste or reference the canonical map from `references/requirement-acceptance-map.md`; every accepted requirement id must end passed or approved_exclusion]
+[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work, small required/review_intensive Architecture Decision Pack work, or retained route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
+- source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance while progressive_artifact_retention_state=retained; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map; terminally_archived permits omission]
+
+## Architecture Decision Pack
+[N/A only when architecture_design_mode=not_applicable with a concrete reason. Otherwise retain a typed reference, not a duplicate narrative.]
+- Pack id / mode: [ref/id | lightweight | required | review_intensive]
+- Freshness: [branch/HEAD or greenfield basis, source refs, invalidated_by]
+- Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
+- Boundary / design-pressure / Type Ledger / quality scenario refs: [compact refs]
+- Handoff binding: [discover_only forbids invented future refs; Plan atomically sets downstream_bound with plan/task-packet and review-scope refs before Build; invalidation clears stale refs through refresh/re-plan/reapproval]
+- Plan-mode-none binding: [pre-Build atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action]
+- Material questions: [none before Plan, or grouped refs]
+- Plan/task packet/review refs: [typed locations]
+
+## Progressive Discovery
+[N/A only for ordinary bounded work with both durable markers and progressive_artifact_retention_state not_applicable, or after typed terminal archival. Keep compact refs for the retained canonical reference chain here or in the equivalent carried state; do not duplicate full schemas.]
+- progressive_route_clear_consumption_state: [not_applicable | pending | consumed; pending mirrors route_clear_handoff, consumed remains after bounded/not_applicable only after reciprocal map consumption]
+- progressive_sequence_readiness_state: [not_applicable | active | closed; active retains the one progressive decision-map readiness record across pause/blocked/compaction/continuation and third+ activation; closed only after durable route-clear consumption or explicit task termination/final archival and cannot reopen/reset]
+- progressive_artifact_retention_state: [not_applicable | retained | terminally_archived; retained while durable progressive references remain resumable; terminally_archived only when progressive_terminal_archival is already present before this state is persisted or resumed, binds current task identity, final decision-map ref, typed final archival/termination basis, and resolvable evidence refs proving continuation and reference resolution are impossible as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable; historical consumed and closed markers remain; Task state: completed does not qualify; terminally_archived cannot revert and is invalid while route consumption is pending or readiness is active]
+- Decision map ref: [journal/packet ref; retain while progressive_artifact_retention_state=retained and either durable marker is pending/consumed or active/closed, so route_clear_handoff.decision_map_ref and loop_readiness_assessment refs resolve]
+- Decision items ref: [journal/packet ref; retain every map-referenced canonical decision_item plus any activation_ordinal history entry needed before the second activation/readiness record]
+- Deferred uncertainty ref: [journal/packet ref; retain every map-referenced canonical deferred_uncertainty with unlock_condition and unlocking_decision_item_ref; each status=unlocked entry records converted_decision_item_ref to the actionable canonical item listed exactly once in its predecessor resolution's newly_precise_item_refs; every current-map retired/excluded entry must retain its exact canonical predecessor resolution when that current predecessor is resolved, superseded, or excluded, preserving a concrete all-excluded route; route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs is ordered unique, resolves exactly once, and exactly covers these entries]
+- Decision frontier ref: [journal/packet ref only for live progressive state; when progressive_discovery_state=blocked it retains non-empty blocked_item_refs with typed recovery, including blocker_kind=readiness_exhausted; it remains transient after live state ends]
+- Decision resolutions ref: [journal/packet ref; retain exactly one canonical decision_resolution for every resolved item, including a mapping-state predecessor, every current-map retired/excluded deferred uncertainty predecessor, and every resolved item referenced by loop readiness]
+- Route-clear handoff ref: [journal/packet ref; route_clear_handoff.decisions contains each current-map resolved decision exactly once through canonical decision_resolution.decision_item_ref values, while superseded/excluded current-map decisions appear exactly once in exclusions; decisions is non-empty when any current-map decision has status=resolved; retired_or_excluded_deferred_uncertainty_refs is ordered unique and exactly covers current-map retired/excluded uncertainty; retained historical resolutions for superseded/excluded current-map items are lineage evidence only and do not appear in decisions; route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed] and progressive_artifact_retention_state=retained, with both reciprocal map refs resolvable during active/resumable continuation; terminally_archived permits omission]
+- Progressive terminal archival: [required when terminally_archived; progressive_terminal_archival binds current_task_identity, final_progressive_decision_map_ref, final_archival_or_termination_basis, and resolvable evidence_refs proving continuation and reference resolution are impossible; missing/dangling/mismatched evidence fails closed]
 
 ## Key Decisions
 - [decision]: [why] (Step N)
@@ -275,7 +309,7 @@ do not start the next slice until the current one is `VERIFIED`
 
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
-3. **Clarification** caps are maximums, not quotas. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
+3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
 4. **Decompose/Plan** persists the slice manifest for medium+ work. Plan is omitted only for eligible `plan_mode=none`, inline mode records a no-wait compact plan, and approval-required mode captures approval.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
 6. **Review** owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.

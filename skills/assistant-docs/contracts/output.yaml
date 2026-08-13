@@ -1,12 +1,13 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-docs
 
 artifacts:
   - name: files_updated
     type: object[]
-    required: true
+    required: conditional
+    condition: "architecture_design_mode == not_applicable or architecture_decision_pack_status == current"
     description: "List of files created or modified with documentation"
     min_items: 1
     on_fail: "Re-run skill to produce the missing artifact"
@@ -60,3 +61,51 @@ artifacts:
     description: "Redactions, sensitive/internal details omitted, or ['none'] when no safety-sensitive content was encountered"
     validation: "Must not include the sensitive value itself"
     on_fail: "Redact sensitive content and summarize the omission without exposing values"
+
+  - name: architecture_decision_pack_trace
+    type: object
+    required: conditional
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    description: "Discriminated documentation/recovery trace for a current, missing, stale, or out-of-scope Architecture Decision Pack"
+    validation: "architecture_decision_pack_status=current requires outcome=documented; missing requires blocked_missing_pack; stale requires blocked_stale_pack; out_of_scope requires outcome=out_of_scope. outcome=documented requires source_pack_ref, documented_decision_refs, and evidence_refs from a current Pack. Blocked or out-of-scope outcomes require recovery_action and non-empty review_trace without invented refs; stale_pack_ref appears only when a stale ref is actually available."
+    on_fail: "Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack. Stop documentation of that decision, request a fresh Pack, or mark the decision out of scope."
+    object_fields:
+      - name: outcome
+        type: enum
+        required: true
+        enum_values: [documented, blocked_missing_pack, blocked_stale_pack, out_of_scope]
+        on_missing: fail
+      - name: source_pack_ref
+        type: string
+        required: conditional
+        condition: "outcome == documented"
+        on_missing: fail
+      - name: stale_pack_ref
+        type: string
+        required: false
+        condition: "outcome == blocked_stale_pack and a stale Pack ref is actually available"
+        on_missing: skip
+      - name: documented_decision_refs
+        type: string[]
+        required: conditional
+        condition: "outcome == documented"
+        min_items: 1
+        on_missing: fail
+      - name: evidence_refs
+        type: string[]
+        required: conditional
+        condition: "outcome == documented"
+        min_items: 1
+        on_missing: fail
+      - name: recovery_action
+        type: enum
+        required: conditional
+        condition: "outcome in [blocked_missing_pack, blocked_stale_pack, out_of_scope]"
+        enum_values: [request_current_pack, mark_decision_out_of_scope]
+        on_missing: fail
+      - name: review_trace
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Review items, stale-claim handling, or ['none'] when all documented Pack claims are current and supported"
+        on_missing: fail

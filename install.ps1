@@ -1440,27 +1440,27 @@ function Remove-ExactManagedFiles {
         $item = Get-Item -LiteralPath $safeFile -Force -ErrorAction SilentlyContinue
         if ($null -eq $item) { continue }
         if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "Refusing to remove a source-only target that is a reparse point: $safeFile"
+            throw "Refusing to remove a managed target for $Label that is a reparse point: $safeFile"
         }
         if ($item.PSIsContainer) {
-            throw "Refusing to remove a source-only target that is not a file: $safeFile"
+            throw "Refusing to remove a managed target for $Label that is not a file: $safeFile"
         }
         $validatedFiles.Add($safeFile)
     }
 
     foreach ($safeFile in $validatedFiles) {
         if ($DryRun) {
-            Write-DryRun "Remove source-only installed target $safeFile"
+            Write-DryRun "Remove managed installed target for ${Label}: $safeFile"
             continue
         }
         [void](Assert-SafeManagedChild -LiteralPath $safeFile -ManagedRoot $safeTargetRoot -Purpose "$Label deletion")
         $item = Get-Item -LiteralPath $safeFile -Force -ErrorAction SilentlyContinue
         if ($null -eq $item) { continue }
         if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.PSIsContainer) {
-            throw "Refusing changed source-only target before deletion: $safeFile"
+            throw "Refusing changed managed target for $Label before deletion: $safeFile"
         }
         [System.IO.File]::Delete($safeFile)
-        Write-Ok "Removed source-only installed target $safeFile"
+        Write-Ok "Removed managed installed target for ${Label}: $safeFile"
     }
 }
 
@@ -2276,15 +2276,16 @@ function Invoke-AssistantFrameworkInstall {
         'evals/finalize-workflow-kernel-review.sh',
         'evals/lib/context-budget-evidence.sh'
     )
-    [void](Assert-SafeUserFile -LiteralPath $settingsFile -ManagedRoot $agentHome -Purpose 'agent settings')
+    $retiredManagedTools = @(
+        'cleanup-memory-graph.ps1',
+        'cleanup-memory-graph.sh'
+    )
+    # Legacy hook retirement is the only remaining operation that reads agent
+    # configuration. Do not inspect unrelated user-owned files such as Codex
+    # config.toml or Claude's top-level .claude.json.
     [void](Assert-SafeUserFile -LiteralPath $legacySettings -ManagedRoot $agentHome -Purpose 'legacy hook settings')
     [void](Assert-SafeUserFile -LiteralPath $instructionsFile -ManagedRoot $agentHome -Purpose 'agent instructions' -RequireExclusiveUpdatePreflight:($agentName -eq 'codex'))
-    Assert-JsonFilePropertyIdentitySafe -LiteralPath $settingsFile
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $legacySettings
-    if ($agentName -eq 'claude') {
-        $claudeConfigFile = Assert-SafeUserFile -LiteralPath (Join-Path $script:UserHome '.claude.json') -ManagedRoot $script:UserHome -Purpose 'Claude configuration'
-        Assert-JsonFilePropertyIdentitySafe -LiteralPath $claudeConfigFile
-    }
 
     foreach ($skillName in $selectedSkills) {
         [void](Assert-ManagedDirectoryCopySafe -Source (Join-Path $skillsSource $skillName) -Target (Join-Path $skillsTarget $skillName) -ManagedRoot $skillsTarget -Label $skillName)
@@ -2304,18 +2305,11 @@ function Invoke-AssistantFrameworkInstall {
     }
     Assert-LegacyHookCleanupSafe -HooksTarget $hooksTarget
 
-    $retirementTool = Join-Path $script:FrameworkDir 'tools/cleanup-memory-graph.ps1'
-    if (-not (Test-Path -LiteralPath $retirementTool -PathType Leaf)) {
-        throw "Memory Graph retirement tool not found: $retirementTool"
-    }
     $installedAgentFiles = @()
     try {
-        & $retirementTool -Agent $agentName -DryRun:$DryRun
-        $retirementSucceeded = $?
-        if (-not $retirementSucceeded) { throw 'Memory Graph retirement cleanup failed before installation.' }
-
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
+            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedTools -Label 'retired managed tools'
         }
 
         Install-Skills -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget -AgentName $agentName

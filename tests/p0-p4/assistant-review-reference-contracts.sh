@@ -3,6 +3,54 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+contract_field_block() {
+    local file="$1"
+    local field="$2"
+    awk -v field="$field" '
+        $0 == "  - name: " field { inside = 1 }
+        inside && /^  - name: / && $0 != "  - name: " field { exit }
+        inside { print }
+    ' "$file"
+}
+
+test_start "standalone architecture records can project complete typed review facts"
+review_missing=()
+review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_required_block="$(contract_field_block "$review_input" architecture_decision_pack_review_required)"
+review_pack_block="$(contract_field_block "$review_input" architecture_decision_pack)"
+for term in \
+    'equivalent standalone architecture decision record' \
+    'or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or'; do
+    if ! grep -Fq -- "$term" <<<"$review_required_block"; then review_missing+=("review trigger: $term"); fi
+done
+for term in \
+    'on_missing: infer' \
+    'Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record' \
+    'If a workflow Pack is required but absent' \
+    '      - name: facts' \
+    '          - name: claim' \
+    '      - name: assumptions' \
+    '          - name: statement' \
+    '          - name: rationale_or_impact' \
+    '      - name: material_questions' \
+    '          - name: topic' \
+    '          - name: why_needed' \
+    '          - name: risk_if_guessed' \
+    '          - name: recommended_default_or_none' \
+    '      - name: independent_challenge_evidence' \
+    '        on_missing: fail' \
+    '          - name: challenge_ref' \
+    '          - name: dissent_or_validation' \
+    '          - name: resolution' \
+    '          - name: selected_design_impact'; do
+    if ! grep -Fq -- "$term" <<<"$review_pack_block"; then review_missing+=("Pack projection: $term"); fi
+done
+if ! grep -Fq -- 'standalone equivalent records derive its compact Pack projection' "$review_handoffs"; then
+    review_missing+=("Reviewer handoff derivation rule")
+fi
+if [[ ${#review_missing[@]} -eq 0 ]]; then pass; else fail "assistant-review Pack projection gaps: ${review_missing[*]}"; fi
+
 p0p4_reference_section_has_term() {
     local file="$1"
     local heading="$2"
@@ -21,6 +69,7 @@ review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-chec
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
 review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
 review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
 
@@ -49,6 +98,7 @@ for file_and_term in \
     "$review_skill::Agentic Loop Safety Checklist" \
     "$review_skill::Behavioral Contract Review Checklist" \
     "$review_skill::Semantic Contract Review Checklist" \
+    "$review_skill::Architecture Decision Pack Review Checklist" \
     "$review_evals::review-checklists-reference-is-mandatory" \
     "$review_evals::references/review-checklists.md" \
     "$review_evals::Agentic Loop Safety Checklist" \
@@ -97,6 +147,225 @@ if [[ "${#review_checklist_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
+fi
+
+test_start "assistant-review requires evidence-bound medium-scope design coherence"
+design_coherence_failures=()
+for file_and_term in \
+    "$review_skill::Design Coherence Pass" \
+    "$review_loop::principle_checks.design_coherence" \
+    "$review_handoffs::scope_size" \
+    "$review_handoffs::design_coherence" \
+    "$review_phase_gates::RS6A" \
+    "$review_phase_gates::principle_checks.design_coherence" \
+    "$review_evals::review-medium-scope-design-coherence" \
+    "$review_evals::review-design-coherence-avoids-structural-heuristic"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        design_coherence_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for section_and_term in \
+    "## Design Coherence Pass::independent reasons to change" \
+    "## Design Coherence Pass::no concrete risk found" \
+    "## Design Coherence Pass::structural diff shape"; do
+    section="${section_and_term%%::*}"
+    term="${section_and_term#*::}"
+    if ! p0p4_reference_section_has_term "$review_principles" "$section" "$term"; then
+        design_coherence_failures+=("skills/assistant-review/references/review-principles.md $section missing $term")
+    fi
+done
+if ! awk '
+    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
+    in_bundle && /^  - name: / { exit }
+    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
+        fields = $0
+        sub(/^.*\[/, "", fields)
+        sub(/\].*$/, "", fields)
+        count = split(fields, items, ",")
+        for (item_index = 1; item_index <= count; item_index++) {
+            item = items[item_index]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+            if (item == "scope_size") found = 1
+        }
+    }
+    END { exit found ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing scope_size")
+fi
+if ! awk '
+    $0 == "      - name: principle_checks" { in_checks = 1; next }
+    in_checks && /^      - name: / { exit }
+    in_checks && $0 == "        required: conditional" { required = 1 }
+    in_checks && $0 == "        condition: \"quality_principles_required is true or scope_size in [medium, large]\"" { condition = 1 }
+    END { exit required && condition ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("principle_checks is not conditionally required for its applicable scope")
+fi
+if ! awk '
+    $0 == "      - name: principle_checks" { in_checks = 1; next }
+    in_checks && /^      - name: / { exit }
+    in_checks && $0 == "          - name: design_coherence" { in_design_coherence = 1; next }
+    in_design_coherence && /^          - name: / { exit }
+    in_design_coherence && $0 == "            required: conditional" { required = 1 }
+    in_design_coherence && $0 == "            condition: \"scope_size in [medium, large]\"" { condition = 1 }
+    END { exit required && condition ? 0 : 1 }
+' "$review_handoffs"; then
+    design_coherence_failures+=("principle_checks.design_coherence is not conditionally required for medium/large scope")
+fi
+if [[ "${#design_coherence_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review medium-scope design-coherence contract is incomplete: ${design_coherence_failures[*]}"
+fi
+
+test_start "assistant-review checks applicable Architecture Decision Packs"
+architecture_pack_review_failures=()
+for file_and_term in \
+    "$review_checklists::## Architecture Decision Pack Review Checklist" \
+    "$review_checklists::Freshness, facts, and material questions" \
+    "$review_checklists::Ownership, dependency, and lifecycle boundary" \
+    "$review_checklists::Design-pressure checks" \
+    "$review_checklists::Semantic type ledger and primitive exceptions" \
+    "$review_checklists::Falsifiable quality scenarios" \
+    "$review_checklists::Compatibility, extension, and verification handoff" \
+    "$review_index::architecture_decision_pack_review_required" \
+    "$review_phase_gates::RS10" \
+    "$review_evals::architecture-decision-pack-review-is-fresh-and-falsifiable"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        architecture_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for section_and_term in \
+    "## Architecture Decision Pack Review Checklist::Freshness, facts, and material questions" \
+    "## Architecture Decision Pack Review Checklist::Design-pressure checks" \
+    "## Architecture Decision Pack Review Checklist::Semantic type ledger and primitive exceptions" \
+    "## Architecture Decision Pack Review Checklist::Falsifiable quality scenarios" \
+    "## Architecture Decision Pack Review Checklist::Compatibility, extension, and verification handoff"; do
+    section="${section_and_term%%::*}"
+    term="${section_and_term#*::}"
+    if ! p0p4_reference_section_has_term "$review_checklists" "$section" "$term"; then
+        architecture_pack_review_failures+=("skills/assistant-review/references/review-checklists.md $section missing $term")
+    fi
+done
+if [[ ${#architecture_pack_review_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Architecture Decision Pack reference is incomplete: ${architecture_pack_review_failures[*]}"
+fi
+
+test_start "assistant-review binds Pack review to the canonical architecture mode"
+architecture_pack_mode_consumer_failures=()
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+if ! ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0))
+    handoffs = YAML.load_file(ARGV.fetch(1))
+    output = YAML.load_file(ARGV.fetch(2))
+    index = YAML.load_file(ARGV.fetch(3))
+    entry_names = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "review-entry-fields" }.fetch("names")
+    input_fields = input.fetch("fields").to_h { |field| [field["name"], field] }
+    canonical_mode = input_fields.fetch("architecture_design_mode")
+    pack = input_fields.fetch("architecture_decision_pack")
+    pack_fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+    handoff = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
+    context = handoff.fetch("context_fields").to_h { |field| [field["name"], field] }
+    reviewer_checks = handoff.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
+    reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+    output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
+    output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
+    valid = input["schema_version"] == "6.0" && handoffs["schema_version"] == "6.0" && output["schema_version"] == "6.0" && index["schema_version"] == "6.0" &&
+      canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
+      canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
+      canonical_mode["on_missing"] == "infer" &&
+      canonical_mode.fetch("infer_from").include?("standalone equivalent architecture decision record") &&
+      canonical_mode.fetch("infer_from").include?("one local owner, dependency, type, or verification decision") &&
+      canonical_mode.fetch("infer_from").include?("cross-boundary/public contract") &&
+      canonical_mode.fetch("infer_from").include?("high-risk or conflicting drivers") &&
+      canonical_mode.fetch("infer_from").include?("memory vs throughput") &&
+      canonical_mode.fetch("infer_from").include?("irreversible public/data decision") &&
+      canonical_mode.fetch("infer_from").include?("independent_challenge_evidence") &&
+      canonical_mode.fetch("infer_from").include?("corroborate but must not determine") &&
+      canonical_mode.fetch("infer_from").include?("workflow Pack or handoff") &&
+      entry_names.include?("architecture_design_mode") &&
+      pack_fields.fetch("mode")["validation"] == "Must equal canonical architecture_design_mode" &&
+      pack_fields.fetch("independent_challenge_evidence")["condition"] == "architecture_design_mode == review_intensive" &&
+      context.fetch("architecture_design_mode")["required"] == "conditional" && context.fetch("architecture_design_mode")["condition"] == "architecture_decision_pack_review_required is true" &&
+      context.fetch("architecture_design_mode")["enum_values"] == %w[lightweight required review_intensive] &&
+      reviewer_challenge["condition"] == "architecture_design_mode == review_intensive" &&
+      output_challenge["condition"] == "architecture_design_mode == review_intensive"
+    exit valid ? 0 : 1
+' "$review_input" "$review_handoffs" "$review_output" "$review_index"; then
+    architecture_pack_mode_consumer_failures+=("canonical input, Reviewer context, and output Pack mode binding")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-architecture-record-derives-review-projection") |
+    (.setup_context | any(. == "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.")) and
+    (.expected_behavior | any(. == "Infers canonical architecture_design_mode=review_intensive from the standalone record\u0027s high-risk/conflicting drivers, keeps architecture_decision_pack.mode=architecture_design_mode, and treats independent challenge evidence as corroboration rather than the mode determinant.")) and
+    (.machine_expectations.required_substrings | index("architecture_design_mode=review_intensive")) and
+    (.machine_expectations.required_substrings | index("architecture_decision_pack.mode=architecture_design_mode"))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone review eval does not prove review_intensive normalization")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-high-risk-record-without-challenge-remains-review-intensive") |
+    (.setup_context | any(. == "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.")) and
+    (.expected_behavior | any(. == "Infers architecture_design_mode=review_intensive from the ADR drivers before inspecting challenge evidence and does not downgrade to required.")) and
+    (.expected_behavior | any(. == "Reports missing independent challenge evidence as a validation failure, finding, or blocker required by review_intensive mode.")) and
+    (.machine_expectations.required_substrings | index("architecture_design_mode=review_intensive")) and
+    (.machine_expectations.required_substrings | index("missing independent challenge evidence")) and
+    (.machine_expectations.forbidden_substrings | index("architecture_design_mode=required"))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone high-risk review eval does not retain review_intensive when challenge evidence is missing")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standalone-high-risk-record-without-challenge-remains-review-intensive") |
+    (.prompt | contains("Return exactly one valid JSON object")) and
+    (.machine_expectations.structured_json_assertions | length == 5) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["architecture_design_mode"],"expected":"review_intensive"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals_path","path":["architecture_design_mode"],"other_path":["architecture_decision_pack","mode"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","status"],"expected":"blocked"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","missing_field"],"expected":"independent_challenge_evidence"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}))
+' "$review_evals" >/dev/null; then
+    architecture_pack_mode_consumer_failures+=("standalone high-risk review eval is missing structured mode and blocked-validation assertions")
+fi
+adversarial_review_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-structured-adversary.XXXXXX")"
+adversarial_review_responses="$adversarial_review_root/responses"
+adversarial_review_output="$adversarial_review_root/grader.out"
+p0p4_register_cleanup "$adversarial_review_root"
+mkdir -p "$adversarial_review_responses/assistant-review"
+while IFS= read -r adversarial_case_id; do
+    adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
+    adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
+    if [[ "$adversarial_case_id" == "standalone-high-risk-record-without-challenge-remains-review-intensive" ]]; then
+        jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
+    else
+        printf '%s\n' "$adversarial_required_summary" >"$adversarial_response_path"
+    fi
+done < <(jq -r '.cases[].id' "$review_evals")
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review >"$adversarial_review_output" 2>&1; then
+    architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response passed")
+elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-challenge-remains-review-intensive' "$adversarial_review_output" \
+    || ! grep -Fq "structured JSON assertion failure" "$adversarial_review_output"; then
+    architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
+fi
+for file_and_term in \
+    "$review_skill::Migration note: assistant-review contracts are v6" \
+    "$review_phase_gates::architecture_design_mode" \
+    "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        architecture_pack_mode_consumer_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ ${#architecture_pack_mode_consumer_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review canonical Pack mode consumer gaps: ${architecture_pack_mode_consumer_failures[*]}"
 fi
 
 test_start "assistant-review does not use rubric score alone to force round 3 or stronger claims"
@@ -302,6 +571,94 @@ if [[ "${#independent_reuse_search_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
+fi
+
+test_start "assistant-review v6 preserves recoverable selected-design Pack projections"
+pack_projection_cardinality_failures=()
+if ! ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0))
+    contracts = ARGV.map { |path| YAML.load_file(path) }
+    pack = input.fetch("fields").find { |field| field["name"] == "architecture_decision_pack" }
+    fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+    boundaries = fields.fetch("boundaries_and_dependencies")
+    pressure = fields.fetch("design_pressure_checks")
+    required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
+    ref = fields.fetch("ref")
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "6.0" } &&
+      boundaries["required"] == true && boundaries["min_items"] == 1 &&
+      pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
+      ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
+      required_concerns.all? { |concern| pressure.fetch("validation").include?(concern) }
+    exit valid ? 0 : 1
+' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
+    pack_projection_cardinality_failures+=("v6 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
+fi
+if ! grep -Fq 'Migration note: assistant-review contracts are v6' "$review_skill" \
+    || ! grep -Fq 'recoverable selected design, rationale, and viable alternatives/dispositions' "$review_skill"; then
+    pack_projection_cardinality_failures+=("v6 migration note does not describe recoverable selected design evidence")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "architecture-pack-empty-review-evidence-blocks") |
+    (.prompt | contains("Return exactly one valid JSON object")) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","status"],"expected":"blocked"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","missing_field"],"expected":"boundaries_and_dependencies_or_design_pressure_checks"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}))
+' "$review_evals" >/dev/null; then
+    pack_projection_cardinality_failures+=("empty Pack projection negative eval is missing structured blocked evidence")
+fi
+if [[ ${#pack_projection_cardinality_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Pack projection cardinality gaps: ${pack_projection_cardinality_failures[*]}"
+fi
+
+test_start "assistant-review reviewer-context ceiling matches its canonical loop reference"
+if ruby -ryaml -e '
+    index = YAML.load_file(ARGV.fetch(0))
+    budget = index.fetch("load_sets").fetch("reviewer_context").fetch("budget_words")
+    reference = File.read(ARGV.fetch(1))
+    exit reference.include?("strictly below #{budget} words") ? 0 : 1
+  ' "$review_index" "$review_loop"; then
+    pass
+else
+    fail "assistant-review reviewer-context budget_words and review-loop closure ceiling diverged"
+fi
+
+test_start "assistant-review grader rejects unrecoverable selected Pack decisions"
+review_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-selected-decision.XXXXXX")"
+p0p4_register_cleanup "$review_identity_eval_root"
+mkdir -p "$review_identity_eval_root/skill" "$review_identity_eval_root/skill/evals"
+cp "$review_skill" "$review_identity_eval_root/skill/SKILL.md"
+jq '.skill = "skill" | .cases = [.cases[] | select(.id == "architecture-pack-selected-design-recovery-blocks")]' "$review_evals" >"$review_identity_eval_root/skill/evals/cases.json"
+review_identity_required="$(jq -r '.cases[0].machine_expectations.required_substrings[]' "$review_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
+jq -n --arg summary "$review_identity_required" '{summary: $summary, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "validated"}}' >"$review_identity_eval_root/skill/architecture-pack-selected-design-recovery-blocks.txt"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$review_identity_eval_root" --skill "$review_identity_eval_root/skill" >"$review_identity_eval_root/grader.out" 2>&1; then
+    fail "real grader accepted unrecoverable selected Pack decision"
+elif grep -Fq $'FAIL\tskill\tarchitecture-pack-selected-design-recovery-blocks' "$review_identity_eval_root/grader.out" \
+    && grep -Fq 'structured JSON assertion failure' "$review_identity_eval_root/grader.out"; then
+    pass
+else
+    fail "real grader did not reject unrecoverable selected Pack decision for the intended reason"
+fi
+
+test_start "assistant-review v6 conditionally requires Pack checks in Reviewer returns"
+reviewer_pack_return_failures=()
+if ! ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0))
+    reviewer = handoffs.fetch("handoffs").find { |handoff| handoff["name"] == "orchestrator_to_reviewer" }
+    checks = reviewer.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
+    validation = handoffs.fetch("return_validation_bundles").find { |bundle| bundle["name"] == "reviewer_return_validation" }
+    valid = checks["required"] == "conditional" &&
+      checks["condition"] == "architecture_decision_pack_review_required is true" &&
+      validation.fetch("validation").include?("architecture_decision_pack_checks when triggered")
+    exit valid ? 0 : 1
+' "$review_handoffs"; then
+    reviewer_pack_return_failures+=("Reviewer return can omit triggered architecture_decision_pack_checks")
+fi
+if [[ ${#reviewer_pack_return_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Reviewer Pack return requiredness gaps: ${reviewer_pack_return_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [execution_lane, activation_reason, behaviors, debugging_evidence, test_framework, exceptions]
+        names: [execution_lane, activation_reason, behaviors, debugging_evidence, architecture_test_obligations, test_framework, exceptions]
     budget_words: 1500
   current_phase:
     selectors:
@@ -33,7 +33,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV1, INV2, INV3, INV4]
+        names: [INV1, INV2, INV3, INV4, INV5]
     budget_words: 3500
   completion:
     selectors:
@@ -42,7 +42,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [cycle_log, coverage_summary, task_journal_entry]
+        allowed_names: [cycle_log, coverage_summary, architecture_obligation_coverage, task_journal_entry]
     budget_words: 3500
 
 fallback:

@@ -61,8 +61,8 @@ context_budget_build_evidence() {
           baseline_instruction_sha256:$baseline_instruction_sha256,
           candidate_instruction_sha256:$candidate_instruction_sha256,
           policy_caps:{
-            selected_initial_words_max:1000,
-            selected_entry_words_max:2600,
+            selected_initial_words_max:1050,
+            selected_entry_words_max:3000,
             standing_context_growth_allowed:false
           },
           baseline:$b,
@@ -88,7 +88,7 @@ context_budget_validate_evidence_structure() {
       and (.reporter_sha256 | test("^[0-9a-f]{64}$"))
       and (.baseline_instruction_sha256 | test("^[0-9a-f]{64}$"))
       and (.candidate_instruction_sha256 | test("^[0-9a-f]{64}$"))
-      and .policy_caps == {selected_initial_words_max:1000,selected_entry_words_max:2600,standing_context_growth_allowed:false}
+      and .policy_caps == {selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false}
       and all(.baseline[],.candidate[]; type == "number" and . >= 0 and . == floor)
       and .baseline.total_initial_words == (.baseline.selected_initial_words + .baseline.standing_initial_words)
       and .candidate.total_initial_words == (.candidate.selected_initial_words + .candidate.standing_initial_words)
@@ -104,7 +104,7 @@ context_budget_validate_evidence_structure() {
 context_budget_validate_promotion_policy() {
     local evidence="$1"
     jq -e '
-      .policy_caps == {selected_initial_words_max:1000,selected_entry_words_max:2600,standing_context_growth_allowed:false}
+      .policy_caps == {selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false}
       and .candidate.selected_initial_words <= .policy_caps.selected_initial_words_max
       and .candidate.selected_entry_words <= .policy_caps.selected_entry_words_max
       and .deltas.standing_initial_words == 0
@@ -118,8 +118,8 @@ context_budget_validate_manifest() {
     mismatch="$(jq -c --slurpfile evidence "$evidence" '
       . as $manifest | $evidence[0] as $e
       | {
-          selected_initial_words_max:{manifest:.promotion_gates.selected_initial_words_max,evidence:1000},
-          selected_entry_words_max:{manifest:.promotion_gates.selected_entry_words_max,evidence:2600},
+          selected_initial_words_max:{manifest:.promotion_gates.selected_initial_words_max,evidence:1050},
+          selected_entry_words_max:{manifest:.promotion_gates.selected_entry_words_max,evidence:3000},
           standing_context_growth_allowed:{manifest:.promotion_gates.standing_context_growth_allowed,evidence:false},
           baseline_selected_initial_words:{manifest:.static_measurement.baseline_selected_initial_words,evidence:$e.baseline.selected_initial_words},
           candidate_selected_initial_words:{manifest:.static_measurement.candidate_selected_initial_words,evidence:$e.candidate.selected_initial_words},

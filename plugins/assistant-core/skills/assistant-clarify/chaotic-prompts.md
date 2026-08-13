@@ -125,7 +125,7 @@ Bad question:
 ## Failure modes
 
 Avoid these:
-- Asking five small questions instead of one decisive one
+- Asking scattered small questions instead of concise, grouped decisive questions
 - Guessing and implementing against unverified assumptions
 - Repeating the entire user message back verbatim
 - Offering a taxonomy when the user just needs the next move

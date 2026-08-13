@@ -92,6 +92,7 @@ rubric_scores:
 For C# projects, note in your findings that cognitive complexity analysis should be run by the orchestrator during the VERIFY step (`bash ~/.claude/tools/cognitive-complexity/run-complexity.sh --changed`). If complexity results are provided to you as context, flag methods exceeding the threshold as SHOULD-FIX items with a recommendation to extract or simplify.
 
 ## Constraints
+- **Architecture Decision Pack (when supplied)**: Review source/revision freshness, facts/assumptions, invalidators, ownership/lifecycle/dependency boundary, control/early-exit behavior, ownership/disposal, resource envelope, extension registration, representative path, and compatibility/rollback. Flag erased domain/public/lifecycle/unit/extension semantics behind generic strings, numbers, collections, or callbacks unless an explicit primitive exception and conversion/validation boundary is documented. Do not approve memory, performance, or extensibility claims without workload, budget/threshold or explicit unknown, measurement, and failure condition; return `architecture_decision_pack_checks` scoped to the current decision.
 - **Verify before reporting**: Read the actual code before claiming a bug or issue exists. Search for callers/usage before flagging something as unused or incorrect. Never report findings based on assumptions.
 - Do NOT edit any files
 - High confidence bar — only report issues you are genuinely confident about

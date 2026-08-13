@@ -22,13 +22,16 @@
       "setup_context": [
         "The assistant-onboard skill instructions are active.",
         "The current project has not been onboarded in this session.",
+        "The surface scan classifies the repository as medium.",
         "No focus_area or depth was specified."
       ],
       "expected_behavior": [
         "Requires or infers project_path and defaults depth to standard when unspecified.",
+        "Returns project_size=medium.",
         "Prints onboarding progress steps for Surface scan, Architecture mapping, Pattern recognition, Identifying unknowns, and Generating project orientation.",
         "Reads README, agent instructions, gitignore, root listing, build files, and CI/CD config before deeper mapping.",
-        "Uses Code Mapper when available and records an adapter-aware fallback when delegation is unavailable.",
+        "Builds the architecture map from local evidence and uses Code Mapper only when the user or an applicable instruction specifically requires delegated mapping.",
+        "Identifies evidence-backed ownership/lifecycle boundaries and semantic type candidates or explicit primitive-boundary exceptions without redesigning the project.",
         "Samples representative files for conventions instead of reading every file.",
         "Returns project_summary, key_files, conventions, artifacts, gaps, and status.",
         "Uses project-local orientation as an artifact."
@@ -37,6 +40,9 @@
         "The response includes the required onboarding phases.",
         "The response outputs key_files with path and purpose.",
         "The response outputs conventions with pattern and example.",
+        "The response outputs semantic_type_candidates with evidence or an inspected empty list.",
+        "The response outputs design_pressure_candidates with evidence or an inspected empty list.",
+        "Returns inspected semantic_type_candidates and design_pressure_candidates for the medium project.",
         "The response records artifact_updated accurately.",
         "The response lists specific gaps or questions."
       ],
@@ -50,10 +56,13 @@
         "required_substrings": [
           "Surface scan",
           "Architecture mapping",
-          "adapter-aware",
+          "local evidence",
           "Pattern recognition",
           "key_files",
           "conventions",
+          "semantic_type_candidates",
+          "design_pressure_candidates",
+          "project_size=medium",
           "artifact_updated",
           "questions",
           "Status"
@@ -63,6 +72,75 @@
           "read every file",
           "No key_files needed",
           "Any questions?"
+        ]
+      }
+    },
+    {
+      "id": "medium-onboarding-requires-inspected-architecture-candidates",
+      "title": "Medium onboarding requires inspected architecture candidates",
+      "category": "project_size_architecture_mapping",
+      "purpose": "Checks that medium and large onboarding does not silently omit architecture candidate evidence.",
+      "prompt": "Onboard this medium repository and return the orientation.",
+      "setup_context": [
+        "The assistant-onboard skill instructions are active.",
+        "The surface scan classifies the repository as medium.",
+        "Architecture inspection found no semantic-type or design-pressure candidates."
+      ],
+      "expected_behavior": [
+        "Returns project_size=medium.",
+        "Returns explicit inspected empty arrays for semantic_type_candidates and design_pressure_candidates.",
+        "Does not silently default or omit either array."
+      ],
+      "pass_criteria": [
+        "The response includes project_size=medium.",
+        "The response includes semantic_type_candidates=[] and design_pressure_candidates=[] after inspection."
+      ],
+      "fail_signals": [
+        "Omits a medium or large candidate array.",
+        "Claims an empty array without inspection.",
+        "Uses an implicit or silent default."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "project_size=medium",
+          "semantic_type_candidates=[]",
+          "design_pressure_candidates=[]",
+          "after inspection"
+        ],
+        "forbidden_substrings": [
+          "silent default",
+          "omit semantic_type_candidates",
+          "omit design_pressure_candidates"
+        ]
+      }
+    },
+    {
+      "id": "small-onboarding-may-omit-architecture-candidates",
+      "title": "Small onboarding may omit architecture candidates",
+      "category": "project_size_architecture_mapping",
+      "purpose": "Checks that small onboarding remains proportionate.",
+      "prompt": "Onboard this small repository and return the orientation.",
+      "setup_context": [
+        "The assistant-onboard skill instructions are active.",
+        "The surface scan classifies the repository as small."
+      ],
+      "expected_behavior": [
+        "Returns project_size=small.",
+        "May omit semantic_type_candidates and design_pressure_candidates."
+      ],
+      "pass_criteria": [
+        "The response keeps the orientation proportional to a small project."
+      ],
+      "fail_signals": [
+        "Requires architecture candidate arrays solely because the project is small."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "project_size=small"
+        ],
+        "forbidden_substrings": [
+          "small must return semantic_type_candidates",
+          "small must return design_pressure_candidates"
         ]
       }
     },

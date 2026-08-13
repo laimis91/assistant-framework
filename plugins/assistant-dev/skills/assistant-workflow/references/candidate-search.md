@@ -87,6 +87,9 @@ Do not reuse the post-code review rubric. Score before implementation with:
 - Feasibility: matches project architecture and available time/tooling.
 - Risk: minimizes security, data, migration, operability, and scope risk.
 - Simplicity: smallest durable approach; avoids needless framework or dependency additions.
+- When an Architecture Decision Pack applies: preserves its boundary ownership,
+  semantic type commitments/primitive exceptions, quality scenarios, and
+  explicit compatibility strategy.
 
 Suggested scoring:
 

@@ -180,6 +180,73 @@ count_false_positive_marker_failures() {
     fi
 }
 
+count_structured_json_assertion_failures() {
+    local fixture_file="$1"
+    local id="$2"
+    local response_path="$3"
+    local assertion
+    local failures=0
+
+    if [[ "$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length' "$fixture_file")" -eq 0 ]]; then
+        printf '0\n'
+        return
+    fi
+
+    if ! jq -e -s 'length == 1' "$response_path" >/dev/null 2>&1; then
+        printf '1\n'
+        return
+    fi
+
+    while IFS= read -r assertion; do
+        if ! jq -e --argjson assertion "$assertion" '
+            def path_exists($path):
+              reduce $path[] as $key (
+                { exists: true, value: . };
+                if (.exists | not) then .
+                elif (($key | type) == "string") and ((.value | type) == "object") and (.value | has($key)) then
+                  { exists: true, value: .value[$key] }
+                elif (($key | type) == "number") and ((.value | type) == "array") and ($key >= 0) and ($key < (.value | length)) then
+                  { exists: true, value: .value[$key] }
+                else
+                  { exists: false, value: null }
+                end
+              ) | .exists;
+            def value_at($path): getpath($path);
+            if $assertion.operator == "equals" then
+              path_exists($assertion.path) and value_at($assertion.path) == $assertion.expected
+            elif $assertion.operator == "nonempty_string" then
+              path_exists($assertion.path) and (value_at($assertion.path) | type == "string" and test("[^[:space:]]"))
+            elif $assertion.operator == "nonempty_array" then
+              path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length > 0)
+            elif $assertion.operator == "empty_array" then
+              path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length == 0)
+            elif $assertion.operator == "equals_path" then
+              path_exists($assertion.path) and path_exists($assertion.other_path)
+              and value_at($assertion.path) == value_at($assertion.other_path)
+            elif $assertion.operator == "required_when_equals" then
+              if path_exists($assertion.when_path) and value_at($assertion.when_path) == $assertion.value then
+                path_exists($assertion.path) and value_at($assertion.path) != null
+                and (if $assertion.expected_type? == null then true else (value_at($assertion.path) | type == $assertion.expected_type) end)
+              else true end
+            elif $assertion.operator == "array_field_values_exact" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "array")
+              and ([value_at($assertion.path)[] | if type == "object" then .[$assertion.field] else null end] | sort)
+                == ($assertion.expected_values | sort)
+            elif $assertion.operator == "array_items_nonempty_fields" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "array")
+              and (value_at($assertion.path) | length > 0)
+              and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | ($item[$field] | type == "string" and test("[^[:space:]]"))))
+            else false end
+        ' "$response_path" >/dev/null; then
+            failures=$((failures + 1))
+        fi
+    done < <(jq -c --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.structured_json_assertions[]?' "$fixture_file")
+
+    printf '%s\n' "$failures"
+}
+
 grade_responses() {
     validate_all_fixtures
     [[ -d "$RESPONSES_DIR" ]] || die "Response directory does not exist: $RESPONSES_DIR"
@@ -195,6 +262,7 @@ grade_responses() {
     local ordered_substring_failures=0
     local seeded_defect_failures=0
     local false_positive_marker_failures=0
+    local structured_json_assertion_failures=0
     local index
     local skill_name
     local fixture_file
@@ -208,6 +276,7 @@ grade_responses() {
     local ordered_failures
     local seeded_failures
     local false_positive_failures
+    local structured_failures
     local status
     local reason
 
@@ -239,6 +308,7 @@ grade_responses() {
                 ordered_failures="$(count_ordered_substring_failures "$fixture_file" "$id" "$response_path")"
                 seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$response_path")"
                 false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$response_path")"
+                structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path")"
                 if [[ "$fail_signal_hits" -gt 0 ]]; then
                     status="FAIL"
                     reason="$fail_signal_hits exact fail-signal phrase hit(s)"
@@ -289,6 +359,15 @@ grade_responses() {
                     fi
                     false_positive_marker_failures=$((false_positive_marker_failures + false_positive_failures))
                 fi
+                if [[ "$structured_failures" -gt 0 ]]; then
+                    if [[ "$status" == "FAIL" ]]; then
+                        reason="$reason; $structured_failures structured JSON assertion failure(s)"
+                    else
+                        status="FAIL"
+                        reason="$structured_failures structured JSON assertion failure(s)"
+                    fi
+                    structured_json_assertion_failures=$((structured_json_assertion_failures + structured_failures))
+                fi
             fi
 
             if [[ "$status" == "PASS" ]]; then
@@ -302,8 +381,8 @@ grade_responses() {
     done
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s skills=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "${#FIXTURE_FILES[@]}"
+    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s structured_json_assertion_failures=%s skills=%s\n' \
+        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "$structured_json_assertion_failures" "${#FIXTURE_FILES[@]}"
 
     [[ "$failed" -eq 0 ]]
 }

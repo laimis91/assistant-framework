@@ -23,15 +23,16 @@ while round <= 10:
 
   1. REVIEW
      - Require the latest Spec Review result to be PASS before review dispatch.
-     - At the moment this pass begins, resolve `reviewer_context` from `contracts/index.yaml`; its declared boundary closure must remain below 5000 words.
+     - At the moment this pass begins, resolve `reviewer_context` from `contracts/index.yaml`; its declared boundary closure must remain strictly below 5653 words.
      - Create one fresh `fresh_reviewer_context` bundle with:
        - selected `dispatch_context_ref` for `orchestrator_to_reviewer.context_fields`
        - `review_evidence_pointer` covering Spec Review PASS evidence, review material, and required `build_test_verification_ref`
        - round number, `additional_round_reason` when round >= 3, previously_fixed, finding_filter_policy, and review-mode flags
        - `reuse_search_instruction`: independently during review, conduct the bounded capability search for rule-like changes; Carried Mapper/task-packet evidence alone cannot satisfy review
        - `references/review-principles.md`
+       - for medium+ scope, its Design Coherence Pass and a `principle_checks.design_coherence` conclusion of either an evidence-backed risk or `no concrete risk found`; do not create a finding from structural heuristics alone
        - `references/review-rubric.md` for the medium+ Reviewer
-       - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, and/or Agentic Loop Safety Checklist
+       - only triggered sections from `references/review-checklists.md`: Semantic Contract Review Checklist, Behavioral Contract Review Checklist, Agentic Loop Safety Checklist, and/or Architecture Decision Pack Review Checklist
      - Exclude every untriggered checklist section. If no checklist flag is true, include no checklist section.
      - In delegated mode, dispatch a fresh Reviewer with this bundle. In direct fallback, start a fresh isolated pass with the same bounded bundle and record fresh-context evidence; do not claim a subagent dispatch.
      - Treat speculative or low-evidence concerns as non-blocking Observations. Do not re-report previously_fixed items. If security-sensitive surfaces are present, hand off to `assistant-security`.

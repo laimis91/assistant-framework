@@ -2,7 +2,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
-p0p4_enable_codex_semantic_fixture
 
 p0p4_file_mode_octal() {
     local path="$1"
@@ -34,6 +33,14 @@ p0p4_path_without_jq() {
             [[ -e "$tmpbin/$name" ]] || ln -s "$f" "$tmpbin/$name" 2>/dev/null || true
         done
     done
+}
+
+p0p4_extract_current_agents_suffix() {
+    local agents_file="$1"
+    local suffix_file="$2"
+
+    sed '1,/<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->/d' "$agents_file" \
+        | sed '1{/^$/d;}' >"$suffix_file"
 }
 
 test_start "Codex reinstall keeps one lean framework block and retires the memory protocol"
@@ -353,7 +360,7 @@ else
     pass
 fi
 
-test_start "installer rejects interrupted retired memory protocol without mutation"
+test_start "installer preserves an interrupted retired memory protocol while installing the current managed block"
 INSTALL_HOME_THREE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_THREE"
 mkdir -p "$INSTALL_HOME_THREE/.codex"
@@ -372,16 +379,25 @@ $legacy_orchestrator_role
 Interrupted installer-owned memory content that should be removed.
 TRUNCATED
 cp "$INSTALL_HOME_THREE/.codex/AGENTS.md" "$INSTALL_HOME_THREE/.codex/AGENTS.before"
-if HOME="$INSTALL_HOME_THREE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-truncated.out 2>/tmp/p0p4-install-truncated.err; then
-    fail "install should reject an interrupted retired memory protocol"
-elif cmp -s "$INSTALL_HOME_THREE/.codex/AGENTS.before" "$INSTALL_HOME_THREE/.codex/AGENTS.md" \
-    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-truncated.err; then
-    pass
+interrupted_codex_suffix="$(mktemp)"
+interrupted_codex_mutated_suffix="$(mktemp)"
+p0p4_register_cleanup "$interrupted_codex_suffix" "$interrupted_codex_mutated_suffix"
+if HOME="$INSTALL_HOME_THREE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-truncated.out 2>/tmp/p0p4-install-truncated.err \
+    && [[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$INSTALL_HOME_THREE/.codex/AGENTS.md")" == "1" ]] \
+    && [[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$INSTALL_HOME_THREE/.codex/AGENTS.md")" == "1" ]]; then
+    p0p4_extract_current_agents_suffix "$INSTALL_HOME_THREE/.codex/AGENTS.md" "$interrupted_codex_suffix"
+    sed '$d' "$INSTALL_HOME_THREE/.codex/AGENTS.before" >"$interrupted_codex_mutated_suffix"
+    if cmp -s "$INSTALL_HOME_THREE/.codex/AGENTS.before" "$interrupted_codex_suffix" \
+        && ! cmp -s "$interrupted_codex_mutated_suffix" "$interrupted_codex_suffix"; then
+        pass
+    else
+        fail "interrupted retired memory protocol was not preserved as the exact suffix after the current managed block"
+    fi
 else
-    fail "interrupted retired memory protocol was not preserved with a fail-closed diagnostic"
+    fail "interrupted retired memory protocol was not preserved while installing the current managed block"
 fi
 
-test_start "Codex reinstall rejects duplicate retired memory protocol blocks without mutation"
+test_start "Codex reinstall preserves duplicate retired memory protocol blocks while installing the current managed block"
 INSTALL_HOME_SIX="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SIX"
 mkdir -p "$INSTALL_HOME_SIX/.codex"
@@ -428,16 +444,27 @@ $legacy_orchestrator_role
 Interrupted installer-owned memory content that should be removed.
 DUPLICATE_CODEX
 cp "$INSTALL_HOME_SIX/.codex/AGENTS.md" "$INSTALL_HOME_SIX/.codex/AGENTS.before"
-if HOME="$INSTALL_HOME_SIX" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-duplicate-codex.out 2>/tmp/p0p4-install-duplicate-codex.err; then
-    fail "install should reject duplicate retired memory protocol blocks"
-elif cmp -s "$INSTALL_HOME_SIX/.codex/AGENTS.before" "$INSTALL_HOME_SIX/.codex/AGENTS.md" \
-    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-duplicate-codex.err; then
-    pass
+duplicate_codex_expected_suffix="$(mktemp)"
+duplicate_codex_actual_suffix="$(mktemp)"
+duplicate_codex_mutated_suffix="$(mktemp)"
+p0p4_register_cleanup "$duplicate_codex_expected_suffix" "$duplicate_codex_actual_suffix" "$duplicate_codex_mutated_suffix"
+sed '/<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->/,/<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->/d' "$INSTALL_HOME_SIX/.codex/AGENTS.before" >"$duplicate_codex_expected_suffix"
+if HOME="$INSTALL_HOME_SIX" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-duplicate-codex.out 2>/tmp/p0p4-install-duplicate-codex.err \
+    && [[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$INSTALL_HOME_SIX/.codex/AGENTS.md")" == "1" ]] \
+    && [[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$INSTALL_HOME_SIX/.codex/AGENTS.md")" == "1" ]]; then
+    p0p4_extract_current_agents_suffix "$INSTALL_HOME_SIX/.codex/AGENTS.md" "$duplicate_codex_actual_suffix"
+    sed '$d' "$duplicate_codex_expected_suffix" >"$duplicate_codex_mutated_suffix"
+    if cmp -s "$duplicate_codex_expected_suffix" "$duplicate_codex_actual_suffix" \
+        && ! cmp -s "$duplicate_codex_mutated_suffix" "$duplicate_codex_actual_suffix"; then
+        pass
+    else
+        fail "duplicate retired memory protocol blocks were not preserved as the exact current-block suffix"
+    fi
 else
-    fail "duplicate retired memory protocol blocks were not preserved with a fail-closed diagnostic"
+    fail "duplicate retired memory protocol blocks were not preserved while installing the current managed block"
 fi
 
-test_start "installer rejects interrupted Gemini retired memory protocol without mutation"
+test_start "installer preserves an interrupted Gemini retired memory protocol while installing the current managed skill"
 INSTALL_HOME_FOUR="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_FOUR"
 mkdir -p "$INSTALL_HOME_FOUR/.gemini"
@@ -456,29 +483,33 @@ $legacy_orchestrator_role
 Interrupted installer-owned Gemini memory content that should be removed.
 TRUNCATED_GEMINI
 cp "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" "$INSTALL_HOME_FOUR/.gemini/GEMINI.before"
-if HOME="$INSTALL_HOME_FOUR" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow --no-hooks >/tmp/p0p4-install-gemini-truncated.out 2>/tmp/p0p4-install-gemini-truncated.err; then
-    fail "install should reject an interrupted Gemini retired memory protocol"
-elif cmp -s "$INSTALL_HOME_FOUR/.gemini/GEMINI.before" "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" \
-    && grep -Fq "Ambiguous, duplicate, or unbalanced Assistant Framework markers" /tmp/p0p4-install-gemini-truncated.err; then
+if HOME="$INSTALL_HOME_FOUR" bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-workflow --no-hooks >/tmp/p0p4-install-gemini-truncated.out 2>/tmp/p0p4-install-gemini-truncated.err \
+    && cmp -s "$INSTALL_HOME_FOUR/.gemini/GEMINI.before" "$INSTALL_HOME_FOUR/.gemini/GEMINI.md" \
+    && [[ -f "$INSTALL_HOME_FOUR/.gemini/skills/assistant-workflow/SKILL.md" ]]; then
     pass
 else
-    fail "interrupted Gemini retired memory protocol was not preserved with a fail-closed diagnostic"
+    fail "interrupted Gemini retired memory protocol was not preserved while installing the current managed skill"
 fi
 
-test_start "installer reinstall removes stale installed tool build artifacts"
+test_start "installer removes stale build artifacts only from managed tools"
 INSTALL_HOME_SEVEN="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SEVEN"
 if HOME="$INSTALL_HOME_SEVEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-tools-1.out 2>/tmp/p0p4-install-tools-1.err; then
-    stale_publish="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/.publish"
-    stale_bin="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/bin"
-    stale_obj="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/obj"
-    mkdir -p "$stale_publish" "$stale_bin" "$stale_obj"
-    touch "$stale_publish/MemoryGraph" "$stale_bin/stale.dll" "$stale_obj/stale.dll"
+    stale_publish="$INSTALL_HOME_SEVEN/.codex/tools/evals/.publish"
+    stale_bin="$INSTALL_HOME_SEVEN/.codex/tools/evals/bin"
+    stale_obj="$INSTALL_HOME_SEVEN/.codex/tools/evals/obj"
+    legacy_publish="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/.publish"
+    legacy_bin="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/bin"
+    legacy_obj="$INSTALL_HOME_SEVEN/.codex/tools/memory-graph/src/MemoryGraph/obj"
+    mkdir -p "$stale_publish" "$stale_bin" "$stale_obj" "$legacy_publish" "$legacy_bin" "$legacy_obj"
+    touch "$stale_publish/managed" "$stale_bin/managed.dll" "$stale_obj/managed.dll"
+    touch "$legacy_publish/MemoryGraph" "$legacy_bin/stale.dll" "$legacy_obj/stale.dll"
     if HOME="$INSTALL_HOME_SEVEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-tools-2.out 2>/tmp/p0p4-install-tools-2.err; then
-        if [[ ! -e "$stale_publish" && ! -e "$stale_bin" && ! -e "$stale_obj" ]]; then
+        if [[ ! -e "$stale_publish" && ! -e "$stale_bin" && ! -e "$stale_obj" \
+            && -e "$legacy_publish/MemoryGraph" && -e "$legacy_bin/stale.dll" && -e "$legacy_obj/stale.dll" ]]; then
             pass
         else
-            fail "expected stale memory-graph .publish, bin, and obj artifacts to be removed after reinstall"
+            fail "expected managed build artifacts to be removed without altering the legacy Memory Graph tool tree"
         fi
     else
         fail "second install for stale tool cleanup failed; see /tmp/p0p4-install-tools-2.err"
@@ -487,7 +518,7 @@ else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
 fi
 
-test_start "Codex reinstall retires stale memory-graph MCP config, preserves no-hooks profile, and file mode"
+test_start "Codex reinstall preserves legacy Memory Graph MCP config without a Codex CLI"
 INSTALL_HOME_NINE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_NINE"
 mkdir -p "$INSTALL_HOME_NINE/.codex"
@@ -514,22 +545,18 @@ hooks = false
 codex_hooks = false
 STALE_CODEX_MCP
 chmod 600 "$INSTALL_HOME_NINE/.codex/config.toml"
+cp "$INSTALL_HOME_NINE/.codex/config.toml" "$INSTALL_HOME_NINE/original-config.toml"
 if HOME="$INSTALL_HOME_NINE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-stale-codex-mcp.out 2>/tmp/p0p4-install-stale-codex-mcp.err; then
     config_file="$INSTALL_HOME_NINE/.codex/config.toml"
     config_mode="$(p0p4_file_mode_octal "$config_file")"
-    if grep -q '^\[mcp_servers\.memory-graph\]' "$config_file" \
-        || grep -q "/stale/memory-graph" "$config_file" \
-        || ! grep -q '^model = "test-model"$' "$config_file" \
-        || ! grep -q '^\[mcp_servers\.other-server\]$' "$config_file" \
-        || ! grep -q '^hooks = false$' "$config_file" \
-        || ! grep -q '^[[:space:]]*codex_hooks[[:space:]]*= false$' "$config_file" \
+    if ! cmp -s "$config_file" "$INSTALL_HOME_NINE/original-config.toml" \
         || [[ "$config_mode" != "600" ]]; then
-        fail "expected stale Codex memory-graph registration to retire while preserving unrelated config, disabled hooks profile, and file mode"
+        fail "expected legacy Codex MCP configuration to remain byte-for-byte unchanged with its file mode preserved"
     else
         pass
     fi
 else
-    fail "Codex install with stale memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
+    fail "Codex install with legacy memory-graph MCP config failed; see /tmp/p0p4-install-stale-codex-mcp.err"
 fi
 
 test_start "clean install keeps legacy offline evals but excludes source-only promotion evaluators"
@@ -655,5 +682,4 @@ else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
-p0p4_disable_codex_semantic_fixture
 p0p4_finish_suite "${BASH_SOURCE[0]}"

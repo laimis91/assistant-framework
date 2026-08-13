@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "3.0"
+schema_version: "6.0"
 contract: input
 skill: assistant-review
 
@@ -289,6 +289,149 @@ fields:
       tool-calling loops, multi-agent orchestration, background jobs, subagent dispatch loops, or repeated model/API calls.
       false when no autonomous/repeated execution path is present unless the user requests loop-safety review.
 
+  - name: architecture_decision_pack_review_required
+    type: boolean
+    required: false
+    default: false
+    description: "Whether a carried Architecture Decision Pack or equivalent standalone architecture decision record must receive the Architecture Decision Pack Review Checklist"
+    on_missing: infer
+    infer_from: >
+      true when the review packet carries architecture_design_mode other than not_applicable, an Architecture Decision Pack,
+      or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or
+      cross-boundary claims. False for work with no applicable architecture decision record; never invent a Pack merely to review.
+
+  - name: architecture_design_mode
+    type: enum
+    required: conditional
+    condition: "architecture_decision_pack_review_required is true"
+    enum_values: [lightweight, required, review_intensive]
+    description: "Canonical architecture mode carried with an applicable Pack review"
+    validation: "Must be the canonical mode for the reviewed Pack; architecture_decision_pack.mode must equal architecture_design_mode."
+    on_missing: infer
+    infer_from: "Only for a standalone equivalent architecture decision record, infer the canonical mode from record evidence: infer lightweight for one local owner, dependency, type, or verification decision; infer required for a cross-boundary/public contract, persistent data lifecycle, material resource/extensibility target, or genuinely viable design; infer review_intensive before inspecting independent_challenge_evidence when record facts, assumptions, material questions, decision, or risk evidence show high-risk or conflicting drivers such as memory vs throughput, compatibility vs type safety, or an irreversible public/data decision. independent_challenge_evidence may corroborate but must not determine the mode. A carried workflow Pack or handoff missing its canonical top-level mode fails; do not infer it from a nested Pack mode."
+
+  - name: architecture_decision_pack
+    type: object
+    required: conditional
+    condition: "architecture_decision_pack_review_required is true"
+    description: "Compact fresh review projection of a workflow Pack or standalone equivalent architecture decision record; it is evidence for one decision, not global memory"
+    validation: "Contains a source/revision freshness basis, separate facts, assumptions, and material questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and conditional independent challenge evidence. mode must equal canonical architecture_design_mode; review_intensive requires independent_challenge_evidence. A stale Pack is a review finding or blocker, not an assumed current design."
+    on_missing: infer
+    infer_from: "Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record. If a workflow Pack is required but absent, or the standalone record cannot support the required typed facts, fail instead of inventing evidence."
+    object_fields:
+      - name: ref
+        type: string
+        required: true
+        validation: "Resolves against the current authoritative Pack to recover the selected design, selected design rationale, and viable alternatives with dispositions; otherwise block review instead of inventing or documenting the decision."
+      - name: mode
+        type: enum
+        required: true
+        enum_values: [lightweight, required, review_intensive]
+        validation: "Must equal canonical architecture_design_mode"
+      - name: freshness_basis
+        type: string
+        required: true
+      - name: facts
+        type: object[]
+        required: true
+        min_items: 1
+        object_fields:
+          - name: claim
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: true
+      - name: assumptions
+        type: object[]
+        required: true
+        object_fields:
+          - name: statement
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [safe_default, pending_question, validated, deferred]
+          - name: rationale_or_impact
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+      - name: material_questions
+        type: object[]
+        required: true
+        object_fields:
+          - name: question_id
+            type: string
+            required: true
+          - name: topic
+            type: string
+            required: true
+          - name: question
+            type: string
+            required: true
+          - name: why_needed
+            type: string
+            required: true
+          - name: risk_if_guessed
+            type: string
+            required: true
+          - name: recommended_default_or_none
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [open, answered, safe_default, deferred]
+      - name: boundaries_and_dependencies
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Non-empty compact ownership, lifecycle, and dependency boundary conclusions projected from the Pack"
+        on_missing: fail
+      - name: design_pressure_checks
+        type: string[]
+        required: true
+        min_items: 5
+        max_items: 5
+        description: "Exactly one conclusion or explicit not-applicable evidence item for each canonical design-pressure concern"
+        validation: "Contains exactly one item for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path"
+        on_missing: fail
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+        description: "Independent challenge dissent/validation and resolution carried from a review-intensive Pack"
+        on_missing: fail
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
+      - name: type_ledger
+        type: string[]
+        required: true
+      - name: quality_scenarios
+        type: string[]
+        required: true
+      - name: verification_and_rollback
+        type: string[]
+        required: true
+      - name: invalidators
+        type: string[]
+        required: true
+
   - name: task_journal_path
     type: string
     required: false
@@ -312,7 +455,7 @@ fields:
         validation: ">= 1 and <= 10"
 
 # Validation behavior:
-# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, and agentic_loop_safety_review_required before entering the loop
+# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
 # 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch
-# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | files: {count}
+# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | architecture_pack_review: {architecture_decision_pack_review_required} | files: {count}

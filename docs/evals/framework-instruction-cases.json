@@ -589,18 +589,18 @@
       "id": "clear-medium-task-zero-clarification-questions",
       "title": "Clear medium task should not get ritual questions",
       "category": "clarification_admissibility",
-      "purpose": "Checks that question caps are treated as maximums rather than quotas when a medium task is already clear from prompt and repo context.",
+      "purpose": "Checks that clear tasks proceed with zero questions while every material undiscoverable uncertainty remains admissible and uncapped.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
         "The request names exact files, expected behavior, verification command, and non-goals.",
         "Read-only discovery confirms those details in the repository."
       ],
-      "prompt": "Implement the contract test described in tests/p0-p4/workflow-basics-contracts.sh. Add the exact guard terms for clarification confidence and cap wording. Run the focused suite only.",
+      "prompt": "Implement the contract test described in tests/p0-p4/workflow-basics-contracts.sh. Add the exact guard terms for clarification confidence and uncapped material-question wording. Run the focused suite only.",
       "expected_behavior": [
         "States TRIAGE or DISCOVER before acting.",
         "Triages the task as medium or small based on file/risk evidence.",
         "Records zero clarification questions when the task is clear.",
-        "States that the question cap is a maximum, not a quota.",
+        "States that no numeric cap or quota suppresses material questions.",
         "Does not ask an arbitrary question before planning.",
         "Moves to Plan only after discovery evidence supports high confidence."
       ],
@@ -612,21 +612,21 @@
       ],
       "fail_signals": [
         "Asks a ritual question despite complete implementation details.",
-        "Treats a question cap as a minimum required number of questions.",
+        "Suppresses a material question to satisfy a numeric quota.",
         "Skips discovery evidence and guesses.",
         "Moves to build without a plan when medium."
       ],
       "machine_expectations": {
         "required_substrings": [
           "Clarification questions asked: 0",
-          "cap is a maximum",
+          "no numeric cap or quota",
           "high confidence",
           "verification"
         ],
         "forbidden_substrings": [
           "medium tasks must ask at least one question",
-          "question quota",
-          "I need to ask something anyway"
+          "I need to ask something anyway",
+          "I will limit material questions to three"
         ]
       }
     },

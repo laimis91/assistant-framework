@@ -14,8 +14,8 @@
   ],
   "cases": [
     {
-      "id": "multi-intent-prompt-asks-bounded-clarification",
-      "title": "Multi-intent prompt asks bounded clarification",
+      "id": "multi-intent-prompt-asks-material-clarification",
+      "title": "Multi-intent prompt asks material clarification",
       "category": "ambiguous_multi_intent",
       "purpose": "Checks that mixed implementation, documentation, and priority requests are clarified before execution.",
       "prompt": "I need you to fix the onboarding flow, maybe write docs too, and make the skill stuff less confusing before the demo. Not sure if the bug or docs matters more.",
@@ -28,14 +28,14 @@
         "Reflects the likely goal without calling the prompt messy or blaming the user.",
         "Identifies that the request contains multiple possible outcomes and still needs clarification.",
         "Produces a structured brief with knowns, unknowns, assumptions, constraints, and likely deliverables.",
-        "Asks one to three high-yield clarifying questions with bounded choices or a recommended default.",
+        "Asks every unresolved material clarification question, grouped by topic, with bounded choices or a recommended default.",
         "States a provisional execution target and marks the status as needs clarification.",
         "Does not begin implementation, documentation edits, or broad refactoring before the ambiguity is reduced."
       ],
       "pass_criteria": [
         "The response includes a concise interpretation or likely goal.",
         "The structured brief separates known facts from unknowns and assumptions.",
-        "The clarifying question offers concrete options instead of a generic request for clarification.",
+        "Each clarifying question names a topic, impact, risk if guessed, and concrete options or recommendation instead of a generic request for clarification.",
         "The response preserves momentum by recommending a default or next target.",
         "No file edits or irreversible work are proposed as already started."
       ],
@@ -52,7 +52,8 @@
           "knowns",
           "unknowns",
           "assumptions",
-          "clarifying questions",
+        "clarifying questions",
+        "risk if guessed",
           "execution target",
           "needs clarification"
         ],
@@ -79,7 +80,7 @@
         "States the likely goal as turning the compressed request into an actionable execution target.",
         "Builds a structured brief that includes knowns, unknowns, assumptions, constraints, and likely deliverables.",
         "Separates the refactor and research-note possibilities so the user can choose a primary outcome.",
-        "Asks at most three clarifying questions and includes a recommendation or default path.",
+        "Asks every material clarification question and includes a recommendation, safe default, or explicit none for each.",
         "Identifies the execution target as provisional until the user confirms the priority.",
         "Reports status as needs clarification rather than ready to implement."
       ],
@@ -92,7 +93,7 @@
       ],
       "fail_signals": [
         "Treats the request as already ready for BUILD.",
-        "Asks more than three clarification questions.",
+        "Suppresses a material question solely to keep a numeric question limit.",
         "Provides only a taxonomy or lecture without an execution target.",
         "Ignores the user's constraint against a huge process."
       ],
@@ -110,7 +111,7 @@
         "forbidden_substrings": [
           "ready for BUILD",
           "I have started the refactor",
-          "Here are five questions",
+          "I will limit material questions to three",
           "This requires a huge process"
         ]
       }

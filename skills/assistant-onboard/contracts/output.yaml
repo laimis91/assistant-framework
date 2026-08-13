@@ -1,9 +1,17 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-onboard
 
 artifacts:
+  - name: project_size
+    type: enum
+    required: true
+    enum_values: [small, medium, large]
+    description: "surface-scan-derived observed project size"
+    validation: "Matches the evidence-based surface-scan classification; no silent default."
+    on_fail: "Classify the inspected project as small, medium, or large before returning orientation."
+
   - name: project_summary
     type: string
     required: true
@@ -38,6 +46,52 @@ artifacts:
     description: "Files or directories future features/fixes will likely touch"
     validation: "Each entry includes path_or_directory and when_to_use"
     on_fail: "Map likely future change points or explicitly include an empty list when none are identifiable"
+
+  - name: semantic_type_candidates
+    type: object[]
+    required: conditional
+    condition: "project_size in [medium, large]"
+    description: "Evidence-backed domain/public/lifecycle/unit type candidates and explicit primitive-boundary exceptions discovered during architecture mapping"
+    validation: "Each entry identifies a concept, current representation, boundary, evidence, and recommendation. For medium or large projects, explicit [] is valid only after inspection finds no meaningful candidate; no silent default. Small projects may omit this field. This is orientation evidence, not an instruction to redesign every primitive."
+    on_missing: fail
+    on_fail: "Inspect public/domain/lifecycle boundaries and record concrete candidates or an empty list after inspection"
+    object_fields:
+      - name: concept
+        type: string
+        required: true
+      - name: current_representation
+        type: string
+        required: true
+      - name: boundary
+        type: enum
+        required: true
+        enum_values: [domain_or_public_semantic_type, local_temporary, wire_or_storage, foreign_or_framework, no_domain_semantics]
+      - name: evidence
+        type: string
+        required: true
+      - name: recommendation
+        type: string
+        required: true
+
+  - name: design_pressure_candidates
+    type: object[]
+    required: conditional
+    condition: "project_size in [medium, large]"
+    description: "Evidence-backed control, ownership, resource, extension, or representative-path observations that can inform a later Architecture Decision Pack"
+    validation: "Each entry identifies the concern, source evidence, and recommendation. For medium or large projects, explicit [] is valid only after inspection finds no relevant design pressure; no silent default. Small projects may omit this field. This is orientation evidence, not a request to invent an abstraction."
+    on_missing: fail
+    on_fail: "Inspect relevant boundary and lifecycle paths, record concrete design-pressure candidates, or return an inspected empty list"
+    object_fields:
+      - name: concern
+        type: enum
+        required: true
+        enum_values: [control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, representative_path]
+      - name: evidence
+        type: string
+        required: true
+      - name: recommendation
+        type: string
+        required: true
 
   - name: artifacts
     type: string[]

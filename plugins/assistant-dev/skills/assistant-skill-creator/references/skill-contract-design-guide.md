@@ -22,7 +22,7 @@ Keep the root `SKILL.md` outcome-shaped and compact. For complex skills, include
 
 ### Ask/Proceed Policy
 
-Clarification questions are allowed only when the missing answer materially changes correctness, scope, public contract, security, data shape, rollout, or verification, cannot be discovered from provided context or local source, and has no safe default. Question budgets are maximums, not quotas. When the prompt and context are sufficient, proceed and record assumptions or defaults instead of asking ritual questions.
+Clarification questions are allowed only when the missing answer materially changes correctness, scope, public contract, security, data shape, rollout, or verification, cannot be discovered from provided context or local source, and has no safe default. Ask every such material question, grouped by topic and with its impact and risk if guessed; do not impose an arbitrary numeric question cap. When the prompt and context are sufficient, proceed and record assumptions or defaults instead of asking ritual questions.
 
 ---
 
@@ -48,6 +48,10 @@ DSPy replaces hand-written prompts with **signatures** — typed declarations of
 - Descriptions are not optional — they scope what the agent should produce
 
 ### 2. CrewAI — Pydantic Output Models and Task Chaining
+
+These YAML field kinds are schema transport primitives. They do not authorize
+application or skill interfaces to erase domain meaning into generic strings,
+integers, callbacks, or collections.
 
 **Source:** [CrewAI Tasks](https://docs.crewai.com/en/concepts/tasks)
 
@@ -199,6 +203,69 @@ fields:
     notes: "context"            # additional context for the agent
 ```
 
+### Semantic interface policy
+
+Use a named semantic type, value object, request/result type, event, or
+discriminated result when a value has domain meaning, validation, unit,
+lifecycle, ownership, security meaning, public-contract meaning, or a likely
+extension seam. A public/domain `string`, `int`, `Action<string>`, or
+`IEnumerable<int>` must not be accepted as an unexplained substitute for a
+semantic type.
+
+Primitive representations remain valid at local temporary calculations, opaque
+wire/storage/foreign-library boundaries, framework-required signatures, and
+values with demonstrably no domain semantics. Record the primitive exception,
+conversion point, and validation rule; convert to semantic types at the owned
+boundary. Prefer a cohesive command/request type when an operation evolves,
+but do not replace coherent interfaces with generic property bags. Public or
+serialized type changes must declare compatibility, versioning/adapters, and
+migration or rollback handling.
+
+### Architecture Decision Pack and skill surface audit
+
+Architecture design is an LLM-led, conditional workflow capability, not a
+permanent architect agent or global memory system. Create or refresh the
+compact Architecture Decision Pack only when a task has a new system,
+cross-boundary data/resource ownership, public-contract change, material
+quality driver, or genuinely viable architectural alternatives. It records a
+single goal, freshness basis, facts versus assumptions, material questions,
+boundaries, design-pressure checks, Type Ledger, interfaces, quality scenarios,
+alternatives, decision, verification, invalidation, and handoff reference. The
+pressure checks cover control/early exit, ownership/disposal, resource envelope,
+extension registration, and a representative producer-consumer path so an LLM
+does not invent a generic engine or callback before its concrete use is known.
+For ordinary local work,
+record `architecture_design_mode: not_applicable` and a short reason.
+
+Questions are not numerically limited: inspect source, apply safe defaults,
+then ask every remaining material question concisely by topic with why, risk if
+guessed, and a default where one exists. Never claim a memory, performance, or
+extensibility benefit without a workload, budget/threshold or explicit unknown,
+measurement method, and failure condition.
+
+The first-class skills were audited against that playbook. Each owns only the
+smallest relevant behavior; none is required to invent architecture ceremony.
+
+| Skill | Architecture-playbook responsibility |
+|---|---|
+| `assistant-workflow` | Owns conditional Pack triage, freshness, design-pressure checks, plan/journal/packet propagation, and completion evidence. |
+| `assistant-clarify` | Discovers every material design question concisely, grouped with why/risk/default. |
+| `assistant-thinking` | Selectively challenges genuinely contested Pack decisions; returns a compact Pack update, never a standing council. |
+| `assistant-review` | Independently checks applicable Pack freshness, boundaries, design-pressure checks, semantic types/exceptions, quality falsifiability, compatibility, and handoff. |
+| `assistant-onboard` | Maps evidence-backed ownership/lifecycle, design-pressure, and type candidates before change work. |
+| `assistant-docs` | Documents only fresh source-backed decisions, design/type boundaries, and quality verification claims. |
+| `assistant-skill-creator` | Enforces semantic interface design and explicit primitive exceptions in reusable skill contracts. |
+| `assistant-tdd` | Tests semantic conversion/validation, public compatibility, design-pressure behavior, and stated quality scenarios when carried by a Pack. |
+| `assistant-debugging` | Supplies source facts, failure lifecycle, and falsifiable hypotheses that may invalidate a Pack. |
+| `assistant-diagrams` | Visualizes only evidence-backed boundaries, ownership, and flows supplied by the decision record. |
+| `assistant-ideate` | Produces options only when alternatives are needed; it does not select or persist the architectural decision. |
+| `assistant-research` | Validates external claims or benchmarks only when local evidence is insufficient and research is in scope. |
+| `assistant-security` | Evaluates security-sensitive ownership, public-contract, and data-boundary implications when triggered. |
+| `assistant-telos` | Remains purpose/strategy scoped; it does not create implementation architecture unless the user explicitly requests a bridge. |
+
+This audit is behavior mapping, not a requirement to change every skill for
+every task. The workflow Pack and review gate are the durable integration path.
+
 ### Phase gate schema
 
 ```yaml
@@ -335,6 +402,8 @@ The default per-skill eval inventory is 14 first-class `skills/assistant-*` skil
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
+Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, and `array_items_nonempty_fields`. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+
 **Current implementation: Levels 1-4 for every first-class skill, with complete first-class per-skill eval fixtures.** Level 3 is source structural validation; Level 4 is provider-neutral conformance fixtures plus semantic review. Local-only skill experiments remain opt-in through `--include-local`.
 
 ---
@@ -353,9 +422,14 @@ Local response grading is deterministic and heuristic: missing files, empty resp
 10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates
 11. **Root SKILL.md stays compact and outcome-shaped** — detailed controller
     patterns live in references loaded only when the active task needs them
-12. **Clarification prompts are admissible** — ask only for material,
-    non-discoverable missing data with no safe default
-13. **Loop controllers are explicit and bounded** — use Done Contract, Harness
+12. **Clarification prompts are admissible and uncapped** — ask every material,
+    non-discoverable missing decision with no safe default; group questions by
+    topic and do not add ritual or count-driven questions
+13. **Semantic interfaces preserve meaning** — use named types for domain,
+    public, lifecycle, unit, validation, ownership, or extension semantics;
+    record primitive exceptions and boundary conversions; version public or
+    serialized changes
+14. **Loop controllers are explicit and bounded** — use Done Contract, Harness
     Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
     decisions, and the max 10 terminal cap when the Process skill has
     long-running review, QA, or fix-verify loops

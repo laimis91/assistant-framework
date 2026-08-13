@@ -60,6 +60,7 @@ When told this is round N with a previously-fixed list:
 For C# projects, run `bash ~/.codex/tools/cognitive-complexity/run-complexity.sh --changed` to identify methods with high cognitive complexity. Flag methods exceeding the threshold as SHOULD-FIX items with a recommendation to extract or simplify.
 
 ## Constraints
+- **Architecture Decision Pack (when supplied)**: Check source/revision freshness, facts versus assumptions, every material question/invalidator, ownership/lifecycle/dependency boundary, control/early-exit behavior, ownership/disposal, resource envelope, extension registration, representative path, and compatibility/rollback. Require named semantic types when generic strings, numbers, collections, or callbacks erase meaningful domain/public/lifecycle/unit/extension semantics; accept primitives only as explicit local temporary, wire/storage, foreign/framework, or no-domain-semantics exceptions with conversion/validation. Do not approve memory, performance, or extensibility claims without workload, budget/threshold or explicit unknown, measurement method, and failure condition. Return `architecture_decision_pack_checks` scoped to the current decision; do not propose a permanent architect agent or global memory system.
 - **Verify before reporting**: Read the actual code before claiming a bug or issue exists. Search for callers/usage before flagging something as unused or incorrect. Never report findings based on assumptions.
 - Do NOT edit any files
 - High confidence bar. Only report issues you are genuinely confident about

@@ -1,7 +1,7 @@
 # Research Output Contract
 # Defines what a completed research activity MUST produce.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-research
 
@@ -125,7 +125,7 @@ artifacts:
     condition: "research_method == five_lens_briefing"
     description: "STORM-style per-lens question trace and evidence ledger before contradiction mapping"
     min_items: 5
-    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, a follow-up question, and evidence status."
+    validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, every material evidence-prompted follow-up question or an explicit none_needed decision, and evidence status."
     on_fail: "Build the question trace/evidence ledger before contradiction mapping or synthesis; do not synthesize directly from fixed lenses."
     object_fields:
       - name: lens
@@ -145,12 +145,33 @@ artifacts:
         required: true
         min_items: 1
         description: "Sources, verified URLs, or an explicit no-source/unresolved marker"
-      - name: follow_up_question
-        type: string
+      - name: follow_ups
+        type: object[]
         required: true
-      - name: follow_up_answer_or_gap
-        type: string
-        required: true
+        description: "Every material follow-up prompted by this answer, contradiction, or gap, or one typed none_needed decision"
+        validation: "Every material follow-up is retained exactly once with a question, answer_or_gap, sources_or_verified_urls, and evidence_status. An empty collection is invalid; use one none_needed decision only when no material follow-up exists, and none_needed cannot coexist with material follow-ups for the same trace."
+        on_fail: "Record every material follow-up or add one typed none_needed decision before synthesis."
+        min_items: 1
+        object_fields:
+          - name: decision
+            type: enum
+            required: true
+            enum_values: [follow_up, none_needed]
+          - name: question
+            type: string
+            required: conditional
+            condition: "decision == follow_up"
+          - name: answer_or_gap
+            type: string
+            required: true
+          - name: sources_or_verified_urls
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_status
+            type: enum
+            required: true
+            enum_values: [source_backed, inference_only, unresolved]
       - name: evidence_status
         type: enum
         required: true
@@ -295,7 +316,7 @@ artifacts:
 # - {lens}: {core_position} — confidence: {HIGH/MEDIUM/LOW}
 #
 # QUESTION TRACE / EVIDENCE LEDGER (required when method=five_lens_briefing)
-# - {lens}: question, answer, sources/verified URLs, follow-up question, follow-up answer or gap, evidence status
+# - {lens}: question, answer, sources/verified URLs, follow_ups[] (every material follow-up or typed none_needed decision), evidence status
 #
 # CONTRADICTION MAP (required when method=five_lens_briefing)
 # - {direct conflicts, consensus, unresolved question, missing angle}
@@ -333,6 +354,6 @@ artifacts:
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
 # 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, and peer_review are present
-# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow-up question, and evidence status before synthesis
+# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow_ups[] retaining every material follow-up or one typed none_needed decision, and evidence status before synthesis
 # 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
 # 10. candidate_mechanisms exists when why/how/cause/improvement mechanisms were requested, and every candidate has evidence, confidence, counterevidence_or_conflicts, gaps, validation_method, and non-proven claim_status

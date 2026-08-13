@@ -48,3 +48,4 @@ Do NOT dump full build logs or test output. The whole point of your role is to a
 - Use the project's existing test framework and conventions
 - Name tests descriptively: {Method}_{Case}_{Expected}
 - Follow Arrange-Act-Assert pattern
+- When a workflow Architecture Decision Pack carries test obligations, verify semantic type validation, primitive-boundary conversion, public compatibility, a stated quality scenario, or applicable early-exit, ownership/disposal, resource-envelope, extension-registration, and representative-path behavior. Quality verification needs workload, budget or explicit unknown, measurement, and failure condition; otherwise return a blocker or explicit unknown instead of claiming a benefit.

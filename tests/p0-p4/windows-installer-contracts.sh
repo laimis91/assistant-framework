@@ -7,12 +7,12 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 test_start "native Windows installer exposes the planned safe PowerShell surface"
 installer="$FRAMEWORK_DIR/install.ps1"
-cleanup_script="$FRAMEWORK_DIR/tools/cleanup-memory-graph.ps1"
 native_suite="$FRAMEWORK_DIR/tests/windows/installer-contracts.ps1"
 failures=()
 
 [[ -f "$installer" ]] || failures+=("missing install.ps1")
-[[ -f "$cleanup_script" ]] || failures+=("missing tools/cleanup-memory-graph.ps1")
+[[ ! -e "$FRAMEWORK_DIR/tools/cleanup-memory-graph.ps1" ]] || failures+=("retired Memory Graph PowerShell cleanup remains")
+[[ ! -e "$FRAMEWORK_DIR/tools/cleanup-memory-graph.sh" ]] || failures+=("retired Memory Graph Bash cleanup remains")
 [[ -f "$native_suite" ]] || failures+=("missing tests/windows/installer-contracts.ps1")
 
 if [[ -f "$installer" ]]; then
@@ -36,8 +36,10 @@ if [[ -f "$installer" ]]; then
         || failures+=("missing deep JSON preservation")
     grep -Fq -- '[Environment]::OSVersion.Platform' "$installer" \
         || failures+=("security decisions do not use the host platform API")
-    grep -Fq -- 'cleanup-memory-graph.ps1' "$installer" \
-        || failures+=("installer does not invoke the Memory Graph retirement cleanup")
+    grep -Fq -- "'cleanup-memory-graph.ps1'" "$installer" \
+        || failures+=("installer does not retire the exact PowerShell cleanup target")
+    grep -Fq -- "'cleanup-memory-graph.sh'" "$installer" \
+        || failures+=("installer does not retire the exact Bash cleanup target")
     if rg -n -e '^function .*(MemoryGraph|GraphSeed)' "$installer" >/tmp/p0p4-windows-retired-installer-functions.out; then
         failures+=("installer retains retired Memory Graph registration, build, or seed functions")
     fi
@@ -51,28 +53,6 @@ if [[ -f "$installer" ]]; then
 
     if grep -Eqi -- 'Invoke-Expression|Set-ExecutionPolicy|ExecutionPolicy[[:space:]]+Bypass|Start-Process[^[:cntrl:]]*-Verb[[:space:]]+RunAs|New-Item[^[:cntrl:]]*SymbolicLink' "$installer"; then
         failures+=("contains a forbidden PowerShell execution or symlink surface")
-    fi
-fi
-
-if [[ -f "$cleanup_script" ]]; then
-    grep -Fq -- '#requires -Version 5.1' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup lacks the PowerShell 5.1 marker")
-    grep -Eq -- '\[switch\][[:space:]]*\$DryRun' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup lacks -DryRun")
-    grep -Eq -- '\[switch\][[:space:]]*\$PurgeData' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup lacks -PurgeData")
-    grep -Fq -- 'mcp list --json' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup does not use the Codex JSON MCP identity protocol")
-    grep -Fq -- '[System.IO.FileAccess]::ReadWrite' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup lacks a committed handle with metadata-repair access")
-    grep -Fq -- 'Set-FileStreamAcl -Stream $committedStream' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup does not apply repairable DACL drift through the committed handle")
-    grep -Fq -- 'Get-OwnerGroupDaclDifferences -Expected $originalAcl -Actual (Get-FileStreamAcl -Stream $committedStream)' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup does not read back repaired owner/group/protection/ordered DACL through the committed handle")
-    grep -Fq -- 'Atomic rollback ACL verification failed' "$cleanup_script" \
-        || failures+=("Memory Graph cleanup lacks rollback ACL readback verification")
-    if grep -Eqi -- 'Invoke-Expression|Set-ExecutionPolicy|ExecutionPolicy[[:space:]]+Bypass' "$cleanup_script"; then
-        failures+=("Memory Graph cleanup contains a forbidden execution surface")
     fi
 fi
 
@@ -97,10 +77,14 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks fail-closed marker coverage")
     grep -Fq -- 'fresh install omits the retired Memory Graph launcher and registration' "$native_suite" \
         || failures+=("native suite lacks retired Memory Graph coverage")
-    grep -Fq -- 'locked Codex update files fail preflight before installation changes' "$native_suite" \
+    grep -Fq -- 'Codex installation preserves existing legacy Memory Graph state without a CLI' "$native_suite" \
+        || failures+=("native suite lacks legacy-state preservation coverage")
+    grep -Fq -- 'locked Codex instructions fail preflight before installation changes' "$native_suite" \
         || failures+=("native suite lacks locked Codex update-file preflight coverage")
-    grep -Fq -- 'late retirement-managed config lock reports a recoverable partial installation' "$native_suite" \
-        || failures+=("native suite lacks late-lock partial-install recovery coverage")
+    grep -Fq -- "'cleanup-memory-graph.ps1'" "$native_suite" \
+        || failures+=("native suite lacks exact PowerShell cleanup retirement coverage")
+    grep -Fq -- "'cleanup-memory-graph.sh'" "$native_suite" \
+        || failures+=("native suite lacks exact Bash cleanup retirement coverage")
 fi
 
 if [[ "${#failures[@]}" -eq 0 ]]; then
@@ -211,7 +195,7 @@ fi
 test_start "Windows workflow does not retain retired Memory Graph SDK setup"
 windows_workflow="$FRAMEWORK_DIR/.github/workflows/windows-installer.yml"
 if rg -n -i 'setup-dotnet|dotnet-version|\.NET 8 SDK' "$windows_workflow" >/tmp/p0p4-windows-sdk-retirement.out; then
-    fail "Windows installer workflow retains unused .NET SDK setup after Memory Graph retirement"
+    fail "Windows installer workflow retains unused .NET SDK setup after legacy feature removal"
 else
     pass
 fi

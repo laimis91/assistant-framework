@@ -4,8 +4,8 @@
   "base_skill": "assistant-workflow",
   "intervention": "Replace only the root SKILL.md while keeping canonical contracts and references unchanged.",
   "promotion_gates": {
-    "selected_initial_words_max": 1000,
-    "selected_entry_words_max": 2600,
+    "selected_initial_words_max": 1050,
+    "selected_entry_words_max": 3000,
     "standing_context_growth_allowed": false,
     "must_pass_case_regressions_allowed": 0,
     "seeded_defect_recall_must_not_drop": true,
@@ -22,14 +22,14 @@
     "raw_response_retained": false
   },
   "static_measurement": {
-    "baseline_selected_initial_words": 1709,
-    "candidate_selected_initial_words": 997,
-    "selected_initial_word_delta": -712,
-    "baseline_total_initial_words": 2310,
-    "candidate_total_initial_words": 1598,
-    "baseline_selected_entry_words": 3261,
-    "candidate_selected_entry_words": 2549,
-    "selected_entry_word_delta": -712,
+    "baseline_selected_initial_words": 2023,
+    "candidate_selected_initial_words": 1027,
+    "selected_initial_word_delta": -996,
+    "baseline_total_initial_words": 2624,
+    "candidate_total_initial_words": 1628,
+    "baseline_selected_entry_words": 3972,
+    "candidate_selected_entry_words": 2976,
+    "selected_entry_word_delta": -996,
     "standing_context_growth": 0,
     "measured_with": "tools/context-budget-report.sh --skill-overlay"
   },

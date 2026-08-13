@@ -26,6 +26,12 @@ session.
 10. **Review claim** — evidence-bounded wording; never imply proof beyond the
     reviewed scope and available evidence.
 
+When an Architecture Decision Pack applied, include its fresh reference in the
+architecture-decision section. State the design-pressure outcome
+(control/ownership/resource/extension/representative path), semantic type or
+primitive-exception commitments, quality verification, and
+compatibility/invalidation outcome instead of copying stale architecture prose.
+
 When a straightforward task has no material architecture decision, rejected
 alternative, or rollback action, use a concise `N/A — [concrete reason]`
 instead of inventing filler.

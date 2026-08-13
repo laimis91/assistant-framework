@@ -2,6 +2,8 @@
 
 ## Protocol
 
+When the scope carries a workflow Architecture Decision Pack, infer `architecture_decision_pack_status` before drafting. For `current`, preserve only the compact canonical `architecture_decision_pack` projection: ref, mode, freshness basis, facts, assumptions, material questions, boundaries/dependencies, design-pressure checks, review-intensive challenge evidence, Type Ledger, quality scenarios, verification/rollback, and invalidators. Resolve the selected design and rationale through the current canonical Pack ref, then record the resulting decision refs in `documented_decision_refs`. Return `architecture_decision_pack_trace` with outcome `documented` and the source Pack/decision/evidence refs. If the ref cannot resolve those decisions or currentness cannot be proven, use `missing` or `stale` status and recovery. For `missing`, `stale`, or `out_of_scope`, stop that decision's documentation. Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack. Return the matching blocked/out-of-scope trace outcome with recovery action and review trace; include a stale ref only when it exists. Safe recovery may produce no documentation file. If no Pack applies, do not manufacture one just to write a system overview.
+
 ### Step 1: Map the System
 
 Use Code Mapper or manual exploration to identify:
@@ -65,6 +67,24 @@ Produce a document with these sections:
 |---|---|---|
 | [decision] | [why] | [what was given up] |
 
+## Decision Records and Type Boundaries
+
+| Decision / Pack ref | Freshness basis | Ownership and lifecycle boundary | Semantic types / permitted primitive exceptions | Compatibility / extension seam |
+|---|---|---|---|---|
+| [decision] | [revision/context or explicit unknown] | [owner, dependency direction, failure/cancellation] | [named type or wire/storage/foreign/local exception with conversion/validation] | [version/adaptor/migration, seam or explicit none] |
+
+## Design-pressure checks
+
+| Control / early exit | Ownership / disposal | Resource envelope | Extension registration | Representative path |
+|---|---|---|---|---|
+| [pull/push/cancel/seek behavior] | [buffer/resource owner and cleanup] | [workload, bounded buffer/item/concurrency or explicit unknown] | [registration/selection seam or explicit none] | [producer -> consumer -> failure/cancellation path] |
+
+## Quality Verification
+
+| Claim | Workload | Budget or explicit unknown | Measurement method | Failure condition |
+|---|---|---|---|---|
+| [memory/performance/extensibility claim] | [scenario] | [threshold or unknown] | [benchmark/test/inspection] | [what would disprove it] |
+
 ## External Dependencies
 
 | System | Purpose | How Connected |
@@ -93,6 +113,8 @@ If `assistant-diagrams` skill is available, delegate diagram generation to it.
 - Every dependency listed is real (check .csproj references, using statements)
 - Data flow matches actual code path (trace it)
 - No hallucinated components or relationships
+- For any Architecture Decision Pack, its source/revision freshness, facts versus assumptions, ownership/type boundary, design-pressure checks, compatibility/extension seam, and verification/rollback link are preserved
+- No memory, performance, or extensibility benefit is presented as fact without workload, budget/explicit unknown, measurement method, and failure condition
 
 ### Output Location
 

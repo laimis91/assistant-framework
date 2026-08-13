@@ -4,7 +4,7 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "3.0"
+schema_version: "6.0"
 contract: handoffs
 skill: assistant-review
 
@@ -40,7 +40,7 @@ dispatch_context_bundles:
     review_evidence_pointer:
       required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
       validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -52,15 +52,17 @@ dispatch_context_bundles:
             condition: "behavioral_contract_review_required is true"
           - name: Agentic Loop Safety Checklist
             condition: "agentic_loop_safety_review_required is true"
-        exclusion: "Every untriggered checklist section is excluded; include none when all three flags are false."
+          - name: Architecture Decision Pack Review Checklist
+            condition: "architecture_decision_pack_review_required is true"
+        exclusion: "Every untriggered checklist section is excluded; include none when all four checklist flags are false."
       - path: references/review-rubric.md
         sections: [all]
         condition: "scope_size in [medium, large] or rubric_required is true"
     direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
     excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
     return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
-    budget_words: 5000
-    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5000 words."
+    budget_words: 5653
+    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5653 words."
 
   - name: qa_evaluator_context
     phase: QA_EVALUATION_STEP
@@ -73,7 +75,7 @@ return_validation_bundles:
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
-    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -155,6 +157,12 @@ handoffs:
             default: null
             description: "Optional PR URL, task journal path, command, or user-provided label"
 
+      - name: scope_size
+        type: enum
+        required: true
+        enum_values: [trivial, small, medium, large]
+        description: "Resolved review-scope size; medium+ requires rubric scoring and the Design Coherence Pass"
+
       - name: round
         type: int
         required: true
@@ -223,7 +231,7 @@ handoffs:
         required: false
         default: true
         description: "Whether Reviewer must apply SOLID, KISS, DRY, YAGNI, and readability checks from references/review-principles.md"
-        notes: "Default true for every review. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
+        notes: "Default true for every review. Medium+ scope also requires the Design Coherence Pass. Findings still require concrete evidence, concrete risk, and the smallest durable fix."
 
       - name: reuse_search_instruction
         type: string
@@ -250,6 +258,27 @@ handoffs:
         default: false
         description: "Whether Reviewer must apply the Agentic Loop Safety Checklist"
         notes: "Set true for agent/workflow/retry/search/tool/subagent/background loops or repeated model/API calls."
+
+      - name: architecture_decision_pack_review_required
+        type: boolean
+        required: false
+        default: false
+        description: "Whether Reviewer must apply the Architecture Decision Pack Review Checklist"
+        notes: "Set true only when a carried workflow Architecture Decision Pack or equivalent architecture decision record applies; do not manufacture an architecture review for a local change."
+
+      - name: architecture_design_mode
+        type: enum
+        required: conditional
+        condition: "architecture_decision_pack_review_required is true"
+        enum_values: [lightweight, required, review_intensive]
+        description: "Canonical architecture mode Reviewer uses to validate the carried Pack"
+        validation: "architecture_decision_pack.mode must equal canonical architecture_design_mode"
+
+      - name: architecture_decision_pack
+        type: object
+        required: conditional
+        condition: "architecture_decision_pack_review_required is true"
+        description: "Fresh compact Pack projection whose mode must equal canonical architecture_design_mode, with source/revision, separate facts, assumptions, material_questions, boundary/design-pressure/type/quality/verification evidence, invalidators, and review_intensive independent_challenge_evidence; standalone equivalent records derive its compact Pack projection."
 
       - name: rubric_required
         type: boolean
@@ -437,11 +466,46 @@ handoffs:
             required: true
             description: "Whether root/plugin/generated/docs/automation surfaces that can drive behavior are synced or not applicable"
 
+      - name: architecture_decision_pack_checks
+        type: object
+        required: conditional
+        condition: "architecture_decision_pack_review_required is true"
+        description: "Compact confirmation that Architecture Decision Pack review was applied"
+        object_fields:
+          - name: freshness_and_facts
+            type: string
+            required: true
+          - name: material_questions_and_invalidators
+            type: string
+            required: true
+          - name: independent_challenge_evidence
+            type: string
+            required: conditional
+            condition: "architecture_design_mode == review_intensive"
+          - name: ownership_dependency_and_lifecycle_boundary
+            type: string
+            required: true
+          - name: design_pressure_checks
+            type: string
+            required: true
+          - name: semantic_type_and_primitive_exception_ledger
+            type: string
+            required: true
+          - name: quality_scenario_falsifiability
+            type: string
+            required: true
+          - name: compatibility_and_extension_seam
+            type: string
+            required: true
+          - name: verification_handoff_and_rollback
+            type: string
+            required: true
+
       - name: principle_checks
         type: object
-        required: false
-        condition: "quality_principles_required is true"
-        description: "Compact confirmation that the clean-code principle lens was applied"
+        required: conditional
+        condition: "quality_principles_required is true or scope_size in [medium, large]"
+        description: "Compact confirmation that the clean-code principle lens was applied; medium+ includes the Design Coherence Pass"
         object_fields:
           - name: solid
             type: string
@@ -463,6 +527,11 @@ handoffs:
             type: string
             required: true
             description: "Readability observations or 'no concrete risk found'"
+          - name: design_coherence
+            type: string
+            required: conditional
+            condition: "scope_size in [medium, large]"
+            description: "Affected responsibility/boundary assessment with an evidence-backed risk or 'no concrete risk found'"
 
       - name: reuse_search
         type: object

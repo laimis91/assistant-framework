@@ -57,9 +57,9 @@ active skill requires subagents.
 
 ## What each role does
 
-- **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Output is compact enough to paste into other agents' prompts. Runs first on medium+ tasks.
-- **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Understands WHY, not just WHERE.
-- **Architect** — Designs implementation blueprints: files to create/modify, interfaces, data flows, build sequence, test plan. Does not write code.
+- **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Use only when the current boundary cannot be resolved directly; output stays compact enough to paste into the current packet.
+- **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Use only for an unresolved lifecycle, failure, coupling, or behavior question after a compact map.
+- **Architect** — Conditional Architecture Decision Pack/implementation blueprint work for genuine boundary, public-contract, quality-driver, or viable-alternative uncertainty. Does not write code and is not a permanent role.
 - **Code Writer / bounded executor** — Implements the packet. In `bounded_executor`, also writes focused tests and runs focused verification; never performs independent review.
 - **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Builds, writes tests, runs suites, and absorbs noisy output without modifying production code.
 - **Code Reviewer** — Canonical independent code review with confidence-based filtering. Finds bugs, security issues, architecture violations, test coverage gaps, and structural code issues. Does not edit files.
@@ -78,10 +78,10 @@ its compact validation plus fresh-review evidence instead.
 | Phase | Subagent(s) | Condition | Justification |
 |---|---|---|---|
 | **TRIAGE** | — (Orchestrator direct) | All sizes | Too lightweight for dispatch — single classification decision |
-| **DISCOVER** | Code Mapper | Medium+ | Produces context map for downstream agents |
-| **DISCOVER** | Explorer | Large+ | Traces execution paths and hidden dependencies |
-| **DECOMPOSE** | Architect | Medium+ | Analyzes problem boundaries and proposes strict slice manifest |
-| **PLAN** | Architect | Large+ | Designs full implementation blueprint from slice manifest |
+| **DISCOVER** | Code Mapper | Current file/boundary cannot be resolved directly | Produces a compact context map only when it reduces uncertainty |
+| **DISCOVER** | Explorer | Unresolved lifecycle/failure/coupling/behavior question after mapping | Traces only the needed execution path |
+| **DECOMPOSE** | Architect | Pack or slice boundary has genuine uncertainty | Analyzes the current boundary and proposes the smallest usable slice manifest |
+| **PLAN** | Architect | `architecture_design_mode` is `required`/`review_intensive` or an ordinary plan cannot resolve a concrete boundary | Produces a bounded blueprint from current evidence |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
 | **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation; also focused RED/GREEN/verification in bounded lane |
 | **BUILD** | Builder/Tester | `build_execution_lane=separated_workers` | Independent RED/build/test verification for triggered split work |
@@ -91,15 +91,15 @@ its compact validation plus fresh-review evidence instead.
 
 **Rule:** If `subagent_execution_mode=delegated` and a phase's subagent column shows a dispatch, you MUST dispatch that role. If `subagent_execution_mode=direct_fallback`, you MUST NOT spawn subagents; instead record which role responsibility was handled directly and what equivalent evidence proves it.
 
-## Dispatch rules by task size
+## Illustrative sizing patterns (not dispatch limits)
 
 | Size | Agents used | Flow |
 |---|---|---|
 | **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; promote out of light when risk/harness/QA criteria apply |
 | **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
-| **Medium** | Code Mapper → Architect (decompose) → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only when separated_workers triggers |
-| **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer may be used only as compatibility |
-| **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration |
+| **Medium** | Bounded executor → Code Reviewer, plus mapping/design roles only when their concrete trigger applies | Ordinary default; add Builder/Tester only when separated_workers triggers |
+| **Large** | Current-boundary mapping/analysis/design roles as needed → Code Writer/Builder-Tester when selected → Code Reviewer → QA Evaluator when required | Full evidence path is selected by risk and uncertainty, not by role count |
+| **Mega** | Parallel writers/role specialists only for independently executable slices and concrete triggers | Integration still requires current verification/review evidence; do not add roles as ceremony |
 
 ## Dispatch guidelines
 
@@ -131,9 +131,9 @@ its compact validation plus fresh-review evidence instead.
   equivalent role, phase, verification, and review evidence; silent fallback
   fails the completion gates.
 - **QA evidence gate**: when QA is required, delegated mode is not complete until the task journal Agent Dispatch Log records QA Evaluator dispatch/result evidence after Builder/Tester and Code Reviewer evidence. Direct fallback must record fresh QA Evaluator direct evidence separately from Code Reviewer direct evidence. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
-- **Every medium+ task gets Architect decomposition responsibility**: In delegated mode the Architect proposes smallest iterable slice boundaries; in direct fallback the same criteria and evidence are recorded directly.
+- **Architect is conditional**: use it only when a Pack/slice boundary has genuine uncertainty; in direct work the same compact decision criteria and evidence are recorded without inventing an Architect dispatch.
 - **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)
-- **Code Mapper runs first** on medium+ tasks — its output feeds into Architect and Code Writer
+- **Code Mapper runs only when needed** to resolve current files/boundaries; its compact output feeds the current plan/implementation packet without becoming durable global memory.
 - **Code Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is triggered; `reviewer` is the compatibility route for older handoffs. Direct fallback must reset review context and record how stale-context risk was controlled.
 - **QA Evaluator gets a fresh dispatch each QA round** when QA is required and delegated mode is triggered. Direct fallback must reset acceptance-evaluation context and record how stale-context risk was controlled.
 - **Main session stays Orchestrator**: owns user communication, final integration, handoffs

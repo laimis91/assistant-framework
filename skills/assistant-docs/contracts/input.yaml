@@ -1,5 +1,5 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: input
 skill: assistant-docs
 
@@ -41,6 +41,216 @@ fields:
     validation: "Use strict for public or release docs"
     on_missing: infer
     enum_values: [strict, normal]
+
+  - name: architecture_design_mode
+    type: enum
+    required: false
+    description: "Whether this documentation request carries a workflow Architecture Decision Pack"
+    validation: "Use not_applicable when no Pack-backed decision is in scope; applicable modes require architecture_decision_pack_status. current requires the compact architecture_decision_pack projection and missing, stale, or out_of_scope require architecture_decision_pack_issue evidence."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Infer from carried workflow state or source material. Do not create a Pack merely to document an architecture overview."
+    enum_values: [not_applicable, lightweight, required, review_intensive]
+
+  - name: architecture_decision_pack_status
+    type: enum
+    required: conditional
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    description: "Current availability and freshness state of the carried Architecture Decision Pack"
+    validation: "current requires a fresh compact Pack projection; missing, stale, and out_of_scope require architecture_decision_pack_issue instead of invented Pack content"
+    on_missing: infer
+    infer_from: "Infer current only when the Pack ref and freshness basis resolve against current source; otherwise infer missing, stale, or out_of_scope from the available evidence."
+    enum_values: [current, missing, stale, out_of_scope]
+
+  - name: architecture_decision_pack
+    type: object
+    required: conditional
+    condition: "architecture_decision_pack_status == current"
+    description: "Compact fresh Architecture Decision Pack projection used to document a carried decision without copying the workflow Pack"
+    validation: "Matches the canonical assistant-review compact Pack projection without translation aliases. The current Pack ref must resolve to the selected design and rationale before documenting them. Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack."
+    on_missing: fail
+    object_fields:
+      - name: ref
+        type: string
+        required: true
+        description: "Stable reference to the current canonical Architecture Decision Pack, including its selected design and rationale"
+        validation: "Must resolve against the current canonical Pack to the selected design and rationale; if resolution or currentness cannot be proven, use missing or stale status and recovery instead"
+        on_missing: fail
+      - name: mode
+        type: enum
+        required: true
+        enum_values: [lightweight, required, review_intensive]
+        description: "Canonical Pack mode; must equal architecture_design_mode"
+        validation: "Must equal architecture_design_mode"
+        on_missing: fail
+      - name: freshness_basis
+        type: string
+        required: true
+        description: "Canonical source/revision freshness basis"
+        on_missing: fail
+      - name: facts
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Source-backed facts used by the documentation"
+        on_missing: fail
+        object_fields:
+          - name: claim
+            type: string
+            required: true
+            on_missing: fail
+          - name: source_ref
+            type: string
+            required: true
+            on_missing: fail
+      - name: assumptions
+        type: object[]
+        required: true
+        description: "Assumptions retained separately from sourced facts"
+        on_missing: fail
+        object_fields:
+          - name: statement
+            type: string
+            required: true
+            on_missing: fail
+          - name: status
+            type: enum
+            required: true
+            enum_values: [safe_default, pending_question, validated, deferred]
+            on_missing: fail
+          - name: rationale_or_impact
+            type: string
+            required: true
+            on_missing: fail
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+            on_missing: skip
+      - name: material_questions
+        type: object[]
+        required: true
+        description: "Canonical remaining material design questions; empty only when none remain"
+        on_missing: fail
+        object_fields:
+          - name: question_id
+            type: string
+            required: true
+            on_missing: fail
+          - name: topic
+            type: string
+            required: true
+            on_missing: fail
+          - name: question
+            type: string
+            required: true
+            on_missing: fail
+          - name: why_needed
+            type: string
+            required: true
+            on_missing: fail
+          - name: risk_if_guessed
+            type: string
+            required: true
+            on_missing: fail
+          - name: recommended_default_or_none
+            type: string
+            required: true
+            on_missing: fail
+          - name: status
+            type: enum
+            required: true
+            enum_values: [open, answered, safe_default, deferred]
+            on_missing: fail
+      - name: boundaries_and_dependencies
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Non-empty compact ownership, lifecycle, and dependency boundary conclusions projected from the Pack"
+        on_missing: fail
+      - name: design_pressure_checks
+        type: string[]
+        required: true
+        min_items: 5
+        max_items: 5
+        description: "Exactly one conclusion or explicit not-applicable evidence item for each canonical design-pressure concern"
+        validation: "Contains exactly one item for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path"
+        on_missing: fail
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+        description: "Independent challenge evidence retained only for review-intensive decisions"
+        on_missing: fail
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+            on_missing: fail
+          - name: dissent_or_validation
+            type: string
+            required: true
+            on_missing: fail
+          - name: resolution
+            type: string
+            required: true
+            on_missing: fail
+          - name: selected_design_impact
+            type: string
+            required: true
+            on_missing: fail
+      - name: type_ledger
+        type: string[]
+        required: true
+        description: "Canonical semantic types, primitive exceptions, and extension/validation seams"
+        on_missing: fail
+      - name: quality_scenarios
+        type: string[]
+        required: true
+        description: "Canonical falsifiable quality scenarios or explicit unknowns"
+        on_missing: fail
+      - name: verification_and_rollback
+        type: string[]
+        required: true
+        on_missing: fail
+      - name: invalidators
+        type: string[]
+        required: true
+        description: "Changes or contradictory facts that invalidate the Pack"
+        on_missing: fail
+  - name: architecture_decision_pack_issue
+    type: object
+    required: conditional
+    condition: "architecture_decision_pack_status in [missing, stale, out_of_scope]"
+    description: "Typed availability, freshness, and recovery evidence when Pack-backed documentation cannot use a current Pack"
+    validation: "Records the inferred Pack status, concrete issue, available evidence refs, and recovery action; does not substitute reconstructed Pack content."
+    on_missing: fail
+    object_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [missing, stale, out_of_scope]
+        validation: "Must equal architecture_decision_pack_status"
+        on_missing: fail
+      - name: issue
+        type: string
+        required: true
+        on_missing: fail
+      - name: evidence_refs
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: recovery_action
+        type: enum
+        required: true
+        enum_values: [request_current_pack, mark_decision_out_of_scope]
+        on_missing: fail
+      - name: stale_pack_ref
+        type: string
+        required: false
+        condition: "status == stale and a stale Pack ref is actually available"
+        on_missing: skip
 
   - name: format
     type: enum

@@ -1,4 +1,4 @@
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-thinking
 
@@ -88,8 +88,63 @@ artifacts:
     required: conditional
     condition: "tool_used in [perspectives, stress_test, deep_think] and the output is a decision"
     description: "Options, criteria, and validation step for decision-oriented reasoning"
-    validation: "Includes options considered, decision criteria, selected option, and next validation step"
+    validation: "Includes options considered, decision criteria, selected option, and next validation step. For architecture decisions, distinguish facts from assumptions and do not claim memory, performance, or extensibility benefit without a workload/budget, measurement method, and failure condition or an explicit unknown."
     on_fail: "Re-run decision synthesis and include options considered, criteria, selected option, and validation or rollback step"
+
+  - name: architecture_pack_update
+    type: object
+    required: conditional
+    condition: "architecture_design_mode != not_applicable"
+    description: "Compact challenge result that the workflow can merge into the Architecture Decision Pack without duplicating global memory"
+    validation: "Records Pack freshness, decision-impacting questions, design-pressure and type-boundary findings, and quality-scenario verification implications; does not claim an unmeasured quality benefit."
+    on_fail: "Refresh or amend the Architecture Decision Pack before accepting the recommendation"
+    object_fields:
+      - name: architecture_decision_pack_ref
+        type: string
+        required: true
+      - name: freshness_status
+        type: enum
+        required: true
+        enum_values: [fresh, refresh_required]
+      - name: material_questions_or_invalidators
+        type: string[]
+        required: true
+        description: "Questions, changed facts, or requirements that would invalidate the current decision; empty only when none are found"
+      - name: design_pressure_findings
+        type: string[]
+        required: true
+        description: "Control/early-exit, ownership/disposal, resource-envelope, extension-registration, or representative-path implications"
+      - name: semantic_type_findings
+        type: string[]
+        required: true
+        description: "Named semantic type, primitive exception, validation boundary, or public-contract evolution implications"
+      - name: quality_scenario_findings
+        type: string[]
+        required: true
+        description: "Workload/budget/measurement/failure-condition implications, or explicit unknowns that block a quality claim"
+      - name: recommended_pack_change
+        type: string
+        required: true
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+        description: "Independent challenge or validation that changes, confirms, or bounds the selected Pack design"
+        validation: "All fields are required so review-intensive challenge evidence is traceable and cannot be reduced to a conclusion."
+        on_fail: "Return to the independent challenge and record every required field before merging the Pack update."
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
 
   - name: debug_artifacts
     type: object

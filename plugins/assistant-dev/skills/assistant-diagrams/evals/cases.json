@@ -66,10 +66,10 @@
       }
     },
     {
-      "id": "ambiguous-diagram-asks-bounded-clarification",
-      "title": "Ambiguous diagram asks bounded clarification",
+      "id": "ambiguous-diagram-asks-material-clarification",
+      "title": "Ambiguous diagram asks material clarification",
       "category": "input_contract_clarification",
-      "purpose": "Checks that missing diagram_type or scope triggers a bounded clarification instead of a guessed diagram.",
+      "purpose": "Checks that missing diagram_type or scope triggers concise material clarification instead of a guessed diagram.",
       "prompt": "Draw a diagram for this project.",
       "setup_context": [
         "The assistant-diagrams skill instructions are active.",
@@ -81,7 +81,7 @@
         "Asks a concise clarification with a small set of diagram type choices.",
         "Mentions scope or source_files needed to avoid guessing.",
         "Does not generate a diagram before input contract fields are resolved.",
-        "Keeps the response bounded rather than asking broad open-ended questions."
+        "Groups every material question concisely rather than asking broad open-ended questions."
       ],
       "pass_criteria": [
         "The response asks for diagram_type and scope or equivalent choices.",

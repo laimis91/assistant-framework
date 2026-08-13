@@ -56,6 +56,15 @@ Generated: [date] | Task: [1-sentence description]
 - decision_rationale: [why this decision preserves authoritative behavior]
 - divergence_control: [required for intentional_duplicate]
 
+## Architecture Inputs (only when Architecture Decision Pack applies)
+- Freshness basis: [branch/HEAD or greenfield assumptions plus source refs]
+- Boundaries and ownership: [boundary | owner | lifecycle/dependency direction]
+- Design-pressure evidence: [control/early exit | ownership/disposal | resource envelope | extension registration | representative path]
+- Semantic type candidates: [concept | current representation | boundary | evidence]
+- Quality evidence: [memory/performance/extensibility/etc. workload, budget or explicit unknown, measurement]
+- Design questions: [group/topic | question | why/risk | default or none]
+- Pack ref: [Architecture Decision Pack ref, or N/A with reason]
+
 ## Conventions Observed
 - [naming pattern, e.g. "Services end in *Service, registered as scoped"]
 - [architecture pattern, e.g. "CQRS with MediatR handlers"]
@@ -68,5 +77,6 @@ Generated: [date] | Task: [1-sentence description]
 - File paths must be relative to project root
 - If the codebase is too large, focus on the modules the task touches
 - "All references" means behaviorally relevant references inside the accepted task scope, not every textual match in the repository. Check callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces when they can affect or describe the change; record not-applicable or deferred surfaces instead of leaving them implicit.
+- Keep Architecture Inputs as pointers/evidence for the typed Architecture Decision Pack, not a second architecture narrative.
 - Add the configured context-map path (for example `{agent_state_dir}/context-map.md`) to `.gitignore` when local state artifacts are used — this is ephemeral, per-session only
 - If a context-map artifact was accidentally tracked, remove it from the git index while preserving the local file

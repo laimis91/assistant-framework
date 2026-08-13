@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "4.0"
+schema_version: "8.0"
 contract: output
 skill: assistant-workflow
 
@@ -17,20 +17,20 @@ completion_tiers:
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, architecture_decision_pack, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, architecture_decision_pack, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -39,8 +39,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
+    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, architecture_design_mode and trigger reasons, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, architecture design mode/reasons, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -64,6 +64,16 @@ artifacts:
         required: true
         enum_values: [none, inline, approval_required]
         validation: "Matches task size, risk, uncertainty, reversibility, approval policy, and the input contract eligibility rules"
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
+        validation: "Matches concrete architecture trigger evidence; size alone is not a trigger"
+      - name: architecture_design_trigger_reasons
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Non-empty for lightweight, required, or review_intensive; concrete not-applicable reason otherwise"
       - name: build_execution_lane
         type: enum
         required: true
@@ -73,7 +83,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline, journal]
-        validation: "journal is selected only when persistence, delegation, cross-session continuation, clarification wait, strict, harness, required QA, or explicit durable-state criteria apply; size alone does not require it"
+        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger; size alone does not require journal"
       - name: manual_verification_mode
         type: enum
         required: true
@@ -143,8 +153,8 @@ artifacts:
     required: true
     condition: "always"
     description: "Compact adaptive-completion selection carried in the inline packet or task journal."
-    validation: "Records controller intensity, plan mode, and execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
-    on_fail: "Resolve and record controller_intensity, plan_mode, workflow_state_mode, and manual_verification_mode before completion."
+    validation: "Records controller intensity, plan mode, architecture design mode, and execution/completion modes with concrete trigger reasons; mode selection does not infer ceremony from task size alone."
+    on_fail: "Resolve and record controller_intensity, plan_mode, architecture_design_mode, workflow_state_mode, and manual_verification_mode before completion."
     object_fields:
       - name: controller_intensity
         type: enum
@@ -158,10 +168,15 @@ artifacts:
         type: enum
         required: true
         enum_values: [none, inline, approval_required]
+      - name: architecture_design_mode
+        type: enum
+        required: true
+        enum_values: [not_applicable, lightweight, required, review_intensive]
       - name: workflow_state_mode
         type: enum
         required: true
         enum_values: [inline, journal]
+        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger"
       - name: manual_verification_mode
         type: enum
         required: true
@@ -247,7 +262,7 @@ artifacts:
     type: object
     required: true
     condition: "runnable tests exist or task changes behavior"
-    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. Use validation_results when tests are not applicable."
+    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. When TDD Architecture Decision Pack obligations apply, architecture_obligation_coverage aggregates the selected Build owner return: bounded_executor CodeWriter or separated_workers BuilderTester, with exact-once stable obligation_id coverage. Use validation_results when tests are not applicable."
     on_fail: "Re-run tests or move non-test verification to validation_results with explicit not-applicable reason for tests"
     object_fields:
       - name: passed
@@ -261,6 +276,30 @@ artifacts:
       - name: skipped
         type: int
         required: true
+      - name: architecture_obligation_coverage
+        type: object[]
+        required: conditional
+        condition: "tdd_mode is true and architecture_design_mode in [lightweight, required, review_intensive]"
+        min_items: 1
+        validation: "Aggregates the selected Build owner return: build_execution_lane == bounded_executor uses CodeWriter coverage and build_execution_lane == separated_workers uses BuilderTester coverage. Each carried architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id."
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: architecture_decision_pack_ref
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: evidence
+            type: string
+            required: true
+          - name: outcome
+            type: enum
+            required: true
+            enum_values: [covered, blocked, explicit_unknown]
 
   - name: validation_results
     type: object[]
@@ -285,7 +324,7 @@ artifacts:
     required: conditional
     condition: "controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path."
     on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
     object_fields:
       - name: result
@@ -302,14 +341,41 @@ artifacts:
       - name: evidence
         type: string
         required: true
+      - name: canonical_result_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated assistant-review final_summary for the light Pack review"
+        validation: "Resolves to a validated canonical assistant-review final_summary without requiring review_delegation_path for light direct fallback"
+      - name: canonical_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
+      - name: architecture_decision_pack_review_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated assistant-review Architecture Decision Pack review"
+        validation: "Resolves to the current Pack review for the carried architecture_decision_pack_ref"
+      - name: architecture_decision_pack_review_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#architecture_decision_pack_review"
+      - name: validation_status
+        type: enum
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        enum_values: [validated]
 
   - name: review_result
     type: object
     required: conditional
     condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
-    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
-    on_fail: "Load and follow assistant-review, validate its final_summary and review_delegation_path, and record stable refs plus exact canonical contracts before Review completes."
+    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. When an Architecture Decision Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review and declares that exact contract. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
+    on_fail: "Load and follow assistant-review, validate its final_summary, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
       - name: canonical_result_ref
         type: string
@@ -327,6 +393,17 @@ artifacts:
         type: string
         required: true
         validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"
+      - name: architecture_decision_pack_review_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated canonical assistant-review Architecture Decision Pack review"
+        validation: "Resolves to the current Pack review for the carried architecture_decision_pack_ref"
+      - name: architecture_decision_pack_review_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#architecture_decision_pack_review"
       - name: validation_status
         type: enum
         required: true
@@ -566,9 +643,9 @@ artifacts:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
-    description: "Completion traceability from accepted requirements to verification evidence"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason"
+    condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
+    description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -587,10 +664,36 @@ artifacts:
         type: string[]
         required: true
         on_missing: fail
+      - name: source_route_clear_handoff_ref
+        type: string
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; every retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non_goals element or entries element with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        on_missing: fail
+      - name: retired_or_excluded_deferred_uncertainty_traces
+        type: object[]
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        min_items: 0
+        validation: "Binds every source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs ref exactly once to a concrete consuming target. Empty only when the source collection is empty; no unknown, duplicate, or wrong-disposition source ref is allowed."
+        object_fields:
+          - name: source_retired_or_excluded_deferred_uncertainty_ref
+            type: string
+            required: true
+            validation: "Resolves exactly once to one source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry"
+          - name: target_disposition
+            type: enum
+            required: true
+            enum_values: [non_goal, approved_exclusion]
+          - name: target_ref
+            type: string
+            required: true
+            validation: "Resolves to the concrete non_goals element for non_goal or entries element with status=approved_exclusion for approved_exclusion"
       - name: entries
         type: object[]
         required: true
-        min_items: 1
+        min_items: 0
+        validation: "Non-empty when any accepted requirement, source route_clear_handoff decision, or acceptance_seed exists. Empty only for the exact all-excluded route whose source decisions and acceptance_seed are empty and whose excluded or retired lineage is traced exactly once to concrete non_goals or approved-exclusion targets."
         on_missing: fail
         object_fields:
           - name: requirement_id
@@ -631,6 +734,386 @@ artifacts:
             required: conditional
             condition: "status == approved_exclusion"
             on_missing: fail
+
+  - name: architecture_decision_pack
+    type: object
+    required: conditional
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
+    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios with stable identity and verified evidence; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real with stable selected binding, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
+    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
+    object_fields:
+      - name: pack_id
+        type: string
+        required: true
+        description: "Stable task-scoped pack identity"
+        on_missing: fail
+      - name: mode
+        type: enum
+        required: true
+        enum_values: [lightweight, required, review_intensive]
+        description: "Selected architecture design depth"
+        validation: "Must equal canonical architecture_design_mode; review_intensive cannot use a weaker nested mode to evade independent_challenge_evidence."
+        on_missing: fail
+      - name: single_goal
+        type: string
+        required: true
+        description: "One implementation outcome, not a broad project rewrite"
+        validation: "Non-empty and scoped to the approved task"
+        on_missing: fail
+      - name: freshness
+        type: object
+        required: true
+        description: "Evidence basis and conditions that invalidate the decision"
+        object_fields:
+          - name: basis_kind
+            type: enum
+            required: true
+            enum_values: [repository, greenfield]
+          - name: branch_or_project_state
+            type: string
+            required: true
+          - name: revision_or_context_ref
+            type: string
+            required: true
+            description: "Repository HEAD/branch or explicit greenfield context reference"
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Commands, paths, symbols, or supplied material that support current facts"
+          - name: invalidated_by
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Requirement, revision, contract, quality-target, or contradiction changes requiring refresh"
+      - name: facts
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Observed source-backed facts, never unstated inferences"
+        object_fields:
+          - name: claim
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: true
+          - name: verified_against
+            type: string
+            required: true
+      - name: assumptions
+        type: object[]
+        required: true
+        description: "Defaults, pending questions, or explicit unknowns kept separate from facts"
+        object_fields:
+          - name: statement
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [safe_default, pending_question, validated, deferred]
+          - name: rationale_or_impact
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: false
+            default: null
+      - name: material_questions
+        type: object[]
+        required: true
+        description: "All remaining material design questions; empty only when none block the next phase"
+        object_fields:
+          - name: question_id
+            type: string
+            required: true
+          - name: topic
+            type: string
+            required: true
+            description: "Decision group such as ownership, public contract, resource envelope, or rollout"
+          - name: question
+            type: string
+            required: true
+            description: "One answerable design decision"
+          - name: why_needed
+            type: string
+            required: true
+          - name: risk_if_guessed
+            type: string
+            required: true
+          - name: recommended_default_or_none
+            type: string
+            required: true
+          - name: source_checked
+            type: string[]
+            required: true
+            min_items: 1
+          - name: status
+            type: enum
+            required: true
+            enum_values: [open, answered, safe_default, deferred]
+      - name: independent_challenge_evidence
+        type: object
+        required: conditional
+        condition: "architecture_design_mode == review_intensive"
+        description: "Independent challenge evidence for conflicting or high-risk architectural drivers"
+        validation: "Names the independent challenge, dissent or validation result, and how it changed or confirmed the selected design"
+        on_missing: fail
+        object_fields:
+          - name: challenge_ref
+            type: string
+            required: true
+          - name: dissent_or_validation
+            type: string
+            required: true
+          - name: resolution
+            type: string
+            required: true
+          - name: selected_design_impact
+            type: string
+            required: true
+      - name: boundaries
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Owned boundaries and dependencies affected by the goal"
+        object_fields:
+          - name: boundary
+            type: string
+            required: true
+          - name: owner
+            type: string
+            required: true
+          - name: lifecycle_or_data_flow
+            type: string
+            required: true
+          - name: dependency_direction
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
+      - name: design_pressure_checks
+        type: object[]
+        required: true
+        min_items: 5
+        max_items: 5
+        description: "Evidence-backed checks that prevent a premature interface, orchestration, or extension abstraction"
+        validation: "Covers control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; each is resolved, not_applicable with evidence, open, or deferred, and records its decision implication and revalidation point."
+        object_fields:
+          - name: concern
+            type: enum
+            required: true
+            enum_values: [control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, representative_path]
+          - name: status
+            type: enum
+            required: true
+            enum_values: [resolved, not_applicable, open, deferred]
+          - name: evidence_or_material_question
+            type: string
+            required: true
+          - name: decision_implication
+            type: string
+            required: true
+          - name: revalidation_point
+            type: string
+            required: true
+            description: "First real use, benchmark, integration, or explicit none with reason"
+      - name: type_ledger
+        type: object[]
+        required: true
+        description: "Semantic types, justified primitive exceptions, and extension/validation seams"
+        object_fields:
+          - name: concept
+            type: string
+            required: true
+          - name: representation_policy
+            type: enum
+            required: true
+            enum_values: [semantic_type, primitive_exception, not_applicable]
+          - name: representation
+            type: string
+            required: true
+            description: "Named domain/request/result/event type or the retained primitive representation"
+          - name: boundary
+            type: string
+            required: true
+          - name: semantics_or_exception_reason
+            type: string
+            required: true
+          - name: conversion_or_validation_point
+            type: string
+            required: true
+          - name: extension_seam
+            type: string
+            required: true
+          - name: primitive_exception_kind
+            type: enum
+            required: conditional
+            condition: "representation_policy == primitive_exception"
+            enum_values: [local_temporary, wire_or_storage, foreign_interface, framework_required, no_domain_semantics]
+      - name: interface_contracts
+        type: object[]
+        required: true
+        description: "Interfaces whose input, output, failure, owner, or evolution shape matters"
+        object_fields:
+          - name: consumer_or_owner
+            type: string
+            required: true
+          - name: exposure
+            type: enum
+            required: true
+            enum_values: [internal, public, wire, storage]
+          - name: input_type
+            type: string
+            required: true
+          - name: output_or_failure_type
+            type: string
+            required: true
+          - name: evolution_strategy
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
+      - name: quality_scenarios
+        type: object[]
+        required: true
+        description: "Falsifiable quality claims or explicit unknowns"
+        validation: "quality_scenario_id is stable and unique. A scenario with budget_or_explicit_unknown that is explicit unknown may be pending or unknown only, never verified. status=verified requires a concrete falsifiable budget or threshold and verification_ref resolving exactly once to a verification.verification_id."
+        object_fields:
+          - name: quality_scenario_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within quality_scenarios"
+          - name: attribute
+            type: enum
+            required: true
+            enum_values: [memory, performance, scalability, extensibility, reliability, security, operability, other]
+          - name: scenario
+            type: string
+            required: true
+          - name: workload
+            type: string
+            required: true
+          - name: budget_or_explicit_unknown
+            type: string
+            required: true
+          - name: measurement
+            type: string
+            required: true
+          - name: failure_condition
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [pending, verified, unknown]
+          - name: verification_ref
+            type: string
+            required: conditional
+            condition: "status == verified"
+            validation: "Resolves exactly once to verification.verification_id; required only for verified scenarios"
+      - name: architecture_test_obligations
+        type: object[]
+        required: conditional
+        condition: "tdd_mode is true"
+        description: "Pack-derived test obligations carried unchanged into active TDD task packets"
+        validation: "Each stable obligation_id is unique and testable; kinds match assistant-tdd input semantics and do not add a non-Pack claim."
+        min_items: 1
+        object_fields:
+          - name: obligation_id
+            type: string
+            required: true
+          - name: obligation_kind
+            type: enum
+            required: true
+            enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+          - name: behavior
+            type: string
+            required: true
+          - name: verification
+            type: string
+            required: true
+      - name: alternatives
+        type: object[]
+        required: true
+        description: "Only genuinely viable alternatives; an empty list records an evidenced single path"
+        validation: "alternative_id values are stable and unique. When non-empty, exactly one disposition=selected exists; selected_alternative_id resolves exactly once to it, and selected_design describes that same choice. When empty, selected_alternative_id is absent and the single path is evidenced."
+        object_fields:
+          - name: alternative_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within alternatives"
+          - name: option
+            type: string
+            required: true
+          - name: tradeoffs
+            type: string
+            required: true
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [selected, rejected]
+      - name: selected_alternative_id
+        type: string
+        required: conditional
+        condition: "alternatives is non-empty"
+        validation: "Resolves exactly once to the sole alternatives entry with disposition=selected"
+      - name: selected_design
+        type: string
+        required: true
+        validation: "Matches selected_alternative_id when alternatives is non-empty; otherwise describes the evidenced single path"
+      - name: selected_design_rationale
+        type: string
+        required: true
+      - name: verification
+        type: object[]
+        required: true
+        min_items: 1
+        validation: "verification_id values are stable and unique; every quality_scenarios[].verification_ref resolves exactly once when status=verified"
+        object_fields:
+          - name: verification_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within verification"
+          - name: claim_or_constraint
+            type: string
+            required: true
+          - name: method
+            type: string
+            required: true
+          - name: success_signal
+            type: string
+            required: true
+          - name: failure_condition
+            type: string
+            required: true
+      - name: handoff_refs
+        type: object
+        required: true
+        description: "Discover records only durable context/journal state; Plan or the plan_mode=none pre-Build boundary atomically binds downstream refs before Build."
+        validation: "discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+        on_fail: "Refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
+        object_fields:
+          - name: handoff_binding_state
+            type: enum
+            required: true
+            enum_values: [discover_only, downstream_bound]
+            description: "Whether the Pack has only Discover context or atomically bound downstream planning/review references"
+          - name: context_or_journal_ref
+            type: string
+            required: true
+          - name: plan_or_task_packet_ref
+            type: string
+            required: conditional
+            condition: "handoff_binding_state == downstream_bound"
+          - name: review_scope_ref
+            type: string
+            required: conditional
+            condition: "handoff_binding_state == downstream_bound"
 
   - name: build_repair_state
     type: object
@@ -693,7 +1176,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega]"
     description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
-    validation: "Includes changed behavior/areas, architecture decisions and rationale, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
+    validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
     on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
     object_fields:
       - name: changed_behavior_and_areas
@@ -705,6 +1188,13 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
+        on_missing: fail
+      - name: architecture_decision_pack_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Current reviewed Architecture Decision Pack reference"
+        validation: "Resolves to the pack that was fresh for the final verified revision"
         on_missing: fail
       - name: rejected_alternatives_and_tradeoffs
         type: string[]
@@ -887,7 +1377,7 @@ artifacts:
       - name: artifact_type
         type: enum
         required: true
-        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, test_result, review_result, qa_evaluation_result]
+        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
         validation: "Classifies the artifact without requiring prose parsing"
         on_missing: fail
       - name: producer
@@ -1517,6 +2007,267 @@ artifacts:
         condition: "provider_gate_state in [passed, failed]"
         validation: "Required nonblank, non-whitespace-only provider-neutral gate evidence when provider_gate_state is passed or failed; not required while not_evaluated."
 
+  - name: decision_map
+    type: object
+    required: conditional
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
+    description: "Canonical progressive Discover map that anchors the intended outcome and scope"
+    validation: "Contains target_outcome, scope_anchor, decision_item_refs, and deferred_uncertainty_refs; current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical decision_item.decision_id or deferred_uncertainty.uncertainty_id. This does not require exhaustive coverage of global historical typed entries: retired, excluded, or history entries may exist outside current refs, but each referenced entry resolves exactly once. During durable route-clear consumption or active/closed readiness, progressive_artifact_retention_state=retained keeps this canonical map so route_clear_handoff.decision_map_ref and loop_readiness_assessment.progressive_decision_map_ref remain resolvable. Only progressive_artifact_retention_state=terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify."
+    on_fail: "Return to progressive Discover, repair empty, duplicate, dangling, or partially resolvable current refs, and do not treat the route as clear or prepare bounded planning. Restore the retained canonical map before resumable continuation."
+    object_fields:
+      - name: target_outcome
+        type: string
+        required: true
+      - name: scope_anchor
+        type: string
+        required: true
+      - name: decision_item_refs
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Ordered unique refs; every ref resolves exactly once to a canonical decision_item.decision_id."
+      - name: deferred_uncertainty_refs
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Ordered unique refs; every ref resolves exactly once to a canonical deferred_uncertainty.uncertainty_id."
+
+  - name: decision_item
+    type: object[]
+    required: conditional
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
+    description: "Typed register item for a precise progressive Discover decision"
+    validation: "Contains interaction_mode, dependencies, and status. dependencies are ordered unique decision_id refs; every dependency resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. An eligible or active item requires every dependency status=resolved. Every item that has ever been activated sets activation_ordinal atomically on first activation; the ordinal remains positive, immutable, and unique across retained canonical decision-map history, including activation-marked items outside current-map refs, and is retained across resolved, blocked, superseded, or excluded status and compaction. Before second activation, ascending activation_ordinal values reconstruct the ordered unique activated_decision_item_refs. Never-activated items omit activation_ordinal. status=blocked additionally requires blocker_kind, blocker_reason, and unblock_condition. At most one status=active is allowed across the collection in every progressive state where decision items exist, including mapping. human_required items are not self-resolved."
+    on_fail: "Record the missing decision item fields, restore first-activation provenance before another activation, including typed blocker recovery state when blocked; keep at most one status=active across decision items, preserve unresolved work, and return to progressive Discover."
+    min_items: 1
+    object_fields:
+      - name: decision_id
+        type: string
+        required: true
+      - name: prompt
+        type: string
+        required: true
+      - name: interaction_mode
+        type: enum
+        required: true
+        enum_values: [agent_only, human_required, collaborative]
+        description: "agent_only is an agent-owned decision; human_required is a human/user-owned decision; collaborative is a joint agent+human/user contribution."
+        validation: "A collaborative item can reach status=resolved only through a decision_resolution with contributor_evidence containing both agent and human_or_user evidence; human_required retains human_confirmation_ref."
+      - name: dependencies
+        type: string[]
+        required: true
+        validation: "Ordered unique decision_id refs; every ref resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. An item is eligible or active only after every dependency has status=resolved; use an empty array when there are no dependencies."
+      - name: status
+        type: enum
+        required: true
+        enum_values: [pending, active, resolved, blocked, superseded, excluded]
+      - name: activation_ordinal
+        type: int
+        required: conditional
+        condition: "item has ever been activated"
+        validation: "Required as a positive ordinal set atomically on first activation; immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs. Retain it across resolved, blocked, superseded, or excluded status and compaction. Never-activated items omit it. Before second activation, ascending activation_ordinal values reconstruct exactly the ordered unique loop_readiness_assessment.activated_decision_item_refs."
+      - name: blocker_kind
+        type: enum
+        required: conditional
+        condition: "status == blocked"
+        enum_values: [missing_evidence, readiness_exhausted, external_dependency, human_input, tool_failure, policy_or_permission, other]
+        validation: "Classifies the blocked state without replacing the concrete blocker reason"
+      - name: blocker_reason
+        type: string
+        required: conditional
+        condition: "status == blocked"
+        validation: "Nonblank reason the decision cannot currently proceed"
+      - name: unblock_condition
+        type: string
+        required: conditional
+        condition: "status == blocked"
+        validation: "Concrete evidence, state change, approval, or dependency result required before retry"
+
+  - name: deferred_uncertainty
+    type: object[]
+    required: conditional
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
+    description: "Outcome-shaping uncertainty that cannot yet be stated as a decision item"
+    validation: "Contains unlock_condition and unlocking_decision_item_ref. Each ref resolves exactly once to canonical decision_item.decision_id. Every deferred uncertainty listed in current decision_map.deferred_uncertainty_refs names a predecessor listed in current decision_map.decision_item_refs. When status=unlocked, that predecessor has status=resolved and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. Every current-map retired/excluded deferred uncertainty predecessor has status in [resolved, superseded, excluded] and maps exactly once to an exact retained canonical decision_resolution.decision_item_ref. When status=unlocked, converted_decision_item_ref resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs. Precise, answerable questions cannot be hidden as deferred; they belong in decision_item or ordinary workflow clarification."
+    on_fail: "Add the typed predecessor ref, restore its canonical resolution before advancing the uncertainty, or move a precise question into decision_item or workflow clarification."
+    min_items: 1
+    object_fields:
+      - name: uncertainty_id
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: unlock_condition
+        type: string
+        required: true
+      - name: unlocking_decision_item_ref
+        type: string
+        required: true
+        validation: "Resolves exactly once to a canonical decision_item.decision_id. For status in [retired, excluded], its exact retained canonical decision_resolution permits predecessor status in [resolved, superseded, excluded]."
+      - name: status
+        type: enum
+        required: true
+        enum_values: [deferred, unlocked, retired, excluded]
+      - name: converted_decision_item_ref
+        type: string
+        required: conditional
+        condition: "status == unlocked"
+        validation: "Resolves exactly once to an actionable canonical decision_item.decision_id and appears exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs."
+
+  - name: decision_frontier
+    type: object
+    required: conditional
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [resolving, route_clear, blocked]"
+    description: "Current eligible, active, and blocked progressive decision state"
+    validation: "Computes eligible_item_refs, active_item_ref, and blocked_item_refs. eligible_item_refs and active_item_ref resolve only to decision_item entries whose dependencies each resolve exactly once to canonical decision_item.decision_id values with status=resolved. The blocked_item_refs resolve to decision_item entries carrying status=blocked, blocker_kind, blocker_reason, and unblock_condition. When progressive_discovery_state == blocked, blocked_item_refs is non-empty and resolves to at least one canonical status=blocked item. It allows at most one active item while multiple sequential resolutions per session are allowed."
+    on_fail: "Recompute the frontier, leave no more than one active item, and preserve each blocked item reference with its typed reason and unblock condition. If progressive_discovery_state is blocked, restore at least one canonical blocked item and its non-empty reference before resumption."
+    object_fields:
+      - name: computed_from
+        type: string[]
+        required: true
+        validation: "Refs to the decision items, deferred uncertainty, and resolutions used to compute this snapshot"
+      - name: eligible_item_refs
+        type: string[]
+        required: true
+      - name: active_item_ref
+        type: string
+        required: false
+      - name: blocked_item_refs
+        type: string[]
+        required: true
+        validation: "When progressive_discovery_state == blocked, this collection is non-empty and every ref resolves exactly once to a canonical decision_item with status=blocked, blocker_kind, blocker_reason, and unblock_condition. Empty is allowed only while the progressive state is not blocked and no item is blocked."
+
+  - name: decision_resolution
+    type: object[]
+    required: conditional
+    condition: "(uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state in [mapping, blocked] and (any decision_item has status=resolved or any current-map deferred_uncertainty has status in [retired, excluded])))) or (progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed]))"
+    description: "Canonical record of one resolved progressive decision"
+    validation: "Each resolved decision_item has exactly one decision_resolution via decision_item_ref. Each current-map retired/excluded deferred uncertainty predecessor retains exactly one canonical decision_resolution via decision_item_ref even when that predecessor status is superseded or excluded. With a mapping or blocked resolved item, or a current-map retired/excluded deferred uncertainty, collection is non-empty; it may be empty before first resolution only when neither trigger applies. Retain canonical history through route-clear consumption or active/closed readiness so loop_readiness_assessment.resolved_decision_item_refs resolve. human_confirmation_ref required for human_required decisions. contributor_evidence required for collaborative decisions before resolved status or route_clear."
+    on_fail: "Repair missing resolutions or invalid effect refs; retain prior history during mapping or if later blocked; restore it before continuation."
+    object_fields:
+      - name: decision_item_ref
+        type: string
+        required: true
+      - name: resolution
+        type: string
+        required: true
+      - name: evidence
+        type: string
+        required: true
+      - name: downstream_effects
+        type: string[]
+        required: true
+      - name: contributor_evidence
+        type: object[]
+        required: conditional
+        condition: "decision item interaction_mode == collaborative"
+        min_items: 2
+        validation: "Contains at least one agent and one human_or_user contribution, each with concrete evidence, before the collaborative decision is status=resolved or reaches route_clear."
+        object_fields:
+          - name: contributor_role
+            type: enum
+            required: true
+            enum_values: [agent, human_or_user]
+          - name: contribution
+            type: string
+            required: true
+          - name: evidence_ref
+            type: string
+            required: true
+      - name: human_confirmation_ref
+        type: string
+        required: conditional
+        condition: "decision item interaction_mode == human_required"
+        validation: "Actual user evidence reference required for human_required resolution; agents cannot self-resolve it"
+      - name: newly_precise_item_refs
+        type: string[]
+        required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs resolving exactly once to items not superseded or excluded."
+      - name: superseded_item_refs
+        type: string[]
+        required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs resolving exactly once to superseded items."
+
+  - name: route_clear_handoff
+    type: object
+    required: conditional
+    condition: "(uncertainty_shape == progressive and progressive_discovery_state == route_clear) or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed])"
+    description: "Compact progressive route-clear handoff used to prepare the bounded-Discover Requirement Acceptance Map"
+    validation: "Contains decision_map_ref, decisions, constraints, exclusions, acceptance_seed, consumption_state, and next_route=bounded_discover. At clearance, open_item_refs, blocked_item_refs, and remaining_deferred_uncertainty_refs are empty; retired_or_excluded_deferred_uncertainty_refs remains explicit. route_clear_handoff.decisions and exclusions exactly partition current decision_map.decision_item_refs: every current-map status=resolved decision appears exactly once through its canonical decision_resolution.decision_item_ref in decisions, and every current-map status=superseded or excluded decision appears exactly once in exclusions. decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. route_clear_handoff remains required while progressive_artifact_retention_state=retained and progressive_route_clear_consumption_state in [pending, consumed]. While pending, consumption_state=pending mirrors the marker and typed uncertainty_shape=progressive plus progressive_discovery_state=route_clear persists while the bounded-Discover Requirement Acceptance Map is prepared. consumption_state=consumed is valid only when requirement_acceptance_map.source_route_clear_handoff_ref resolves to this source handoff and this handoff's consumed_by_requirement_acceptance_map_ref resolves to that consuming map, forming reciprocal back-references rather than equal values. After bounded/not_applicable, retained keeps the consumed handoff and both reciprocal refs resolvable during active/resumable continuation. Only progressive_artifact_retention_state=terminally_archived permits their omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+    on_fail: "Return to progressive Discover and repair the retained handoff, map cross-reference, or carried-forward planning inputs before any bounded/not_applicable transition or resumable continuation."
+    object_fields:
+      - name: decision_map_ref
+        type: string
+        required: true
+      - name: decisions
+        type: string[]
+        required: true
+        validation: "Ordered unique canonical decision_resolution.decision_item_ref values. Covers every current decision_map.decision_item_refs whose canonical decision_item status=resolved exactly once. decisions is non-empty when any current-map decision has status=resolved and empty only when every current-map decision is superseded or excluded. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions."
+      - name: constraints
+        type: string[]
+        required: true
+      - name: exclusions
+        type: string[]
+        required: true
+        validation: "Ordered unique canonical decision_item.decision_id refs. Covers every current decision_map.decision_item_refs whose canonical decision_item status is superseded or excluded exactly once."
+      - name: acceptance_seed
+        type: string[]
+        required: true
+      - name: consumption_state
+        type: enum
+        required: true
+        enum_values: [pending, consumed]
+        validation: "pending mirrors progressive_route_clear_consumption_state=pending while typed progressive route_clear prepares the bounded-Discover Requirement Acceptance Map; consumed requires reciprocal map consumption and progressive_route_clear_consumption_state=consumed before the atomic transition to bounded/not_applicable"
+      - name: consumed_by_requirement_acceptance_map_ref
+        type: string
+        required: conditional
+        condition: "consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        validation: "Resolves to the consuming Requirement Acceptance Map, whose source_route_clear_handoff_ref resolves to this source route_clear_handoff; together they validate the reciprocal back-reference rather than equal values"
+      - name: open_item_refs
+        type: string[]
+        required: true
+      - name: blocked_item_refs
+        type: string[]
+        required: true
+      - name: remaining_deferred_uncertainty_refs
+        type: string[]
+        required: true
+      - name: retired_or_excluded_deferred_uncertainty_refs
+        type: string[]
+        required: true
+        validation: "Ordered unique refs resolving exactly once to current decision_map.deferred_uncertainty entries. Exactly covers every and only current decision_map deferred uncertainty with status retired or excluded; empty if and only if none have either status."
+      - name: next_route
+        type: enum
+        required: true
+        enum_values: [bounded_discover]
+
+  - name: progressive_terminal_archival
+    type: object
+    required: conditional
+    condition: "progressive_artifact_retention_state == terminally_archived"
+    description: "Durable terminal tombstone that authorizes release of retained progressive artifacts for one task and decision map"
+    validation: "Binds current_task_identity and final_progressive_decision_map_ref to the same terminally archived task/map, records a typed final archival or termination basis, and has one or more resolvable evidence_refs proving continuation and reference resolution are impossible. Missing, dangling, or mismatched evidence fails closed and cannot release the retained chain."
+    on_fail: "Restore progressive_artifact_retention_state=retained and the canonical reference chain; do not archive until the typed tombstone resolves every required identity and evidence ref."
+    object_fields:
+      - name: current_task_identity
+        type: string
+        required: true
+        validation: "Matches the current task identity exactly"
+      - name: final_progressive_decision_map_ref
+        type: string
+        required: true
+        validation: "Matches the final retained progressive decision_map identity exactly"
+      - name: final_archival_or_termination_basis
+        type: enum
+        required: true
+        enum_values: [task_terminated, archival_irrecoverable]
+      - name: evidence_refs
+        type: string[]
+        required: true
+        min_items: 1
+        validation: "Each ref resolves and proves continuation and reference resolution are impossible"
+
   - name: metrics_entry
     type: jsonl_line
     required: false
@@ -1660,15 +2411,25 @@ artifacts:
   - name: loop_readiness_assessment
     type: object
     required: conditional
-    condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates"
-    description: "Pre-loop gate for repeat/optimization loops; not required for one-pass work or the normal required review loop."
-    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    on_fail: "Before running the repeat/optimization loop, add the readiness assessment or remove the loop from the plan. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
+    condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])"
+    description: "Pre-loop/readiness gate for repeat/optimization loops and sequential progressive resolution; not required for one-pass work or the normal required review loop."
+    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. For loop_type == progressive_decision_sequence, set progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically before the second activation; one stable readiness_assessment_id and progressive_decision_map_ref identify the sequence; max_iterations is immutable; cumulative_activation_count equals the ordered unique append-only activated_decision_item_refs including the first activation; resolved_decision_item_refs are ordered unique subset entries and contain every activated ref whose canonical decision_item.status=resolved; and each such ref maps exactly once to decision_resolution.decision_item_ref. While active, retain that record through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, progressive_artifact_retention_state=retained keeps the same record while the task remains active/resumable or compacts. Only progressive_artifact_retention_state=terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Closed cannot reopen or reset the same decision-map record. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
+    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. For progressive_decision_sequence, preserve the stable identity and cumulative history while active through durable route-clear consumption and after closed while progressive_artifact_retention_state=retained. Permit omission only after the explicit final archival/termination transition to terminally_archived. When count equals max_iterations or evidence is inconsistent, fail closed to blocked/escalation. Do not reopen or reset a closed sequence. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
     object_fields:
       - name: loop_type
         type: enum
         required: true
-        enum_values: [repeat, optimization, experiment]
+        enum_values: [repeat, optimization, experiment, progressive_decision_sequence]
+      - name: readiness_assessment_id
+        type: string
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Stable identity for one progressive decision map across continuation, compaction, and redispatch"
+      - name: progressive_decision_map_ref
+        type: string
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Canonical decision_map reference paired with readiness_assessment_id"
       - name: loop_trigger
         type: string
         required: true
@@ -1689,7 +2450,23 @@ artifacts:
       - name: max_iterations
         type: int
         required: true
-        validation: "Positive finite cap"
+        validation: "Positive finite cap; immutable for one readiness_assessment_id and progressive_decision_map_ref pair when loop_type == progressive_decision_sequence"
+      - name: cumulative_activation_count
+        type: int
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Equals the number of ordered unique append-only activated_decision_item_refs, including the first activation; never decreases or resets across continuation or compaction"
+      - name: activated_decision_item_refs
+        type: string[]
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        min_items: 1
+        validation: "Ordered unique append-only decision_item refs; another activation atomically appends one ref and increments cumulative_activation_count only while the count is below max_iterations"
+      - name: resolved_decision_item_refs
+        type: string[]
+        required: conditional
+        condition: "loop_type == progressive_decision_sequence"
+        validation: "Ordered unique subset of activated_decision_item_refs. Every activated_decision_item_ref whose canonical decision_item.status=resolved appears in resolved_decision_item_refs and maps exactly once to canonical decision_resolution.decision_item_ref"
       - name: budget_limit
         type: string
         required: true
@@ -1756,11 +2533,11 @@ artifacts:
 # 1. All required artifacts for the task's completion_tier are present and controller_intensity matches the selected tier
 # 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
 # 3. When size is medium/large/mega or risk_tier is high/critical: spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts
+# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts, plus architecture_decision_pack_review_ref and its exact canonical contract when a Pack applies
 # 5. If qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
 # 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
-# 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
+# 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops or a second/sequential progressive decision activation and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
 # 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
 # 10. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
 # 11. manual_verification_result exists only when manual_verification_mode=required; user_approval exists only when that scoped check depends on user observation. Metrics never block completion.

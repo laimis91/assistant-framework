@@ -95,6 +95,34 @@ artifacts:
         required: true
         validation: "Must be true at TDD completion"
 
+  - name: architecture_obligation_coverage
+    type: object[]
+    required: conditional
+    condition: "architecture_test_obligations is non-empty"
+    description: "Evidence that each carried Architecture Decision Pack obligation was tested or explicitly remains blocked/unknown"
+    min_items: 1
+    validation: "Each input architecture_test_obligations obligation is represented exactly once by obligation_id; no coverage entry has an unknown or duplicate id. Each entry cites the Pack reference, obligation, test or verification evidence, and outcome. Quality claims cannot be marked proven without workload, budget/explicit unknown, measurement method, and failure condition. Design-pressure claims require evidence for control/early exit, ownership/disposal, bounded resources, extension registration, or a representative path when applicable."
+    on_fail: "Add a focused RED/GREEN test or record the explicit measurement/blocker gap before TDD completion"
+    object_fields:
+      - name: obligation_id
+        type: string
+        required: true
+        validation: "Matches exactly one input architecture_test_obligations.obligation_id"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: true
+      - name: obligation_kind
+        type: enum
+        required: true
+        enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+      - name: evidence
+        type: string
+        required: true
+      - name: outcome
+        type: enum
+        required: true
+        enum_values: [covered, blocked, explicit_unknown]
+
   - name: task_journal_entry
     type: string
     required: true
@@ -107,3 +135,4 @@ artifacts:
 # 2. Every cycle has verified_failing=true (RED), test_passes=true (GREEN), all_tests_pass=true (REFACTOR)
 # 3. No production code exists without a preceding failing test
 # 4. coverage_summary.all_passing is true
+# 5. If architecture_test_obligations are carried, every unique obligation_id has exactly one architecture_obligation_coverage entry with evidence or an explicit blocker/unknown; no coverage id is unknown or duplicated

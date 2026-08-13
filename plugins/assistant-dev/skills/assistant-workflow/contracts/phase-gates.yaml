@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "4.0"
+schema_version: "8.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -70,6 +70,10 @@ gates:
         check: "plan_mode=none is used only for trivial localized reversible low-risk work with an obvious path and verification; inline is used only for bounded small no-approval work; approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests"
         on_fail: "Promote plan_mode to inline or approval_required. Do not skip Plan when size, risk, uncertainty, policy, or user intent requires it."
 
+      - id: T_ARCHITECTURE_DESIGN_MODE
+        check: "architecture_design_mode is not_applicable, lightweight, required, or review_intensive and has concrete trigger evidence; not_applicable records why no boundary, lifecycle, public contract, resource target, extension seam, or viable design choice needs a pack; size alone is not a trigger"
+        on_fail: "Load references/architecture-decision-pack.md, inspect the candidate scope scan, select the proportional architecture design mode, and record trigger reasons or a concrete not-applicable reason."
+
       - id: T6
         check: "required_gates includes common gates plus every applicable task-category gate pack"
         on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
@@ -116,8 +120,8 @@ gates:
         on_fail: "Write a requirements summary before proceeding"
 
       - id: D_REQUIREMENT_ACCEPTANCE_MAP
-        check: "For medium+ work, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
-        condition: "size in [medium, large, mega]"
+        check: "For medium+ work, small required/review_intensive architecture work, or progressive_route_clear_consumption_state=consumed with progressive_artifact_retention_state=retained, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
+        condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
         on_fail: "Load references/requirement-acceptance-map.md, map every accepted requirement, resolve material questions, and do not decompose from an untraceable criteria list"
 
       - id: D1A
@@ -141,22 +145,52 @@ gates:
         on_fail: "Create or update the orchestrator-owned {agent_state_dir}/task.md state artifact when a local state directory is configured and policy allows it; otherwise include Clarification status, defaults applied, and unresolved topics in the response before printing the clarification wait message or continuing"
 
       - id: D4A
-        check: "Clarification question cap is treated as a maximum, not a quota; clear medium+ tasks may complete Discover with zero questions when confidence is high"
-        on_fail: "Do not ask ritual questions. Record questions_asked=0, clarification_confidence=high, and clarification_admissibility=not_applicable or satisfied when prompt plus code/context are sufficient."
+        check: "Clarification has no numeric cap or quota; clear tasks may complete Discover with zero questions, while every admissible material question is grouped by topic and asked before planning"
+        on_fail: "Do not ask ritual questions or suppress material ones. Record questions_asked=0 with high confidence when source/context is sufficient; otherwise group and ask every admissible unresolved decision."
 
       - id: D4B
         check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
+
+      - id: D_PROGRESSIVE_DISCOVERY_HOLD
+        check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
+        condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+        on_fail: "Return to progressive Discover, preserve the typed decision and handoff state, use only the framework-owned journal/equivalent carried-state update needed to record it, and do not execute or prepare a mutating prerequisite outside a separate approved workflow with returned evidence."
+
+      - id: D_PROGRESSIVE_REPEAT_READINESS
+        check: "Before every second/subsequent progressive decision activation after any prior activation, atomically set progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained with loop_readiness_assessment using loop_type=progressive_decision_sequence with stable readiness_assessment_id and progressive_decision_map_ref; immutable finite max_iterations; cumulative_activation_count matching ordered unique append-only activated_decision_item_refs including the first activation; prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved; resolved_decision_item_refs linked exactly once to canonical decision_resolution; budget_limit; route-clear, cap, stagnation, or failure stop conditions; unchanged frontier/no-progress detection; retry_or_empty_result_handling; tool_error_handling; low_confidence_escalation; and existing journal/equivalent state tracking. While active, retain that record through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, retained keeps the same record while the task remains active/resumable or compacts. Only terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Before another activation count must be below max_iterations; equality or inconsistency ends in blocked/escalation. Closed cannot reopen or reset the same decision map."
+        condition: "(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])"
+        on_fail: "Keep the next item inactive and record or repair the retained loop_readiness_assessment without resetting identity, cap, or history. If the exhausted route persists progressive_discovery_state=blocked, set the proposed/current item status=blocked with blocker_kind=readiness_exhausted, blocker_reason, and unblock_condition, and include it in non-empty blocked_item_refs; otherwise escalate."
+
+      - id: D_PROGRESSIVE_ROUTE_CLEAR
+        check: "When progressive_discovery_state == route_clear, route clear proves no open/blocked items and no remaining deferred uncertainty except retired/excluded entries. A retired/excluded uncertainty must retain an exact canonical decision_resolution for a current predecessor now status=resolved, superseded, or excluded, so a legitimate all-excluded route remains concrete. route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs is ordered unique, resolves exactly once, and exactly covers every current decision_map deferred uncertainty with status retired/excluded; it is empty if and only if none exist. Empty, duplicate, dangling, or partially resolvable current map refs cannot reach route_clear, bounded planning, Decompose, Plan, or Build; wrong-status refs also fail closed. route_clear_handoff.decisions contains every current-map status=resolved decision exactly once through canonical decision_resolution.decision_item_ref values, while every current-map status=superseded or excluded decision appears exactly once in exclusions; decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. route_clear_handoff.next_route is bounded_discover and consumption_state=pending mirrors progressive_route_clear_consumption_state=pending while progressive_artifact_retention_state=retained, typed progressive route_clear persists, and the bounded-Discover Requirement Acceptance Map is prepared from its decisions, constraints, exclusions, retired_or_excluded_deferred_uncertainty_refs, and acceptance_seed. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. The map source_route_clear_handoff_ref resolves to the source handoff and its consumed_by_requirement_acceptance_map_ref resolves back to the consuming map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained. After consumed map transition, retired_or_excluded_deferred_uncertainty_traces binds every source retired/excluded uncertainty ref exactly once to a concrete non_goal or approved_exclusion target_ref; pending route-clear alone is insufficient. Record consumption_state=consumed and progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable; route_clear_handoff remains required while progressive_route_clear_consumption_state in [pending, consumed] and progressive_artifact_retention_state=retained, and both reciprocal refs remain resolvable during active/resumable continuation so the normal Requirement Acceptance Map and current gates still run."
+        condition: "uncertainty_shape == progressive and progressive_discovery_state == route_clear"
+        on_fail: "Return to progressive Discover, resolve or explicitly retire/exclude remaining state, repair the pending route_clear_handoff or matching Requirement Acceptance Map reference, and do not transition to bounded/not_applicable or enter Decompose, Plan, or Build before durable consumption."
+
+      - id: D_ALL_EXCLUDED_REQUIREMENT_MAP
+        check: "When a consumed route-clear Requirement Acceptance Map has entries=[], source route_clear_handoff.decisions and acceptance_seed are both empty, no accepted requirement exists, and every excluded or retired source item is traced exactly once to a concrete non_goals or approved-exclusion target; otherwise entries is non-empty and every acceptance seed is an acceptance criterion."
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state == retained"
+        on_fail: "Repair exact route-clear lineage or add the missing accepted requirement entries; never fabricate an acceptance entry for the legitimate all-excluded route."
 
       - id: D_CONTEXT_BUDGET
         check: "For medium+ tasks or large material: context_budget_note records exact/pinned, summarized, omitted/deferred, and split/delegation plan"
         condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
+      - id: D_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios with stable identity and verified evidence, selected design with unique selected alternative binding when alternatives exist, verification, invalidation conditions, and handoff refs. Discover starts handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs while downstream targets do not yet exist. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
+
+      - id: D_ARCHITECTURE_PACK_NO_PLAN_BINDING
+        check: "atomically sets handoff_binding_state=downstream_bound with compact inline task-packet/execution and inline review-scope refs before Discover exits to Build."
+        condition: "plan_mode == none and architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Record both inline refs before Build."
+
       - id: D5
-        check: "For medium+ tasks: context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Dispatch Code Mapper or perform local mapping, then persist the context map to {agent_state_dir}/context-map.md when allowed; otherwise carry the context map content forward in the plan packet"
+        check: "When the candidate scope scan cannot resolve relevant files/boundaries directly or architecture_design_mode != not_applicable: a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Perform local mapping or dispatch Code Mapper only when routing permits, then persist the compact map to {agent_state_dir}/context-map.md when allowed; otherwise carry it forward in the plan packet"
 
       - id: D7
         check: "constraints list is captured (may be empty, but must be explicitly set)"
@@ -167,14 +201,14 @@ gates:
         on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
 
       - id: D8
-        check: "For medium+ tasks: context map was produced by Code Mapper subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent evidence"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Produce a context map using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
+        check: "When a context map is required: it was produced by Code Mapper only when delegated mapping is selected, or produced directly with equivalent local evidence"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Produce a compact context map directly or with an explicitly selected delegated mapper; record the evidence and routing path without inventing an automatic role"
 
       - id: D8A
-        check: "For medium+ tasks: context map includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces, or explicit not-applicable/deferred reasons"
-        condition: "size in [medium, large, mega]"
-        on_fail: "Re-dispatch Code Mapper or complete direct-fallback mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
+        check: "When a context map is required: it includes references_checked covering behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces, or explicit not-applicable/deferred reasons"
+        condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
+        on_fail: "Complete direct or delegated mapping with references_checked before leaving Discover. Do not leave relevant references implicit."
 
       - id: D_REUSE_SEARCH
         check: "For rule-like changes involving business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details: reuse_search records bounded existing-capability searches before implementation, then candidates or no_candidate_reason, decision, and rationale. not_applicable records a concrete reason without search ceremony."
@@ -182,16 +216,16 @@ gates:
         on_fail: "Search the accepted task area before implementation, record the reuse_search result in the context map and task packet, or record a concrete not_applicable reason. Do not substitute candidate_search for this bounded capability check."
 
       - id: D9
-        check: "For large+ tasks: execution paths were traced by Explorer subagent when subagent_execution_mode=delegated, or traced directly in fallback mode with equivalent evidence"
-        condition: "size in [large, mega]"
-        on_fail: "Trace execution paths using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
+        check: "When an unresolved lifecycle, failure, coupling, or behavior question remains after mapping: execution paths were traced by Explorer only when delegated analysis is selected, or traced directly with equivalent evidence"
+        condition: "unresolved lifecycle, failure, coupling, or behavior question remains after mapping"
+        on_fail: "Trace the specific execution path directly or with explicitly selected delegation; record the evidence and stop once the current decision is resolved"
 
     guidance_assertions:
 
       - id: D6
         severity: guidance
         check: "For medium+ tasks: agent readiness score was assessed and printed when subagent routing is uncertain"
-        condition: "size in [medium, large, mega]"
+        condition: "size in [medium, large, mega] or architecture_design_mode in [required, review_intensive]"
         on_fail: "Run agent readiness check when delegation choice is material; otherwise record direct execution/fallback rationale"
 
   # ─────────────────────────────────────────────
@@ -262,6 +296,11 @@ gates:
       - id: P_ARTIFACT_CONTRACT
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
+
+      - id: P_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive and plan_mode!=none: Plan references the current Architecture Decision Pack, atomically sets handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref before Build, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets."
 
       - id: P_DONE_CONTRACT
         check: "For medium+ harness-capable work: accepted Done Contract exists before Build with done_when, not_done_when, verification, owner/consumer, acceptance_criteria, and debate_record with at least two perspectives; delegated mode uses subagent perspectives when available"
@@ -449,6 +488,16 @@ gates:
         check: "When workflow_state_mode is journal, the task journal is current; when inline, the carried-forward packet contains progress and evidence for completed steps"
         on_fail: "Update the selected state surface without creating a task journal solely because the task is medium+."
 
+      - id: B_ARCHITECTURE_PACK_ALIGNMENT
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: Build requires handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref. When plan_mode=none, the pre-Build boundary atomically sets those refs to compact inline task-packet/execution and inline review-scope refs before any Build action. Build preserves the current Architecture Decision Pack boundary ownership, semantic type commitments or primitive exceptions, public compatibility strategy, and quality verification; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Stop the affected Build step, clear stale downstream refs, refresh the Architecture Decision Pack, re-plan and obtain reapproval before implementing a changed design."
+
+      - id: B_ARCHITECTURE_TDD_OBLIGATION_COVERAGE
+        check: "When tdd_mode is true and an Architecture Decision Pack applies, the selected Build owner returns architecture_obligation_coverage that represents each carried architecture_test_obligations obligation exactly once by stable obligation_id, with no unknown or duplicate coverage id and evidence/outcome for every entry."
+        condition: "tdd_mode is true and architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Return to the selected Build owner with the typed Pack obligations, record missing RED/GREEN or explicit blocker evidence, and do not enter Review with partial, duplicate, or unknown coverage."
+
       - id: B12
         check: "For medium+ tasks: every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
         condition: "size in [medium, large, mega]"
@@ -528,14 +577,14 @@ gates:
         on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
-        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs"
+        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs, and an applicable Pack also records architecture_decision_pack_review_ref"
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow."
+        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow, including architecture_decision_pack_review_ref when a Pack applies."
 
       - id: R_LIGHT_FRESH_REVIEW
-        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence"
+        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
         condition: "controller_intensity == light"
-        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence."
+        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary and architecture_decision_pack_review refs; do not require review_delegation_path for light direct fallback."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
         check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
@@ -552,14 +601,19 @@ gates:
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
-        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, and validation_status=validated; developer handoff creation remains in Document"
+        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, conditional architecture_decision_pack_review_ref with architecture_decision_pack_review_contract=assistant-review/contracts/output.yaml#architecture_decision_pack_review, and validation_status=validated; developer handoff creation remains in Document"
         condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
-        on_fail: "Complete assistant-review, validate its canonical result and delegation-path artifacts, record workflow refs, then continue to Document for developer handoff creation"
+        on_fail: "Complete assistant-review, validate its canonical result, delegation-path, and applicable Pack-review artifacts, record workflow refs, then continue to Document for developer handoff creation"
 
       - id: R_REQUIREMENT_COVERAGE
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
-        condition: "size in [medium, large, mega]"
+        condition: "size in [medium, large, mega] or architecture_design_mode in [required, review_intensive]"
         on_fail: "Use references/requirement-acceptance-map.md to run missing verification, repair failed behavior, or obtain explicit approval for an exclusion; do not infer coverage from aggregate test success"
+
+      - id: R_ARCHITECTURE_DECISION_PACK
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario stable identity and verification evidence, selected-alternative identity/binding, and scope propagation; review_intensive includes independent challenge evidence, and the applicable workflow review wrapper retains architecture_decision_pack_review_ref."
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        on_fail: "Provide the current pack and changed scope to assistant-review, run the Architecture Decision Pack Review Checklist, fix concrete findings, refresh validation, and retain architecture_decision_pack_review_ref before Document."
 
       - id: R3A
         check: "For bugfixes, review material includes reproduction/root-cause evidence or an explicit not_applicable/blocker rationale, and verifies that regression coverage follows from that evidence"
@@ -682,3 +736,99 @@ invariants:
     check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
+
+  - id: INV_ARCHITECTURE_PACK_FRESHNESS
+    check: "When architecture_design_mode is not not_applicable, the Architecture Decision Pack remains tied to the current repository revision or stated greenfield basis. A changed HEAD, requirement, public contract, quality target, or contradictory source fact invalidates and refreshes the pack before Build or Review relies on it."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Return to Discover or Plan, refresh the Architecture Decision Pack with current source evidence and invalidation state, then reapprove if the selected design, scope, behavior, risk, or verification changed."
+
+  - id: INV_ARCHITECTURE_PACK_HANDOFF_BINDING
+    check: "Architecture Decision Packs use handoff_binding_state=discover_only with context_or_journal_ref only during Discover; Plan atomically binds plan_or_task_packet_ref and review_scope_ref as downstream_bound before Build when plan_mode!=none; when plan_mode=none, the pre-Build boundary atomically binds compact inline task-packet/execution and inline review-scope refs before any Build action; Build, Review, and completion retain downstream_bound; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Stop downstream work, clear stale refs, refresh the Pack, re-plan and reapprove the bound refs before Build, Review, or completion continues."
+
+  - id: INV_SEMANTIC_TYPE_BOUNDARIES
+    check: "When the Architecture Decision Pack introduces or changes a domain/public/lifecycle/unit/validation/ownership/extension concept, its Type Ledger uses a semantic type or records a concrete primitive exception with an owned conversion/validation boundary. Public or serialized changes retain compatibility/versioning/adapters and rollback evidence."
+    condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+    scope: all_phases
+    on_fail: "Repair the Type Ledger and affected interface/task packet before implementation; do not hide domain meaning in unexplained generic primitives or introduce wrapper-only types without an owned semantic boundary."
+
+  - id: INV_PROGRESSIVE_DISCOVERY_BOUNDARY
+    check: "Progressive mapping, resolving, route_clear, or blocked state remains in Discover and is a no-execution boundary: no Decompose, Plan, Build, project/source mutation, external writes, branch creation, or credential-location recording occurs. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    scope: all_phases
+    on_fail: "Return to progressive Discover, preserve the typed decision and handoff state, use only the framework-owned journal/equivalent carried-state update needed to record it, and run any mutating prerequisite as a separate approved workflow that returns evidence before this workflow can consume it."
+
+  - id: INV_PROGRESSIVE_SINGLE_ACTIVE
+    check: "Ensures that at most one decision item is active in every progressive state where decision items exist, including mapping; use decision-item statuses when no decision_frontier snapshot exists, and the recomputed decision_frontier enforces the same limit once it exists. Sequential resolutions may continue in the same session only after each recomputation."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    scope: all_phases
+    on_fail: "Keep at most one decision-item status=active; use decision-item statuses during mapping and, when a decision_frontier snapshot exists, recompute it and preserve the unresolved and blocked refs. Do not require a decision_frontier during mapping."
+
+  - id: INV_PROGRESSIVE_DEPENDENCY_ORDER
+    check: "Every decision_item.dependencies collection is ordered unique and each ref resolves exactly once to another canonical decision_item.decision_id; no self dependency or circular dependency is allowed. A decision is eligible or active only after every dependency has status=resolved, so decision_frontier cannot select a dependent prematurely."
+    condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
+    scope: all_phases
+    on_fail: "Keep the dependent pending or blocked, repair dangling/self/cyclic dependency refs, and recompute the frontier only after every predecessor is resolved."
+
+  - id: INV_PROGRESSIVE_ACTIVATION_PROVENANCE
+    check: "Every decision item that has ever been activated records a positive activation_ordinal atomically on first activation and retains that immutable ordinal across resolved, blocked, superseded, or excluded status and compaction; never-activated items omit it. Ordinals are unique across retained canonical decision-map history, including activation-marked items outside current-map refs. Before the second activation, ascending ordinals reconstruct exactly the ordered unique activated_decision_item_refs, preserving the first activation even when its current status no longer proves it was active."
+    condition: "uncertainty_shape == progressive"
+    scope: all_phases
+    on_fail: "Do not activate another item. Restore the first activation ordinal and every later immutable ordinal on the canonical decision items, then reconstruct activated_decision_item_refs before the second proposal."
+
+  - id: INV_PROGRESSIVE_REPEAT_READINESS
+    check: "One active item and multiple sequential resolutions remain allowed, but every second/subsequent activation after any prior activation atomically sets progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained with a ready loop_readiness_assessment with loop_type=progressive_decision_sequence, stable readiness_assessment_id and progressive_decision_map_ref, immutable finite max_iterations, cumulative_activation_count matching ordered unique append-only activated_decision_item_refs reconstructed from ascending activation_ordinal values and including the first activation. Prior activated items may be resolved, superseded, or excluded while cumulative activated refs remain append-only; superseded/excluded refs are not classified as resolved; resolved_decision_item_refs link exactly once to canonical decision_resolution. While active, retain that record through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, retained keeps the same record while the task remains active/resumable or compacts. Only terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Another activation atomically appends/increments only below the cap with budget_limit, route-clear, cap, stagnation, or failure stop conditions, unchanged frontier/no-progress detection, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, and existing journal/equivalent state tracking; equality or inconsistency fails closed to blocked/escalation. Closed cannot reopen or reset the same decision map."
+    condition: "(uncertainty_shape == progressive and a second/subsequent decision activation is proposed after any prior activation) or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])"
+    scope: all_phases
+    on_fail: "Do not activate another item. Preserve the stable identity, immutable cap, and cumulative history while active through durable route-clear consumption and after closed while progressive_artifact_retention_state=retained. Permit omission only after the explicit final archival/termination transition to terminally_archived. Record bounded readiness evidence or route to blocked/escalation; never reset the cap or treat an unchanged frontier as progress."
+
+  - id: INV_PROGRESSIVE_HUMAN_EVIDENCE
+    check: "A human_required decision cannot self-resolve: its decision_resolution has actual user evidence at human_confirmation_ref before it is marked resolved."
+    condition: "uncertainty_shape == progressive"
+    scope: all_phases
+    on_fail: "Keep the decision unresolved, request or record actual user evidence, and do not manufacture human confirmation."
+
+  - id: INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE
+    check: "A collaborative decision is a joint agent+human/user contribution. Before status=resolved or route_clear, its canonical decision_resolution has contributor_evidence with at least one agent and one human_or_user contribution, each with a concrete evidence_ref. human_required decisions retain their separate human_confirmation_ref requirement."
+    condition: "uncertainty_shape == progressive"
+    scope: all_phases
+    on_fail: "Keep the collaborative decision unresolved and outside route_clear, request or record the missing typed contributor evidence, and do not substitute an agent-only result for human/user participation."
+
+  - id: INV_PROGRESSIVE_BLOCKED_RECOVERY
+    check: "When progressive_discovery_state=blocked, at least one canonical decision_item has status=blocked and decision_frontier.blocked_item_refs is non-empty. Every decision_item status=blocked records blocker_kind, blocker_reason, and unblock_condition. Every blocked_item_refs entry resolves exactly once to a status=blocked item, and every status=blocked item is referenced so recovery knows why it stopped and what must change before retry."
+    condition: "uncertainty_shape == progressive and (progressive_discovery_state == blocked or (progressive_discovery_state in [resolving, route_clear] and any decision_item has status=blocked))"
+    scope: all_phases
+    on_fail: "Keep or mark the current/proposed item blocked, record its typed reason and concrete unblock condition, repair non-empty blocked_item_refs, and do not retry or advance until the condition is evidenced. Use blocker_kind=readiness_exhausted when the sequence cap, stagnation, failure, or evidence route caused the blocked state."
+
+  - id: INV_PROGRESSIVE_RECOMPUTATION
+    check: "Before recomputing the frontier, each decision_resolution records downstream effects, newly precise items, superseded/invalidated items, and effect refs; when a mapping item becomes resolved, retain that canonical decision_resolution with evidence and effects before dependent eligibility; every unlocked deferred_uncertainty has converted_decision_item_ref resolving exactly once to an actionable canonical decision_item and appearing exactly once in the unlocking predecessor decision_resolution.newly_precise_item_refs; newly_precise_item_refs and superseded_item_refs meet their ordered-unique canonical field validations."
+    condition: "uncertainty_shape == progressive and (progressive_discovery_state in [resolving, route_clear] or (progressive_discovery_state == mapping and any decision_item has status=resolved))"
+    scope: all_phases
+    on_fail: "Repair missing mapping-time or later resolutions, duplicate, dangling, or status-misclassified effects/refs, then recompute the frontier."
+
+  - id: INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE
+    check: "When durable markers are pending or consumed, or active or closed, progressive_artifact_retention_state must be retained unless a valid terminally_archived transition has occurred; not_applicable or missing state fails closed and never releases an artifact. terminally_archived is valid only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable after progressive_terminal_archival is already present before the state is persisted or resumed. The tombstone carries explicit final archival/termination evidence proving continuation and reference resolution are impossible, binds exact current_task_identity and final_progressive_decision_map_ref, typed final archival/termination basis, and resolvable evidence_refs. It is invalid while route-clear consumption is pending or sequence readiness is active. Task state: completed, consumed route clearance, closed readiness, or compaction alone is insufficient evidence. terminally_archived is terminal for the same task and decision map and cannot revert to retained."
+    condition: "progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed] or progressive_artifact_retention_state == terminally_archived"
+    scope: all_phases
+    on_fail: "Set or restore progressive_artifact_retention_state=retained and every required durable artifact before continuation. Reject terminally_archived unless a complete progressive_terminal_archival tombstone is already present and it atomically sets uncertainty_shape=bounded and progressive_discovery_state=not_applicable; never infer archival from completion, consumption, closure, compaction, or generic evidence alone, and never revert a valid terminal state."
+
+  - id: INV_PROGRESSIVE_TERMINAL_ARCHIVAL
+    check: "When progressive_artifact_retention_state=terminally_archived, progressive_terminal_archival is present and binds current_task_identity, final_progressive_decision_map_ref, typed final_archival_or_termination_basis, and one or more resolvable evidence_refs proving continuation and reference resolution are impossible. Every identity and evidence ref matches the current task and final map exactly; missing, dangling, or mismatched tombstone evidence fails closed and cannot release the retained chain."
+    condition: "progressive_artifact_retention_state == terminally_archived"
+    scope: all_phases
+    on_fail: "Restore retained progressive artifacts and progressive_artifact_retention_state=retained until a complete typed terminal tombstone is recorded; never infer it from task completion, route consumption, readiness closure, or compaction."
+
+  - id: INV_PROGRESSIVE_ROUTE_CLEAR
+    check: "When progressive_route_clear_consumption_state=pending, route_clear requires progressive_artifact_retention_state=retained, no open/blocked items, and no remaining deferred uncertainty except retired/excluded entries. Each current-map retired/excluded deferred uncertainty must retain its exact canonical predecessor decision_resolution even when that predecessor is superseded or excluded. route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs is ordered unique, resolves exactly once, and exactly covers every current decision_map deferred uncertainty with status retired/excluded; it is empty if and only if none exist. Empty, duplicate, dangling, or partially resolvable current map refs cannot reach route_clear, bounded planning, Decompose, Plan, or Build; wrong-status refs also fail closed. route_clear_handoff.decisions contains every current-map status=resolved decision exactly once through canonical decision_resolution.decision_item_ref values, while every current-map status=superseded or excluded decision appears exactly once in exclusions; decisions is non-empty when any current-map decision has status=resolved and empty only for a legitimate all-excluded route. Retained historical resolutions for current-map superseded or excluded items are lineage evidence only and do not appear in decisions. route_clear_handoff.next_route is bounded_discover and consumption_state=pending mirrors the typed marker while the handoff prepares the Requirement Acceptance Map from its decisions, constraints, exclusions, retired_or_excluded_deferred_uncertainty_refs, and acceptance_seed. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending. Its source_route_clear_handoff_ref resolves to the source handoff and that handoff's consumed_by_requirement_acceptance_map_ref resolves back to the consuming map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained, and retired_or_excluded_deferred_uncertainty_traces binds every source retired/excluded uncertainty ref exactly once to a concrete non_goal or approved_exclusion target_ref; pending route-clear alone is insufficient. Reciprocal map consumption records progressive_route_clear_consumption_state=consumed before the atomic typed-state transition to bounded/not_applicable; route_clear_handoff and both reciprocal refs remain required while progressive_artifact_retention_state=retained during active/resumable continuation."
+    condition: "progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state in [pending, consumed]"
+    scope: all_phases
+    on_fail: "Return to progressive Discover, repair unresolved/deferred refs or the handoff/map cross-reference, and do not enter bounded/not_applicable state or Decompose, Plan, or Build until durable consumption."
+
+  - id: INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN
+    check: "While progressive_artifact_retention_state=retained and either progressive_route_clear_consumption_state is pending or consumed, or progressive_sequence_readiness_state is active or closed, preserve the retained canonical reference chain: decision_map; every referenced decision_item and deferred_uncertainty; every canonical decision_resolution for a resolved item; and every exact retained predecessor decision_resolution required by a current-map retired/excluded deferred uncertainty. route_clear_handoff.decision_map_ref and loop_readiness_assessment references must resolve to those retained canonical artifacts throughout active/resumable continuation or compaction. decision_frontier remains transient after live progressive state ends. Only progressive_artifact_retention_state=terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible. Task state: completed does not qualify; terminally_archived is invalid with pending route consumption or active readiness and cannot revert."
+    condition: "progressive_artifact_retention_state != terminally_archived and (progressive_route_clear_consumption_state in [pending, consumed] or progressive_sequence_readiness_state in [active, closed])"
+    scope: all_phases
+    on_fail: "Restore the retained canonical reference chain before continuing, keep decision_frontier limited to live progressive state, and do not discard artifacts while durable markers permit resumption."

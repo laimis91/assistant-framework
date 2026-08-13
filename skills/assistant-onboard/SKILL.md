@@ -16,9 +16,10 @@ triggers:
 | File | Purpose |
 |---|---|
 | [`contracts/input.yaml`](contracts/input.yaml) | project_path, focus_area, depth |
-| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, key_files[], conventions[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, questions[] |
+| [`contracts/output.yaml`](contracts/output.yaml) | project_summary, project_size, key_files[], conventions[], semantic_type_candidates[], risky_areas[], likely_change_points[], artifacts[], artifact_updated, questions[] |
 
 - `project_path` is required; `depth` defaults to standard when not specified
+- Migration note: assistant-onboard contracts are v2. Output `project_size` is scan-derived and required; medium and large projects must return inspected semantic-type and design-pressure candidate arrays, while small projects may omit them.
 - `key_files` entries include path and purpose; `conventions` entries include pattern and example
 - `risky_areas` and `likely_change_points` make the orientation actionable for future development work
 - `questions` must be specific to unclear areas discovered during onboarding
@@ -43,12 +44,14 @@ Build a compact, evidence-based orientation for the project so future developmen
 - Key files include path and purpose; conventions include pattern and concrete example.
 - Build/test/run commands are identified from project files when available.
 - Risky areas and likely change points are called out for future development work.
+- Architecture mapping identifies meaningful ownership/lifecycle boundaries, design-pressure candidates (control/early exit, disposal/resources, registration, representative paths), and semantic type candidates or explicit primitive boundaries without inventing a redesign.
+- Medium and large onboarding never silently defaults architecture candidate arrays: explicit `[]` is valid only after inspection; small projects may omit them.
 - Questions are specific to discovered gaps, not generic prompts.
 - Orientation artifacts are reported accurately.
 
 ## Constraints
 
-- Ask only when the focus area or depth materially changes which files are inspected and cannot be inferred from the user's request.
+- Ask every material question when the focus area or depth changes which files are inspected and cannot be inferred; group questions by topic with why, risk if guessed, and a safe default where available rather than enforcing a numeric quota.
 - Do not edit production code during onboarding.
 - Do not claim full coverage from a representative sample; label gaps and assumptions clearly.
 - Do not create or overwrite orientation/memory files unless the user or project policy allows it.
@@ -88,8 +91,9 @@ Extract:
 
 Print: `>> Onboarding: Architecture mapping`
 
-For medium+ projects, dispatch a **Code Mapper** subagent if available.
-If delegation is unavailable in the active adapter or tool policy, perform a lightweight local map and record that Code Mapper dispatch was unavailable.
+For medium+ projects, build the architecture map directly from local source. Use a **Code Mapper** only when the user or an applicable instruction specifically requires delegated mapping; otherwise do not create a persistent or automatic mapper role.
+
+Classify `project_size` from the surface scan as `small`, `medium`, or `large`. For medium and large projects, inspect and return both architecture candidate arrays; use explicit `[]` only when inspection found no candidates. Do not silently default either array. Small projects may omit these optional architecture arrays.
 
 Map:
 - **Entry points**: where execution starts
@@ -98,6 +102,9 @@ Map:
 - **Data model**: entities, their relationships, persistence strategy
 - **External integrations**: databases, APIs, message queues
 - **Configuration**: what's configurable, where settings live
+- **Ownership and lifecycle boundaries**: which component owns each important resource/state transition and cancellation/failure path
+- **Design-pressure candidates**: evidence about early exit/control, resource/disposal ownership, bounded resource envelopes, extension registration, and representative paths
+- **Semantic type candidates**: domain/public/lifecycle/unit concepts currently hidden behind generic primitives, plus explicit wire/storage/foreign/framework exception boundaries
 
 ### Phase 3: Pattern Recognition
 
@@ -150,6 +157,9 @@ Create or update a project-local orientation artifact only when allowed by user/
 - Pattern: [pattern name]
 - Entry points: [list with paths]
 - Layers: [list with descriptions]
+- Ownership/lifecycle boundaries: [evidence-backed summary]
+- Semantic type candidates or primitive exceptions: [only where source shows a meaningful boundary]
+- Design-pressure candidates: [only where source shows a relevant control, ownership, resource, extension, or representative-path implication]
 
 ## Conventions
 - Naming: [convention]
@@ -210,6 +220,8 @@ Return:
 - **Conventions** - discovered patterns with concrete examples.
 - **Risky areas** - surfaces that need extra care in future work and why.
 - **Likely change points** - files/directories future features or fixes will likely touch.
+- **Type and boundary candidates** - evidence-backed semantic type candidates or documented primitive-boundary exceptions to consider before changing public/domain interfaces.
+- **Design-pressure candidates** - evidence-backed control, ownership/disposal, resource-envelope, extension-registration, or representative-path implications to consider before choosing an abstraction.
 - **Artifacts** - orientation files created or updated, or "none" if no files changed.
 - **Gaps** - unknowns, assumptions, and specific questions for the user.
 - **Status** - onboarded, partially onboarded, or blocked by missing access/context.
@@ -227,12 +239,12 @@ When returning to a known project after significant time:
 
 - **Never skip Phase 1** — even for "quick" tasks in a new repo
 - **Don't read everything** — sample representative files, don't read every file
-- **Ask about unknowns** — don't guess business logic or domain concepts
+- **Ask about unknowns** — don't guess business logic or domain concepts; ask every material unknown concisely by topic with why/risk/default.
 - **Keep memory concise** — under 100 lines, focused on stable development conventions
 - **Update, don't overwrite** — if memory.md exists, update sections, don't regenerate
 
 ## Stop Rules
 
-- Stop and ask one focused question when project path, focus area, or onboarding depth cannot be inferred and changes the inspection plan.
+- Stop and ask every material, non-discoverable question when project path, focus area, or onboarding depth cannot be inferred and changes the inspection plan; group them by topic and keep them concise.
 - Stop and report blocked status when required files cannot be read.
 - Do not proceed to code changes as part of onboarding.

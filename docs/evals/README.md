@@ -148,8 +148,8 @@ trusted repository; variant inputs can never supply executable tooling. It uses
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
 reporter and both materialized instruction hashes. Generic manifest-free A/B
 plans retain structural counts without applying workflow-kernel policy.
-Manifest-backed promotion enforces fixed selected-skill caps of 1000 initial
-words and 2600 entry-boundary words, zero standing-context growth, and the
+Manifest-backed promotion enforces fixed selected-skill caps of 1050 initial
+words and 3000 entry-boundary words, zero standing-context growth, and the
 hardcoded two-case smoke and six-case/three-repeat pilot. Internally consistent
 but false or loosened manifests fail closed. The evidence contains no
 instruction bodies or absolute paths.
@@ -537,7 +537,8 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/clarify-eval-prompts --skill 
 
 Prompt packets are written under `<output>/<skill>/<case-id>.md` and include the
 setup context, prompt, expected behavior, pass criteria, fail signals, optional
-seeded defects / measurable assertions, and machine expectations.
+seeded defects / measurable assertions, machine expectations, and an optional
+Structured JSON Assertions section when the case declares one.
 
 Run each prompt packet with the target assistant and save captured responses as
 `<response-dir>/<skill>/<case-id>.txt` or `<response-dir>/<skill>/<case-id>.md`.
@@ -551,6 +552,18 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --responses /tmp/clarify-eval-responses --skill assistant-clarify
 ```
 
+Cases may additionally define `machine_expectations.structured_json_assertions`.
+For these per-skill cases, the response must contain exactly one valid JSON
+value. The local grader applies only the fixed provider-neutral operators:
+`equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`,
+`required_when_equals`, `array_field_values_exact`, and
+`array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
+`getpath` access. They are grader-only declarations, never executable fixture
+content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
+requires the target array to contain at least one object, and every listed field
+in every object must be a non-empty string.
+`empty_array` requires the target path to resolve to an empty array.
+
 Include local-only skill experiments explicitly:
 
 ```bash
@@ -560,8 +573,8 @@ tools/evals/run-skill-evals.sh --list --include-local
 
 The response grader is heuristic/local grading. It checks missing files, empty
 responses, exact fail-signal phrase hits where useful, missing required
-substrings, forbidden substring hits, and optional `seeded_defects` measurable
-assertions. Seeded defects make evals more measurable by requiring captured
+substrings, forbidden substring hits, optional structured JSON assertions, and
+optional `seeded_defects` measurable assertions. Seeded defects make evals more measurable by requiring captured
 responses to detect fixture-specific planted risks with detection anchors,
 evidence anchors, acceptable severity labels, and optional finding markers. Cases
 can also define `false_positive_markers` plus `false_positive_budget` to fail

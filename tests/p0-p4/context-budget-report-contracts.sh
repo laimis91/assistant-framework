@@ -77,6 +77,16 @@ else
     fail "docs/evals/README.md does not document the hookless native Codex context budget command"
 fi
 
+test_start "eval README documents workflow-kernel promotion caps"
+if grep -Fq -- "fixed selected-skill caps of 1050 initial" "$eval_readme" \
+    && grep -Fq -- "words and 3000 entry-boundary words" "$eval_readme" \
+    && ! grep -Fq -- "1000 initial words" "$eval_readme" \
+    && ! grep -Fq -- "2600 entry-boundary words" "$eval_readme"; then
+    pass
+else
+    fail "docs/evals/README.md does not document the current workflow-kernel promotion caps"
+fi
+
 report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-home.XXXXXX")"
 report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-report.XXXXXX")"
 report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-report-error.XXXXXX")"
@@ -399,8 +409,8 @@ if HOME="$report_home" \
         --skill-overlay "$kernel_skill" --format json >"$overlay_report" 2>"$report_error" \
     && jq -e --slurpfile baseline "$report_output" --slurpfile candidate "$overlay_report" '
         .status == "candidate"
-        and .promotion_gates.selected_initial_words_max == 1000
-        and .promotion_gates.selected_entry_words_max == 2600
+        and .promotion_gates.selected_initial_words_max == 1050
+        and .promotion_gates.selected_entry_words_max == 3000
         and .promotion_gates.standing_context_growth_allowed == false
         and .static_measurement.baseline_selected_initial_words == $baseline[0].components.selected_skill_initial.words
         and .static_measurement.candidate_selected_initial_words == $candidate[0].components.selected_skill_initial.words
@@ -428,7 +438,7 @@ p0p4_register_cleanup "$standing_evidence"
 jq -cnS '{
   schema_version:"1.0",reporter_sha256:("a"*64),
   baseline_instruction_sha256:("b"*64),candidate_instruction_sha256:("c"*64),
-  policy_caps:{selected_initial_words_max:1000,selected_entry_words_max:2600,standing_context_growth_allowed:false},
+  policy_caps:{selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false},
   baseline:{selected_initial_words:800,selected_entry_words:2000,total_initial_words:900,total_entry_words:2100,standing_initial_words:100,standing_entry_words:100},
   candidate:{selected_initial_words:700,selected_entry_words:1900,total_initial_words:801,total_entry_words:2001,standing_initial_words:101,standing_entry_words:101},
   deltas:{selected_initial_words:-100,selected_entry_words:-100,standing_initial_words:1,standing_entry_words:1}

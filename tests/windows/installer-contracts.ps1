@@ -23,16 +23,16 @@ $script:Skipped = 0
 $script:ActiveIsolatedUserProfile = $null
 $script:FrameworkRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $script:InstallerPath = Join-Path $script:FrameworkRoot 'install.ps1'
-$script:MemoryCleanupPath = Join-Path $script:FrameworkRoot 'tools\cleanup-memory-graph.ps1'
 $script:PowerShellExecutable = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-$script:ExternalCodexCommand = @(Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)[0]
 $suiteTempBase = [System.IO.Path]::GetTempPath()
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -and (Test-Path -LiteralPath '/private/tmp' -PathType Container)) {
     # macOS exposes /var as a symlink. Use its canonical private temp root so
     # the installer's deliberate ancestor-reparse rejection can still be tested.
     $suiteTempBase = '/private/tmp'
 }
-$script:SuiteRoot = Join-Path $suiteTempBase ('assistant-framework windows contracts ' + [Guid]::NewGuid().ToString('N'))
+# Keep Windows fixtures short enough for the installer's same-directory atomic
+# temporary files under legacy MAX_PATH environments.
+$script:SuiteRoot = Join-Path $suiteTempBase ('afw-' + [Guid]::NewGuid().ToString('N'))
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -148,56 +148,6 @@ function Restore-ProcessEnvironment {
     }
 }
 
-function New-IsolatedCodexSemanticAuthority {
-    param([Parameter(Mandatory = $true)][string]$Root)
-    $fakeBin = Join-Path $Root 'fake-codex-semantic-authority'
-    [void][System.IO.Directory]::CreateDirectory($fakeBin)
-    $fakeCodex = Join-Path $fakeBin 'codex.ps1'
-    $source = @'
-if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
-if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
-$configFile = Join-Path $env:CODEX_HOME 'config.toml'
-if (-not [IO.File]::Exists($configFile)) { exit 64 }
-$hasCanonicalTable = $false
-foreach ($line in [IO.File]::ReadAllLines($configFile)) {
-    if (
-        [string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal) -or
-        [string]::Equals($line, '[mcp_servers."memory\u002Dgraph"]', [System.StringComparison]::Ordinal) -or
-        [string]::Equals($line, '[mcp_servers."memory\U0000002Dgraph"]', [System.StringComparison]::Ordinal)
-    ) { $hasCanonicalTable = $true; break }
-}
-if ($hasCanonicalTable) { '[{"name":"memory-graph"}]' } else { '[]' }
-exit 0
-'@
-    [System.IO.File]::WriteAllText($fakeCodex, $source, (New-Object System.Text.UTF8Encoding($false)))
-    return $fakeBin
-}
-
-function New-ProgrammableCodexSemanticAuthority {
-    param(
-        [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string[]]$JsonLines
-    )
-    $fakeBin = Join-Path $Root 'programmable-codex-semantic-authority'
-    [void][System.IO.Directory]::CreateDirectory($fakeBin)
-    $jsonOutput = (@($JsonLines | ForEach-Object { "    '" + $_.Replace("'", "''") + "'" }) -join ",`r`n")
-    $source = @'
-if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
-if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
-$configFile = Join-Path $env:CODEX_HOME 'config.toml'
-if (-not [IO.File]::Exists($configFile)) { exit 64 }
-$hasCanonicalTable = $false
-foreach ($line in [IO.File]::ReadAllLines($configFile)) {
-    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
-}
-if (-not $hasCanonicalTable) { '[]'; exit 0 }
-@(
-'@
-    $source += $jsonOutput + "`r`n) | ForEach-Object { `$_ }`r`nexit 0`r`n"
-    [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $source, (New-Object System.Text.UTF8Encoding($false)))
-    return $fakeBin
-}
-
 function Use-IsolatedEnvironment {
     param([string]$Name, [scriptblock]$Body)
     $root = Join-Path $script:SuiteRoot $Name
@@ -245,8 +195,6 @@ function Use-IsolatedEnvironment {
         foreach ($runtimeDirectory in @('appdata', 'localappdata', 'cache', 'config', 'data', 'dotnet', 'nuget-packages', 'nuget-http-cache', 'nuget-plugin-cache')) {
             [void][System.IO.Directory]::CreateDirectory((Join-Path $hostRuntimeRoot $runtimeDirectory))
         }
-        $fakeCodexBin = New-IsolatedCodexSemanticAuthority -Root $root
-        [Environment]::SetEnvironmentVariable('PATH', $fakeCodexBin + [System.IO.Path]::PathSeparator + $saved.PATH, 'Process')
         & $Body $root $isolatedUserProfile
     }
     finally {
@@ -416,7 +364,7 @@ function Get-InstalledSkillNames {
 }
 
 function Assert-ScriptsParse {
-    foreach ($path in @($script:InstallerPath, $script:MemoryCleanupPath, $PSCommandPath)) {
+    foreach ($path in @($script:InstallerPath, $PSCommandPath)) {
         $tokens = $null
         $errors = $null
         [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
@@ -429,24 +377,15 @@ try {
 
     Invoke-Contract 'PowerShell sources parse and avoid forbidden execution surfaces' {
         Assert-True (Test-Path -LiteralPath $script:InstallerPath -PathType Leaf) 'install.ps1 is missing'
-        Assert-True (Test-Path -LiteralPath $script:MemoryCleanupPath -PathType Leaf) 'Memory Graph PowerShell cleanup is missing'
         Assert-ScriptsParse
-        $combined = [System.IO.File]::ReadAllText($script:InstallerPath) + "`n" + [System.IO.File]::ReadAllText($script:MemoryCleanupPath)
+        $combined = [System.IO.File]::ReadAllText($script:InstallerPath)
         foreach ($forbidden in @('Invoke-Expression', 'Set-ExecutionPolicy', 'ExecutionPolicy Bypass', 'Start-Process -Verb RunAs', 'ItemType SymbolicLink')) {
             Assert-NotContains $combined $forbidden "Forbidden PowerShell surface found: $forbidden"
         }
         Assert-Contains $combined '-LiteralPath' 'Literal-path operations are not present'
         Assert-Contains $combined 'ConvertTo-Json -Depth 100' 'Deep JSON preservation is not explicit'
-        $cleanup = [System.IO.File]::ReadAllText($script:MemoryCleanupPath)
-        Assert-Contains $cleanup '$parsedPayload = $output | ConvertFrom-Json -ErrorAction Stop' 'Codex semantic JSON parsing does not preserve the PowerShell 5.1 two-step normalization'
-        Assert-Contains $cleanup '$payload = @($parsedPayload)' 'Codex semantic JSON parsing does not flatten the parsed payload'
-        Assert-NotContains $cleanup '$payload = @($output | ConvertFrom-Json -ErrorAction Stop)' 'Codex semantic JSON parsing still wraps the pipeline result directly'
-        $contracts = [System.IO.File]::ReadAllText($PSCommandPath)
-        Assert-Contains $contracts '[IO.File]::ReadAllLines($configFile)' 'Codex semantic test fakes do not read TOML as exact lines'
-        Assert-Contains $contracts '[System.StringComparison]::Ordinal' 'Codex semantic test fakes do not use ordinal exact-line matching'
-        Assert-NotContains $contracts ('findstr /l /x' + ' /c:') 'Codex semantic test fakes still use findstr parsing'
+        Assert-NotContains $combined 'memory-graph\\run-memory-graph' 'Installer retains a retired Memory Graph launcher dependency'
     }
-
     Invoke-Contract 'child PowerShell output preserves raw long diagnostics across runtimes' {
         $harnessSource = [System.IO.File]::ReadAllText($PSCommandPath)
         $invokeInstallerStart = $harnessSource.IndexOf('function Invoke-Installer', [System.StringComparison]::Ordinal)
@@ -469,242 +408,6 @@ try {
         )
         $actual = Convert-ProcessOutputToText -OutputItems @('stdout marker', $errorRecord)
         Assert-Equal ('stdout marker' + [Environment]::NewLine + $expectedError) $actual 'Raw-output normalization changed a long native error message'
-    }
-
-    Invoke-Contract 'Codex semantic absence with a local owned span fails closed through the JSON validator protocol' {
-        Use-IsolatedEnvironment 'codex semantic absence local span' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Semantic Absent Codex Home'
-            $configFile = Join-Path $codexHome 'config.toml'
-            $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-            $provider = Join-Path $codexHome 'memory\graph.db'
-            $fakeBin = Join-Path $root 'fake-codex'
-            $argsFile = Join-Path $root 'fake-codex.args'
-            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-            [void][IO.Directory]::CreateDirectory($fakeBin)
-            [IO.File]::WriteAllText($runtime, 'runtime')
-            [IO.File]::WriteAllText($provider, 'provider')
-            $original = "[mcp_servers.memory-graph]`ncommand = `"retire`"`n"
-            [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
-            $fakeSource = @'
-if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
-if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
-$configFile = Join-Path $env:CODEX_HOME 'config.toml'
-if (-not [IO.File]::Exists($configFile)) { exit 64 }
-[IO.File]::AppendAllText($env:FAKE_CODEX_ARGS, ($args -join '|') + [Environment]::NewLine)
-'[]'
-exit 0
-'@
-            [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $fakeSource, (New-Object Text.UTF8Encoding($false)))
-            $oldPath, $oldArgs = $env:PATH, $env:FAKE_CODEX_ARGS
-            try {
-                $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                $env:FAKE_CODEX_ARGS = $argsFile
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-                Assert-True ($result.ExitCode -ne 0) "Semantic absence/local span cleanup reported success: $($result.Output)"
-                Assert-Equal $original ([IO.File]::ReadAllText($configFile)) 'Semantic absence/local span cleanup changed config bytes'
-                Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Semantic absence/local span cleanup deleted runtime'
-                Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Semantic absence/local span cleanup deleted provider data'
-                Assert-Contains ([IO.File]::ReadAllText($argsFile)) 'mcp|list|--json' 'Fake validator did not receive the exact JSON MCP protocol'
-                Assert-Contains $result.Output $configFile 'Semantic disagreement diagnostic omitted the affected path'
-            }
-            finally { $env:PATH = $oldPath; $env:FAKE_CODEX_ARGS = $oldArgs }
-        }
-    }
-
-    Invoke-Contract 'Codex semantic authority rejects null JSON entries and accepts pretty-printed valid output' {
-        Use-IsolatedEnvironment 'codex programmable semantic authority' {
-            param($root, $isolatedUserProfile)
-            $authorityCases = @(
-                [PSCustomObject]@{
-                    Name = 'null authority entry'
-                    JsonLines = @('[null]')
-                    ExpectsRetirement = $false
-                },
-                [PSCustomObject]@{
-                    Name = 'pretty printed authority entry'
-                    JsonLines = @('[', '  {', '    "name": "memory-graph"', '  }', ']')
-                    ExpectsRetirement = $true
-                }
-            )
-            foreach ($authorityCase in $authorityCases) {
-                $caseRoot = Join-Path $root $authorityCase.Name
-                $codexHome = Join-Path $caseRoot 'Codex Home'
-                $configFile = Join-Path $codexHome 'config.toml'
-                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-                $provider = Join-Path $codexHome 'memory\graph.db'
-                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-                $originalConfig = "[mcp_servers.memory-graph]`r`ncommand = `"retire`"`r`n"
-                $runtimeBytes = [byte[]](0, 1, 2, 255)
-                $providerBytes = [byte[]](3, 4, 5, 254)
-                [IO.File]::WriteAllText($configFile, $originalConfig, (New-Object Text.UTF8Encoding($false)))
-                [IO.File]::WriteAllBytes($runtime, $runtimeBytes)
-                [IO.File]::WriteAllBytes($provider, $providerBytes)
-                $configFingerprint = [Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))
-                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $authorityCase.JsonLines
-                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
-                try {
-                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                    $fakeCommand = Join-Path $fakeBin 'codex.ps1'
-                    $childCodex = @(& $script:PowerShellExecutable -NoLogo -NoProfile -Command '(Get-Command codex -ErrorAction Stop).Source')
-                    Assert-Equal $fakeCommand ($childCodex -join [Environment]::NewLine) "$($authorityCase.Name) child PowerShell did not resolve the isolated Codex authority"
-                    $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-                    if ($authorityCase.ExpectsRetirement) {
-                        Assert-Equal 0 $result.ExitCode "Pretty-printed valid authority JSON was rejected: $($result.Output)"
-                        Assert-NotContains ([IO.File]::ReadAllText($configFile)) '[mcp_servers.memory-graph]' 'Pretty-printed valid authority JSON did not remove the retired table'
-                        Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) 'Pretty-printed valid authority JSON did not authorize runtime retirement'
-                        Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Pretty-printed valid authority JSON deleted provider data'
-                        Assert-Equal ([Convert]::ToBase64String($providerBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($provider))) 'Pretty-printed valid authority JSON changed provider bytes'
-                    }
-                    else {
-                        Assert-True ($result.ExitCode -ne 0) "Null authority JSON entry was accepted: $($result.Output)"
-                        Assert-Equal $configFingerprint ([Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))) 'Null authority JSON entry changed config bytes'
-                        Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Null authority JSON entry deleted runtime'
-                        Assert-Equal ([Convert]::ToBase64String($runtimeBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($runtime))) 'Null authority JSON entry changed runtime bytes'
-                        Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Null authority JSON entry deleted provider data'
-                        Assert-Equal ([Convert]::ToBase64String($providerBytes)) ([Convert]::ToBase64String([IO.File]::ReadAllBytes($provider))) 'Null authority JSON entry changed provider bytes'
-                    }
-                }
-                finally {
-                    $env:PATH = $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
-                }
-            }
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup applies TOML backslash parity and preserves unrelated bytes' {
-        Use-IsolatedEnvironment 'cleanup TOML backslash parity' {
-            param($root, $isolatedUserProfile)
-            $cases = @(
-                [PSCustomObject]@{
-                    Name = 'even multiline terminator'
-                    SemanticJson = @('[]')
-                    Original = @'
-multiline_basic = """
-even consecutive backslashes \\"""
-[mcp_servers.keep]
-command = "keep"
-'@
-                    Expected = $null
-                }
-                [PSCustomObject]@{
-                    Name = 'odd multiline terminator'
-                    SemanticJson = @('[]')
-                    Original = @'
-multiline_basic = """
-odd consecutive backslashes \"""
-[mcp_servers.memory-graph]
-remains = "inside the string"
-"""
-
-[mcp_servers.keep]
-command = "keep"
-'@
-                    Expected = $null
-                }
-                [PSCustomObject]@{
-                    Name = 'ordinary escaped quote'
-                    SemanticJson = @('[]')
-                    Original = @'
-basic = "escaped quote: \" stays in this value"
-[mcp_servers.keep]
-command = "keep"
-'@
-                    Expected = $null
-                }
-            )
-            foreach ($case in $cases) {
-                $caseRoot = Join-Path $root $case.Name
-                $codexHome = Join-Path $caseRoot 'Codex Home'
-                $configFile = Join-Path $codexHome 'config.toml'
-                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-                [IO.File]::WriteAllText($configFile, $case.Original, (New-Object Text.UTF8Encoding($false)))
-                [IO.File]::WriteAllText($runtime, 'runtime', (New-Object Text.UTF8Encoding($false)))
-                $expected = if ($null -eq $case.Expected) { $case.Original } else { $case.Expected }
-                $fakeBin = New-ProgrammableCodexSemanticAuthority -Root $caseRoot -JsonLines $case.SemanticJson
-                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
-                try {
-                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                    $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-                    Assert-Equal 0 $result.ExitCode "$($case.Name) cleanup failed: $($result.Output)"
-                    Assert-Equal $expected ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup changed unrelated TOML bytes or failed to remove exactly the owned span"
-                    Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup did not retire the authorized stale runtime"
-                }
-                finally {
-                    $env:PATH = $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
-                }
-            }
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup decodes only case-sensitive TOML basic-key escapes' {
-        Use-IsolatedEnvironment 'cleanup TOML basic-key escape case' {
-            param($root, $isolatedUserProfile)
-            $cases = @(
-                [PSCustomObject]@{
-                    Name = 'lowercase unicode escape'
-                    Header = '[mcp_servers."memory\u002Dgraph"]'
-                    ExpectsRetirement = $true
-                }
-                [PSCustomObject]@{
-                    Name = 'uppercase eight-digit unicode escape'
-                    Header = '[mcp_servers."memory\U0000002Dgraph"]'
-                    ExpectsRetirement = $true
-                }
-                [PSCustomObject]@{
-                    Name = 'invalid uppercase basic escape'
-                    Header = '[mcp_servers."memory\Bgraph"]'
-                    ExpectsRetirement = $false
-                }
-            )
-            $caseFailures = @()
-            foreach ($case in $cases) {
-                $caseRoot = Join-Path $root $case.Name
-                $codexHome = Join-Path $caseRoot 'Codex Home'
-                $configFile = Join-Path $codexHome 'config.toml'
-                $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-                $original = $case.Header + "`ncommand = `"retire`"`n`n[mcp_servers.keep]`ncommand = `"keep`"`n"
-                $expected = "[mcp_servers.keep]`ncommand = `"keep`"`n"
-                [IO.File]::WriteAllText($configFile, $original, (New-Object Text.UTF8Encoding($false)))
-                [IO.File]::WriteAllText($runtime, 'runtime', (New-Object Text.UTF8Encoding($false)))
-                $fakeBin = New-IsolatedCodexSemanticAuthority -Root $caseRoot
-                $oldPath, $oldCodexHome = $env:PATH, $env:CODEX_HOME
-                try {
-                    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                    try {
-                        $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-                        if ($case.ExpectsRetirement) {
-                            Assert-Equal 0 $result.ExitCode "$($case.Name) cleanup failed: $($result.Output)"
-                            Assert-Equal $expected ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup did not remove exactly the owned encoded key"
-                            Assert-False (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup did not retire the exact stale runtime"
-                        }
-                        else {
-                            Assert-True ($result.ExitCode -ne 0) "$($case.Name) cleanup accepted an invalid case-variant TOML escape: $($result.Output)"
-                            Assert-Equal $original ([IO.File]::ReadAllText($configFile)) "$($case.Name) cleanup changed invalid TOML bytes"
-                            Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) "$($case.Name) cleanup deleted runtime after invalid TOML escape"
-                        }
-                    }
-                    catch {
-                        $caseFailures += $_.Exception.Message
-                    }
-                }
-                finally {
-                    $env:PATH = $oldPath
-                    [Environment]::SetEnvironmentVariable('CODEX_HOME', $oldCodexHome, 'Process')
-                }
-            }
-            if ($caseFailures.Count -gt 0) { throw ($caseFailures -join [Environment]::NewLine) }
-        }
     }
 
     Invoke-Contract 'atomic replacement keeps the exclusive temporary handle through private DACL creation and content write' {
@@ -1551,6 +1254,31 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
+    Invoke-Contract 'Codex installation preserves existing legacy Memory Graph state without a CLI' {
+        Use-IsolatedEnvironment 'codex legacy state preservation' {
+            param($root, $isolatedUserProfile)
+            $codexHome = Join-Path $root 'Codex Legacy State Home'
+            $configFile = Join-Path $codexHome 'config.toml'
+            $runtimeFile = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
+            $providerFile = Join-Path $codexHome 'memory\graph.db'
+            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtimeFile))
+            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $providerFile))
+            $originalConfig = "custom = `"keep`"`r`n`r`n[mcp_servers.memory-graph]`r`ncommand = `"legacy`"`r`n"
+            $providerBytes = [byte[]](0, 1, 2, 13, 10, 255)
+            [System.IO.File]::WriteAllText($configFile, $originalConfig, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText($runtimeFile, 'legacy runtime', (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllBytes($providerFile, $providerBytes)
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+
+            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "Legacy-state install failed: $($result.Output)"
+            Assert-Equal $originalConfig ([System.IO.File]::ReadAllText($configFile)) 'Installer changed existing Codex configuration'
+            Assert-True (Test-Path -LiteralPath $runtimeFile -PathType Leaf) 'Installer removed legacy runtime state'
+            Assert-Equal $providerBytes ([System.IO.File]::ReadAllBytes($providerFile)) 'Installer changed legacy provider data'
+            Assert-True (Test-Path -LiteralPath (Join-Path $isolatedUserProfile '.agents\skills\assistant-workflow\SKILL.md') -PathType Leaf) 'Codex skill was not installed while preserving legacy state'
+        }
+    }
+
     Invoke-Contract 'full inventory, plugin profile, and single-skill selection remain bounded' {
         Use-IsolatedEnvironment 'inventory selection' {
             param($root, $isolatedUserProfile)
@@ -1608,18 +1336,20 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'reinstall retires exact source-only tools and preserves unrelated top-level siblings' {
-        Use-IsolatedEnvironment 'source-only upgrade cleanup' {
+    Invoke-Contract 'reinstall retires exact managed targets and preserves unrelated top-level siblings' {
+        Use-IsolatedEnvironment 'managed target retirement cleanup' {
             param($root, $isolatedUserProfile)
             $codexHome = Join-Path $root 'Codex Source-Only Upgrade Home'
             $toolsRoot = Join-Path $codexHome 'tools'
-            $sourceOnlyTargets = @(
+            $retiredManagedTargets = @(
                 'context-budget-report.sh',
                 'evals\run-codex-framework-evals.sh',
                 'evals\finalize-workflow-kernel-review.sh',
-                'evals\lib\context-budget-evidence.sh'
+                'evals\lib\context-budget-evidence.sh',
+                'cleanup-memory-graph.ps1',
+                'cleanup-memory-graph.sh'
             )
-            foreach ($relativePath in $sourceOnlyTargets) {
+            foreach ($relativePath in $retiredManagedTargets) {
                 $target = Join-Path $toolsRoot $relativePath
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $target))
                 [System.IO.File]::WriteAllText($target, 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
@@ -1630,160 +1360,29 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
 
             $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
-            Assert-Equal 0 $dryRun.ExitCode "Source-only cleanup dry run failed: $($dryRun.Output)"
-            Assert-Contains $dryRun.Output 'Remove source-only installed target' 'Dry run omitted exact source-only cleanup'
-            foreach ($relativePath in $sourceOnlyTargets) {
-                Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed source-only target: $relativePath"
+            Assert-Equal 0 $dryRun.ExitCode "Managed target retirement dry run failed: $($dryRun.Output)"
+            Assert-Contains $dryRun.Output 'Remove managed installed target for source-only tools' 'Dry run omitted exact source-only cleanup'
+            Assert-Contains $dryRun.Output 'Remove managed installed target for retired managed tools' 'Dry run omitted exact retired-target cleanup'
+            Assert-Contains $dryRun.Output 'cleanup-memory-graph.ps1' 'Dry run omitted the retired PowerShell cleanup target'
+            Assert-Contains $dryRun.Output 'cleanup-memory-graph.sh' 'Dry run omitted the retired Bash cleanup target'
+            foreach ($relativePath in $retiredManagedTargets) {
+                Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed managed target: $relativePath"
             }
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Dry run changed unrelated tools sibling'
 
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $result.ExitCode "Source-only cleanup reinstall failed: $($result.Output)"
-            foreach ($relativePath in $sourceOnlyTargets) {
-                Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Source-only target survived reinstall: $relativePath"
+            Assert-Equal 0 $result.ExitCode "Managed target retirement reinstall failed: $($result.Output)"
+            foreach ($relativePath in $retiredManagedTargets) {
+                Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Managed target survived reinstall: $relativePath"
             }
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Reinstall changed unrelated top-level tools sibling'
         }
     }
 
-    Invoke-Contract 'reinstall retires only the exact TOML entry and preserves user-owned state' {
-        Use-IsolatedEnvironment 'retired runtime reinstall' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Codex Reinstall Home'
-            [void][System.IO.Directory]::CreateDirectory($codexHome)
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-            $agentsFile = Join-Path $codexHome 'AGENTS.md'
-            [System.IO.File]::WriteAllText($agentsFile, "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`nRETIRED PROTOCOL`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`nCUSTOM USER INSTRUCTION`n", (New-Object System.Text.UTF8Encoding($false)))
-            $configFile = Join-Path $codexHome 'config.toml'
-            [System.IO.File]::WriteAllText($configFile, "custom = `"keep`"`n`n[mcp_servers.memory-graph]`ncommand = `"stale`"`n`n[mcp_servers.memory-graphical]`ncommand = `"keep-similar`"`n", (New-Object System.Text.UTF8Encoding($false)))
-            $userData = Join-Path $codexHome 'memory\user-owned-history.db'
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $userData))
-            [System.IO.File]::WriteAllText($userData, 'preserve-user-data', (New-Object System.Text.UTF8Encoding($false)))
-            $agentsAclBefore = $null
-            $configAclBefore = $null
-            $isWindowsHost = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-            if ($isWindowsHost) {
-                $protectedConfigAcl = Get-Acl -LiteralPath $configFile
-                $protectedConfigAcl.SetAccessRuleProtection($true, $false)
-                foreach ($rule in @($protectedConfigAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) {
-                    [void]$protectedConfigAcl.RemoveAccessRuleSpecific($rule)
-                }
-                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-                $currentUserRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                    $currentUser,
-                    [System.Security.AccessControl.FileSystemRights]::FullControl,
-                    [System.Security.AccessControl.AccessControlType]::Allow
-                )
-                [void]$protectedConfigAcl.AddAccessRule($currentUserRule)
-                $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
-                $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                    $builtInUsers,
-                    [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
-                    [System.Security.AccessControl.AccessControlType]::Allow
-                )
-                [void]$protectedConfigAcl.AddAccessRule($readRule)
-                Set-Acl -LiteralPath $configFile -AclObject $protectedConfigAcl
-                $agentsAclBefore = Get-Acl -LiteralPath $agentsFile
-                $configAclBefore = Get-Acl -LiteralPath $configFile
-                Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'Restrictive config ACL fixture is not protected'
-                Assert-True (@((Get-Acl -LiteralPath $configFile).GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier])).Count -ge 2) 'Restrictive config owner/group/DACL fixture lacks multiple explicit access rules'
-                [Environment]::SetEnvironmentVariable('OS', 'spoofed-by-contract', 'Process')
-            }
-
-            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $result.ExitCode "Retirement reinstall failed: $($result.Output)"
-            Assert-Equal 'preserve-user-data' ([System.IO.File]::ReadAllText($userData)) 'Installer changed user-owned memory data'
-
-            $agents = [System.IO.File]::ReadAllText($agentsFile)
-            Assert-Contains $agents 'CUSTOM USER INSTRUCTION' 'Custom Codex instruction was lost'
-            Assert-Equal 0 (Get-LiteralCount $agents 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Retired memory protocol marker survived reinstall'
-            if ($isWindowsHost) {
-                Assert-OwnerGroupDaclEquivalent -Expected $agentsAclBefore -Actual (Get-Acl -LiteralPath $agentsFile) -Message 'AGENTS.md owner, group, DACL protection, or effective rules changed during atomic replacement'
-                Assert-OwnerGroupDaclEquivalent -Expected $configAclBefore -Actual (Get-Acl -LiteralPath $configFile) -Message 'config.toml owner, group, DACL protection, or effective rules changed during atomic replacement'
-                Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'config.toml DACL lost inheritance protection during atomic replacement'
-            }
-
-            $config = [System.IO.File]::ReadAllText($configFile)
-            Assert-Contains $config '[mcp_servers.memory-graphical]' 'Similar unrelated TOML table was removed'
-            Assert-Contains $config 'keep-similar' 'Similar unrelated TOML value was removed'
-            Assert-Equal 0 (Get-LiteralCount $config '[mcp_servers.memory-graph]') 'Canonical retired TOML table survived reinstall'
-            Assert-NotContains $config 'command = "stale"' 'Stale retired TOML table survived cleanup'
-            $codexCommand = $script:ExternalCodexCommand
-            if ($null -ne $codexCommand) {
-                $parseOutput = @(& $codexCommand.Source mcp list 2>&1)
-                Assert-Equal 0 $LASTEXITCODE "Refreshed supported TOML was rejected by Codex: $($parseOutput | Out-String)"
-            }
-        }
-
-        Use-IsolatedEnvironment 'retired protocol final line' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Codex Final-Line Protocol Home'
-            [void][System.IO.Directory]::CreateDirectory($codexHome)
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-            $agentsFile = Join-Path $codexHome 'AGENTS.md'
-            $original = "CUSTOM BEFORE`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`nRETIRED PROTOCOL`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->"
-            [System.IO.File]::WriteAllText($agentsFile, $original, (New-Object System.Text.UTF8Encoding($false)))
-
-            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $result.ExitCode "Final-line protocol retirement failed: $($result.Output)"
-            $updated = [System.IO.File]::ReadAllText($agentsFile)
-            Assert-Contains $updated 'CUSTOM BEFORE' 'Final-line protocol retirement lost preceding user instructions'
-            Assert-Equal 0 (Get-LiteralCount $updated 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Final-line retired memory protocol marker survived reinstall'
-            Assert-Equal 0 (Get-LiteralCount $updated 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END') 'Final-line retired memory protocol end marker survived reinstall'
-        }
-    }
-
-    Invoke-Contract 'JSON retirement removes only the exact entry and preserves deep custom data' {
-        Use-IsolatedEnvironment 'json preservation' {
-            param($root, $isolatedUserProfile)
-            $claudeConfig = Join-Path $isolatedUserProfile '.claude.json'
-            $deep = New-Object PSObject
-            $cursor = $deep
-            for ($i = 0; $i -lt 35; $i++) {
-                $next = New-Object PSObject
-                $cursor | Add-Member -MemberType NoteProperty -Name ('level' + $i) -Value $next
-                $cursor = $next
-            }
-            $cursor | Add-Member -MemberType NoteProperty -Name 'sentinel' -Value 'deep-value'
-            $fixture = New-Object PSObject -Property @{
-                custom = $deep
-                mcpServers = (New-Object PSObject -Property @{
-                    'memory-graph' = (New-Object PSObject -Property @{ command = 'stale-root-command' })
-                    customServer = (New-Object PSObject -Property @{ command = 'keep-command' })
-                })
-            }
-            Write-JsonFile -LiteralPath $claudeConfig -Value $fixture
-
-            $settingsFile = Join-Path $isolatedUserProfile '.claude\settings.json'
-            $settings = New-Object PSObject -Property @{
-                customSetting = 'keep-setting'
-                mcpServers = (New-Object PSObject -Property @{
-                    'memory-graph' = (New-Object PSObject -Property @{ command = 'stale' })
-                    customSettingsServer = (New-Object PSObject -Property @{ command = 'keep-settings-command' })
-                })
-            }
-            Write-JsonFile -LiteralPath $settingsFile -Value $settings
-
-            $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $result.ExitCode "Claude JSON install failed: $($result.Output)"
-            $updated = Read-JsonFile -LiteralPath $claudeConfig
-            $deepCursor = $updated.custom
-            for ($i = 0; $i -lt 35; $i++) { $deepCursor = $deepCursor.PSObject.Properties['level' + $i].Value }
-            Assert-Equal 'deep-value' $deepCursor.sentinel 'Deep custom JSON data was truncated'
-            Assert-Equal 'keep-command' $updated.mcpServers.customServer.command 'Unrelated MCP server was lost'
-            Assert-True ($null -eq $updated.mcpServers.PSObject.Properties['memory-graph']) 'Exact retired root JSON entry survived cleanup'
-
-            $updatedSettings = Read-JsonFile -LiteralPath $settingsFile
-            Assert-Equal 'keep-setting' $updatedSettings.customSetting 'Claude settings custom property was lost'
-            Assert-Equal 'keep-settings-command' $updatedSettings.mcpServers.customSettingsServer.command 'Claude settings custom MCP server was lost'
-            Assert-True ($null -eq $updatedSettings.mcpServers.PSObject.Properties['memory-graph']) 'Stale Claude settings Memory Graph entry was not retired'
-        }
-    }
-
-    Invoke-Contract 'locked Codex update files fail preflight before installation changes' {
+    Invoke-Contract 'locked Codex instructions fail preflight before installation changes' {
         Use-IsolatedEnvironment 'locked codex update files' {
             param($root, $isolatedUserProfile)
-            foreach ($targetName in @('config.toml', 'AGENTS.md')) {
+            foreach ($targetName in @('AGENTS.md')) {
                 $codexHome = Join-Path $root ('Codex Locked ' + $targetName)
                 [void][System.IO.Directory]::CreateDirectory($codexHome)
                 $configFile = Join-Path $codexHome 'config.toml'
@@ -1820,120 +1419,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'late retirement-managed config lock reports a recoverable partial installation' {
-        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-            Skip-Contract -Name 'late retirement-managed config lock reports a recoverable partial installation' -Reason 'late atomic replacement lock recovery requires Windows sharing semantics'
-            return
-        }
-        Use-IsolatedEnvironment 'late codex config lock' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Codex Late Lock'
-            [void][System.IO.Directory]::CreateDirectory($codexHome)
-            $configFile = Join-Path $codexHome 'config.toml'
-            $instructionsFile = Join-Path $codexHome 'AGENTS.md'
-            $originalConfig = "custom = `"keep`"`r`n`r`n[mcp_servers.memory-graph]`r`ncommand = `"stale`"`r`n"
-            $originalInstructions = "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`r`nRETIRED PROTOCOL`r`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`r`nKeep these user instructions.`r`n"
-            [System.IO.File]::WriteAllText($configFile, $originalConfig, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText($instructionsFile, $originalInstructions, (New-Object System.Text.UTF8Encoding($false)))
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-
-            $retirementMutationSignal = $instructionsFile
-            $lockedSignal = Join-Path $root 'late-lock-acquired.signal'
-            $releaseSignal = Join-Path $root 'late-lock-release.signal'
-            $locker = [System.Management.Automation.PowerShell]::Create()
-            [void]$locker.AddScript({
-                param($RetirementMutationSignal, $ConfigPath, $LockedSignal, $ReleaseSignal)
-                $deadline = [DateTime]::UtcNow.AddSeconds(30)
-                while ((-not [System.IO.File]::Exists($RetirementMutationSignal) -or [System.IO.File]::ReadAllText($RetirementMutationSignal).Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')) -and [DateTime]::UtcNow -lt $deadline) {
-                    Start-Sleep -Milliseconds 10
-                }
-                if (-not [System.IO.File]::Exists($RetirementMutationSignal) -or [System.IO.File]::ReadAllText($RetirementMutationSignal).Contains('ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START')) {
-                    throw "Timed out waiting for the retirement instruction mutation signal: $RetirementMutationSignal"
-                }
-                $stream = [System.IO.File]::Open(
-                    $ConfigPath,
-                    [System.IO.FileMode]::Open,
-                    [System.IO.FileAccess]::ReadWrite,
-                    [System.IO.FileShare]::None
-                )
-                try {
-                    [System.IO.File]::WriteAllText($LockedSignal, 'locked')
-                    while (-not [System.IO.File]::Exists($ReleaseSignal) -and [DateTime]::UtcNow -lt $deadline) {
-                        Start-Sleep -Milliseconds 10
-                    }
-                }
-                finally {
-                    $stream.Dispose()
-                }
-            }).AddArgument($retirementMutationSignal).AddArgument($configFile).AddArgument($lockedSignal).AddArgument($releaseSignal)
-            $asyncLock = $locker.BeginInvoke()
-            $lockerFailure = $null
-            try {
-                $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            }
-            finally {
-                [System.IO.File]::WriteAllText($releaseSignal, 'release')
-                try {
-                    [void]$locker.EndInvoke($asyncLock)
-                }
-                catch {
-                    $lockerFailure = $_.Exception.Message
-                }
-                $locker.Dispose()
-            }
-
-            Assert-True ([string]::IsNullOrWhiteSpace($lockerFailure)) "Late-lock coordinator failed: $lockerFailure"
-            Assert-True ([System.IO.File]::Exists($lockedSignal)) 'Late-lock coordinator never acquired the Codex config lock'
-            Assert-True ($result.ExitCode -ne 0) "Late-lock install reported success: $($result.Output)"
-            Assert-Contains $result.Output 'Partial installation:' 'Late-lock failure was not identified as a partial installation'
-            Assert-Contains $result.Output 'some managed Assistant Framework files may already have been updated' 'Late-lock diagnostic did not explain the partial state'
-            Assert-Contains $result.Output 'reinstall is safe' 'Late-lock diagnostic did not identify reinstall as safe'
-            Assert-Contains $result.Output $configFile 'Late-lock diagnostic did not preserve the original file-specific cause'
-            Assert-False ([System.IO.File]::Exists((Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'))) 'Late-lock failure recreated a retired launcher'
-            Assert-Equal $originalConfig ([System.IO.File]::ReadAllText($configFile)) 'Late-lock failure changed the locked config'
-            Assert-NotContains ([System.IO.File]::ReadAllText($instructionsFile)) 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START' 'Late-lock failure did not retain the completed retirement instruction update'
-            Assert-False ([System.IO.File]::Exists((Join-Path $codexHome 'agents\code-writer.toml'))) 'Late-lock failure continued into Codex agent installation'
-            Assert-False ([System.IO.File]::Exists((Join-Path $codexHome 'rules\workflow.rules'))) 'Late-lock failure continued into Codex rule installation'
-
-            $recovery = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-Equal 0 $recovery.ExitCode "Recovery reinstall failed: $($recovery.Output)"
-            $recoveredConfig = [System.IO.File]::ReadAllText($configFile)
-            $recoveredInstructions = [System.IO.File]::ReadAllText($instructionsFile)
-            Assert-Contains $recoveredConfig 'custom = "keep"' 'Recovery reinstall lost unrelated Codex configuration'
-            Assert-Equal 0 (Get-LiteralCount $recoveredConfig '[mcp_servers.memory-graph]') 'Recovery reinstall did not retire the exact Memory Graph table'
-            Assert-Contains $recoveredInstructions 'Keep these user instructions.' 'Recovery reinstall lost custom instructions'
-            Assert-Equal 1 (Get-LiteralCount $recoveredInstructions 'ASSISTANT_FRAMEWORK_AGENTS_MD_START') 'Recovery reinstall did not add Codex guidance exactly once'
-            Assert-Equal 0 (Get-LiteralCount $recoveredInstructions 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START') 'Recovery reinstall retained the retired memory protocol'
-            Assert-True ([System.IO.File]::Exists((Join-Path $codexHome 'agents\code-writer.toml'))) 'Recovery reinstall did not install Codex agents'
-            Assert-True ([System.IO.File]::Exists((Join-Path $codexHome 'rules\workflow.rules'))) 'Recovery reinstall did not install Codex rules'
-        }
-    }
-
-    Invoke-Contract 'duplicate-equivalent retired Codex TOML subtrees retire after candidate validation' {
-        Use-IsolatedEnvironment 'ambiguous retired toml ownership' {
-            param($root, $isolatedUserProfile)
-            $fixtures = @(
-                "[mcp_servers.memory-graph]`r`ncommand = `"one`"`r`n[mcp_servers.`"memory-graph`"]`r`ncommand = `"two`"`r`n",
-                "[mcp_servers.memory-graph]`r`ncommand = `"one`"`r`n[mcp_servers.memory-graph.tools.memory_context]`r`napproval_mode = `"approve`"`r`n[mcp_servers.memory-graph]`r`ncommand = `"two`"`r`n"
-            )
-            for ($index = 0; $index -lt $fixtures.Count; $index++) {
-                $codexHome = Join-Path $root ('Codex TOML Fixture ' + $index)
-                [void][System.IO.Directory]::CreateDirectory($codexHome)
-                $configFile = Join-Path $codexHome 'config.toml'
-                $original = $fixtures[$index]
-                [System.IO.File]::WriteAllText($configFile, $original, (New-Object System.Text.UTF8Encoding($false)))
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                $warmup = Invoke-Installer -Arguments @('-Help')
-                Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
-                $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-                Assert-Equal 0 $result.ExitCode "Duplicate-equivalent retired TOML install failed: $($result.Output)"
-                $updated = [System.IO.File]::ReadAllText($configFile)
-                Assert-NotContains $updated 'memory-graph' "Duplicate-equivalent retired TOML fixture $index retained an owned registration"
-            }
-        }
-    }
-
-    Invoke-Contract 'unrelated invalid or unsupported Codex TOML is preserved without blocking retirement' {
+    Invoke-Contract 'unrelated or unsupported Codex TOML is preserved without blocking installation' {
         Use-IsolatedEnvironment 'unrelated unsupported toml' {
             param($root, $isolatedUserProfile)
             $fixtures = @(
@@ -1941,7 +1427,6 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 "foo.bar = 1`r`n",
                 "[custom]`r`nvalues = [`r`n  `"one`",`r`n  `"two`",`r`n]`r`n"
             )
-            $codexCommand = $script:ExternalCodexCommand
             for ($index = 0; $index -lt $fixtures.Count; $index++) {
                 $codexHome = Join-Path $root ('Codex Valid Unsupported TOML Fixture ' + $index)
                 [void][System.IO.Directory]::CreateDirectory($codexHome)
@@ -1949,11 +1434,6 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 $original = $fixtures[$index]
                 [System.IO.File]::WriteAllText($configFile, $original, (New-Object System.Text.UTF8Encoding($false)))
                 [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-
-                if ($null -ne $codexCommand) {
-                    $parseOutput = @(& $codexCommand.Source mcp list 2>&1)
-                    Assert-Equal 0 $LASTEXITCODE "Original valid TOML fixture $index was rejected by Codex: $($parseOutput | Out-String)"
-                }
 
                 $warmup = Invoke-Installer -Arguments @('-Help')
                 Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
@@ -1969,10 +1449,6 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $projectTable = "[projects.`"C:\\Users\\Laimis\\repo`"]`r`ntrust_level = `"trusted`"`r`n`r`n[mcp_servers]`r`nexisting = { command = `"echo`" }`r`n"
             [System.IO.File]::WriteAllText($supportedConfig, $projectTable, (New-Object System.Text.UTF8Encoding($false)))
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $supportedHome, 'Process')
-            if ($null -ne $codexCommand) {
-                $parseOutput = @(& $codexCommand.Source mcp list 2>&1)
-                Assert-Equal 0 $LASTEXITCODE "Unrelated escaped project key was rejected by Codex: $($parseOutput | Out-String)"
-            }
             $supportedResult = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
             Assert-Equal 0 $supportedResult.ExitCode "Unrelated escaped project key blocked installation: $($supportedResult.Output)"
             $supportedUpdated = [System.IO.File]::ReadAllText($supportedConfig)
@@ -1983,7 +1459,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'invalid and wrong-root JSON fail closed and remain byte-identical' {
+    Invoke-Contract 'invalid and wrong-root hook JSON is preserved without blocking installation' {
         Use-IsolatedEnvironment 'invalid json' {
             param($root, $isolatedUserProfile)
             $settingsFile = Join-Path $isolatedUserProfile '.gemini\settings.json'
@@ -1991,7 +1467,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $invalid = "{ invalid json [ fixture ]`r`n"
             [System.IO.File]::WriteAllText($settingsFile, $invalid, (New-Object System.Text.UTF8Encoding($false)))
             $result = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-workflow')
-            Assert-True ($result.ExitCode -ne 0) "Invalid JSON was accepted: $($result.Output)"
+            Assert-Equal 0 $result.ExitCode "Invalid JSON blocked installation: $($result.Output)"
             Assert-Equal $invalid ([System.IO.File]::ReadAllText($settingsFile)) 'Invalid JSON bytes changed'
 
             $wrongHome = Join-Path $root 'Wrong Root User'
@@ -2002,12 +1478,12 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $wrongRoot = "[`r`n  { `"keep`": true }`r`n]`r`n"
             [System.IO.File]::WriteAllText($wrongFile, $wrongRoot, (New-Object System.Text.UTF8Encoding($false)))
             $wrongResult = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-workflow')
-            Assert-True ($wrongResult.ExitCode -ne 0) "Wrong-root JSON was accepted: $($wrongResult.Output)"
+            Assert-Equal 0 $wrongResult.ExitCode "Wrong-root JSON blocked installation: $($wrongResult.Output)"
             Assert-Equal $wrongRoot ([System.IO.File]::ReadAllText($wrongFile)) 'Wrong-root JSON bytes changed'
         }
     }
 
-    Invoke-Contract 'case-variant JSON identities are preserved exactly' {
+    Invoke-Contract 'unmanaged top-level Claude configuration is preserved exactly' {
         Use-IsolatedEnvironment 'json exact update identity' {
             param($root, $isolatedUserProfile)
             $configFile = Join-Path $isolatedUserProfile '.claude.json'
@@ -2023,18 +1499,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             for ($index = 0; $index -lt $fixtures.Count; $index++) {
                 $original = $fixtures[$index]
                 [System.IO.File]::WriteAllText($configFile, $original, (New-Object System.Text.UTF8Encoding($false)))
-                $before = Get-TreeFingerprint -LiteralPath $root
                 $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
-                if ($index -lt 2) {
-                    Assert-Equal 0 $result.ExitCode "Case-variant JSON fixture $index blocked installation: $($result.Output)"
-                    Assert-Equal $original ([System.IO.File]::ReadAllText($configFile)) "Case-variant JSON fixture $index changed"
-                }
-                else {
-                    Assert-True ($result.ExitCode -ne 0) "Duplicate or case-colliding JSON fixture $index was accepted: $($result.Output)"
-                    Assert-Equal $original ([System.IO.File]::ReadAllText($configFile)) "Duplicate or case-colliding JSON fixture $index changed"
-                    Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) "Duplicate or case-colliding JSON fixture $index caused project mutation"
-                    Assert-Contains $result.Output 'JSON property identity' "Duplicate or case-colliding JSON fixture $index lacked an identity diagnostic"
-                }
+                Assert-Equal 0 $result.ExitCode "Unmanaged Claude JSON fixture $index blocked installation: $($result.Output)"
+                Assert-Equal $original ([System.IO.File]::ReadAllText($configFile)) "Unmanaged Claude JSON fixture $index changed"
             }
         }
 
@@ -2052,7 +1519,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'malformed UTF-8 configuration bytes fail before mutation' {
+    Invoke-Contract 'unmanaged configuration bytes are never parsed or modified' {
         Use-IsolatedEnvironment 'invalid utf8 json' {
             param($root, $isolatedUserProfile)
             $configFile = Join-Path $isolatedUserProfile '.claude.json'
@@ -2060,11 +1527,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [System.IO.File]::WriteAllBytes($configFile, $invalidBytes)
             $warmup = Invoke-Installer -Arguments @('-Help')
             Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
-            $before = Get-TreeFingerprint -LiteralPath $root
             $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
-            Assert-True ($result.ExitCode -ne 0) 'Malformed UTF-8 JSON was accepted'
+            Assert-Equal 0 $result.ExitCode "Malformed unmanaged UTF-8 JSON blocked installation: $($result.Output)"
             Assert-Equal ([Convert]::ToBase64String($invalidBytes)) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($configFile))) 'Malformed UTF-8 JSON bytes changed'
-            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Malformed UTF-8 JSON caused project mutation'
         }
 
         Use-IsolatedEnvironment 'invalid utf8 toml' {
@@ -2077,15 +1542,13 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
             $warmup = Invoke-Installer -Arguments @('-Help')
             Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
-            $before = Get-TreeFingerprint -LiteralPath $root
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-True ($result.ExitCode -ne 0) 'Malformed UTF-8 TOML was accepted'
+            Assert-Equal 0 $result.ExitCode "Malformed unmanaged UTF-8 TOML blocked installation: $($result.Output)"
             Assert-Equal ([Convert]::ToBase64String($invalidBytes)) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($configFile))) 'Malformed UTF-8 TOML bytes changed'
-            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Malformed UTF-8 TOML caused project mutation'
         }
     }
 
-    Invoke-Contract 'JSON preflight rejects excessive nesting and values before mutation' {
+    Invoke-Contract 'unmanaged Claude configuration bypasses JSON preflight budgets' {
         Use-IsolatedEnvironment 'json nesting budget' {
             param($root, $isolatedUserProfile)
             $configFile = Join-Path $isolatedUserProfile '.claude.json'
@@ -2094,12 +1557,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [System.IO.File]::WriteAllText($configFile, $original, (New-Object System.Text.UTF8Encoding($false)))
             $warmup = Invoke-Installer -Arguments @('-Help')
             Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
-            $before = Get-TreeFingerprint -LiteralPath $root
             $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
-            Assert-True ($result.ExitCode -ne 0) 'Over-nested JSON was accepted'
+            Assert-Equal 0 $result.ExitCode "Over-nested unmanaged JSON blocked installation: $($result.Output)"
             Assert-Equal $original ([System.IO.File]::ReadAllText($configFile)) 'Over-nested JSON changed'
-            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Over-nested JSON caused project mutation'
-            Assert-Contains $result.Output 'JSON complexity' 'Over-nested JSON lacked a bounded-complexity diagnostic'
         }
 
         Use-IsolatedEnvironment 'json value budget' {
@@ -2109,12 +1569,9 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             [System.IO.File]::WriteAllText($configFile, $original, (New-Object System.Text.UTF8Encoding($false)))
             $warmup = Invoke-Installer -Arguments @('-Help')
             Assert-Equal 0 $warmup.ExitCode 'PowerShell warm-up help invocation failed'
-            $before = Get-TreeFingerprint -LiteralPath $root
             $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
-            Assert-True ($result.ExitCode -ne 0) 'Over-wide JSON was accepted'
+            Assert-Equal 0 $result.ExitCode "Over-wide unmanaged JSON blocked installation: $($result.Output)"
             Assert-Equal $original ([System.IO.File]::ReadAllText($configFile)) 'Over-wide JSON changed'
-            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Over-wide JSON caused project mutation'
-            Assert-Contains $result.Output 'JSON complexity' 'Over-wide JSON lacked a bounded-complexity diagnostic'
         }
     }
 
@@ -2181,7 +1638,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'marker prose is preserved and interleaved marker blocks fail closed' {
+    Invoke-Contract 'marker prose and interleaved marker blocks are preserved without mutation' {
         Use-IsolatedEnvironment 'marker prose and ordering' {
             param($root, $isolatedUserProfile)
             $proseHome = Join-Path $root 'Codex Marker Prose Home'
@@ -2229,7 +1686,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $interleaved = "<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->`r`nA`r`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`r`nM`r`n<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->`r`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`r`nCUSTOM`r`n"
             [System.IO.File]::WriteAllText($interleavedFile, $interleaved, (New-Object System.Text.UTF8Encoding($false)))
             $interleavedResult = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
-            Assert-True ($interleavedResult.ExitCode -ne 0) "Interleaved managed markers did not fail closed: $($interleavedResult.Output)"
+            Assert-Equal 0 $interleavedResult.ExitCode "Interleaved managed markers blocked installation: $($interleavedResult.Output)"
             Assert-Equal $interleaved ([System.IO.File]::ReadAllText($interleavedFile)) 'Interleaved marker blocks changed user-owned instructions'
             Assert-True ($interleavedResult.Output -match 'Ambiguous, duplicate, or unbalanced') 'Interleaved markers lacked an ambiguous, duplicate, or unbalanced diagnostic'
         }
@@ -2403,7 +1860,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
 
             $preflightHome = Join-Path $root 'Codex User File Preflight Home'
             [void][System.IO.Directory]::CreateDirectory($preflightHome)
-            foreach ($relativeLeaf in @('config.toml', 'AGENTS.md', 'hooks.json')) {
+            foreach ($relativeLeaf in @('AGENTS.md', 'hooks.json')) {
                 $leafJunction = Join-Path $preflightHome $relativeLeaf
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $leafJunction))
                 $leafJunctionCreated = $false
@@ -2552,246 +2009,6 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'Memory Graph cleanup exposes explicit dry-run and purge switches' {
-        $cleanup = [System.IO.File]::ReadAllText($script:MemoryCleanupPath)
-        Assert-Contains $cleanup '[switch]$DryRun' 'Cleanup lacks dry-run switch'
-        Assert-Contains $cleanup '[switch]$PurgeData' 'Cleanup lacks explicit purge switch'
-        Assert-NotContains $cleanup 'Invoke-Expression' 'Cleanup evaluates command text'
-        Assert-NotContains $cleanup 'ExecutionPolicy' 'Cleanup changes or bypasses execution policy'
-    }
-
-    Invoke-Contract 'Memory Graph cleanup preserves case-variant TOML and protocol marker identities' {
-        Use-IsolatedEnvironment 'cleanup exact identities' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Codex Exact Identity Home'
-            [void][System.IO.Directory]::CreateDirectory($codexHome)
-            $configFile = Join-Path $codexHome 'config.toml'
-            $agentsFile = Join-Path $codexHome 'AGENTS.md'
-            $originalConfig = "[mcp_servers.Memory-Graph]`r`ncommand = `"keep-case`"`r`n`r`n[mcp_servers.memory-graphical]`r`ncommand = `"keep-similar`"`r`n"
-            $originalAgents = "<!-- assistant_framework_memory_protocol_start -->`r`ncase-variant user marker`r`n<!-- assistant_framework_memory_protocol_end -->`r`n"
-            [System.IO.File]::WriteAllText($configFile, $originalConfig, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText($agentsFile, $originalAgents, (New-Object System.Text.UTF8Encoding($false)))
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-
-            $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-
-            Assert-Equal 0 $result.ExitCode "Cleanup rejected unrelated case-variant identities: $($result.Output)"
-            Assert-Equal $originalConfig ([System.IO.File]::ReadAllText($configFile)) 'Cleanup treated case-variant or similarly named TOML identity as owned'
-            Assert-Equal $originalAgents ([System.IO.File]::ReadAllText($agentsFile)) 'Cleanup treated lowercase memory protocol markers as owned'
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup removes the exact historical contiguous preamble while preserving BOM CRLF and bare-CR bytes' {
-        Use-IsolatedEnvironment 'cleanup historical protocol preamble bytes' {
-            param($root, $isolatedUserProfile)
-            foreach ($lineEnding in @("`r`n", "`r")) {
-                $codexHome = Join-Path $root ('Historical Preamble ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lineEnding)))
-                [void][System.IO.Directory]::CreateDirectory($codexHome)
-                $agentsFile = Join-Path $codexHome 'AGENTS.md'
-                $lines = @(
-                    'user-prefix',
-                    '',
-                    '# Assistant Framework — Memory Protocol',
-                    '',
-                    '## Role',
-                    '',
-                    'You are an orchestrator. You delegate ALL file editing, code implementation, and phase execution to specialized agents.',
-                    '<!-- This is a template. Paths like ~/.codex/ are substituted during install.sh for non-Claude agents. -->',
-                    '<!-- Appended by Assistant Framework install. Do not remove this marker. -->',
-                    '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->',
-                    'retired protocol',
-                    '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->',
-                    'user-suffix',
-                    ''
-                )
-                $originalBytes = [byte[]](0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes(($lines -join $lineEnding))
-                $expectedBytes = [byte[]](0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes(('user-prefix' + $lineEnding + 'user-suffix' + $lineEnding))
-                [System.IO.File]::WriteAllBytes($agentsFile, $originalBytes)
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-
-                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-
-                Assert-Equal 0 $result.ExitCode "Cleanup rejected the exact historical preamble: $($result.Output)"
-                Assert-Equal $expectedBytes ([System.IO.File]::ReadAllBytes($agentsFile)) 'Cleanup did not remove the whole historical preamble while preserving BOM and external line-ending bytes'
-            }
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup rejects exact duplicate JSON before removing the retired entry' {
-        Use-IsolatedEnvironment 'cleanup duplicate JSON identity' {
-            param($root, $isolatedUserProfile)
-            $claudeConfig = Join-Path $isolatedUserProfile '.claude.json'
-            $original = '{"mcpServers":{"memory-graph":{"command":"retired"}},"custom":{"command":"one","command":"two"}}'
-            [System.IO.File]::WriteAllText($claudeConfig, $original, (New-Object System.Text.UTF8Encoding($false)))
-
-            $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'claude')
-
-            Assert-True ($result.ExitCode -ne 0) "Cleanup accepted exact duplicate JSON identity: $($result.Output)"
-            Assert-Equal $original ([System.IO.File]::ReadAllText($claudeConfig)) 'Cleanup changed exact duplicate JSON before failing closed'
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup removes native Codex skills while CODEX_HOME retains its own retired artifacts and provider data' {
-        Use-IsolatedEnvironment 'native Codex cleanup' {
-            param($root, $isolatedUserProfile)
-            $nativeSkillsRoot = Join-Path $isolatedUserProfile '.agents\skills'
-            $nativeMemorySkill = Join-Path $nativeSkillsRoot 'assistant-memory'
-            $nativeReflexionSkill = Join-Path $nativeSkillsRoot 'assistant-reflexion'
-            $codexHome = Join-Path $root 'Custom Codex Home'
-            $codexTool = Join-Path $codexHome 'tools\memory-graph'
-            $codexMemory = Join-Path $codexHome 'memory'
-            [void][System.IO.Directory]::CreateDirectory($nativeMemorySkill)
-            [void][System.IO.Directory]::CreateDirectory($nativeReflexionSkill)
-            [void][System.IO.Directory]::CreateDirectory($codexTool)
-            [void][System.IO.Directory]::CreateDirectory($codexMemory)
-            [System.IO.File]::WriteAllText((Join-Path $nativeMemorySkill 'SKILL.md'), 'retired native memory skill')
-            [System.IO.File]::WriteAllText((Join-Path $nativeReflexionSkill 'SKILL.md'), 'retired native reflexion skill')
-            [System.IO.File]::WriteAllText((Join-Path $codexTool 'run-memory-graph.ps1'), 'retired tool')
-            [System.IO.File]::WriteAllText((Join-Path $codexMemory 'graph.db'), 'provider memory remains by default')
-            [System.IO.File]::WriteAllText((Join-Path $codexHome 'config.toml'), "[mcp_servers.memory-graph]`ncommand = 'retired'`n`n[mcp_servers.custom]`ncommand = 'keep'`n")
-            [System.IO.File]::WriteAllText((Join-Path $codexHome 'AGENTS.md'), "User instruction remains.`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`nretired protocol`n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`n")
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-
-            $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-
-            Assert-Equal 0 $result.ExitCode "Memory Graph cleanup failed: $($result.Output)"
-            Assert-False (Test-Path -LiteralPath $nativeMemorySkill) 'Cleanup retained assistant-memory under the native %USERPROFILE%\.agents\skills location'
-            Assert-False (Test-Path -LiteralPath $nativeReflexionSkill) 'Cleanup retained assistant-reflexion under the native %USERPROFILE%\.agents\skills location'
-            Assert-False (Test-Path -LiteralPath $codexTool) 'Cleanup retained the retired Memory Graph tool under CODEX_HOME'
-            Assert-NotContains ([System.IO.File]::ReadAllText((Join-Path $codexHome 'config.toml'))) '[mcp_servers.memory-graph]' 'Cleanup retained the retired Codex MCP registration under CODEX_HOME'
-            Assert-Contains ([System.IO.File]::ReadAllText((Join-Path $codexHome 'config.toml'))) '[mcp_servers.custom]' 'Cleanup removed an unrelated Codex MCP registration'
-            Assert-NotContains ([System.IO.File]::ReadAllText((Join-Path $codexHome 'AGENTS.md'))) 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START' 'Cleanup retained the retired Codex instruction marker under CODEX_HOME'
-            Assert-Contains ([System.IO.File]::ReadAllText((Join-Path $codexHome 'AGENTS.md'))) 'User instruction remains.' 'Cleanup removed user-authored Codex instructions'
-            Assert-True (Test-Path -LiteralPath (Join-Path $codexMemory 'graph.db') -PathType Leaf) 'Cleanup removed provider memory without -PurgeData'
-        }
-    }
-
-    Invoke-Contract 'native PowerShell cleanup preserves protected Codex config owner group and DACL during successful retirement' {
-        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-            Skip-Contract -Name 'native PowerShell cleanup preserves protected Codex config owner group and DACL during successful retirement' -Reason 'protected owner/group/DACL preservation requires Windows'
-            return
-        }
-        Use-IsolatedEnvironment 'cleanup protected codex config ACL' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Protected Codex Home'
-            $configFile = Join-Path $codexHome 'config.toml'
-            $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-            $provider = Join-Path $codexHome 'memory\graph.db'
-            $fakeBin = Join-Path $root 'fake-codex'
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-            [void][System.IO.Directory]::CreateDirectory($fakeBin)
-            [System.IO.File]::WriteAllText($runtime, 'retired runtime')
-            [System.IO.File]::WriteAllText($provider, 'provider data')
-            [System.IO.File]::WriteAllText($configFile, "[mcp_servers.memory-graph]`r`ncommand = `"retire`"`r`n`r`n[mcp_servers.keep]`r`ncommand = `"keep`"`r`n", (New-Object System.Text.UTF8Encoding($false)))
-            $protectedAcl = Get-Acl -LiteralPath $configFile
-            $protectedAcl.SetAccessRuleProtection($true, $false)
-            foreach ($rule in @($protectedAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) {
-                [void]$protectedAcl.RemoveAccessRuleSpecific($rule)
-            }
-            $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-            [void]$protectedAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($currentUser, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.Security.AccessControl.AccessControlType]::Allow)))
-            $builtInUsers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
-            [void]$protectedAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($builtInUsers, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, [System.Security.AccessControl.AccessControlType]::Allow)))
-            Set-Acl -LiteralPath $configFile -AclObject $protectedAcl
-            $configAclBefore = Get-Acl -LiteralPath $configFile
-            Assert-True $configAclBefore.AreAccessRulesProtected 'Protected cleanup config ACL fixture lost inheritance protection before cleanup'
-            $fakeSource = @'
-if ($args.Count -ne 3 -or $args[0] -cne 'mcp' -or $args[1] -cne 'list' -or $args[2] -cne '--json') { exit 64 }
-if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { exit 64 }
-$configFile = Join-Path $env:CODEX_HOME 'config.toml'
-if (-not [IO.File]::Exists($configFile)) { exit 64 }
-$hasCanonicalTable = $false
-foreach ($line in [IO.File]::ReadAllLines($configFile)) {
-    if ([string]::Equals($line, '[mcp_servers.memory-graph]', [System.StringComparison]::Ordinal)) { $hasCanonicalTable = $true; break }
-}
-if ($hasCanonicalTable) { '[{"name":"memory-graph"}]' } else { '[]' }
-exit 0
-'@
-            [System.IO.File]::WriteAllText((Join-Path $fakeBin 'codex.ps1'), $fakeSource, (New-Object Text.UTF8Encoding($false)))
-            $oldPath = $env:PATH
-            try {
-                $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath
-                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-                $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-            }
-            finally { $env:PATH = $oldPath }
-            Assert-Equal 0 $result.ExitCode "Protected config cleanup failed: $($result.Output)"
-            Assert-OwnerGroupDaclEquivalent -Expected $configAclBefore -Actual (Get-Acl -LiteralPath $configFile) -Message 'Protected config owner, group, DACL protection, or effective rules changed during cleanup rewrite'
-            Assert-True (Get-Acl -LiteralPath $configFile).AreAccessRulesProtected 'Protected config DACL lost inheritance protection during cleanup rewrite'
-            Assert-NotContains ([System.IO.File]::ReadAllText($configFile)) '[mcp_servers.memory-graph]' 'Cleanup retained the retired Codex registration'
-            Assert-Contains ([System.IO.File]::ReadAllText($configFile)) '[mcp_servers.keep]' 'Cleanup removed an unrelated Codex registration'
-            Assert-False (Test-Path -LiteralPath (Split-Path -Parent $runtime)) 'Cleanup retained the retired runtime'
-            Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Cleanup removed provider data without -PurgeData'
-        }
-    }
-
-    Invoke-Contract 'native cleanup ACL repair and post-set rollback paths are executable only on Windows' {
-        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-            Skip-Contract -Name 'native cleanup ACL repair and post-set rollback paths are executable only on Windows' -Reason 'handle-bound DACL drift and rollback injection requires Windows'
-            return
-        }
-        $cleanup = [System.IO.File]::ReadAllText($script:MemoryCleanupPath)
-        $writerStart = $cleanup.IndexOf('function Write-AtomicUtf8', [System.StringComparison]::Ordinal)
-        $writerEnd = $cleanup.IndexOf('function Get-TomlBasicKey', $writerStart, [System.StringComparison]::Ordinal)
-        Assert-True ($writerStart -ge 0 -and $writerEnd -gt $writerStart) 'Cleanup atomic writer boundary was not found for native ACL injection'
-        $writer = $cleanup.Substring($writerStart, $writerEnd - $writerStart)
-        $repair = $writer.IndexOf('Set-FileStreamAcl -Stream $committedStream', [System.StringComparison]::Ordinal)
-        $readback = $writer.IndexOf('Get-FileStreamAcl -Stream $committedStream', $repair, [System.StringComparison]::Ordinal)
-        $rollback = $writer.IndexOf('Atomic rollback ACL verification failed', [System.StringComparison]::Ordinal)
-        Assert-True ($repair -ge 0 -and $readback -gt $repair -and $rollback -gt $readback) 'Native cleanup does not expose ordered committed-handle repair, readback, and rollback injection points'
-    }
-
-    Invoke-Contract 'Memory Graph cleanup rejects NBSP JSON whitespace before mutation' {
-        Use-IsolatedEnvironment 'cleanup nbsp json' {
-            param($root, $isolatedUserProfile)
-            $settingsFile = Join-Path $isolatedUserProfile '.claude\settings.json'
-            $runtime = Join-Path $isolatedUserProfile '.claude\tools\memory-graph\run-memory-graph.ps1'
-            $provider = Join-Path $isolatedUserProfile '.claude\memory\graph.db'
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-            [System.IO.File]::WriteAllText($runtime, 'runtime')
-            [System.IO.File]::WriteAllText($provider, 'provider')
-            $original = "{`u{00A0}`"mcpServers`":{`"memory-graph`":{`"command`":`"retire`"}}}"
-            [System.IO.File]::WriteAllText($settingsFile, $original, (New-Object System.Text.UTF8Encoding($false)))
-
-            $result = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'claude')
-
-            Assert-True ($result.ExitCode -ne 0) "Cleanup accepted NBSP JSON whitespace: $($result.Output)"
-            Assert-Equal $original ([System.IO.File]::ReadAllText($settingsFile)) 'Cleanup mutated NBSP JSON bytes'
-            Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Cleanup deleted runtime after NBSP JSON rejection'
-            Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Cleanup deleted provider data after NBSP JSON rejection'
-            Assert-Contains $result.Output $settingsFile 'NBSP diagnostic omitted the affected settings path'
-        }
-    }
-
-    Invoke-Contract 'Memory Graph cleanup tokenizes bare-CR markers consistently and preserves ambiguous documents' {
-        Use-IsolatedEnvironment 'cleanup bare cr markers' {
-            param($root, $isolatedUserProfile)
-            $codexHome = Join-Path $root 'Bare CR Codex Home'
-            $agentsFile = Join-Path $codexHome 'AGENTS.md'
-            $runtime = Join-Path $codexHome 'tools\memory-graph\run-memory-graph.ps1'
-            $provider = Join-Path $codexHome 'memory\graph.db'
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtime))
-            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $provider))
-            [System.IO.File]::WriteAllText($runtime, 'runtime')
-            [System.IO.File]::WriteAllText($provider, 'provider')
-            $ambiguous = "prefix`r<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`r<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->`r<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->`r<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`rsuffix`r"
-            [System.IO.File]::WriteAllText($agentsFile, $ambiguous, (New-Object System.Text.UTF8Encoding($false)))
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
-            $failed = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-            Assert-True ($failed.ExitCode -ne 0) "Cleanup accepted interleaved bare-CR markers: $($failed.Output)"
-            Assert-Equal $ambiguous ([System.IO.File]::ReadAllText($agentsFile)) 'Cleanup changed ambiguous bare-CR markers'
-            Assert-True (Test-Path -LiteralPath $runtime -PathType Leaf) 'Cleanup deleted runtime after ambiguous bare-CR markers'
-            Assert-True (Test-Path -LiteralPath $provider -PathType Leaf) 'Cleanup deleted provider data after ambiguous bare-CR markers'
-
-            $balanced = "prefix`r<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->`rretired`r<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->`rsuffix`r"
-            [System.IO.File]::WriteAllText($agentsFile, $balanced, (New-Object System.Text.UTF8Encoding($false)))
-            $success = Invoke-PowerShellFile -LiteralPath $script:MemoryCleanupPath -Arguments @('-Agent', 'codex')
-            Assert-Equal 0 $success.ExitCode "Cleanup rejected balanced bare-CR markers: $($success.Output)"
-            Assert-Equal "prefix`rsuffix`r" ([System.IO.File]::ReadAllText($agentsFile)) 'Cleanup did not preserve external bare-CR bytes while removing the owned marker block'
-        }
-    }
 }
 finally {
     if (Test-Path -LiteralPath $script:SuiteRoot) {

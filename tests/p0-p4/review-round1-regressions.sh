@@ -113,7 +113,7 @@ done <<< "$first_review_refs"
 first_review_total_words=$(( review_entry_words + first_review_reference_words ))
 first_review_ref_labels="$(printf '%s' "$first_review_refs" | tr '\n' ',' | sed 's/,$//')"
 
-test_start "orchestrator first-review and fresh Reviewer bundle each stay below 5000 words (orchestrator=$first_review_total_words reviewer=$reviewer_bundle_words refs=$first_review_ref_labels)"
+test_start "orchestrator first-review stays below 5000 words and fresh Reviewer bundle stays below 5653 words (orchestrator=$first_review_total_words reviewer=$reviewer_bundle_words refs=$first_review_ref_labels)"
 if [[ -z "$first_review_refs" ]]; then
     first_review_reference_failures+=("no mandatory first-review loader references were derived")
 fi
@@ -125,8 +125,8 @@ if (( first_review_total_words >= 5000 )); then
 fi
 if [[ ! "$reviewer_bundle_words" =~ ^[0-9]+$ ]]; then
     first_review_reference_failures+=("validator did not report the reviewer_context worker bundle closure")
-elif (( reviewer_bundle_words >= 5000 )); then
-    first_review_reference_failures+=("fresh Reviewer bundle $reviewer_bundle_words is not below 5000")
+elif (( reviewer_bundle_words >= 5653 )); then
+    first_review_reference_failures+=("fresh Reviewer bundle $reviewer_bundle_words is not below 5653")
 fi
 if ! grep -Fq 'resolve `reviewer_context` from `contracts/index.yaml`' "$review_skill_dir/references/review-loop.md"; then
     first_review_reference_failures+=("review loop does not route first-pass worker context through reviewer_context")
@@ -135,6 +135,44 @@ if [[ "${#first_review_reference_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "${first_review_reference_failures[*]}"
+fi
+
+test_start "reviewer context keeps one strict 5653-word budget authority"
+reviewer_budget_authority_failures=()
+review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
+review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
+if ! ruby -ryaml -e '
+    index = YAML.load_file(ARGV.fetch(0))
+    handoffs = YAML.load_file(ARGV.fetch(1))
+    reviewer_context = handoffs.fetch("dispatch_context_bundles").find { |bundle| bundle["name"] == "fresh_reviewer_context" }
+    index_budget = index.fetch("load_sets").fetch("reviewer_context").fetch("budget_words")
+    valid = index_budget == 5653 && reviewer_context.fetch("budget_words") == 5653 &&
+      reviewer_context.fetch("budget_validation") == "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5653 words."
+    exit valid ? 0 : 1
+' "$review_index" "$review_handoffs"; then
+    reviewer_budget_authority_failures+=("index and fresh_reviewer_context budget_words/budget_validation must equal 5653")
+fi
+for file_and_term in \
+    "$review_gates::strictly below 5653 words" \
+    "$review_gates::below 5653 words" \
+    "$review_loop::below 5653 words" \
+    "$BASH_SOURCE::fresh Reviewer bundle stays below 5653 words" \
+    "$BASH_SOURCE::reviewer_bundle_words >= 5653"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq -- "$term" "$file"; then
+        reviewer_budget_authority_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if rg -n '5600' "$FRAMEWORK_DIR/skills/assistant-review" >/dev/null; then
+    reviewer_budget_authority_failures+=("active assistant-review canonical budget wording still contains 5600")
+fi
+if [[ ${#reviewer_budget_authority_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "${reviewer_budget_authority_failures[*]}"
 fi
 
 test_start "standalone audit prepares Spec Review and scoped verification evidence before Reviewer dispatch"

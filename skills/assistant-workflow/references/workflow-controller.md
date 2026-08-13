@@ -98,6 +98,15 @@ gates.
   delegation, compaction/cross-session continuation, explicit persistence, or
   strict/harness/required-QA execution. Medium+ size alone does not force a task
   journal; `journal` owns durable state when one of those triggers applies.
+- Progressive uncertainty selects `workflow_state_mode=journal` when local
+  state artifacts are configured and policy allows them; otherwise use the
+  equivalent carried-state fallback. Keep `progressive_discovery_state` and its
+  compact decision refs in the existing journal/equivalent carried state, never
+  a second store.
+- Progressive Discover is a no-execution boundary. Any mutating prerequisite
+  must use a separate approved workflow that returns evidence; this controller
+  does not authorize project/source mutation, external writes, or branch work
+  inside progressive Discover.
 - Use `manual_verification_mode=required` only for an explicit request,
   subjective or UI acceptance, external effects, destructive/migration work,
   or inadequate automated verification. Optional steps do not create a wait,

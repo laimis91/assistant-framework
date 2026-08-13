@@ -24,13 +24,13 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v3. Applicable direct-user,
+Migration note: assistant-review contracts are v6. Pack projections require non-empty boundaries, exact five-concern design-pressure coverage, and a current authoritative `ref` that preserves recoverable selected design, rationale, and viable alternatives/dispositions; triggered Reviewer returns require `architecture_decision_pack_checks`. v4 Pack review carries canonical `architecture_design_mode`; its nested Pack mode must match and review-intensive review requires independent challenge evidence. Applicable direct-user,
 `AGENTS.md`, and active-skill instructions trigger required Reviewer and QA
 roles; record their provenance and covered work in `subagent_trigger_scope`
 without a second permission question. Explicit opt-out, real unavailability,
 and exact active policy blocks retain direct fallback. Every Reviewer return and
-final summary now requires a non-empty `reviewed_scope` string array so workflow
-v4 can consume the producer packet without deriving or guessing its boundary.
+final summary requires a non-empty `reviewed_scope` string array so workflow
+consumers can use the producer packet without deriving or guessing its boundary.
 
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 
@@ -48,6 +48,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 - Findings are severity-ranked with evidence and confidence.
 - Every Reviewer return names the non-empty `reviewed_scope` actually inspected.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
+- When a carried Architecture Decision Pack applies, the review checks its freshness, ownership/dependency boundary, semantic type ledger, falsifiable quality scenarios, compatibility/extension seam, and verification handoff.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
 - Validation and a fresh review follow fixes.
 - QA evaluation runs after code-review/build evidence when `qa_evaluation_mode=required`, returns score progression and a final acceptance verdict, and does not replace code-reviewer.
@@ -90,6 +91,7 @@ The fresh Reviewer context bundle points to `references/review-checklists.md` an
 - Agentic loop flag -> Agentic Loop Safety Checklist -> `agentic_loop_safety_checks`.
 - Behavioral flag -> Behavioral Contract Review Checklist -> `behavioral_contract_checks`.
 - Semantic flag -> Semantic Contract Review Checklist -> `semantic_contract_checks`.
+- Architecture Decision Pack flag -> Architecture Decision Pack Review Checklist -> `architecture_decision_pack_checks`.
 
 ## Refactor-Related Findings
 
@@ -107,9 +109,13 @@ Every refactor-related finding MUST state the risk category, affected surface, e
 
 Use concrete risk framing instead of generic convention, style, cleanliness, or improvement language. Request broad cleanup only when a smaller durable fix cannot remove the risk.
 
+## Architecture Decision Pack Review
+
+Review a Pack only when workflow metadata or review material says one applies. Its nested mode must equal canonical `architecture_design_mode`; review-intensive review requires independent challenge evidence. It is a compact, durable decision record, not a permanent architect role or global memory. Require source/revision freshness and every material question that could invalidate the decision; group questions with why, risk if guessed, and a safe default where available. Check control/early-exit behavior, ownership/disposal, bounded resource envelope, extension registration, and the representative producer-consumer path before accepting an interface or engine. Treat generic `string`, numeric, collection, or callback interfaces as a finding when they erase domain/public/lifecycle semantics without an explicit local-boundary primitive exception and conversion/validation. Do not approve memory, performance, or extensibility claims without workload, budget, measurement method, and failure condition; mark absent evidence as unknown or a verification gap.
+
 ## Principle and Readability Lens
 
-The fresh Reviewer bundle includes `references/review-principles.md` for the SOLID, KISS, DRY, YAGNI, and readability lens. Report a principle finding only when evidence shows concrete correctness, coupling, duplication, complexity, or maintainability risk.
+The fresh Reviewer bundle includes `references/review-principles.md` for clean-code checks. For medium+ scope, run its Design Coherence Pass and return `principle_checks.design_coherence`: evidence-backed risk or `no concrete risk found`, never a structural heuristic. Report findings only with concrete risk.
 
 For each principle/readability finding, include the violated lens, affected surface, concrete evidence, risk category, and smallest durable fix. Do not report acronym-only findings such as "violates SOLID" without naming the observed behavior and the user-facing or maintainer risk.
 

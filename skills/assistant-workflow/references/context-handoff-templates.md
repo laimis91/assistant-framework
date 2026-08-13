@@ -22,6 +22,7 @@ Every handoff must separate **pinned context** from **compressible context** so 
 - Latest user request and any later corrections that supersede earlier work.
 - Task-state reconciliation result and the user/repository evidence supporting it.
 - Goal, non-goals, acceptance criteria, and risk/safety constraints.
+- Current Architecture Decision Pack reference, freshness basis, design-pressure conclusions, semantic type/primitive-exception commitments, quality verification, and invalidation conditions when one applies.
 - Current phase, current branch/PR/state artifact paths, and exact next action.
 - Files changed or intentionally in scope.
 - Validation commands already run and exact pass/fail/blocker results.
@@ -60,6 +61,7 @@ A continuation packet must include these fields:
 ## Pinned Requirements
 - Acceptance criteria:
 - Safety / policy constraints:
+- Architecture Decision Pack: [ref or N/A with concrete reason]
 - Output contract:
 
 ## Work State

@@ -112,7 +112,7 @@ else
 fi
 
 test_start "entry loading defers exact field names to the canonical selector"
-if p0p4_contains_text "$workflow/SKILL.md" 'load the exact entry fields declared by `contracts/index.yaml`' \
+if grep -Eq '^- `entry`: load (the exact )?entry fields declared by `contracts/index\.yaml` from `contracts/input\.yaml`;' "$workflow/SKILL.md" \
     && ! grep -Fq 'select `task_description`, `task_type`, `scope_hint`' "$workflow/SKILL.md"; then
     pass
 else

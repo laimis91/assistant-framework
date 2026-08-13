@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "4.0"
+schema_version: "8.0"
 contract: input
 skill: assistant-workflow
 
@@ -56,8 +56,8 @@ fields:
   - name: required_agents
     type: string[]
     required: false
-    description: "Agent or skill roles required by size, task type, and risk tier"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Separated role names remain Code Writer, Builder/Tester, and Code Reviewer. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
+    description: "Agent or skill roles required by concrete task uncertainty, task type, risk tier, and explicit user/project routing"
+    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect are selected only for a concrete mapping, lifecycle, or Architecture Decision Pack uncertainty, not from size alone. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
     default: []
     on_missing: skip
 
@@ -157,9 +157,9 @@ fields:
   - name: requirement_acceptance_map
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
-    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion"
-    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason"
+    condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
+    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
+    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff retired_or_excluded_deferred_uncertainty_refs entry is traced exactly once as a non-goal or approved exclusion."
     on_missing: fail
     object_fields:
       - name: intended_outcome
@@ -182,10 +182,37 @@ fields:
         required: true
         description: "Explicit exclusions; may be empty"
         on_missing: fail
+      - name: source_route_clear_handoff_ref
+        type: string
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        description: "Durable source reference to the consumed progressive route-clear handoff"
+        validation: "Resolves to the source route_clear_handoff, whose consumed_by_requirement_acceptance_map_ref resolves to this consuming Requirement Acceptance Map; together they validate the reciprocal back-reference rather than equal values. The handoff decisions and constraints are traced into applicable accepted map state; exclusions appear in non_goals or entries with status=approved_exclusion; every retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non_goals element or entries element with status=approved_exclusion; and each acceptance_seed becomes an entries[].acceptance_criterion with binary acceptance."
+        on_missing: fail
+      - name: retired_or_excluded_deferred_uncertainty_traces
+        type: object[]
+        required: conditional
+        condition: "progressive_route_clear_consumption_state == consumed and progressive_artifact_retention_state != terminally_archived"
+        min_items: 0
+        validation: "Binds every source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs ref exactly once to a concrete consuming target. Empty only when the source collection is empty; no unknown, duplicate, or wrong-disposition source ref is allowed."
+        object_fields:
+          - name: source_retired_or_excluded_deferred_uncertainty_ref
+            type: string
+            required: true
+            validation: "Resolves exactly once to one source route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry"
+          - name: target_disposition
+            type: enum
+            required: true
+            enum_values: [non_goal, approved_exclusion]
+          - name: target_ref
+            type: string
+            required: true
+            validation: "Resolves to the concrete non_goals element for non_goal or entries element with status=approved_exclusion for approved_exclusion"
       - name: entries
         type: object[]
         required: true
-        min_items: 1
+        min_items: 0
+        validation: "Non-empty when any accepted requirement, source route_clear_handoff decision, or acceptance_seed exists. Empty only for the exact all-excluded route whose source decisions and acceptance_seed are empty and whose excluded or retired lineage is traced exactly once to concrete non_goals or approved-exclusion targets."
         on_missing: fail
         object_fields:
           - name: requirement_id
@@ -291,15 +318,18 @@ fields:
     required: false
     enum_values: [inline, journal]
     description: "Whether workflow state stays in the current response/plan packet or is persisted in the durable task journal."
-    validation: "inline is valid for light work and standard work that does not need persistence. journal is required when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
+    validation: "inline is valid when uncertainty_shape == bounded for light or standard work that does not need persistence. For progressive uncertainty, inline is only the equivalent carried-state fallback when local state artifacts are unavailable or policy-disallowed. journal is required when uncertainty_shape == progressive and local state artifacts are configured and policy allows them, or when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
     default: inline
     on_missing: infer
     infer_from: >
-      Use journal when the task enters clarification wait, uses delegated workflow roles,
-      is expected to cross sessions or compaction boundaries, explicitly requests persisted
+      Use journal when uncertainty_shape == progressive and local state artifacts are configured
+      and policy allows them, or when the task enters clarification wait, uses delegated workflow
+      roles, is expected to cross sessions or compaction boundaries, explicitly requests persisted
       workflow state, uses controller_intensity == strict, harness_capable == true, or
-      qa_evaluation_mode == required. Otherwise use inline, including small low-risk work and
-      ordinary standard work whose approved plan and evidence fit safely in the active packet.
+      qa_evaluation_mode == required. When progressive local state artifacts are unavailable or
+      policy-disallowed, use inline with the equivalent carried-state fallback. Otherwise use
+      inline only when uncertainty_shape == bounded, including small low-risk work and ordinary
+      standard work whose approved plan and evidence fit safely in the active packet.
 
   - name: manual_verification_mode
     type: enum
@@ -348,6 +378,25 @@ fields:
     on_missing: infer
     infer_from: "Use candidate_search for explicit alternatives, open-ended architecture/design, optimization-heavy work, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots; use lightweight for ordinary tasks with 1-3 obvious options; otherwise none."
 
+  - name: architecture_design_mode
+    type: enum
+    required: false
+    enum_values: [not_applicable, lightweight, required, review_intensive]
+    description: "Whether the task needs a typed Architecture Decision Pack before executable planning"
+    validation: "not_applicable requires a concrete reason that the change has one evidenced local path and no meaningful changed boundary, data lifecycle, public contract, resource target, extension seam, or competing design. lightweight records one bounded design decision. required covers new systems, cross-boundary/public contracts, persistent data lifecycle, material extensibility/resource targets, or genuinely viable designs. review_intensive adds independent challenge for high-risk or conflicting drivers. Size alone is never a trigger."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use required when the task creates a system or changes a cross-boundary/public contract, persistent data lifecycle, material memory/performance/reliability/extensibility target, or has genuinely viable architectures. Use lightweight for one local owner/dependency/type/verification decision. Use review_intensive only for high-risk or conflicting drivers that need independent challenge. Otherwise use not_applicable and record the concrete reason."
+
+  - name: architecture_design_trigger_reasons
+    type: string[]
+    required: true
+    min_items: 1
+    description: "Concrete architecture trigger reasons or not-applicable rationale selected during Triage"
+    validation: "Non-empty. Each entry names an observed trigger such as cross-boundary contract, data lifecycle, resource target, extension seam, genuinely viable alternative, or conflicting driver; when architecture_design_mode=not_applicable, record the concrete evidenced local-path reason."
+    on_missing: infer
+    infer_from: "Derive from the request and candidate scope scan; record only triggers supported by local or user evidence. Concrete reason required even when architecture_design_mode=not_applicable."
+
   - name: candidate_search_goal
     type: string
     required: false
@@ -363,6 +412,56 @@ fields:
     validation: "Each entry must come from user constraints, approved plan boundaries, policy constraints, or discovered project constraints."
     default: []
     on_missing: skip
+
+  - name: uncertainty_shape
+    type: enum
+    required: false
+    enum_values: [bounded, progressive]
+    description: "Whether outcome-shaping uncertainty is already precise enough for ordinary Discover or must be resolved progressively before executable planning"
+    validation: "bounded is the default. Use progressive only when a not-yet-precise outcome-shaping unknown is unlocked by a predecessor; fully specified tasks remain bounded, and size alone is not a trigger."
+    default: bounded
+    on_missing: infer
+    infer_from: "Use bounded unless an outcome-shaping unknown cannot yet be stated precisely and a predecessor decision will unlock it."
+
+  - name: progressive_discovery_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, mapping, resolving, route_clear, blocked]
+    description: "Current typed state for progressive Discover decision work"
+    validation: "not_applicable requires uncertainty_shape=bounded. mapping, resolving, route_clear, and blocked require uncertainty_shape=progressive."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable for bounded uncertainty. For progressive uncertainty, use mapping until a decision map exists, resolving while the frontier has work, route_clear when the route can return to bounded Discover, or blocked when the next required decision cannot proceed."
+
+  - name: progressive_route_clear_consumption_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, pending, consumed]
+    description: "Durable state for Requirement Acceptance Map consumption of a progressive route-clear handoff"
+    validation: "not_applicable applies to ordinary bounded work with no route_clear_handoff. pending mirrors route_clear_handoff.consumption_state=pending while progressive route_clear prepares the map. consumed requires reciprocal map consumption and remains consumed after the bounded/not_applicable transition. While progressive_artifact_retention_state=retained, the consumed marker keeps requirement_acceptance_map and its reciprocal refs required; terminally_archived may release those progressive artifacts without rewriting consumed history."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable for ordinary bounded/no-handoff work. Use pending when route_clear_handoff.consumption_state=pending. Use consumed only after requirement_acceptance_map.source_route_clear_handoff_ref and route_clear_handoff.consumed_by_requirement_acceptance_map_ref form reciprocal map consumption; retain consumed as historical lifecycle state after the atomic bounded/not_applicable transition and terminal archival."
+
+  - name: progressive_sequence_readiness_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, active, closed]
+    description: "External lifecycle applicability for one progressive decision-map sequence readiness record"
+    validation: "not_applicable applies before a second progressive activation and to ordinary bounded or generic loops. Set active atomically with loop_readiness_assessment before the second activation; while active, retain the same readiness_assessment_id, progressive_decision_map_ref, immutable cap, and cumulative activation/resolution history through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, progressive_artifact_retention_state=retained keeps the same record while the task remains active/resumable or compacts; only terminally_archived after explicit final archival/termination permits omission. Closed is terminal for the same decision map and cannot reopen or reset its record."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use not_applicable unless a progressive decision sequence has reached its second activation. Set active atomically with the existing readiness assessment before that activation and retain it through durable route-clear consumption. Then set closed; after it becomes closed, retain the same record while progressive_artifact_retention_state=retained. terminally_archived permits omission only after explicit final archival/termination makes continuation impossible. Never reopen or reset closed for the same decision map."
+
+  - name: progressive_artifact_retention_state
+    type: enum
+    required: false
+    enum_values: [not_applicable, retained, terminally_archived]
+    description: "Typed lifecycle for durable progressive artifacts carried after live progressive Discover ends"
+    validation: "not_applicable applies when no durable progressive artifact chain exists. retained is required while durable markers are pending/consumed or active/closed and continuation or reference resolution remains possible, and keeps every durable reference resolvable during active/resumable work. terminally_archived requires explicit final archival/termination evidence that continuation and reference resolution are impossible; progressive_terminal_archival must be present before terminally_archived state is persisted or resumed, with exact current_task_identity and final_progressive_decision_map_ref plus a typed basis and resolvable evidence_refs; dangling or unresolved evidence_refs fail closed. It requires one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable. Task state: completed does not qualify by itself. terminally_archived is invalid while route-clear consumption is pending or sequence readiness is active, is terminal, and cannot revert to retained for the same task and decision map."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use retained whenever either durable progressive marker requires resumable artifacts and no final archival evidence applies. Use terminally_archived only as one atomic transition with uncertainty_shape=bounded and progressive_discovery_state=not_applicable when progressive_terminal_archival is already present and its task identity, final map identity, typed basis, and every evidence_ref resolve exactly. Never infer terminally_archived from Task state: completed or generic archival evidence."
 
   - name: clarification_status
     type: enum
@@ -387,14 +486,6 @@ fields:
     required: false
     description: "Number of clarification questions asked during Discover"
     validation: "Must be zero or greater. May be zero for any task size when prompt plus code/context are sufficiently clear."
-    default: 0
-    on_missing: skip
-
-  - name: clarification_question_cap
-    type: int
-    required: false
-    description: "Maximum allowed clarification questions for the current size/risk, never a quota"
-    validation: "Must be zero or greater. The cap limits questions; it never requires questions."
     default: 0
     on_missing: skip
 
@@ -453,9 +544,9 @@ fields:
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.
-# 2. If on_missing=ask: present ONE focused question, wait for answer
+# 2. If on_missing=ask: group and present every material, non-discoverable question, then wait for the answers
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
-# 5. Clarification question caps are maximums, not quotas. Never ask a ritual question just because a task is medium+.
+# 5. Clarification has no numeric cap or quota. Ask every admissible material question, grouped by topic; never ask a ritual question because of task size.
 # 6. Apply deterministic safe defaults immediately, record source/rationale, and set clarification_defaults_applied=true. If clarification_status=needs_clarification, carry only topics with no safe default into Discover and stop for explicit answers; `defaults` remains an acceptance shorthand for displayed recommendations.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

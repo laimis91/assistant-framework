@@ -281,6 +281,91 @@
       }
     },
     {
+      "id": "review-medium-scope-design-coherence",
+      "title": "Medium review checks responsibility-boundary coherence",
+      "category": "design_coherence",
+      "purpose": "Checks that a medium+ review assesses responsibility boundaries from concrete evidence instead of treating design principles as slogans.",
+      "prompt": "Review this medium change. DeliveryCoordinator now validates customer input, applies eligibility policy, sends HTTP requests, writes status records, and formats operator messages. Policy, transport, persistence, and presentation evolve independently.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope is medium.",
+        "The described concerns have different owners and independent reasons to change."
+      ],
+      "expected_behavior": [
+        "Runs the Design Coherence Pass.",
+        "Identifies the affected responsibility boundary and the independently changing concerns.",
+        "Reports a design-coherence finding only with concrete evidence of maintainability, testing, or behavior risk.",
+        "Records principle_checks.design_coherence with the assessment.",
+        "Recommends the smallest durable boundary or responsibility adjustment rather than a speculative redesign."
+      ],
+      "pass_criteria": [
+        "The response names the independent reasons to change or the boundary they cross.",
+        "The finding is tied to concrete risk and evidence.",
+        "The response includes principle_checks.design_coherence.",
+        "The proposed fix is the smallest durable change."
+      ],
+      "fail_signals": [
+        "Reports a generic SOLID slogan without an observed risk.",
+        "Requires a redesign without concrete evidence.",
+        "Skips the explicit design-coherence conclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Design Coherence Pass",
+          "principle_checks.design_coherence",
+          "independent reasons to change",
+          "concrete risk",
+          "smallest durable fix"
+        ],
+        "forbidden_substrings": [
+          "violates SOLID",
+          "always split every coordinator",
+          "architecture is bad"
+        ]
+      }
+    },
+    {
+      "id": "review-design-coherence-avoids-structural-heuristic",
+      "title": "Design coherence does not manufacture a finding",
+      "category": "design_coherence",
+      "purpose": "Checks that a medium+ review can conclude no concrete design risk when a detailed implementation remains cohesive and evidence does not show an unclear boundary.",
+      "prompt": "Review this medium change. InvoiceSummaryBuilder performs a detailed transformation from one normalized invoice into one summary. Every step contributes to that calculation, the output has one consumer, and no separate policy, I/O, persistence, or presentation concern is introduced.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The review scope is medium.",
+        "The unit has one cohesive responsibility and the available evidence shows no independently changing concern."
+      ],
+      "expected_behavior": [
+        "Runs the Design Coherence Pass.",
+        "Recognizes the unit as cohesive from the available evidence.",
+        "Records principle_checks.design_coherence as no concrete risk found.",
+        "Does not infer a design finding from a structural description or familiar implementation pattern alone."
+      ],
+      "pass_criteria": [
+        "The response records no concrete risk found for design coherence.",
+        "The response explains that the assessed unit is cohesive or has one reason to change.",
+        "No design finding is manufactured without concrete evidence."
+      ],
+      "fail_signals": [
+        "Treats detailed implementation as proof of multiple responsibilities.",
+        "Flags a design problem solely from a familiar structural shape.",
+        "Fails to record the design-coherence conclusion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Design Coherence Pass",
+          "no concrete risk found",
+          "cohesive",
+          "concrete evidence"
+        ],
+        "forbidden_substrings": [
+          "long code is always a design defect",
+          "structural diff proves a violation",
+          "split it by default"
+        ]
+      }
+    },
+    {
       "id": "review-detects-null-encoded-state-transitions",
       "title": "Review distinguishes null-encoded state from optional data",
       "category": "state_and_extensibility_modeling",
@@ -930,6 +1015,279 @@
           "domain scores do not need evidence",
           "QAEvaluator replaces Code Reviewer",
           "general code defects are QA findings"
+        ]
+      }
+    },
+    {
+      "id": "standalone-architecture-record-derives-review-projection",
+      "title": "Standalone architecture record derives a typed review projection",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an equivalent standalone architecture decision record is projected into review facts instead of being rejected for lacking workflow Pack packaging.",
+      "prompt": "Review this standalone ADR. It selects a bounded cache, labels repository evidence and assumptions, lists one material question with its impact and default, and records an independent challenge. There is no workflow Architecture Decision Pack artifact.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
+        "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.",
+        "The supplied ADR has enough source-backed content to derive the compact review projection."
+      ],
+      "expected_behavior": [
+        "Derives a compact Architecture Decision Pack review projection from the standalone ADR instead of failing only because no workflow Pack artifact exists.",
+        "Infers canonical architecture_design_mode=review_intensive from the standalone record's high-risk/conflicting drivers, keeps architecture_decision_pack.mode=architecture_design_mode, and treats independent challenge evidence as corroboration rather than the mode determinant.",
+        "Preserves separate typed facts with source refs and assumptions with status, rationale or impact, and optional source refs.",
+        "Preserves material-question topic, why needed, risk if guessed, recommended default or none, and status.",
+        "Carries independent challenge reference, dissent or validation, resolution, and selected-design impact into review."
+      ],
+      "pass_criteria": [
+        "The response names the standalone ADR as the projection source.",
+        "The response distinguishes facts, assumptions, and material questions.",
+        "The response applies Architecture Decision Pack review without demanding duplicate workflow packaging."
+      ],
+      "fail_signals": [
+        "Fails solely because the record is not packaged as a workflow Pack.",
+        "Flattens facts and assumptions into untyped strings.",
+        "Drops material-question rationale or independent challenge outcomes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "standalone ADR",
+          "compact",
+          "facts",
+          "source ref",
+          "assumptions",
+          "status",
+          "rationale or impact",
+          "material question",
+          "why needed",
+          "risk if guessed",
+          "recommended default",
+          "independent challenge",
+          "architecture_design_mode=review_intensive",
+          "architecture_decision_pack.mode=architecture_design_mode",
+          "selected-design impact"
+        ],
+        "forbidden_substrings": [
+          "workflow Pack artifact is required",
+          "cannot review a standalone ADR",
+          "facts and assumptions are interchangeable",
+          "drop the material questions"
+        ]
+      }
+    },
+    {
+      "id": "standalone-high-risk-record-without-challenge-remains-review-intensive",
+      "title": "Standalone high-risk ADR without challenge remains review intensive",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that a standalone ADR with high-risk or conflicting record drivers resolves review_intensive before missing independent challenge evidence is validated.",
+      "prompt": "Review this standalone ADR. It selects a retention policy that trades memory use against throughput and makes an irreversible public-data deletion decision. It records facts, assumptions, material questions, decision, risk, and verification evidence, but no independent challenge evidence. There is no workflow Architecture Decision Pack artifact. Return exactly one valid JSON object with architecture_design_mode, architecture_decision_pack.mode, and validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The ADR makes memory, throughput, public-data, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
+        "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.",
+        "No workflow architecture_design_mode is supplied."
+      ],
+      "expected_behavior": [
+        "Infers architecture_design_mode=review_intensive from the ADR drivers before inspecting challenge evidence and does not downgrade to required.",
+        "Reports missing independent challenge evidence as a validation failure, finding, or blocker required by review_intensive mode.",
+        "Does not invent independent challenge evidence or reject the ADR solely because it is standalone."
+      ],
+      "pass_criteria": [
+        "The response preserves review_intensive mode despite the missing challenge evidence.",
+        "The response identifies the missing independent challenge evidence as actionable review work."
+      ],
+      "fail_signals": [
+        "Downgrades the ADR to required because challenge evidence is absent.",
+        "Uses independent challenge evidence as the determinant for review_intensive mode.",
+        "Silently accepts the missing challenge evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_design_mode=review_intensive",
+          "memory-versus-throughput",
+          "irreversible public-data decision",
+          "missing independent challenge evidence",
+          "validation failure"
+        ],
+        "forbidden_substrings": [
+          "architecture_design_mode=required",
+          "challenge evidence determines the mode",
+          "missing challenge evidence is acceptable"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_design_mode"],
+            "expected": "review_intensive"
+          },
+          {
+            "operator": "equals_path",
+            "path": ["architecture_design_mode"],
+            "other_path": ["architecture_decision_pack", "mode"]
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "status"],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "missing_field"],
+            "expected": "independent_challenge_evidence"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["validation_result", "evidence_or_gap"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "architecture-pack-empty-review-evidence-blocks",
+      "title": "Empty Pack review evidence blocks review",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an applicable Pack projection cannot pass review with empty boundary and design-pressure evidence.",
+      "prompt": "Review this current workflow Architecture Decision Pack projection. It supplies boundaries_and_dependencies=[] and design_pressure_checks=[] even though Pack review is required. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "architecture_decision_pack_review_required is true.",
+        "The supplied compact Pack projection has no boundary entries and no design-pressure entries."
+      ],
+      "expected_behavior": [
+        "Blocks review because boundaries_and_dependencies requires at least one item.",
+        "Blocks review because design_pressure_checks requires exactly one item for each of the five canonical concerns.",
+        "Does not invent missing Pack evidence or report the checklist as passed."
+      ],
+      "pass_criteria": [
+        "The response reports empty Pack review evidence as a blocked validation result."
+      ],
+      "fail_signals": [
+        "Accepts empty Pack review evidence.",
+        "Invents boundary or design-pressure evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "validation_result",
+          "blocked",
+          "boundaries_and_dependencies",
+          "design_pressure_checks",
+          "empty Pack review evidence"
+        ],
+        "forbidden_substrings": [
+          "empty Pack review evidence is acceptable",
+          "checklist passed"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["validation_result", "status"],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "missing_field"],
+            "expected": "boundaries_and_dependencies_or_design_pressure_checks"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["validation_result", "evidence_or_gap"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "architecture-decision-pack-review-is-fresh-and-falsifiable",
+      "title": "Architecture Decision Pack review is fresh and falsifiable",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an applicable workflow Architecture Decision Pack is reviewed as a fresh, evidence-backed decision record rather than generic architecture advice or a permanent memory role.",
+      "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "architecture_decision_pack_review_required is true, architecture_design_mode=review_intensive, and the Pack mode equals canonical architecture_design_mode with a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and independent challenge evidence.",
+        "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
+        "The changed repository revision is newer than the Pack's recorded revision."
+      ],
+      "expected_behavior": [
+        "Applies the Architecture Decision Pack Review Checklist alongside other applicable review checklists.",
+        "Flags the stale Pack and requests a refresh before treating its facts as current.",
+        "Flags generic string cache-key usage when it erases a domain/public identity and requires a named semantic type or an explicit boundary-local primitive exception with conversion and validation.",
+        "Does not approve memory efficiency or extensibility claims without workload, budget or explicit unknown, measurement method, and failure condition.",
+        "Checks ownership/lifecycle/dependency boundary, control/early-exit behavior, ownership/disposal, resource envelope, registration/representative-path evidence, compatibility/versioning or adapter plan, extension seam or explicit none, verification, rollback, and handoff.",
+        "Keeps the Pack scoped to the current decision and does not introduce a permanent architect agent or global memory system."
+      ],
+      "pass_criteria": [
+        "The response includes Architecture Decision Pack Review Checklist or architecture_decision_pack_checks.",
+        "The response identifies freshness, design-pressure checks, semantic type or primitive exception, workload, budget, measurement, failure condition, compatibility, and verification/rollback.",
+        "Any unresolved item is reported as a concrete finding, explicit unknown, or material question with why/risk/default rather than silently assumed."
+      ],
+      "fail_signals": [
+        "Approves the cache as memory efficient or extensible without a measurable scenario.",
+        "Accepts a generic string key solely because it is easy to add parameters later.",
+        "Treats an old Pack revision as current without a refresh.",
+        "Recommends a permanent architect agent or global memory store."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Architecture Decision Pack Review Checklist",
+          "freshness",
+          "design-pressure",
+          "semantic type",
+          "primitive exception",
+          "workload",
+          "budget",
+          "measurement",
+          "failure condition",
+          "compatibility",
+          "verification",
+          "rollback",
+          "independent challenge",
+          "architecture_design_mode=review_intensive",
+          "architecture_decision_pack.mode=architecture_design_mode"
+        ],
+        "forbidden_substrings": [
+          "memory efficient by design",
+          "string is always sufficient",
+          "permanent architect agent",
+          "global memory system"
+        ]
+      }
+    },
+    {
+      "id": "architecture-pack-selected-design-recovery-blocks",
+      "title": "Architecture Pack review blocks unrecoverable selected decision",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that compact Pack review projections reject a referenced Pack whose selected design, rationale, or viable alternative dispositions cannot be recovered.",
+      "prompt": "Review this applicable workflow Architecture Decision Pack projection. It has ref=journal#pack-17 but omits selected_design, selected_design_rationale, and viable_alternatives/dispositions. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "assistant-review is active and architecture_decision_pack_review_required is true.",
+        "The projection may remain compact only if ref resolves against the current authoritative Pack to the selected design, rationale, and viable alternatives/dispositions."
+      ],
+      "expected_behavior": [
+        "Blocks the review projection rather than documenting or reviewing an unrecoverable selected decision.",
+        "Requires current authoritative ref resolution or explicit selected_design, selected_design_rationale, and viable_alternatives/dispositions evidence."
+      ],
+      "pass_criteria": [
+        "The response is one JSON object with blocked validation_result.",
+        "The evidence_or_gap explains that the selected design is not recoverable from the current Pack ref."
+      ],
+      "fail_signals": [
+        "Accepts the projection because the ref exists without resolving the selected decision.",
+        "Invents a selected design or alternative disposition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "selected_design",
+          "selected_design_rationale",
+          "viable_alternatives",
+          "current authoritative Pack",
+          "recoverable"
+        ],
+        "forbidden_substrings": [
+          "accept unresolved selected design",
+          "invent selected design"
+        ],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["validation_result","status"],"expected":"blocked"},
+          {"operator":"nonempty_string","path":["validation_result","missing_field"]},
+          {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}
         ]
       }
     },
