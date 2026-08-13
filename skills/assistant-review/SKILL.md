@@ -24,15 +24,13 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v4. Pack review now carries
-canonical `architecture_design_mode`; its nested Pack mode must match and
-review-intensive review requires independent challenge evidence. Applicable direct-user,
+Migration note: assistant-review contracts are v5. Pack projections require non-empty boundaries and exact five-concern design-pressure coverage, and triggered Reviewer returns require `architecture_decision_pack_checks`. v4 Pack review carries canonical `architecture_design_mode`; its nested Pack mode must match and review-intensive review requires independent challenge evidence. Applicable direct-user,
 `AGENTS.md`, and active-skill instructions trigger required Reviewer and QA
 roles; record their provenance and covered work in `subagent_trigger_scope`
 without a second permission question. Explicit opt-out, real unavailability,
 and exact active policy blocks retain direct fallback. Every Reviewer return and
-final summary now requires a non-empty `reviewed_scope` string array so workflow
-v4 can consume the producer packet without deriving or guessing its boundary.
+final summary requires a non-empty `reviewed_scope` string array so workflow
+consumers can use the producer packet without deriving or guessing its boundary.
 
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 

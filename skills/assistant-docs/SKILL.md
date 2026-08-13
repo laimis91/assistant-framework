@@ -23,7 +23,7 @@ triggers:
 - `review_items` is non-empty when docs contain inferred, stale, conflicting, or audience-sensitive claims needing confirmation
 - Infer `architecture_design_mode` and conditional `architecture_decision_pack_status`. A current Pack requires the compact canonical `architecture_decision_pack` projection; resolve selected design and rationale through its current canonical ref and record them in `documented_decision_refs`. Missing, stale, and out-of-scope Pack states require issue/recovery evidence and an `architecture_decision_pack_trace` outcome. Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack.
 
-Migration note: v2 keeps files_updated required/non-empty for ordinary and current-Pack documentation, but permits its omission only for typed blocked_missing_pack/blocked_stale_pack/out_of_scope no-write recovery; v1 consumers must adapt before accepting v2.
+Migration note: v2 keeps files_updated required/non-empty for ordinary and current-Pack documentation, but permits its omission only for typed blocked_missing_pack/blocked_stale_pack/out_of_scope no-write recovery. Pack projections require non-empty boundaries and exact five-concern design-pressure coverage; v1 consumers must adapt before accepting v2.
 
 Covers the developer's documentation weakness by generating accurate, maintainable docs from code.
 

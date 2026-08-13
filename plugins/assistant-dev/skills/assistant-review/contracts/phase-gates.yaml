@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -37,6 +37,11 @@ gates:
       - id: E5
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"
         on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, agentic_loop_safety_review_required=true for autonomous/repeated loop changes, and architecture_decision_pack_review_required=true only when a carried Pack or relevant architecture decision record applies; require its top-level canonical architecture_design_mode."
+
+      - id: E5A
+        check: "When architecture_decision_pack_review_required is true, the compact Pack projection has at least one boundary and exactly one design-pressure conclusion for each of the five canonical concerns"
+        condition: "architecture_decision_pack_review_required is true"
+        on_fail: "Block review and request a repaired Pack projection with non-empty boundaries plus control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path conclusions; never invent missing evidence."
 
       - id: E6
         check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
@@ -84,8 +89,8 @@ gates:
         on_fail: "Block Reviewer dispatch. Run current build/tests when fix/build is in scope or after a source fix; otherwise record exactly one allowed explicit not_applicable reason."
 
       - id: RS2B
-        check: "The declared reviewer_context boundary closure is strictly below 5619 words and excludes orchestrator_to_reviewer.return_fields"
-        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5619 words."
+        check: "The declared reviewer_context boundary closure is strictly below 5634 words and excludes orchestrator_to_reviewer.return_fields"
+        on_fail: "Trim or defer worker context, re-run contract-index validation, and do not begin the review pass until the bounded dispatch bundle is below 5634 words."
 
       - id: RS3
         check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"

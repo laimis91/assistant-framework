@@ -122,13 +122,21 @@ p0p4_write_skill_eval_responses() {
                         jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
                         ;;
                     code-mapper-applicable-architecture-evidence)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed"}, {concern: "ownership_and_disposal", status: "observed"}, {concern: "resource_envelope", status: "observed"}, {concern: "extension_registration", status: "observed"}, {concern: "representative_path", status: "observed", evidence_or_gap: "producer reaches consumer", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: "observed", evidence_or_gap: "producer reaches consumer", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}' >"$response_path"
+                        ;;
+                    code-mapper-representative-path-not-applicable|code-mapper-representative-path-unresolved)
+                        path_status="${id#code-mapper-representative-path-}"
+                        path_status="${path_status//-/_}"
+                        jq -n --arg summary "$required_summary" --arg status "$path_status" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: $status, evidence_or_gap: "No executable path is available at this boundary.", source_ref: "src/order.rb"}], representative_paths: [], semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "No semantic type candidate crosses this boundary.", source_refs: ["src/order.rb"]}}}' >"$response_path"
                         ;;
                     code-mapper-inspected-empty-requires-evidence)
                         jq -n '{architecture_mapping_evidence: {semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "no domain concept crosses the inspected boundary", source_refs: ["src/order.rb"]}, representative_paths: ["src/order.rb"]}}' >"$response_path"
                         ;;
                     progressive-collaborative-contributor-evidence)
                         jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
+                        ;;
+                    standard-pack-review-result-retains-checklist)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}' >"$response_path"
                         ;;
                     *)
                         fail "unhandled structured assistant-workflow eval case: $id"
@@ -141,6 +149,9 @@ p0p4_write_skill_eval_responses() {
                 case "$id" in
                     standalone-high-risk-record-without-challenge-remains-review-intensive)
                         jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive"}, validation_result: {status: "blocked", missing_field: "independent_challenge_evidence", evidence_or_gap: "The standalone ADR lacks the independent challenge evidence required by review_intensive mode."}}' >"$response_path"
+                        ;;
+                    architecture-pack-empty-review-evidence-blocks)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, validation_result: {status: "blocked", missing_field: "boundaries_and_dependencies_or_design_pressure_checks", evidence_or_gap: "The compact Pack projection contains empty Pack review evidence."}}' >"$response_path"
                         ;;
                     *)
                         fail "unhandled structured assistant-review eval case: $id"
@@ -508,6 +519,7 @@ jq '
     {"operator":"equals","path":["status"],"expected":"ready"},
     {"operator":"nonempty_string","path":["semantic","evidence_or_gap"]},
     {"operator":"nonempty_array","path":["semantic","source_refs"]},
+    {"operator":"empty_array","path":["semantic","excluded_refs"]},
     {"operator":"equals_path","path":["architecture_design_mode"],"other_path":["architecture_decision_pack","mode"]},
     {"operator":"required_when_equals","when_path":["architecture_design_mode"],"value":"review_intensive","path":["architecture_decision_pack","independent_challenge_evidence"],"expected_type":"object"},
     {"operator":"array_field_values_exact","path":["contributors"],"field":"role","expected_values":["agent","human_or_user"]},
@@ -519,7 +531,7 @@ if ! "$skill_eval_runner" --validate-fixture --skill "$structured_skill" > /dev/
     fail "skill eval runner rejected valid structured JSON assertions: $(cat "$structured_validation_err")"
 else
     mkdir -p "$structured_responses/assistant-eval-structured"
-    structured_valid='{"fixture":"fixture required fixture first fixture second","status":"ready","architecture_design_mode":"review_intensive","architecture_decision_pack":{"mode":"review_intensive","independent_challenge_evidence":{"ref":"challenge"}},"semantic":{"evidence_or_gap":"src/order.rb","source_refs":["src/order.rb"]},"contributors":[{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"human_or_user","contribution":"decision","evidence_ref":"decision-ref"}]}'
+    structured_valid='{"fixture":"fixture required fixture first fixture second","status":"ready","architecture_design_mode":"review_intensive","architecture_decision_pack":{"mode":"review_intensive","independent_challenge_evidence":{"ref":"challenge"}},"semantic":{"evidence_or_gap":"src/order.rb","source_refs":["src/order.rb"],"excluded_refs":[]},"contributors":[{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"human_or_user","contribution":"decision","evidence_ref":"decision-ref"}]}'
     printf '%s\n' "$structured_valid" >"$structured_responses/assistant-eval-structured/fixture-case.txt"
     if ! "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
         || ! grep -Fq "structured_json_assertion_failures=0" "$structured_output"; then
@@ -530,6 +542,7 @@ else
             '(.semantic.evidence_or_gap) = ""' \
             '(.semantic.evidence_or_gap) = "   "' \
             '(.semantic.source_refs) = []' \
+            '(.semantic.excluded_refs) = ["unexpected-ref"]' \
             '(.architecture_decision_pack.mode) = "lightweight"' \
             '(.architecture_decision_pack.independent_challenge_evidence) = null' \
             '(.contributors) = [{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"agent","contribution":"decision","evidence_ref":"decision-ref"}]' \
@@ -795,7 +808,9 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md"; then
     pass
 else
     fail "skill eval docs do not describe complete first-class coverage"

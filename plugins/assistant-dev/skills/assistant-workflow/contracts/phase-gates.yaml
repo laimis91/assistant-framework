@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "6.0"
+schema_version: "7.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -572,9 +572,9 @@ gates:
         on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
-        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs"
+        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs, and an applicable Pack also records architecture_decision_pack_review_ref"
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow."
+        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow, including architecture_decision_pack_review_ref when a Pack applies."
 
       - id: R_LIGHT_FRESH_REVIEW
         check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
@@ -596,9 +596,9 @@ gates:
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
-        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, and validation_status=validated; developer handoff creation remains in Document"
+        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, conditional architecture_decision_pack_review_ref with architecture_decision_pack_review_contract=assistant-review/contracts/output.yaml#architecture_decision_pack_review, and validation_status=validated; developer handoff creation remains in Document"
         condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
-        on_fail: "Complete assistant-review, validate its canonical result and delegation-path artifacts, record workflow refs, then continue to Document for developer handoff creation"
+        on_fail: "Complete assistant-review, validate its canonical result, delegation-path, and applicable Pack-review artifacts, record workflow refs, then continue to Document for developer handoff creation"
 
       - id: R_REQUIREMENT_COVERAGE
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
@@ -606,9 +606,9 @@ gates:
         on_fail: "Use references/requirement-acceptance-map.md to run missing verification, repair failed behavior, or obtain explicit approval for an exclusion; do not infer coverage from aggregate test success"
 
       - id: R_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario verification, and scope propagation; review_intensive includes independent challenge evidence."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: assistant-review applies the Architecture Decision Pack Review Checklist and records concrete findings or no-concrete-risk checks for freshness, ownership/dependency boundaries, semantic types/primitive exceptions, interface evolution, quality-scenario verification, and scope propagation; review_intensive includes independent challenge evidence, and the applicable workflow review wrapper retains architecture_decision_pack_review_ref."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        on_fail: "Provide the current pack and changed scope to assistant-review, run the Architecture Decision Pack Review Checklist, fix concrete findings, and refresh validation before Document."
+        on_fail: "Provide the current pack and changed scope to assistant-review, run the Architecture Decision Pack Review Checklist, fix concrete findings, refresh validation, and retain architecture_decision_pack_review_ref before Document."
 
       - id: R3A
         check: "For bugfixes, review material includes reproduction/root-cause evidence or an explicit not_applicable/blocker rationale, and verifies that regression coverage follows from that evidence"

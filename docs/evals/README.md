@@ -555,13 +555,14 @@ tools/evals/run-skill-evals.sh --responses /tmp/clarify-eval-responses --skill a
 Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
-`equals`, `nonempty_string`, `nonempty_array`, `equals_path`,
+`equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`,
 `required_when_equals`, `array_field_values_exact`, and
 `array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
 in every object must be a non-empty string.
+`empty_array` requires the target path to resolve to an empty array.
 
 Include local-only skill experiments explicitly:
 

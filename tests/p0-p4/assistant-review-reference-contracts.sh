@@ -204,7 +204,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "4.0" && handoffs["schema_version"] == "4.0" && output["schema_version"] == "4.0" && index["schema_version"] == "4.0" &&
+    valid = input["schema_version"] == "5.0" && handoffs["schema_version"] == "5.0" && output["schema_version"] == "5.0" && index["schema_version"] == "5.0" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -281,7 +281,7 @@ elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-ch
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
-    "$review_skill::Migration note: assistant-review contracts are v4" \
+    "$review_skill::Migration note: assistant-review contracts are v5" \
     "$review_phase_gates::architecture_design_mode" \
     "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
     file="${file_and_term%%::*}"
@@ -499,6 +499,63 @@ if [[ "${#independent_reuse_search_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
+fi
+
+test_start "assistant-review v5 preserves Pack projection cardinality and rejects empty evidence"
+pack_projection_cardinality_failures=()
+if ! ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0))
+    contracts = ARGV.map { |path| YAML.load_file(path) }
+    pack = input.fetch("fields").find { |field| field["name"] == "architecture_decision_pack" }
+    fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+    boundaries = fields.fetch("boundaries_and_dependencies")
+    pressure = fields.fetch("design_pressure_checks")
+    required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "5.0" } &&
+      boundaries["required"] == true && boundaries["min_items"] == 1 &&
+      pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
+      required_concerns.all? { |concern| pressure.fetch("validation").include?(concern) }
+    exit valid ? 0 : 1
+' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
+    pack_projection_cardinality_failures+=("v5 input does not preserve non-empty boundaries and exact five-concern pressure coverage")
+fi
+if ! grep -Fq 'Migration note: assistant-review contracts are v5' "$review_skill" \
+    || ! grep -Fq 'Pack projections require non-empty boundaries and exact five-concern design-pressure coverage' "$review_skill"; then
+    pack_projection_cardinality_failures+=("v5 migration note does not describe Pack projection cardinality")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "architecture-pack-empty-review-evidence-blocks") |
+    (.prompt | contains("Return exactly one valid JSON object")) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","status"],"expected":"blocked"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["validation_result","missing_field"],"expected":"boundaries_and_dependencies_or_design_pressure_checks"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}))
+' "$review_evals" >/dev/null; then
+    pack_projection_cardinality_failures+=("empty Pack projection negative eval is missing structured blocked evidence")
+fi
+if [[ ${#pack_projection_cardinality_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Pack projection cardinality gaps: ${pack_projection_cardinality_failures[*]}"
+fi
+
+test_start "assistant-review v5 conditionally requires Pack checks in Reviewer returns"
+reviewer_pack_return_failures=()
+if ! ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0))
+    reviewer = handoffs.fetch("handoffs").find { |handoff| handoff["name"] == "orchestrator_to_reviewer" }
+    checks = reviewer.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
+    validation = handoffs.fetch("return_validation_bundles").find { |bundle| bundle["name"] == "reviewer_return_validation" }
+    valid = checks["required"] == "conditional" &&
+      checks["condition"] == "architecture_decision_pack_review_required is true" &&
+      validation.fetch("validation").include?("architecture_decision_pack_checks when triggered")
+    exit valid ? 0 : 1
+' "$review_handoffs"; then
+    reviewer_pack_return_failures+=("Reviewer return can omit triggered architecture_decision_pack_checks")
+fi
+if [[ ${#reviewer_pack_return_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review Reviewer Pack return requiredness gaps: ${reviewer_pack_return_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

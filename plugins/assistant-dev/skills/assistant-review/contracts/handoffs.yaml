@@ -4,7 +4,7 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: handoffs
 skill: assistant-review
 
@@ -61,8 +61,8 @@ dispatch_context_bundles:
     direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
     excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
     return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
-    budget_words: 5619
-    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5619 words."
+    budget_words: 5634
+    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5634 words."
 
   - name: qa_evaluator_context
     phase: QA_EVALUATION_STEP
@@ -462,7 +462,7 @@ handoffs:
 
       - name: architecture_decision_pack_checks
         type: object
-        required: false
+        required: conditional
         condition: "architecture_decision_pack_review_required is true"
         description: "Compact confirmation that Architecture Decision Pack review was applied"
         object_fields:

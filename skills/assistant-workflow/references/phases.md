@@ -379,7 +379,8 @@ For standard/strict work, run the stages in order:
 3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
 
 After review, enforce the applicable status gate and write `review_result` as
-validated canonical assistant-review result/delegation refs plus the
+validated canonical assistant-review result/delegation refs plus
+`architecture_decision_pack_review_ref` when a Pack applies and the
 Verification Summary. Review owns independent reviewer evidence; it does
 not create the developer handoff. Wait only when `manual_verification_mode=required`; optional manual
 steps do not block and `not_required` proceeds directly to Document.

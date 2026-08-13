@@ -111,7 +111,7 @@ validate_fixture() {
             if (.path? | json_path | not) or (has("expected") | not) or (.expected | scalar | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid equals assertion"
             else empty end
-          elif .operator == "nonempty_string" or .operator == "nonempty_array" then
+          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" then
             if (.path? | json_path | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid \(.operator) path"
             else empty end

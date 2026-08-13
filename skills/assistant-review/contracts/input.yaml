@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: input
 skill: assistant-review
 
@@ -388,10 +388,17 @@ fields:
       - name: boundaries_and_dependencies
         type: string[]
         required: true
+        min_items: 1
+        description: "Non-empty compact ownership, lifecycle, and dependency boundary conclusions projected from the Pack"
+        on_missing: fail
       - name: design_pressure_checks
         type: string[]
         required: true
-        description: "Control/early-exit, ownership/disposal, resource-envelope, extension-registration, and representative-path conclusions or explicit not-applicable evidence"
+        min_items: 5
+        max_items: 5
+        description: "Exactly one conclusion or explicit not-applicable evidence item for each canonical design-pressure concern"
+        validation: "Contains exactly one item for control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path"
+        on_missing: fail
       - name: independent_challenge_evidence
         type: object
         required: conditional

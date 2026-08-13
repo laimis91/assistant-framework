@@ -1,4 +1,4 @@
-schema_version: "6.0"
+schema_version: "7.0"
 contract: index
 skill: assistant-workflow
 
@@ -52,7 +52,7 @@ load_sets:
         section: artifacts
         key: name
         names: [decision_map, decision_item,deferred_uncertainty,decision_frontier,decision_resolution,route_clear_handoff,loop_readiness_assessment,progressive_terminal_archival]
-    budget_words: 8040
+    budget_words: 8053
   delegation:
     selectors:
       - id: workflow-delegation-fields
@@ -60,7 +60,7 @@ load_sets:
         section: fields
         key: name
         names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]
-    budget_words: 2500
+    budget_words: 2509
   slice_review:
     references:
       - references/slice-review-topology.md
@@ -70,7 +70,7 @@ load_sets:
         section: fields
         key: name
         names: [slice_promotion_mode]
-    budget_words: 2550
+    budget_words: 2563
   current_phase:
     selectors:
       - id: workflow-current-phase-gate
@@ -84,7 +84,7 @@ load_sets:
         section: invariants
         key: id
         names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_ARCHITECTURE_PACK_FRESHNESS,INV_ARCHITECTURE_PACK_HANDOFF_BINDING,INV_SEMANTIC_TYPE_BOUNDARIES,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_TERMINAL_ARCHIVAL,INV_PROGRESSIVE_REPEAT_READINESS]
-    budget_words: 6385
+    budget_words: 6398
   selected_handoff:
     selectors:
       - id: workflow-selected-handoff

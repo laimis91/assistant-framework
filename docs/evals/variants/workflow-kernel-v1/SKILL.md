@@ -77,7 +77,7 @@ recovery. Load `references/workflow-controller.md` for cross-phase routing and
 their named condition applies.
 
 Migration: workflow v4 uses `subagent_trigger_scope`; `verification_command`
-remains non-empty argv `string[]`. assistant-review v4 owns Reviewer/QA packets
+remains non-empty argv `string[]`. assistant-review v5 owns Reviewer/QA packets
 and returns `final_summary` / `qa_evaluation_result`.
 
 ## Execution

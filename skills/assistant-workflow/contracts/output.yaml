@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "6.0"
+schema_version: "7.0"
 contract: output
 skill: assistant-workflow
 
@@ -374,8 +374,8 @@ artifacts:
     required: conditional
     condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
-    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
-    on_fail: "Load and follow assistant-review, validate its final_summary and review_delegation_path, and record stable refs plus exact canonical contracts before Review completes."
+    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. When an Architecture Decision Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review and declares that exact contract. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
+    on_fail: "Load and follow assistant-review, validate its final_summary, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
       - name: canonical_result_ref
         type: string
@@ -393,6 +393,17 @@ artifacts:
         type: string
         required: true
         validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"
+      - name: architecture_decision_pack_review_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated canonical assistant-review Architecture Decision Pack review"
+        validation: "Resolves to the current Pack review for the carried architecture_decision_pack_ref"
+      - name: architecture_decision_pack_review_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#architecture_decision_pack_review"
       - name: validation_status
         type: enum
         required: true
@@ -886,7 +897,8 @@ artifacts:
       - name: design_pressure_checks
         type: object[]
         required: true
-        min_items: 1
+        min_items: 5
+        max_items: 5
         description: "Evidence-backed checks that prevent a premature interface, orchestration, or extension abstraction"
         validation: "Covers control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path; each is resolved, not_applicable with evidence, open, or deferred, and records its decision implication and revalidation point."
         object_fields:
@@ -2494,7 +2506,7 @@ artifacts:
 # 1. All required artifacts for the task's completion_tier are present and controller_intensity matches the selected tier
 # 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
 # 3. When size is medium/large/mega or risk_tier is high/critical: spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts
+# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts, plus architecture_decision_pack_review_ref and its exact canonical contract when a Pack applies
 # 5. If qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
 # 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build

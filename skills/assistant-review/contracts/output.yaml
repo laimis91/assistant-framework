@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: output
 skill: assistant-review
 

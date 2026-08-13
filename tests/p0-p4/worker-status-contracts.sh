@@ -438,7 +438,8 @@ for prompt in agents/codex/code-mapper.toml agents/claude/code-mapper.md; do
     done
 done
 if ! jq -e '
-    (.cases[] | select(.id == "code-mapper-applicable-architecture-evidence") |
+    . as $fixture |
+    ($fixture.cases[] | select(.id == "code-mapper-applicable-architecture-evidence") |
       (.machine_expectations.required_substrings | index("semantic_type_inspection")) and
       (.machine_expectations.required_substrings | index("inspected_empty") | not) and
       (.machine_expectations.required_substrings | index("representative_paths")) and
@@ -492,7 +493,7 @@ test_start "CodeMapper eval accepts every typed semantic inspection outcome and 
 mapper_outcome_eval_failures=()
 mapper_applicable_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
 mapper_common_response=$'architecture_mapping_evidence\ncontrol_and_early_exit\nownership_and_disposal\nresource_envelope\nextension_registration\nrepresentative_path\nsemantic_type_inspection\nrepresentative_paths\nrepresentative_path status=observed requires at least one detailed producer-consumer path\nmaps evidence, never designs'
-mapper_common_structured="$(jq -n --arg summary "$mapper_common_response" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed"}, {concern: "ownership_and_disposal", status: "observed"}, {concern: "resource_envelope", status: "observed"}, {concern: "extension_registration", status: "observed"}, {concern: "representative_path", status: "observed", evidence_or_gap: "order producer reaches validator", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}')"
+mapper_common_structured="$(jq -n --arg summary "$mapper_common_response" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: "observed", evidence_or_gap: "order producer reaches validator", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}')"
 for outcome in candidates_found inspected_empty unresolved; do
     case "$outcome" in
         candidates_found)
@@ -593,6 +594,90 @@ if [[ ${#mapper_eval_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "not-applicable CodeMapper eval omission guards: ${mapper_eval_failures[*]}"
+fi
+
+test_start "CodeMapper structured eval requests raw JSON and covers every representative-path status"
+mapper_path_branch_failures=()
+if ! jq -e '
+    . as $fixture |
+    ($fixture.cases[] | select(.id == "code-mapper-applicable-architecture-evidence") |
+      (.prompt | contains("Return the complete response as one valid JSON object")) and
+      (.expected_behavior | index("For this observed representative path, records at least one detailed producer-consumer path with failure or cancellation and source evidence.")) and
+      (.expected_behavior | all(contains("not_applicable or unresolved keeps the path array empty") | not)) and
+      (.machine_expectations.structured_json_assertions | any(
+        .operator == "array_field_values_exact" and
+        .path == ["architecture_mapping_evidence", "design_pressure_checks"] and
+        .field == "concern" and
+        .expected_values == ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+      )) and
+      (.machine_expectations.structured_json_assertions | any(
+        .operator == "array_items_nonempty_fields" and
+        .path == ["architecture_mapping_evidence", "design_pressure_checks"] and
+        .fields == ["concern", "status", "evidence_or_gap", "source_ref"]
+      ))) and
+    (["not_applicable", "unresolved"] | all(. as $status |
+      ($fixture.cases[] | select(.id == ("code-mapper-representative-path-" + ($status | gsub("_"; "-")))) |
+        (.prompt | contains("Return the complete response as one valid JSON object")) and
+        (.expected_behavior | any(contains("representative_path status=" + $status))) and
+        (.machine_expectations.structured_json_assertions | any(
+          .operator == "equals" and
+          .path == ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"] and
+          .expected == $status
+        )) and
+        (.machine_expectations.structured_json_assertions | any(
+          .operator == "empty_array" and
+          .path == ["architecture_mapping_evidence", "representative_paths"]
+        )) and
+        (.machine_expectations.structured_json_assertions | any(
+          .operator == "array_field_values_exact" and
+          .path == ["architecture_mapping_evidence", "design_pressure_checks"] and
+          .field == "concern" and
+          .expected_values == ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+        )) and
+        (.machine_expectations.structured_json_assertions | any(
+          .operator == "array_items_nonempty_fields" and
+          .path == ["architecture_mapping_evidence", "design_pressure_checks"] and
+          .fields == ["concern", "status", "evidence_or_gap", "source_ref"]
+        ))
+      )
+    ))
+' "$mapper_eval" >/dev/null; then
+    mapper_path_branch_failures+=("fixture does not request raw JSON and split observed/not-applicable/unresolved path branches")
+fi
+for status in not_applicable unresolved; do
+    case_id="code-mapper-representative-path-${status//_/-}"
+    required_summary="$(jq -r --arg id "$case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$mapper_eval" | paste -sd ' ' -)"
+    response="$(jq -n --arg summary "$required_summary" --arg status "$status" '{
+      summary: $summary,
+      architecture_mapping_evidence: {
+        design_pressure_checks: [
+          {concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"},
+          {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"},
+          {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"},
+          {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"},
+          {concern: "representative_path", status: $status, evidence_or_gap: "No executable path is available at this boundary.", source_ref: "src/order.rb"}
+        ],
+        representative_paths: [],
+        semantic_type_inspection: {outcome: "inspected_empty", evidence_or_gap: "No semantic type candidate crosses this boundary.", source_refs: ["src/order.rb"]}
+      }
+    }')"
+    if ! run_code_mapper_outcome_eval "$mapper_eval" "$case_id" "$response" PASS; then
+        mapper_path_branch_failures+=("actual eval runner rejects representative_path status=$status with an empty path collection")
+    fi
+    for mutation in \
+        '(.architecture_mapping_evidence.design_pressure_checks[0]) = {}' \
+        '(.architecture_mapping_evidence.design_pressure_checks[4].source_ref) = ""' \
+        '(.architecture_mapping_evidence.design_pressure_checks[3].concern) = "representative_path"'; do
+        unsafe_response="$(jq "$mutation" <<<"$response")"
+        if ! run_code_mapper_outcome_eval "$mapper_eval" "$case_id" "$unsafe_response" FAIL; then
+            mapper_path_branch_failures+=("actual eval runner accepts $status mutation $mutation")
+        fi
+    done
+done
+if [[ ${#mapper_path_branch_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "CodeMapper representative-path eval branch gaps: ${mapper_path_branch_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -135,7 +135,9 @@ Enforce the review cycle before presenting results:
 - Review Log or equivalent review result must exist.
 - Standard/strict `review_result` must record validated refs to assistant-review
   `final_summary` and `review_delegation_path` plus their exact canonical
-  contract ids; canonical review fields remain owned by assistant-review.
+  contract ids. Standard/strict Pack-backed `review_result` must also record validated refs to
+  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
+  canonical review fields remain owned by assistant-review.
 - Light Pack-backed `fresh_review_result` must record validated refs to
   `assistant-review/contracts/output.yaml#final_summary` and
   `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;

@@ -1056,6 +1056,59 @@
       }
     },
     {
+      "id": "architecture-pack-empty-review-evidence-blocks",
+      "title": "Empty Pack review evidence blocks review",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that an applicable Pack projection cannot pass review with empty boundary and design-pressure evidence.",
+      "prompt": "Review this current workflow Architecture Decision Pack projection. It supplies boundaries_and_dependencies=[] and design_pressure_checks=[] even though Pack review is required. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "architecture_decision_pack_review_required is true.",
+        "The supplied compact Pack projection has no boundary entries and no design-pressure entries."
+      ],
+      "expected_behavior": [
+        "Blocks review because boundaries_and_dependencies requires at least one item.",
+        "Blocks review because design_pressure_checks requires exactly one item for each of the five canonical concerns.",
+        "Does not invent missing Pack evidence or report the checklist as passed."
+      ],
+      "pass_criteria": [
+        "The response reports empty Pack review evidence as a blocked validation result."
+      ],
+      "fail_signals": [
+        "Accepts empty Pack review evidence.",
+        "Invents boundary or design-pressure evidence."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "validation_result",
+          "blocked",
+          "boundaries_and_dependencies",
+          "design_pressure_checks",
+          "empty Pack review evidence"
+        ],
+        "forbidden_substrings": [
+          "empty Pack review evidence is acceptable",
+          "checklist passed"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["validation_result", "status"],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": ["validation_result", "missing_field"],
+            "expected": "boundaries_and_dependencies_or_design_pressure_checks"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["validation_result", "evidence_or_gap"]
+          }
+        ]
+      }
+    },
+    {
       "id": "architecture-decision-pack-review-is-fresh-and-falsifiable",
       "title": "Architecture Decision Pack review is fresh and falsifiable",
       "category": "architecture_decision_pack_review",

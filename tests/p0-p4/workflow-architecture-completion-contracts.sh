@@ -89,7 +89,7 @@ architecture_pack_projection_matches() {
     local producer="$1"
     local consumer="$2"
     ruby -ryaml -e '
-        STRUCTURAL_KEYS = %w[name type required condition enum_values min_items].freeze
+        STRUCTURAL_KEYS = %w[name type required condition enum_values min_items max_items].freeze
 
         def architecture_decision_pack_projection(path)
           fields = YAML.load_file(path).fetch("fields")
@@ -103,6 +103,7 @@ architecture_pack_projection_matches() {
           STRUCTURAL_KEYS.each_with_object({}) do |key, normalized|
             normalized[key] = field[key] if field.key?(key)
           end.tap do |normalized|
+            normalized["validation"] = field["validation"] if field["name"] == "design_pressure_checks" && field.key?("validation")
             if field.key?("object_fields")
               normalized["object_fields"] = field.fetch("object_fields").map { |nested| normalize(nested) }
             end
@@ -129,6 +130,10 @@ mutate_docs_pack_projection() {
           fields.find { |field| field["name"] == "mode" }["enum_values"] = ["lightweight", "required"]
         when "requiredness_drift"
           fields.find { |field| field["name"] == "facts" }["required"] = false
+        when "cardinality_drift"
+          fields.find { |field| field["name"] == "design_pressure_checks" }.delete("max_items")
+        when "coverage_drift"
+          fields.find { |field| field["name"] == "design_pressure_checks" }["validation"] = "Contains design-pressure summaries"
         else
           raise "unknown projection mutation: #{ARGV.fetch(2)}"
         end
@@ -195,6 +200,14 @@ for term in \
     '          - name: selected_design_impact'; do
     if ! grep -Fq -- "$term" <<<"$output_pack_block"; then workflow_missing+=("challenge evidence: $term"); fi
 done
+if ! ruby -ryaml -e '
+    output = YAML.load_file(ARGV.fetch(0))
+    pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+    pressure = pack.fetch("object_fields").find { |field| field["name"] == "design_pressure_checks" }
+    exit pressure["min_items"] == 5 && pressure["max_items"] == 5 ? 0 : 1
+' "$output_contract"; then
+    workflow_missing+=("workflow Pack design_pressure_checks exact five-item cardinality")
+fi
 for handoff in orchestrator_to_architect_decompose orchestrator_to_architect; do
     if ! handoff_return_field_present "$workflow_handoffs" "$handoff" architecture_decision_pack_update; then
         workflow_missing+=("$handoff architecture_decision_pack_update")
@@ -314,9 +327,13 @@ fi
 if ! grep -Fq 'schema_version: "2.0"' "$docs_output_contract"; then
     docs_architecture_missing+=("assistant-docs output v2 schema_version")
 fi
+if ! grep -Fq 'schema_version: "2.0"' "$docs_input_contract"; then
+    docs_architecture_missing+=("assistant-docs input v2 schema_version")
+fi
 for term in \
     'v2 keeps files_updated required/non-empty for ordinary and current-Pack documentation' \
     'permits its omission only for typed blocked_missing_pack/blocked_stale_pack/out_of_scope no-write recovery' \
+    'Pack projections require non-empty boundaries and exact five-concern design-pressure coverage' \
     'v1 consumers must adapt before accepting v2'; do
     if ! grep -Fq -- "$term" "$docs_skill"; then docs_architecture_missing+=("assistant-docs v2 migration note: $term"); fi
 done
@@ -375,7 +392,7 @@ test_start "assistant-docs Pack projection comparator rejects structural drift"
 docs_projection_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-docs-pack-projection.XXXXXX")"
 p0p4_register_cleanup "$docs_projection_mutation_dir"
 docs_projection_mutation_failures=()
-for mutation in extra_required_field enum_drift requiredness_drift; do
+for mutation in extra_required_field enum_drift requiredness_drift cardinality_drift coverage_drift; do
     mutated_docs_input="$docs_projection_mutation_dir/$mutation.yaml"
     mutate_docs_pack_projection "$docs_input_contract" "$mutated_docs_input" "$mutation"
     if architecture_pack_projection_matches "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" "$mutated_docs_input"; then
@@ -485,27 +502,27 @@ else
     pass
 fi
 
-test_start "workflow v6 migration note covers every breaking producer contract"
+test_start "workflow v7 migration note preserves every breaking producer contract"
 migration_note="$(awk '
     /^Migration note:/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
-if ! grep -Fq 'assistant-workflow contracts are v6' <<<"$migration_note"; then
-    fail "v6 migration note does not declare the breaking contract version"
+if ! grep -Fq 'assistant-workflow contracts are v7' <<<"$migration_note"; then
+    fail "v7 migration note does not declare the breaking contract version"
 elif ! grep -Fq 'semantic_type_inspection' <<<"$migration_note" \
     || ! grep -Fq 'contributor_evidence' <<<"$migration_note"; then
-    fail "v6 migration note does not describe CodeMapper semantic inspection and collaborative contributor evidence migrations"
+    fail "v7 migration note does not preserve CodeMapper semantic inspection and collaborative contributor evidence migrations"
 elif ! ruby -ryaml -e '
-    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "6.0" }
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "7.0" }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    fail "v6 migration does not bump every assistant-workflow canonical contract header"
+    fail "v7 migration does not bump every assistant-workflow canonical contract header"
 elif ! grep -Fq 'verification_command' <<<"$migration_note"; then
-    fail "v6 migration note no longer explains verification_command argv migration"
+    fail "v7 migration note no longer explains verification_command argv migration"
 elif ! grep -Fq 'assistant-review' <<<"$migration_note" \
     || ! grep -Eiq 'owns?' <<<"$migration_note" \
     || ! grep -Fq 'subagent_trigger_scope' <<<"$migration_note"; then
-    fail "v6 migration note does not preserve assistant-review ownership and trigger-based delegation"
+    fail "v7 migration note does not preserve assistant-review ownership and trigger-based delegation"
 else
     pass
 fi
@@ -604,7 +621,7 @@ else
     fail "light Pack fresh_review_result reference declaration guard false-passes: ${fresh_review_mutation_failures[*]}"
 fi
 
-test_start "assistant-review and every Reviewer prompt produce workflow v4 reviewed_scope"
+test_start "assistant-review and every Reviewer prompt produce workflow-consumable reviewed_scope"
 assistant_review_return_block="$(awk '
     /^    return_fields:/ { inside = 1 }
     inside && /^  - name: / { exit }
@@ -634,7 +651,7 @@ fi
 
 test_start "promotable workflow overlay preserves optional Plan ownership and v4 migration semantics"
 candidate_missing=()
-for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v4' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
+for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v5' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
     if ! grep -Fq -- "$term" "$candidate_skill"; then
         candidate_missing+=("$term")
     fi
@@ -1168,6 +1185,98 @@ if [[ ${#onboard_small_eval_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "small onboarding eval grader semantics regressions: ${onboard_small_eval_failures[*]}"
+fi
+
+run_standard_pack_review_eval() {
+    local fixture="$1"
+    local response="$2"
+    local expected_status="$3"
+    local eval_root
+    local temporary_skill
+    local responses_dir
+    local runner_output
+
+    eval_root="$(mktemp -d "${TMPDIR:-/tmp}/standard-pack-review-eval.XXXXXX")"
+    p0p4_register_cleanup "$eval_root"
+    temporary_skill="$eval_root/assistant-workflow"
+    responses_dir="$eval_root/responses"
+    mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
+    cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
+    jq '.cases = [.cases[] | select(.id == "standard-pack-review-result-retains-checklist")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    printf '%s\n' "$response" >"$responses_dir/assistant-workflow/standard-pack-review-result-retains-checklist.txt"
+    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
+        [[ "$expected_status" == "FAIL" ]] || return 1
+    elif [[ "$expected_status" == "FAIL" ]]; then
+        return 1
+    fi
+    grep -Fq $'\tassistant-workflow\tstandard-pack-review-result-retains-checklist' <<<"$runner_output" \
+        && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
+}
+
+test_start "workflow v7 standard reviews retain validated Pack checklist references"
+standard_pack_review_failures=()
+review_result_block="$(contract_field_block "$output_contract" review_result)"
+for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
+    if ! grep -A8 -F -- "- name: $field" <<<"$review_result_block" | grep -Fq 'required: conditional' \
+        || ! grep -A8 -F -- "- name: $field" <<<"$review_result_block" | grep -Fq 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"'; then
+        standard_pack_review_failures+=("review_result $field is not conditionally required for an applicable Pack")
+    fi
+done
+if ! grep -A8 -F -- '- name: architecture_decision_pack_review_contract' <<<"$review_result_block" \
+    | grep -Fq 'assistant-review/contracts/output.yaml#architecture_decision_pack_review'; then
+    standard_pack_review_failures+=("review_result Pack checklist contract is not canonical")
+fi
+for file_and_term in \
+    "$phase_gates::architecture_decision_pack_review_ref" \
+    "$review_router::Standard/strict Pack-backed \`review_result\` must also record validated refs" \
+    "$workflow_dir/references/phases.md::architecture_decision_pack_review_ref"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq -- "$term" "$file"; then
+        standard_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if ! grep -Fq 'assistant-workflow contracts are v7' "$workflow_skill" \
+    || ! grep -Fq 'Pack `review_result` retains canonical refs' "$workflow_skill"; then
+    standard_pack_review_failures+=("workflow v7 migration note does not describe standard Pack review retention")
+fi
+if ! jq -e '
+    .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
+    (.prompt | contains("Return the complete response as one valid JSON object")) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","delegation_path_ref"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#review_delegation_path"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","architecture_decision_pack_review_ref"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","architecture_decision_pack_review_contract"],"expected":"assistant-review/contracts/output.yaml#architecture_decision_pack_review"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","validation_status"],"expected":"validated"}))
+' "$workflow_dir/evals/cases.json" >/dev/null; then
+    standard_pack_review_failures+=("standard Pack review retention eval lacks structured canonical reference assertions")
+fi
+if ! ruby -ryaml -e '
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "7.0" }
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
+    standard_pack_review_failures+=("workflow v7 does not cover every canonical contract header")
+fi
+standard_review_required_summary="$(jq -r '.cases[] | select(.id == "standard-pack-review-result-retains-checklist") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+standard_review_valid="$(jq -n --arg summary "$standard_review_required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}')"
+if ! run_standard_pack_review_eval "$workflow_dir/evals/cases.json" "$standard_review_valid" PASS; then
+    standard_pack_review_failures+=("actual eval runner rejects the complete standard Pack review wrapper")
+fi
+for mutation in \
+    'del(.review_result.canonical_result_ref)' \
+    'del(.review_result.canonical_contract)' \
+    'del(.review_result.delegation_path_ref)' \
+    'del(.review_result.delegation_contract)'; do
+    unsafe_standard_review="$(jq "$mutation" <<<"$standard_review_valid")"
+    if ! run_standard_pack_review_eval "$workflow_dir/evals/cases.json" "$unsafe_standard_review" FAIL; then
+        standard_pack_review_failures+=("actual eval runner accepts $mutation")
+    fi
+done
+if [[ ${#standard_pack_review_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow standard Pack review retention gaps: ${standard_pack_review_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

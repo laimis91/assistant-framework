@@ -218,6 +218,8 @@ count_structured_json_assertion_failures() {
               path_exists($assertion.path) and (value_at($assertion.path) | type == "string" and test("[^[:space:]]"))
             elif $assertion.operator == "nonempty_array" then
               path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length > 0)
+            elif $assertion.operator == "empty_array" then
+              path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length == 0)
             elif $assertion.operator == "equals_path" then
               path_exists($assertion.path) and path_exists($assertion.other_path)
               and value_at($assertion.path) == value_at($assertion.other_path)

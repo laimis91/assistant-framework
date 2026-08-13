@@ -406,7 +406,7 @@
       "title": "Code Mapper returns applicable architecture evidence",
       "category": "code_mapper_architecture_mapping",
       "purpose": "Checks that applicable architecture mapping returns evidence rather than a design.",
-      "prompt": "Map the codebase for this required Architecture Decision Pack.",
+      "prompt": "Map the codebase for this required Architecture Decision Pack. Return the complete response as one valid JSON object.",
       "setup_context": [
         "architecture_design_mode=required.",
         "architecture_design_trigger_reasons is non-empty.",
@@ -415,7 +415,7 @@
       "expected_behavior": [
         "Returns architecture_mapping_evidence.",
         "Records exactly one check for each design-pressure concern.",
-        "For representative_path status=observed, records at least one detailed producer-consumer path with failure or cancellation and source evidence; not_applicable or unresolved keeps the path array empty and records the reason in the pressure evidence.",
+        "For this observed representative path, records at least one detailed producer-consumer path with failure or cancellation and source evidence.",
         "Maps evidence and unresolved questions without selecting the design."
       ],
       "pass_criteria": [
@@ -443,6 +443,17 @@
         ],
         "structured_json_assertions": [
           {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
+          },
+          {
             "operator": "equals",
             "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
             "expected": "representative_path"
@@ -456,6 +467,138 @@
             "operator": "array_items_nonempty_fields",
             "path": ["architecture_mapping_evidence", "representative_paths"],
             "fields": ["producer", "consumer", "failure_or_cancellation", "source_ref"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-representative-path-not-applicable",
+      "title": "Code Mapper preserves a not-applicable representative path",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that an applicable Pack mapping can record a source-backed not-applicable representative path without inventing producer-consumer details.",
+      "prompt": "Map this required Architecture Decision Pack boundary where source inspection proves no representative producer-consumer path applies. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "The other four design-pressure concerns have been inspected.",
+        "The representative_path concern has source-backed not-applicable evidence."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence with representative_path status=not_applicable.",
+        "Keeps architecture_mapping_evidence.representative_paths empty and records the reason and source in the representative_path pressure evidence.",
+        "Maps evidence and never designs."
+      ],
+      "pass_criteria": [
+        "The response preserves the typed not_applicable status without fabricating a representative path."
+      ],
+      "fail_signals": [
+        "Fabricates producer-consumer details for a not-applicable representative path."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "representative_path",
+          "not_applicable",
+          "representative_paths",
+          "evidence_or_gap"
+        ],
+        "forbidden_substrings": [
+          "invented representative path"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "not_applicable"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "evidence_or_gap"]
+          },
+          {
+            "operator": "empty_array",
+            "path": ["architecture_mapping_evidence", "representative_paths"]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-mapper-representative-path-unresolved",
+      "title": "Code Mapper preserves an unresolved representative path",
+      "category": "code_mapper_architecture_mapping",
+      "purpose": "Checks that an applicable Pack mapping can retain an unresolved representative path without fabricating producer-consumer details.",
+      "prompt": "Map this required Architecture Decision Pack boundary where the representative producer-consumer path remains unresolved after bounded source inspection. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode=required.",
+        "The other four design-pressure concerns have been inspected.",
+        "The representative_path concern has a concrete evidence gap and source reference."
+      ],
+      "expected_behavior": [
+        "Returns architecture_mapping_evidence with representative_path status=unresolved.",
+        "Keeps architecture_mapping_evidence.representative_paths empty and records the evidence gap and source in the representative_path pressure evidence.",
+        "Maps evidence and never designs."
+      ],
+      "pass_criteria": [
+        "The response preserves the typed unresolved status without fabricating a representative path."
+      ],
+      "fail_signals": [
+        "Fabricates producer-consumer details for an unresolved representative path."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "architecture_mapping_evidence",
+          "representative_path",
+          "unresolved",
+          "representative_paths",
+          "evidence_or_gap"
+        ],
+        "forbidden_substrings": [
+          "invented representative path"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "concern"],
+            "expected": "representative_path"
+          },
+          {
+            "operator": "equals",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "status"],
+            "expected": "unresolved"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks", 4, "evidence_or_gap"]
+          },
+          {
+            "operator": "empty_array",
+            "path": ["architecture_mapping_evidence", "representative_paths"]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "field": "concern",
+            "expected_values": ["control_and_early_exit", "ownership_and_disposal", "resource_envelope", "extension_registration", "representative_path"]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["architecture_mapping_evidence", "design_pressure_checks"],
+            "fields": ["concern", "status", "evidence_or_gap", "source_ref"]
           }
         ]
       }
@@ -2185,6 +2328,76 @@
           "omit decision_resolution during mapping",
           "make consent-decision active",
           "advance to Decompose"
+        ]
+      }
+    },
+    {
+      "id": "standard-pack-review-result-retains-checklist",
+      "title": "Standard Pack review result retains the canonical checklist",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that a standard or strict Pack-backed review persists the canonical Pack checklist reference across handoff and compaction.",
+      "prompt": "Complete the standard review wrapper for this Pack-backed workflow after assistant-review returns validated final summary, delegation path, and Architecture Decision Pack review artifacts. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "controller_intensity=standard.",
+        "architecture_design_mode=required.",
+        "The assistant-review final_summary, review_delegation_path, and architecture_decision_pack_review artifacts are current and validated."
+      ],
+      "expected_behavior": [
+        "Records review_result canonical final-summary and delegation-path refs.",
+        "Records review_result.architecture_decision_pack_review_ref and its exact canonical assistant-review contract.",
+        "Marks review_result.validation_status=validated only after all three artifacts resolve."
+      ],
+      "pass_criteria": [
+        "The standard review wrapper remains reconstructable after handoff or compaction without duplicating assistant-review fields."
+      ],
+      "fail_signals": [
+        "Drops the Architecture Decision Pack review reference from a Pack-backed standard review_result."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "review_result",
+          "canonical_result_ref",
+          "delegation_path_ref",
+          "architecture_decision_pack_review_ref",
+          "assistant-review/contracts/output.yaml#architecture_decision_pack_review",
+          "validated"
+        ],
+        "forbidden_substrings": [
+          "Pack review reference is optional"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "canonical_result_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "canonical_contract"],
+            "expected": "assistant-review/contracts/output.yaml#final_summary"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "delegation_path_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "delegation_contract"],
+            "expected": "assistant-review/contracts/output.yaml#review_delegation_path"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": ["review_result", "architecture_decision_pack_review_ref"]
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "architecture_decision_pack_review_contract"],
+            "expected": "assistant-review/contracts/output.yaml#architecture_decision_pack_review"
+          },
+          {
+            "operator": "equals",
+            "path": ["review_result", "validation_status"],
+            "expected": "validated"
+          }
         ]
       }
     },
