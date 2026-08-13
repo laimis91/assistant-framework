@@ -1251,6 +1251,47 @@
       }
     },
     {
+      "id": "architecture-pack-selected-design-recovery-blocks",
+      "title": "Architecture Pack review blocks unrecoverable selected decision",
+      "category": "architecture_decision_pack_review",
+      "purpose": "Checks that compact Pack review projections reject a referenced Pack whose selected design, rationale, or viable alternative dispositions cannot be recovered.",
+      "prompt": "Review this applicable workflow Architecture Decision Pack projection. It has ref=journal#pack-17 but omits selected_design, selected_design_rationale, and viable_alternatives/dispositions. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "setup_context": [
+        "assistant-review is active and architecture_decision_pack_review_required is true.",
+        "The projection may remain compact only if ref resolves against the current authoritative Pack to the selected design, rationale, and viable alternatives/dispositions."
+      ],
+      "expected_behavior": [
+        "Blocks the review projection rather than documenting or reviewing an unrecoverable selected decision.",
+        "Requires current authoritative ref resolution or explicit selected_design, selected_design_rationale, and viable_alternatives/dispositions evidence."
+      ],
+      "pass_criteria": [
+        "The response is one JSON object with blocked validation_result.",
+        "The evidence_or_gap explains that the selected design is not recoverable from the current Pack ref."
+      ],
+      "fail_signals": [
+        "Accepts the projection because the ref exists without resolving the selected decision.",
+        "Invents a selected design or alternative disposition."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "selected_design",
+          "selected_design_rationale",
+          "viable_alternatives",
+          "current authoritative Pack",
+          "recoverable"
+        ],
+        "forbidden_substrings": [
+          "accept unresolved selected design",
+          "invent selected design"
+        ],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["validation_result","status"],"expected":"blocked"},
+          {"operator":"nonempty_string","path":["validation_result","missing_field"]},
+          {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}
+        ]
+      }
+    },
+    {
       "id": "review-finding-distills-permanent-rule-candidates",
       "title": "Review finding distills permanent rule candidates",
       "category": "review_finding_rule_distillation",

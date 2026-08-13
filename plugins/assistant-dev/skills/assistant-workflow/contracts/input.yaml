@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "7.0"
+schema_version: "8.0"
 contract: input
 skill: assistant-workflow
 
@@ -159,7 +159,7 @@ fields:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason. Every consumed route_clear_handoff retired_or_excluded_deferred_uncertainty_refs entry is traced exactly once as a non-goal or approved exclusion."
+    validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff retired_or_excluded_deferred_uncertainty_refs entry is traced exactly once as a non-goal or approved exclusion."
     on_missing: fail
     object_fields:
       - name: intended_outcome
@@ -211,7 +211,8 @@ fields:
       - name: entries
         type: object[]
         required: true
-        min_items: 1
+        min_items: 0
+        validation: "Non-empty when any accepted requirement, source route_clear_handoff decision, or acceptance_seed exists. Empty only for the exact all-excluded route whose source decisions and acceptance_seed are empty and whose excluded or retired lineage is traced exactly once to concrete non_goals or approved-exclusion targets."
         on_missing: fail
         object_fields:
           - name: requirement_id

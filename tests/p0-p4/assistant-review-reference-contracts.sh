@@ -276,7 +276,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "5.0" && handoffs["schema_version"] == "5.0" && output["schema_version"] == "5.0" && index["schema_version"] == "5.0" &&
+    valid = input["schema_version"] == "6.0" && handoffs["schema_version"] == "6.0" && output["schema_version"] == "6.0" && index["schema_version"] == "6.0" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -353,7 +353,7 @@ elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-ch
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
-    "$review_skill::Migration note: assistant-review contracts are v5" \
+    "$review_skill::Migration note: assistant-review contracts are v6" \
     "$review_phase_gates::architecture_design_mode" \
     "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
     file="${file_and_term%%::*}"
@@ -573,7 +573,7 @@ else
     fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
 fi
 
-test_start "assistant-review v5 preserves Pack projection cardinality and rejects empty evidence"
+test_start "assistant-review v6 preserves recoverable selected-design Pack projections"
 pack_projection_cardinality_failures=()
 if ! ruby -ryaml -e '
     input = YAML.load_file(ARGV.fetch(0))
@@ -583,17 +583,19 @@ if ! ruby -ryaml -e '
     boundaries = fields.fetch("boundaries_and_dependencies")
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "5.0" } &&
+    ref = fields.fetch("ref")
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "6.0" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
+      ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
       required_concerns.all? { |concern| pressure.fetch("validation").include?(concern) }
     exit valid ? 0 : 1
 ' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
-    pack_projection_cardinality_failures+=("v5 input does not preserve non-empty boundaries and exact five-concern pressure coverage")
+    pack_projection_cardinality_failures+=("v6 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
 fi
-if ! grep -Fq 'Migration note: assistant-review contracts are v5' "$review_skill" \
-    || ! grep -Fq 'Pack projections require non-empty boundaries and exact five-concern design-pressure coverage' "$review_skill"; then
-    pack_projection_cardinality_failures+=("v5 migration note does not describe Pack projection cardinality")
+if ! grep -Fq 'Migration note: assistant-review contracts are v6' "$review_skill" \
+    || ! grep -Fq 'recoverable selected design, rationale, and viable alternatives/dispositions' "$review_skill"; then
+    pack_projection_cardinality_failures+=("v6 migration note does not describe recoverable selected design evidence")
 fi
 if ! jq -e '
     .cases[] | select(.id == "architecture-pack-empty-review-evidence-blocks") |
@@ -610,7 +612,36 @@ else
     fail "assistant-review Pack projection cardinality gaps: ${pack_projection_cardinality_failures[*]}"
 fi
 
-test_start "assistant-review v5 conditionally requires Pack checks in Reviewer returns"
+test_start "assistant-review reviewer-context ceiling matches its canonical loop reference"
+if ruby -ryaml -e '
+    index = YAML.load_file(ARGV.fetch(0))
+    budget = index.fetch("load_sets").fetch("reviewer_context").fetch("budget_words")
+    reference = File.read(ARGV.fetch(1))
+    exit reference.include?("strictly below #{budget} words") ? 0 : 1
+  ' "$review_index" "$review_loop"; then
+    pass
+else
+    fail "assistant-review reviewer-context budget_words and review-loop closure ceiling diverged"
+fi
+
+test_start "assistant-review grader rejects unrecoverable selected Pack decisions"
+review_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-selected-decision.XXXXXX")"
+p0p4_register_cleanup "$review_identity_eval_root"
+mkdir -p "$review_identity_eval_root/skill" "$review_identity_eval_root/skill/evals"
+cp "$review_skill" "$review_identity_eval_root/skill/SKILL.md"
+jq '.skill = "skill" | .cases = [.cases[] | select(.id == "architecture-pack-selected-design-recovery-blocks")]' "$review_evals" >"$review_identity_eval_root/skill/evals/cases.json"
+review_identity_required="$(jq -r '.cases[0].machine_expectations.required_substrings[]' "$review_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
+jq -n --arg summary "$review_identity_required" '{summary: $summary, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "validated"}}' >"$review_identity_eval_root/skill/architecture-pack-selected-design-recovery-blocks.txt"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$review_identity_eval_root" --skill "$review_identity_eval_root/skill" >"$review_identity_eval_root/grader.out" 2>&1; then
+    fail "real grader accepted unrecoverable selected Pack decision"
+elif grep -Fq $'FAIL\tskill\tarchitecture-pack-selected-design-recovery-blocks' "$review_identity_eval_root/grader.out" \
+    && grep -Fq 'structured JSON assertion failure' "$review_identity_eval_root/grader.out"; then
+    pass
+else
+    fail "real grader did not reject unrecoverable selected Pack decision for the intended reason"
+fi
+
+test_start "assistant-review v6 conditionally requires Pack checks in Reviewer returns"
 reviewer_pack_return_failures=()
 if ! ruby -ryaml -e '
     handoffs = YAML.load_file(ARGV.fetch(0))

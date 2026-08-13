@@ -248,21 +248,131 @@ for term in \
 done
 if [[ ${#workflow_missing[@]} -eq 0 ]]; then pass; else fail "architecture Pack propagation/traceability contract gaps: ${workflow_missing[*]}"; fi
 
-test_start "assistant-docs Pack contracts parse as strict YAML in source and mirror"
-docs_yaml_parse_failures=()
+test_start "workflow v8 Pack and route-clear contracts retain stable decision and verification identity"
+workflow_integrity_missing=()
+if ! ruby -ryaml -e '
+    contracts = ARGV.map { |path| YAML.load_file(path) }
+    output = contracts.first
+    pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+    pack_fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
+    alternatives = pack_fields.fetch("alternatives")
+    alternative_fields = alternatives.fetch("object_fields").to_h { |field| [field["name"], field] }
+    quality = pack_fields.fetch("quality_scenarios")
+    quality_fields = quality.fetch("object_fields").to_h { |field| [field["name"], field] }
+    verification = pack_fields.fetch("verification")
+    verification_fields = verification.fetch("object_fields").to_h { |field| [field["name"], field] }
+    maps = contracts.map { |contract| (contract["fields"] || []).find { |field| field["name"] == "requirement_acceptance_map" } || (contract["artifacts"] || []).find { |artifact| artifact["name"] == "requirement_acceptance_map" } }.compact
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "8.0" } &&
+      pack_fields.fetch("selected_alternative_id")["required"] == "conditional" &&
+      pack_fields.fetch("selected_alternative_id")["condition"].include?("alternatives") &&
+      alternative_fields.fetch("alternative_id")["required"] == true &&
+      alternatives.fetch("validation").include?("unique") && alternatives.fetch("validation").include?("exactly one") &&
+      quality_fields.fetch("quality_scenario_id")["required"] == true &&
+      quality_fields.fetch("verification_ref")["required"] == "conditional" &&
+      quality.fetch("validation").include?("budget_or_explicit_unknown") && quality.fetch("validation").include?("verified") &&
+      verification_fields.fetch("verification_id")["required"] == true && verification.fetch("validation").include?("unique") &&
+      maps.all? { |map| entries = map.fetch("object_fields").find { |field| field["name"] == "entries" }; entries["min_items"] == 0 && entries.fetch("validation").include?("all-excluded") }
+    exit valid ? 0 : 1
+  ' "$output_contract" "$input_contract" "$phase_gates" "$workflow_handoffs"; then
+    workflow_integrity_missing+=("v8 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
+fi
+for file_and_term in \
+    "$workflow_skill::Migration note: assistant-workflow contracts are v8" \
+    "$workflow_skill::selected_alternative_id" \
+    "$workflow_skill::quality_scenario_id" \
+    "$workflow_dir/references/architecture-decision-pack.md::alternative_id" \
+    "$workflow_dir/references/architecture-decision-pack.md::verification_id" \
+    "$workflow_dir/references/progressive-discovery.md::all-excluded route"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq -- "$term" "$file"; then workflow_integrity_missing+=("${file#$FRAMEWORK_DIR/}: $term"); fi
+done
+if [[ ${#workflow_integrity_missing[@]} -eq 0 ]]; then pass; else fail "workflow v8 integrity contract gaps: ${workflow_integrity_missing[*]}"; fi
+
+test_start "workflow grader independently rejects each Pack identity invariant"
+workflow_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-identity-integrity.XXXXXX")"
+p0p4_register_cleanup "$workflow_identity_eval_root"
+mkdir -p "$workflow_identity_eval_root/skill" "$workflow_identity_eval_root/skill/evals"
+cp "$workflow_skill" "$workflow_identity_eval_root/skill/SKILL.md"
+jq '.skill = "skill" | .cases = [.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks"))]' "$workflow_dir/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.json"
+workflow_identity_grader_failures=()
+while IFS=$'\t' read -r case_id expected_missing_field; do
+    workflow_identity_required="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
+    jq -n --arg summary "$workflow_identity_required" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "blocked", missing_field: $expected_missing_field, evidence_or_gap: "Candidate violates the named invariant."}}' >"$workflow_identity_eval_root/skill/$case_id.txt"
+done < <(jq -r '.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks")) | [.id, (.machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected)] | @tsv' "$workflow_identity_eval_root/skill/evals/cases.json")
+if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_identity_eval_root" --skill "$workflow_identity_eval_root/skill" >"$workflow_identity_eval_root/grader.out" 2>&1; then
+    workflow_identity_grader_failures+=("safe identity responses")
+fi
+while IFS=$'\t' read -r case_id expected_missing_field; do
+    workflow_identity_required="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
+    jq '.cases = [.cases[] | select(.id == $case_id)]' --arg case_id "$case_id" "$workflow_identity_eval_root/skill/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/one-case.json"
+    mv "$workflow_identity_eval_root/skill/evals/one-case.json" "$workflow_identity_eval_root/skill/evals/cases.json"
+    rm -f "$workflow_identity_eval_root/skill"/*.txt
+    jq -n --arg summary "$workflow_identity_required" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "accepted", missing_field: $expected_missing_field, evidence_or_gap: "Candidate violates the named invariant."}}' >"$workflow_identity_eval_root/skill/$case_id.txt"
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_identity_eval_root" --skill "$workflow_identity_eval_root/skill" >"$workflow_identity_eval_root/grader.out" 2>&1; then
+        workflow_identity_grader_failures+=("$case_id accepted unsafe response")
+    elif ! grep -Fq $'FAIL\tskill\t'"$case_id" "$workflow_identity_eval_root/grader.out" \
+        || ! grep -Fq 'structured JSON assertion failure' "$workflow_identity_eval_root/grader.out" \
+        || ! grep -Fq 'structured_json_assertion_failures=1' "$workflow_identity_eval_root/grader.out"; then
+        workflow_identity_grader_failures+=("$case_id unsafe response did not fail its sole structured assertion")
+    fi
+    jq '.skill = "skill" | .cases = [.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks"))]' "$workflow_dir/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.json"
+    jq -n --arg summary "$workflow_identity_required" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "blocked", missing_field: $expected_missing_field, evidence_or_gap: "Candidate violates the named invariant."}}' >"$workflow_identity_eval_root/skill/$case_id.txt"
+done < <(jq -r '.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks")) | [.id, (.machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected)] | @tsv' "$workflow_identity_eval_root/skill/evals/cases.json")
+if [[ ${#workflow_identity_grader_failures[@]} -eq 0 ]]; then pass; else fail "real grader accepted or did not independently reject Pack identity invariants: ${workflow_identity_grader_failures[*]}"; fi
+
+test_start "changed Pack contracts parse as strict duplicate-key-safe YAML in source and mirror"
+contracts_yaml_parse_failures=()
 for docs_contract in \
     "$docs_input_contract" \
     "$docs_output_contract" \
     "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/output.yaml"; do
-    if ! ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0))' "$docs_contract" >/dev/null 2>&1; then
-        docs_yaml_parse_failures+=("${docs_contract#$FRAMEWORK_DIR/}")
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/output.yaml" \
+    "$workflow_dir/contracts/index.yaml" \
+    "$workflow_dir/contracts/input.yaml" \
+    "$workflow_dir/contracts/output.yaml" \
+    "$workflow_dir/contracts/phase-gates.yaml" \
+    "$workflow_dir/contracts/handoffs.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/index.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/index.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/input.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/output.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/phase-gates.yaml" \
+    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/handoffs.yaml"; do
+    if ! ruby -e '
+        require "yaml"
+        def reject_duplicate_keys(node)
+          if node.is_a?(Psych::Nodes::Mapping)
+            keys = {}
+            node.children.each_slice(2) do |key, value|
+              raise "duplicate YAML key: #{key.value}" if key.is_a?(Psych::Nodes::Scalar) && keys[key.value]
+              keys[key.value] = true if key.is_a?(Psych::Nodes::Scalar)
+              reject_duplicate_keys(key)
+              reject_duplicate_keys(value)
+            end
+          elsif node.respond_to?(:children) && node.children
+            node.children.each { |child| reject_duplicate_keys(child) }
+          end
+        end
+        reject_duplicate_keys(Psych.parse_file(ARGV.fetch(0)))
+        YAML.load_file(ARGV.fetch(0))
+      ' "$docs_contract" >/dev/null 2>&1; then
+        contracts_yaml_parse_failures+=("${docs_contract#$FRAMEWORK_DIR/}")
     fi
 done
-if [[ ${#docs_yaml_parse_failures[@]} -eq 0 ]]; then
+if [[ ${#contracts_yaml_parse_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "assistant-docs Pack contracts are not strict YAML: ${docs_yaml_parse_failures[*]}"
+    fail "changed Pack contracts are not strict duplicate-key-safe YAML: ${contracts_yaml_parse_failures[*]}"
 fi
 
 test_start "assistant-docs preserves the exact compact assistant-review Pack projection"
@@ -502,27 +612,27 @@ else
     pass
 fi
 
-test_start "workflow v7 migration note preserves every breaking producer contract"
+test_start "workflow v8 migration note preserves every breaking producer contract"
 migration_note="$(awk '
     /^Migration note:/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
-if ! grep -Fq 'assistant-workflow contracts are v7' <<<"$migration_note"; then
-    fail "v7 migration note does not declare the breaking contract version"
+if ! grep -Fq 'assistant-workflow contracts are v8' <<<"$migration_note"; then
+    fail "v8 migration note does not declare the breaking contract version"
 elif ! grep -Fq 'semantic_type_inspection' <<<"$migration_note" \
     || ! grep -Fq 'contributor_evidence' <<<"$migration_note"; then
-    fail "v7 migration note does not preserve CodeMapper semantic inspection and collaborative contributor evidence migrations"
+    fail "v8 migration note does not preserve CodeMapper semantic inspection and collaborative contributor evidence migrations"
 elif ! ruby -ryaml -e '
-    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "7.0" }
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "8.0" }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    fail "v7 migration does not bump every assistant-workflow canonical contract header"
+    fail "v8 migration does not bump every assistant-workflow canonical contract header"
 elif ! grep -Fq 'verification_command' <<<"$migration_note"; then
-    fail "v7 migration note no longer explains verification_command argv migration"
+    fail "v8 migration note no longer explains verification_command argv migration"
 elif ! grep -Fq 'assistant-review' <<<"$migration_note" \
     || ! grep -Eiq 'owns?' <<<"$migration_note" \
     || ! grep -Fq 'subagent_trigger_scope' <<<"$migration_note"; then
-    fail "v7 migration note does not preserve assistant-review ownership and trigger-based delegation"
+    fail "v8 migration note does not preserve assistant-review ownership and trigger-based delegation"
 else
     pass
 fi
@@ -651,7 +761,7 @@ fi
 
 test_start "promotable workflow overlay preserves optional Plan ownership and v4 migration semantics"
 candidate_missing=()
-for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v5' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
+for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v6' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
     if ! grep -Fq -- "$term" "$candidate_skill"; then
         candidate_missing+=("$term")
     fi
@@ -1213,7 +1323,7 @@ run_standard_pack_review_eval() {
         && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
 }
 
-test_start "workflow v7 standard reviews retain validated Pack checklist references"
+test_start "workflow v8 standard reviews retain validated Pack checklist references"
 standard_pack_review_failures=()
 review_result_block="$(contract_field_block "$output_contract" review_result)"
 for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
@@ -1236,9 +1346,9 @@ for file_and_term in \
         standard_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
-if ! grep -Fq 'assistant-workflow contracts are v7' "$workflow_skill" \
+if ! grep -Fq 'assistant-workflow contracts are v8' "$workflow_skill" \
     || ! grep -Fq 'Pack `review_result` retains canonical refs' "$workflow_skill"; then
-    standard_pack_review_failures+=("workflow v7 migration note does not describe standard Pack review retention")
+    standard_pack_review_failures+=("workflow v8 migration note does not describe standard Pack review retention")
 fi
 if ! jq -e '
     .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
@@ -1254,9 +1364,9 @@ if ! jq -e '
     standard_pack_review_failures+=("standard Pack review retention eval lacks structured canonical reference assertions")
 fi
 if ! ruby -ryaml -e '
-    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "7.0" }
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "8.0" }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    standard_pack_review_failures+=("workflow v7 does not cover every canonical contract header")
+    standard_pack_review_failures+=("workflow v8 does not cover every canonical contract header")
 fi
 standard_review_required_summary="$(jq -r '.cases[] | select(.id == "standard-pack-review-result-retains-checklist") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
 standard_review_valid="$(jq -n --arg summary "$standard_review_required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}')"

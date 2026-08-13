@@ -1,4 +1,4 @@
-schema_version: "5.0"
+schema_version: "6.0"
 contract: index
 skill: assistant-review
 
@@ -55,7 +55,7 @@ load_sets:
         section: dispatch_context_bundles
         key: name
         names: [fresh_reviewer_context]
-    budget_words: 5634
+    budget_words: 5653
   return_validation:
     selectors:
       - id: review-return-validation-bundle

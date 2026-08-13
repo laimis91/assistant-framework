@@ -2402,6 +2402,78 @@
       }
     },
     {
+      "id": "architecture-pack-all-excluded-accepted-seed-blocks",
+      "title": "All-excluded route blocks accepted seed",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects entries=[] when a consumed all-excluded route carries an acceptance seed.",
+      "prompt": "Validate candidate route_clear_handoff.decisions=[], acceptance_seed=[ship-cache], entries=[], and complete exclusion traces. Return one JSON validation_result.",
+      "setup_context": ["The consumed route is otherwise all-excluded and its exclusion traces are complete."],
+      "expected_behavior": ["Blocks entries=[] because acceptance_seed is non-empty and requires an accepted entry."],
+      "pass_criteria": ["Returns blocked with missing_field=accepted_requirement_entry."],
+      "fail_signals": ["Accepts entries=[] with accepted seed."],
+      "machine_expectations": {"required_substrings": ["all-excluded", "acceptance_seed", "entries=[]"], "forbidden_substrings": ["accept entries=[] with accepted seed"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"accepted_requirement_entry"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-duplicate-alternative-id-blocks",
+      "title": "Pack blocks duplicate alternative identity",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects viable alternatives that reuse one alternative_id.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}, {alternative_id=cache, disposition=rejected}] and selected_alternative_id=cache. Return one JSON validation_result.",
+      "setup_context": ["The alternatives are otherwise viable and the selected design names cache."],
+      "expected_behavior": ["Blocks duplicate alternative_id before accepting selected binding."],
+      "pass_criteria": ["Returns blocked with missing_field=unique_alternative_id."],
+      "fail_signals": ["Accepts duplicate alternative_id."],
+      "machine_expectations": {"required_substrings": ["alternative_id", "duplicate", "selected_alternative_id"], "forbidden_substrings": ["accept duplicate alternative_id"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"unique_alternative_id"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-unknown-selected-alternative-blocks",
+      "title": "Pack blocks unknown selected alternative",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects selected_alternative_id that does not resolve to the selected alternative.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}] and selected_alternative_id=missing. Return one JSON validation_result.",
+      "setup_context": ["The one declared alternative is the sole selected choice."],
+      "expected_behavior": ["Blocks selected_alternative_id that resolves to no alternative."],
+      "pass_criteria": ["Returns blocked with missing_field=selected_alternative_resolution."],
+      "fail_signals": ["Accepts unknown selected_alternative_id."],
+      "machine_expectations": {"required_substrings": ["selected_alternative_id", "missing", "alternative_id"], "forbidden_substrings": ["accept unknown selected_alternative_id"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"selected_alternative_resolution"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-multiple-selected-alternatives-blocks",
+      "title": "Pack blocks multiple selected alternatives",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects alternatives with more than one selected disposition.",
+      "prompt": "Validate candidate alternatives=[{alternative_id=cache, disposition=selected}, {alternative_id=stream, disposition=selected}] and selected_alternative_id=cache. Return one JSON validation_result.",
+      "setup_context": ["Both alternatives are viable but only one may be selected."],
+      "expected_behavior": ["Blocks multiple selected dispositions despite one selected_alternative_id."],
+      "pass_criteria": ["Returns blocked with missing_field=single_selected_alternative."],
+      "fail_signals": ["Accepts multiple selected dispositions."],
+      "machine_expectations": {"required_substrings": ["alternatives", "multiple", "disposition=selected"], "forbidden_substrings": ["accept multiple selected dispositions"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"single_selected_alternative"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-explicit-unknown-verified-quality-blocks",
+      "title": "Pack blocks verified explicit-unknown quality scenario",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects quality status=verified when budget_or_explicit_unknown is unknown.",
+      "prompt": "Validate candidate quality_scenario_id=memory-limit, budget_or_explicit_unknown=unknown, status=verified, verification_ref=memory-check. Return one JSON validation_result.",
+      "setup_context": ["The scenario has a stable identity and a verification reference but no concrete budget."],
+      "expected_behavior": ["Blocks explicit unknown quality evidence from claiming verified."],
+      "pass_criteria": ["Returns blocked with missing_field=concrete_quality_budget."],
+      "fail_signals": ["Accepts unknown verified quality scenario."],
+      "machine_expectations": {"required_substrings": ["budget_or_explicit_unknown", "unknown", "status=verified"], "forbidden_substrings": ["accept unknown verified quality scenario"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"concrete_quality_budget"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
+      "id": "architecture-pack-dangling-quality-verification-blocks",
+      "title": "Pack blocks dangling quality verification ref",
+      "category": "architecture_decision_pack_integrity",
+      "purpose": "Rejects verified quality verification_ref without matching verification_id.",
+      "prompt": "Validate candidate quality_scenario_id=memory-limit, budget_or_explicit_unknown=128MB, status=verified, verification_ref=missing-check, verification=[{verification_id=memory-check}]. Return one JSON validation_result.",
+      "setup_context": ["The scenario has a concrete threshold and is otherwise eligible for verified status."],
+      "expected_behavior": ["Blocks dangling verification_ref rather than accepting verified quality evidence."],
+      "pass_criteria": ["Returns blocked with missing_field=verification_ref_resolution."],
+      "fail_signals": ["Accepts dangling verification_ref."],
+      "machine_expectations": {"required_substrings": ["verification_ref", "missing-check", "verification_id"], "forbidden_substrings": ["accept dangling verification_ref"], "structured_json_assertions": [{"operator":"equals","path":["validation_result","status"],"expected":"blocked"}, {"operator":"equals","path":["validation_result","missing_field"],"expected":"verification_ref_resolution"}, {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}]}
+    },
+    {
       "id": "workflow-required-roles-dispatch-from-instruction-trigger",
       "title": "Required workflow roles dispatch from an applicable instruction trigger",
       "category": "subagent_delegation_trigger",

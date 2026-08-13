@@ -89,7 +89,11 @@ bind every source `retired_or_excluded_deferred_uncertainty_refs` ref exactly
 once through `retired_or_excluded_deferred_uncertainty_traces` to a concrete
 `non_goals` or `entries` target with `status=approved_exclusion`,
 turn each acceptance seed into an `entries[].acceptance_criterion` with binary
-acceptance, then record `source_route_clear_handoff_ref` resolving to the
+acceptance. The sole exception is the legitimate all-excluded route: its source
+`decisions=[]` and `acceptance_seed=[]`, no accepted requirement exists,
+`entries=[]`, and every source excluded or retired item is traced exactly once
+to a concrete `non_goals` or `approved_exclusion` target; never fabricate an
+acceptance entry. Then record `source_route_clear_handoff_ref` resolving to the
 source handoff. That handoff records `consumed_by_requirement_acceptance_map_ref`
 resolving back to the consuming map; these are reciprocal pointers, not equal
 values. Record that consumption_state=consumed and

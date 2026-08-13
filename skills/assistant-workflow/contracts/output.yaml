@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "7.0"
+schema_version: "8.0"
 contract: output
 skill: assistant-workflow
 
@@ -645,7 +645,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -692,7 +692,8 @@ artifacts:
       - name: entries
         type: object[]
         required: true
-        min_items: 1
+        min_items: 0
+        validation: "Non-empty when any accepted requirement, source route_clear_handoff decision, or acceptance_seed exists. Empty only for the exact all-excluded route whose source decisions and acceptance_seed are empty and whose excluded or retired lineage is traced exactly once to concrete non_goals or approved-exclusion targets."
         on_missing: fail
         object_fields:
           - name: requirement_id
@@ -739,7 +740,7 @@ artifacts:
     required: conditional
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
-    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
+    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios with stable identity and verified evidence; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real with stable selected binding, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
     on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
     object_fields:
       - name: pack_id
@@ -981,7 +982,12 @@ artifacts:
         type: object[]
         required: true
         description: "Falsifiable quality claims or explicit unknowns"
+        validation: "quality_scenario_id is stable and unique. A scenario with budget_or_explicit_unknown that is explicit unknown may be pending or unknown only, never verified. status=verified requires a concrete falsifiable budget or threshold and verification_ref resolving exactly once to a verification.verification_id."
         object_fields:
+          - name: quality_scenario_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within quality_scenarios"
           - name: attribute
             type: enum
             required: true
@@ -1005,6 +1011,11 @@ artifacts:
             type: enum
             required: true
             enum_values: [pending, verified, unknown]
+          - name: verification_ref
+            type: string
+            required: conditional
+            condition: "status == verified"
+            validation: "Resolves exactly once to verification.verification_id; required only for verified scenarios"
       - name: architecture_test_obligations
         type: object[]
         required: conditional
@@ -1030,7 +1041,12 @@ artifacts:
         type: object[]
         required: true
         description: "Only genuinely viable alternatives; an empty list records an evidenced single path"
+        validation: "alternative_id values are stable and unique. When non-empty, exactly one disposition=selected exists; selected_alternative_id resolves exactly once to it, and selected_design describes that same choice. When empty, selected_alternative_id is absent and the single path is evidenced."
         object_fields:
+          - name: alternative_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within alternatives"
           - name: option
             type: string
             required: true
@@ -1041,9 +1057,15 @@ artifacts:
             type: enum
             required: true
             enum_values: [selected, rejected]
+      - name: selected_alternative_id
+        type: string
+        required: conditional
+        condition: "alternatives is non-empty"
+        validation: "Resolves exactly once to the sole alternatives entry with disposition=selected"
       - name: selected_design
         type: string
         required: true
+        validation: "Matches selected_alternative_id when alternatives is non-empty; otherwise describes the evidenced single path"
       - name: selected_design_rationale
         type: string
         required: true
@@ -1051,7 +1073,12 @@ artifacts:
         type: object[]
         required: true
         min_items: 1
+        validation: "verification_id values are stable and unique; every quality_scenarios[].verification_ref resolves exactly once when status=verified"
         object_fields:
+          - name: verification_id
+            type: string
+            required: true
+            validation: "Non-empty and unique within verification"
           - name: claim_or_constraint
             type: string
             required: true

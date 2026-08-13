@@ -146,8 +146,8 @@ nested Pack mode cannot be weakened to evade that evidence.
 |---|---|---|---|
 
 ### Quality scenarios
-| Attribute | Workload | Budget/threshold | Measurement | Failure condition |
-|---|---|---|---|---|
+| Quality scenario id | Attribute | Workload | Budget/threshold or explicit unknown | Measurement | Failure condition | Status | Verification ref |
+|---|---|---|---|---|---|---|---|
 
 ### TDD test obligations
 When TDD applies, list each Pack-derived obligation with a stable `obligation_id`,
@@ -156,9 +156,9 @@ Carry this typed list unchanged into CodeWriter and BuilderTester task packets;
 the selected Build owner returns exact-once `architecture_obligation_coverage`.
 
 ### Decision and verification
-- Selected design: [choice and rationale]
-- Alternatives: [only genuine viable alternatives and trade-offs]
-- Verification: [command/manual method, success signal, failure condition]
+- Selected design: [choice and rationale; matches selected alternative when alternatives are non-empty]
+- Alternatives: [only genuine viable alternatives and trade-offs; each has stable `alternative_id`, exactly one `disposition=selected`, and `selected_alternative_id` resolves to it; empty alternatives omit selected_alternative_id and evidence the single path]
+- Verification: [each stable `verification_id`: command/manual method, success signal, failure condition; verified quality scenarios resolve exactly one verification ref]
 - Handoff binding: [discover_only with context-map/journal ref, or downstream_bound with task-packet and review refs]
 ```
 
@@ -168,7 +168,10 @@ Do not approve or claim a memory, performance, extensibility, reliability, or
 operability benefit without a stated workload, target/budget or explicit
 unknown, measurement method, and failure condition. For streaming/resource
 work, define bounded ownership and queue/buffer limits before claiming memory
-efficiency; for example, a resource envelope may be expressed as fixed process
+efficiency; `budget_or_explicit_unknown=unknown` permits only pending or unknown
+quality status, never verified. A verified scenario has a concrete falsifiable
+budget or threshold and resolves exactly one `verification_ref` to a stable
+`verification_id`; for example, a resource envelope may be expressed as fixed process
 cost plus bounded concurrency times bounded per-item buffers. This is a design
 hypothesis until its stated verification runs.
 

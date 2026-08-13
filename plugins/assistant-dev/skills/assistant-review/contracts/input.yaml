@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "5.0"
+schema_version: "6.0"
 contract: input
 skill: assistant-review
 
@@ -322,6 +322,7 @@ fields:
       - name: ref
         type: string
         required: true
+        validation: "Resolves against the current authoritative Pack to recover the selected design, selected design rationale, and viable alternatives with dispositions; otherwise block review instead of inventing or documenting the decision."
       - name: mode
         type: enum
         required: true

@@ -319,6 +319,10 @@ write_workflow_eval_responses() {
                 standard-pack-review-result-retains-checklist)
                     jq -n --arg summary "$required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}' >"$response_path"
                     ;;
+                architecture-pack-*-blocks)
+                    expected_missing_field="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected' "$fixture")"
+                    jq -n --arg summary "$required_summary" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "blocked", missing_field: $expected_missing_field, evidence_or_gap: "The supplied candidate violates the named Pack identity invariant."}}' >"$response_path"
+                    ;;
                 *)
                     fail "unhandled structured assistant-workflow eval case: $case_id"
                     ;;

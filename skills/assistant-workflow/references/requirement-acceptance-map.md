@@ -65,7 +65,10 @@ Requirement Acceptance Map:
   once through `retired_or_excluded_deferred_uncertainty_traces` as a non-goal
   or approved exclusion with a concrete target ref; and
   each acceptance_seed becomes an entries[].acceptance_criterion with binary
-  acceptance.
+  acceptance. The only permitted `entries=[]` map is the exact all-excluded
+  route: source `decisions=[]` and `acceptance_seed=[]`, no accepted
+  requirement, and every excluded or retired source item traced exactly once to
+  a concrete non-goal or approved-exclusion target; never fabricate an entry.
 - Keep both reciprocal references while
   `progressive_artifact_retention_state=retained`. Before
   `progressive_artifact_retention_state=terminally_archived` is persisted or

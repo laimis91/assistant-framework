@@ -138,6 +138,10 @@ p0p4_write_skill_eval_responses() {
                     standard-pack-review-result-retains-checklist)
                         jq -n --arg summary "$required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}' >"$response_path"
                         ;;
+                    architecture-pack-*-blocks)
+                        expected_missing_field="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected' "$fixture_file")"
+                        jq -n --arg summary "$required_summary" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "blocked", missing_field: $expected_missing_field, evidence_or_gap: "The supplied candidate violates the named Pack identity invariant."}}' >"$response_path"
+                        ;;
                     *)
                         fail "unhandled structured assistant-workflow eval case: $id"
                         ;;
@@ -152,6 +156,9 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     architecture-pack-empty-review-evidence-blocks)
                         jq -n --arg summary "$required_summary" '{summary: $summary, validation_result: {status: "blocked", missing_field: "boundaries_and_dependencies_or_design_pressure_checks", evidence_or_gap: "The compact Pack projection contains empty Pack review evidence."}}' >"$response_path"
+                        ;;
+                    architecture-pack-selected-design-recovery-blocks)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, validation_result: {status: "blocked", missing_field: "selected_design_evidence", evidence_or_gap: "The current Pack reference does not recover the selected decision evidence."}}' >"$response_path"
                         ;;
                     *)
                         fail "unhandled structured assistant-review eval case: $id"
