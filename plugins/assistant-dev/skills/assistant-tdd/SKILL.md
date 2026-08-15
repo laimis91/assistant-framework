@@ -1,11 +1,6 @@
 ---
 name: assistant-tdd
 description: "Apply Red-Green-Refactor. Use when tests-first/TDD is requested or required by project conventions."
-effort: high
-triggers:
-  - pattern: "tdd|tests? first|test.driven|red green refactor|write the test first"
-    priority: 85
-    reminder: "This request matches assistant-tdd. You MUST invoke the Skill tool with skill='assistant-tdd' BEFORE writing any production code."
 ---
 
 # Test-Driven Development

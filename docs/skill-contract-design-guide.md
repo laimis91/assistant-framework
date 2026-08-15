@@ -132,8 +132,13 @@ Multiple open protocols define structured metadata for agent discovery, capabili
 - Handoff requires structured, queryable memory rather than raw text transfer
 
 **Enforcement for skills:**
+- Required SKILL.md discovery fields are `name` and non-empty `description`.
+  Repository-only `requires` is optional and appears only for validated hard
+  dependencies; body instructions apply after native activation
 - Skill descriptions in frontmatter are capability declarations — keep them precise
-- Trigger patterns are capability matching — keep them specific to avoid false matches
+- Native activation is description-based. Use representative activation examples to
+  shape the description and positive and negative routing evals; do not serialize
+  examples as frontmatter routing metadata
 - Subagent prompts include structured context blocks with required fields, not free-form prose
 
 ### 7. LLM Guardrails — Drift Prevention
@@ -366,7 +371,14 @@ Use `--include-local` only for local experiments:
 tools/skills/validate-skills.sh --include-local
 ```
 
-This validator checks source skill metadata and contract structure: frontmatter, required contract tier files, contract headers, required-field recovery behavior, and enum value declarations. It intentionally stays on the source side. Canonical source paths such as `.claude` remain valid in source skills; installed-agent path substitution for `.codex` and `.gemini` stays covered by installer tests.
+This validator checks source skill metadata and contract structure: frontmatter,
+required contract tier files, contract headers, required-field recovery behavior,
+and enum value declarations. SKILL.md frontmatter requires `name` and a non-empty
+`description`; repository skills may include optional `requires` for validated
+hard dependencies. Top-level `effort` and `triggers` are deprecated and rejected.
+It intentionally stays on the source side. Canonical source paths such as
+`.claude` remain valid in source skills; installed-agent path substitution for
+`.codex` and `.gemini` stays covered by installer tests.
 
 ### Level 1: Contract files exist (passive)
 The contracts are YAML files in the skill directory. Agents read them as part of skill execution. This relies on the agent following instructions — the same trust model as the existing SKILL.md.

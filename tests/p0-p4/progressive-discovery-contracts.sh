@@ -3172,7 +3172,7 @@ fi
 
 mirror_diff="$(mktemp)"
 p0p4_register_cleanup "$mirror_diff"
-if ! diff -qr "$workflow_dir" "$workflow_plugin" >"$mirror_diff"; then
+if ! diff -qr -x .DS_Store "$workflow_dir" "$workflow_plugin" >"$mirror_diff"; then
     alignment_missing+=("assistant-workflow canonical and assistant-dev mirror are not directory-identical")
 fi
 

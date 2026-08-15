@@ -107,6 +107,45 @@ else
     fail "single-skill Codex install failed; see /tmp/p0p4-install-single-skill-table.err"
 fi
 
+test_start "requires fixtures stay outside the canonical skills inventory"
+requires_fixture_prefix='assistant-requires-contract-fixture-'
+canonical_fixture_creation='mktemp -d "$FRAMEWORK_DIR/skills/'"$requires_fixture_prefix"
+if grep -Fq -- "$canonical_fixture_creation" "${BASH_SOURCE[0]}"; then
+    fail "requires fixture is created inside the canonical skills inventory"
+else
+    pass
+fi
+
+test_start "Codex installer observes missing dependencies from canonical block requires"
+INSTALL_HOME_REQUIRES="$(mktemp -d)"
+REQUIRES_FRAMEWORK_ROOT="$(mktemp -d)"
+REQUIRES_FIXTURE_NAME="assistant-requires-contract-fixture-$(basename "$REQUIRES_FRAMEWORK_ROOT")"
+REQUIRES_FIXTURE="$REQUIRES_FRAMEWORK_ROOT/skills/$REQUIRES_FIXTURE_NAME"
+p0p4_register_cleanup "$INSTALL_HOME_REQUIRES" "$REQUIRES_FRAMEWORK_ROOT"
+mkdir -p "$REQUIRES_FIXTURE"
+cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_FRAMEWORK_ROOT/install.sh"
+cat >"$REQUIRES_FIXTURE/SKILL.md" <<EOF
+---
+name: $REQUIRES_FIXTURE_NAME
+description: Canonical block requires installer fixture.
+requires:
+  - assistant-missing-dependency
+---
+
+# Canonical Requires Fixture
+EOF
+if [[ "$REQUIRES_FIXTURE" == "$FRAMEWORK_DIR/skills/"* ]]; then
+    fail "requires fixture must not be created under canonical skills"
+elif HOME="$INSTALL_HOME_REQUIRES" bash "$REQUIRES_FRAMEWORK_ROOT/install.sh" --agent codex --skill "$REQUIRES_FIXTURE_NAME" --no-hooks >/tmp/p0p4-install-requires.out 2>/tmp/p0p4-install-requires.err; then
+    if grep -Fq "NOTE: $REQUIRES_FIXTURE_NAME requires 'assistant-missing-dependency'" /tmp/p0p4-install-requires.out; then
+        pass
+    else
+        fail "canonical block requires did not produce the missing-dependency note"
+    fi
+else
+    fail "canonical block requires fixture install failed; see /tmp/p0p4-install-requires.err"
+fi
+
 test_start "Codex plugin profile dry-run selects assistant-core skills only"
 INSTALL_HOME_PLUGIN_DRY="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY"

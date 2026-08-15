@@ -1,13 +1,6 @@
 ---
 name: assistant-security
 description: "Analyze threats, vulnerabilities, dependencies, and attack surfaces. Use for explicit security work or changes to auth, input, or sensitive data."
-triggers:
-  - pattern: "security review|security audit|security analysis"
-    priority: 85
-    reminder: "This request matches assistant-security. You MUST invoke the Skill tool with skill='assistant-security' BEFORE proceeding."
-  - pattern: "security|threat model|vulnerability|attack surface|owasp|cve|dependency check"
-    priority: 75
-    reminder: "This request matches assistant-security. You MUST invoke the Skill tool with skill='assistant-security' BEFORE proceeding."
 ---
 
 # Security Tools

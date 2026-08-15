@@ -1,12 +1,6 @@
 ---
 name: assistant-diagrams
 description: "Create Mermaid architecture, sequence, ER, flow, class, or state diagrams. Use for explicit diagram or system-flow visualization requests."
-effort: medium
-triggers:
-  - pattern: "diagram|draw|visualize|show me the flow|architecture diagram|sequence diagram|er diagram|data model|class diagram|state diagram|flow chart"
-    priority: 65
-    min_words: 3
-    reminder: "This request matches assistant-diagrams. Consider invoking the Skill tool with skill='assistant-diagrams' for visual documentation."
 ---
 
 # Diagram Generator

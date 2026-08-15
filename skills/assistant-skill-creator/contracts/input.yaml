@@ -1,7 +1,7 @@
 # Assistant Skill Creator Input Contract
 # Resolve these fields before entering CAPTURE phase.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: input
 skill: assistant-skill-creator
 
@@ -9,85 +9,74 @@ fields:
   - name: skill_name
     type: string
     required: true
-    description: "Kebab-case identifier for the new skill, prefixed with domain (e.g., assistant-foo, unity-bar)"
-    validation: "Must be kebab-case. Must start with a domain prefix (assistant-, unity-, etc.)"
+    description: "Kebab-case new-skill identifier with a domain prefix"
+    validation: "Must be kebab-case with a domain prefix"
     on_missing: ask
-    ask_prompt: "What should this skill be called? Use kebab-case with a domain prefix (e.g., assistant-my-skill)."
-    examples:
-      - "assistant-deploy"
-      - "unity-terrain"
-      - "assistant-changelog"
+    ask_prompt: "What is this kebab-case, domain-prefixed skill name?"
 
   - name: skill_purpose
     type: string
     required: true
     description: "One sentence describing what the skill enables the agent to do"
-    validation: "Non-empty string. Must describe a concrete capability, not a vague goal."
+    validation: "Non-empty concrete capability, not a vague goal"
     on_missing: ask
     ask_prompt: "In one sentence, what should this skill enable the agent to do?"
-    examples:
-      - "Generate infrastructure diagrams from Terraform files"
-      - "Run structured brainstorming sessions with diverge-converge pipeline"
-      - "Scaffold new .NET projects with layered architecture"
 
   - name: skill_category
     type: enum
     required: true
     enum_values: [process, analysis, utility]
-    description: "Contract tier — determines which contract files are required"
-    validation: "Must be one of the enum values"
+    description: "Contract tier determining required files"
+    validation: "Must be an enum value"
     on_missing: infer
-    infer_from: "skill_purpose keywords: 'multi-phase/workflow/pipeline/subagent/dispatch' -> process, 'analyze/reason/research/diverge/converge' -> analysis, else -> utility"
-
-  - name: trigger_phrases
-    type: string[]
-    required: true
-    description: "User phrases that should activate this skill"
-    validation: "At least 3 phrases. Each phrase is 2-5 words, lowercase."
-    min_items: 3
-    on_missing: ask
-    ask_prompt: "What phrases would a user say when they need this skill? Give at least 3."
-    examples:
-      - ["deploy to prod", "push deployment", "release to staging"]
-      - ["generate terrain", "create landscape", "build terrain"]
-
-  - name: dependencies
-    type: string[]
-    required: false
-    description: "Other skills this skill requires. Only include hard dependencies when no safe fallback exists; otherwise document optional references in SKILL.md."
-    default: []
-    on_missing: skip
-    examples:
-      - ["assistant-review"]
-      - []
-
-  - name: policy_constraints
-    type: string[]
-    required: false
-    description: "Company, privacy, runtime, or tool-use constraints the generated skill must honor"
-    default: []
-    on_missing: infer
-    infer_from: "Include any user/project constraints such as no external tools, local-only, no memory writes, no subagents, no network calls"
-
-  - name: effort_level
-    type: enum
-    required: false
-    enum_values: [low, medium, high]
-    description: "Expected effort to execute this skill"
-    default: medium
-    on_missing: infer
-    infer_from: "skill_category: utility -> low, analysis -> medium, process -> high"
+    infer_from: "Purpose: workflow/pipeline -> process; analyze/research -> analysis; else utility"
 
   - name: existing_skill_path
     type: string
     required: false
-    description: "Path to an existing skill to add contracts to (instead of creating from scratch)"
+    description: "Existing skill path when updating rather than creating"
     default: null
     on_missing: skip
-    notes: "When provided, skip CAPTURE and go straight to DESIGN using the existing SKILL.md"
+    notes: "Resolve first. Inspect existing description/evals, derive adequate examples, then ask only residual gaps; require 2 normalized distinct positives and 1 normalized-disjoint nearby negative before DESIGN."
 
-# Validation behavior:
-# 1. Resolve required fields before printing --- PHASE: CAPTURE ---
-# 2. If on_missing=ask: group and present every material, non-discoverable question, then wait for the answers
-# 3. If on_missing=infer: state the inference ("I'm categorizing this as a utility skill")
-# 4. If on_missing=skip: proceed with default value
+  - name: activation_examples
+    type: object[]
+    required: conditional
+    condition: "No existing_skill_path, or its description/evals lack 2 normalized distinct true requests and 1 normalized-disjoint false nearby non-match"
+    description: "User requests with activation decisions for native description and positive/negative evals; never header metadata"
+    validation: "Require at least 2 distinct true and 1 false should_activate decisions, each with concrete nonblank user_request and boolean should_activate. Normalize requests by trim, whitespace collapse, and ASCII case fold; positive and negative sets must be disjoint. For existing_skill_path, derive structured activation examples from the existing description and activation evals when adequate; capture only missing material examples for description and evals."
+    min_items: 3
+    on_missing: ask
+    ask_prompt: "For a new skill, give two distinct normalized should_activate: true requests and one normalized-disjoint nearby should_activate: false non-match. For existing_skill_path, inspect description/evals, derive adequate examples, then ask only for remaining material gaps. Use them for description/evals, not header metadata."
+    object_fields:
+      - name: user_request
+        type: string
+        required: true
+        description: "Concrete activation-evidence request"
+      - name: should_activate
+        type: boolean
+        required: true
+        description: "Whether to activate for user_request"
+    examples:
+      - - user_request: "Deploy the approved release"
+          should_activate: true
+        - user_request: "Roll out the approved release"
+          should_activate: true
+        - user_request: "Draft a release announcement"
+          should_activate: false
+
+  - name: dependencies
+    type: string[]
+    required: false
+    description: "Hard dependencies only when no safe fallback exists"
+    validation: "unique non-empty kebab-case skill names, not skill_name, preserve order; project non-empty values to optional plain-block two-space-dash requires, otherwise omit it."
+    default: []
+    on_missing: skip
+
+  - name: policy_constraints
+    type: string[]
+    required: false
+    description: "Company, privacy, runtime, or tool-use constraints"
+    default: []
+    on_missing: infer
+    infer_from: "User/project constraints: external tools, locality, memory, subagents, network"

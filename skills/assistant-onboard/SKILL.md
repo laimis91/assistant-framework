@@ -1,12 +1,6 @@
 ---
 name: assistant-onboard
 description: "Map an unfamiliar codebase and its patterns. Use for onboarding, project orientation, or explicit codebase-learning requests."
-effort: high
-triggers:
-  - pattern: "learn this codebase|onboard|get familiar with|map this project|what does this project do|new to this repo|first time"
-    priority: 65
-    min_words: 4
-    reminder: "This request matches assistant-onboard. Load and follow this SKILL.md and its contracts for systematic codebase learning."
 ---
 
 # Project Onboarding

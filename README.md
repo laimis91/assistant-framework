@@ -590,35 +590,32 @@ Telos skill: Checks active work against your purpose chain
 
 ## Native skill routing
 
-Each supported agent selects installed skills from the skill name, description, and instructions. Framework contracts, evals, project guidance, and review provide the workflow discipline; there is no separate runtime router or lifecycle enforcement layer.
+Each supported agent discovers installed skills from required native `name` and
+non-empty `description` fields. Body instructions apply after activation.
+Framework contracts, evals, project guidance, and review provide the workflow
+discipline; there is no separate runtime router or lifecycle enforcement layer.
 
 Workflow metrics are optional, non-blocking observability.
 
-The repository also keeps `triggers:` metadata as explicit examples for documentation and eval fixtures:
+SKILL.md frontmatter defines required native discovery fields and optional repository dependency metadata:
 
 ```yaml
 ---
 name: my-skill
 description: "..."
-triggers:
-  - pattern: "keyword1|keyword2|multi word phrase"
-    priority: 80
-    reminder: "You MUST invoke the Skill tool with skill='my-skill' BEFORE proceeding."
-  - pattern: "another pattern"
-    priority: 60
-    min_words: 5
-    reminder: "Consider invoking my-skill for this request."
 ---
 ```
 
-| Field | Required | Description |
-|---|---|---|
-| `pattern` | Yes | Example prompt pattern associated with the skill |
-| `priority` | No | Relative specificity used by repository evals and documentation |
-| `reminder` | No | Expected routing intent for tests and examples |
-| `min_words` | No | Optional example threshold that avoids overly broad fixture matches |
+`name` and a non-empty `description` are required native discovery fields.
+Repository skills may add optional `requires` only for validated hard
+dependencies; omit it when none exist. Native agents select skills from the
+description and metadata, then apply body instructions after activation.
+Top-level `effort` and `triggers` are retired and rejected by validation. Keep
+representative activation examples in contracts and positive/negative evals,
+never in SKILL.md header metadata.
 
-No runtime script changes are needed when adding a skill: add the skill metadata, contracts, and evals, then reinstall.
+No runtime script changes are needed when adding a skill: add required discovery
+fields, conditional `requires` when applicable, contracts, and evals, then reinstall.
 
 ## Design principles
 

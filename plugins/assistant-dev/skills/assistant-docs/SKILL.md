@@ -1,12 +1,6 @@
 ---
 name: assistant-docs
 description: "Create or update README, API, architecture, changelog, or migration docs. Use for explicit documentation work."
-effort: medium
-triggers:
-  - pattern: "document|write docs|update readme|changelog|api docs|architecture doc|migration guide|generate docs|doc this|explain this code"
-    priority: 70
-    min_words: 3
-    reminder: "This request matches assistant-docs. You MUST invoke the Skill tool with skill='assistant-docs' BEFORE writing documentation manually."
 ---
 
 # Documentation Generator

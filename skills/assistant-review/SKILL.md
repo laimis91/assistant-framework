@@ -1,14 +1,6 @@
 ---
 name: assistant-review
 description: "Review code, fix actionable findings, and run one fresh re-review. Use for explicit code review or the workflow Review phase; QA runs only when required."
-effort: high
-triggers:
-  - pattern: "fix (all |the |review |reported )?issues|fix (all |the )?findings|apply (all )?fixes"
-    priority: 90
-    reminder: "This request to fix review issues matches assistant-review. You MUST read this SKILL.md and contracts/index.yaml first, then load the applicable contract selector. The skill includes fix -> validation -> re-review steps that run before the final summary."
-  - pattern: "review|fresh review|code review|review this|check the code|/review"
-    priority: 80
-    reminder: "This request matches assistant-review. You MUST read this SKILL.md and contracts/index.yaml first, then load the applicable contract selector. Run the autonomous review-fix loop to its exit condition before reporting."
 ---
 
 # Autonomous Review And QA Evaluation

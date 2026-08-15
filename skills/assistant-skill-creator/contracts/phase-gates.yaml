@@ -1,7 +1,7 @@
 # Assistant Skill Creator Phase Gates
 # Binary assertions checked at every phase transition.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-skill-creator
 
@@ -24,13 +24,16 @@ gates:
         check: "skill_category is one of: process, analysis, utility"
         on_fail: "Infer category from purpose or ask the user"
       - id: SC4
-        check: "At least 3 trigger phrases are defined"
-        on_fail: "Ask the user for additional trigger phrases"
+        check: "Activation examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match for description and positive and negative activation eval design"
+        on_fail: "Ask for normalized-distinct positive and normalized-disjoint negative activation decisions"
 
   - phase: DESIGN
     checkpoint_start: "--- PHASE: DESIGN ---"
     checkpoint_end: "--- PHASE: DESIGN COMPLETE ---"
     exit_assertions:
+      - id: SD0
+        check: "Activation examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match before DESIGN completion; for existing_skill_path, inspect existing description and activation evals first, derive adequate structured examples, then ask only for remaining material gaps"
+        on_fail: "Derive adequate activation examples, then ask only residual gaps with normalized-distinct positive and normalized-disjoint negative decisions"
       - id: SD1a
         check: "Input contract has at least 3 fields"
         on_fail: "Add more input fields — minimum 3 per SKILL.md guidance"
@@ -82,8 +85,8 @@ gates:
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
     exit_assertions:
       - id: SB1
-        check: "SKILL.md exists with valid YAML frontmatter"
-        on_fail: "Create or fix SKILL.md frontmatter"
+        check: "SKILL.md exists with required name and non-empty description, optional requires only when validated hard dependencies are non-empty and ordered as a plain block sequence with two-space dash items; inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected"
+        on_fail: "Create or fix SKILL.md frontmatter with name and description; project validated hard dependencies to ordered optional requires only when non-empty as a plain block sequence; remove inline, empty, or quoted `requires` forms and legacy top-level `effort` and `triggers` keys"
       - id: SB2
         check: "contracts/input.yaml exists with schema_version header"
         on_fail: "Create input.yaml with proper header"
@@ -123,9 +126,9 @@ gates:
         check: "All corrective actions are actionable"
         on_fail: "Replace vague on_fail actions with specific recovery steps"
       - id: SV1g
-        check: "No previously required fields have been removed"
-        condition: "skill has a prior version"
-        on_fail: "Restore removed required fields or mark them deprecated with defaults"
+        check: "No previously required fields have been removed unless a documented major schema migration updates consumers, evals, and generated mirrors"
+        condition: "skill has a prior version and the removal is not the approved v2.0 header-metadata migration"
+        on_fail: "Restore removed required fields or document the major schema migration and update consumers, evals, and generated mirrors"
       - id: SV1h
         check: "Conditional fields use condition: syntax"
         on_fail: "Add condition: to fields that only apply in certain contexts"
@@ -139,6 +142,9 @@ gates:
       - id: SV1k
         check: "Semantic interface types, primitive exceptions, and applicable representative-path/design-pressure checks comply with Rule 13"
         on_fail: "Add named semantic types where meaning is erased, or document the permitted exception, conversion/validation, public-contract evolution plan, and applicable early-exit/ownership/resource/registration evidence"
+      - id: SV1l
+        check: "Hard dependencies are unique non-empty kebab-case skill names, exclude skill_name, and project in order to optional requires only when non-empty as a plain block sequence with two-space dash items"
+        on_fail: "Correct hard dependencies and canonical block-sequence requires projection before completion"
       - id: SV2
         check: "SKILL.md body is under 500 lines"
         on_fail: "Split content into sub-files under references/"

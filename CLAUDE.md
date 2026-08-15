@@ -26,7 +26,7 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 
 ### Two-layer design
 
-1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with YAML frontmatter (name, description, triggers). Sub-files load on demand (progressive loading). Skills are agent-agnostic.
+1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with required YAML frontmatter (`name` and `description`) and optional repository `requires` for validated hard dependencies. Sub-files load on demand (progressive loading). Skills are agent-agnostic.
 
 2. **Tools** (`tools/`) — Compiled and script utilities used for repository validation and installation.
    - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
@@ -44,7 +44,7 @@ skills/<skill-name>/
   agents/               # (workflow) Agent preset configs per platform
 ```
 
-Each supported agent discovers installed skills natively from skill metadata and instructions. `triggers:` metadata remains useful for repository evals and documentation, but no routing script is installed.
+Each supported agent discovers installed skills natively from required names and descriptions, then follows body instructions after activation. Use `requires` only for validated hard dependencies. Keep representative activation examples only in contracts and positive/negative evals; top-level `effort` and `triggers` metadata are retired and rejected by validation.
 
 ### Agent configurations
 

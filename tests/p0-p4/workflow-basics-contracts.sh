@@ -478,7 +478,7 @@ fi
 
 test_start "workflow candidate-search root and assistant-dev plugin copies stay in sync"
 if [[ -d "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" ]] \
-    && diff -qr "$FRAMEWORK_DIR/skills/assistant-workflow" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" >/tmp/p0p4-candidate-plugin-parity.out; then
+    && diff -qr -x .DS_Store "$FRAMEWORK_DIR/skills/assistant-workflow" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" >/tmp/p0p4-candidate-plugin-parity.out; then
     pass
 else
     fail "assistant-workflow plugin copy is not in sync; see /tmp/p0p4-candidate-plugin-parity.out"
