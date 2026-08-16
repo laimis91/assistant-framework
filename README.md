@@ -319,6 +319,13 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 
 The default eval inventory is 14 first-class `assistant-*` skills with fixtures
 and excludes local-only `unity-*` skills unless `--include-local` is passed.
+Canonical first-class fixtures use schema `2.0` and include top-level
+`activation_cases`: exact `{user_request, should_activate}` objects with at
+least two normalized-distinct positive requests and one normalized-disjoint
+nearby negative. Schema `1.0` custom/local fixtures may omit this field; when
+they include it, the same shape is validated. Activation cases shape discovery
+coverage only; they are separate from response-graded `.cases` and never
+SKILL.md metadata.
 Local-only Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
@@ -608,8 +615,9 @@ description: "..."
 
 `name` and a non-empty `description` are required native discovery fields.
 Repository skills may add optional `requires` only for validated hard
-dependencies; omit it when none exist. Native agents select skills from the
-description and metadata, then apply body instructions after activation.
+dependencies; omit it when none exist. Native discovery uses required `name`
+and `description`; optional repository `requires` is not an activation signal.
+Agents apply body instructions only after activation.
 Top-level `effort` and `triggers` are retired and rejected by validation. Keep
 representative activation examples in contracts and positive/negative evals,
 never in SKILL.md header metadata.

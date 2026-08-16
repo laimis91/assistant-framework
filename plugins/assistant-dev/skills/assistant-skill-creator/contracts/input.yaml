@@ -29,7 +29,7 @@ fields:
     description: "Contract tier determining required files"
     validation: "Must be an enum value"
     on_missing: infer
-    infer_from: "Purpose: workflow/pipeline -> process; analyze/research -> analysis; else utility"
+    infer_from: "Process first: workflow, pipeline, multi-phase, subagent, dispatch, handoff, or handoffs -> process; otherwise analyze, analysis, reason, research, diverge, or converge -> analysis; else Utility"
 
   - name: existing_skill_path
     type: string
@@ -41,8 +41,7 @@ fields:
 
   - name: activation_examples
     type: object[]
-    required: conditional
-    condition: "No existing_skill_path, or its description/evals lack 2 normalized distinct true requests and 1 normalized-disjoint false nearby non-match"
+    required: true
     description: "User requests with activation decisions for native description and positive/negative evals; never header metadata"
     validation: "Require at least 2 distinct true and 1 false should_activate decisions, each with concrete nonblank user_request and boolean should_activate. Normalize requests by trim, whitespace collapse, and ASCII case fold; positive and negative sets must be disjoint. For existing_skill_path, derive structured activation examples from the existing description and activation evals when adequate; capture only missing material examples for description and evals."
     min_items: 3

@@ -139,6 +139,12 @@ Multiple open protocols define structured metadata for agent discovery, capabili
 - Native activation is description-based. Use representative activation examples to
   shape the description and positive and negative routing evals; do not serialize
   examples as frontmatter routing metadata
+- Every first-class schema `2.0` `evals/cases.json` fixture declares top-level
+  `activation_cases`: exact `{user_request, should_activate}` objects with at
+  least two normalized-distinct positive requests and one normalized-disjoint
+  nearby negative. Schema `1.0` custom/local fixtures may omit the field, but
+  validate it when present. These are discovery evidence, not ordinary
+  response-grade `.cases` or SKILL.md metadata.
 - Subagent prompts include structured context blocks with required fields, not free-form prose
 
 ### 7. LLM Guardrails — Drift Prevention
@@ -315,6 +321,11 @@ handoffs:
 | **Analysis** (structured reasoning) | thinking, research, ideate | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
 | **Utility** (single-purpose) | docs, diagrams, onboard, telos | input + output | Single-pass execution, no phases to gate |
 
+Infer a skill category in this order: Process first when its purpose mentions a
+workflow, pipeline, multi-phase work, subagents, dispatch, or handoffs; then
+Analysis for analyze/analysis/reason/research/diverge/converge; otherwise
+Utility. Process wins when a purpose contains both Process and Analysis terms.
+
 ### Process skills (4 files)
 - Most complex — multiple phases, subagent dispatch, approval gates
 - Phase gates enforce sequencing (can't skip steps)
@@ -411,6 +422,13 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
 The default per-skill eval inventory is 14 first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, and `assistant-workflow`.
+
+Each first-class schema `2.0` fixture must provide top-level `activation_cases`
+with exact `user_request` and `should_activate` fields, at least two
+normalized-distinct positive requests, and one normalized-disjoint nearby
+negative. Schema `1.0` custom/local fixtures may omit the field, but it remains
+validated when present. This evidence shapes native description routing and is
+separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 

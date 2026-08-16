@@ -26,6 +26,52 @@ validate_fixture() {
           if (.[$name]? | nonempty_string_array) then empty
           else "missing or invalid non-empty string array field: \($name)" end;
 
+        def normalized_activation_request:
+          gsub("^[[:space:]]+|[[:space:]]+$"; "")
+          | gsub("[[:space:]]+"; " ")
+          | ascii_downcase;
+
+        def activation_case_error($index):
+          if type != "object" then
+            "activation_cases[\($index)] must be an object"
+          elif (keys | sort) != ["should_activate", "user_request"] then
+            "activation_cases[\($index)] must contain exactly user_request and should_activate"
+          elif (.user_request? | type) != "string" then
+            "activation_cases[\($index)].user_request must be a nonblank string"
+          elif (.user_request | test("[^[:space:]]") | not) then
+            "activation_cases[\($index)].user_request must be a nonblank string"
+          elif (.should_activate? | type != "boolean") then
+            "activation_cases[\($index)].should_activate must be boolean"
+          else
+            empty
+          end;
+
+        def validate_activation_cases:
+          if .schema_version == "1.0" and (has("activation_cases") | not) then
+            empty
+          elif (.activation_cases? | type != "array") then
+            "top-level field activation_cases must be an array"
+          elif (.activation_cases | length < 3) then
+            "top-level field activation_cases must contain at least three entries"
+          else
+            [ .activation_cases | to_entries[] | .key as $index | .value | activation_case_error($index) ] as $item_errors
+            | if ($item_errors | length > 0) then
+                $item_errors[]
+              else
+                ([.activation_cases[] | select(.should_activate == true) | .user_request | normalized_activation_request] | unique) as $positive_requests
+                | ([.activation_cases[] | select(.should_activate == false) | .user_request | normalized_activation_request] | unique) as $negative_requests
+                | if ($positive_requests | length < 2) then
+                    "activation_cases must contain at least two normalized-distinct positive requests"
+                  elif ($negative_requests | length < 1) then
+                    "activation_cases must contain at least one normalized-disjoint nearby negative request"
+                  elif (($positive_requests - $negative_requests | length) != ($positive_requests | length)) then
+                    "activation_cases positive and negative requests must be normalized-disjoint"
+                  else
+                    empty
+                  end
+              end
+          end;
+
         def skill_identity_name:
           (.skill? // null) as $skill
           | if ($skill | nonempty_string) then $skill
@@ -206,6 +252,7 @@ validate_fixture() {
           required_bool("provider_neutral"; true),
           required_bool("model_specific_api_calls"; false),
           required_string_array("recommended_use"),
+          validate_activation_cases,
           validate_skill_identity,
           validate_optional_skill_path,
           (if (.cases? | type == "array") and (.cases | length > 0) then empty

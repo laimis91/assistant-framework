@@ -66,6 +66,8 @@ from existing description and activation evals when adequate; ask only for
 remaining material gaps. Before DESIGN, require two distinct normalized
 positives and a normalized-disjoint nearby negative. Dependencies are unique, non-empty kebab-case names, exclude
 the skill, preserve order, and project to optional plain-block `requires`.
+Activation examples remain required for new and existing skills; derivation
+changes their recovery path, not their requiredness.
 
 Contract tiers:
 

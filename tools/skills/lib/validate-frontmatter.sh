@@ -28,10 +28,113 @@ frontmatter_value() {
     ' "$file" | trim_value
 }
 
+frontmatter_description_codepoint_is_printable() {
+    local codepoint="$1"
+
+    # Unicode 17.0 Cf baseline: https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt
+    # YAML 1.2.2 c-printable excludes U+FFFE and U+FFFF.
+    (( codepoint >= 32 \
+        && (codepoint < 127 || codepoint > 159) \
+        && codepoint != 8232 \
+        && codepoint != 8233 \
+        && codepoint != 65534 \
+        && codepoint != 65535 \
+        && (codepoint < 55296 || codepoint > 57343) \
+        && codepoint <= 1114111 \
+        && codepoint != 173 \
+        && !(codepoint >= 1536 && codepoint <= 1541) \
+        && codepoint != 1564 && codepoint != 1757 && codepoint != 1807 \
+        && !(codepoint >= 2192 && codepoint <= 2193) && codepoint != 2274 \
+        && codepoint != 6158 \
+        && !(codepoint >= 8203 && codepoint <= 8207) \
+        && !(codepoint >= 8234 && codepoint <= 8238) \
+        && !(codepoint >= 8288 && codepoint <= 8292) \
+        && !(codepoint >= 8294 && codepoint <= 8303) \
+        && codepoint != 65279 && !(codepoint >= 65529 && codepoint <= 65531) \
+        && codepoint != 69821 && codepoint != 69837 \
+        && !(codepoint >= 78896 && codepoint <= 78911) \
+        && !(codepoint >= 113824 && codepoint <= 113827) \
+        && !(codepoint >= 119155 && codepoint <= 119162) \
+        && codepoint != 917505 && !(codepoint >= 917536 && codepoint <= 917631) ))
+}
+
+frontmatter_description_codepoint_is_unicode_whitespace() {
+    local codepoint="$1"
+
+    (( codepoint == 32 || codepoint == 160 || codepoint == 5760 \
+        || (codepoint >= 8192 && codepoint <= 8202) \
+        || codepoint == 8239 || codepoint == 8287 || codepoint == 12288 ))
+}
+
+frontmatter_description_utf8_byte_value() {
+    local LC_ALL=C
+    local byte
+
+    printf -v byte '%d' "'$1"
+    if (( byte < 0 )); then
+        byte=$(( byte + 256 ))
+    fi
+    printf '%s\n' "$byte"
+}
+
+frontmatter_description_raw_utf8_is_printable() {
+    local LC_ALL=C
+    local value="$1"
+    local byte second third fourth codepoint consume
+    local has_non_whitespace=false
+
+    while [[ -n "$value" ]]; do
+        byte="$(frontmatter_description_utf8_byte_value "${value:0:1}")"
+        if (( byte == 28 )); then
+            value="${value:1}"
+            continue
+        elif (( byte < 128 )); then
+            codepoint=$byte
+            consume=1
+        elif (( byte >= 194 && byte <= 223 && ${#value} >= 2 )); then
+            second="$(frontmatter_description_utf8_byte_value "${value:1:1}")"
+            (( (second & 0xC0) == 0x80 )) || return 1
+            codepoint=$(( ((byte & 0x1F) << 6) | (second & 0x3F) ))
+            consume=2
+        elif (( byte >= 224 && byte <= 239 && ${#value} >= 3 )); then
+            second="$(frontmatter_description_utf8_byte_value "${value:1:1}")"
+            third="$(frontmatter_description_utf8_byte_value "${value:2:1}")"
+            (( (second & 0xC0) == 0x80 && (third & 0xC0) == 0x80 )) || return 1
+            (( byte != 224 || second >= 160 )) || return 1
+            (( byte != 237 || second <= 159 )) || return 1
+            codepoint=$(( ((byte & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F) ))
+            consume=3
+        elif (( byte >= 240 && byte <= 244 && ${#value} >= 4 )); then
+            second="$(frontmatter_description_utf8_byte_value "${value:1:1}")"
+            third="$(frontmatter_description_utf8_byte_value "${value:2:1}")"
+            fourth="$(frontmatter_description_utf8_byte_value "${value:3:1}")"
+            (( (second & 0xC0) == 0x80 && (third & 0xC0) == 0x80 && (fourth & 0xC0) == 0x80 )) || return 1
+            (( byte != 240 || second >= 144 )) || return 1
+            (( byte != 244 || second <= 143 )) || return 1
+            codepoint=$(( ((byte & 0x07) << 18) | ((second & 0x3F) << 12) | ((third & 0x3F) << 6) | (fourth & 0x3F) ))
+            consume=4
+        else
+            return 1
+        fi
+        frontmatter_description_codepoint_is_printable "$codepoint" || return 1
+        if ! frontmatter_description_codepoint_is_unicode_whitespace "$codepoint"; then
+            has_non_whitespace=true
+        fi
+        value="${value:consume}"
+    done
+    printf '%s\n' "$has_non_whitespace"
+}
+
 frontmatter_description_value() {
     local file="$1"
+    local parsed_description
+    local description
+    local escaped_codepoints
+    local codepoint
+    local has_non_whitespace=false
+    local raw_has_non_whitespace
 
-    awk '
+    parsed_description="$(awk '
         function trim(value) {
             sub(/^[[:space:]]+/, "", value)
             sub(/[[:space:]]+$/, "", value)
@@ -40,6 +143,17 @@ frontmatter_description_value() {
         function trailing_comment_or_space(value) {
             return value ~ /^[[:space:]]*$/ || value ~ /^[[:space:]]+#/
         }
+        function hex_value(value, expected_length, i, character, digit, result) {
+            if (length(value) != expected_length) return -1
+            result = 0
+            for (i = 1; i <= expected_length; i++) {
+                character = tolower(substr(value, i, 1))
+                digit = index("0123456789abcdef", character) - 1
+                if (digit < 0) return -1
+                result = (result * 16) + digit
+            }
+            return result
+        }
         function decode_double(value, decoded, i, character, escaped, tail) {
             if (substr(value, 1, 1) != "\"") return ""
             value = substr(value, 2)
@@ -47,18 +161,23 @@ frontmatter_description_value() {
             for (i = 1; i <= length(value); i++) {
                 character = substr(value, i, 1)
                 if (escaped) {
-                    if (character == "n" || character == "r" || character == "t") decoded = decoded " "
-                    else if (character == "\"" || character == "\\" || character == "/") decoded = decoded character
-                    else return ""
+                    if (character == "\"" || character == "\\" || character == "/") {
+                        decoded = decoded character
+                    } else if (character == "u" || character == "U") {
+                        escape_length = character == "u" ? 4 : 8
+                        codepoint = hex_value(substr(value, i + 1, escape_length), escape_length)
+                        if (codepoint < 0 || codepoint > 1114111 || (codepoint >= 55296 && codepoint <= 57343)) return ""
+                        escaped_codepoints = escaped_codepoints codepoint " "
+                        decoded = decoded "\034"
+                        i += escape_length
+                    } else return ""
                     escaped = 0
                 } else if (character == "\\") {
                     escaped = 1
                 } else if (character == "\"") {
                     tail = substr(value, i + 1)
                     return trailing_comment_or_space(tail) ? decoded : ""
-                } else {
-                    decoded = decoded character
-                }
+                } else decoded = decoded character
             }
             return ""
         }
@@ -75,14 +194,13 @@ frontmatter_description_value() {
                         tail = substr(value, i + 1)
                         return trailing_comment_or_space(tail) ? decoded : ""
                     }
-                } else {
-                    decoded = decoded character
-                }
+                } else decoded = decoded character
             }
             return ""
         }
         function decode_description(value, normalized) {
             value = trim(value)
+            if (value ~ /[[:cntrl:]]/) return ""
             if (substr(value, 1, 1) == "\"") return decode_double(value)
             if (substr(value, 1, 1) == "\047") return decode_single(value)
 
@@ -102,10 +220,41 @@ frontmatter_description_value() {
             value = $0
             sub(/^description:[[:space:]]*/, "", value)
             value = trim(decode_description(value))
-            if (value != "") print value
+            if (value != "") print value "\t" escaped_codepoints
             exit
         }
-    ' "$file"
+    ' "$file")"
+
+    if [[ -z "$parsed_description" ]]; then
+        return 0
+    fi
+    description="${parsed_description%%$'\t'*}"
+    escaped_codepoints="${parsed_description#*$'\t'}"
+    while [[ -n "$escaped_codepoints" ]]; do
+        codepoint="${escaped_codepoints%% *}"
+        if ! frontmatter_description_codepoint_is_printable "$codepoint"; then
+            return 0
+        fi
+        if ! frontmatter_description_codepoint_is_unicode_whitespace "$codepoint"; then
+            has_non_whitespace=true
+        fi
+        if [[ "$escaped_codepoints" == *" "* ]]; then
+            escaped_codepoints="${escaped_codepoints#* }"
+        else
+            break
+        fi
+    done
+    if ! raw_has_non_whitespace="$(frontmatter_description_raw_utf8_is_printable "$description")"; then
+        return 0
+    fi
+    if [[ "$raw_has_non_whitespace" == true ]]; then
+        has_non_whitespace=true
+    fi
+    if [[ "$has_non_whitespace" != true ]]; then
+        return 0
+    fi
+    description="${description//$'\034'/x}"
+    printf '%s\n' "$description"
 }
 
 frontmatter_has_key() {

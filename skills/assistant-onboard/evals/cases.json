@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-onboard-skill-behavior",
   "skill": "assistant-onboard",
   "title": "assistant-onboard Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Get familiar with this codebase.", "should_activate": true},
+    {"user_request": "Map this project before changing it.", "should_activate": true},
+    {"user_request": "Make a small change in this familiar codebase.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-onboard skill instructions loaded.",
     "Compare the local response against surface scan, architecture map, pattern recognition, output contract, and gap handling requirements.",

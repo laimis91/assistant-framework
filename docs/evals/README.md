@@ -504,6 +504,15 @@ skills are excluded from the default inventory. Use `--include-local` only when
 you explicitly want to include local skill experiments that also have eval
 fixtures.
 
+Every first-class fixture uses schema `2.0` and declares top-level
+`activation_cases`. Each entry is exactly `{ "user_request": string,
+"should_activate": boolean }`; fixtures need at least two
+normalized-distinct positive requests and one normalized-disjoint nearby
+negative. Schema `1.0` custom/local fixtures may omit activation cases, but an
+included field is still structurally validated. These cases provide
+native-description activation evidence and remain separate from response-grade
+`.cases` and SKILL.md frontmatter.
+
 ### How To Use
 
 Validate all default per-skill fixtures:

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-research-skill-behavior",
   "skill": "assistant-research",
   "title": "assistant-research Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Research current source-backed evidence.", "should_activate": true},
+    {"user_request": "Compare these technical options.", "should_activate": true},
+    {"user_request": "Choose the option from the completed research brief.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-research skill instructions loaded.",
     "Compare the local response against tier selection, source confidence, URL verification, conflicts, and gaps contracts.",

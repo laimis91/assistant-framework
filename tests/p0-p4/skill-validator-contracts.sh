@@ -181,6 +181,158 @@ else
     fail "validator rejected quoted descriptions containing hash and trailing comments: ${quoted_description_failures[*]}"
 fi
 
+test_start "skill validator accepts raw multibyte Unicode in quoted descriptions"
+raw_unicode_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-raw-unicode.XXXXXX")"
+p0p4_register_cleanup "$raw_unicode_root"
+raw_unicode_failures=()
+for raw_unicode_case in double single; do
+    raw_unicode_skill="$raw_unicode_root/$raw_unicode_case-unicode-validator-skill"
+    p0p4_write_valid_skill_fixture "$raw_unicode_skill"
+    case "$raw_unicode_case" in
+        double) raw_unicode_line='description: "Fixture — routing"' ;;
+        single) raw_unicode_line="description: 'Fixture — routing'" ;;
+    esac
+    awk -v line="$raw_unicode_line" 'NR == 3 { print line; next } { print }' "$raw_unicode_skill/SKILL.md" >"$raw_unicode_skill/skill.tmp"
+    mv "$raw_unicode_skill/skill.tmp" "$raw_unicode_skill/SKILL.md"
+    if ! "$skill_validator" --skill "$raw_unicode_skill" >/dev/null; then
+        raw_unicode_failures+=("$raw_unicode_case")
+    fi
+done
+if [[ ${#raw_unicode_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator rejected raw multibyte Unicode quoted descriptions: ${raw_unicode_failures[*]}"
+fi
+
+test_start "skill validator rejects raw Unicode format controls in quoted descriptions"
+raw_format_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-raw-format.XXXXXX")"
+p0p4_register_cleanup "$raw_format_root"
+raw_format_failures=()
+for raw_format_case in double_u200b single_u200b double_u202e single_u202e; do
+    raw_format_skill="$raw_format_root/$raw_format_case-validator-skill"
+    p0p4_write_valid_skill_fixture "$raw_format_skill"
+    case "$raw_format_case" in
+        *_u200b) printf -v raw_format_character '\342\200\213' ;;
+        *_u202e) printf -v raw_format_character '\342\200\256' ;;
+    esac
+    case "$raw_format_case" in
+        double_*) printf -v raw_format_line 'description: "Fixture %s routing"' "$raw_format_character" ;;
+        single_*) printf -v raw_format_line "description: 'Fixture %s routing'" "$raw_format_character" ;;
+    esac
+    awk -v line="$raw_format_line" 'NR == 3 { print line; next } { print }' "$raw_format_skill/SKILL.md" >"$raw_format_skill/skill.tmp"
+    mv "$raw_format_skill/skill.tmp" "$raw_format_skill/SKILL.md"
+    if "$skill_validator" --skill "$raw_format_skill" >/dev/null 2>&1; then
+        raw_format_failures+=("$raw_format_case")
+    fi
+done
+if [[ ${#raw_format_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator accepted raw Unicode format controls: ${raw_format_failures[*]}"
+fi
+
+test_start "skill validator rejects whitespace-only raw Unicode descriptions"
+raw_whitespace_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-raw-whitespace.XXXXXX")"
+p0p4_register_cleanup "$raw_whitespace_root"
+raw_whitespace_failures=()
+for raw_whitespace_case in u00a0 u1680 u2000 u2001 u2002 u2003 u2004 u2005 u2006 u2007 u2008 u2009 u200a u202f u205f u3000; do
+    case "$raw_whitespace_case" in
+        u00a0) printf -v raw_whitespace_character '\302\240' ;;
+        u1680) printf -v raw_whitespace_character '\341\232\200' ;;
+        u2000) printf -v raw_whitespace_character '\342\200\200' ;;
+        u2001) printf -v raw_whitespace_character '\342\200\201' ;;
+        u2002) printf -v raw_whitespace_character '\342\200\202' ;;
+        u2003) printf -v raw_whitespace_character '\342\200\203' ;;
+        u2004) printf -v raw_whitespace_character '\342\200\204' ;;
+        u2005) printf -v raw_whitespace_character '\342\200\205' ;;
+        u2006) printf -v raw_whitespace_character '\342\200\206' ;;
+        u2007) printf -v raw_whitespace_character '\342\200\207' ;;
+        u2008) printf -v raw_whitespace_character '\342\200\210' ;;
+        u2009) printf -v raw_whitespace_character '\342\200\211' ;;
+        u200a) printf -v raw_whitespace_character '\342\200\212' ;;
+        u202f) printf -v raw_whitespace_character '\342\200\257' ;;
+        u205f) printf -v raw_whitespace_character '\342\201\237' ;;
+        u3000) printf -v raw_whitespace_character '\343\200\200' ;;
+    esac
+    for quote_style in double single; do
+        raw_whitespace_skill="$raw_whitespace_root/$raw_whitespace_case-$quote_style-validator-skill"
+        p0p4_write_valid_skill_fixture "$raw_whitespace_skill"
+        case "$quote_style" in
+            double) printf -v raw_whitespace_line 'description: "%s"' "$raw_whitespace_character" ;;
+            single) printf -v raw_whitespace_line "description: '%s'" "$raw_whitespace_character" ;;
+        esac
+        awk -v line="$raw_whitespace_line" 'NR == 3 { print line; next } { print }' "$raw_whitespace_skill/SKILL.md" >"$raw_whitespace_skill/skill.tmp"
+        mv "$raw_whitespace_skill/skill.tmp" "$raw_whitespace_skill/SKILL.md"
+        if "$skill_validator" --skill "$raw_whitespace_skill" >/dev/null 2>&1; then
+            raw_whitespace_failures+=("$raw_whitespace_case-$quote_style")
+        fi
+    done
+done
+if [[ ${#raw_whitespace_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator accepted whitespace-only raw Unicode descriptions: ${raw_whitespace_failures[*]}"
+fi
+
+test_start "skill validator accepts mixed-content Unicode whitespace descriptions"
+mixed_whitespace_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-mixed-whitespace.XXXXXX")"
+p0p4_register_cleanup "$mixed_whitespace_root"
+mixed_whitespace_failures=()
+for mixed_whitespace_case in raw_double raw_single escaped_double; do
+    mixed_whitespace_skill="$mixed_whitespace_root/$mixed_whitespace_case-validator-skill"
+    p0p4_write_valid_skill_fixture "$mixed_whitespace_skill"
+    case "$mixed_whitespace_case" in
+        raw_double)
+            printf -v mixed_whitespace_character '\342\200\200'
+            printf -v mixed_whitespace_line 'description: "Fixture%s routing"' "$mixed_whitespace_character"
+            ;;
+        raw_single)
+            printf -v mixed_whitespace_character '\342\200\200'
+            printf -v mixed_whitespace_line "description: 'Fixture%s routing'" "$mixed_whitespace_character"
+            ;;
+        escaped_double) mixed_whitespace_line='description: "Fixture\u2000 routing"' ;;
+    esac
+    awk -v line="$mixed_whitespace_line" 'NR == 3 { print line; next } { print }' "$mixed_whitespace_skill/SKILL.md" >"$mixed_whitespace_skill/skill.tmp"
+    mv "$mixed_whitespace_skill/skill.tmp" "$mixed_whitespace_skill/SKILL.md"
+    if ! "$skill_validator" --skill "$mixed_whitespace_skill" >/dev/null; then
+        mixed_whitespace_failures+=("$mixed_whitespace_case")
+    fi
+done
+if [[ ${#mixed_whitespace_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator rejected mixed-content Unicode whitespace descriptions: ${mixed_whitespace_failures[*]}"
+fi
+
+test_start "skill validator rejects raw Unicode noncharacters in quoted descriptions"
+raw_noncharacter_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-raw-noncharacter.XXXXXX")"
+p0p4_register_cleanup "$raw_noncharacter_root"
+raw_noncharacter_failures=()
+for raw_noncharacter_case in ufffe uffff; do
+    case "$raw_noncharacter_case" in
+        ufffe) printf -v raw_noncharacter_character '\357\277\276' ;;
+        uffff) printf -v raw_noncharacter_character '\357\277\277' ;;
+    esac
+    for quote_style in double single; do
+        raw_noncharacter_skill="$raw_noncharacter_root/$raw_noncharacter_case-$quote_style-validator-skill"
+        p0p4_write_valid_skill_fixture "$raw_noncharacter_skill"
+        case "$quote_style" in
+            double) printf -v raw_noncharacter_line 'description: "Fixture %s routing"' "$raw_noncharacter_character" ;;
+            single) printf -v raw_noncharacter_line "description: 'Fixture %s routing'" "$raw_noncharacter_character" ;;
+        esac
+        awk -v line="$raw_noncharacter_line" 'NR == 3 { print line; next } { print }' "$raw_noncharacter_skill/SKILL.md" >"$raw_noncharacter_skill/skill.tmp"
+        mv "$raw_noncharacter_skill/skill.tmp" "$raw_noncharacter_skill/SKILL.md"
+        if "$skill_validator" --skill "$raw_noncharacter_skill" >/dev/null 2>&1; then
+            raw_noncharacter_failures+=("$raw_noncharacter_case-$quote_style")
+        fi
+    done
+done
+if [[ ${#raw_noncharacter_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator accepted raw Unicode noncharacters: ${raw_noncharacter_failures[*]}"
+fi
+
 test_start "skill validator accepts quoted numeric and date-like descriptions"
 quoted_scalar_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-quoted-scalars.XXXXXX")"
 p0p4_register_cleanup "$quoted_scalar_root"
@@ -199,6 +351,83 @@ if [[ ${#quoted_scalar_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "validator rejected quoted numeric or date-like descriptions: ${quoted_scalar_failures[*]}"
+fi
+
+test_start "skill validator decodes printable YAML escapes and rejects decoded controls"
+escaped_description_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-escaped-description.XXXXXX")"
+p0p4_register_cleanup "$escaped_description_root"
+p0p4_write_valid_skill_fixture "$escaped_description_root/printable-escape-validator-skill"
+awk 'NR == 3 { print "description: \"Fixture \\u2014 routing\""; next } { print }' "$escaped_description_root/printable-escape-validator-skill/SKILL.md" >"$escaped_description_root/skill.tmp"
+mv "$escaped_description_root/skill.tmp" "$escaped_description_root/printable-escape-validator-skill/SKILL.md"
+escaped_description_failures=()
+if ! "$skill_validator" --skill "$escaped_description_root/printable-escape-validator-skill" >/dev/null; then
+    escaped_description_failures+=("printable_unicode_escape")
+fi
+for escaped_description_case in escaped_lf escaped_cr escaped_tab u000a u000d u0009 u0000 u0020 U00000020 u0085 u200b u2028 u2029 u202e ufffe uffff U00013439 U0001343F surrogate malformed_hex malformed_length out_of_range; do
+    case "$escaped_description_case" in
+        escaped_lf) escaped_description_line='description: "Fixture\\n routing"' ;;
+        escaped_cr) escaped_description_line='description: "Fixture\\r routing"' ;;
+        escaped_tab) escaped_description_line='description: "Fixture\\t routing"' ;;
+        u000a) escaped_description_line='description: "Fixture\\u000A routing"' ;;
+        u000d) escaped_description_line='description: "Fixture\\u000D routing"' ;;
+        u0009) escaped_description_line='description: "Fixture\\u0009 routing"' ;;
+        u0000) escaped_description_line='description: "Fixture\\u0000 routing"' ;;
+        u0020) escaped_description_line='description: "\\u0020"' ;;
+        U00000020) escaped_description_line='description: "\\U00000020"' ;;
+        u0085) escaped_description_line='description: "Fixture\\u0085 routing"' ;;
+        u200b) escaped_description_line='description: "Fixture\\u200B routing"' ;;
+        u2028) escaped_description_line='description: "Fixture\\u2028 routing"' ;;
+        u2029) escaped_description_line='description: "Fixture\\u2029 routing"' ;;
+        u202e) escaped_description_line='description: "Fixture\\u202E routing"' ;;
+        ufffe) escaped_description_line='description: "Fixture\\uFFFE routing"' ;;
+        uffff) escaped_description_line='description: "Fixture\\uFFFF routing"' ;;
+        U00013439) escaped_description_line='description: "Fixture\\U00013439 routing"' ;;
+        U0001343F) escaped_description_line='description: "Fixture\\U0001343F routing"' ;;
+        surrogate) escaped_description_line='description: "Fixture\\uD800 routing"' ;;
+        malformed_hex) escaped_description_line='description: "Fixture\\u20G4 routing"' ;;
+        malformed_length) escaped_description_line='description: "Fixture\\u201 routing"' ;;
+        out_of_range) escaped_description_line='description: "Fixture\\U00110000 routing"' ;;
+    esac
+    escaped_description_skill="$escaped_description_root/$escaped_description_case-validator-skill"
+    escaped_description_err="$escaped_description_root/$escaped_description_case.err"
+    p0p4_write_valid_skill_fixture "$escaped_description_skill"
+    awk -v line="$escaped_description_line" 'NR == 3 { print line; next } { print }' "$escaped_description_skill/SKILL.md" >"$escaped_description_skill/skill.tmp"
+    mv "$escaped_description_skill/skill.tmp" "$escaped_description_skill/SKILL.md"
+    if "$skill_validator" --skill "$escaped_description_skill" >/dev/null 2>"$escaped_description_err" \
+        || ! grep -Fq "FRONTMATTER_DESCRIPTION" "$escaped_description_err"; then
+        escaped_description_failures+=("$escaped_description_case")
+    fi
+done
+if [[ ${#escaped_description_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator did not enforce decoded YAML escape safety: ${escaped_description_failures[*]}"
+fi
+
+test_start "skill validator rejects literal control characters in quoted descriptions"
+literal_control_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-literal-controls.XXXXXX")"
+p0p4_register_cleanup "$literal_control_root"
+literal_control_failures=()
+for literal_control_case in tab del; do
+    literal_control_skill="$literal_control_root/$literal_control_case-validator-skill"
+    literal_control_err="$literal_control_root/$literal_control_case.err"
+    literal_control_line="$literal_control_root/$literal_control_case.line"
+    p0p4_write_valid_skill_fixture "$literal_control_skill"
+    case "$literal_control_case" in
+        tab) printf 'description: "Fixture\t routing"\n' >"$literal_control_line" ;;
+        del) printf 'description: "Fixture\177 routing"\n' >"$literal_control_line" ;;
+    esac
+    awk -v replacement="$literal_control_line" 'NR == 3 { getline line < replacement; print line; next } { print }' "$literal_control_skill/SKILL.md" >"$literal_control_skill/skill.tmp"
+    mv "$literal_control_skill/skill.tmp" "$literal_control_skill/SKILL.md"
+    if "$skill_validator" --skill "$literal_control_skill" >/dev/null 2>"$literal_control_err" \
+        || ! grep -Fq "FRONTMATTER_DESCRIPTION" "$literal_control_err"; then
+        literal_control_failures+=("$literal_control_case")
+    fi
+done
+if [[ ${#literal_control_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator accepted literal quoted controls: ${literal_control_failures[*]}"
 fi
 
 test_start "skill validator rejects top-level legacy effort metadata"

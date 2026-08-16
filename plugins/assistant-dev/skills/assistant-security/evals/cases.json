@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-security-skill-behavior",
   "skill": "assistant-security",
   "title": "assistant-security Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Threat model this OAuth callback.", "should_activate": true},
+    {"user_request": "Audit this endpoint for vulnerabilities.", "should_activate": true},
+    {"user_request": "Write release notes for the already approved OAuth callback fix.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-security skill instructions loaded.",
     "Compare the local response against scope, analyze, report, and evidence requirements.",

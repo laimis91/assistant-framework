@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-review-skill-behavior",
   "skill": "assistant-review",
   "title": "assistant-review Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Review the current uncommitted changes.", "should_activate": true},
+    {"user_request": "Review and fix actionable findings in the current changes.", "should_activate": true},
+    {"user_request": "Summarize already approved review findings without inspecting code.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-review skill instructions loaded.",
     "Compare the local response against the review loop entry, findings, fix, validate, and exit contracts.",

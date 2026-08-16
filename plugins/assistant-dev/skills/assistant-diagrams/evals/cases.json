@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-diagrams-skill-behavior",
   "skill": "assistant-diagrams",
   "title": "assistant-diagrams Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Create a Mermaid sequence diagram.", "should_activate": true},
+    {"user_request": "Show the system flow.", "should_activate": true},
+    {"user_request": "Explain the architecture in prose without a diagram.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-diagrams skill instructions loaded.",
     "Compare the local response against diagram input/output contracts, source evidence, placement, and gap handling.",

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-skill-creator-skill-behavior",
   "skill": "assistant-skill-creator",
   "title": "assistant-skill-creator Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Create a new skill with contracts.", "should_activate": true},
+    {"user_request": "Update this skill's contract design.", "should_activate": true},
+    {"user_request": "Run the existing skill without modifying its design.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-skill-creator skill instructions loaded.",
     "Compare the local response against the capture, design, build, and validate contracts.",
@@ -97,6 +102,7 @@
       ],
       "expected_behavior": [
         "Uses the existing skill shortcut and reads the existing SKILL.md, description, and activation evals instead of asking for all capture fields again.",
+        "Treats activation_examples as required even for an existing skill, deriving available evidence before asking for residual gaps.",
         "Reuses adequate existing positive evidence without an all-example prompt, derives structured examples from existing description and activation evals, and asks only for remaining material gaps.",
         "Enters DESIGN using the existing skill purpose, category, description, and activation evidence only after two normalized-distinct positive and one normalized-disjoint nearby negative should_activate decisions are available.",
         "Builds the contract files required for the inferred skill category.",
@@ -125,6 +131,7 @@
         "required_substrings": [
           "existing_skill_path",
           "activation_examples",
+          "required activation_examples",
           "user_request",
           "should_activate: true",
           "should_activate: false",

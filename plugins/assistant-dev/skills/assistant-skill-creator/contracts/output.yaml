@@ -52,7 +52,7 @@ artifacts:
     type: string
     required: true
     description: "Summary of validation results against the contract design guide rules and company-safe/agent-agnostic checks"
-    validation: "Must report pass/fail for all contract rules plus policy/runtime checks. For existing skills, inspect the existing description and activation evals first, derive adequate structured activation examples, and ask only for remaining material gaps; verify 2 normalized-distinct positive and 1 normalized-disjoint nearby negative decision before DESIGN completion. No failures allowed in final output."
+    validation: "Must report pass/fail for all contract rules plus policy/runtime checks. activation_examples remain required for new and existing skills. For existing skills, inspect the existing description and activation evals first, derive adequate structured activation examples, and ask only for remaining material gaps; verify 2 normalized-distinct positive and 1 normalized-disjoint nearby negative decision before DESIGN completion. No failures allowed in final output."
     on_fail: "Derive adequate existing activation evidence or ask only for remaining material gaps, fix failing rules, and re-validate"
 
   - name: policy_safety_summary

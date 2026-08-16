@@ -21,8 +21,8 @@ gates:
         check: "skill_purpose is a concrete one-sentence description"
         on_fail: "Ask the user to refine the purpose into one actionable sentence"
       - id: SC3
-        check: "skill_category is one of: process, analysis, utility"
-        on_fail: "Infer category from purpose or ask the user"
+        check: "skill_category follows Process-first inference: workflow, pipeline, multi-phase, subagent, dispatch, handoff, or handoffs select process; then analyze, analysis, reason, research, diverge, or converge select analysis; otherwise utility"
+        on_fail: "Apply Process-first category inference from purpose or ask the user"
       - id: SC4
         check: "Activation examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match for description and positive and negative activation eval design"
         on_fail: "Ask for normalized-distinct positive and normalized-disjoint negative activation decisions"
@@ -32,7 +32,7 @@ gates:
     checkpoint_end: "--- PHASE: DESIGN COMPLETE ---"
     exit_assertions:
       - id: SD0
-        check: "Activation examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match before DESIGN completion; for existing_skill_path, inspect existing description and activation evals first, derive adequate structured examples, then ask only for remaining material gaps"
+        check: "Required activation_examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match before DESIGN completion; for existing_skill_path, inspect existing description and activation evals first, derive adequate structured examples, then ask only for remaining material gaps"
         on_fail: "Derive adequate activation examples, then ask only residual gaps with normalized-distinct positive and normalized-disjoint negative decisions"
       - id: SD1a
         check: "Input contract has at least 3 fields"
