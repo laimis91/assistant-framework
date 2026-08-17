@@ -514,6 +514,101 @@ else
     fail "validator did not reject legacy key forms: ${legacy_key_form_failures[*]}"
 fi
 
+test_start "skill validator decodes escaped quoted reserved top-level keys"
+escaped_key_forms_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-escaped-key-forms.XXXXXX")"
+p0p4_register_cleanup "$escaped_key_forms_root"
+escaped_key_form_failures=()
+for escaped_key_form in \
+    '"eff\\u006frt": low|FRONTMATTER_LEGACY_EFFORT' \
+    '"trigg\\u0065rs": []|FRONTMATTER_LEGACY_TRIGGERS' \
+    '"requ\\u0069res":|FRONTMATTER_REQUIRES_FORMAT'; do
+    escaped_key_line="${escaped_key_form%%|*}"
+    expected_error="${escaped_key_form##*|}"
+    escaped_key_slug="$(printf '%s' "$expected_error" | tr '[:upper:]_' '[:lower:]-')"
+    escaped_key_skill="$escaped_key_forms_root/$escaped_key_slug"
+    escaped_key_err="$escaped_key_forms_root/$escaped_key_slug.err"
+    p0p4_write_valid_skill_fixture "$escaped_key_skill"
+    if [[ "$expected_error" == "FRONTMATTER_REQUIRES_FORMAT" ]]; then
+        awk -v line="$escaped_key_line" 'NR == 3 { print line; print "  - assistant-review" } { print }' \
+            "$escaped_key_skill/SKILL.md" >"$escaped_key_skill/skill.tmp"
+    else
+        awk -v line="$escaped_key_line" 'NR == 3 { print line } { print }' \
+            "$escaped_key_skill/SKILL.md" >"$escaped_key_skill/skill.tmp"
+    fi
+    mv "$escaped_key_skill/skill.tmp" "$escaped_key_skill/SKILL.md"
+    if "$skill_validator" --skill "$escaped_key_skill" >/dev/null 2>"$escaped_key_err" \
+        || ! grep -Fq "$expected_error" "$escaped_key_err"; then
+        escaped_key_form_failures+=("$escaped_key_line")
+    fi
+done
+if [[ ${#escaped_key_form_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator did not reject escaped quoted reserved keys: ${escaped_key_form_failures[*]}"
+fi
+
+test_start "skill validator rejects unsupported top-level YAML key syntax"
+unsupported_key_syntax_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-unsupported-key-syntax.XXXXXX")"
+p0p4_register_cleanup "$unsupported_key_syntax_root"
+unsupported_key_syntax_failures=()
+for unsupported_key_syntax_case in \
+    tagged_effort \
+    anchored_triggers \
+    explicit_requires \
+    merged_effort_alias \
+    double_quoted_merge_alias \
+    single_quoted_merge_alias \
+    hex_escaped_merge_aliases \
+    unicode_escaped_merge_aliases; do
+    unsupported_key_syntax_skill="$unsupported_key_syntax_root/${unsupported_key_syntax_case//_/-}-skill"
+    unsupported_key_syntax_err="$unsupported_key_syntax_root/$unsupported_key_syntax_case.err"
+    p0p4_write_valid_skill_fixture "$unsupported_key_syntax_skill"
+    case "$unsupported_key_syntax_case" in
+        tagged_effort)
+            awk 'NR == 3 { print "!!str \"eff\\u006frt\": low" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        anchored_triggers)
+            awk 'NR == 3 { print "&legacy-key \"trigg\\u0065rs\": []" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        explicit_requires)
+            awk 'NR == 3 { print "? \"requ\\u0069res\""; print ":"; print "  - assistant-review" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        merged_effort_alias)
+            awk 'NR == 3 { print "defaults: &legacy"; print "  effort: low"; print "<<: *legacy" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        double_quoted_merge_alias)
+            awk 'NR == 3 { print "defaults: &legacy"; print "  effort: low"; print "\"<<\": *legacy" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        single_quoted_merge_alias)
+            awk 'NR == 3 { print "defaults: &legacy"; print "  effort: low"; print "\047<<\047: *legacy" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        hex_escaped_merge_aliases)
+            awk 'NR == 3 { print "defaults: &legacy"; print "  effort: low"; print "extras: &extras"; print "  triggers: []"; print "\"\\x3c\\x3c\": [*legacy, *extras]" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+        unicode_escaped_merge_aliases)
+            awk 'NR == 3 { print "defaults: &legacy"; print "  effort: low"; print "extras: &extras"; print "  triggers: []"; print "\"\\u003c\\u003c\":"; print "  - *legacy"; print "  - *extras" } { print }' \
+                "$unsupported_key_syntax_skill/SKILL.md" >"$unsupported_key_syntax_skill/skill.tmp"
+            ;;
+    esac
+    mv "$unsupported_key_syntax_skill/skill.tmp" "$unsupported_key_syntax_skill/SKILL.md"
+    if "$skill_validator" --skill "$unsupported_key_syntax_skill" >/dev/null 2>"$unsupported_key_syntax_err" \
+        || ! grep -Fq "FRONTMATTER_KEY_FORMAT" "$unsupported_key_syntax_err"; then
+        unsupported_key_syntax_failures+=("$unsupported_key_syntax_case")
+    fi
+done
+if [[ ${#unsupported_key_syntax_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator accepted unsupported top-level YAML key syntax: ${unsupported_key_syntax_failures[*]}"
+fi
+
 test_start "skill validator allows canonical block-sequence top-level requires metadata"
 requires_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-requires.XXXXXX")"
 p0p4_register_cleanup "$requires_root"

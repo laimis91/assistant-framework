@@ -324,7 +324,8 @@ Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
 nearby negative. Schema `1.0` custom/local fixtures may omit this field; when
-they include it, the same shape is validated. Activation cases shape discovery
+they include it, the same shape is validated. Other schema versions are
+rejected. Activation cases shape discovery
 coverage only unless compared against externally observed native selections with
 `--activation-results`; they are separate from response-graded `.cases` and
 never SKILL.md metadata. The runner does not invoke native routing itself.

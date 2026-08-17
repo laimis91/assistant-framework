@@ -143,8 +143,9 @@ Multiple open protocols define structured metadata for agent discovery, capabili
   `activation_cases`: exact `{user_request, should_activate}` objects with at
   least two normalized-distinct positive requests and one normalized-disjoint
   nearby negative. Schema `1.0` custom/local fixtures may omit the field, but
-  validate it when present. These are discovery evidence, not ordinary
-  response-grade `.cases` or SKILL.md metadata. When externally observed native
+  validate it when present; reject every other schema version. These are
+  discovery evidence, not ordinary response-grade `.cases` or SKILL.md
+  metadata. When externally observed native
   selections are available, `run-skill-evals.sh --activation-results FILE`
   validates one exact skill/request result per activation case and compares the
   expected decision without invoking a custom router or provider API.
@@ -390,6 +391,8 @@ required contract tier files, contract headers, required-field recovery behavior
 and enum value declarations. SKILL.md frontmatter requires `name` and a non-empty
 `description`; repository skills may include optional `requires` for validated
 hard dependencies. Top-level `effort` and `triggers` are deprecated and rejected.
+Top-level keys use plain or quoted scalar block-mapping syntax; YAML merge keys,
+node properties, aliases, and explicit-key indicators are rejected.
 It intentionally stays on the source side. Canonical source paths such as
 `.claude` remain valid in source skills; installed-agent path substitution for
 `.codex` and `.gemini` stays covered by installer tests.
@@ -430,8 +433,8 @@ Each first-class schema `2.0` fixture must provide top-level `activation_cases`
 with exact `user_request` and `should_activate` fields, at least two
 normalized-distinct positive requests, and one normalized-disjoint nearby
 negative. Schema `1.0` custom/local fixtures may omit the field, but it remains
-validated when present. This evidence shapes native description routing and is
-separate from response-grade `.cases`.
+validated when present; every other schema version is rejected. This evidence
+shapes native description routing and is separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 

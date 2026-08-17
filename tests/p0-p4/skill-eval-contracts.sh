@@ -487,6 +487,34 @@ else
     fail "activation result adapter did not pass exact external observations"
 fi
 
+test_start "activation result adapter preserves trailing newlines in exact request keys"
+trailing_newline_skill="$activation_results_root/assistant-trailing-newline"
+trailing_newline_results="$activation_results_root/trailing-newline-results.json"
+trailing_newline_output="$activation_results_root/trailing-newline-results.out"
+mkdir -p "$trailing_newline_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md" "$trailing_newline_skill/SKILL.md"
+jq '.skill = "assistant-trailing-newline" | .activation_cases[0].user_request += "\n"' \
+    "$clarify_fixture" >"$trailing_newline_skill/evals/cases.json"
+jq -n --arg skill "assistant-trailing-newline" --slurpfile fixture "$trailing_newline_skill/evals/cases.json" '
+    {
+      schema_version: "1.0",
+      results: [
+        $fixture[0].activation_cases[]
+        | {
+            skill: $skill,
+            user_request,
+            selected_skills: (if .should_activate then [$skill] else [] end)
+          }
+      ]
+    }
+' >"$trailing_newline_results"
+if "$skill_eval_runner" --activation-results "$trailing_newline_results" --skill "$trailing_newline_skill" >"$trailing_newline_output" 2>&1 \
+    && grep -Fq "Summary: total=3 passed=3 failed=0" "$trailing_newline_output"; then
+    pass
+else
+    fail "activation result adapter lost a trailing newline from an exact request key"
+fi
+
 test_start "activation result adapter rejects missing duplicate unexpected and mismatched observations"
 activation_result_mutation_failures=()
 while IFS='|' read -r mutation expected_error; do
@@ -560,6 +588,29 @@ if "$skill_eval_runner" --validate-fixture --skill "$legacy_activation_skill" >/
     pass
 else
     fail "schema-1.0 fixture without activation_cases should remain valid, stderr=$(cat "$legacy_activation_err")"
+fi
+
+test_start "skill eval runner rejects unsupported fixture schema versions"
+unsupported_schema_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-unsupported-schema.XXXXXX")"
+p0p4_register_cleanup "$unsupported_schema_root"
+unsupported_schema_failures=()
+for unsupported_schema_version in "2.O" "3.0" "0.9"; do
+    unsupported_schema_slug="${unsupported_schema_version//./-}"
+    unsupported_schema_skill="$unsupported_schema_root/assistant-unsupported-$unsupported_schema_slug"
+    unsupported_schema_err="$unsupported_schema_root/$unsupported_schema_slug.err"
+    p0p4_write_skill_eval_fixture "$unsupported_schema_skill"
+    jq --arg version "$unsupported_schema_version" '.schema_version = $version' \
+        "$unsupported_schema_skill/evals/cases.json" >"$unsupported_schema_root/cases.json"
+    mv "$unsupported_schema_root/cases.json" "$unsupported_schema_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$unsupported_schema_skill" >/dev/null 2>"$unsupported_schema_err" \
+        || ! grep -Fq 'top-level field schema_version must be 1.0 or 2.0' "$unsupported_schema_err"; then
+        unsupported_schema_failures+=("$unsupported_schema_version")
+    fi
+done
+if [[ ${#unsupported_schema_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "skill eval runner accepted unsupported fixture schema versions: ${unsupported_schema_failures[*]}"
 fi
 
 test_start "skill eval runner validates malformed schema-1.0 activation cases when present"

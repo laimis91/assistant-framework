@@ -26,6 +26,15 @@ validate_fixture() {
           if (.[$name]? | nonempty_string_array) then empty
           else "missing or invalid non-empty string array field: \($name)" end;
 
+        def validate_schema_version:
+          if (.schema_version? | type) != "string" then
+            empty
+          elif .schema_version == "1.0" or .schema_version == "2.0" then
+            empty
+          else
+            "top-level field schema_version must be 1.0 or 2.0"
+          end;
+
         def normalized_activation_request:
           gsub("^[[:space:]]+|[[:space:]]+$"; "")
           | gsub("[[:space:]]+"; " ")
@@ -47,7 +56,9 @@ validate_fixture() {
           end;
 
         def validate_activation_cases:
-          if .schema_version == "1.0" and (has("activation_cases") | not) then
+          if .schema_version != "1.0" and .schema_version != "2.0" then
+            empty
+          elif .schema_version == "1.0" and (has("activation_cases") | not) then
             empty
           elif (.activation_cases? | type != "array") then
             "top-level field activation_cases must be an array"
@@ -248,6 +259,7 @@ validate_fixture() {
           "fixture root must be a JSON object"
         else
           required_string("schema_version"),
+          validate_schema_version,
           required_string("suite_id"),
           required_string("title"),
           required_string("description"),

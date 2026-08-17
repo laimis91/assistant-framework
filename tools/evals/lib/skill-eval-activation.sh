@@ -69,7 +69,7 @@ validate_activation_results() {
 }
 
 evaluate_activation_results() {
-    local expected_results expected_result skill_name user_request should_activate
+    local expected_results expected_result skill_name should_activate request_json
     local result observed_selected total=0 passed=0 failed=0
 
     validate_all_fixtures
@@ -79,17 +79,20 @@ evaluate_activation_results() {
     echo ""
     while IFS= read -r expected_result; do
         skill_name="$(jq -r '.skill' <<<"$expected_result")"
-        user_request="$(jq -r '.user_request' <<<"$expected_result")"
         should_activate="$(jq -r '.should_activate' <<<"$expected_result")"
-        result="$(jq -c --arg skill "$skill_name" --arg user_request "$user_request" '.results[] | select(.skill == $skill and .user_request == $user_request)' "$ACTIVATION_RESULTS_FILE")"
+        request_json="$(jq -c '.user_request' <<<"$expected_result")"
+        result="$(jq -c --argjson expected "$expected_result" '
+            .results[]
+            | select(.skill == $expected.skill and .user_request == $expected.user_request)
+        ' "$ACTIVATION_RESULTS_FILE")"
         observed_selected="$(jq -r --arg skill "$skill_name" '.selected_skills | index($skill) != null' <<<"$result")"
         total=$((total + 1))
         if [[ "$should_activate" == "$observed_selected" ]]; then
             passed=$((passed + 1))
-            printf 'PASS\t%s\t%s\texpected should_activate=%s observed selected=%s\n' "$skill_name" "$(jq -cn --arg request "$user_request" '$request')" "$should_activate" "$observed_selected"
+            printf 'PASS\t%s\t%s\texpected should_activate=%s observed selected=%s\n' "$skill_name" "$request_json" "$should_activate" "$observed_selected"
         else
             failed=$((failed + 1))
-            printf 'FAIL\t%s\t%s\texpected should_activate=%s observed selected=%s\n' "$skill_name" "$(jq -cn --arg request "$user_request" '$request')" "$should_activate" "$observed_selected"
+            printf 'FAIL\t%s\t%s\texpected should_activate=%s observed selected=%s\n' "$skill_name" "$request_json" "$should_activate" "$observed_selected"
         fi
     done < <(jq -c '.[]' <<<"$expected_results")
 

@@ -287,21 +287,75 @@ frontmatter_description_value() {
     printf '%s\n' "$description"
 }
 
+readonly FRONTMATTER_SCALAR_KEY_AWK='
+    function hex_value(value, expected_length, i, character, digit, result) {
+        if (length(value) != expected_length) return -1
+        result = 0
+        for (i = 1; i <= expected_length; i++) {
+            character = tolower(substr(value, i, 1))
+            digit = index("0123456789abcdef", character) - 1
+            if (digit < 0) return -1
+            result = (result * 16) + digit
+        }
+        return result
+    }
+    function decode_double_ascii_key(value, decoded, i, character, escaped, escape_length, codepoint) {
+        if (substr(value, 1, 1) != "\"" || substr(value, length(value), 1) != "\"") return ""
+        value = substr(value, 2, length(value) - 2)
+        for (i = 1; i <= length(value); i++) {
+            character = substr(value, i, 1)
+            if (escaped) {
+                if (character == "\"" || character == "\\" || character == "/") {
+                    decoded = decoded character
+                } else if (character == "x" || character == "u" || character == "U") {
+                    escape_length = character == "x" ? 2 : (character == "u" ? 4 : 8)
+                    codepoint = hex_value(substr(value, i + 1, escape_length), escape_length)
+                    if (codepoint < 32 || codepoint > 126) return ""
+                    decoded = decoded sprintf("%c", codepoint)
+                    i += escape_length
+                } else {
+                    return ""
+                }
+                escaped = 0
+            } else if (character == "\\") {
+                escaped = 1
+            } else {
+                decoded = decoded character
+            }
+        }
+        return escaped ? "" : decoded
+    }
+    function normalize_scalar_key(line, candidate) {
+        candidate = line
+        sub(/[[:space:]]*:.*/, "", candidate)
+        sub(/^[[:space:]]+/, "", candidate)
+        sub(/[[:space:]]+$/, "", candidate)
+        if (substr(candidate, 1, 1) == "\"" && substr(candidate, length(candidate), 1) == "\"") {
+            candidate = decode_double_ascii_key(candidate)
+        } else if (candidate ~ /^\047[^\047]+\047$/) {
+            candidate = substr(candidate, 2, length(candidate) - 2)
+        }
+        return candidate
+    }
+'
+
+frontmatter_has_unsupported_top_level_key_syntax() {
+    local file="$1"
+
+    awk "$FRONTMATTER_SCALAR_KEY_AWK"'
+        NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+        in_frontmatter && $0 == "---" { exit }
+        in_frontmatter && $0 ~ /^[^[:space:]#][^:]*[[:space:]]*:/ && normalize_scalar_key($0) == "<<" { found = 1; exit }
+        in_frontmatter && ($0 ~ /^[!&*]/ || $0 ~ /^[?][[:space:]]/ || $0 ~ /^[:][[:space:]]/ || $0 == "?" || $0 == ":") { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+
 frontmatter_has_key() {
     local file="$1"
     local key="$2"
 
-    awk -v key="$key" '
-        function normalize_scalar_key(line, candidate) {
-            candidate = line
-            sub(/[[:space:]]*:.*/, "", candidate)
-            sub(/^[[:space:]]+/, "", candidate)
-            sub(/[[:space:]]+$/, "", candidate)
-            if (candidate ~ /^"[^"]+"$/ || candidate ~ /^\047[^\047]+\047$/) {
-                candidate = substr(candidate, 2, length(candidate) - 2)
-            }
-            return candidate
-        }
+    awk -v key="$key" "$FRONTMATTER_SCALAR_KEY_AWK"'
         NR == 1 && $0 == "---" { in_frontmatter = 1; next }
         in_frontmatter && $0 == "---" { exit }
         in_frontmatter && $0 ~ /^[^[:space:]#][^:]*[[:space:]]*:/ && normalize_scalar_key($0) == key { found = 1; exit }
@@ -313,17 +367,7 @@ frontmatter_requires_validation_errors() {
     local file="$1"
     local skill_name="$2"
 
-    awk -v skill_name="$skill_name" '
-        function normalize_scalar_key(line, candidate) {
-            candidate = line
-            sub(/[[:space:]]*:.*/, "", candidate)
-            sub(/^[[:space:]]+/, "", candidate)
-            sub(/[[:space:]]+$/, "", candidate)
-            if (candidate ~ /^"[^"]+"$/ || candidate ~ /^\047[^\047]+\047$/) {
-                candidate = substr(candidate, 2, length(candidate) - 2)
-            }
-            return candidate
-        }
+    awk -v skill_name="$skill_name" "$FRONTMATTER_SCALAR_KEY_AWK"'
         function emit(code) {
             if (!reported[code]++) print code
         }
@@ -385,6 +429,10 @@ validate_frontmatter() {
     if ! frontmatter_has_bounds "$skill_file"; then
         record_error "FRONTMATTER_BOUNDS" "$skill_file" "SKILL.md must start with YAML frontmatter bounded by opening and closing ---"
         return
+    fi
+
+    if frontmatter_has_unsupported_top_level_key_syntax "$skill_file"; then
+        record_error "FRONTMATTER_KEY_FORMAT" "$skill_file" "top-level frontmatter keys must use plain or quoted scalar block-mapping syntax; YAML merge keys, tags, anchors, aliases, and explicit-key indicators are unsupported"
     fi
 
     name="$(frontmatter_value "$skill_file" "name")"
