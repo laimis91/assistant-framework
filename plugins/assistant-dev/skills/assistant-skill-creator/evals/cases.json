@@ -33,7 +33,7 @@
         "Starts with CAPTURE and resolves skill_name, skill_purpose, skill_category, activation_examples, dependencies, and policy_constraints.",
         "Captures activation_examples as user_request and should_activate pairs, with two normalized-distinct true decisions and one normalized-disjoint false nearby non-match.",
         "Uses activation_examples only to shape the native description and positive and negative activation evals; it does not emit legacy header metadata.",
-        "Projects validated hard dependencies in order to conditional requires only when non-empty as a plain block sequence with two-space dash items, while preserving required name and description.",
+        "Projects validated hard dependencies in order to conditional requires only when they are supplied and non-empty as a plain block sequence with two-space dash items, while preserving required name and description.",
         "Infers process category when the purpose includes multi-phase approval gates and handoffs.",
         "Moves to DESIGN before BUILD and reads the contract design guide.",
         "Designs input, output, phase-gates, and handoffs contracts for the process tier.",
@@ -75,12 +75,11 @@
           "activation evals",
           "conditional requires",
           "plain block sequence",
-          "requires:",
-          "  - assistant-review",
           "omit requires when empty",
           "legacy header metadata"
         ],
         "forbidden_substrings": [
+          "  - assistant-review",
           "I created SKILL.md",
           "No design approval needed",
           "utility skill",
@@ -96,12 +95,14 @@
       "prompt": "Add contracts to the existing assistant-changelog skill and validate it against the design guide.",
       "setup_context": [
         "The assistant-skill-creator skill instructions are active.",
-        "An existing_skill_path is provided for a skill that already has SKILL.md, description, and activation evals.",
+        "An existing_skill_path is provided for a skill that already has SKILL.md, description, activation evals, and current canonical requires.",
+        "Dependencies are omitted for this update; an explicit empty dependencies list would instead remove current requires.",
         "The existing description and activation evals already provide two normalized-distinct positive requests but may lack a normalized-disjoint nearby negative activation example.",
         "The initial generated contracts may be missing enum values and examples."
       ],
       "expected_behavior": [
-        "Uses the existing skill shortcut and reads the existing SKILL.md, description, and activation evals instead of asking for all capture fields again.",
+        "Uses the existing skill shortcut and reads the existing SKILL.md, description, activation evals, and current canonical requires instead of asking for all capture fields again.",
+        "Preserves current canonical requires when dependencies are omitted, while explicit dependencies or explicit empty dependencies replace or remove them.",
         "Treats activation_examples as required even for an existing skill, deriving available evidence before asking for residual gaps.",
         "Reuses adequate existing positive evidence without an all-example prompt, derives structured examples from existing description and activation evals, and asks only for remaining material gaps.",
         "Enters DESIGN using the existing skill purpose, category, description, and activation evidence only after two normalized-distinct positive and one normalized-disjoint nearby negative should_activate decisions are available.",
@@ -139,6 +140,8 @@
           "missing material examples",
           "reuse adequate existing positive evidence",
           "only for remaining material gaps",
+          "preserve current canonical requires",
+          "explicit empty dependencies replace or remove current requires",
           "--- PHASE: DESIGN ---",
           "--- PHASE: BUILD ---",
           "--- PHASE: VALIDATE ---",

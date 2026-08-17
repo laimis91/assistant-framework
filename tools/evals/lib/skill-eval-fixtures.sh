@@ -58,9 +58,12 @@ validate_fixture() {
             | if ($item_errors | length > 0) then
                 $item_errors[]
               else
-                ([.activation_cases[] | select(.should_activate == true) | .user_request | normalized_activation_request] | unique) as $positive_requests
+                ([[.activation_cases[] | .user_request] | group_by(.)[] | select(length > 1) | .[0]][0]) as $duplicate_exact_request
+                | ([.activation_cases[] | select(.should_activate == true) | .user_request | normalized_activation_request] | unique) as $positive_requests
                 | ([.activation_cases[] | select(.should_activate == false) | .user_request | normalized_activation_request] | unique) as $negative_requests
-                | if ($positive_requests | length < 2) then
+                | if $duplicate_exact_request != null then
+                    "activation_cases must not contain duplicate exact user_request: \($duplicate_exact_request | @json)"
+                  elif ($positive_requests | length < 2) then
                     "activation_cases must contain at least two normalized-distinct positive requests"
                   elif ($negative_requests | length < 1) then
                     "activation_cases must contain at least one normalized-disjoint nearby negative request"

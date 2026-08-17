@@ -315,6 +315,7 @@ tools/evals/run-skill-evals.sh --validate-fixture
 tools/evals/run-skill-evals.sh --list
 tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
+tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
 The default eval inventory is 14 first-class `assistant-*` skills with fixtures
@@ -324,8 +325,9 @@ Canonical first-class fixtures use schema `2.0` and include top-level
 least two normalized-distinct positive requests and one normalized-disjoint
 nearby negative. Schema `1.0` custom/local fixtures may omit this field; when
 they include it, the same shape is validated. Activation cases shape discovery
-coverage only; they are separate from response-graded `.cases` and never
-SKILL.md metadata.
+coverage only unless compared against externally observed native selections with
+`--activation-results`; they are separate from response-graded `.cases` and
+never SKILL.md metadata. The runner does not invoke native routing itself.
 Local-only Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.

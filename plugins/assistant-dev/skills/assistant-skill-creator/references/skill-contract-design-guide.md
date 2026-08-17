@@ -144,7 +144,10 @@ Multiple open protocols define structured metadata for agent discovery, capabili
   least two normalized-distinct positive requests and one normalized-disjoint
   nearby negative. Schema `1.0` custom/local fixtures may omit the field, but
   validate it when present. These are discovery evidence, not ordinary
-  response-grade `.cases` or SKILL.md metadata.
+  response-grade `.cases` or SKILL.md metadata. When externally observed native
+  selections are available, `run-skill-evals.sh --activation-results FILE`
+  validates one exact skill/request result per activation case and compares the
+  expected decision without invoking a custom router or provider API.
 - Subagent prompts include structured context blocks with required fields, not free-form prose
 
 ### 7. LLM Guardrails — Drift Prevention

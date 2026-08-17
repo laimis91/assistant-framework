@@ -85,8 +85,8 @@ gates:
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
     exit_assertions:
       - id: SB1
-        check: "SKILL.md exists with required name and non-empty description, optional requires only when validated hard dependencies are non-empty and ordered as a plain block sequence with two-space dash items; inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected"
-        on_fail: "Create or fix SKILL.md frontmatter with name and description; project validated hard dependencies to ordered optional requires only when non-empty as a plain block sequence; remove inline, empty, or quoted `requires` forms and legacy top-level `effort` and `triggers` keys"
+        check: "SKILL.md exists with required name and non-empty description, optional requires only when validated hard dependencies are non-empty and ordered as a plain block sequence with two-space dash items; preserve current canonical requires when dependencies are omitted for an existing skill, and let explicit dependencies including an empty list replace or remove them; inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected"
+        on_fail: "Create or fix SKILL.md frontmatter with name and description; preserve existing requires when dependencies are omitted, project explicit validated hard dependencies to ordered optional requires only when non-empty as a plain block sequence, remove requires for an explicit empty list, and remove inline, empty, or quoted `requires` forms and legacy top-level `effort` and `triggers` keys"
       - id: SB2
         check: "contracts/input.yaml exists with schema_version header"
         on_fail: "Create input.yaml with proper header"
@@ -143,8 +143,8 @@ gates:
         check: "Semantic interface types, primitive exceptions, and applicable representative-path/design-pressure checks comply with Rule 13"
         on_fail: "Add named semantic types where meaning is erased, or document the permitted exception, conversion/validation, public-contract evolution plan, and applicable early-exit/ownership/resource/registration evidence"
       - id: SV1l
-        check: "Hard dependencies are unique non-empty kebab-case skill names, exclude skill_name, and project in order to optional requires only when non-empty as a plain block sequence with two-space dash items"
-        on_fail: "Correct hard dependencies and canonical block-sequence requires projection before completion"
+        check: "Hard dependencies are unique non-empty kebab-case skill names, exclude skill_name, project explicit values in order to optional requires only when non-empty as a plain block sequence with two-space dash items, and preserve current canonical requires for an existing skill when dependencies are omitted"
+        on_fail: "Correct hard dependencies, preserve omitted existing requires, and apply canonical block-sequence requires projection before completion"
       - id: SV2
         check: "SKILL.md body is under 500 lines"
         on_fail: "Split content into sub-files under references/"

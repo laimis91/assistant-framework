@@ -154,7 +154,7 @@ frontmatter_description_value() {
             }
             return result
         }
-        function decode_double(value, decoded, i, character, escaped, tail) {
+        function decode_double(value, decoded, i, character, escaped, tail, codepoint, escape_length) {
             if (substr(value, 1, 1) != "\"") return ""
             value = substr(value, 2)
             escaped = 0
@@ -163,14 +163,44 @@ frontmatter_description_value() {
                 if (escaped) {
                     if (character == "\"" || character == "\\" || character == "/") {
                         decoded = decoded character
-                    } else if (character == "u" || character == "U") {
-                        escape_length = character == "u" ? 4 : 8
+                    } else if (character == "0") {
+                        codepoint = 0
+                    } else if (character == "a") {
+                        codepoint = 7
+                    } else if (character == "b") {
+                        codepoint = 8
+                    } else if (character == "t") {
+                        codepoint = 9
+                    } else if (character == "n") {
+                        codepoint = 10
+                    } else if (character == "v") {
+                        codepoint = 11
+                    } else if (character == "f") {
+                        codepoint = 12
+                    } else if (character == "r") {
+                        codepoint = 13
+                    } else if (character == "e") {
+                        codepoint = 27
+                    } else if (character == " ") {
+                        codepoint = 32
+                    } else if (character == "N") {
+                        codepoint = 133
+                    } else if (character == "_") {
+                        codepoint = 160
+                    } else if (character == "L") {
+                        codepoint = 8232
+                    } else if (character == "P") {
+                        codepoint = 8233
+                    } else if (character == "x" || character == "u" || character == "U") {
+                        escape_length = character == "x" ? 2 : (character == "u" ? 4 : 8)
                         codepoint = hex_value(substr(value, i + 1, escape_length), escape_length)
                         if (codepoint < 0 || codepoint > 1114111 || (codepoint >= 55296 && codepoint <= 57343)) return ""
-                        escaped_codepoints = escaped_codepoints codepoint " "
-                        decoded = decoded "\034"
                         i += escape_length
                     } else return ""
+                    if (character != "\"" && character != "\\" && character != "/") {
+                        escaped_codepoints = escaped_codepoints codepoint " "
+                        decoded = decoded "\034"
+                    }
                     escaped = 0
                 } else if (character == "\\") {
                     escaped = 1

@@ -363,11 +363,35 @@ escaped_description_failures=()
 if ! "$skill_validator" --skill "$escaped_description_root/printable-escape-validator-skill" >/dev/null; then
     escaped_description_failures+=("printable_unicode_escape")
 fi
-for escaped_description_case in escaped_lf escaped_cr escaped_tab u000a u000d u0009 u0000 u0020 U00000020 u0085 u200b u2028 u2029 u202e ufffe uffff U00013439 U0001343F surrogate malformed_hex malformed_length out_of_range; do
+for escaped_printable_case in escaped_space escaped_nbsp escaped_hex; do
+    case "$escaped_printable_case" in
+        escaped_space) escaped_printable_line='description: "Fixture\\ routing"' ;;
+        escaped_nbsp) escaped_printable_line='description: "Fixture\\_routing"' ;;
+        escaped_hex) escaped_printable_line='description: "Fixture\\x41 routing"' ;;
+    esac
+    escaped_printable_skill="$escaped_description_root/$escaped_printable_case-validator-skill"
+    p0p4_write_valid_skill_fixture "$escaped_printable_skill"
+    awk -v line="$escaped_printable_line" 'NR == 3 { print line; next } { print }' "$escaped_printable_skill/SKILL.md" >"$escaped_printable_skill/skill.tmp"
+    mv "$escaped_printable_skill/skill.tmp" "$escaped_printable_skill/SKILL.md"
+    if ! "$skill_validator" --skill "$escaped_printable_skill" >/dev/null; then
+        escaped_description_failures+=("$escaped_printable_case")
+    fi
+done
+for escaped_description_case in escaped_lf escaped_cr escaped_tab escaped_bel escaped_backspace escaped_vertical_tab escaped_form_feed escaped_escape escaped_nel escaped_ls escaped_ps escaped_space_only escaped_nbsp_only u000a u000d u0009 u0000 u0020 U00000020 u0085 u200b u2028 u2029 u202e ufffe uffff U00013439 U0001343F surrogate malformed_hex malformed_length out_of_range; do
     case "$escaped_description_case" in
         escaped_lf) escaped_description_line='description: "Fixture\\n routing"' ;;
         escaped_cr) escaped_description_line='description: "Fixture\\r routing"' ;;
         escaped_tab) escaped_description_line='description: "Fixture\\t routing"' ;;
+        escaped_bel) escaped_description_line='description: "Fixture\\a routing"' ;;
+        escaped_backspace) escaped_description_line='description: "Fixture\\b routing"' ;;
+        escaped_vertical_tab) escaped_description_line='description: "Fixture\\v routing"' ;;
+        escaped_form_feed) escaped_description_line='description: "Fixture\\f routing"' ;;
+        escaped_escape) escaped_description_line='description: "Fixture\\e routing"' ;;
+        escaped_nel) escaped_description_line='description: "Fixture\\N routing"' ;;
+        escaped_ls) escaped_description_line='description: "Fixture\\L routing"' ;;
+        escaped_ps) escaped_description_line='description: "Fixture\\P routing"' ;;
+        escaped_space_only) escaped_description_line='description: "\\ "' ;;
+        escaped_nbsp_only) escaped_description_line='description: "\\_"' ;;
         u000a) escaped_description_line='description: "Fixture\\u000A routing"' ;;
         u000d) escaped_description_line='description: "Fixture\\u000D routing"' ;;
         u0009) escaped_description_line='description: "Fixture\\u0009 routing"' ;;

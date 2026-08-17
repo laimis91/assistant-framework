@@ -66,6 +66,10 @@ from existing description and activation evals when adequate; ask only for
 remaining material gaps. Before DESIGN, require two distinct normalized
 positives and a normalized-disjoint nearby negative. Dependencies are unique, non-empty kebab-case names, exclude
 the skill, preserve order, and project to optional plain-block `requires`.
+When updating an existing skill and dependencies are omitted, preserve its
+current canonical requires. Explicit dependencies, including an explicit empty
+list, replace or remove current requires; for a new skill, omission infers
+empty.
 Activation examples remain required for new and existing skills; derivation
 changes their recovery path, not their requiredness.
 
@@ -96,10 +100,12 @@ secrets, logs, and stale facts; otherwise return a revision checklist.
 ### BUILD
 
 Create `skills/<name>/SKILL.md`, required tier contracts, and focused evals.
-Emit required `name` and non-empty `description`. Project non-empty validated
-dependencies to ordered top-level plain-block `requires`, otherwise omit it.
-Reject inline, empty, or quoted `requires`, and legacy top-level `effort` and
-`triggers`. Reuse templates; add references only when they reduce root load.
+Emit required `name` and non-empty `description`. Project explicit non-empty
+validated dependencies to ordered top-level plain-block `requires`, omit it for
+an explicit empty list, and preserve an existing skill's current canonical
+`requires` when dependencies are omitted. Reject inline, empty, or quoted
+`requires`, and legacy top-level `effort` and `triggers`. Reuse templates; add
+references only when they reduce root load.
 
 ### VALIDATE
 

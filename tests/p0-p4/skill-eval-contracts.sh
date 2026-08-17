@@ -289,7 +289,7 @@ if grep -Fq 'schema_version: "2.0"' "$skill_creator_input" \
     && ruby -ryaml -e '
         field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
         validation = field.fetch("validation")
-        exit field["type"] == "string[]" && field["required"] == false && field["default"] == [] &&
+        exit field["type"] == "string[]" && field["required"] == false && field["on_missing"] == "infer" && !field.key?("default") &&
           validation.include?("unique") && validation.include?("non-empty") && validation.include?("kebab-case") &&
           validation.include?("skill_name") && validation.include?("order") && validation.include?("requires") ? 0 : 1
     ' "$skill_creator_input" \
@@ -309,7 +309,7 @@ if grep -Fq 'schema_version: "2.0"' "$skill_creator_input" \
     && grep -Fq 'two-space dash kebab-case items' "$skill_creator_output" \
     && grep -Fq 'Reject inline, empty, or quoted `requires` forms. Reject legacy top-level `effort` and `triggers` keys.' "$skill_creator_output" \
     && grep -Fq 'inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected' "$skill_creator_gates" \
-    && jq -e '.cases as $cases | ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["activation_examples", "user_request", "should_activate", "should_activate: true", "should_activate: false", "description", "activation evals", "conditional requires", "plain block sequence", "requires:", "  - assistant-review", "omit requires when empty", "legacy header metadata"] | all(. as $anchor | $required | index($anchor))) and ($cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings as $required | ["activation_examples", "required activation_examples", "user_request", "should_activate: true", "should_activate: false", "derive structured examples", "reuse adequate existing positive evidence", "only for remaining material gaps"] | all(. as $anchor | $required | index($anchor))) and ([$cases[].expected_behavior[]] | any(contains("activation_examples") and contains("normalized"))) and ([$cases[] | tostring] | join(" ") | contains("trigger_phrases") | not) and ([$cases[] | tostring] | join(" ") | contains("effort_level") | not)' "$skill_creator_cases" >/dev/null; then
+    && jq -e '.cases as $cases | ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["activation_examples", "user_request", "should_activate", "should_activate: true", "should_activate: false", "description", "activation evals", "conditional requires", "plain block sequence", "omit requires when empty", "legacy header metadata"] | all(. as $anchor | $required | index($anchor))) and ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["requires:", "  - assistant-review"] | all(. as $anchor | $required | index($anchor) | not)) and ($cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings as $required | ["activation_examples", "required activation_examples", "user_request", "should_activate: true", "should_activate: false", "derive structured examples", "reuse adequate existing positive evidence", "only for remaining material gaps"] | all(. as $anchor | $required | index($anchor))) and ([$cases[].expected_behavior[]] | any(contains("activation_examples") and contains("normalized"))) and ([$cases[] | tostring] | join(" ") | contains("trigger_phrases") | not) and ([$cases[] | tostring] | join(" ") | contains("effort_level") | not)' "$skill_creator_cases" >/dev/null; then
     pass
 else
     fail "assistant-skill-creator did not define v2 activation examples and legacy header exclusions"
@@ -330,6 +330,49 @@ if ruby -ryaml -e '
     pass
 else
     fail "activation_examples does not remain required while modeling derive-first existing-skill recovery"
+fi
+
+test_start "assistant-skill-creator preserves existing dependencies unless explicitly replaced"
+if ruby -ryaml -e '
+    field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
+    inference = field.fetch("infer_from")
+    exit field["on_missing"] == "infer" && !field.key?("default") &&
+      inference.include?("existing_skill_path") && inference.include?("preserve") &&
+      inference.include?("explicit") && inference.include?("new skill") ? 0 : 1
+' "$skill_creator_input" \
+    && ruby -e '
+        prose = File.read(ARGV.fetch(0)).gsub(/\s+/, " ")
+        exit prose.include?("When updating an existing skill and dependencies are omitted, preserve its current canonical requires.") &&
+          prose.include?("Explicit dependencies, including an explicit empty list, replace or remove current requires") ? 0 : 1
+    ' "$skill_creator_skill" \
+    && grep -Fq 'preserve current canonical requires when dependencies are omitted' "$skill_creator_gates" \
+    && jq -e '
+        .cases[] | select(.id == "existing-skill-validation-enforces-checklist")
+        | (.setup_context | join(" ") | contains("current canonical requires"))
+        and (.expected_behavior | join(" ") | contains("Preserves current canonical requires"))
+        and (.expected_behavior | join(" ") | contains("explicit empty dependencies"))
+        and (.machine_expectations.required_substrings | index("preserve current canonical requires"))
+        and (.machine_expectations.required_substrings | index("explicit empty dependencies replace or remove current requires"))
+    ' "$skill_creator_cases" >/dev/null; then
+    pass
+else
+    fail "assistant-skill-creator does not preserve existing requires when dependencies are omitted"
+fi
+
+test_start "new-skill eval does not invent an assistant-review dependency"
+if jq -e '
+    .cases[] | select(.id == "new-process-skill-designs-contracts-before-build")
+    | .machine_expectations.required_substrings as $required
+    | ($required | index("  - assistant-review") | not)
+    and ($required | index("requires:") | not)
+    and (.machine_expectations.forbidden_substrings | index("  - assistant-review"))
+    and ($required | index("conditional requires"))
+    and ($required | index("plain block sequence"))
+    and ($required | index("omit requires when empty"))
+' "$skill_creator_cases" >/dev/null; then
+    pass
+else
+    fail "new-skill eval requires an unprovided concrete hard dependency"
 fi
 
 test_start "assistant-skill-creator category inference is process-first and ordered"
@@ -419,6 +462,92 @@ else
     fail "activation cases do not retain the curated route/nonmatch examples: ${curated_activation_failures[*]}"
 fi
 
+test_start "skill eval runner grades externally observed activation selections"
+activation_results_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-activation-results.XXXXXX")"
+activation_results_file="$activation_results_root/results.json"
+activation_results_output="$activation_results_root/results.out"
+p0p4_register_cleanup "$activation_results_root"
+jq -n --arg skill "assistant-clarify" --slurpfile fixture "$clarify_fixture" '
+    {
+      schema_version: "1.0",
+      results: [
+        $fixture[0].activation_cases[]
+        | {
+            skill: $skill,
+            user_request,
+            selected_skills: (if .should_activate then [$skill] else [] end)
+          }
+      ]
+    }
+' >"$activation_results_file"
+if "$skill_eval_runner" --activation-results "$activation_results_file" --skill assistant-clarify >"$activation_results_output" 2>&1 \
+    && grep -Fq "Summary: total=3 passed=3 failed=0" "$activation_results_output"; then
+    pass
+else
+    fail "activation result adapter did not pass exact external observations"
+fi
+
+test_start "activation result adapter rejects missing duplicate unexpected and mismatched observations"
+activation_result_mutation_failures=()
+while IFS='|' read -r mutation expected_error; do
+    mutation_file="$activation_results_root/$expected_error.json"
+    jq "$mutation" "$activation_results_file" >"$mutation_file"
+    if "$skill_eval_runner" --activation-results "$mutation_file" --skill assistant-clarify >"$activation_results_output" 2>&1 \
+        || ! grep -Fq "$expected_error" "$activation_results_output"; then
+        activation_result_mutation_failures+=("$expected_error")
+    fi
+done <<'EOF_ACTIVATION_RESULTS'
+del(.results[0])|missing activation result
+.results += [.results[0]]|duplicate activation result
+.results += [{"skill":"assistant-unexpected","user_request":"Unexpected request.","selected_skills":[]}]|unexpected activation result
+.results[0].selected_skills = []|expected should_activate=true
+.results[0].selected_skills = ["assistant-clarify", "assistant-clarify"]|selected_skills must be a unique array
+.results[0].selected_skills = [42]|selected_skills must be a unique array
+.schema_version = "2.0"|activation results schema_version must be 1.0
+EOF_ACTIVATION_RESULTS
+if [[ ${#activation_result_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "activation result adapter did not reject invalid observations: ${activation_result_mutation_failures[*]}"
+fi
+
+test_start "activation result adapter evaluates multiple selected fixtures"
+multi_activation_results_file="$activation_results_root/multi-results.json"
+multi_activation_results_output="$activation_results_root/multi-results.out"
+jq -n --slurpfile clarify "$clarify_fixture" --slurpfile telos "$telos_fixture" '
+    {
+      schema_version: "1.0",
+      results: [
+        ($clarify[0].activation_cases[] | {
+          skill: "assistant-clarify",
+          user_request,
+          selected_skills: (if .should_activate then ["assistant-clarify"] else [] end)
+        }),
+        ($telos[0].activation_cases[] | {
+          skill: "assistant-telos",
+          user_request,
+          selected_skills: (if .should_activate then ["assistant-telos"] else [] end)
+        })
+      ]
+    }
+' >"$multi_activation_results_file"
+if "$skill_eval_runner" --activation-results "$multi_activation_results_file" --skill assistant-clarify --skill assistant-telos >"$multi_activation_results_output" 2>&1 \
+    && grep -Fq "Summary: total=6 passed=6 failed=0" "$multi_activation_results_output"; then
+    pass
+else
+    fail "activation result adapter did not pass complete multi-skill observations"
+fi
+
+test_start "activation result adapter rejects a missing second-skill observation"
+jq 'del(.results[3])' "$multi_activation_results_file" >"$activation_results_root/multi-results-missing-telos.json"
+if "$skill_eval_runner" --activation-results "$activation_results_root/multi-results-missing-telos.json" --skill assistant-clarify --skill assistant-telos >"$multi_activation_results_output" 2>&1 \
+    || ! grep -Fq 'missing activation result' "$multi_activation_results_output" \
+    || ! grep -Fq 'assistant-telos' "$multi_activation_results_output"; then
+    fail "activation result adapter did not reject a missing assistant-telos observation"
+else
+    pass
+fi
+
 test_start "skill eval runner preserves schema-1.0 fixture compatibility without activation cases"
 legacy_activation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-legacy-activation.XXXXXX")"
 legacy_activation_skill="$legacy_activation_root/assistant-eval-legacy-activation"
@@ -472,6 +601,7 @@ request_type|.activation_cases[0].user_request = 42|activation_cases[0].user_req
 decision_type|.activation_cases[0].should_activate = "true"|activation_cases[0].should_activate must be boolean
 blank_request|.activation_cases[0].user_request = "   "|activation_cases[0].user_request must be a nonblank string
 duplicate_positive|.activation_cases = [{"user_request":"Use the fixture skill.","should_activate":true},{"user_request":" use   the fixture skill. ","should_activate":true},{"user_request":"Write a general status update.","should_activate":false}]|activation_cases must contain at least two normalized-distinct positive requests
+duplicate_exact|.activation_cases += [.activation_cases[0]]|activation_cases must not contain duplicate exact user_request
 missing_negative|.activation_cases = [{"user_request":"Use the fixture skill.","should_activate":true},{"user_request":"Run the fixture workflow.","should_activate":true},{"user_request":"Write a general status update.","should_activate":true}]|activation_cases must contain at least one normalized-disjoint nearby negative request
 cross_label_collision|.activation_cases = [{"user_request":"Use the fixture skill.","should_activate":true},{"user_request":"Run the fixture workflow.","should_activate":true},{"user_request":" use the fixture skill. ","should_activate":false}]|activation_cases positive and negative requests must be normalized-disjoint
 extra_key|.activation_cases[0].unexpected = "metadata"|activation_cases[0] must contain exactly user_request and should_activate
@@ -1132,6 +1262,7 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'Every first-class schema `2.0` `evals/cases.json` fixture declares top-level' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq -- '--activation-results FILE' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
@@ -1148,7 +1279,9 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/README.md"; then
     pass
 else
     fail "skill eval docs do not describe complete first-class coverage"

@@ -513,6 +513,29 @@ included field is still structurally validated. These cases provide
 native-description activation evidence and remain separate from response-grade
 `.cases` and SKILL.md frontmatter.
 
+To evaluate externally observed native selections without adding a custom router
+or provider API call, save one JSON result for every selected activation case:
+
+```json
+{
+  "schema_version": "1.0",
+  "results": [
+    {
+      "skill": "assistant-clarify",
+      "user_request": "Clarify this ambiguous multi-intent request.",
+      "selected_skills": ["assistant-clarify"]
+    }
+  ]
+}
+```
+
+Each result binds the selected fixture skill and exact `user_request` to the
+externally observed `selected_skills`. The runner requires exactly one result
+per selected activation case and rejects missing, duplicate, or unexpected
+results before comparing whether the expected skill was selected to
+`should_activate`. It only evaluates supplied observations; it never invokes a
+native router, provider API, SDK, or network service.
+
 ### How To Use
 
 Validate all default per-skill fixtures:
@@ -559,6 +582,14 @@ Grade saved responses locally:
 ```bash
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --responses /tmp/clarify-eval-responses --skill assistant-clarify
+```
+
+Compare native-selection observations captured by a separate adapter or manual
+run:
+
+```bash
+tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
+tools/evals/run-skill-evals.sh --activation-results /tmp/clarify-activation-results.json --skill assistant-clarify
 ```
 
 Cases may additionally define `machine_expectations.structured_json_assertions`.

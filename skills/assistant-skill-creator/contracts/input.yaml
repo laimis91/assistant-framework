@@ -68,9 +68,9 @@ fields:
     type: string[]
     required: false
     description: "Hard dependencies only when no safe fallback exists"
-    validation: "unique non-empty kebab-case skill names, not skill_name, preserve order; project non-empty values to optional plain-block two-space-dash requires, otherwise omit it."
-    default: []
-    on_missing: skip
+    validation: "unique non-empty kebab-case skill names, not skill_name, preserve order; project non-empty values to optional plain-block two-space-dash requires, otherwise omit it. When updating an existing skill and dependencies are omitted, preserve its current canonical requires; explicit dependencies, including an empty list, replace or remove current requires."
+    on_missing: infer
+    infer_from: "When existing_skill_path is provided, inspect and preserve current canonical requires when dependencies are omitted; when creating a new skill, infer an empty dependency list. An explicit dependencies value, including [], replaces the inferred value."
 
   - name: policy_constraints
     type: string[]
