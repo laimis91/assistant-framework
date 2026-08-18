@@ -1,12 +1,6 @@
 ---
 name: assistant-telos
 description: "Create or update Telos purpose, mission, goals, challenges, and strategies. Use for explicit purpose or Telos work."
-effort: medium
-triggers:
-  - pattern: "telos|my purpose|why am I doing this|what matters most|my mission|update telos|strategic context"
-    priority: 65
-    min_words: 3
-    reminder: "This request matches assistant-telos. Consider whether the Skill tool should be invoked with skill='assistant-telos' for purpose and strategic context management."
 ---
 
 # Telos — Deep Context Framework

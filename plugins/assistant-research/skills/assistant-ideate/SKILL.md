@@ -1,12 +1,6 @@
 ---
 name: assistant-ideate
-description: "Generate and rank options. Use light mode for quick improvement scans and deep mode for explicit brainstorming or broad exploration."
-effort: medium
-triggers:
-  - pattern: "brainstorm|feature ideas?|what if we|how could we|possibilities for|options for|alternatives to|explore (ways|options|ideas)|what else (could|can|should)|more areas to improve|ideas for"
-    priority: 55
-    min_words: 4
-    reminder: "This request matches assistant-ideate. Load and follow this SKILL.md and its contracts for structured brainstorming."
+description: "Generate and rank options. Use light mode for quick improvement scans and deep mode for explicit brainstorm requests or broad exploration."
 ---
 
 # Idea Generation

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-telos-skill-behavior",
   "skill": "assistant-telos",
   "title": "assistant-telos Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Create my Telos context.", "should_activate": true},
+    {"user_request": "Help define my mission and goals.", "should_activate": true},
+    {"user_request": "Update the project README with our established mission.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-telos skill instructions loaded.",
     "Compare the local response against Telos input/output contracts, TCF section requirements, and review findings.",

@@ -1,11 +1,6 @@
 ---
 name: assistant-research
-description: "Gather and synthesize source-backed information. Use for explicit research, topic investigation, current evidence, or option comparison."
-triggers:
-  - pattern: "research|look into|find out about|compare (options|approaches|tools|technologies)|investigate (a |the )?(topic|technology|market|literature)|current state of|latest evidence on"
-    priority: 65
-    min_words: 4
-    reminder: "This request matches assistant-research. Consider whether the Skill tool should be invoked with skill='assistant-research' for research and investigation."
+description: "Gather and synthesize source-backed information. Use for explicit research, topic investigation, current evidence, or requests to compare options."
 ---
 
 # Research

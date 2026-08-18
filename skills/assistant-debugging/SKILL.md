@@ -1,11 +1,6 @@
 ---
 name: assistant-debugging
-description: "Diagnose unknown failures by reproducing and isolating before fixing. Use for debugging, root causes, flaky tests, or unexplained breakage."
-effort: high
-triggers:
-  - pattern: "debug|root cause|investigate (failure|bug|issue)|why .* broken|reproduce (bug|issue)|flaky test|production issue|failing test|test failure"
-    priority: 88
-    reminder: "This request matches assistant-debugging. Load and follow this SKILL.md and its contracts before patching code. Reproduce and isolate root cause before fixing."
+description: "Diagnose an unknown failure by reproducing and isolating before fixing. Use for debugging, root causes, flaky tests, or unexplained breakage."
 ---
 
 # Evidence-First Debugging

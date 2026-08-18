@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MODE=""
 OUTPUT_DIR=""
 RESPONSES_DIR=""
+ACTIVATION_RESULTS_FILE=""
 INCLUDE_LOCAL=false
 SKILL_SELECTORS=()
 SKILL_NAMES=()
@@ -19,6 +20,7 @@ source "$SCRIPT_DIR/lib/skill-eval-inventory.sh"
 source "$SCRIPT_DIR/lib/skill-eval-fixtures.sh"
 source "$SCRIPT_DIR/lib/skill-eval-render.sh"
 source "$SCRIPT_DIR/lib/skill-eval-grade.sh"
+source "$SCRIPT_DIR/lib/skill-eval-activation.sh"
 
 usage() {
     cat <<'EOF'
@@ -27,6 +29,7 @@ Usage:
   run-skill-evals.sh --list [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --emit-prompts DIR [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --responses DIR [--skill NAME|PATH ...] [--include-local]
+  run-skill-evals.sh --activation-results FILE [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --help
 
 Runs offline, provider-neutral helpers for skill-local eval fixtures:
@@ -44,6 +47,9 @@ Options:
   --list              Print skill, case id, category, and title as tab-separated lines.
   --emit-prompts DIR  Write one Markdown prompt packet per case under DIR/<skill>/.
   --responses DIR     Heuristically grade local response files from DIR.
+  --activation-results FILE
+                      Compare externally observed native skill selections for every
+                      selected activation case. The runner does not route requests.
   -h, --help          Show this help.
 
 Fixture schema:
@@ -85,6 +91,13 @@ while [[ $# -gt 0 ]]; do
             RESPONSES_DIR="$2"
             shift 2
             ;;
+        --activation-results)
+            [[ -z "$MODE" ]] || die "Only one mode may be specified."
+            [[ $# -ge 2 ]] || die "Missing file for --activation-results."
+            MODE="activation_results"
+            ACTIVATION_RESULTS_FILE="$2"
+            shift 2
+            ;;
         --skill)
             [[ $# -ge 2 ]] || die "Missing NAME or PATH for --skill."
             SKILL_SELECTORS+=("$2")
@@ -122,6 +135,9 @@ case "$MODE" in
         ;;
     responses)
         grade_responses
+        ;;
+    activation_results)
+        evaluate_activation_results
         ;;
     *)
         die "No mode specified."

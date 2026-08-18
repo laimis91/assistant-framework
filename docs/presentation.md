@@ -272,7 +272,7 @@ Separation of concerns at the agent level.
 
 | Layer | Owner | What |
 |---|---|---|
-| **Skill discovery** | Provider runtime | Selects installed skills from metadata and instructions |
+| **Skill discovery** | Provider runtime | Discovers installed skills from required name and description; body instructions apply after activation |
 | **Permissions** | Provider runtime | Owns command and file-operation approvals |
 | **Subagents** | Provider runtime | Spawns configured specialist roles |
 | **Compaction** | Provider runtime | Manages context lifecycle and continuation |
@@ -295,7 +295,7 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 
 - Skills auto-adapt paths (`.claude/` → `.codex/` → `.gemini/`)
 - Agent definitions per platform (`.md` for Claude, `.toml` for Codex)
-- Native skill routing selects installed skills from metadata and instructions
+- Native skill routing discovers installed skills from required name and description; body instructions apply after activation
 
 ---
 

@@ -132,8 +132,23 @@ Multiple open protocols define structured metadata for agent discovery, capabili
 - Handoff requires structured, queryable memory rather than raw text transfer
 
 **Enforcement for skills:**
+- Required SKILL.md discovery fields are `name` and non-empty `description`.
+  Repository-only `requires` is optional and appears only for validated hard
+  dependencies; body instructions apply after native activation
 - Skill descriptions in frontmatter are capability declarations — keep them precise
-- Trigger patterns are capability matching — keep them specific to avoid false matches
+- Native activation is description-based. Use representative activation examples to
+  shape the description and positive and negative routing evals; do not serialize
+  examples as frontmatter routing metadata
+- Every first-class schema `2.0` `evals/cases.json` fixture declares top-level
+  `activation_cases`: exact `{user_request, should_activate}` objects with at
+  least two normalized-distinct positive requests and one normalized-disjoint
+  nearby negative. Schema `1.0` custom/local fixtures may omit the field, but
+  validate it when present; reject every other schema version. These are
+  discovery evidence, not ordinary response-grade `.cases` or SKILL.md
+  metadata. When externally observed native
+  selections are available, `run-skill-evals.sh --activation-results FILE`
+  validates one exact skill/request result per activation case and compares the
+  expected decision without invoking a custom router or provider API.
 - Subagent prompts include structured context blocks with required fields, not free-form prose
 
 ### 7. LLM Guardrails — Drift Prevention
@@ -310,6 +325,11 @@ handoffs:
 | **Analysis** (structured reasoning) | thinking, research, ideate | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
 | **Utility** (single-purpose) | docs, diagrams, onboard, telos | input + output | Single-pass execution, no phases to gate |
 
+Infer a skill category in this order: Process first when its purpose mentions a
+workflow, pipeline, multi-phase work, subagents, dispatch, or handoffs; then
+Analysis for analyze/analysis/reason/research/diverge/converge; otherwise
+Utility. Process wins when a purpose contains both Process and Analysis terms.
+
 ### Process skills (4 files)
 - Most complex — multiple phases, subagent dispatch, approval gates
 - Phase gates enforce sequencing (can't skip steps)
@@ -366,7 +386,16 @@ Use `--include-local` only for local experiments:
 tools/skills/validate-skills.sh --include-local
 ```
 
-This validator checks source skill metadata and contract structure: frontmatter, required contract tier files, contract headers, required-field recovery behavior, and enum value declarations. It intentionally stays on the source side. Canonical source paths such as `.claude` remain valid in source skills; installed-agent path substitution for `.codex` and `.gemini` stays covered by installer tests.
+This validator checks source skill metadata and contract structure: frontmatter,
+required contract tier files, contract headers, required-field recovery behavior,
+and enum value declarations. SKILL.md frontmatter requires `name` and a non-empty
+`description`; repository skills may include optional `requires` for validated
+hard dependencies. Top-level `effort` and `triggers` are deprecated and rejected.
+Top-level keys use plain or quoted scalar block-mapping syntax; YAML merge keys,
+node properties, aliases, and explicit-key indicators are rejected.
+It intentionally stays on the source side. Canonical source paths such as
+`.claude` remain valid in source skills; installed-agent path substitution for
+`.codex` and `.gemini` stays covered by installer tests.
 
 ### Level 1: Contract files exist (passive)
 The contracts are YAML files in the skill directory. Agents read them as part of skill execution. This relies on the agent following instructions — the same trust model as the existing SKILL.md.
@@ -399,6 +428,13 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
 The default per-skill eval inventory is 14 first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, and `assistant-workflow`.
+
+Each first-class schema `2.0` fixture must provide top-level `activation_cases`
+with exact `user_request` and `should_activate` fields, at least two
+normalized-distinct positive requests, and one normalized-disjoint nearby
+negative. Schema `1.0` custom/local fixtures may omit the field, but it remains
+validated when present; every other schema version is rejected. This evidence
+shapes native description routing and is separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 

@@ -1254,6 +1254,48 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
+    Invoke-Contract 'requires fixture stays outside the canonical skills inventory' {
+        $harnessSource = [System.IO.File]::ReadAllText($PSCommandPath)
+        $canonicalFixtureCreation = '$fixtureRoot = Join-Path (Join-Path $script:FrameworkRoot ' + "'skills') " + '$fixtureName'
+        Assert-False $harnessSource.Contains($canonicalFixtureCreation) 'Requires fixture is created inside the canonical skills inventory'
+    }
+
+    Invoke-Contract 'canonical block requires reports a missing dependency' {
+        $fixtureName = 'assistant-requires-contract-fixture-' + [Guid]::NewGuid().ToString('N')
+        $fixtureFrameworkRoot = Join-Path $script:SuiteRoot ('requires-framework-' + [Guid]::NewGuid().ToString('N'))
+        $fixtureInstaller = Join-Path $fixtureFrameworkRoot 'install.ps1'
+        $fixtureRoot = Join-Path (Join-Path $fixtureFrameworkRoot 'skills') $fixtureName
+        $fixtureSkill = Join-Path $fixtureRoot 'SKILL.md'
+        try {
+            [void][System.IO.Directory]::CreateDirectory($fixtureRoot)
+            [System.IO.File]::Copy($script:InstallerPath, $fixtureInstaller)
+            [System.IO.File]::WriteAllText($fixtureSkill, @"
+---
+name: $fixtureName
+description: Canonical block requires installer fixture.
+requires:
+  - assistant-missing-dependency
+---
+
+# Canonical Requires Fixture
+"@, (New-Object System.Text.UTF8Encoding($false)))
+
+            Use-IsolatedEnvironment 'canonical block requires' {
+                param($root, $isolatedUserProfile)
+                $canonicalFixture = Join-Path (Join-Path $script:FrameworkRoot 'skills') $fixtureName
+                Assert-False (Test-Path -LiteralPath $canonicalFixture) 'Requires fixture must not be created under canonical skills'
+                $result = Invoke-PowerShellFile -LiteralPath $fixtureInstaller -Arguments @('-Agent', 'codex', '-Skill', $fixtureName, '-NoHooks')
+                Assert-Equal 0 $result.ExitCode "Canonical block requires fixture install failed: $($result.Output)"
+                Assert-Contains $result.Output "NOTE: $fixtureName requires 'assistant-missing-dependency'" 'Canonical block requires did not produce the missing-dependency note'
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $fixtureFrameworkRoot) {
+                Remove-Item -LiteralPath $fixtureFrameworkRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     Invoke-Contract 'Codex installation preserves existing legacy Memory Graph state without a CLI' {
         Use-IsolatedEnvironment 'codex legacy state preservation' {
             param($root, $isolatedUserProfile)

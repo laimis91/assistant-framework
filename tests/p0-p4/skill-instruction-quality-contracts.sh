@@ -201,14 +201,14 @@ else
     fail "assistant-review findings-only prompts must infer audit mode: ${review_audit_failures[*]}"
 fi
 
-test_start "assistant-ideate owns brainstorming trigger"
+test_start "assistant-ideate owns brainstorming description activation"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
 ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"
 brainstorm_trigger_failures=()
-if grep -Eq '^(description:|  - pattern:).*brainstorm' "$thinking_skill"; then
+if grep -Eiq '^description:.*brainstorm' "$thinking_skill"; then
     brainstorm_trigger_failures+=("assistant-thinking frontmatter still routes brainstorm")
 fi
-if ! grep -Eq '^(description:|  - pattern:).*brainstorm' "$ideate_skill"; then
+if ! grep -Eiq '^description:.*brainstorm' "$ideate_skill"; then
     brainstorm_trigger_failures+=("assistant-ideate frontmatter does not route brainstorm")
 fi
 
@@ -218,34 +218,48 @@ else
     fail "brainstorm prompts should route to ideate only: ${brainstorm_trigger_failures[*]}"
 fi
 
+test_start "current routing guidance separates discovery fields from post-activation instructions"
+routing_readme="$FRAMEWORK_DIR/README.md"
+routing_presentation="$FRAMEWORK_DIR/docs/presentation.md"
+routing_guidance_failures=()
+for file_and_term in \
+    "$routing_readme::required native discovery fields" \
+    "$routing_readme::body instructions apply after activation" \
+    "$routing_readme::optional repository dependency metadata" \
+    "$routing_presentation::name and description" \
+    "$routing_presentation::body instructions apply after activation"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fqi "$term" "$file"; then
+        routing_guidance_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for file_and_stale_term in \
+    "$routing_readme::name, description, and instructions" \
+    "$routing_presentation::metadata and instructions"; do
+    file="${file_and_stale_term%%::*}"
+    stale_term="${file_and_stale_term#*::}"
+    if grep -Fqi "$stale_term" "$file"; then
+        routing_guidance_failures+=("${file#$FRAMEWORK_DIR/}: stale $stale_term")
+    fi
+done
+if [[ ${#routing_guidance_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "native routing guidance is stale: ${routing_guidance_failures[*]}"
+fi
+
 test_start "assistant-workflow routes concrete dev creation without stealing brainstorming"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-workflow_pattern="$(awk -F'"' '/^[[:space:]]*- pattern:/ { print $2; exit }' "$workflow_skill")"
 workflow_creation_failures=()
-
-workflow_prompt_matches() {
-    local prompt="$1"
-    printf '%s\n' "$prompt" | tr '[:upper:]' '[:lower:]' | grep -qE "\b($workflow_pattern)\b"
-}
-
-if [[ -z "$workflow_pattern" ]]; then
-    workflow_creation_failures+=("assistant-workflow pattern missing")
-else
-    for prompt in \
-        "create a new REST endpoint" \
-        "make a dashboard" \
-        "turn this idea into an implementation plan"; do
-        if ! workflow_prompt_matches "$prompt"; then
-            workflow_creation_failures+=("does not route: $prompt")
-        fi
-    done
-    for prompt in \
-        "brainstorm dashboard ideas" \
-        "ideas for dashboard"; do
-        if workflow_prompt_matches "$prompt"; then
-            workflow_creation_failures+=("steals brainstorming: $prompt")
-        fi
-    done
+workflow_description="$(awk -F'"' '/^description:/ { print $2; exit }' "$workflow_skill")"
+for term in plan build implement; do
+    if ! printf '%s\n' "$workflow_description" | grep -Fqi "$term"; then
+        workflow_creation_failures+=("description does not cover $term")
+    fi
+done
+if printf '%s\n' "$workflow_description" | grep -Fqi 'brainstorm'; then
+    workflow_creation_failures+=("description steals brainstorming")
 fi
 
 if [[ "${#workflow_creation_failures[@]}" -eq 0 ]]; then

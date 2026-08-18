@@ -20,16 +20,21 @@ description_catalog() {
     done
 }
 
-skill_patterns() {
-    awk -F'"' '/^[[:space:]]*- pattern:/ { print $2 }' "$1" | paste -sd'|' -
-}
-
-skill_matches() {
+description_prompt_anchor_count() {
     local skill_file="$1"
     local prompt="$2"
-    local patterns
-    patterns="$(skill_patterns "$skill_file")"
-    [[ -n "$patterns" ]] && printf '%s\n' "$prompt" | tr '[:upper:]' '[:lower:]' | grep -Eq "($patterns)"
+    local description
+    local token
+    local count=0
+
+    description="$(awk -F'"' '/^description:/ { print $2; exit }' "$skill_file" | tr '[:upper:]' '[:lower:]')"
+    while IFS= read -r token; do
+        [[ ${#token} -ge 5 ]] || continue
+        if printf '%s\n' "$prompt" | tr '[:upper:]' '[:lower:]' | grep -Fqw "$token"; then
+            count=$((count + 1))
+        fi
+    done < <(printf '%s\n' "$description" | tr -cs '[:alnum:]' '\n' | sort -u)
+    printf '%s\n' "$count"
 }
 
 test_start "native assistant skill description catalog stays below 2200 characters"
@@ -44,7 +49,7 @@ else
     fail "assistant skill descriptions use $catalog_characters characters; operating budget is 2200 (approved maximum 2500)"
 fi
 
-test_start "skill trigger precedence keeps broad prose away from specialist routes"
+test_start "deterministic lexical description proxy keeps broad prose away from specialist routes"
 ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"
 research_skill="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
@@ -53,17 +58,17 @@ debugging_skill="$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md"
 activation_failures=()
 
 for file_and_prompt in \
-    "$ideate_skill::brainstorm alternatives for our release flow" \
-    "$ideate_skill::what else could improve our agent framework" \
-    "$research_skill::research current approaches to agent memory" \
-    "$research_skill::compare tools for prompt evaluation" \
-    "$thinking_skill::stress test this architecture decision" \
-    "$clarify_skill::help me untangle these two requests" \
-    "$debugging_skill::investigate failure in the payment test"; do
+    "$ideate_skill::generate and rank brainstorm options" \
+    "$ideate_skill::run a quick improvement scan for our agent framework" \
+    "$research_skill::research current source-backed evidence" \
+    "$research_skill::compare source-backed options" \
+    "$thinking_skill::stress test this complex architecture decision" \
+    "$clarify_skill::clarify this ambiguous request and help me untangle it" \
+    "$debugging_skill::diagnose this unknown failure before fixing"; do
     file="${file_and_prompt%%::*}"
     prompt="${file_and_prompt#*::}"
-    if ! skill_matches "$file" "$prompt"; then
-        activation_failures+=("missing positive route: $(basename "$(dirname "$file")") -> $prompt")
+    if [[ "$(description_prompt_anchor_count "$file" "$prompt")" -lt 2 ]]; then
+        activation_failures+=("fewer than two lexical description anchors: $(basename "$(dirname "$file")") -> $prompt")
     fi
 done
 
@@ -86,8 +91,8 @@ for file_and_prompt in \
     "$thinking_skill::clarify my request"; do
     file="${file_and_prompt%%::*}"
     prompt="${file_and_prompt#*::}"
-    if skill_matches "$file" "$prompt"; then
-        activation_failures+=("false positive route: $(basename "$(dirname "$file")") -> $prompt")
+    if [[ "$(description_prompt_anchor_count "$file" "$prompt")" -ge 2 ]]; then
+        activation_failures+=("false positive lexical proxy route: $(basename "$(dirname "$file")") -> $prompt")
     fi
 done
 

@@ -1,12 +1,6 @@
 ---
 name: assistant-thinking
 description: "Reason through architecture decisions and complex trade-offs. Use for explicit stress tests, debate, first principles, or hypotheses."
-effort: high
-triggers:
-  - pattern: "think about|think through|perspectives on|stress test|debate|first principles|hypothesize"
-    priority: 60
-    min_words: 3
-    reminder: "This request matches assistant-thinking. Consider whether the Skill tool should be invoked with skill='assistant-thinking' for structured reasoning."
 ---
 
 # Thinking Tools

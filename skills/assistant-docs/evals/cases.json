@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-docs-skill-behavior",
   "skill": "assistant-docs",
   "title": "assistant-docs Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Update the README documentation.", "should_activate": true},
+    {"user_request": "Write an API migration guide.", "should_activate": true},
+    {"user_request": "Fix the broken API endpoint.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-docs skill instructions loaded.",
     "Compare the local response against documentation input/output contracts, evidence, coverage, and review-items/evidence/safety handling.",

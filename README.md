@@ -315,10 +315,20 @@ tools/evals/run-skill-evals.sh --validate-fixture
 tools/evals/run-skill-evals.sh --list
 tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
+tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
 The default eval inventory is 14 first-class `assistant-*` skills with fixtures
 and excludes local-only `unity-*` skills unless `--include-local` is passed.
+Canonical first-class fixtures use schema `2.0` and include top-level
+`activation_cases`: exact `{user_request, should_activate}` objects with at
+least two normalized-distinct positive requests and one normalized-disjoint
+nearby negative. Schema `1.0` custom/local fixtures may omit this field; when
+they include it, the same shape is validated. Other schema versions are
+rejected. Activation cases shape discovery
+coverage only unless compared against externally observed native selections with
+`--activation-results`; they are separate from response-graded `.cases` and
+never SKILL.md metadata. The runner does not invoke native routing itself.
 Local-only Unity skills remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
@@ -590,35 +600,33 @@ Telos skill: Checks active work against your purpose chain
 
 ## Native skill routing
 
-Each supported agent selects installed skills from the skill name, description, and instructions. Framework contracts, evals, project guidance, and review provide the workflow discipline; there is no separate runtime router or lifecycle enforcement layer.
+Each supported agent discovers installed skills from required native `name` and
+non-empty `description` fields. Body instructions apply after activation.
+Framework contracts, evals, project guidance, and review provide the workflow
+discipline; there is no separate runtime router or lifecycle enforcement layer.
 
 Workflow metrics are optional, non-blocking observability.
 
-The repository also keeps `triggers:` metadata as explicit examples for documentation and eval fixtures:
+SKILL.md frontmatter defines required native discovery fields and optional repository dependency metadata:
 
 ```yaml
 ---
 name: my-skill
 description: "..."
-triggers:
-  - pattern: "keyword1|keyword2|multi word phrase"
-    priority: 80
-    reminder: "You MUST invoke the Skill tool with skill='my-skill' BEFORE proceeding."
-  - pattern: "another pattern"
-    priority: 60
-    min_words: 5
-    reminder: "Consider invoking my-skill for this request."
 ---
 ```
 
-| Field | Required | Description |
-|---|---|---|
-| `pattern` | Yes | Example prompt pattern associated with the skill |
-| `priority` | No | Relative specificity used by repository evals and documentation |
-| `reminder` | No | Expected routing intent for tests and examples |
-| `min_words` | No | Optional example threshold that avoids overly broad fixture matches |
+`name` and a non-empty `description` are required native discovery fields.
+Repository skills may add optional `requires` only for validated hard
+dependencies; omit it when none exist. Native discovery uses required `name`
+and `description`; optional repository `requires` is not an activation signal.
+Agents apply body instructions only after activation.
+Top-level `effort` and `triggers` are retired and rejected by validation. Keep
+representative activation examples in contracts and positive/negative evals,
+never in SKILL.md header metadata.
 
-No runtime script changes are needed when adding a skill: add the skill metadata, contracts, and evals, then reinstall.
+No runtime script changes are needed when adding a skill: add required discovery
+fields, conditional `requires` when applicable, contracts, and evals, then reinstall.
 
 ## Design principles
 

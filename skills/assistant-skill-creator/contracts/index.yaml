@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "2.0"
 contract: index
 skill: assistant-skill-creator
 
@@ -17,7 +17,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [skill_name, skill_purpose, skill_category, trigger_phrases, dependencies, policy_constraints, effort_level, existing_skill_path]
+        names: [skill_name, existing_skill_path, skill_purpose, skill_category, activation_examples, dependencies, policy_constraints]
     budget_words: 1500
   current_phase:
     selectors:

@@ -234,10 +234,6 @@ write_index_validator_fixture() {
 ---
 name: $skill_name
 description: "Indexed validator review regression fixture."
-effort: low
-triggers:
-  - pattern: "indexed validator fixture"
-    priority: 50
 ---
 
 # Indexed Validator Fixture

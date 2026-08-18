@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-debugging-skill-behavior",
   "skill": "assistant-debugging",
   "title": "assistant-debugging Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Diagnose this flaky test failure.", "should_activate": true},
+    {"user_request": "Find the root cause before fixing.", "should_activate": true},
+    {"user_request": "Apply the known one-line fix from the accepted diagnosis.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-debugging skill instructions loaded.",
     "Compare the local response against reproduce, hypothesize, isolate, fix, verify, and residual-risk requirements.",

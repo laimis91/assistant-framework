@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "suite_id": "assistant-skill-creator-skill-behavior",
   "skill": "assistant-skill-creator",
   "title": "assistant-skill-creator Skill Behavior Eval Fixtures",
@@ -7,6 +7,11 @@
   "eval_type": "skill_prompt_fixture",
   "provider_neutral": true,
   "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Create a new skill with contracts.", "should_activate": true},
+    {"user_request": "Update this skill's contract design.", "should_activate": true},
+    {"user_request": "Run the existing skill without modifying its design.", "should_activate": false}
+  ],
   "recommended_use": [
     "Run each case with the assistant-skill-creator skill instructions loaded.",
     "Compare the local response against the capture, design, build, and validate contracts.",
@@ -25,7 +30,10 @@
         "No contract design has been approved yet."
       ],
       "expected_behavior": [
-        "Starts with CAPTURE and resolves skill_name, skill_purpose, skill_category, trigger_phrases, dependencies, and effort_level.",
+        "Starts with CAPTURE and resolves skill_name, skill_purpose, skill_category, activation_examples, dependencies, and policy_constraints.",
+        "Captures activation_examples as user_request and should_activate pairs, with two normalized-distinct true decisions and one normalized-disjoint false nearby non-match.",
+        "Uses activation_examples only to shape the native description and positive and negative activation evals; it does not emit legacy header metadata.",
+        "Projects validated hard dependencies in order to conditional requires only when they are supplied and non-empty as a plain block sequence with two-space dash items, while preserving required name and description.",
         "Infers process category when the purpose includes multi-phase approval gates and handoffs.",
         "Moves to DESIGN before BUILD and reads the contract design guide.",
         "Designs input, output, phase-gates, and handoffs contracts for the process tier.",
@@ -57,9 +65,21 @@
           "handoffs.yaml",
           "on_missing",
           "on_fail",
-          "approval"
+          "approval",
+          "activation_examples",
+          "user_request",
+          "should_activate",
+          "should_activate: true",
+          "should_activate: false",
+          "description",
+          "activation evals",
+          "conditional requires",
+          "plain block sequence",
+          "omit requires when empty",
+          "legacy header metadata"
         ],
         "forbidden_substrings": [
+          "  - assistant-review",
           "I created SKILL.md",
           "No design approval needed",
           "utility skill",
@@ -71,16 +91,21 @@
       "id": "existing-skill-validation-enforces-checklist",
       "title": "Existing skill validation enforces checklist",
       "category": "validation_checklist",
-      "purpose": "Checks that adding contracts to an existing skill skips capture, validates all required contract rules, and fixes failures before completion.",
+      "purpose": "Checks that adding contracts to an existing skill derives or captures typed activation evidence before design completion, validates all required contract rules, and fixes failures before completion.",
       "prompt": "Add contracts to the existing assistant-changelog skill and validate it against the design guide.",
       "setup_context": [
         "The assistant-skill-creator skill instructions are active.",
-        "An existing_skill_path is provided for a skill that already has SKILL.md.",
+        "An existing_skill_path is provided for a skill that already has SKILL.md, description, activation evals, and current canonical requires.",
+        "Dependencies are omitted for this update; an explicit empty dependencies list would instead remove current requires.",
+        "The existing description and activation evals already provide two normalized-distinct positive requests but may lack a normalized-disjoint nearby negative activation example.",
         "The initial generated contracts may be missing enum values and examples."
       ],
       "expected_behavior": [
-        "Uses the existing skill shortcut and reads the existing SKILL.md instead of asking for all capture fields again.",
-        "Enters DESIGN using the existing skill purpose, category, and triggers.",
+        "Uses the existing skill shortcut and reads the existing SKILL.md, description, activation evals, and current canonical requires instead of asking for all capture fields again.",
+        "Preserves current canonical requires when dependencies are omitted, while explicit dependencies or explicit empty dependencies replace or remove them.",
+        "Treats activation_examples as required even for an existing skill, deriving available evidence before asking for residual gaps.",
+        "Reuses adequate existing positive evidence without an all-example prompt, derives structured examples from existing description and activation evals, and asks only for remaining material gaps.",
+        "Enters DESIGN using the existing skill purpose, category, description, and activation evidence only after two normalized-distinct positive and one normalized-disjoint nearby negative should_activate decisions are available.",
         "Builds the contract files required for the inferred skill category.",
         "Runs VALIDATE against the 14 contract design guide rules.",
         "Checks compact Goal, Success criteria, Constraints, Output, and Stop rules for non-trivial skills.",
@@ -89,7 +114,8 @@
         "Fixes checklist failures before printing VALIDATE COMPLETE or final success."
       ],
       "pass_criteria": [
-        "The response names existing_skill_path or existing skill shortcut behavior.",
+        "The response names existing_skill_path or existing skill shortcut behavior, reuses adequate existing positive evidence, and derives structured activation examples.",
+        "The response includes two normalized-distinct positive and one normalized-disjoint nearby negative activation decisions before DESIGN completion.",
         "The response includes the VALIDATE phase and validation summary.",
         "The response references all 14 contract design guide rules.",
         "The response fixes missing enum_values or examples before completion.",
@@ -97,6 +123,7 @@
       ],
       "fail_signals": [
         "Asks for all capture fields despite existing_skill_path.",
+        "Skips negative activation evidence because existing_skill_path is provided.",
         "Reports validation success while enum_values are missing.",
         "Leaves ambiguous fields without examples.",
         "Prints VALIDATE COMPLETE before fixing checklist failures."
@@ -104,6 +131,17 @@
       "machine_expectations": {
         "required_substrings": [
           "existing_skill_path",
+          "activation_examples",
+          "required activation_examples",
+          "user_request",
+          "should_activate: true",
+          "should_activate: false",
+          "derive structured examples",
+          "missing material examples",
+          "reuse adequate existing positive evidence",
+          "only for remaining material gaps",
+          "preserve current canonical requires",
+          "explicit empty dependencies replace or remove current requires",
           "--- PHASE: DESIGN ---",
           "--- PHASE: BUILD ---",
           "--- PHASE: VALIDATE ---",
