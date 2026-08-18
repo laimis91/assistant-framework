@@ -154,6 +154,48 @@ else
     fail "validator rejected representative plain description"
 fi
 
+test_start "skill validator accepts quoted and escaped required top-level keys"
+quoted_required_keys_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-quoted-required-keys.XXXXXX")"
+p0p4_register_cleanup "$quoted_required_keys_root"
+quoted_required_key_failures=()
+for quoted_required_key_case in double single escaped; do
+    quoted_required_key_skill="$quoted_required_keys_root/$quoted_required_key_case-required-key-validator-skill"
+    quoted_required_key_name="$(basename "$quoted_required_key_skill")"
+    p0p4_write_valid_skill_fixture "$quoted_required_key_skill"
+    case "$quoted_required_key_case" in
+        double)
+            awk -v skill_name="$quoted_required_key_name" '
+                NR == 2 { print "\"name\": " skill_name; next }
+                NR == 3 { print "\"description\": \"Fixture skill used by the validator contract tests.\""; next }
+                { print }
+            ' "$quoted_required_key_skill/SKILL.md" >"$quoted_required_key_skill/skill.tmp"
+            ;;
+        single)
+            awk -v skill_name="$quoted_required_key_name" '
+                NR == 2 { print "\047name\047: " skill_name; next }
+                NR == 3 { print "\047description\047: \047Fixture skill used by the validator contract tests.\047"; next }
+                { print }
+            ' "$quoted_required_key_skill/SKILL.md" >"$quoted_required_key_skill/skill.tmp"
+            ;;
+        escaped)
+            awk -v skill_name="$quoted_required_key_name" '
+                NR == 2 { print "\"n\\u0061me\": " skill_name; next }
+                NR == 3 { print "\"descr\\u0069ption\": \"Fixture skill used by the validator contract tests.\""; next }
+                { print }
+            ' "$quoted_required_key_skill/SKILL.md" >"$quoted_required_key_skill/skill.tmp"
+            ;;
+    esac
+    mv "$quoted_required_key_skill/skill.tmp" "$quoted_required_key_skill/SKILL.md"
+    if ! "$skill_validator" --skill "$quoted_required_key_skill" >/dev/null; then
+        quoted_required_key_failures+=("$quoted_required_key_case")
+    fi
+done
+if [[ ${#quoted_required_key_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator rejected quoted required top-level keys: ${quoted_required_key_failures[*]}"
+fi
+
 test_start "skill validator accepts single- and double-quoted descriptions containing hash and trailing comments"
 quoted_description_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-quoted-description.XXXXXX")"
 p0p4_register_cleanup "$quoted_description_root"

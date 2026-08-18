@@ -12,20 +12,13 @@ frontmatter_value() {
     local file="$1"
     local key="$2"
 
-    awk -v key="$key" '
-        NR == 1 && $0 == "---" { in_frontmatter = 1; next }
-        in_frontmatter && $0 == "---" { exit }
-        in_frontmatter {
-            pattern = "^" key ":[[:space:]]*"
-            if ($0 ~ pattern) {
-                value = $0
-                sub(pattern, "", value)
-                sub(/[[:space:]]+#.*$/, "", value)
-                print value
-                exit
-            }
+    frontmatter_scalar_value "$file" "$key" | awk '
+        {
+            sub(/[[:space:]]+#.*$/, "", $0)
+            print
+            exit
         }
-    ' "$file" | trim_value
+    ' | trim_value
 }
 
 frontmatter_description_codepoint_is_printable() {
@@ -134,7 +127,7 @@ frontmatter_description_value() {
     local has_non_whitespace=false
     local raw_has_non_whitespace
 
-    parsed_description="$(awk '
+    parsed_description="$(frontmatter_scalar_value "$file" "description" | awk '
         function trim(value) {
             sub(/^[[:space:]]+/, "", value)
             sub(/[[:space:]]+$/, "", value)
@@ -244,16 +237,13 @@ frontmatter_description_value() {
                 || value !~ /^[A-Za-z][A-Za-z0-9[:space:].,;!?()\047\/-]*$/) return ""
             return value
         }
-        NR == 1 && $0 == "---" { in_frontmatter = 1; next }
-        in_frontmatter && $0 == "---" { exit }
-        in_frontmatter && $0 ~ /^description:[[:space:]]*/ {
+        {
             value = $0
-            sub(/^description:[[:space:]]*/, "", value)
             value = trim(decode_description(value))
             if (value != "") print value "\t" escaped_codepoints
             exit
         }
-    ' "$file")"
+    ')"
 
     if [[ -z "$parsed_description" ]]; then
         return 0
@@ -338,6 +328,22 @@ readonly FRONTMATTER_SCALAR_KEY_AWK='
         return candidate
     }
 '
+
+frontmatter_scalar_value() {
+    local file="$1"
+    local key="$2"
+
+    awk -v key="$key" "$FRONTMATTER_SCALAR_KEY_AWK"'
+        NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+        in_frontmatter && $0 == "---" { exit }
+        in_frontmatter && $0 ~ /^[^[:space:]#][^:]*[[:space:]]*:/ && normalize_scalar_key($0) == key {
+            value = $0
+            sub(/^[^:]*:[[:space:]]*/, "", value)
+            print value
+            exit
+        }
+    ' "$file"
+}
 
 frontmatter_has_unsupported_top_level_key_syntax() {
     local file="$1"
