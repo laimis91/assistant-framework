@@ -53,9 +53,9 @@ gates:
         on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
 
       - id: E8
-        check: "Standalone review without carried evidence performs Spec Review against the user request and review scope, records spec_review_pass_ref before Reviewer dispatch, fixes any scope mismatch on FAIL, and does not require a task journal"
+        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit records a finding and exits without source mutation or Reviewer dispatch."
         condition: "review_preparation_mode == standalone"
-        on_fail: "Block Reviewer dispatch, run Spec Review against user request/review scope, fix missing or extra scope on FAIL, repeat until PASS, and record the PASS pointer; do not require task_journal_path."
+        on_fail: "Block Reviewer dispatch. In mode=review-fix, repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch and exit without source mutation or Reviewer dispatch."
 
       - id: E9
         check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"

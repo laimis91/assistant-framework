@@ -8,9 +8,9 @@ previously_fixed = []
 score_history = []
 
 PREPARE
-  - Resolve review mode before Spec Review, Reviewer dispatch, or source mutation. Select audit only for unambiguous report-only intent. Select review-fix only for explicit source-modification authorization or a carried active approved implementation workflow with bounded in-scope repairs. If audit versus editing remains materially unresolved, ask exactly: "Should I only report findings, or also implement and verify fixes?" Stop until answered; authorship, branch/PR ownership, platform, and connector never authorize edits.
+  - Infer review mode before review or mutation. Clear report-only intent selects audit; clear source-modification authorization or a carried active approved implementation workflow with bounded in-scope repairs selects review-fix. Only if audit versus editing remains unresolved, ask exactly: "Should I only report findings, or also implement and verify fixes?" Stop until answered; authorship, branch/PR ownership, platform, and connector never authorize edits.
   - Workflow-composed review: consume the carried Spec Review PASS pointer and carried current build/test evidence refs.
-  - Standalone review: no task journal is required. Run Spec Review against the user request and review scope, record `spec_review_pass_ref`, and do not dispatch Reviewer on FAIL. In review-fix mode, correct only an evidence-backed mismatch within authorized scope and repeat Spec Review until PASS; in audit mode, report the mismatch without source changes.
+  - Standalone review: no task journal is required. Run Spec Review against user scope. In review-fix mode, correct only an authorized mismatch and repeat until `spec_review_pass_ref` exists. In audit mode, record the mismatch as a finding and exit without source mutation or Reviewer dispatch.
   - Populate required `build_test_verification_ref` with real current passed evidence whenever source fix/build work is in scope.
   - Use `not_applicable: audit_only|read_only|no_build_scope` only when no source fix or build is in scope.
 

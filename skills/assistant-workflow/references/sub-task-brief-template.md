@@ -8,7 +8,7 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 - Do not split by layer, module, folder, broad feature bucket, setup step, or broad component unless that split is itself a verified deliverable artifact slice
 - Contract-only work is valid only when it is the verified deliverable artifact slice
 - Dependent slices start only after prerequisite slices are VERIFIED
-- Parallel slices require no overlapping file ownership and no undeclared prerequisite
+- Source-changing packets in a shared or unknown workspace run sequentially, even when ownership does not overlap. Parallel source-changing packets require the runtime explicitly proves isolated workspaces; parallel read-only analysis remains allowed.
 - UI slices include a Design step, backend slices skip it
 - Slice packets add code comments but do NOT update README, CHANGELOG, or architecture docs
 
@@ -133,14 +133,16 @@ debugging, explorer, architect, candidate search, replan, or restart.
 ## Execution strategies
 
 **Parallel sessions (multiple conversations):**
-Best when slices have no dependencies after prerequisite slices. Start each with its brief.
+Use for read-only analysis. Source-changing packets may run in parallel only when the runtime explicitly proves isolated workspaces; otherwise start one verified packet at a time.
 
 **Sequential sessions:**
 Best when slices depend on each other. Complete one, carry verified output to next.
 
 **Native subagents:**
-Each agent receives the packet as its task context. Dispatch only independent
-slices in parallel; keep dependent packets sequenced by `depends_on`.
+Each agent receives the packet as its task context. Keep source-changing packets
+sequential in a shared or unknown workspace. Dispatch independent source-changing
+slices in parallel only when the runtime explicitly proves isolated workspaces;
+keep dependent packets sequenced by `depends_on`.
 
 ## Decomposition rules
 

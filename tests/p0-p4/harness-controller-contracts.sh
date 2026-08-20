@@ -213,7 +213,7 @@ test_start "output contract defines Done Contract and Harness Recipe artifacts"
 output_contract="$workflow_dir/contracts/output.yaml"
 require_terms "output contract" "$output_contract" \
     "- name: done_contract" \
-    'condition: "size in [medium, large, mega] and harness_capable == true"' \
+    'condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"' \
     "done_when" \
     "not_done_when" \
     "verification" \

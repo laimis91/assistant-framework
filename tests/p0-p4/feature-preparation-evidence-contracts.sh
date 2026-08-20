@@ -168,6 +168,112 @@ else
     fail "preparation-only completion does not distinguish small/not-applicable from medium/existing-system readiness"
 fi
 
+test_start "medium preparation may record readiness without waiting for implementation approval"
+if ruby -ryaml -rjson -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  cases = JSON.parse(File.read(ARGV.fetch(2))).fetch("cases")
+  skill = File.read(ARGV.fetch(3))
+  controller = File.read(ARGV.fetch(4))
+  triage = File.read(ARGV.fetch(5))
+  plan_mode = input.fetch("fields").find { |field| field["name"] == "plan_mode" }
+  triage_gate = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }
+  t_plan_mode = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PLAN_MODE" }
+  plan = gates.fetch("gates").find { |gate| gate["phase"] == "PLAN" }
+  p4 = plan.fetch("exit_assertions").find { |assertion| assertion["id"] == "P4" }
+  medium_case = cases.find { |entry| entry["id"] == "medium-prepare-only-readiness-does-not-wait-for-implementation-approval" }
+  terminal_case = cases.find { |entry| entry["id"] == "medium-prepare-only-terminal-route" }
+  large_case = cases.find { |entry| entry["id"] == "large-prepare-only-terminal-route" }
+  valid = plan_mode.fetch("validation").include?("prepare_only at any size uses none") &&
+    plan_mode.fetch("validation").include?("For execution_intent != prepare_only, approval_required applies") &&
+    plan_mode.fetch("infer_from").include?("For execution_intent != prepare_only, approval_required") &&
+    skill.include?("`prepare_only`: `approval_required` only for explicitly requested readiness planning; otherwise `none`") &&
+    skill.include?("For `execution_intent != prepare_only`, `approval_required` applies to medium+") &&
+    controller.match?(/`prepare_only` at any size may retain `plan_mode=none`\s+unless an optional readiness plan is specifically requested/) &&
+    controller.match?(/For `execution_intent != prepare_only`, use\s+`plan_mode=approval_required` for medium+/) &&
+    triage.include?("prepare_only at any size retains `none`, including high/critical risk") &&
+    triage.include?("For `execution_intent != prepare_only`, medium+ work") &&
+    t_plan_mode.fetch("check").include?("prepare_only at any size retains none") &&
+    t_plan_mode.fetch("check").include?("For execution_intent != prepare_only, approval_required") &&
+    !skill.include?("non-prepare-only medium+, risky") &&
+    !controller.include?("all non-prepare-only medium+ work and any task") &&
+    !triage.include?("Non-prepare-only medium+ work, high/critical") &&
+    plan.fetch("condition") == "plan_mode != none" &&
+    plan.fetch("checkpoint_end").include?("prepare_only readiness plans") &&
+    plan_mode.fetch("description").include?("requires explicit plan approval before implementation work") &&
+    plan_mode.fetch("description").include?("prepare_only readiness never waits for implementation approval") &&
+    !plan_mode.fetch("description").include?("waits for explicit plan approval") &&
+    p4.fetch("check").include?("prepare_only") &&
+    p4.fetch("check").include?("do not wait for implementation approval") &&
+    !medium_case.nil? &&
+    medium_case.fetch("expected_behavior").join(" ").include?("does not wait for implementation approval") &&
+    medium_case.fetch("fail_signals").join(" ").include?("Waits for implementation approval") &&
+    !terminal_case.nil? &&
+    terminal_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
+    terminal_case.fetch("expected_behavior").join(" ").include?("Preparation Completion") &&
+    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" } &&
+    !large_case.nil? &&
+    large_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
+    large_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" }
+  exit valid ? 0 : 1
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/evals/cases.json" "$workflow_dir/SKILL.md" "$workflow_dir/references/workflow-controller.md" "$workflow_dir/references/triage-rubric.md"; then
+    pass
+else
+    fail "medium prepare-only work still waits for implementation approval before returning readiness"
+fi
+
+test_start "prepare-only routes directly to preparation completion without implementation phases"
+if ruby -ryaml -rjson -e '
+  index = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  output = YAML.load_file(ARGV.fetch(2))
+  cases = JSON.parse(File.read(ARGV.fetch(3))).fetch("cases")
+  gate_map = gates.fetch("gates").to_h { |gate| [gate.fetch("phase"), gate] }
+  invariant = gates.fetch("invariants").find { |item| item["id"] == "INV2" }
+  completion = gate_map.fetch("PREPARATION_COMPLETION")
+  completion_ids = completion.fetch("exit_assertions").map { |item| item["id"] }
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  preparation_forbidden = %w[fresh_review_result review_result qa_evaluation_result spec_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary user_approval]
+  current_phase_names = index.fetch("load_sets").fetch("current_phase").fetch("selectors").find { |item| item["id"] == "workflow-current-phase-gate" }.fetch("allowed_names")
+  tier = output.fetch("completion_tiers").fetch("preparation_only")
+  eval_ids = %w[medium-prepare-only-terminal-route large-prepare-only-terminal-route]
+  valid = %w[BUILD REVIEW].all? { |phase| gate_map.fetch(phase).fetch("condition").include?("execution_intent != prepare_only") } &&
+    gate_map.fetch("DESIGN").fetch("condition").include?("execution_intent != prepare_only") &&
+    gate_map.fetch("PLAN").fetch("condition") == "plan_mode != none" &&
+    current_phase_names.include?("PREPARATION_COMPLETION") &&
+    completion.fetch("condition") == "execution_intent == prepare_only" &&
+    %w[PC1 PC2 PC3].all? { |id| completion_ids.include?(id) } &&
+    invariant.fetch("check").include?("prepare_only") &&
+    tier.fetch("required_artifacts") == %w[completion_policy feature_preparation_result] &&
+    preparation_forbidden.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
+    eval_ids.all? { |id| cases.any? { |item| item["id"] == id } }
+  exit valid ? 0 : 1
+' "$workflow_dir/contracts/index.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/evals/cases.json"; then
+    pass
+else
+    fail "prepare-only still inherits implementation phase or final-handoff requirements"
+fi
+
+test_start "prepare-only plan readiness does not inherit approval wait or Build routing"
+if ruby -e '
+  phases = File.read(ARGV.fetch(0))
+  skill = File.read(ARGV.fetch(1))
+  valid = phases.include?("For `execution_intent=prepare_only`, record the optional readiness plan") &&
+    phases.include?("For `execution_intent != prepare_only` and `plan_mode=approval_required`, print:") &&
+    !phases.include?("For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`") &&
+    skill.include?("| Plan | `plan_mode != none`; optional prepare_only readiness |") &&
+    skill.include?("| Design | UI only; `execution_intent != prepare_only` |") &&
+    skill.include?("| Build | `execution_intent != prepare_only` |") &&
+    skill.include?("| Review | `execution_intent != prepare_only` |") &&
+    skill.include?("| Document | `execution_intent != prepare_only` |") &&
+    !skill.include?("| Build | All |")
+  exit valid ? 0 : 1
+' "$workflow_dir/references/phases.md" "$workflow_dir/SKILL.md"; then
+    pass
+else
+    fail "prepare-only plan readiness still inherits approval wait or Build routing"
+fi
+
 test_start "thinking retains feature-preparation concerns as candidates until evidence validates them"
 thinking_failures=()
 for file_and_term in \

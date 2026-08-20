@@ -16,21 +16,21 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Scale phases to risk; Decompose, Design, and durable state run only when triggered.
 - Before resume, reconcile the newest user request and repository evidence.
 - If resume reconciliation classifies persisted state as stale, superseded, or completed, update the framework-owned `{agent_state_dir}/task.md` before acting or returning; record the classification and reason, current task identity, and repaired exact next action.
-- `plan_mode` keeps planning proportional: trivial safe work may use `none`, bounded small work may use `inline`, and medium+, risky, destructive, or scope-shaping work uses `approval_required`. When `plan_mode=inline`, small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- `plan_mode`: bounded small uses no-wait `inline`; For `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, scope changes. `prepare_only`: `approval_required` only for explicitly requested readiness planning; otherwise `none`.
 - `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels from Discover-only context binding through atomic Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
-- Existing-system feature work traces requirements, design evidence, implementation, and behavioral tests before Plan or Build. `prepare_only` stops after evidence and never claims code changes. Unsupported Product questions are forbidden.
+- Existing-system prep inspects sources, code, and tests before Plan/Build. `prepare_only` ends at Preparation Completion without code claims. Product questions need evidence.
 - Review, QA, and security routing apply when triggered.
-- Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
+- Medium+ output follows `references/final-handoff.md`; prepare_only returns readiness and next implementation state.
 
 ## Constraints
 
 - Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals.
-- Do not skip applicable phases; Plan is inapplicable only when the explicit `plan_mode=none` eligibility gate passes.
+- Run phases. `prepare_only`: Discover -> Preparation Completion; readiness optional, implementation gates inapplicable. Other work skips Plan only when eligible.
 - Do not ask ritual questions when code/context makes the next safe action clear.
 - Ask every material clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification. Group questions by topic; never impose an arbitrary numeric question cap.
 - assistant-clarify owns prompt-level ambiguity when its routing matches; clear prompts do not invoke it. Existing workflow clarification owns precise, answerable questions and safe defaults.
@@ -113,6 +113,7 @@ plan mode, subagent state, and search mode. Ideas need binary criteria.
 
 | Size | Phases |
 |---|---|
+| **Prepare-only** | Discover -> [readiness] -> Preparation Completion; no implementation |
 | **Small** | Discover quick -> [Plan] -> Build -> Review -> Document; `plan_mode=none` only for trivial safe work, otherwise inline or approval-required |
 | **Medium** | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
 | **Large** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
@@ -132,12 +133,13 @@ Load `references/phases.md` for the current phase. Load `references/workflow-con
 | Phase | When | Key Actions |
 |---|---|---|
 | Discover | All | Inspect request/repo and unknowns; create a source map only when the current file/boundary cannot be resolved directly; unknown-cause bugfixes: load `assistant-debugging`. |
-| Decompose | Medium+ | Smallest slices with acceptance and verification. |
-| Plan | `plan_mode != none` | Inline stays concise; approval-required waits for approved scope, packets, files, checks, and risks. |
-| Design | UI only | Direction, checklist, approval. |
-| Build | All | Light direct; ordinary medium one edit/test executor; separation only for high-risk or broad/noisy/environment-heavy verification. Tests/validation travel with code. |
-| Review | All | Light fresh self-review; standard/strict Spec Review then independent `assistant-review`; QA only when required. |
-| Document | All | Apply state/manual-verification modes; metrics optional and non-blocking. |
+| Decompose | Medium+ implementation work | Smallest slices with acceptance and verification. |
+| Plan | `plan_mode != none`; optional prepare_only readiness | Inline/approval routing. |
+| Design | UI only; `execution_intent != prepare_only` | Direction, checklist, approval. |
+| Build | `execution_intent != prepare_only` | Light direct; ordinary medium one edit/test executor; separation only for high-risk or broad/noisy/environment-heavy verification. Tests/validation travel with code. |
+| Review | `execution_intent != prepare_only` | Light fresh self-review; standard/strict Spec Review then independent `assistant-review`; QA only when required. |
+| Document | `execution_intent != prepare_only` | Apply state/manual-verification modes; metrics optional and non-blocking. |
+| Preparation Completion | `prepare_only` | Return readiness; approval is next. |
 
 For subagent rules, load `references/subagent-dispatch.md` and resolve
 `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`,
@@ -166,5 +168,5 @@ Do not use phrases like "should work", "probably fixed", or "looks good" unless 
 
 - Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
 - Stop before Build when `plan_mode=approval_required` until plan approval.
-- Stop before final response if build, tests, required review, or output contract evidence is missing.
+- Stop before response if required output-contract evidence is missing; implementation also requires build, tests, and review evidence.
 - Stop when a plan deviation changes approved scope, files, behavior, risk, verification, or acceptance criteria; record the deviation and get approval before continuing.

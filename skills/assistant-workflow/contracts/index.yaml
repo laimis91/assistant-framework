@@ -83,7 +83,7 @@ load_sets:
         section: gates
         key: phase
         name_from: active_workflow_phase
-        allowed_names: [TRIAGE,DISCOVER,DECOMPOSE,PLAN,DESIGN,BUILD,REVIEW,DOCUMENT]
+        allowed_names: [TRIAGE,DISCOVER,DECOMPOSE,PLAN,DESIGN,BUILD,REVIEW,DOCUMENT,PREPARATION_COMPLETION]
       - id: workflow-phase-invariants
         path: contracts/phase-gates.yaml
         section: invariants

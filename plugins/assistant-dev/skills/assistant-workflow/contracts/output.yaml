@@ -332,7 +332,7 @@ artifacts:
   - name: fresh_review_result
     type: object
     required: conditional
-    condition: "controller_intensity == light"
+    condition: "execution_intent != prepare_only and controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
     validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path."
     on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
@@ -382,7 +382,7 @@ artifacts:
   - name: review_result
     type: object
     required: conditional
-    condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
+    condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical])"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
     validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. When an Architecture Decision Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review and declares that exact contract. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
     on_fail: "Load and follow assistant-review, validate its final_summary, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
@@ -422,7 +422,7 @@ artifacts:
   - name: qa_evaluation_result
     type: object
     required: conditional
-    condition: "qa_evaluation_mode == required"
+    condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
     description: "Workflow reference wrapper for canonical assistant-review QA artifacts. QA evaluation does not replace review_result."
     validation: "canonical_result_ref resolves to a validated assistant-review qa_evaluation_result; delegation_path_ref resolves to its qa_evaluation_delegation_path; both declare their exact canonical contracts."
     on_fail: "Load and follow the assistant-review QA loop, validate its canonical QA result and delegation path, and record stable refs. Do not substitute Code Reviewer findings for QA evaluation."
@@ -451,7 +451,7 @@ artifacts:
   - name: spec_review_result
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
+    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical])"
     validation: >
       Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
       Must be distinct from assistant-review quality findings. At completion, status must
@@ -490,14 +490,14 @@ artifacts:
   - name: manual_test_steps
     type: string[]
     required: conditional
-    condition: "manual_verification_mode == required"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required"
     validation: "At least 1 actionable step the user can follow to verify the change"
     on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
 
   - name: manual_verification_result
     type: object
     required: conditional
-    condition: "manual_verification_mode == required"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required"
     description: "Evidence for the exceptional manual acceptance gate; it does not require ritual user confirmation when an equivalent observation proves the result."
     validation: "trigger is one allowed reason, result is passed, and evidence names the observation, user report, external check, or manual run that passed."
     on_fail: "Perform the scoped manual verification, record passed evidence, or return blocked without claiming workflow completion."
@@ -517,7 +517,7 @@ artifacts:
   - name: subagent_evidence
     type: object
     required: conditional
-    condition: "controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
+    condition: "execution_intent != prepare_only and controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
     description: "Standard/strict completion evidence whose Build and Review responsibilities are recorded separately."
     validation: "Evidence matches build_execution_lane. Build records only selected-lane implementation/verification evidence: one bounded executor or Code Writer plus Builder/Tester. Independent Code Reviewer evidence remains required at completion for both lanes, but Review owns and emits it after Build. direct_fallback preserves the same phase ownership with an explicit policy reason."
     on_fail: "Record selected-lane Build evidence, then record Review-owned independent Code Reviewer evidence after Build. Do not require reviewer evidence to leave Build or invent Builder/Tester dispatch in bounded_executor mode."
@@ -1135,7 +1135,7 @@ artifacts:
   - name: build_repair_state
     type: object
     required: conditional
-    condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
+    condition: "execution_intent != prepare_only and an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
     description: "Bounded ordinary Build repair controller state; harness-specific loops keep their existing controller artifacts"
     validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across worker/context/session changes, and reaching either bound sets terminal_route to pivot or block rather than another retry."
     on_fail: "Stop the retry, reconstruct the repair state from Build evidence, and create a pivot_restart_decision or return blocked before any further implementation attempt."
@@ -1191,7 +1191,7 @@ artifacts:
   - name: final_handoff
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
     validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
     on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
@@ -1380,7 +1380,7 @@ artifacts:
   - name: artifact_reference_ledger
     type: object[]
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Typed producer/consumer ledger for artifacts passed between subagents during harness work."
     validation: "Each entry includes artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary; ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
     on_fail: "Before Build, Review, completion, or handoff, create or repair the Artifact Reference Ledger in the plan/task journal; re-dispatch the producer when a required typed artifact reference is missing, stale, invalid, or lacks a consumer validation status."
@@ -1432,7 +1432,7 @@ artifacts:
   - name: done_contract
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Accepted pre-Build Done Contract for harness-capable work"
     validation: "Must include done_when, not_done_when, verification, owner_consumer, acceptance_criteria, debate_record with at least two perspectives, and accepted_by before Build starts"
     on_fail: "Block Build, load references/harness-controller.md, return to Plan, write the missing Done Contract, collect at least two debate perspectives using subagents when delegated mode is available, and record approval or scope-change re-approval"
@@ -1480,7 +1480,7 @@ artifacts:
   - name: harness_recipe
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Pre-Build controller recipe selected from task/model/risk/context profile"
     validation: "Must classify task_profile, model_profile, risk_profile, and context_profile, then name selected_recipe, recipe_rationale, required_artifacts, and corrective_action"
     on_fail: "Block Build, load references/harness-controller.md, return to Plan, classify the task/model/risk/context profile, select a Harness Recipe, and record the corrective action for missing or stale recipe evidence"
@@ -1521,7 +1521,7 @@ artifacts:
   - name: harness_run_state
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Harness Run State artifact for recovering active harness execution after compaction, failure, or handoff."
     validation: "Must record task_id, task_name, phase, slice, status, blockers, last_verification, next_action, and recovery_pointer; update it as Build, Review, and Document progress. When a pivot/restart is active, it also records pivot_restart_decision_ref and the exact next action after restart."
     on_fail: "Pause advancement, update the task journal or carried-forward state with a complete Harness Run State block, point recovery_pointer at the current task packet or ledger entry, then resume from next_action."
@@ -1596,7 +1596,7 @@ artifacts:
   - name: trace_ledger
     type: object[]
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Trace Ledger artifact for ordered harness execution evidence."
     validation: "Records timestamped/ordered agent events, decisions, verification commands/results, plan deviations, and artifact refs as execution progresses."
     on_fail: "Append missing trace entries before advancing: reconstruct from Agent Dispatch Log, Key Decisions, verification output, plan deviations, and Artifact Registry; mark any unrecoverable gap explicitly."
@@ -1637,7 +1637,7 @@ artifacts:
   - name: replay_packet
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Replay Packet artifact that lets the workflow resume after compaction, failure, or handoff."
     validation: "Captures pinned_context, artifact_refs, validation_state, exact_next_action, run_state_ref, trace_ledger_ref, recovery_pointer, and pivot_restart_decision_ref when active with enough detail to recover without replaying stale reasoning."
     on_fail: "Create or repair the Replay Packet before ending the turn or crossing a phase boundary; copy pinned context from the approved plan/task packet, cite artifact refs, summarize validation state, and name the exact_next_action."
@@ -1775,7 +1775,7 @@ artifacts:
   - name: decomposition_plan_review
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     description: "Cheap-before-expensive review of slice/subagent decomposition before Plan/Build"
     validation: "Must state scope understanding, slice/subagent count sanity, step/cost budget, dependency order, output-plan match, fallback path, broad-split rejection proof, and proceed/revise/return decision"
     on_fail: "Load references/decomposition-plan-review.md and repair the decomposition review packet before entering Plan"
@@ -1810,7 +1810,7 @@ artifacts:
   - name: slice_manifest
     type: object[]
     required: true
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     validation: >
       Contains one or more smallest iterable slices in dependency order. Each
       slice has the strict slice schema, exact files, observable increment,
@@ -1881,7 +1881,7 @@ artifacts:
   - name: single_slice_rationale
     type: string
     required: conditional
-    condition: "size in [medium, large, mega] and slice_manifest has exactly one item"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and slice_manifest has exactly one item"
     description: "Required when medium+ emits one slice; proves the one slice is the smallest iterable decomposition and not a broad fallback."
     validation: "single_slice_rationale must be present and non-blank, explaining why the task cannot be split into smaller independently verifiable slices without losing the observable increment"
     on_fail: "Return to DECOMPOSE/PLAN and either split the work into multiple strict slices or provide a non-blank single_slice_rationale"
@@ -1889,7 +1889,7 @@ artifacts:
   - name: slice_verification_summary
     type: object[]
     required: true
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     validation: >
       Contains one entry per slice from the manifest, in order, with task
       packet id, RED status when TDD was active, implementation status,
@@ -2448,7 +2448,7 @@ artifacts:
   - name: user_approval
     type: enum
     required: conditional
-    condition: "manual_verification_mode == required and the selected manual verification trigger specifically needs user observation or confirmation"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required and the selected manual verification trigger specifically needs user observation or confirmation"
     enum_values: [confirmed, confirmed_with_issues, not_required_small]
     validation: "Records user confirmation only when the scoped manual verification actually depends on the user's observation; plan approval is enforced separately and user confirmation is not ritual."
     on_fail: "Request the specific user observation needed for manual verification, or record equivalent non-user evidence when the trigger does not require user confirmation."

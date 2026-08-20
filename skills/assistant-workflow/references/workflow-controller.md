@@ -33,17 +33,24 @@ file centralizes decision boundaries that cut across phase details while
 
 ## Routing Defaults
 
-- `plan_mode=none`: only trivial, localized, reversible, low-risk work with one
-  obvious implementation path, known files and verification, no material
-  ambiguity, and no public contract, data, security, destructive, or policy
-  concern. Discover carries the goal, scope, constraints, and verification
-  directly into Build; there is no plan artifact.
+- `plan_mode=none`: `prepare_only` at any size may retain `plan_mode=none`
+  unless an optional readiness plan is specifically requested; Discover then
+  proceeds directly to Preparation Completion. Otherwise this mode is only for
+  trivial, localized, reversible, low-risk work with one obvious implementation
+  path, known files and verification, no material ambiguity, and no public
+  contract, data, security, destructive, or policy concern. Discover carries
+  the goal, scope, constraints, and verification directly into Build; there is
+  no plan artifact.
+- `prepare_only`: use `plan_mode=approval_required` only when an optional
+  readiness plan is explicitly requested; otherwise retain `plan_mode=none`,
+  including at high/critical risk.
 - `plan_mode=inline`: bounded small work with more than one useful step but no
   approval trigger. Record the compact plan and continue without waiting.
-- `plan_mode=approval_required`: all medium+ work and any task with high/critical
-  risk, destructive effects, public contract/data/security changes, material
-  architecture or scope choices, repository approval policy, or an explicit
-  user request. Wait for approval before Build.
+- `plan_mode=approval_required`: For `execution_intent != prepare_only`, use
+  `plan_mode=approval_required` for medium+, high/critical risk, destructive
+  effects, public contract/data/security changes, material architecture or
+  scope choices, repository approval policy, or an explicit user request. Wait
+  for approval before Build.
 
 - `light`: small, low-risk, local work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant

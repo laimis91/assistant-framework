@@ -291,11 +291,11 @@ fields:
     type: enum
     required: false
     enum_values: [none, inline, approval_required]
-    description: "Whether this task skips a separate Plan phase, records a compact no-wait plan, or waits for explicit plan approval"
-    validation: "none is allowed only for trivial, localized, reversible, low-risk work with one obvious implementation path, known files, known verification, no material ambiguity, and no public contract/data/security/destructive effect. inline is limited to bounded small work with no approval trigger. approval_required is mandatory for medium+, high/critical risk, destructive work, public contract/data/security changes, material architecture or scope choices, repository policy, or an explicit user request."
+    description: "Whether this task skips a separate Plan phase, records a compact no-wait plan, or requires explicit plan approval before implementation work; prepare_only readiness never waits for implementation approval"
+    validation: "prepare_only at any size uses none for readiness (never Build) unless an optional readiness plan is explicitly requested; it uses approval_required only for that optional plan without implementation approval, even at high/critical risk. For execution_intent != prepare_only, approval_required applies to medium+, risk, policy, scope, or explicit request; none is trivial safe work only and inline is bounded small."
     default: none
     on_missing: infer
-    infer_from: "Use approval_required for medium+ or any approval trigger. Use inline for small work that benefits from multiple recorded steps but has no approval trigger. Use none only when the next safe edit and verification are obvious after Discover."
+    infer_from: "prepare_only: none for evidence/readiness, including high/critical risk; approval_required only for an explicitly requested optional readiness plan, without implementation wait. For execution_intent != prepare_only, approval_required applies to medium+ or any approval trigger; inline is for bounded small."
 
   - name: controller_intensity
     type: enum

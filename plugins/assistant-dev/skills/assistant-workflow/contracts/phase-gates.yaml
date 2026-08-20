@@ -67,7 +67,7 @@ gates:
         on_fail: "Infer and record plan_mode plus the two additive completion modes from the input contract; do not infer journal or manual-verification ceremony from size alone."
 
       - id: T_PLAN_MODE
-        check: "plan_mode=none is used only for trivial localized reversible low-risk work with an obvious path and verification; inline is used only for bounded small no-approval work; approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests"
+        check: "prepare_only at any size retains none unless an optional readiness plan is explicitly requested; prepare_only uses approval_required only for that optional plan, even at high/critical risk. For execution_intent != prepare_only, approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests; none is otherwise limited to trivial localized reversible low-risk work with an obvious path and verification and inline to bounded small no-approval work"
         on_fail: "Promote plan_mode to inline or approval_required. Do not skip Plan when size, risk, uncertainty, policy, or user intent requires it."
 
       - id: T_ARCHITECTURE_DESIGN_MODE
@@ -239,7 +239,7 @@ gates:
   - phase: DECOMPOSE
     checkpoint_start: "--- PHASE: DECOMPOSE ---"
     checkpoint_end: "--- PHASE: DECOMPOSE COMPLETE ---"
-    condition: "size in [medium, large, mega]"
+    condition: "size in [medium, large, mega] and execution_intent != prepare_only"
     exit_assertions:
 
       - id: DC1
@@ -259,8 +259,8 @@ gates:
         on_fail: "Replace ordinal-only slice IDs with descriptive slugs and keep sequencing in manifest order and depends_on"
 
       - id: DC3
-        check: "Slices are ordered by dependency — independent slices first and dependent slices after every depends_on prerequisite"
-        on_fail: "Reorder slices so prerequisites come before dependents"
+        check: "Slices are ordered by dependency — independent slices first and dependent slices after every depends_on prerequisite. Source-changing packets in a shared or unknown workspace remain sequential; parallel source-changing packets require runtime proof of isolated workspaces."
+        on_fail: "Reorder slices so prerequisites come before dependents, and sequence source-changing packets unless isolated workspaces are runtime-proven."
 
       - id: DC4
         check: "No circular dependencies exist between slices"
@@ -289,7 +289,7 @@ gates:
   # ─────────────────────────────────────────────
   - phase: PLAN
     checkpoint_start: "--- PHASE: PLAN ---"
-    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved medium+ plans; --- PHASE: PLAN COMPLETE --- for no-wait small plans"
+    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved non-prepare-only plans; --- PHASE: PLAN COMPLETE --- for no-wait inline or prepare_only readiness plans"
     condition: "plan_mode != none"
     exit_assertions:
 
@@ -327,16 +327,16 @@ gates:
         on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
 
       - id: P1
-        check: "Plan contains ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan consumes the approved slice manifest from Decompose without rediscovering boundaries"
+        check: "End-to-end/implement-only plans contain ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan consumes the approved slice manifest from Decompose without rediscovering boundaries. A prepare_only plan is optional readiness context and must not manufacture executable packets."
         on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and carry the approved slice manifest forward for medium+ tasks"
 
       - id: P2
-        check: "Each implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify"
+        check: "Each end-to-end/implement-only implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify. A prepare_only readiness plan records only evidence-backed implications, open decisions, and the next implementation state."
         on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
 
       - id: P4
-        check: "When plan_mode=approval_required, the user explicitly approved the plan and slice manifest when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
-        on_fail: "Wait for approval when plan_mode=approval_required. For inline mode, record why the compact plan can proceed without waiting. If none was selected incorrectly, return to Triage and promote plan_mode."
+        check: "When execution_intent=prepare_only, readiness evidence and any optional plan do not wait for implementation approval; record the approval/delegation needed to implement next in feature_preparation_result.open_decisions and/or recommended_next_step. Otherwise, when plan_mode=approval_required, the user explicitly approved the plan and slice manifest when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
+        on_fail: "For prepare_only, return the evidence-backed readiness result and name the required next implementation approval. Otherwise wait for approval when plan_mode=approval_required. For inline mode, record why the compact plan can proceed without waiting. If none was selected incorrectly, return to Triage and promote plan_mode."
 
       - id: P5
         check: "Plan tier matches plan_mode and task size: compact for inline, standard for approval-required medium, and full for approval-required large/mega"
@@ -362,7 +362,7 @@ gates:
         on_fail: "Search local repo for similar patterns and record Pattern Retrieval before implementation; placeholders such as [paths/queries] or N/A without rationale do not satisfy this gate"
 
       - id: P9
-        check: "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md and aligned one-to-one with approved Decompose slices"
+        check: "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md and aligned one-to-one with approved Decompose slices. prepare_only has no executable packet requirement."
         condition: "size in [medium, large, mega]"
         on_fail: "Rewrite vague implementation steps into executable task packets that consume slice_id and slice manifest fields directly"
 
@@ -422,7 +422,7 @@ gates:
   - phase: DESIGN
     checkpoint_start: "--- PHASE: DESIGN ---"
     checkpoint_end: "--- PHASE: DESIGN COMPLETE (approved) ---"
-    condition: "phases list includes DESIGN"
+    condition: "phases list includes DESIGN and execution_intent != prepare_only"
     exit_assertions:
 
       - id: DS1
@@ -443,6 +443,7 @@ gates:
   - phase: BUILD
     checkpoint_start: "--- PHASE: BUILD ---"
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
+    condition: "execution_intent != prepare_only"
     exit_assertions:
 
       - id: B1
@@ -559,6 +560,7 @@ gates:
   - phase: REVIEW
     checkpoint_start: "--- PHASE: REVIEW ---"
     checkpoint_end: "--- PHASE: REVIEW COMPLETE ---"
+    condition: "execution_intent != prepare_only"
     exit_assertions:
 
       - id: R1
@@ -645,6 +647,7 @@ gates:
   - phase: DOCUMENT
     checkpoint_start: "--- PHASE: DOCUMENT ---"
     checkpoint_end: "--- PHASE: DOCUMENT COMPLETE ---"
+    condition: "execution_intent != prepare_only"
     exit_assertions:
 
       - id: DOC1
@@ -681,6 +684,28 @@ gates:
         check: "Optional metrics were appended when useful and configured, or omitted without affecting completion"
         on_fail: "Record metrics later if useful; missing metrics never blocks completion."
 
+  # ─────────────────────────────────────────────
+  # PREPARATION COMPLETION → COMPLETE
+  # ─────────────────────────────────────────────
+  - phase: PREPARATION_COMPLETION
+    checkpoint_start: "--- PHASE: PREPARATION COMPLETION ---"
+    checkpoint_end: "--- PHASE: PREPARATION COMPLETE ---"
+    condition: "execution_intent == prepare_only"
+    exit_assertions:
+
+      - id: PC1
+        check: "completion_policy and feature_preparation_result are present with execution_status=not_started"
+        on_fail: "Return the typed preparation completion result before ending the workflow."
+
+      - id: PC2
+        check: "For existing-system preparation, feature_preparation_evidence is complete and feature_preparation_result carries its exact ref"
+        condition: "feature_preparation_scope == existing_system"
+        on_fail: "Return to Discover and complete the canonical evidence matrix before preparation completion."
+
+      - id: PC3
+        check: "Preparation completion contains no Build, changed_files, test_results, code-review, final_handoff, or implementation Document claims"
+        on_fail: "Remove invented implementation claims and return only evidence-backed preparation readiness."
+
 # ─────────────────────────────────────────────
 # Cross-phase invariants
 # These must hold true throughout the entire workflow, not just at gates.
@@ -697,7 +722,7 @@ invariants:
     on_fail: "Print '>> CONSTRAINT REMOVED — review with user before proceeding' and restore the removed constraint"
 
   - id: INV2
-    check: "No required phase is skipped; Plan runs exactly when plan_mode is inline or approval_required and is omitted only when plan_mode=none eligibility remains true"
+    check: "No required phase is skipped. prepare_only requires Discover then PREPARATION_COMPLETION; Decompose/Plan readiness work is optional and Design, Build, Review, and implementation Document/final-handoff gates are inapplicable. Otherwise Plan runs exactly when plan_mode is inline or approval_required and is omitted only when plan_mode=none eligibility remains true"
     scope: all_phases
     on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing', or return to Triage and correct plan_mode before proceeding"
 

@@ -551,13 +551,13 @@ fi
 test_start "Document is the sole final_handoff phase owner"
 review_block="$(phase_block REVIEW)"
 document_block="$(phase_block DOCUMENT)"
-final_handoff_phase_refs="$(grep -c 'final_handoff' "$phase_gates" 2>/dev/null || true)"
+preparation_completion_block="$(phase_block PREPARATION_COMPLETION)"
 if grep -Fq 'final_handoff' <<<"$review_block"; then
     fail "Review requires final_handoff before Document can create it"
 elif ! grep -Fq 'final_handoff' <<<"$document_block"; then
     fail "Document must own final_handoff creation"
-elif [[ "$final_handoff_phase_refs" -ne 1 ]]; then
-    fail "phase gates must have exactly one final_handoff owner; found $final_handoff_phase_refs references"
+elif ! grep -Fq 'no Build, changed_files, test_results, code-review, final_handoff' <<<"$preparation_completion_block"; then
+    fail "prepare-only completion must forbid final_handoff rather than claiming ownership"
 else
     pass
 fi

@@ -209,10 +209,10 @@ review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_router="$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
 for file_and_term in \
-    "$review_loop::Resolve review mode before Spec Review, Reviewer dispatch, or source mutation" \
+    "$review_loop::Infer review mode before review or mutation" \
     "$review_loop::Run only in review-fix mode" \
     "$review_loop::evidence-backed must-fix and should-fix items" \
-    "$review_loop::in audit mode, report the mismatch without source changes" \
+    "$review_loop::In audit mode, record the mismatch as a finding and exit without source mutation or Reviewer dispatch" \
     "$review_loop::Return it to the composing workflow for planning or approval" \
     "$review_router::Before Stage 1 Spec Review or source inspection/mutation" \
     "$review_router::only when review-fix authority is explicit or carried by the" \
@@ -228,22 +228,14 @@ for file_and_term in \
 done
 
 if ! jq -e '
-    def review_request:
-      .prompt | test("^(Review|Check|Audit|Could you check|Run a fresh review)");
-    def resolved_mode_context:
-      (.setup_context | join("\n") | test("explicitly (authorizes source modifications|requests an audit)|active approved implementation workflow"; "i"));
-    all(.cases[];
-      if .id == "ambiguous-standalone-review-asks-before-review-or-mutation" then
-        (.expected_behavior | index("Asks exactly: Should I only report findings, or also implement and verify fixes?")) and
-        (.machine_expectations.required_substrings | index("Should I only report findings, or also implement and verify fixes?")) and
-        (.machine_expectations.forbidden_substrings | index("I reviewed")) and
-        (.machine_expectations.forbidden_substrings | index("I changed"))
-      elif review_request then
-        resolved_mode_context
-      else
-        true
-      end
-    )
+    def case($id): .cases[] | select(.id == $id);
+    (case("audit-one-pass").expected_behavior | index("Reports findings and residual risk without edits.")) and
+    (case("audit-spec-review-fail-is-read-only").expected_behavior | index("Exits without source mutation or Reviewer dispatch.")) and
+    (case("review-fix-loop-handles-findings").expected_behavior | index("Uses the user\u0027s explicit source-modification authorization to resolve mode=review-fix.")) and
+    (case("workflow-carried-authorization-allows-bounded-review-fix").expected_behavior | index("Resolves mode=review-fix from carried active approved workflow authorization.")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").expected_behavior | index("Asks exactly: Should I only report findings, or also implement and verify fixes?")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").machine_expectations.forbidden_substrings | index("I reviewed")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").machine_expectations.forbidden_substrings | index("I changed"))
 ' "$review_evals" >/dev/null; then
     review_authorization_failures+=("assistant-review evals lack explicit audit/fix/workflow authority or ambiguity guard")
 fi
@@ -329,7 +321,7 @@ workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_phase_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 
 for file_and_term in \
-    "$workflow_skill::inline plan and proceeds without ceremony unless risk requires approval" \
+    "$workflow_skill::no-wait" \
     "$workflow_phases::print the inline plan and continue directly to Build" \
     "$workflow_output::not_required_small" \
     "$workflow_phase_gates::no-wait eligibility was recorded"; do

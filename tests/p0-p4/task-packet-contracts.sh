@@ -33,7 +33,7 @@ test_start "workflow phase gates enforce executable task packet planning checks"
 missing_phase_gate_terms=()
 for term in \
     "- id: P9" \
-    "For medium+ tasks: implementation work is represented as executable task packets using plan-template.md" \
+    "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md" \
     "- id: P10" \
     "verification command and expected success signal" \
     "- id: P11" \
@@ -100,7 +100,7 @@ missing_slice_output_terms=()
 for term in \
     "- name: slice_verification_summary" \
     "- name: slice_manifest" \
-    "condition: \"size in [medium, large, mega]\"" \
+    "condition: \"execution_intent != prepare_only and size in [medium, large, mega]\"" \
     "slice_id" \
     "slice_name" \
     "task_packet_id" \
@@ -134,7 +134,7 @@ missing_single_slice_terms=()
 for file in "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; do
     for term in \
         "- name: single_slice_rationale" \
-        "condition: \"size in [medium, large, mega] and slice_manifest has exactly one item\"" \
+        "condition: \"execution_intent != prepare_only and size in [medium, large, mega] and slice_manifest has exactly one item\"" \
         "proves the one slice is the smallest iterable decomposition and not a broad fallback" \
         "single_slice_rationale must be present and non-blank"; do
         if ! grep -Fq -- "$term" "$file"; then
@@ -188,6 +188,43 @@ elif rg -n -i 'run-agents\.sh|check-integration\.sh|worktree' "$FRAMEWORK_DIR/sk
     fail "native verification contract still depends on retired runner mechanics; see /tmp/p0p4-native-verification-runner.out"
 else
     pass
+fi
+
+test_start "source-changing slice packets stay sequential in shared or unknown workspaces"
+workspace_isolation_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md::shared or unknown workspace" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md::runtime explicitly proves isolated workspaces" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::Parallel read-only analysis remains allowed" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::runtime-proven isolated workspaces" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md::shared or unknown workspace"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! grep -Fq -- "$term" "$file"; then
+        workspace_isolation_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if ! ruby -rjson -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  item = cases.find { |entry| entry["id"] == "native-slice-execution-uses-dependencies-not-runner-topology" }
+  expected = item.fetch("expected_behavior").join(" ")
+  failures = item.fetch("fail_signals").join(" ")
+  valid = expected.include?("Sequences source-changing A and B because the workspace is shared or isolation is unknown") &&
+    expected.include?("read-only analysis in parallel") &&
+    expected.include?("runtime-proven isolated workspaces") &&
+    failures.include?("parallel source-changing A/B in a shared or unknown workspace")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
+    workspace_isolation_failures+=("workflow eval does not distinguish shared/unknown sequential, isolated parallel, and read-only parallel boundaries")
+fi
+if rg -qi 'parallel writers[^\n]*(independently executable slices|concrete triggers)' \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md"; then
+    workspace_isolation_failures+=("subagent dispatch still authorizes parallel Writers from independence alone")
+fi
+if [[ "${#workspace_isolation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workspace isolation routing is incomplete: ${workspace_isolation_failures[*]}"
 fi
 
 test_start "workflow slice identities are descriptive while ordering stays display-only"
@@ -893,7 +930,7 @@ for term in \
     "- evidence_to_record:" \
     "- deviation_rollback_rule:" \
     "DEVIATED" \
-    "Parallel slices require no overlapping file ownership"; do
+    "Source-changing packets in a shared or unknown workspace run sequentially"; do
     if ! grep -Fq -- "$term" "$sub_task_template"; then
         missing_sub_task_packet_terms+=("$term")
     fi

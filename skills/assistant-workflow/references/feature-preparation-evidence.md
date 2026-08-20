@@ -29,6 +29,10 @@ not manufacture changed-files, Build, test-run, or code-review evidence. For
 `execution_intent=implement_only`, consume the approved ref rather than
 reconstructing missing preparation.
 
+Prepare-only routes from Discover to Preparation Completion. Readiness
+Decompose/Plan context is optional; Design, Build, Review, implementation
+Document, and final-handoff gates are inapplicable.
+
 ## Classification
 
 `behavior_status` records what should happen to behavior:
@@ -76,5 +80,8 @@ merely because the requirements or design source omits a behavior.
 Preparation-only completion returns `feature_preparation_result`: execution
 status `not_started`, exact scope, the evidence ref only for existing-system
 work, evidence gaps, open decisions, implementation implications, and a
-recommended next step. It does not return invented changed files, Build,
-test-run, review, or final-handoff evidence.
+recommended next step. Medium+ preparation may include an optional readiness
+plan, but it does not wait for implementation approval: record the approval or
+delegation required for a later implementation workflow in `open_decisions`
+and/or `recommended_next_step`. It does not return invented changed files,
+Build, test-run, review, or final-handoff evidence.

@@ -206,7 +206,9 @@ Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 
 ## Phase: Plan
 
-**Run condition:** `plan_mode` is `inline` or `approval_required`. When
+**Run condition:** `plan_mode` is `inline` or `approval_required`. For
+`prepare_only`, this is optional readiness planning and never waits for
+implementation approval. When
 `plan_mode=none`, Discover carries the obvious file scope, constraints,
 acceptance check, and verification argv directly into the Discover exit
 transition, which atomically sets `handoff_binding_state=downstream_bound` with compact
@@ -251,9 +253,11 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 
 ### Approval gate
 
-For `plan_mode=inline`, print the inline plan and continue directly to Build. If ambiguity, user-requested approval, destructive operations, public contract/data/security impact, or scope-changing choices appear, return to Triage and promote to `approval_required`.
+For `execution_intent=prepare_only`, record the optional readiness plan, return the required preparation evidence, and continue to Preparation Completion without waiting for implementation approval. Print: `--- PHASE: PLAN COMPLETE ---` when this optional Plan runs.
 
-For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`
+For `execution_intent != prepare_only` and `plan_mode=inline`, print the inline plan and continue directly to Build. If ambiguity, user-requested approval, destructive operations, public contract/data/security impact, or scope-changing choices appear, return to Triage and promote to `approval_required`.
+
+For `execution_intent != prepare_only` and `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`
 
 Present the plan and WAIT:
 ```
@@ -263,9 +267,11 @@ Review the plan:
 - Questions -- I'll address before proceeding
 ```
 
-Print: `--- PHASE: PLAN COMPLETE (approved) ---` for approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for inline plans.
+Print: `--- PHASE: PLAN COMPLETE (approved) ---` for non-prepare-only approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for non-prepare-only inline plans.
 
 ## Phase: Design (UI/UX only, skip for backend)
+
+**Run condition:** `execution_intent != prepare_only`.
 
 Print: `--- PHASE: DESIGN ---`
 
@@ -281,6 +287,8 @@ Show mockup and WAIT for approval.
 Print: `--- PHASE: DESIGN COMPLETE (approved) ---`
 
 ## Phase: Build
+
+**Run condition:** `execution_intent != prepare_only`.
 
 Print: `--- PHASE: BUILD ---`
 
@@ -355,6 +363,8 @@ Print: `--- PHASE: BUILD COMPLETE ---`
 
 ## Phase: Review
 
+**Run condition:** `execution_intent != prepare_only`.
+
 Print: `--- PHASE: REVIEW ---`
 
 Load `references/review-qa-router.md`. Light work uses its compact fresh-review
@@ -384,6 +394,8 @@ Print: `--- PHASE: REVIEW COMPLETE ---`
 
 ## Phase: Document
 
+**Run condition:** `execution_intent != prepare_only`.
+
 Print: `--- PHASE: DOCUMENT ---`
 
 Load `references/completion-controller.md` and, for medium+ work,
@@ -397,3 +409,12 @@ optional and non-blocking. Refresh harness runtime artifacts only when
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`
+
+## Phase: Preparation Completion
+
+**Run condition:** `execution_intent=prepare_only` after Discover. Optional
+readiness planning does not create executable packets or delay completion.
+Return `completion_policy` and `feature_preparation_result`, plus complete
+`feature_preparation_evidence` for existing-system work. Keep execution
+`not_started`; do not claim Build, changed files, tests, review, final handoff,
+or implementation documentation.

@@ -137,30 +137,35 @@
       "id": "native-slice-execution-uses-dependencies-not-runner-topology",
       "title": "Native slices use dependency-aware subagents",
       "category": "native_slice_execution",
-      "purpose": "Checks that approved implementation work keeps strict packets, uses native subagents only for genuinely independent slices, and verifies integration without a shell runner or branch topology.",
-      "prompt": "Implement the approved medium change. Slice A and B own different files; Slice C consumes A. Use parallel work only where it is safe.",
+      "purpose": "Checks that approved implementation work keeps strict packets, sequences source-changing packets in a shared workspace, allows read-only analysis in parallel, and permits parallel writers only with runtime-proven isolated workspaces.",
+      "prompt": "Implement the approved medium change in a shared workspace. Slice A and B own different files; Slice C consumes A. Keep source changes safe and parallelize only read-only analysis unless isolated workspaces are runtime-proven.",
       "setup_context": [
         "The implementation plan is approved.",
-        "Slices A and B have no dependencies or overlapping files.",
+        "Slices A and B have no dependencies or overlapping files, but their workspace isolation is unknown.",
         "Slice C depends_on A and has cross-slice acceptance checks."
       ],
       "expected_behavior": [
-        "Dispatches or performs A and B in parallel only after confirming independent ownership and dependencies.",
+        "Sequences source-changing A and B because the workspace is shared or isolation is unknown, despite independent ownership.",
+        "Allows independent read-only analysis in parallel and allows parallel source-changing packets only after runtime-proven isolated workspaces.",
         "Keeps C blocked until A is verified.",
         "Carries each packet's verification command and evidence through integration, cross-slice validation, and fresh review.",
-        "Does not require a Bash runner, worktree topology, or provider review state."
+        "Does not invent a worktree or isolation subsystem, runner, or provider review state."
       ],
       "pass_criteria": [
-        "The response explicitly distinguishes independent A/B from dependent C.",
+        "The response distinguishes shared or unknown source-changing A/B from read-only analysis and isolated workspaces.",
         "The response records per-slice verification before C and post-integration verification before review."
       ],
       "fail_signals": [
         "Launches dependent C with A.",
+        "Launches parallel source-changing A/B in a shared or unknown workspace.",
         "Uses a runner script or branch topology as an execution requirement."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "independent",
+          "shared or unknown workspace",
+          "sequential",
+          "read-only analysis",
+          "isolated workspaces",
           "depends_on",
           "verification command",
           "cross-slice",
@@ -168,8 +173,8 @@
           "native subagents"
         ],
         "forbidden_substrings": [
-          "worktree topology",
-          "provider review state"
+          "provider review state",
+          "parallel source-changing packets in a shared workspace"
         ]
       }
     },
@@ -2591,6 +2596,113 @@
           {"operator": "empty_array", "path": ["feature_preparation_result", "open_decisions"]},
           {"operator": "nonempty_array", "path": ["feature_preparation_result", "implementation_implications"]},
           {"operator": "nonempty_string", "path": ["feature_preparation_result", "recommended_next_step"]}
+        ]
+      }
+    },
+    {
+      "id": "medium-prepare-only-readiness-does-not-wait-for-implementation-approval",
+      "title": "Medium preparation returns readiness before implementation approval",
+      "category": "feature_preparation_readiness",
+      "purpose": "Checks that medium prepare-only work returns admissible evidence and optional readiness planning without treating later implementation approval as a preparation blocker.",
+      "prompt": "Prepare this medium existing-system feature from repository evidence. Do not implement. Return one valid JSON object.",
+      "setup_context": [
+        "The work is medium-sized and current implementation plus behavioral tests are available.",
+        "The user has not approved implementation or delegated a future implementation packet.",
+        "The response may include a readiness plan but must not execute it."
+      ],
+      "expected_behavior": [
+        "Uses execution_intent=prepare_only and returns feature_preparation_evidence plus feature_preparation_result.",
+        "Preparation does not wait for implementation approval before returning readiness.",
+        "Records the required approval or delegation for later implementation in open_decisions and/or recommended_next_step.",
+        "Does not claim Build, changed_files, tests, code review, or final handoff."
+      ],
+      "pass_criteria": [
+        "The response separates preparation completion from later implementation approval.",
+        "The response keeps execution_status=not_started.",
+        "The next step names the bounded implementation approval or delegation."
+      ],
+      "fail_signals": [
+        "Waits for implementation approval before returning preparation readiness.",
+        "Treats missing implementation approval as incomplete feature evidence.",
+        "Starts Build or invents implementation verification."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["prepare_only", "feature_preparation_result", "does not wait for implementation approval", "open_decisions", "recommended_next_step", "Execution not started"],
+        "forbidden_substrings": ["waiting for implementation approval before preparation completes", "Build started", "changed_files"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["execution_intent"], "expected": "prepare_only"},
+          {"operator": "equals", "path": ["feature_preparation_result", "execution_status"], "expected": "not_started"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_result", "open_decisions"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_result", "recommended_next_step"]}
+        ]
+      }
+    },
+    {
+      "id": "medium-prepare-only-terminal-route",
+      "title": "Medium prepare-only completes without implementation phases",
+      "category": "feature_preparation_terminal_route",
+      "purpose": "Checks that standard medium preparation reaches typed completion after evidence instead of waiting for Build, review, or final handoff.",
+      "prompt": "Prepare this medium existing-system feature from code and tests. Do not implement. Return one valid JSON object.",
+      "setup_context": [
+        "The task is medium, standard intensity, and existing-system evidence is complete.",
+        "No implementation approval has been given.",
+        "No optional readiness plan or executable packet is requested."
+      ],
+      "expected_behavior": [
+        "Keeps plan_mode=none and routes Discover directly to Preparation Completion.",
+        "Returns completion_policy, feature_preparation_result, and feature_preparation_evidence.",
+        "Keeps execution not started and names the next implementation approval or delegation."
+      ],
+      "pass_criteria": [
+        "The response completes preparation without waiting.",
+        "The response contains no implementation-phase or final-handoff artifact."
+      ],
+      "fail_signals": [
+        "Waits for Build, code review, or final handoff before preparation completion.",
+        "Invents changed_files or test_results.",
+        "Requires an executable task packet."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["Preparation Completion", "completion_policy", "feature_preparation_result", "Execution not started"],
+        "forbidden_substrings": ["Build started", "code review complete", "final_handoff", "changed_files", "test_results"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["execution_intent"], "expected": "prepare_only"},
+          {"operator": "equals", "path": ["completion_policy", "plan_mode"], "expected": "none"},
+          {"operator": "equals", "path": ["feature_preparation_result", "execution_status"], "expected": "not_started"}
+        ]
+      }
+    },
+    {
+      "id": "large-prepare-only-terminal-route",
+      "title": "Large strict prepare-only skips implementation gates",
+      "category": "feature_preparation_terminal_route",
+      "purpose": "Checks that large strict preparation still returns readiness evidence rather than inheriting Build, review, changed-file, test, or final-handoff requirements.",
+      "prompt": "Technically prepare this large existing-system epic using current code and behavioral tests. Do not implement. Return one valid JSON object.",
+      "setup_context": [
+        "The task is large and strict due to risk, but execution_intent is prepare_only.",
+        "Feature-preparation evidence is complete and implementation remains unapproved."
+      ],
+      "expected_behavior": [
+        "Keeps plan_mode=none and runs Discover and Preparation Completion, with optional readiness context only.",
+        "Returns the required preparation artifacts while preserving execution_status=not_started.",
+        "Does not wait for implementation approval or run implementation phases."
+      ],
+      "pass_criteria": [
+        "The response separates strict preparation evidence from strict implementation gates.",
+        "The response names the next implementation state without claiming execution."
+      ],
+      "fail_signals": [
+        "Requires Build, Review, implementation Document, or final handoff before preparation completes.",
+        "Claims changed_files, test_results, or code-review evidence.",
+        "Waits for implementation approval instead of returning readiness."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["prepare_only", "Preparation Completion", "feature_preparation_evidence", "feature_preparation_result", "Execution not started"],
+        "forbidden_substrings": ["Build started", "Review complete", "final_handoff", "changed_files", "test_results"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["execution_intent"], "expected": "prepare_only"},
+          {"operator": "equals", "path": ["completion_policy", "plan_mode"], "expected": "none"},
+          {"operator": "equals", "path": ["feature_preparation_result", "execution_status"], "expected": "not_started"}
         ]
       }
     },

@@ -7,7 +7,7 @@ Use the strict slice packet fields from `slice_manifest` for every executable br
 - One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
-- Keep slice ownership explicit through task packets. Use native subagents only when slices are independent, with no overlapping file ownership or undeclared prerequisite.
+- Keep slice ownership explicit through task packets. Source-changing packets in a shared or unknown workspace are sequential. Parallel source-changing packets require the runtime explicitly proves isolated workspaces; independent read-only analysis may run in parallel.
 - Verify each completed slice before dependent work starts. After all slices are integrated, run cross-slice and full-scope validation, then a fresh review.
 
 ## Agent Portability

@@ -78,7 +78,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | **Small** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when explicitly requested |
 | **Medium** | Code Mapper → Architect (decompose) → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only for separated_workers triggers |
 | **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer is compatibility routing |
-| **Mega** | All roles, parallel Code Writers per slice | Mapper → Explorer → Architect → parallel Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration |
+| **Mega** | All roles; source-changing packets sequential by default | Mapper → Explorer → Architect → sequential Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration. In a shared or unknown workspace, parallel Writers require runtime proof of isolated workspaces; independent read-only analysis may run in parallel. |
 
 ## Reviewer dispatch (review rounds)
 

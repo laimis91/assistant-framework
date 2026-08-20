@@ -283,6 +283,9 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 For `prepare_only`, return `feature_preparation_result` instead of an execution
 handoff: scope, evidence ref when applicable, evidence gaps, open decisions,
 implementation implications, recommended next step, and `execution_status=not_started`.
+For medium+ preparation, an optional readiness plan may be recorded without
+waiting for implementation approval; name that approval or delegation as the
+next implementation state rather than treating it as a gate on preparation.
 
 ## Tests to run
 - [command]: [what it validates]

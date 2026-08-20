@@ -150,6 +150,38 @@
       }
     },
     {
+      "id": "audit-spec-review-fail-is-read-only",
+      "title": "Audit records a standalone Spec Review mismatch without repair",
+      "category": "spec_review_mode_boundary",
+      "purpose": "Checks that a seeded standalone Spec Review FAIL is a read-only audit finding, not authority to repair or dispatch a Reviewer.",
+      "prompt": "Audit this standalone change against the stated request. Report findings only; do not fix anything.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The request is standalone audit mode with no carried implementation authority.",
+        "Spec Review FAIL: the diff includes a file outside the stated request scope.",
+        "The mismatch is evidence-backed but no source mutation is authorized."
+      ],
+      "expected_behavior": [
+        "Records the Spec Review FAIL as an evidence-backed audit finding.",
+        "Exits without source mutation or Reviewer dispatch.",
+        "Does not start a fix loop, validation, or repeat Spec Review."
+      ],
+      "pass_criteria": [
+        "The response identifies the out-of-scope mismatch.",
+        "The response remains in audit mode and one pass.",
+        "The response records residual risk without changing source."
+      ],
+      "fail_signals": [
+        "Changes source to repair the mismatch.",
+        "Dispatches a Reviewer after the failing Spec Review.",
+        "Starts a review-fix loop or repeat Spec Review."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["audit", "Spec Review FAIL", "finding", "without source mutation or Reviewer dispatch"],
+        "forbidden_substrings": ["fixed the mismatch", "second Reviewer dispatch", "Build started"]
+      }
+    },
+    {
       "id": "workflow-carried-authorization-allows-bounded-review-fix",
       "title": "Carried workflow authorization allows bounded review-fix",
       "category": "review_mode_resolution",

@@ -35,9 +35,9 @@ Escalate size when risk exceeds file count. Auth, PII, payments, destructive dat
 
 | Mode | Use when |
 |---|---|
-| `none` | Trivial, localized, reversible, low-risk work has one obvious path, known files and verification, no material ambiguity, and no public contract/data/security/destructive/policy concern. |
+| `none` | prepare_only at any size retains `none`, including high/critical risk, unless an optional readiness plan is explicitly requested; approval_required is only for that requested plan. Otherwise trivial, localized, reversible, low-risk work has one obvious path, known files and verification, no material ambiguity, and no public contract/data/security/destructive/policy concern. |
 | `inline` | Bounded small work benefits from a compact multi-step plan but has no approval trigger. |
-| `approval_required` | Medium+ work, high/critical risk, destructive effects, public contract/data/security changes, material architecture/scope choices, repository policy, or an explicit approval request. |
+| `approval_required` | For `execution_intent != prepare_only`, medium+ work, high/critical risk, destructive effects, public contract/data/security changes, material architecture/scope choices, repository policy, or an explicit approval request. |
 
 If Discover invalidates `none` or `inline` eligibility, re-triage before Build.
 
