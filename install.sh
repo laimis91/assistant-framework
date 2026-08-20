@@ -646,16 +646,6 @@ for skill in "${SKILLS[@]}"; do
             --exclude='.DS_Store' \
             "$source_dir/" "$target_dir/"
 
-        # Swap agent.conf to the correct preset if one exists before path substitution.
-        if [[ "$AGENT" != "claude" ]]; then
-            agent_preset="$target_dir/agents/${AGENT}.conf"
-            agent_conf="$target_dir/agent.conf"
-            if [[ -f "$agent_preset" && -f "$agent_conf" ]]; then
-                cp "$agent_preset" "$agent_conf"
-            fi
-
-        fi
-
         # Substitute agent-specific state directory placeholders in instruction/config files.
         while IFS= read -r instruction_file; do
             substitute_agent_paths_in_file "$instruction_file"

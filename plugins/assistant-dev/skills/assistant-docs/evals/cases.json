@@ -348,6 +348,90 @@
           "No source evidence needed"
         ]
       }
+    },
+    {
+      "id": "architecture-doc-blocks-incomplete-feature-preparation-pack",
+      "title": "Architecture docs block a fresh Pack with incomplete feature evidence",
+      "category": "feature_preparation_pack_recovery",
+      "purpose": "Checks that documentation does not propagate a Product question merely because the Architecture Decision Pack is fresh.",
+      "prompt": "Document the current architecture decision for the read-only VIEWING route. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "architecture_design_mode is required and architecture_decision_pack_status=current.",
+        "The Pack is fresh but carries a Product question whose feature-preparation row has requirements evidence only; implementation and behavioral tests were not inspected.",
+        "feature_preparation_evidence_status=incomplete."
+      ],
+      "expected_behavior": [
+        "Does not create documentation or restate the unsupported Product question as a decision.",
+        "Returns architecture_decision_pack_trace outcome=blocked_incomplete_pack.",
+        "Returns recovery_action=request_complete_pack and a review trace explaining the missing implementation/test evidence.",
+        "Does not invent feature_preparation_evidence_refs."
+      ],
+      "pass_criteria": [
+        "The response blocks the documentation decision despite Pack freshness.",
+        "The recovery points to the missing implementation and test evidence."
+      ],
+      "fail_signals": [
+        "Documents the Product question as settled architecture.",
+        "Claims a fresh Pack alone proves semantic completeness."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_status", "incomplete", "blocked_incomplete_pack", "recovery_action", "request_complete_pack", "implementation", "behavioral tests", "review_trace"],
+        "forbidden_substrings": ["outcome=documented", "files_updated", "invented feature_preparation_evidence_refs"],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["review_items"]},
+          {"operator": "nonempty_array", "path": ["safety_notes"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "incomplete"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "blocked_incomplete_evidence"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "recovery_action"], "expected": "request_complete_evidence"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "outcome"], "expected": "blocked_incomplete_pack"},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "recovery_action"], "expected": "request_complete_pack"},
+          {"operator": "nonempty_string", "path": ["architecture_decision_pack_trace", "review_trace", 0]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-doc-blocks-incomplete-evidence-without-pack",
+      "title": "Feature-preparation docs block incomplete evidence without an Architecture Pack",
+      "category": "feature_preparation_recovery",
+      "purpose": "Checks that omitting an Architecture Decision Pack cannot bypass the evidence gate for a feature, epic, story, or spike preparation document.",
+      "prompt": "Write the technical preparation document for the read-only VIEWING route without an Architecture Decision Pack. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "feature_preparation_scope=existing_system and architecture_design_mode=not_applicable.",
+        "The preparation material proposes a Product question based only on requirements omission.",
+        "Current implementation and behavioral tests were not inspected, so feature_preparation_evidence_status=incomplete."
+      ],
+      "expected_behavior": [
+        "Does not create or update the requested document.",
+        "Returns feature_preparation_evidence_trace outcome=blocked_incomplete_evidence.",
+        "Returns recovery_action=request_complete_evidence and a review trace naming the missing implementation and behavioral-test inspection.",
+        "Does not manufacture an Architecture Decision Pack merely to express the recovery."
+      ],
+      "pass_criteria": [
+        "The response blocks the unsupported feature-preparation claim without Pack coupling.",
+        "The recovery requests the canonical implementation/test evidence."
+      ],
+      "fail_signals": [
+        "Writes the document because architecture_design_mode is not_applicable.",
+        "Propagates the Product question based only on requirements omission."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_trace", "blocked_incomplete_evidence", "recovery_action", "request_complete_evidence", "implementation", "behavioral tests", "review_trace"],
+        "forbidden_substrings": ["files_updated", "outcome=validated", "created Architecture Decision Pack"],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["review_items"]},
+          {"operator": "nonempty_array", "path": ["safety_notes"]},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "incomplete"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "blocked_incomplete_evidence"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "recovery_action"], "expected": "request_complete_evidence"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
+        ]
+      }
     }
   ]
 }

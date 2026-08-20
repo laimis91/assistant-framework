@@ -281,6 +281,34 @@ smallest relevant behavior; none is required to invent architecture ceremony.
 This audit is behavior mapping, not a requirement to change every skill for
 every task. The workflow Pack and review gate are the durable integration path.
 
+### Existing-system feature preparation evidence
+
+Technical preparation for a feature, epic, story, or spike must not classify a
+behavior as a Product question merely because requirements or visual design omit
+it. When existing repository behavior is in scope, `assistant-workflow` owns a
+provider-neutral evidence matrix that traces requirements, design evidence or an
+explicit disposition, current implementation and observable effects, relevant
+behavioral tests or inspected absence/access gaps, conflicts, and evidence gaps.
+The matrix classifies behavior separately from work: for example, behavior may
+be `existing_behavior_to_preserve` while the work is an `implementation_gap`.
+
+Product-question promotion fails closed. Uninspected or inaccessible evidence is
+an evidence gap, contradictory sources are a source conflict, and tested current
+behavior defaults to preservation unless an authoritative source explicitly
+changes it. The gate applies before Plan or Build in prepare-only and end-to-end
+work; implementation-only work must resolve the approved evidence reference.
+Prepare-only completion reports that execution has not started and never
+manufactures changed-files or implementation verification evidence.
+
+Adjacent skills consume but do not redefine this decision. `assistant-thinking`
+may surface candidate concerns or criteria, but cannot promote them without an
+admissible evidence row. `assistant-diagrams` traces every rendered node and edge
+to inspected or user-provided evidence and discloses gaps. `assistant-docs`
+blocks any existing-system preparation document whose behavior claims or Product
+questions lack complete evidence; when a fresh Architecture Decision Pack also
+applies, it returns an additional incomplete-Pack recovery rather than
+propagating those claims as decisions.
+
 ### Phase gate schema
 
 ```yaml

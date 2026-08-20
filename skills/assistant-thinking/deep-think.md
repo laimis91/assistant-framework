@@ -1,9 +1,9 @@
 # Deep Think (Iterative Depth)
 
-Run a problem through multiple analytical lenses to surface hidden requirements, risks, and edge cases.
+Run a problem through multiple analytical lenses to surface candidate concerns, criteria, risks, and edge cases.
 
 ## When to use
-- Requirements feel incomplete or underspecified
+- Requirements may omit concerns or criteria worth investigating
 - Complex feature with many stakeholders
 - You want to make sure you haven't missed anything before planning
 
@@ -32,10 +32,10 @@ Run a problem through multiple analytical lenses to surface hidden requirements,
 
 For each selected lens:
 1. Apply the lens question to the problem
-2. List new requirements, risks, or criteria discovered
+2. List candidate concerns or criteria discovered; in existing-system feature preparation these are not requirements or Product questions until the canonical workflow evidence row validates them
 3. Note any criteria from previous lenses that need refinement
 
-After all lenses: synthesize into a consolidated list of criteria/requirements.
+After all lenses: synthesize into a consolidated list of candidate concerns or criteria. Promote only through an admissible feature-preparation evidence row when existing behavior is in scope. A validated promotion repeats the exact canonical input evidence ref and its item id; a missing, stale, mismatched, or unresolved pair remains candidate-only.
 
 ## Output format
 
@@ -43,8 +43,8 @@ After all lenses: synthesize into a consolidated list of criteria/requirements.
 PROBLEM: [statement]
 
 LENS 1 — LITERAL
-- [requirement/finding]
-- [requirement/finding]
+- [candidate concern/criterion]
+- [candidate concern/criterion]
 
 LENS 3 — FAILURE
 - [risk/edge case]
@@ -53,9 +53,9 @@ LENS 3 — FAILURE
 [...additional lenses...]
 
 SYNTHESIS
-New criteria discovered: [count]
-- [criterion 1]
-- [criterion 2]
+Candidate concerns or criteria discovered: [count]
+- [candidate 1]
+- [candidate 2]
 - ...
 Refined criteria: [which existing criteria got sharper]
 Risks to mitigate: [top 3]

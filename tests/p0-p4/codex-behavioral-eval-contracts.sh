@@ -202,8 +202,7 @@ if [[ -f "$workspace/.agents/skills/assistant-workflow/contracts/index.yaml" ]] 
     && [[ -f "$workspace/.agents/skills/assistant-workflow/references/phases.md" ]]; then
     printf '%s\n' 'canonical-skill-surfaces-present' >>"$capture_dir/call-$call_id.fixtures"
     if ! grep -R -Fq '{agent_state_dir}' "$workspace/.agents/skills/assistant-workflow" \
-        && grep -R -Fq '.codex/task.md' "$workspace/.agents/skills/assistant-workflow" \
-        && grep -Fq 'AGENT_NAME="codex"' "$workspace/.agents/skills/assistant-workflow/agent.conf"; then
+        && grep -R -Fq '.codex/task.md' "$workspace/.agents/skills/assistant-workflow"; then
         printf '%s\n' 'codex-state-path-substituted' >>"$capture_dir/call-$call_id.fixtures"
     fi
 fi
@@ -3135,16 +3134,6 @@ if jq -e '
     pass
 else
     fail "trace schema does not expose the required behavioral provenance contract"
-fi
-
-test_start "Codex workflow examples use the current -C working-directory flag"
-if grep -Fq 'AGENT_CWD_FLAG="-C"' "$FRAMEWORK_DIR/skills/assistant-workflow/agents/codex.conf" \
-    && grep -Fq 'codex exec "PROMPT" -C DIR' "$FRAMEWORK_DIR/skills/assistant-workflow/agent.conf" \
-    && grep -Fq -- "codex exec \"\$(cat 'briefs/slice-<N>-<slice_id>.md')\" -C ." "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
-    && ! grep -Fq -- 'codex exec "PROMPT" --cwd DIR' "$FRAMEWORK_DIR/skills/assistant-workflow/agent.conf"; then
-    pass
-else
-    fail "one or more approved Codex launch examples still use --cwd"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

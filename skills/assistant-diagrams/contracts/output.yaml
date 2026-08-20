@@ -1,5 +1,5 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-diagrams
 
@@ -24,3 +24,54 @@ artifacts:
     description: "What the diagram shows — a brief explanation of its contents"
     validation: "Non-empty, concise description of the diagram's purpose and scope"
     on_fail: "Re-run skill to produce the missing artifact"
+
+  - name: evidence_sources
+    type: object[]
+    required: true
+    min_items: 1
+    description: "Inspected code, configuration, tests, or user-provided evidence used to draw the diagram"
+    validation: "Each source identifies what elements or relationships it supports; user-provided evidence is allowed and must be labeled as such."
+    on_fail: "Inspect or request source evidence before finalizing the diagram."
+    object_fields:
+      - name: source_ref
+        type: string
+        required: true
+      - name: supported_elements_or_relationships
+        type: string[]
+        required: true
+        min_items: 1
+
+  - name: element_trace
+    type: object[]
+    required: true
+    min_items: 1
+    description: "Trace for every rendered node and edge"
+    validation: "Every diagram node and edge appears exactly once with source_refs; an intentionally omitted or untraceable element belongs in coverage_gaps, never as an unexplained diagram element."
+    on_fail: "Remove untraceable elements or add their source trace and coverage disclosure."
+    object_fields:
+      - name: element_id
+        type: string
+        required: true
+      - name: element_kind
+        type: enum
+        required: true
+        enum_values: [node, edge]
+      - name: source_refs
+        type: string[]
+        required: true
+        min_items: 1
+
+  - name: coverage_gaps
+    type: string[]
+    required: true
+    description: "Known uninspected, inaccessible, proposed, or intentionally omitted behavior that limits diagram completeness"
+    validation: "Use an empty list only when all scoped elements and relationships are traceable."
+    on_fail: "Record the coverage limitation instead of implying a complete diagram."
+
+  - name: feature_preparation_evidence_ref
+    type: string
+    required: conditional
+    condition: "diagram supports existing-system feature preparation"
+    description: "Echoed canonical evidence ref used to validate preservation/gap scope"
+    validation: "Must equal the applicable input evidence ref and coverage_gaps must name any unavailable row."
+    on_fail: "Return to the feature-preparation evidence matrix before presenting the diagram as complete."

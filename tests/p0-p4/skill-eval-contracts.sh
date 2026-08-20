@@ -165,6 +165,12 @@ p0p4_write_skill_eval_responses() {
                     architecture-pack-resists-premature-abstraction)
                         jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
                         ;;
+                    viewing-route-preserves-active-behavior)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", completion_policy: {controller_intensity: "light", build_execution_lane: "inline_direct", plan_mode: "inline", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare the scoped evidence without implementation."}, feature_preparation_evidence: {ref: "prep/viewing-route", items: [{item_id: "viewing-route-effects", requirements_evidence: ["requirements/viewing-route: read-only VIEWING route"], design_evidence: {status: "unavailable", source_refs: [], rationale: "No design source is available for route effects."}, implementation_evidence: {status: "inspected", traces: [{file: "src/route.ts", symbols: ["select", "highlight", "focus"], execution_behavior: "ACTIVE selects, highlights, and focuses"}], search_or_access_refs: ["rg ACTIVE src/route.ts"], rationale: "The ACTIVE execution path performs all three observable effects."}, behavioral_test_evidence: {status: "inspected", assertions_or_search_refs: ["test/route_test.ts: selection, highlight, viewport focus"], rationale: "Behavioral tests assert each ACTIVE effect."}, conflict_analysis: "No source conflict: requirements add VIEWING but do not change ACTIVE effects.", evidence_gaps: [], behavior_status: "existing_behavior_to_preserve", work_status: "implementation_gap", rationale: "Existing observable behavior defaults to preservation absent an explicit change.", implementation_implication: "Extend the route scope to VIEWING while retaining read-only behavior and without enabling editing."}]}, feature_preparation_result: {execution_status: "not_started", scope: "existing_system read-only VIEWING route", feature_preparation_evidence_ref: "prep/viewing-route", evidence_gaps: [], open_decisions: [], implementation_implications: ["Adapt the ACTIVE effects to VIEWING without enabling edits."], recommended_next_step: "Create the implementation plan from prep/viewing-route."}}' >"$response_path"
+                        ;;
+                    feature-preparation-counterclassifies-unknown-conflict-and-gap)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", completion_policy: {controller_intensity: "light", build_execution_lane: "inline_direct", plan_mode: "inline", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare evidence and resolutions without implementation."}, feature_preparation_evidence: {ref: "prep/countercases", items: [{item_id: "case-a", requirements_evidence: ["requirements/case-a: silent after inspection"], design_evidence: {status: "not_applicable", source_refs: [], rationale: "No design evidence applies."}, implementation_evidence: {status: "inspected_absent", traces: [], search_or_access_refs: ["rg CaseA src test"], rationale: "Implementation inspection found no observable behavior."}, behavioral_test_evidence: {status: "inspected_absent", assertions_or_search_refs: ["rg CaseA test"], rationale: "Behavioral-test inspection found no assertions."}, conflict_analysis: "No sources conflict; all inspected sources are silent.", evidence_gaps: [], behavior_status: "materially_unknown", work_status: "product_question", rationale: "Only fully inspected silence leaves a material product decision.", implementation_implication: "Obtain a product decision before designing Case A."}, {item_id: "case-b", requirements_evidence: ["requirements/case-b: explicitly change tested behavior"], design_evidence: {status: "provided", source_refs: ["design/case-b"], rationale: "Design repeats the requested change."}, implementation_evidence: {status: "inspected", traces: [{file: "src/case-b.ts", symbols: ["existingBehavior"], execution_behavior: "Existing behavior differs from requirements."}], search_or_access_refs: ["src/case-b.ts"], rationale: "Implementation evidence conflicts with the requested source."}, behavioral_test_evidence: {status: "inspected", assertions_or_search_refs: ["test/case-b_test.ts"], rationale: "Tests preserve the existing behavior."}, conflict_analysis: "Requirements/design conflict with tested existing behavior.", evidence_gaps: [], behavior_status: "source_conflict", work_status: "source_conflict_resolution", rationale: "Contradictory sources require resolution, not a product question from omission.", implementation_implication: "Resolve the source conflict before implementation."}, {item_id: "case-c", requirements_evidence: ["requirements/case-c"], design_evidence: {status: "unavailable", source_refs: [], rationale: "Design evidence is unavailable."}, implementation_evidence: {status: "inspected", traces: [{file: "src/case-c.ts", symbols: ["behavior"], execution_behavior: "Implementation behavior was inspected."}], search_or_access_refs: ["src/case-c.ts"], rationale: "Implementation is accessible."}, behavioral_test_evidence: {status: "inaccessible", assertions_or_search_refs: ["test access denied"], rationale: "Relevant behavioral tests could not be accessed."}, conflict_analysis: "No conflict can be concluded while tests are inaccessible.", evidence_gaps: ["Relevant behavioral-test access"], behavior_status: "materially_unknown", work_status: "evidence_gap", rationale: "Missing test evidence fails closed.", implementation_implication: "Restore test access and complete the evidence row."}]}, feature_preparation_result: {execution_status: "not_started", scope: "existing_system countercase preparation", feature_preparation_evidence_ref: "prep/countercases", evidence_gaps: ["Relevant behavioral-test access for Case C"], open_decisions: ["Case A product decision", "Case B source-conflict resolution"], implementation_implications: ["Do not implement Case A or B before their recorded resolution."], recommended_next_step: "Resolve the evidence gap and open decisions before implementation."}}' >"$response_path"
+                        ;;
                     code-mapper-applicable-architecture-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: "observed", evidence_or_gap: "producer reaches consumer", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}' >"$response_path"
                         ;;
@@ -206,6 +212,32 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     *)
                         fail "unhandled structured assistant-review eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
+            if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$skill_name:$id" in
+                    assistant-thinking:feature-preparation-candidates-require-evidence)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
+                        ;;
+                    assistant-thinking:feature-preparation-exact-evidence-binding)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["The canonical row preserves the tested ACTIVE effects for VIEWING."], recommendation: "Carry the preservation obligation into the implementation plan.", confidence: "medium", gaps_or_assumptions: ["VIEWING implementation has not started."], evidence_or_observations: ["prep/viewing-route#viewing-route-effects records inspected implementation and behavioral tests."], feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", rationale: "The exact canonical evidence row records inspected implementation and behavioral-test effects."}]}' >"$response_path"
+                        ;;
+                    assistant-thinking:feature-preparation-mismatched-evidence-binding)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
+                        ;;
+                    assistant-diagrams:feature-preparation-diagram-traceability)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_ref: "prep/viewing-route", evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus", "VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
+                        ;;
+                    assistant-docs:architecture-doc-blocks-incomplete-feature-preparation-pack)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, evidence_sources: [{source: "feature-preparation evidence status", claims_supported: "The Pack cannot document the unsupported route decision."}], doc_coverage: "No architecture decision was documented because the carried feature evidence is incomplete.", review_items: ["Inspect implementation and behavioral tests before documenting the Pack decision."], safety_notes: ["none"], feature_preparation_evidence_status: "incomplete", feature_preparation_evidence_trace: {outcome: "blocked_incomplete_evidence", recovery_action: "request_complete_evidence", review_trace: ["implementation and behavioral tests were not inspected"]}, architecture_decision_pack_trace: {outcome: "blocked_incomplete_pack", recovery_action: "request_complete_pack", review_trace: ["implementation and behavioral tests were not inspected"]}}' >"$response_path"
+                        ;;
+                    assistant-docs:feature-preparation-doc-blocks-incomplete-evidence-without-pack)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, evidence_sources: [{source: "feature-preparation evidence status", claims_supported: "The requested technical preparation document is blocked pending inspection."}], doc_coverage: "No technical preparation decision was documented because evidence is incomplete.", review_items: ["Inspect implementation and behavioral tests before documenting the route behavior."], safety_notes: ["none"], feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "incomplete", feature_preparation_evidence_trace: {outcome: "blocked_incomplete_evidence", recovery_action: "request_complete_evidence", review_trace: ["implementation and behavioral tests were not inspected"]}}' >"$response_path"
+                        ;;
+                    *)
+                        fail "unhandled structured skill eval case: $skill_name/$id"
                         ;;
                 esac
                 continue
@@ -1019,7 +1051,143 @@ if "$skill_eval_runner" --responses "$passing_response_dir" >"$passing_response_
     && grep -Fq "structured_json_assertion_failures=0" "$passing_response_output"; then
     pass
 else
-    fail "skill eval runner --responses did not pass generated all-required response set"
+    fail "skill eval runner --responses did not pass generated all-required response set: $(grep -E '^(FAIL|Summary:)' "$passing_response_output" | paste -sd ' | ' -)"
+fi
+
+test_start "feature-preparation rows and diagram traces reject omitted central evidence in the actual grader"
+feature_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/feature-eval-mutations.XXXXXX")"
+feature_counter_skill="$feature_mutation_root/assistant-eval-feature-counter"
+feature_diagram_skill="$feature_mutation_root/assistant-eval-feature-diagram"
+feature_thinking_skill="$feature_mutation_root/assistant-eval-feature-thinking"
+feature_docs_skill="$feature_mutation_root/assistant-eval-feature-docs"
+feature_counter_responses="$feature_mutation_root/counter-responses"
+feature_diagram_responses="$feature_mutation_root/diagram-responses"
+feature_thinking_responses="$feature_mutation_root/thinking-responses"
+feature_docs_responses="$feature_mutation_root/docs-responses"
+feature_counter_output="$feature_mutation_root/counter.out"
+feature_diagram_output="$feature_mutation_root/diagram.out"
+feature_thinking_output="$feature_mutation_root/thinking.out"
+feature_docs_output="$feature_mutation_root/docs.out"
+p0p4_register_cleanup "$feature_mutation_root"
+p0p4_write_skill_eval_fixture "$feature_counter_skill"
+p0p4_write_skill_eval_fixture "$feature_diagram_skill"
+p0p4_write_skill_eval_fixture "$feature_thinking_skill"
+p0p4_write_skill_eval_fixture "$feature_docs_skill"
+jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-counterclassifies-unknown-conflict-and-gap")' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")" \
+    '.cases = [$case]' "$feature_counter_skill/evals/cases.json" >"$feature_mutation_root/counter-cases.json"
+mv "$feature_mutation_root/counter-cases.json" "$feature_counter_skill/evals/cases.json"
+jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-diagram-traceability")' "$FRAMEWORK_DIR/skills/assistant-diagrams/evals/cases.json")" \
+    '.cases = [$case]' "$feature_diagram_skill/evals/cases.json" >"$feature_mutation_root/diagram-cases.json"
+mv "$feature_mutation_root/diagram-cases.json" "$feature_diagram_skill/evals/cases.json"
+jq --argjson cases "$(jq '[.cases[] | select(.id == "feature-preparation-exact-evidence-binding" or .id == "feature-preparation-mismatched-evidence-binding")]' "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json")" \
+    '.cases = $cases' "$feature_thinking_skill/evals/cases.json" >"$feature_mutation_root/thinking-cases.json"
+mv "$feature_mutation_root/thinking-cases.json" "$feature_thinking_skill/evals/cases.json"
+jq --argjson cases "$(jq '[.cases[] | select(.id == "architecture-doc-blocks-incomplete-feature-preparation-pack" or .id == "feature-preparation-doc-blocks-incomplete-evidence-without-pack")]' "$FRAMEWORK_DIR/skills/assistant-docs/evals/cases.json")" \
+    '.cases = $cases' "$feature_docs_skill/evals/cases.json" >"$feature_mutation_root/docs-cases.json"
+mv "$feature_mutation_root/docs-cases.json" "$feature_docs_skill/evals/cases.json"
+mkdir -p "$feature_counter_responses/assistant-eval-feature-counter" "$feature_diagram_responses/assistant-eval-feature-diagram" \
+    "$feature_thinking_responses/assistant-eval-feature-thinking" "$feature_docs_responses/assistant-eval-feature-docs"
+cp "$passing_response_dir/assistant-workflow/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" \
+    "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
+cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+    "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+for case_id in feature-preparation-exact-evidence-binding feature-preparation-mismatched-evidence-binding; do
+    cp "$passing_response_dir/assistant-thinking/$case_id.txt" "$feature_thinking_responses/assistant-eval-feature-thinking/$case_id.txt"
+done
+for case_id in architecture-doc-blocks-incomplete-feature-preparation-pack feature-preparation-doc-blocks-incomplete-evidence-without-pack; do
+    cp "$passing_response_dir/assistant-docs/$case_id.txt" "$feature_docs_responses/assistant-eval-feature-docs/$case_id.txt"
+done
+feature_mutation_failures=()
+if ! "$skill_eval_runner" --responses "$feature_counter_responses" --skill "$feature_counter_skill" >"$feature_counter_output" 2>&1 \
+    || ! "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+    || ! "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1 \
+    || ! "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1; then
+    feature_mutation_failures+=("baseline")
+else
+    counter_row_field_paths=(
+        '.item_id'
+        '.requirements_evidence'
+        '.design_evidence.status'
+        '.design_evidence.source_refs'
+        '.design_evidence.rationale'
+        '.implementation_evidence.status'
+        '.implementation_evidence.traces'
+        '.implementation_evidence.search_or_access_refs'
+        '.implementation_evidence.rationale'
+        '.behavioral_test_evidence.status'
+        '.behavioral_test_evidence.assertions_or_search_refs'
+        '.behavioral_test_evidence.rationale'
+        '.conflict_analysis'
+        '.evidence_gaps'
+        '.behavior_status'
+        '.work_status'
+        '.rationale'
+        '.implementation_implication'
+    )
+    counter_root_mutations=(
+        'del(.feature_preparation_evidence.ref)'
+        'del(.feature_preparation_result)'
+        'del(.completion_policy, .feature_preparation_result.scope, .feature_preparation_result.evidence_gaps, .feature_preparation_result.open_decisions)'
+    )
+    for mutation in "${counter_root_mutations[@]}"; do
+        jq "$mutation" "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
+        if "$skill_eval_runner" --responses "$feature_counter_responses" --skill "$feature_counter_skill" >"$feature_counter_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_counter_output"; then
+            feature_mutation_failures+=("counter:$mutation")
+        fi
+        cp "$passing_response_dir/assistant-workflow/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" \
+            "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
+    done
+    for row_index in 0 1 2; do
+        for field_path in "${counter_row_field_paths[@]}"; do
+            mutation="del(.feature_preparation_evidence.items[$row_index]$field_path)"
+            jq "$mutation" "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" >"$feature_mutation_root/mutated.json"
+            mv "$feature_mutation_root/mutated.json" "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
+            if "$skill_eval_runner" --responses "$feature_counter_responses" --skill "$feature_counter_skill" >"$feature_counter_output" 2>&1 \
+                || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_counter_output"; then
+                feature_mutation_failures+=("counter:row-$row_index$field_path")
+            fi
+            cp "$passing_response_dir/assistant-workflow/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" \
+                "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
+        done
+    done
+    for trace_index in 0 1 2 3 4; do
+        jq "del(.element_trace[$trace_index])" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+            feature_mutation_failures+=("diagram:trace-$trace_index")
+        fi
+        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    done
+    jq '(.diagram_code) |= sub("viewing-route"; "preview-route")' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:diagram-code-viewing-route")
+    fi
+    jq 'del(.tool_used, .key_insights, .recommendation, .confidence, .gaps_or_assumptions, .evidence_or_observations)' \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
+    if "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_thinking_output"; then
+        feature_mutation_failures+=("thinking:base-outputs")
+    fi
+    jq 'del(.evidence_sources, .doc_coverage, .review_items, .safety_notes)' \
+        "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-blocks-incomplete-feature-preparation-pack.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-blocks-incomplete-feature-preparation-pack.txt"
+    if "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_docs_output"; then
+        feature_mutation_failures+=("docs:base-outputs")
+    fi
+fi
+if [[ ${#feature_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "feature-preparation structured assertions did not reject omissions: ${feature_mutation_failures[*]}"
 fi
 
 test_start "skill eval runner validates safe structured JSON assertions and rejects unsafe JSON shapes"

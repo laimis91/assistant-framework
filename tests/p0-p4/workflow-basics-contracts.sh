@@ -120,15 +120,13 @@ else
     fail "agentic loop safety lacks low-confidence escalation in: ${missing_loop_safety_terms[*]}"
 fi
 
-test_start "workflow templates and scripts do not use stale Build & Test or VERIFYING labels"
+test_start "workflow templates do not use stale Build & Test or VERIFYING labels"
 if rg -n "Build & Test|VERIFYING" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/generate-agents-md.sh" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" >/tmp/p0p4-stale-workflow-labels.out; then
-    fail "found stale workflow template/script labels; see /tmp/p0p4-stale-workflow-labels.out"
+    fail "found stale workflow template labels; see /tmp/p0p4-stale-workflow-labels.out"
 else
     pass
 fi

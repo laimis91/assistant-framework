@@ -7,13 +7,8 @@ Use the strict slice packet fields from `slice_manifest` for every executable br
 - One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
-- Git: task branch `feature/<task>` + per-slice branches `slice/<task>/<slice-id>`; use `references/slice-review-topology.md` when `promotion_mode: review_gated` produces REVIEW_PENDING evidence. Legacy branch layouts are compatibility-only and must not mix with new briefs.
-
-Automation scripts in `scripts/` (bash):
-- `decompose.sh` -- create branches, worktrees, briefs
-- `run-agents.sh` -- launch parallel agents (reads `agent.conf` for CLI)
-- `check-integration.sh` -- validate integration readiness
-- `generate-agents-md.sh` -- capture project knowledge
+- Keep slice ownership explicit through task packets. Use native subagents only when slices are independent, with no overlapping file ownership or undeclared prerequisite.
+- Verify each completed slice before dependent work starts. After all slices are integrated, run cross-slice and full-scope validation, then a fresh review.
 
 ## Agent Portability
 

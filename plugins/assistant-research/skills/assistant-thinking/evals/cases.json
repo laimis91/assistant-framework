@@ -10,6 +10,7 @@
   "activation_cases": [
     {"user_request": "Stress test this architecture decision.", "should_activate": true},
     {"user_request": "Reason through this trade-off.", "should_activate": true},
+    {"user_request": "Technically prepare this feature from current code and tests; do not implement.", "should_activate": false},
     {"user_request": "Implement the selected architecture decision.", "should_activate": false}
   ],
   "recommended_use": [
@@ -220,6 +221,122 @@
           "ask for permission to spawn",
           "sequential fallback without fallback evidence",
           "policy_disallowed without policy_blocking_source"
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-candidates-require-evidence",
+      "title": "Deep Think keeps feature-preparation concerns as candidates",
+      "category": "feature_preparation_promotion",
+      "purpose": "Checks that Deep Think does not convert an omitted behavior into a requirement or Product question before workflow evidence exists.",
+      "prompt": "Use Deep Think to explore concerns for a read-only VIEWING route before implementation. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "Existing ACTIVE code selects an object, highlights a map, and focuses a viewport.",
+        "Behavioral tests assert those effects.",
+        "The feature-preparation evidence ref has not yet been completed."
+      ],
+      "expected_behavior": [
+        "Returns candidate_concerns_or_criteria with promotion_status=requires_feature_preparation_evidence because no canonical evidence ref resolves.",
+        "Routes the concern to workflow feature preparation for implementation and behavioral-test inspection.",
+        "Does not promote selection/highlight/focus to a Product question or a new requirement."
+      ],
+      "pass_criteria": [
+        "The response preserves candidate status until the canonical evidence ref resolves.",
+        "The response names implementation and behavioral-test inspection as the promotion prerequisite."
+      ],
+      "fail_signals": [
+        "Promotes a candidate based only on omitted requirements/design.",
+        "Claims Deep Think itself completed feature preparation."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["candidate_concerns_or_criteria", "requires_feature_preparation_evidence", "implementation", "behavioral tests"],
+        "forbidden_substrings": ["new Product question", "new requirement because omitted", "validated_by_feature_preparation_evidence"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["tool_used"], "expected": "deep_think"},
+          {"operator": "nonempty_array", "path": ["key_insights"]},
+          {"operator": "nonempty_string", "path": ["recommendation"]},
+          {"operator": "equals", "path": ["confidence"], "expected": "medium"},
+          {"operator": "nonempty_array", "path": ["gaps_or_assumptions"]},
+          {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "requires_feature_preparation_evidence"},
+          {"operator": "array_items_nonempty_fields", "path": ["candidate_concerns_or_criteria"], "fields": ["concern_or_criterion", "promotion_status", "rationale"]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-exact-evidence-binding",
+      "title": "Deep Think validates promotion only with the exact canonical evidence row",
+      "category": "feature_preparation_promotion_binding",
+      "purpose": "Checks that a validated concern repeats the exact canonical evidence reference and resolves a named evidence item.",
+      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "feature_preparation_evidence_ref=prep/viewing-route and feature_preparation_evidence_item_id=viewing-route-effects are canonical and admissible.",
+        "That row records inspected implementation and behavioral tests for ACTIVE selection, highlight, and viewport focus."
+      ],
+      "expected_behavior": [
+        "A validated promotion repeats the exact canonical evidence ref and evidence item id.",
+        "The concern remains tied to the inspected row rather than becoming an independent requirement or Product question."
+      ],
+      "pass_criteria": [
+        "The output uses validated_by_feature_preparation_evidence only with the exact matching ref and row id."
+      ],
+      "fail_signals": [
+        "Uses a different, stale, or unresolved evidence ref.",
+        "Validates a concern without an evidence item id."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["validated_by_feature_preparation_evidence", "prep/viewing-route", "viewing-route-effects"],
+        "forbidden_substrings": ["new Product question", "new requirement because omitted"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["tool_used"], "expected": "deep_think"},
+          {"operator": "nonempty_array", "path": ["key_insights"]},
+          {"operator": "nonempty_string", "path": ["recommendation"]},
+          {"operator": "equals", "path": ["confidence"], "expected": "medium"},
+          {"operator": "nonempty_array", "path": ["gaps_or_assumptions"]},
+          {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "validated_by_feature_preparation_evidence"},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-mismatched-evidence-binding",
+      "title": "Deep Think rejects mismatched feature-preparation evidence binding",
+      "category": "feature_preparation_promotion_binding",
+      "purpose": "Checks that a stale or mismatched candidate reference cannot validate promotion.",
+      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects, but a candidate cites prep/old-route. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "The canonical input ref is prep/viewing-route with row viewing-route-effects.",
+        "The candidate's prep/old-route reference is stale and does not resolve to the input evidence."
+      ],
+      "expected_behavior": [
+        "The candidate remains requires_feature_preparation_evidence or candidate_only.",
+        "The response does not return a mismatched ref or item id as validated evidence."
+      ],
+      "pass_criteria": [
+        "A mismatched ref cannot produce validated_by_feature_preparation_evidence."
+      ],
+      "fail_signals": [
+        "Returns validated_by_feature_preparation_evidence for prep/old-route.",
+        "Silently substitutes an unresolved row id."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["requires_feature_preparation_evidence", "canonical input", "cannot validate"],
+        "forbidden_substrings": ["validated_by_feature_preparation_evidence", "prep/old-route"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["tool_used"], "expected": "deep_think"},
+          {"operator": "nonempty_array", "path": ["key_insights"]},
+          {"operator": "nonempty_string", "path": ["recommendation"]},
+          {"operator": "equals", "path": ["confidence"], "expected": "medium"},
+          {"operator": "nonempty_array", "path": ["gaps_or_assumptions"]},
+          {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "requires_feature_preparation_evidence"},
+          {"operator": "nonempty_string", "path": ["candidate_concerns_or_criteria", 0, "rationale"]}
         ]
       }
     }

@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "5.0"
 contract: input
 skill: assistant-thinking
 
@@ -83,3 +83,21 @@ fields:
     description: "Fresh workflow Architecture Decision Pack reference or durable decision record being challenged"
     validation: "Non-empty and traceable to its source revision/context; if stale, identify refresh rather than reasoning from an assumed current design"
     on_missing: ask
+
+  - name: feature_preparation_evidence_ref
+    type: string
+    required: false
+    condition: "tool == deep_think and existing-system feature preparation is in scope"
+    description: "Canonical workflow feature-preparation evidence reference used to keep concerns from becoming unsupported requirements or Product questions"
+    validation: "When present, resolves to a completed evidence row before a candidate is promoted beyond candidate_only. Missing or inaccessible evidence keeps the concern candidate_only with promotion_status=requires_feature_preparation_evidence; Deep Think may still surface candidates."
+    default: null
+    on_missing: skip
+
+  - name: feature_preparation_evidence_item_id
+    type: string
+    required: false
+    condition: "tool == deep_think and existing-system feature preparation is in scope"
+    description: "Canonical evidence row identifier paired with feature_preparation_evidence_ref when a Deep Think candidate is validated"
+    validation: "When present, resolves under the exact canonical input feature_preparation_evidence_ref; a missing, stale, mismatched, or unresolved pair cannot validate promotion."
+    default: null
+    on_missing: skip

@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "8.0"
+schema_version: "11.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -152,6 +152,11 @@ gates:
         check: "Every clarification question is admissible: it affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be resolved from code/context; lacks a safe default; and states risk if guessed"
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
+      - id: D_FEATURE_PREPARATION_EVIDENCE
+        check: "For existing-system feature work, prepare_only/end_to_end discovery completes feature_preparation_evidence before any question, plan, or Build is finalized; implement_only resolves an approved_feature_preparation_evidence_ref covering the current packet. Product question admissibility fails closed: absence from requirements/design alone is insufficient; current implementation and relevant behavioral tests are inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible/uninspected evidence is evidence_gap; contradictory evidence is source_conflict; existing behavior extended to a new route/scope is existing_behavior_to_preserve + implementation_gap."
+        condition: "feature_preparation_scope == existing_system"
+        on_fail: "For prepare_only/end_to_end, load references/feature-preparation-evidence.md, trace the behavior path and tests, classify each item, and replace unsupported Product questions with an implementation gap, source conflict, or evidence gap. For implement_only, stop until the approved evidence ref resolves to the current packet."
+
       - id: D_PROGRESSIVE_DISCOVERY_HOLD
         check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
         condition: "uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]"
@@ -247,16 +252,11 @@ gates:
 
       - id: DC_SLICE_IDENTITY
         check: "Every slice_id names its observable increment or verified deliverable"
-        on_fail: "Rename generic slice IDs to stable descriptive outcome or deliverable slugs and update every manifest dependency and packet reference before branch creation"
+        on_fail: "Rename generic slice IDs to stable descriptive outcome or deliverable slugs and update every manifest dependency and packet reference"
 
       - id: DC_SLICE_SEQUENCE_LABEL
         check: "No slice_id is an ordinal-only or generic sequence label"
-        on_fail: "Replace ordinal-only slice IDs with descriptive slugs before branch creation and keep sequencing in manifest order and depends_on"
-
-      - id: DC_SLICE_REVIEW_TOPOLOGY
-        check: "When slice_manifest has more than one item or slice_promotion_mode == review_gated, every generated slice packet contains complete topology metadata: target_branch, target_base_sha, task_branch, slice_branch, and promotion_mode"
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        on_fail: "Load references/slice-review-topology.md and add complete topology metadata before Build."
+        on_fail: "Replace ordinal-only slice IDs with descriptive slugs and keep sequencing in manifest order and depends_on"
 
       - id: DC3
         check: "Slices are ordered by dependency — independent slices first and dependent slices after every depends_on prerequisite"
@@ -292,6 +292,11 @@ gates:
     checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved medium+ plans; --- PHASE: PLAN COMPLETE --- for no-wait small plans"
     condition: "plan_mode != none"
     exit_assertions:
+
+      - id: P_FEATURE_PREPARATION_REFERENCE
+        check: "An existing-system feature plan references the completed or approved feature-preparation evidence ref in its plan, task packet, and applicable Architecture Decision Pack. Prepare-only plans state that execution has not started; end-to-end and implement-only plans retain the evidence ref before Build."
+        condition: "feature_preparation_scope == existing_system"
+        on_fail: "Return to Discover, complete or resolve the canonical feature-preparation evidence artifact, then add its stable ref to the plan, task packet, and any applicable Pack."
 
       - id: P_ARTIFACT_CONTRACT
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
@@ -518,16 +523,6 @@ gates:
         condition: "size in [medium, large, mega]"
         on_fail: "This is a process violation — slices must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
 
-      - id: B_SLICE_REVIEW_PENDING
-        check: "For review_gated slices, local verification emits REVIEW_PENDING evidence with exact reviewed SHAs, must not mutate the task branch, and must not mark the slice VERIFIED or unlock dependent work."
-        condition: "slice_promotion_mode == review_gated"
-        on_fail: "Keep the slice pending and record exact local evidence; wait for adapter evidence."
-
-      - id: B_SLICE_REVIEW_PROMOTION
-        check: "A review-gated slice becomes VERIFIED only after provider evidence shows a passed gate for the exact reviewed SHAs, the reviewed head has ancestry in task_branch, and fresh verification succeeds. REVIEW_PENDING, REVIEW_REJECTED, and REVIEW_STALE remain non-completion states."
-        condition: "slice_promotion_mode == review_gated"
-        on_fail: "Treat changed refs as stale, obtain fresh provider evidence and fresh verification, and do not complete the slice early."
-
     guidance_assertions:
 
       - id: B7
@@ -736,6 +731,12 @@ invariants:
     check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
+
+  - id: INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY
+    check: "Product question admissibility fails closed for existing-system feature preparation: every Product question resolves to a feature_preparation_evidence item with requirements/design, implementation, behavioral-test, conflict, and gap evidence. Existing observable behavior is preserved unless explicitly changed; missing access or inspection is evidence_gap and contradictions are source_conflict."
+    condition: "feature_preparation_scope == existing_system"
+    scope: all_phases
+    on_fail: "Do not propagate the question into a plan, Architecture Decision Pack, diagram, or document. Complete the evidence row or classify the unresolved state accurately."
 
   - id: INV_ARCHITECTURE_PACK_FRESHNESS
     check: "When architecture_design_mode is not not_applicable, the Architecture Decision Pack remains tied to the current repository revision or stated greenfield basis. A changed HEAD, requirement, public contract, quality target, or contradictory source fact invalidates and refreshes the pack before Build or Review relies on it."

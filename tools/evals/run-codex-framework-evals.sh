@@ -443,9 +443,6 @@ materialize_variant() {
         cp -R "$entry" "$destination/"
     done < <(find "$REPO_ROOT/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
     cp "$overlay_file" "$destination/SKILL.md"
-    if [[ -f "$destination/agents/codex.conf" ]]; then
-        cp "$destination/agents/codex.conf" "$destination/agent.conf"
-    fi
     while IFS= read -r instruction_file; do
         sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
         rm -f "${instruction_file}.bak"

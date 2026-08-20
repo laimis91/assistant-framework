@@ -10,6 +10,7 @@
   "activation_cases": [
     {"user_request": "Implement this feature with verification.", "should_activate": true},
     {"user_request": "Plan and build this refactor.", "should_activate": true},
+    {"user_request": "Technically prepare this feature for development from current code and tests; do not implement.", "should_activate": true},
     {"user_request": "Answer a narrow question about the existing implementation.", "should_activate": false}
   ],
   "recommended_use": [
@@ -129,6 +130,46 @@
           "by_module",
           "by_feature",
           "contracts_first"
+        ]
+      }
+    },
+    {
+      "id": "native-slice-execution-uses-dependencies-not-runner-topology",
+      "title": "Native slices use dependency-aware subagents",
+      "category": "native_slice_execution",
+      "purpose": "Checks that approved implementation work keeps strict packets, uses native subagents only for genuinely independent slices, and verifies integration without a shell runner or branch topology.",
+      "prompt": "Implement the approved medium change. Slice A and B own different files; Slice C consumes A. Use parallel work only where it is safe.",
+      "setup_context": [
+        "The implementation plan is approved.",
+        "Slices A and B have no dependencies or overlapping files.",
+        "Slice C depends_on A and has cross-slice acceptance checks."
+      ],
+      "expected_behavior": [
+        "Dispatches or performs A and B in parallel only after confirming independent ownership and dependencies.",
+        "Keeps C blocked until A is verified.",
+        "Carries each packet's verification command and evidence through integration, cross-slice validation, and fresh review.",
+        "Does not require a Bash runner, worktree topology, or provider review state."
+      ],
+      "pass_criteria": [
+        "The response explicitly distinguishes independent A/B from dependent C.",
+        "The response records per-slice verification before C and post-integration verification before review."
+      ],
+      "fail_signals": [
+        "Launches dependent C with A.",
+        "Uses a runner script or branch topology as an execution requirement."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "independent",
+          "depends_on",
+          "verification command",
+          "cross-slice",
+          "fresh review",
+          "native subagents"
+        ],
+        "forbidden_substrings": [
+          "worktree topology",
+          "provider review state"
         ]
       }
     },
@@ -1273,47 +1314,6 @@
           "skills/completion-controller",
           "harness runtime artifacts are required for ordinary medium work",
           "phases.md owns full Build Review QA Document procedures"
-        ]
-      }
-    },
-    {
-      "id": "review-gated-slice-evidence-is-provider-neutral",
-      "title": "Review-gated slices await portable evidence",
-      "category": "slice_review",
-      "purpose": "Checks that review_gated work records local exact-SHA evidence without local promotion or provider-specific mechanics.",
-      "prompt": "Run the approved review_gated slice and prepare it for external review.",
-      "setup_context": [
-        "The strict packet declares target_branch, target_base_sha, task_branch, slice_branch, and promotion_mode: review_gated.",
-        "Local verification has passed for one exact slice head."
-      ],
-      "expected_behavior": [
-        "Records REVIEW_PENDING with verified_base_sha, verified_head_sha, verification_evidence_ref, and local verification evidence.",
-        "Does not perform local promotion, does not mutate the task branch, and does not mark the slice VERIFIED.",
-        "Requires fresh post-integration verification before VERIFIED and states that a provider-neutral adapter owns remote review and gate evidence."
-      ],
-      "pass_criteria": [
-        "REVIEW_PENDING, the reviewed SHA pair, verification_evidence_ref, and local verification evidence are explicit.",
-        "The task branch remains unchanged until provider-neutral approval, integration, and fresh post-integration verification succeed."
-      ],
-      "fail_signals": [
-        "Performs provider-specific execution directly.",
-        "Treats REVIEW_PENDING as VERIFIED."
-      ],
-      "machine_expectations": {
-        "required_substrings": [
-          "review_gated",
-          "REVIEW_PENDING",
-          "verified_base_sha",
-          "verified_head_sha",
-          "verification_evidence_ref",
-          "local verification",
-          "no local promotion",
-          "fresh post-integration verification",
-          "provider-neutral"
-        ],
-        "forbidden_substrings": [
-          "gh pr",
-          "glab mr"
         ]
       }
     },
@@ -2521,6 +2521,179 @@
           "direct_fallback without fallback evidence",
           "policy_disallowed without policy_blocking_source",
           "conditional policy blocks active skill exception"
+        ]
+      }
+    },
+    {
+      "id": "viewing-route-preserves-active-behavior",
+      "title": "Preparation preserves tested Active behavior for a read-only Viewing route",
+      "category": "feature_preparation_evidence",
+      "purpose": "Checks the sanitized regression: technical preparation traces current behavior and tests before classifying an open question.",
+      "prompt": "Technically prepare a read-only VIEWING route. Do not implement. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "Requirements add a read-only VIEWING route and do not mention map effects.",
+        "Current ACTIVE route selects an object, highlights the map, and focuses the viewport through the existing execution path.",
+        "Behavioral tests assert selection, map highlight, and viewport focus for ACTIVE.",
+        "Design evidence is unavailable."
+      ],
+      "expected_behavior": [
+        "Uses execution_intent=prepare_only and completes feature_preparation_evidence before planning.",
+        "Classifies the row behavior_status=existing_behavior_to_preserve and work_status=implementation_gap.",
+        "Plans to preserve selection, highlight, and focus for VIEWING without enabling editing.",
+        "Does not ask a Product question merely because requirements/design omit those effects.",
+        "Returns Execution not started and no changed_files or Build claim."
+      ],
+      "pass_criteria": [
+        "The response names requirements, implementation, and behavioral-test evidence.",
+        "The response uses existing_behavior_to_preserve and implementation_gap.",
+        "The response says Product question admissibility fails closed."
+      ],
+      "fail_signals": [
+        "Treats omitted map effects as a Product question without code/test inspection.",
+        "Enables editing for the VIEWING route.",
+        "Claims implementation has started."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["prepare_only", "feature_preparation_evidence", "existing_behavior_to_preserve", "implementation_gap", "selection", "highlight", "viewport focus", "Execution not started"],
+        "forbidden_substrings": ["Product question because requirements do not mention", "changed_files", "Build started"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["execution_intent"], "expected": "prepare_only"},
+          {"operator": "equals", "path": ["completion_policy", "controller_intensity"], "expected": "light"},
+          {"operator": "equals", "path": ["completion_policy", "build_execution_lane"], "expected": "inline_direct"},
+          {"operator": "equals", "path": ["completion_policy", "plan_mode"], "expected": "inline"},
+          {"operator": "equals", "path": ["completion_policy", "architecture_design_mode"], "expected": "not_applicable"},
+          {"operator": "equals", "path": ["completion_policy", "workflow_state_mode"], "expected": "inline"},
+          {"operator": "equals", "path": ["completion_policy", "manual_verification_mode"], "expected": "not_required"},
+          {"operator": "nonempty_string", "path": ["completion_policy", "selection_reason"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "ref"], "expected": "prep/viewing-route"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "item_id"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "requirements_evidence"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "design_evidence", "status"], "expected": "unavailable"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "design_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "status"], "expected": "inspected"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "status"], "expected": "inspected"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "behavior_status"], "expected": "existing_behavior_to_preserve"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "work_status"], "expected": "implementation_gap"},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 0, "evidence_gaps"]},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "traces"], "fields": ["file", "execution_behavior"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "traces", 0, "symbols"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "search_or_access_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "rationale"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "assertions_or_search_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "conflict_analysis"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "implementation_implication"]},
+          {"operator": "equals", "path": ["feature_preparation_result", "execution_status"], "expected": "not_started"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_result", "scope"]},
+          {"operator": "equals", "path": ["feature_preparation_result", "feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "empty_array", "path": ["feature_preparation_result", "evidence_gaps"]},
+          {"operator": "empty_array", "path": ["feature_preparation_result", "open_decisions"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_result", "implementation_implications"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_result", "recommended_next_step"]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-counterclassifies-unknown-conflict-and-gap",
+      "title": "Preparation distinguishes genuine unknowns, conflicts, and evidence gaps",
+      "category": "feature_preparation_countercases",
+      "purpose": "Checks that the evidence matrix reserves Product questions for materially unknown behavior and reports other uncertainty accurately.",
+      "prompt": "Prepare these feature decisions without implementation. Return the complete response as one valid JSON object with evidence items ordered as Case A, Case B, and Case C.",
+      "setup_context": [
+        "Case A: requirements, design, implementation, and tests are silent after inspection.",
+        "Case B: requirements explicitly contradict a tested existing behavior.",
+        "Case C: relevant behavioral tests cannot be accessed."
+      ],
+      "expected_behavior": [
+        "Case A is materially_unknown plus product_question only after the recorded inspections.",
+        "Case B is source_conflict plus source_conflict_resolution, not an implementation gap or Product question.",
+        "Case C is evidence_gap, not a Product question."
+      ],
+      "pass_criteria": [
+        "The response records the two-axis classification for all three cases.",
+        "Only the fully inspected silent case may become a Product question."
+      ],
+      "fail_signals": [
+        "Treats contradictory sources as a Product question.",
+        "Treats inaccessible tests as sufficient evidence for a Product question."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["materially_unknown", "product_question", "source_conflict", "source_conflict_resolution", "evidence_gap"],
+        "forbidden_substrings": ["ask Product for every omission"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["execution_intent"], "expected": "prepare_only"},
+          {"operator": "equals", "path": ["completion_policy", "controller_intensity"], "expected": "light"},
+          {"operator": "equals", "path": ["completion_policy", "build_execution_lane"], "expected": "inline_direct"},
+          {"operator": "equals", "path": ["completion_policy", "plan_mode"], "expected": "inline"},
+          {"operator": "equals", "path": ["completion_policy", "architecture_design_mode"], "expected": "not_applicable"},
+          {"operator": "equals", "path": ["completion_policy", "workflow_state_mode"], "expected": "inline"},
+          {"operator": "equals", "path": ["completion_policy", "manual_verification_mode"], "expected": "not_required"},
+          {"operator": "nonempty_string", "path": ["completion_policy", "selection_reason"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "ref"], "expected": "prep/countercases"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "item_id"], "expected": "case-a"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "requirements_evidence"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "design_evidence", "status"], "expected": "not_applicable"},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 0, "design_evidence", "source_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "design_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "status"], "expected": "inspected_absent"},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "traces"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "search_or_access_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "implementation_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "status"], "expected": "inspected_absent"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "assertions_or_search_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "behavioral_test_evidence", "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "conflict_analysis"]},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 0, "evidence_gaps"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "behavior_status"], "expected": "materially_unknown"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 0, "work_status"], "expected": "product_question"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 0, "implementation_implication"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "item_id"], "expected": "case-b"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 1, "requirements_evidence"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "design_evidence", "status"], "expected": "provided"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 1, "design_evidence", "source_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "design_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "implementation_evidence", "status"], "expected": "inspected"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence", "items", 1, "implementation_evidence", "traces"], "fields": ["file", "execution_behavior"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 1, "implementation_evidence", "traces", 0, "symbols"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 1, "implementation_evidence", "search_or_access_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "implementation_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "behavioral_test_evidence", "status"], "expected": "inspected"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 1, "behavioral_test_evidence", "assertions_or_search_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "behavioral_test_evidence", "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "conflict_analysis"]},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 1, "evidence_gaps"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "behavior_status"], "expected": "source_conflict"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 1, "work_status"], "expected": "source_conflict_resolution"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 1, "implementation_implication"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "item_id"], "expected": "case-c"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 2, "requirements_evidence"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "design_evidence", "status"], "expected": "unavailable"},
+          {"operator": "empty_array", "path": ["feature_preparation_evidence", "items", 2, "design_evidence", "source_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "design_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "implementation_evidence", "status"], "expected": "inspected"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence", "items", 2, "implementation_evidence", "traces"], "fields": ["file", "execution_behavior"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 2, "implementation_evidence", "traces", 0, "symbols"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 2, "implementation_evidence", "search_or_access_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "implementation_evidence", "rationale"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "behavioral_test_evidence", "status"], "expected": "inaccessible"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 2, "behavioral_test_evidence", "assertions_or_search_refs"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "behavioral_test_evidence", "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "conflict_analysis"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence", "items", 2, "evidence_gaps"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "behavior_status"], "expected": "materially_unknown"},
+          {"operator": "equals", "path": ["feature_preparation_evidence", "items", 2, "work_status"], "expected": "evidence_gap"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "rationale"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence", "items", 2, "implementation_implication"]},
+          {"operator": "equals", "path": ["feature_preparation_result", "execution_status"], "expected": "not_started"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_result", "scope"]},
+          {"operator": "equals", "path": ["feature_preparation_result", "feature_preparation_evidence_ref"], "expected": "prep/countercases"},
+          {"operator": "nonempty_array", "path": ["feature_preparation_result", "evidence_gaps"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_result", "open_decisions"]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_result", "implementation_implications"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_result", "recommended_next_step"]}
         ]
       }
     }

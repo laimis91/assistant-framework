@@ -1,5 +1,5 @@
 # contract header
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-docs
 
@@ -251,6 +251,34 @@ fields:
         required: false
         condition: "status == stale and a stale Pack ref is actually available"
         on_missing: skip
+
+  - name: feature_preparation_scope
+    type: enum
+    required: false
+    description: "Whether the requested document carries technical preparation for behavior in an existing system"
+    validation: "Use existing_system for feature, epic, story, or spike preparation whose claims or Product questions depend on current repository behavior; use not_applicable for ordinary source-derived docs."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Infer existing_system from the supplied workflow state, evidence ref, or an explicit request to document repository-grounded feature preparation."
+    enum_values: [not_applicable, existing_system]
+
+  - name: feature_preparation_evidence_status
+    type: enum
+    required: conditional
+    condition: "feature_preparation_scope == existing_system"
+    description: "Whether every existing-system behavior claim and carried Product question has complete admissible feature-preparation evidence"
+    validation: "current requires every carried Product question and behavior-preservation claim to resolve to a complete canonical evidence row. incomplete blocks writing the preparation claim regardless of whether an Architecture Decision Pack applies."
+    enum_values: [current, incomplete]
+    on_missing: fail
+
+  - name: feature_preparation_evidence_refs
+    type: string[]
+    required: conditional
+    condition: "feature_preparation_evidence_status == current"
+    description: "Canonical evidence refs supporting every carried feature-preparation Product question"
+    validation: "Every ref resolves to an admissible evidence row with requirements/design, implementation, behavioral-test, conflict, and gap analysis."
+    min_items: 1
+    on_missing: fail
 
   - name: format
     type: enum

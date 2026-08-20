@@ -1,5 +1,5 @@
 # contract header
-schema_version: "1.0"
+schema_version: "2.0"
 contract: input
 skill: assistant-diagrams
 
@@ -33,3 +33,11 @@ fields:
     validation: "Defaults to mermaid when not specified"
     on_missing: infer
     enum_values: [mermaid, plantuml]
+
+  - name: feature_preparation_evidence_ref
+    type: string
+    required: conditional
+    condition: "diagram supports existing-system feature preparation"
+    description: "Canonical workflow evidence reference constraining a diagram of existing behavior, new routes, or proposed gaps"
+    validation: "Must resolve to the preparation evidence row(s) represented by the diagram; user-provided evidence remains valid when no repository evidence exists."
+    on_missing: fail

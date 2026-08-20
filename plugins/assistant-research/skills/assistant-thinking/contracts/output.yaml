@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "5.0"
 contract: output
 skill: assistant-thinking
 
@@ -153,3 +153,37 @@ artifacts:
     description: "Hypotheses, tests, disconfirming evidence, and conclusion for debugging uncertainty"
     validation: "Includes at least three hypotheses unless fewer are plausible, tests performed or proposed, and what would disprove the current conclusion"
     on_fail: "Re-run hypothesis analysis and include hypotheses, tests, disconfirming evidence, and conclusion"
+
+  - name: candidate_concerns_or_criteria
+    type: object[]
+    required: conditional
+    condition: "tool_used == deep_think and existing-system feature preparation is in scope"
+    description: "Candidate concerns or criteria surfaced by Deep Think before workflow evidence validates promotion"
+    validation: "Each candidate remains unpromoted with candidate_only or requires_feature_preparation_evidence unless the exact canonical input feature_preparation_evidence_ref and feature_preparation_evidence_item_id resolve to an admissible row. Missing, stale, mismatched, or unresolved input evidence keeps the candidate unpromoted. Deep Think never promotes a candidate to a requirement or Product question merely because requirements/design omit a behavior."
+    on_fail: "Return candidates to workflow feature preparation, inspect implementation and behavioral tests, and retain candidate_only until the evidence row is complete."
+    object_fields:
+      - name: concern_or_criterion
+        type: string
+        required: true
+        on_missing: fail
+      - name: promotion_status
+        type: enum
+        required: true
+        enum_values: [candidate_only, requires_feature_preparation_evidence, validated_by_feature_preparation_evidence]
+        on_missing: fail
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "promotion_status == validated_by_feature_preparation_evidence"
+        validation: "Must equal the exact canonical input feature_preparation_evidence_ref; missing, stale, mismatched, or unresolved values require candidate_only or requires_feature_preparation_evidence."
+        on_missing: fail
+      - name: feature_preparation_evidence_item_id
+        type: string
+        required: conditional
+        condition: "promotion_status == validated_by_feature_preparation_evidence"
+        validation: "Must resolve to an admissible evidence row under the exact canonical input feature_preparation_evidence_ref."
+        on_missing: fail
+      - name: rationale
+        type: string
+        required: true
+        on_missing: fail

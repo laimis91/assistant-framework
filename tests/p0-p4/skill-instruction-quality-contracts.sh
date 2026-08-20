@@ -180,25 +180,78 @@ else
     fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
 fi
 
-test_start "assistant-review audit mode covers findings-only requests"
+test_start "assistant-review resolves mode from authorization and asks on ambiguity"
 review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_audit_failures=()
 for term in \
-    "provide findings" \
-    "report findings" \
-    "list findings" \
-    "summarize findings" \
-    "review against" \
-    "audit. Otherwise"; do
+    "semantic modification authority" \
+    "carried active approved implementation workflow" \
+    "authorship, branch/PR ownership, platform, or connector" \
+    "Should I only report findings, or also implement and verify fixes?"; do
     if ! grep -Fq "$term" "$review_input"; then
         review_audit_failures+=("missing $term")
     fi
 done
 
+if grep -Fq "default: review-fix" "$review_input"; then
+    review_audit_failures+=("must not default to review-fix")
+fi
+
 if [[ "${#review_audit_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-review findings-only prompts must infer audit mode: ${review_audit_failures[*]}"
+    fail "assistant-review mode resolution must use authorization and ask on ambiguity: ${review_audit_failures[*]}"
+fi
+
+test_start "assistant-review gates fixes and normalizes review eval authority"
+review_authorization_failures=()
+review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
+review_router="$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
+review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+for file_and_term in \
+    "$review_loop::Resolve review mode before Spec Review, Reviewer dispatch, or source mutation" \
+    "$review_loop::Run only in review-fix mode" \
+    "$review_loop::evidence-backed must-fix and should-fix items" \
+    "$review_loop::in audit mode, report the mismatch without source changes" \
+    "$review_loop::Return it to the composing workflow for planning or approval" \
+    "$review_router::Before Stage 1 Spec Review or source inspection/mutation" \
+    "$review_router::only when review-fix authority is explicit or carried by the" \
+    "$review_router::Audit mode reports findings without source changes" \
+    "$review_router::In audit mode, report the mismatch without source changes" \
+    "$review_router::only evidence-backed findings within authorized scope" \
+    "$review_router::returns to planning or approval before any mutation"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        review_authorization_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if ! jq -e '
+    def review_request:
+      .prompt | test("^(Review|Check|Audit|Could you check|Run a fresh review)");
+    def resolved_mode_context:
+      (.setup_context | join("\n") | test("explicitly (authorizes source modifications|requests an audit)|active approved implementation workflow"; "i"));
+    all(.cases[];
+      if .id == "ambiguous-standalone-review-asks-before-review-or-mutation" then
+        (.expected_behavior | index("Asks exactly: Should I only report findings, or also implement and verify fixes?")) and
+        (.machine_expectations.required_substrings | index("Should I only report findings, or also implement and verify fixes?")) and
+        (.machine_expectations.forbidden_substrings | index("I reviewed")) and
+        (.machine_expectations.forbidden_substrings | index("I changed"))
+      elif review_request then
+        resolved_mode_context
+      else
+        true
+      end
+    )
+' "$review_evals" >/dev/null; then
+    review_authorization_failures+=("assistant-review evals lack explicit audit/fix/workflow authority or ambiguity guard")
+fi
+
+if [[ "${#review_authorization_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review execution authorization contract drifted: ${review_authorization_failures[*]}"
 fi
 
 test_start "assistant-ideate owns brainstorming description activation"

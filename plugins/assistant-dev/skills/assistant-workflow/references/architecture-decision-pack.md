@@ -118,6 +118,14 @@ nested Pack mode cannot be weakened to evade that evidence.
 - Fact: [claim] -- [source ref and command/path]
 - Assumption/default: [statement] -- [safe default | pending question | validated]
 
+### Existing-system feature-preparation evidence (when applicable)
+- Evidence ref: [feature_preparation_evidence.ref]
+- Carried Product question: [item id, only if its evidence row is admissible]
+- Preserve/change classification: [behavior_status + work_status]
+- Do not carry an unsupported Product question: incomplete inspection is an
+  evidence gap and contradictory sources are
+  `source_conflict + source_conflict_resolution` until resolved.
+
 ### Design-pressure checks
 | Check | Evidence or material question | Decision implication |
 |---|---|---|

@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "8.0"
+schema_version: "11.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -554,6 +554,17 @@ handoffs:
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Current Architecture Decision Pack reference; Architect consumes it rather than rediscovering its facts"
         validation: "Resolves to a fresh pack with boundaries, design-pressure checks, Type Ledger, quality scenarios, verification, and invalidation conditions"
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+        description: "Whether decomposition must preserve classifications from existing-system feature preparation"
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Completed or approved evidence ref constraining decomposition"
+        validation: "Resolves to the current two-axis behavior/work classifications and their implementation/test evidence"
       - name: context_map
         type: string
         required: true
@@ -772,6 +783,17 @@ handoffs:
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Fresh typed Architecture Decision Pack reference"
         validation: "Resolves to the pack that owns the current selected design, design-pressure conclusions, semantic type decisions, quality scenarios, and review scope"
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+        description: "Whether executable task packets must carry existing-system behavior classifications"
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Completed or approved evidence ref used to produce task packets"
+        validation: "Resolves to the current two-axis behavior/work classifications and their implementation/test evidence"
       - name: context_map
         type: string
         required: true
@@ -1027,6 +1049,12 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Fresh Architecture Decision Pack reference carried into this executable packet"
             validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
+          - name: feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            description: "Completed or approved evidence ref carried unchanged into this executable packet"
+            validation: "Resolves to the classifications and implementation implications this packet implements"
           - name: architecture_test_obligations
             type: object[]
             required: conditional
@@ -1311,6 +1339,17 @@ handoffs:
         required: true
         enum_values: [not_applicable, lightweight, required, review_intensive]
         description: "Whether the current task packet is constrained by an Architecture Decision Pack"
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+        description: "Whether the Build packet is constrained by existing-system feature-preparation evidence"
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Completed or approved evidence ref constraining this Build handoff"
+        validation: "Resolves to the same evidence ref carried by the applicable inline or executable task packet"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1345,6 +1384,12 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Current Architecture Decision Pack reference that constrains this Build step"
             validation: "Resolves to the current design, including design-pressure checks, and must be refreshed before deviation"
+          - name: feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            description: "Completed or approved feature-preparation evidence ref constraining this Build step"
+            validation: "Resolves to the preserved behavior, explicit changes, conflicts, gaps, and implementation implications for this packet"
           - name: architecture_test_obligations
             type: object[]
             required: conditional
@@ -1802,6 +1847,17 @@ handoffs:
         required: true
         enum_values: [not_applicable, lightweight, required, review_intensive]
         description: "Whether verification must consume Architecture Decision Pack commitments"
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+        description: "Whether verification must check existing-system feature-preparation classifications"
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Completed or approved evidence ref constraining verification"
+        validation: "Resolves to the same evidence ref consumed by the Build handoff"
       - name: current_task_packet
         type: object
         required: conditional
@@ -1832,6 +1888,12 @@ handoffs:
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
             description: "Architecture Decision Pack reference whose design-pressure, quality, and type commitments this verification checks"
             validation: "Resolves to the fresh selected-design pack"
+          - name: feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            description: "Completed or approved evidence ref whose preservation and gap classifications verification must check"
+            validation: "Resolves to the same feature-preparation evidence ref consumed by CodeWriter"
           - name: architecture_test_obligations
             type: object[]
             required: conditional

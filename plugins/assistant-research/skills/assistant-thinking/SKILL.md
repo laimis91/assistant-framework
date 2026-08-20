@@ -37,7 +37,13 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 
 ## Constraints
 
-Migration note: assistant-thinking contracts are v3. v2 consumers must add the
+Migration note: assistant-thinking contracts are v5. v4 consumers must bind
+every validated Deep Think promotion to the exact canonical feature-preparation
+evidence ref and item id; missing, stale, mismatched, or unresolved evidence
+remains candidate-only. v3 consumers must retain
+Deep Think output as candidate concerns or criteria until a canonical
+feature-preparation evidence row validates promotion in existing-system feature
+preparation. v2 consumers must add the
 typed independent challenge evidence for `review_intensive` Architecture
 Decision Pack updates: `challenge_ref`, `dissent_or_validation`, `resolution`,
 and `selected_design_impact`. Applicable direct-user,
@@ -59,7 +65,7 @@ and covered work without a second permission question.
 | **Clarify** | `clarify.md` | Stuck or challenging assumptions. Classifies hard vs soft constraints. |
 | **Perspectives** | `perspectives.md` | Challenge a genuinely contested architecture/design decision; use only the perspectives and rounds that change the decision. |
 | **Stress Test** | `stress-test.md` | Validating important decisions. Steelman + counter-argument. |
-| **Deep Think** | `deep-think.md` | Requirements discovery. Multiple analytical lenses (8 lenses). |
+| **Deep Think** | `deep-think.md` | Candidate concerns and criteria. Multiple analytical lenses (8 lenses). |
 | **Hypothesize** | `hypothesize.md` | Debugging, investigation. Goal-first + hypothesis plurality (3+ hypotheses). |
 | **Creative** | `creative.md` | Naming, breakthrough ideas. Low-probability sampling for diverse output. |
 
@@ -84,7 +90,7 @@ Pick the smallest method that changes the outcome:
 - **Clarify**: assumptions/constraints are tangled, but the main goal is visible.
 - **Perspectives**: several architecture/design options are viable, quality drivers conflict, or an Architecture Decision Pack needs an independent challenge.
 - **Stress Test**: a proposal is likely to be accepted unless actively challenged.
-- **Deep Think**: requirements are incomplete or stakeholder/failure modes are hidden.
+- **Deep Think**: candidate concerns or criteria are needed because requirements are incomplete or stakeholder/failure modes are hidden. In existing-system feature preparation, it does not promote them to requirements or Product questions without workflow evidence.
 - **Hypothesize**: root cause is unknown; generate 3+ testable hypotheses before testing.
 - **Creative**: naming or unusual options are needed after ordinary choices feel stale.
 
@@ -124,6 +130,7 @@ Return:
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
 - **Architecture Pack update** - when supplied: the Pack reference, whether it remains fresh, questions or claims it invalidates, semantic type/primitive-exception findings, and quality-scenario verification implications.
+- **Candidate concerns or criteria** - for Deep Think in existing-system feature preparation: candidate-only observations plus their evidence-promotion status and canonical evidence ref only when validated.
 - **Independent challenge evidence** - for `review_intensive` Pack updates: challenge reference, dissent or validation, resolution, and effect on the selected design.
 - **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and trigger scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.

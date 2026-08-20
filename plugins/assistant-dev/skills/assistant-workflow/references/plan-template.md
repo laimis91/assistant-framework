@@ -39,7 +39,6 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 ### Task [ID]: [short name]
 - name: [task packet name; must populate current_task_packet.name]
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
-- Slice topology: target_branch: [target] | target_base_sha: [immutable target commit SHA] | task_branch: feature/[task] | slice_branch: slice/[task]/[slice_id] | promotion_mode: [local | review_gated]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
@@ -102,11 +101,6 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 ```
 
 ## Slice Manifest
-
-For `review_gated`, copy the complete topology metadata into every packet and
-record `REVIEW_PENDING` review evidence rather than calling the slice VERIFIED.
-Use `references/slice-review-topology.md` for the exact evidence and adapter
-boundary; legacy briefs are a separate compatibility format and cannot mix.
 
 For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
 
@@ -278,6 +272,17 @@ Use the shared Slice Manifest structure above. Paste the approved Decompose mani
 
 ## Task packets
 Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
+
+## Existing-system feature preparation (when `feature_preparation_scope=existing_system`)
+- Feature-preparation evidence ref: [stable `feature_preparation_evidence.ref`]
+- Behavior/work classification: [each scoped item id + behavior_status + work_status]
+- Execution status: [`Execution not started` for prepare-only | evidence completed before Build for end-to-end | approved evidence ref resolved for implement-only]
+- Plan/readiness result: [implementation steps or the exact evidence gap/conflict]
+- Product questions: [only rows admitted by the canonical evidence matrix]
+
+For `prepare_only`, return `feature_preparation_result` instead of an execution
+handoff: scope, evidence ref when applicable, evidence gaps, open decisions,
+implementation implications, recommended next step, and `execution_status=not_started`.
 
 ## Tests to run
 - [command]: [what it validates]

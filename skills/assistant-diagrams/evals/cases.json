@@ -117,6 +117,50 @@
           "guess the architecture"
         ]
       }
+    },
+    {
+      "id": "feature-preparation-diagram-traceability",
+      "title": "Feature-preparation diagrams disclose each traced behavior and gap",
+      "category": "feature_preparation_traceability",
+      "purpose": "Checks that a diagram cannot make an incomplete behavior path look complete during technical preparation.",
+      "prompt": "Draw the route behavior diagram for ACTIVE and read-only VIEWING. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "Canonical feature_preparation_evidence_ref=prep/viewing-route is available.",
+        "Evidence traces ACTIVE selection, map highlight, and viewport focus; VIEWING implementation is not yet present.",
+        "One relationship is proposed and has no implementation source."
+      ],
+      "expected_behavior": [
+        "Echoes feature_preparation_evidence_ref=prep/viewing-route.",
+        "Returns evidence_sources and element_trace for every node and edge.",
+        "Lists the proposed VIEWING relationship in coverage_gaps instead of presenting it as existing behavior.",
+        "Uses the evidence matrix to distinguish preserved ACTIVE effects from the implementation gap."
+      ],
+      "pass_criteria": [
+        "Every rendered element is traceable to source evidence.",
+        "The incomplete VIEWING path is clearly disclosed as a gap."
+      ],
+      "fail_signals": [
+        "Renders the proposed route as established repository behavior.",
+        "Omits source traces for a node or edge."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_ref", "prep/viewing-route", "evidence_sources", "element_trace", "coverage_gaps", "selection", "highlight", "viewport focus"],
+        "forbidden_substrings": ["complete diagram with no evidence", "VIEWING implementation already exists"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["diagram_code"], "expected": "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source_ref"]},
+          {"operator": "nonempty_array", "path": ["evidence_sources", 0, "supported_elements_or_relationships"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace"], "fields": ["element_id", "element_kind"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace"], "field": "element_id", "expected_values": ["active-route", "active-effects", "active-to-effects", "viewing-route", "viewing-to-effects"]},
+          {"operator": "nonempty_array", "path": ["element_trace", 0, "source_refs"]},
+          {"operator": "nonempty_array", "path": ["element_trace", 1, "source_refs"]},
+          {"operator": "nonempty_array", "path": ["element_trace", 2, "source_refs"]},
+          {"operator": "nonempty_array", "path": ["element_trace", 3, "source_refs"]},
+          {"operator": "nonempty_array", "path": ["element_trace", 4, "source_refs"]},
+          {"operator": "nonempty_string", "path": ["coverage_gaps", 0]}
+        ]
+      }
     }
   ]
 }

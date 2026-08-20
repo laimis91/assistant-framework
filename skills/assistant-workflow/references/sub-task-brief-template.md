@@ -7,31 +7,10 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 - Aim for one or more smallest iterable slice packets; use a single slice when correct and record the rationale
 - Do not split by layer, module, folder, broad feature bucket, setup step, or broad component unless that split is itself a verified deliverable artifact slice
 - Contract-only work is valid only when it is the verified deliverable artifact slice
-- Dependent slice branches start from the task branch after prerequisite slices are VERIFIED
+- Dependent slices start only after prerequisite slices are VERIFIED
+- Parallel slices require no overlapping file ownership and no undeclared prerequisite
 - UI slices include a Design step, backend slices skip it
 - Slice packets add code comments but do NOT update README, CHANGELOG, or architecture docs
-
-## Git branching strategy
-
-```
-<target-branch>
- └── feature/[mega-task-name]                    ← task branch
-      ├── slice/[mega-task]/[slice-id]           ← reviewed slice head
-      ├── slice/[mega-task]/[slice-id]
-      └── slice/[mega-task]/[slice-id]
-```
-
-Workflow:
-1. Snapshot the target branch commit as immutable `target_base_sha`, then create the task branch from that commit
-2. Build independently verifiable slice heads from the task branch
-3. Each dependent slice starts only after its prerequisite is VERIFIED
-4. `review_gated` emits REVIEW_PENDING evidence and waits for configured adapter evidence
-5. Local promotion or reviewed integration updates the task branch
-6. Final task branch review targets the repository-specific <target-branch>
-
-Legacy compatibility: old `feature/<task>/integration` and
-`feature/<task>/slice-<slice-id>` briefs remain runnable only as a complete
-legacy set; do not generate or mix that layout with the new topology.
 
 ## Brief template
 
@@ -52,11 +31,6 @@ This packet is the executable contract for the slice. Supporting context below c
 
 - slice_id: [approved slice id]
 - slice_name: [approved slice name]
-- target_branch: [target branch]
-- target_base_sha: [immutable 40- or 64-character lowercase target commit SHA]
-- task_branch: feature/[task]
-- slice_branch: slice/[task]/[slice_id]
-- promotion_mode: local | review_gated
 - observable_increment: [what becomes visible/verifiable after this slice]
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - files_to_create:
@@ -95,7 +69,6 @@ Include the actual code/signatures or artifact paths, not just names.]
 - Must implement: [interface/contract/artifact from prerequisite slices]
 - Must follow the strict slice packet; do not use supporting context as permission to expand scope
 - Naming conventions: [from project]
-- Git branch: [branch name to work on]
 
 ### What to do
 Read configured project-local memory/context (for example `{agent_state_dir}/memory.md`, or another documented equivalent) when available and policy-allowed before starting.
@@ -165,15 +138,9 @@ Best when slices have no dependencies after prerequisite slices. Start each with
 **Sequential sessions:**
 Best when slices depend on each other. Complete one, carry verified output to next.
 
-**Multi-agent (Claude Code, Codex CLI):**
-Each agent gets a brief as its prompt. Requires well-defined contracts and an integration step.
-
-Brief files use `briefs/slice-<N>-<slice_id>.md`.
-
-```bash
-codex exec "$(cat 'briefs/slice-<N>-<slice_id>.md')" -C .
-codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" -C .
-```
+**Native subagents:**
+Each agent receives the packet as its task context. Dispatch only independent
+slices in parallel; keep dependent packets sequenced by `depends_on`.
 
 ## Decomposition rules
 
@@ -187,17 +154,16 @@ codex exec "$(cat 'briefs/slice-<N+1>-<next_slice_id>.md')" -C .
 
 ```
 All slice packets are verified. Now integrate:
-1. Merge all slice branches into integration branch
-2. Resolve merge conflicts
-3. Confirm verified prerequisite slice outputs are present and consumed
-4. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
-5. Run integration tests across slice boundaries
-6. Run full test suite
-7. Fix integration mismatches
+1. Integrate the completed slice changes and resolve conflicts
+2. Confirm verified prerequisite slice outputs are present and consumed
+3. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
+4. Run integration tests across slice boundaries
+5. Run the full relevant suite
+6. Fix integration mismatches and request fresh review
 
 Verified slices completed:
-- [name]: [what was built, branch]
-- [name]: [what was built, branch]
+- [name]: [what was built and verified]
+- [name]: [what was built and verified]
 
 Verified prerequisite slice outputs: [list]
 ```

@@ -27,11 +27,11 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The working tree has uncommitted changes in multiple files.",
-        "The user did not request audit-only mode."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Resolves review scope and captures a non-empty review_material_snapshot.",
-        "Defaults mode to review-fix.",
+        "Uses the user's explicit source-modification authorization to resolve mode=review-fix.",
         "Runs the initial review with evidence-backed findings and previously_fixed tracking.",
         "Fixes all must-fix and should-fix findings before validation.",
         "Runs build or test verification after fixes.",
@@ -77,6 +77,7 @@
       "prompt": "Review and fix this medium change. The second review has no new must-fix or should-fix finding, but its rubric score is 3.5.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modifications for this review.",
         "Round 1 found an actionable issue and the fix passed validation.",
         "Round 2 has no material finding and no changed file, validation failure, regression/drift, or changed hypothesis after it began."
       ],
@@ -118,7 +119,7 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review material is non-empty.",
-        "The user explicitly requested audit mode."
+        "The user explicitly requests an audit; report findings only and do not modify source."
       ],
       "expected_behavior": [
         "Runs exactly one evidence-backed review pass.",
@@ -145,6 +146,94 @@
           "second review round",
           "fixed the findings",
           "Should I fix"
+        ]
+      }
+    },
+    {
+      "id": "workflow-carried-authorization-allows-bounded-review-fix",
+      "title": "Carried workflow authorization allows bounded review-fix",
+      "category": "review_mode_resolution",
+      "purpose": "Checks that the Review phase of an active approved implementation workflow may repair evidence-backed in-scope findings without asking a redundant mode question.",
+      "prompt": "Check the implementation before completion.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The request is the Review phase of an active approved implementation workflow.",
+        "The current review material and acceptance scope belong to that workflow.",
+        "A discovered defect can be fixed without expanding the approved requirements, architecture, or files outside the implementation scope."
+      ],
+      "expected_behavior": [
+        "Resolves mode=review-fix from carried active approved workflow authorization.",
+        "Reviews, fixes the bounded in-scope defect, validates, and performs a fresh re-review.",
+        "Does not ask the audit-versus-fix question again.",
+        "Returns to the composing workflow for planning or approval if a finding would expand scope."
+      ],
+      "pass_criteria": [
+        "The response identifies carried workflow authorization as the reason for review-fix.",
+        "The response limits repairs to the approved scope.",
+        "The response validates after fixes and performs a fresh re-review."
+      ],
+      "fail_signals": [
+        "Treats workflow review as audit only.",
+        "Asks a redundant audit-versus-fix question despite carried authorization.",
+        "Uses the workflow as permission to expand requirements or architecture."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "carried active approved implementation workflow",
+          "review-fix",
+          "bounded in-scope",
+          "validate",
+          "fresh re-review"
+        ],
+        "forbidden_substrings": [
+          "authorship authorizes",
+          "platform authorizes",
+          "connector authorizes",
+          "expand scope without approval"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-standalone-review-asks-before-review-or-mutation",
+      "title": "Ambiguous standalone review asks before review or mutation",
+      "category": "review_mode_resolution",
+      "purpose": "Checks that standalone check/review paraphrases with unresolved audit-versus-edit intent ask one concise mode question before any review pass or source change.",
+      "prompt": "Could you check my branch and review the comments?",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "This is a standalone request with no carried active approved implementation workflow.",
+        "The user did not unambiguously request report-only output or source modification.",
+        "The branch and comments may be user-authored or from any review platform."
+      ],
+      "expected_behavior": [
+        "Keeps mode unresolved because both audit and modification remain plausible.",
+        "Asks exactly: Should I only report findings, or also implement and verify fixes?",
+        "Does not begin a review pass, dispatch a Reviewer, or mutate source before the answer.",
+        "Does not use authorship, branch/PR ownership, platform, or connector to resolve authorization."
+      ],
+      "pass_criteria": [
+        "The response contains only the concise mode question needed to proceed.",
+        "The response does not claim audit or review-fix before the user answers.",
+        "The response does not inspect or change code before resolving mode."
+      ],
+      "fail_signals": [
+        "Defaults to review-fix.",
+        "Defaults to audit.",
+        "Starts reviewing or editing before asking.",
+        "Treats authorship or a connector as modification permission."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Should I only report findings, or also implement and verify fixes?"
+        ],
+        "forbidden_substrings": [
+          "review-fix",
+          "audit mode",
+          "I reviewed",
+          "I changed",
+          "authorship authorizes",
+          "platform authorizes",
+          "connector authorizes"
         ]
       }
     },
@@ -192,7 +281,7 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review scope is medium-sized.",
-        "The user asks for a fresh review and does not request audit-only mode."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
@@ -244,7 +333,7 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review scope has application code, tests, and at least one abstraction change.",
-        "The user explicitly asks for clean-code principle review in addition to normal review."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Loads or applies the review-principles reference.",
@@ -293,6 +382,7 @@
       "prompt": "Review this medium change. DeliveryCoordinator now validates customer input, applies eligibility policy, sends HTTP requests, writes status records, and formats operator messages. Policy, transport, persistence, and presentation evolve independently.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review scope is medium.",
         "The described concerns have different owners and independent reasons to change."
       ],
@@ -337,6 +427,7 @@
       "prompt": "Review this medium change. InvoiceSummaryBuilder performs a detailed transformation from one normalized invoice into one summary. Every step contributes to that calculation, the output has one consumer, and no separate policy, I/O, persistence, or presentation concern is introduced.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review scope is medium.",
         "The unit has one cohesive responsibility and the available evidence shows no independently changing concern."
       ],
@@ -378,6 +469,7 @@
       "prompt": "Review this change for maintainability. Order.ApprovedAt changes from null to a timestamp to approve an order and from a timestamp to null to revoke approval. Rules and notifications depend on those changes. Customer.SecondaryPhone is nullable only because it is optional.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "Approval and revocation are business transitions inferred from changes to Order.ApprovedAt.",
         "Customer.SecondaryPhone has no transition rules, side effects, or state-dependent required data."
       ],
@@ -423,6 +515,7 @@
       "prompt": "Review this integration change. PaymentProvider is an enum that gains a value for every new provider, and pricing, routing, validation, and logging each switch on it. The product supports provider plugins. LogLevel is a stable closed enum used only for logging severity.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "PaymentProvider is an open-ended feature set and additions require changes in several consumers.",
         "LogLevel is a small stable closed enum with no provider-specific behavior."
       ],
@@ -467,6 +560,7 @@
       "purpose": "Checks that review distinguishes reusable authoritative conversion behavior, semantic drift, and unrelated similar arithmetic.",
       "prompt": "Review a mapper that duplicates nautical-mile to metre conversion arithmetic while an authoritative helper already exists. Also assess a second mapper with differing rounding and an unrelated percentage calculation.",
       "setup_context": [
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The helper and first duplicated mapper arithmetic have the same conversion semantics.",
         "The second mapper uses differing rounding, so its semantics diverge from the helper.",
         "The percentage calculation is an independent concept despite similar arithmetic."
@@ -514,6 +608,7 @@
       "prompt": "Review this bugfix diff. It changes checkout total calculation and adds a regression test.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material is a bugfix.",
         "The diff does not clearly show reproduction/root-cause evidence."
       ],
@@ -555,6 +650,7 @@
       "prompt": "Review this assistant-research skill change. It adds a new method template, output contract fields, phase gates, and evals. Check whether the workflow is semantically contract-safe before I merge it.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material touches skills/assistant-research, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and a plugin-local copy.",
         "The new method adapts a named external research method and can emit do/wait/avoid recommendations."
       ],
@@ -639,6 +735,7 @@
       "prompt": "Review this API feature diff. It changes a public order endpoint, adds a new special-case path for refunds, updates tests, and modifies config defaults. Check behavioral compatibility before merge.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material touches public API behavior, domain/business logic, money/refund handling, tests, and config defaults.",
         "The change has both inherited behavior and new behavior that must remain compatible."
       ],
@@ -815,6 +912,7 @@
       "prompt": "Review this research-agent workflow change. It adds a loop that searches the web, calls an LLM to summarize each result, retries empty searches, and dispatches subagents until it thinks the report is good enough.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material adds an agentic research loop with repeated web search, LLM summarization, empty-result retries, and subagent dispatch.",
         "The diff does not clearly show max step count, explicit stop condition, retry cap, empty-result fallback, or cost/token guardrails."
       ],
@@ -891,6 +989,7 @@
       "prompt": "Review a mixed framework/API change. It edits an agent workflow loop, a public billing endpoint, skill contracts, evals, and plugin-local copies. Before declaring it clean, show which mandatory review checklists you applied and give evidence-bearing checks.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material touches an autonomous agent loop, behavior-bearing billing code, skill/workflow contracts, evals, and plugin-local mirrors.",
         "The diff includes plausible risks around runaway retries, bypassed billing authorization, eval fake-passes, and mirror drift."
       ],
@@ -1031,6 +1130,7 @@
       "prompt": "Review this standalone ADR. It selects a bounded cache, labels repository evidence and assumptions, lists one material question with its impact and default, and records an independent challenge. There is no workflow Architecture Decision Pack artifact.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
         "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.",
         "The supplied ADR has enough source-backed content to derive the compact review projection."
@@ -1086,6 +1186,7 @@
       "prompt": "Review this standalone ADR. It selects a retention policy that trades memory use against throughput and makes an irreversible public-data deletion decision. It records facts, assumptions, material questions, decision, risk, and verification evidence, but no independent challenge evidence. There is no workflow Architecture Decision Pack artifact. Return exactly one valid JSON object with architecture_design_mode, architecture_decision_pack.mode, and validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The ADR makes memory, throughput, public-data, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
         "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.",
         "No workflow architecture_design_mode is supplied."
@@ -1153,6 +1254,7 @@
       "prompt": "Review this current workflow Architecture Decision Pack projection. It supplies boundaries_and_dependencies=[] and design_pressure_checks=[] even though Pack review is required. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "architecture_decision_pack_review_required is true.",
         "The supplied compact Pack projection has no boundary entries and no design-pressure entries."
       ],
@@ -1206,6 +1308,7 @@
       "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "architecture_decision_pack_review_required is true, architecture_design_mode=review_intensive, and the Pack mode equals canonical architecture_design_mode with a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and independent challenge evidence.",
         "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
         "The changed repository revision is newer than the Pack's recorded revision."
@@ -1263,6 +1366,7 @@
       "prompt": "Review this applicable workflow Architecture Decision Pack projection. It has ref=journal#pack-17 but omits selected_design, selected_design_rationale, and viable_alternatives/dispositions. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
       "setup_context": [
         "assistant-review is active and architecture_decision_pack_review_required is true.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The projection may remain compact only if ref resolves against the current authoritative Pack to the selected design, rationale, and viable alternatives/dispositions."
       ],
       "expected_behavior": [
@@ -1304,6 +1408,7 @@
       "prompt": "Review a framework PR where an eval passes with checklist headings only and misses a planted contract failure. Report blockers and whether any finding should become a permanent framework rule.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material includes a blocker: an eval can fake-pass by naming headings without fixture-specific evidence.",
         "The same class of failure could recur across other skill evals unless a contract/eval rule is added.",
         "The review also includes a style nit that should not be promoted into a permanent rule."

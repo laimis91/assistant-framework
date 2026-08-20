@@ -244,10 +244,16 @@ fields:
     type: enum
     required: true
     enum_values: [review-fix, audit]
-    description: "review-fix: autonomous loop that fixes issues. audit: report only, no fixes."
-    default: review-fix
-    on_missing: infer
-    infer_from: "User says 'audit', 'review only', 'just review', 'don't fix', 'provide findings', 'report findings', 'list findings', 'summarize findings', or 'review against' → audit. Otherwise → review-fix."
+    description: "review-fix: autonomous loop that fixes issues. audit: report only, no fixes. Resolve from semantic modification authority before review begins."
+    validation: "Set audit only for unambiguous report-only intent. Set review-fix only for unambiguous source-modification authorization or a carried active approved implementation workflow whose repairs remain in scope. Do not infer authorization from authorship, branch/PR ownership, platform, or connector."
+    on_missing: ask
+    infer_from: >
+      Resolve semantic modification authority rather than matching fixed phrases. Clear report-only intent → audit.
+      Clear authorization to modify source → review-fix. A carried active approved implementation workflow →
+      review-fix only for bounded repairs within its approved scope. If neither outcome is unambiguous, leave
+      mode unresolved and ask; do not begin review or mutation.
+    ask_prompt: "Should I only report findings, or also implement and verify fixes?"
+    notes: "A repair that expands approved scope, requirements, or architecture returns to the composing workflow for planning or approval."
 
   - name: change_kind
     type: enum

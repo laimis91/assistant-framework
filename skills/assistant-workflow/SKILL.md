@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "Run proportional development phases and resume persisted task state. Use to plan, build, implement, fix, migrate, refactor, or continue project artifacts."
+description: "Prepare, plan, build, or resume persisted task state. Use for repository-grounded feature/epic/story technical preparation, implementation, fixes, migrations, refactors, and project artifacts."
 ---
 
 # Development Workflow
@@ -23,6 +23,7 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels from Discover-only context binding through atomic Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
+- Existing-system feature work traces requirements, design evidence, implementation, and behavioral tests before Plan or Build. `prepare_only` stops after evidence and never claims code changes. Unsupported Product questions are forbidden.
 - Review, QA, and security routing apply when triggered.
 - Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
 
@@ -46,6 +47,7 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
+- `feature_preparation`: for repository-grounded preparation or existing behavior, load `references/feature-preparation-evidence.md`; resolve its evidence ref before Decompose, Plan, or Build and retain it in downstream artifacts.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -56,7 +58,7 @@ Selectors resolve by unique id plus canonical path, section, key, and explicit n
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: assistant-workflow contracts are v8; consumed all-excluded route-clear maps may keep `entries=[]` only with complete exclusion lineage; Pack alternatives use stable `selected_alternative_id` bindings and verified `quality_scenario_id` scenarios use resolvable verification identity. Pack `review_result` retains canonical refs. v6: `semantic_type_inspection`, `contributor_evidence`. v4 consumers use `handoff_binding_state=discover_only`
+Migration note: assistant-workflow contracts are v11. v10: `prepare_only` uses `feature_preparation_result`, records execution not started, and omits Build/test/review/final-handoff claims. v9: `execution_intent`; existing-system preparation produces or carries `feature_preparation_evidence`. Bash/provider review runners are removed; native task packets retain scope and verification. v8: consumed all-excluded route-clear maps may keep `entries=[]` only with complete exclusion lineage; Pack alternatives use stable `selected_alternative_id` bindings and verified `quality_scenario_id` scenarios use resolvable verification identity. Pack `review_result` retains canonical refs. v6: `semantic_type_inspection`, `contributor_evidence`. v4 consumers use `handoff_binding_state=discover_only`
 with Discover context/journal.
 Plan atomically binds task/review refs as
 `downstream_bound` before Build when `plan_mode!=none`; plan_mode=none binds
@@ -147,7 +149,6 @@ external-write, install, destructive-operation, and secrets safeguards.
 
 Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
 Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
-For review-gated multi-slice work, load `references/slice-review-topology.md` before emitting or consuming slice review evidence.
 
 ## Output
 

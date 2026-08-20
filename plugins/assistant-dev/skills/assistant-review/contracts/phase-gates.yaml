@@ -32,7 +32,7 @@ gates:
 
       - id: E4
         check: "mode is resolved (review-fix or audit)"
-        on_fail: "Default to review-fix unless user explicitly requested audit"
+        on_fail: "Ask exactly: 'Should I only report findings, or also implement and verify fixes?' Stop before Reviewer dispatch or source mutation until the user answers. Do not use authorship, branch/PR ownership, platform, or connector as modification authorization."
 
       - id: E5
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"

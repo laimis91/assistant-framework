@@ -50,7 +50,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 ## Constraints
 
-- Default to audit mode when the user asks to provide, report, list, or summarize findings.
+- Resolve review mode from semantic modification authority, not fixed wording, authorship, platform, or connector metadata. Clear report-only intent selects audit; clear source-modification authorization selects review-fix. A carried active approved implementation workflow authorizes only bounded, in-scope review fixes. When audit versus editing remains materially unresolved, ask: "Should I only report findings, or also implement and verify fixes?" Do not review or mutate until answered.
 - Do not emit intermediate review summaries; present one final summary after loop exit.
 - Use concrete risk categories for refactor-related findings.
 - Treat clean-code principles as evidence lenses, not acronym-driven style rules.
@@ -67,6 +67,8 @@ A workflow-composed review consumes the carried Spec Review PASS pointer and car
 ## Review Modes
 
 Use the smallest applicable combination: spec, regression, test, maintainability, bugfix evidence, semantic contract, behavioral contract, agentic loop safety, and security. Contract and loop modes are enabled by the three entry flags; security-sensitive surfaces route to `assistant-security`.
+
+Authorship, branch/PR ownership, platform, and connector availability may identify material but never authorize source changes. Carried workflow authorization permits only evidence-backed in-scope fixes. Findings expanding scope, requirements, or architecture return to the composing workflow for planning or approval.
 
 Findings include severity (`must-fix`, `should-fix`, or `nit`), file/line evidence, concrete impact, smallest useful fix, and evidence-calibrated confidence. Speculative concerns remain non-blocking Observations.
 

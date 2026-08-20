@@ -146,7 +146,7 @@ The repo is attached. Run the standard workflow:
 Plan → [Design if UI] → Build.
 
 Follow project conventions. Do not modify files outside your scope.
-Work on branch: slice/[mega-task]/[slice-id], with task branch feature/[mega-task]. For `review_gated`, preserve REVIEW_PENDING slice review evidence and do not claim VERIFIED before adapter evidence.
+Use the strict packet's explicit files, dependencies, verification, and deviation rule. Do not modify files outside the packet's scope.
 ```
 
 ## Template 4: Integration session
@@ -157,14 +157,14 @@ When all slices are verified:
 Integration phase for [project name].
 
 Completed verified slices:
-1. [name]: [what was built, key files changed, branch]
-2. [name]: [what was built, key files changed, branch]
-3. [name]: [what was built, key files changed, branch]
+1. [name]: [what was built, key files changed, verification evidence]
+2. [name]: [what was built, key files changed, verification evidence]
+3. [name]: [what was built, key files changed, verification evidence]
 
 Verified prerequisite slice outputs: [list interfaces/DTOs/schemas/artifacts/configs with evidence]
 
 Integrate:
-1. Integrate exact reviewed slice heads into the task branch; REVIEW_PENDING heads require provider-neutral review evidence first
+1. Integrate the completed slice changes
 2. Resolve conflicts
 3. Confirm verified prerequisite slice outputs are present and consumed
 4. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior

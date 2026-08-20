@@ -1076,9 +1076,6 @@ while IFS= read -r entry; do
     cp -R "$entry" "$materialization_expected/"
 done < <(find "$FRAMEWORK_DIR/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
 cp "$materialization_overlay" "$materialization_expected/SKILL.md"
-if [[ -f "$materialization_expected/agents/codex.conf" ]]; then
-    cp "$materialization_expected/agents/codex.conf" "$materialization_expected/agent.conf"
-fi
 while IFS= read -r instruction_file; do
     sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
     rm -f "${instruction_file}.bak"
@@ -1088,11 +1085,10 @@ done < <(find "$materialization_expected" -type f \( \
 expected_materialization_hash="$(test_hash_directory "$materialization_expected")"
 actual_materialization_hash="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; materialized_candidate_hash "$materialization_overlay")"
 if [[ "$actual_materialization_hash" == "$expected_materialization_hash" ]] \
-    && cmp -s "$materialization_expected/agent.conf" "$materialization_expected/agents/codex.conf" \
     && ! grep -R -Fq '{agent_state_dir}' "$materialization_expected"; then
     pass
 else
-    fail "finalizer did not mirror the runner's Codex preset and agent-state substitution before hashing"
+    fail "finalizer did not mirror installer instruction materialization and agent-state substitution before hashing"
 fi
 
 test_start "question-mark proxy naming is explicit across manifest comparison and docs"

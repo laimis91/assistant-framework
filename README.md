@@ -149,12 +149,9 @@ makes quality claims falsifiable with workload/budget/measurement, and travels
 through the plan, task handoff, and independent review. It does not
 add a permanent architect agent or force architecture ceremony onto local work.
 
-For multi-slice work, Assistant Workflow infers the repository's current local
-target branch unless explicitly supplied, then uses a portable task branch
-(`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`)
-built from descriptive outcome-oriented slice identifiers rather than ordinal-only labels.
-`review_gated` slices emit SHA-bound `REVIEW_PENDING` evidence; remote review
-and policy mechanics remain in the configured provider adapter.
+For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
+slice identifiers rather than ordinal-only labels, explicit dependencies, and
+native subagents only for independent packets.
 
 The architecture is an adaptive loop implemented through native skill routing;
 there is no installed lifecycle engine. Its conceptual states map to the public
@@ -164,7 +161,7 @@ workflow like this:
 |---|---|---|
 | ORIENT, RESOLVE | Discover | Inspect the request, repository, policy, and current task state; apply and record deterministic safe defaults, and ask only material questions with no safe default. |
 | PLAN? | Optional Plan | Select `plan_mode`: `none`, `inline`, or `approval_required`. |
-| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run focused tests, and host-verify argv-array commands before marking evidence verified. |
+| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run its explicit verification command, and record evidence before marking it verified. |
 | REVIEW | Review | Independently check requirements, regressions, quality, security, and QA evidence. |
 | REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
 | HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
@@ -172,7 +169,7 @@ workflow like this:
 `plan_mode=none` is limited to small, local, reversible, high-confidence work
 with known scope. `inline` records a short plan without an approval wait.
 `approval_required` applies to medium-or-larger work and to risk, policy, or
-public-impact changes. Build owns implementation, tests, host verification, and
+public-impact changes. Build owns implementation, tests, verification, and
 a bounded repair loop: at most three attempts, a no-progress limit of two, and
 recorded failure signatures and progress before pivoting or reporting a block.
 Build repair is implementation/verification-failure recovery. Review-fix work
@@ -192,13 +189,11 @@ important changed areas, architecture decisions, verification evidence, manual
 test steps, deviations, and remaining risks without claiming checks that did
 not run.
 
-For executable slices, repository verification uses canonical argv arrays and
-is bound to tracked files in the exact clean slice commit. Host verification
-has bounded private logs and a hard process-group timeout; passing commits are
-promoted from an isolated merge candidate with compare-and-swap protection.
-Validation commands must leave the candidate tree unchanged. Parallel worktree
-storage inside the repository must already be gitignored—the runner fails with
-an instruction instead of editing `.gitignore`.
+Each executable slice carries an explicit verification command and evidence
+requirement. Dependent slices wait for verified prerequisites; native subagents
+run in parallel only for independent packets with non-overlapping ownership.
+After integration, rerun cross-slice and full-scope validation and perform a
+fresh review before completion.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest
@@ -442,8 +437,6 @@ skills/
     SKILL.md                       <- Core pipeline (always loaded when triggered)
     references/                    <- Plan templates, checklists, prompt packs
     playbooks/                     <- Project-type architecture guides
-    scripts/                       <- Mega task automation
-    agents/                        <- Agent presets (claude/codex/gemini.conf)
 
   assistant-clarify/
     SKILL.md                       <- Clarification workflow for ambiguous or multi-intent prompts

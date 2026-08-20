@@ -1804,15 +1804,8 @@ function Install-Skills {
         $target = Join-Path $TargetRoot $skillName
         Sync-ManagedDirectory -Source $source -Target $target -ManagedRoot $TargetRoot -Label $skillName
         if ($DryRun) {
-            Write-DryRun "Select $AgentName preset and substitute {agent_state_dir} in $skillName"
+            Write-DryRun "Substitute {agent_state_dir} in $skillName"
             continue
-        }
-        if ($AgentName -ne 'claude') {
-            $preset = Join-Path (Join-Path $target 'agents') ($AgentName + '.conf')
-            $agentConf = Join-Path $target 'agent.conf'
-            if ((Test-Path -LiteralPath $preset -PathType Leaf) -and (Test-Path -LiteralPath $agentConf -PathType Leaf)) {
-                Copy-ManagedFile -Source $preset -Destination $agentConf
-            }
         }
         Replace-AgentStatePlaceholders -SkillTarget $target -AgentName $AgentName
     }

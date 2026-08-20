@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "5.0"
 contract: phase-gates
 skill: assistant-thinking
 
@@ -33,6 +33,10 @@ gates:
       - id: A5
         check: "When architecture_design_mode=review_intensive, the Architecture Pack update contains independent_challenge_evidence with challenge_ref, dissent_or_validation, resolution, and selected_design_impact."
         on_fail: "Return to the independent challenge and record all four evidence fields before synthesis."
+      - id: A6
+        check: "For Deep Think in existing-system feature preparation, every surfaced candidate concern or criterion remains unpromoted with candidate_only or requires_feature_preparation_evidence and is not promoted to a requirement or Product question unless its feature_preparation_evidence_ref resolves to an admissible workflow evidence row."
+        condition: "tool == deep_think and existing-system feature preparation is in scope"
+        on_fail: "Return to workflow feature preparation, inspect requirement/design, implementation, and behavioral-test evidence, then classify the candidate accurately."
 
   - phase: SYNTHESIS
     checkpoint_start: "--- PHASE: SYNTHESIS ---"
