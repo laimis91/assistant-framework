@@ -245,7 +245,7 @@ p0p4_write_skill_eval_responses() {
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
                         ;;
                     assistant-diagrams:feature-preparation-diagram-traceability)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_ref: "prep/viewing-route", evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus", "VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}], evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus", "VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
                         ;;
                     assistant-docs:architecture-doc-pack-backed-decision-trace)
                         jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/parser-boundary.md", change_type: "created", description: "Documents the current parser-boundary decision."}], evidence_sources: [{source: "pack/parser-boundary", claims_supported: "The selected parser boundary design and its compatibility claim are current."}], doc_coverage: "Documents the current parser boundary from the fresh Pack and exact feature-preparation row.", review_items: [], safety_notes: ["none"], architecture_design_mode: "required", architecture_decision_pack_status: "current", feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", architecture_decision_pack: {ref: "pack/parser-boundary", mode: "required", freshness: "current repository basis"}, architecture_decision_pack_trace: {outcome: "documented", source_pack_ref: "pack/parser-boundary", documented_decision_refs: ["pack/parser-boundary#selected-design"], evidence_refs: ["pack/parser-boundary#facts"], feature_preparation_evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["resolves selected design and rationale through the current canonical Pack ref"]}}' >"$response_path"
@@ -1325,6 +1325,84 @@ else
         cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
             "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
     done
+    for binding_field in evidence_ref item_id; do
+        jq "del(.feature_preparation_evidence_refs[0].$binding_field)" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+            feature_mutation_failures+=("diagram:root-binding-$binding_field")
+        fi
+        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    done
+    jq '(.feature_preparation_evidence_refs[0].item_id) = "wrong-evidence-row"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:root-binding-mismatched-item")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    for trace_index in 0 1 2 3 4; do
+        for binding_field in evidence_ref item_id; do
+            jq "del(.element_trace[$trace_index].feature_preparation_evidence_refs[0].$binding_field)" \
+                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+            mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+            if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+                || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+                feature_mutation_failures+=("diagram:trace-$trace_index-binding-$binding_field")
+            fi
+            cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        done
+    done
+    jq '(.element_trace[0].feature_preparation_evidence_refs[0].item_id) = "wrong-evidence-row"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:trace-binding-mismatched-item")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    jq '(.element_trace[0].feature_preparation_evidence_refs[0].item_id) = "viewing-route-gap"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:active-trace-replaced-by-valid-viewing-row")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    jq '(.element_trace[0].element_id) as $active | (.element_trace[3].element_id) as $viewing | .element_trace[0].element_id = $viewing | .element_trace[3].element_id = $active' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:active-viewing-element-ids-swapped")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    jq '.feature_preparation_evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:extra-root-evidence-binding")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    jq '.element_trace[0].feature_preparation_evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:extra-nested-evidence-binding")
+    fi
+    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
     jq '(.diagram_code) |= sub("viewing-route"; "preview-route")' \
         "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
     mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"

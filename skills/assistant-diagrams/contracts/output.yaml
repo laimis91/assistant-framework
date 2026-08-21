@@ -1,5 +1,5 @@
 # contract header
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-diagrams
 
@@ -46,7 +46,7 @@ artifacts:
     required: true
     min_items: 1
     description: "Trace for every rendered node and edge"
-    validation: "Every diagram node and edge appears exactly once with source_refs; an intentionally omitted or untraceable element belongs in coverage_gaps, never as an unexplained diagram element."
+    validation: "Every diagram node and edge appears exactly once with source_refs; when the diagram supports existing-system feature preparation, each element also carries exact feature_preparation_evidence_refs bindings. An intentionally omitted or untraceable element belongs in coverage_gaps, never as an unexplained diagram element."
     on_fail: "Remove untraceable elements or add their source trace and coverage disclosure."
     object_fields:
       - name: element_id
@@ -60,6 +60,25 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
+      - name: feature_preparation_evidence_refs
+        type: object[]
+        required: conditional
+        condition: "diagram supports existing-system feature preparation"
+        description: "Exact feature-preparation evidence-row bindings for this rendered node or edge"
+        validation: "Every binding equals an exact current input evidence_ref and item_id pair that supports this element; source_refs retain the underlying code, configuration, test, or user-provided evidence."
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+            validation: "Equals an exact current input feature_preparation_evidence_refs evidence_ref"
+            on_missing: fail
+          - name: item_id
+            type: string
+            required: true
+            validation: "Equals the exact input item_id under the paired evidence_ref"
+            on_missing: fail
 
   - name: coverage_gaps
     type: string[]
@@ -68,10 +87,22 @@ artifacts:
     validation: "Use an empty list only when all scoped elements and relationships are traceable."
     on_fail: "Record the coverage limitation instead of implying a complete diagram."
 
-  - name: feature_preparation_evidence_ref
-    type: string
+  - name: feature_preparation_evidence_refs
+    type: object[]
     required: conditional
     condition: "diagram supports existing-system feature preparation"
-    description: "Echoed canonical evidence ref used to validate preservation/gap scope"
-    validation: "Must equal the applicable input evidence ref and coverage_gaps must name any unavailable row."
+    description: "Exact canonical feature-preparation evidence-row bindings echoed from input to validate preservation/gap scope"
+    validation: "Equals the exact current input evidence_ref and item_id bindings used by the diagram; coverage_gaps must name any unavailable row."
+    min_items: 1
     on_fail: "Return to the feature-preparation evidence matrix before presenting the diagram as complete."
+    object_fields:
+      - name: evidence_ref
+        type: string
+        required: true
+        validation: "Equals an exact current input feature_preparation_evidence_refs evidence_ref"
+        on_missing: fail
+      - name: item_id
+        type: string
+        required: true
+        validation: "Equals the exact input item_id under the paired evidence_ref"
+        on_missing: fail

@@ -1,5 +1,5 @@
 # contract header
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-diagrams
 
@@ -34,10 +34,24 @@ fields:
     on_missing: infer
     enum_values: [mermaid, plantuml]
 
-  - name: feature_preparation_evidence_ref
-    type: string
+  - name: feature_preparation_evidence_refs
+    type: object[]
     required: conditional
     condition: "diagram supports existing-system feature preparation"
-    description: "Canonical workflow evidence reference constraining a diagram of existing behavior, new routes, or proposed gaps"
-    validation: "Must resolve to the preparation evidence row(s) represented by the diagram; user-provided evidence remains valid when no repository evidence exists."
+    description: "Exact canonical workflow evidence-row bindings constraining a diagram of existing behavior, new routes, or proposed gaps"
+    validation: "Every represented existing-system behavior or proposed gap resolves to an exact evidence_ref and item_id pair; broad artifact-only, mismatched, stale, or unresolved refs are invalid. User-provided evidence remains valid when no repository evidence exists."
+    min_items: 1
     on_missing: fail
+    object_fields:
+      - name: evidence_ref
+        type: string
+        required: true
+        description: "Canonical feature-preparation evidence artifact reference"
+        validation: "Resolves to the current canonical feature-preparation evidence artifact"
+        on_missing: fail
+      - name: item_id
+        type: string
+        required: true
+        description: "Exact evidence-row identifier under evidence_ref"
+        validation: "Resolves under the paired evidence_ref to the admissible canonical evidence row represented by the diagram"
+        on_missing: fail

@@ -22,7 +22,7 @@ else
         "push:" \
         "contents: read" \
         "persist-credentials: false" \
-        "timeout-minutes: 30" \
+        "timeout-minutes: 45" \
         "./tests/test-p0-p4-contracts.sh" \
         "tools/skills/validate-skills.sh" \
         "tools/plugins/sync-plugin-skills.sh --check" \
@@ -38,7 +38,7 @@ else
         || framework_validation_failures+=("framework-validation.yml: expected one checkout@v5 step")
     [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
-    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 45[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the framework-contract job must use the bounded timeout")
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")

@@ -190,6 +190,25 @@ else
     fail "preparation-only completion does not distinguish small/not-applicable from medium/existing-system readiness"
 fi
 
+test_start "prepare-only completion exempts implementation completeness checks"
+if ruby -e '
+  checks = File.read(ARGV.fetch(0)).scan(/^# (?:[0-9]+)\. .*$/)
+  required = {
+    3 => "spec_review_result.status == PASS",
+    4 => "review_result contains validated canonical result",
+    6 => "slice_verification_summary has one VERIFIED entry per slice"
+  }
+  valid = required.all? do |number, phrase|
+    line = checks.find { |candidate| candidate.start_with?("# #{number}. ") }
+    line && line.include?(phrase) && line.include?("execution_intent != prepare_only")
+  end
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml"; then
+    pass
+else
+    fail "prepare-only completion still requires implementation spec review, code review, or slice verification evidence"
+fi
+
 test_start "medium preparation may record readiness without waiting for implementation approval"
 if ruby -ryaml -rjson -e '
   input = YAML.load_file(ARGV.fetch(0))
@@ -675,26 +694,68 @@ else
     fail "thinking promotion can validate without exact evidence reference and row binding"
 fi
 
-test_start "diagrams disclose evidence traces and feature-preparation coverage gaps"
-diagram_failures=()
-for file_and_term in \
-    "$diagrams_dir/contracts/input.yaml::- name: feature_preparation_evidence_ref" \
-    "$diagrams_dir/contracts/output.yaml::- name: evidence_sources" \
-    "$diagrams_dir/contracts/output.yaml::- name: element_trace" \
-    "$diagrams_dir/contracts/output.yaml::element_kind" \
-    "$diagrams_dir/contracts/output.yaml::source_refs" \
-    "$diagrams_dir/contracts/output.yaml::- name: coverage_gaps" \
-    "$diagrams_dir/contracts/output.yaml::feature_preparation_evidence_ref"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! grep -Fq -- "$term" "$file"; then
-        diagram_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#diagram_failures[@]}" -eq 0 ]]; then
+test_start "diagrams bind feature-preparation behavior to exact evidence rows"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  output = YAML.load_file(ARGV.fetch(1))
+  skill = File.read(ARGV.fetch(2))
+  expected = %w[evidence_ref item_id]
+  binding = lambda do |fields|
+    field = fields.find { |candidate| candidate["name"] == "feature_preparation_evidence_refs" }
+    field && field["type"] == "object[]" &&
+      field["required"] == "conditional" &&
+      field["condition"] == "diagram supports existing-system feature preparation" &&
+      field.fetch("object_fields").map { |candidate| candidate["name"] } == expected
+  end
+  input_fields = input.fetch("fields")
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  output_binding = artifacts.fetch("feature_preparation_evidence_refs")
+  trace_fields = artifacts.fetch("element_trace").fetch("object_fields")
+  valid = input.fetch("schema_version") == "3.0" &&
+    output.fetch("schema_version") == "3.0" &&
+    binding.call(input_fields) &&
+    output_binding["type"] == "object[]" &&
+    output_binding["required"] == "conditional" &&
+    output_binding["condition"] == "diagram supports existing-system feature preparation" &&
+    output_binding.fetch("object_fields").map { |candidate| candidate["name"] } == expected &&
+    binding.call(trace_fields) &&
+    !input_fields.any? { |field| field["name"] == "feature_preparation_evidence_ref" } &&
+    !artifacts.key?("feature_preparation_evidence_ref") &&
+    skill.include?("Migration note: diagram contracts are v3") &&
+    skill.include?("{evidence_ref, item_id}")
+  exit(valid ? 0 : 1)
+' "$diagrams_dir/contracts/input.yaml" "$diagrams_dir/contracts/output.yaml" "$diagrams_dir/SKILL.md"; then
     pass
 else
-    fail "diagram traceability contract missing: ${diagram_failures[*]}"
+    fail "diagram feature-preparation bindings remain broad, untyped, or missing from element traces"
+fi
+
+test_start "diagram eval binds ACTIVE effects and VIEWING gaps to different admissible rows"
+if ruby -rjson -e '
+  entry = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases").find { |candidate| candidate["id"] == "feature-preparation-diagram-traceability" }
+  assertions = entry.fetch("machine_expectations").fetch("structured_json_assertions")
+  value_at = lambda do |path|
+    assertion = assertions.find { |candidate| candidate["operator"] == "equals" && candidate["path"] == path }
+    assertion && assertion["expected"]
+  end
+  root_rows = [["prep/viewing-route", "active-route-effects"], ["prep/viewing-route", "viewing-route-gap"]]
+  root_bindings = root_rows.each_with_index.all? do |(ref, item), index|
+    value_at.call(["feature_preparation_evidence_refs", index, "evidence_ref"]) == ref &&
+      value_at.call(["feature_preparation_evidence_refs", index, "item_id"]) == item
+  end
+  expected_items = ["active-route-effects", "active-route-effects", "active-route-effects", "viewing-route-gap", "viewing-route-gap"]
+  trace_bindings = expected_items.each_with_index.all? do |item, index|
+    value_at.call(["element_trace", index, "feature_preparation_evidence_refs", 0, "evidence_ref"]) == "prep/viewing-route" &&
+      value_at.call(["element_trace", index, "feature_preparation_evidence_refs", 0, "item_id"]) == item
+  end
+  valid = entry.fetch("setup_context").join(" ").include?("active-route-effects") &&
+    entry.fetch("setup_context").join(" ").include?("viewing-route-gap") &&
+    root_bindings && trace_bindings && expected_items.uniq.length == 2
+  exit(valid ? 0 : 1)
+' "$diagrams_dir/evals/cases.json"; then
+    pass
+else
+    fail "diagram eval does not prove per-element relevance across two admissible feature-preparation rows"
 fi
 
 test_start "docs block incomplete feature preparation with or without Architecture Packs"
