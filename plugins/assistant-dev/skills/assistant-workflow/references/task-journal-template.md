@@ -37,7 +37,7 @@ Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
 Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 Architecture Decision Pack ref: [ref, or N/A with concrete reason]
-Pack handoff binding: [discover_only: context/journal ref only | downstream_bound: context/journal + plan/task-packet + review-scope refs]
+Pack handoff binding: [prepare_only: discover_only context/journal ref only through Preparation Completion, including optional readiness Plan and no downstream packet refs | execution_intent != prepare_only: Plan binds downstream context/journal + plan/task-packet + review-scope refs before Build; plan_mode=none binds compact inline task-packet/execution + review-scope refs before Build]
 Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 Build execution lane: [inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
@@ -79,7 +79,7 @@ Loop / Experiment Routing:
 - loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically with readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination transition to terminally_archived permits omission. Task state: completed does not qualify, and terminally_archived cannot revert. Never reopen or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 - Progressive current map: [N/A for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable, or after progressive_artifact_retention_state=terminally_archived; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; every current-map deferred uncertainty retains unlocking_decision_item_ref to a current-map predecessor; retired/excluded/history entries may remain outside current refs]
-Plan approval: [N/A for none/inline | yes/no + date for approval_required]
+Plan approval: prepare_only optional readiness never waits; [N/A for none | readiness record only for inline] | execution_intent != prepare_only: [N/A for none/inline | yes/no + date for approval_required]
 
 ## Agent Dispatch Log
 [subagent evidence required by completion gates]
@@ -98,8 +98,10 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - Code Reviewer dispatch/result/direct evidence: [delegated refs | Code Reviewer direct evidence | Reviewer legacy compatibility | N/A]
 - Reviewer dispatch/result/direct evidence: [compatibility refs/direct evidence when used | N/A]
 - QA Evaluator dispatch/result/direct evidence: [delegated QA refs | direct evidence | N/A when not required]
-- Per-slice Build dispatch evidence: [slice_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
-- Review-owned independent evidence: [Code Reviewer dispatch/result or fresh direct-fallback ref, created after Build]
+- Per-slice Build ref: N/A for prepare_only; typed execution ref otherwise.
+- Per-slice Review ref: N/A for prepare_only; typed execution ref otherwise.
+- Per-slice Build dispatch evidence: [execution_intent != prepare_only: slice_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
+- Review-owned independent evidence: [execution_intent != prepare_only: Code Reviewer dispatch/result or fresh direct-fallback ref, created after Build]
 
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
@@ -107,10 +109,13 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - [scope limits, e.g. "Backend only, no UI changes"]
 
 ## Plan
-[paste approved plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths]
+[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested optional readiness plan records evidence, implications, open decisions, and next state without executable steps. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths and downstream task/review refs.]
+
+## Preparation Readiness
+[prepare_only: completion_policy, validation_results, and feature_preparation_evidence plus feature_preparation_result; execution remains not_started, Pack handoff stays discover_only, and no downstream task/review refs exist. execution_intent != prepare_only: use downstream implementation refs before Build.]
 
 ## Requirement Acceptance Map
-[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work, small required/review_intensive Architecture Decision Pack work, or retained route-clear consumption; every accepted requirement id must end passed or approved_exclusion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
+[paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work, small required/review_intensive Architecture Decision Pack work, or retained route-clear consumption. Status is pending only when execution_intent=prepare_only readiness is complete and execution remains not started; otherwise every accepted requirement id must end passed or approved_exclusion for execution completion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
 - source_route_clear_handoff_ref: [N/A unless the map consumes progressive route clearance while progressive_artifact_retention_state=retained; otherwise resolves to the source route_clear_handoff after incorporating its decisions/constraints/exclusions/acceptance seed, with the handoff's consumed_by_requirement_acceptance_map_ref resolving back to this consuming map; terminally_archived permits omission]
 
 ## Architecture Decision Pack
@@ -119,10 +124,10 @@ Plan approval: [N/A for none/inline | yes/no + date for approval_required]
 - Freshness: [branch/HEAD or greenfield basis, source refs, invalidated_by]
 - Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
 - Boundary / design-pressure / Type Ledger / quality scenario refs: [compact refs]
-- Handoff binding: [discover_only forbids invented future refs; Plan atomically sets downstream_bound with plan/task-packet and review-scope refs before Build; invalidation clears stale refs through refresh/re-plan/reapproval]
-- Plan-mode-none binding: [pre-Build atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action]
+- Handoff binding: [prepare_only: discover_only through Preparation Completion, forbids invented future/downstream task/review refs; execution_intent != prepare_only: Plan atomically sets downstream_bound with plan/task-packet and review-scope refs before Build; invalidation clears stale refs through refresh/re-plan/reapproval]
+- Plan-mode-none binding: [prepare_only: no downstream task/review refs through Preparation Completion; execution_intent != prepare_only: pre-Build atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action]
 - Material questions: [none before Plan, or grouped refs]
-- Plan/task packet/review refs: [typed locations]
+- Plan/task packet/review refs: [prepare_only: absent/N/A through Preparation Completion; execution_intent != prepare_only: typed execution locations]
 
 ## Progressive Discovery
 [N/A only for ordinary bounded work with both durable markers and progressive_artifact_retention_state not_applicable, or after typed terminal archival. Keep compact refs for the retained canonical reference chain here or in the equivalent carried state; do not duplicate full schemas.]

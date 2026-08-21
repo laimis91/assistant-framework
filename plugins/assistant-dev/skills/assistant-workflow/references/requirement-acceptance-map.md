@@ -44,8 +44,11 @@ Requirement Acceptance Map:
 - Every slice and task packet references the requirement ids it advances.
 - Spec Review checks that all accepted requirement ids have criteria and that
   no extra scope was introduced.
-- Completion requires passed evidence for every accepted requirement id or an
-  explicit approved exclusion with a reason.
+- Preparation-only completion keeps accepted but unimplemented entries
+  `pending`, with their evidence/readiness reference and next implementation
+  state. End-to-end and implementation-only completion require passed evidence
+  for every accepted requirement id or an explicit approved exclusion with a
+  reason.
 - Updating a requirement updates this map first, then affected slices, tests,
   and handoffs. Do not silently fork acceptance criteria.
 - During small progressive route clearance, Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; use the pending handoff and its current decision references to prepare the completed map. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained. Medium+ work still requires its map regardless of this progressive retention lifecycle.

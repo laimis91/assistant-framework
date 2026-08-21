@@ -209,27 +209,37 @@ Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 **Run condition:** `plan_mode` is `inline` or `approval_required`. For
 `prepare_only`, this is optional readiness planning and never waits for
 implementation approval. When
-`plan_mode=none`, Discover carries the obvious file scope, constraints,
-acceptance check, and verification argv directly into the Discover exit
-transition, which atomically sets `handoff_binding_state=downstream_bound` with compact
-inline task-packet/execution and inline review-scope refs before any Build
-action; do not create a Plan checkpoint or `plan_document`.
+`plan_mode=none` with `execution_intent=prepare_only`, Discover carries the
+evidence ref and readiness implications directly to Preparation Completion;
+do not create a Plan checkpoint, task-packet/execution refs, or
+`plan_document`. For `plan_mode=none` with `execution_intent != prepare_only`,
+Discover carries the obvious file scope, constraints, acceptance check, and
+verification argv into its exit transition, which atomically sets
+`handoff_binding_state=downstream_bound` with compact inline
+task-packet/execution and inline review-scope refs before any Build action.
 
 Print: `--- PHASE: PLAN ---`
 
-**Goal:** Concrete, reviewable implementation plan.
+**Goal:** Concrete, reviewable implementation plan for execution work, or a
+bounded evidence-backed readiness plan for `prepare_only`.
 
-When `architecture_design_mode` is `required` or `review_intensive`, or when a concrete unresolved boundary cannot be represented by the ordinary plan, produce an Architect-level implementation blueprint from existing patterns and the compact map. Dispatch **Architect** only when delegation is explicitly requested or otherwise applicable; otherwise perform the same bounded design work directly. Do not introduce an Architect role merely because the task is large.
+Architect implementation blueprint and dispatch apply only when `execution_intent != prepare_only`. For that execution lane, when `architecture_design_mode` is `required` or `review_intensive`, or when a concrete unresolved boundary cannot be represented by the ordinary plan, produce an Architect-level implementation blueprint from existing patterns and the compact map. Dispatch **Architect** only when delegation is explicitly requested or otherwise applicable; otherwise perform the same bounded design work directly. Do not introduce an Architect role merely because the task is large.
 
-Print: `>> Dispatching Architect` (when `subagent_execution_mode=delegated`)
-Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_mode=direct_fallback`)
+For `prepare_only`, prepare_only does not create an implementation blueprint or dispatch **Architect** for implementation. It may retain current source-backed Architecture Decision Pack and readiness evidence without executable implementation artifacts.
+
+Print: `>> Dispatching Architect` (when `execution_intent != prepare_only` and `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Architect responsibility` (when `execution_intent != prepare_only` and `subagent_execution_mode=direct_fallback`)
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation. When architecture design applies, the Architecture Decision Pack must also be fresh for the current revision and have no unresolved blocking material questions.
 
-Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
+For `prepare_only`, record only the evidence ref, readiness implications, open decisions, and recommended next implementation state. prepare_only readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements.
+
+For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply. Before writing that plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
 - `inline`: compact small plan (goal, files, risks, tests); do not wait.
 - `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
 - `approval_required` large/mega: full plan (all sections including Security and Operability).
+
+For `execution_intent != prepare_only`:
 
 1. Research codebase: modules, patterns, entrypoints
 2. Evaluate architecture proportionally: use the Architecture Decision Pack when triggered, otherwise record a concrete not-applicable reason; review_intensive carries independent challenge evidence into Plan and Review.
@@ -414,6 +424,10 @@ Print: `--- WORKFLOW COMPLETE ---`
 
 **Run condition:** `execution_intent=prepare_only` after Discover. Optional
 readiness planning does not create executable packets or delay completion.
+Print: `--- PHASE: PREPARATION COMPLETION ---` before the completion checks and
+`--- PHASE: PREPARATION COMPLETE ---` after they pass. These exact markers are
+declared by `contracts/phase-gates.yaml`; do not derive a synthetic
+`PREPARATION_COMPLETION COMPLETE` marker.
 Return `completion_policy` and `feature_preparation_result`, plus complete
 `feature_preparation_evidence` for existing-system work. Keep execution
 `not_started`; do not claim Build, changed files, tests, review, final handoff,

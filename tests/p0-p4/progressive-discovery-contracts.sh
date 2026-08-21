@@ -3,18 +3,29 @@
 if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 progressive_ref="$workflow_dir/references/progressive-discovery.md"
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
-skill_eval_invocation_count=0
+actual_grader_invocation_count=0
+workflow_full_corpus_eval_count=0
+prepare_only_mutation_invocation_count=0
+prepare_only_root_or_forbidden_mutation_count=0
+prepare_only_plan_mode_mutation_count=0
+non_workflow_skill_eval_count=0
 
 run_skill_eval() {
     local responses_dir="$1"
     local output_path="$2"
     local skill="$3"
 
+    actual_grader_invocation_count=$((actual_grader_invocation_count + 1))
+    if [[ "$skill" != "assistant-workflow" ]]; then
+        non_workflow_skill_eval_count=$((non_workflow_skill_eval_count + 1))
+    fi
     "$skill_eval_runner" --responses "$responses_dir" --skill "$skill" >"$output_path" 2>&1
 }
 
@@ -22,8 +33,20 @@ run_workflow_eval() {
     local responses_dir="$1"
     local output_path="$2"
 
-    skill_eval_invocation_count=$((skill_eval_invocation_count + 1))
+    workflow_full_corpus_eval_count=$((workflow_full_corpus_eval_count + 1))
     run_skill_eval "$responses_dir" "$output_path" assistant-workflow
+}
+
+run_prepare_only_mutation_eval() {
+    prepare_only_mutation_invocation_count=$((prepare_only_mutation_invocation_count + 1))
+    prepare_only_root_or_forbidden_mutation_count=$((prepare_only_root_or_forbidden_mutation_count + 1))
+    run_skill_eval "$@"
+}
+
+run_plan_mode_mutation_eval() {
+    prepare_only_mutation_invocation_count=$((prepare_only_mutation_invocation_count + 1))
+    prepare_only_plan_mode_mutation_count=$((prepare_only_plan_mode_mutation_count + 1))
+    run_skill_eval "$@"
 }
 
 input_field_has_text() {
@@ -303,16 +326,25 @@ write_workflow_eval_responses() {
                     jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
                     ;;
                 viewing-route-preserves-active-behavior)
-                    jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", completion_policy: {controller_intensity: "light", build_execution_lane: "inline_direct", plan_mode: "inline", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare the scoped evidence without implementation."}, feature_preparation_evidence: {ref: "prep/viewing-route", items: [{item_id: "viewing-route-effects", requirements_evidence: ["requirements/viewing-route: read-only VIEWING route"], design_evidence: {status: "unavailable", source_refs: [], rationale: "No design source is available for route effects."}, implementation_evidence: {status: "inspected", traces: [{file: "src/route.ts", symbols: ["select", "highlight", "focus"], execution_behavior: "ACTIVE selects, highlights, and focuses"}], search_or_access_refs: ["rg ACTIVE src/route.ts"], rationale: "The ACTIVE execution path performs all three observable effects."}, behavioral_test_evidence: {status: "inspected", assertions_or_search_refs: ["test/route_test.ts: selection, highlight, viewport focus"], rationale: "Behavioral tests assert each ACTIVE effect."}, conflict_analysis: "No source conflict: requirements add VIEWING but do not change ACTIVE effects.", evidence_gaps: [], behavior_status: "existing_behavior_to_preserve", work_status: "implementation_gap", rationale: "Existing observable behavior defaults to preservation absent an explicit change.", implementation_implication: "Extend the route scope to VIEWING while retaining read-only behavior and without enabling editing."}]}, feature_preparation_result: {execution_status: "not_started", scope: "existing_system read-only VIEWING route", feature_preparation_evidence_ref: "prep/viewing-route", evidence_gaps: [], open_decisions: [], implementation_implications: ["Adapt the ACTIVE effects to VIEWING without enabling edits."], recommended_next_step: "Create the implementation plan from prep/viewing-route."}}' >"$response_path"
+                    build_viewing_route_prepare_only_response "$response_path" "$required_summary"
                     ;;
                 medium-prepare-only-readiness-does-not-wait-for-implementation-approval)
-                    jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", feature_preparation_result: {execution_status: "not_started", open_decisions: ["Approve or delegate the later implementation packet."], recommended_next_step: "Seek bounded implementation approval."}}' >"$response_path"
+                    build_medium_prepare_only_response "$response_path" "$required_summary"
                     ;;
-                medium-prepare-only-terminal-route|large-prepare-only-terminal-route)
-                    jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", completion_policy: {plan_mode: "none"}, feature_preparation_result: {execution_status: "not_started"}}' >"$response_path"
+                medium-prepare-only-readiness-reports-pending-requirement-map)
+                    build_medium_prepare_only_response "$response_path" "$required_summary"
+                    ;;
+                combined-preparation-and-implementation-routes-end-to-end)
+                    build_small_end_to_end_response "$response_path" "$required_summary"
+                    ;;
+                medium-prepare-only-terminal-route)
+                    build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
+                    ;;
+                large-prepare-only-terminal-route)
+                    build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
                 feature-preparation-counterclassifies-unknown-conflict-and-gap)
-                    jq -n --arg summary "$required_summary" '{summary: $summary, execution_intent: "prepare_only", completion_policy: {controller_intensity: "light", build_execution_lane: "inline_direct", plan_mode: "inline", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare evidence and resolutions without implementation."}, feature_preparation_evidence: {ref: "prep/countercases", items: [{item_id: "case-a", requirements_evidence: ["requirements/case-a: silent after inspection"], design_evidence: {status: "not_applicable", source_refs: [], rationale: "No design evidence applies."}, implementation_evidence: {status: "inspected_absent", traces: [], search_or_access_refs: ["rg CaseA src test"], rationale: "Implementation inspection found no observable behavior."}, behavioral_test_evidence: {status: "inspected_absent", assertions_or_search_refs: ["rg CaseA test"], rationale: "Behavioral-test inspection found no assertions."}, conflict_analysis: "No sources conflict; all inspected sources are silent.", evidence_gaps: [], behavior_status: "materially_unknown", work_status: "product_question", rationale: "Only fully inspected silence leaves a material product decision.", implementation_implication: "Obtain a product decision before designing Case A."}, {item_id: "case-b", requirements_evidence: ["requirements/case-b: explicitly change tested behavior"], design_evidence: {status: "provided", source_refs: ["design/case-b"], rationale: "Design repeats the requested change."}, implementation_evidence: {status: "inspected", traces: [{file: "src/case-b.ts", symbols: ["existingBehavior"], execution_behavior: "Existing behavior differs from requirements."}], search_or_access_refs: ["src/case-b.ts"], rationale: "Implementation evidence conflicts with the requested source."}, behavioral_test_evidence: {status: "inspected", assertions_or_search_refs: ["test/case-b_test.ts"], rationale: "Tests preserve the existing behavior."}, conflict_analysis: "Requirements/design conflict with tested existing behavior.", evidence_gaps: [], behavior_status: "source_conflict", work_status: "source_conflict_resolution", rationale: "Contradictory sources require resolution, not a product question from omission.", implementation_implication: "Resolve the source conflict before implementation."}, {item_id: "case-c", requirements_evidence: ["requirements/case-c"], design_evidence: {status: "unavailable", source_refs: [], rationale: "Design evidence is unavailable."}, implementation_evidence: {status: "inspected", traces: [{file: "src/case-c.ts", symbols: ["behavior"], execution_behavior: "Implementation behavior was inspected."}], search_or_access_refs: ["src/case-c.ts"], rationale: "Implementation is accessible."}, behavioral_test_evidence: {status: "inaccessible", assertions_or_search_refs: ["test access denied"], rationale: "Relevant behavioral tests could not be accessed."}, conflict_analysis: "No conflict can be concluded while tests are inaccessible.", evidence_gaps: ["Relevant behavioral-test access"], behavior_status: "materially_unknown", work_status: "evidence_gap", rationale: "Missing test evidence fails closed.", implementation_implication: "Restore test access and complete the evidence row."}]}, feature_preparation_result: {execution_status: "not_started", scope: "existing_system countercase preparation", feature_preparation_evidence_ref: "prep/countercases", evidence_gaps: ["Relevant behavioral-test access for Case C"], open_decisions: ["Case A product decision", "Case B source-conflict resolution"], implementation_implications: ["Do not implement Case A or B before their recorded resolution."], recommended_next_step: "Resolve the evidence gap and open decisions before implementation."}}' >"$response_path"
+                    build_feature_preparation_countercase_response "$response_path" "$required_summary"
                     ;;
                 code-mapper-applicable-architecture-evidence)
                     jq -n --arg summary "$required_summary" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: "observed", evidence_or_gap: "producer reaches consumer", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}' >"$response_path"
@@ -383,6 +415,116 @@ workflow_forbidden_terms_are_rejected() {
         && grep -Fq "missing_required_substrings=0" "$eval_output" \
         && grep -Fq "forbidden_substring_hits=$expected_forbidden_hits" "$eval_output"
 }
+
+test_start "workflow inspected evidence requires a declared search-ref array"
+search_ref_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-search-ref.XXXXXX")"
+search_ref_eval_output="$(mktemp "${TMPDIR:-/tmp}/workflow-search-ref-output.XXXXXX")"
+p0p4_register_cleanup "$search_ref_eval_dir" "$search_ref_eval_output"
+write_workflow_eval_responses "$search_ref_eval_dir" "$workflow_dir/evals/cases.json"
+jq 'del(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs)' \
+    "$search_ref_eval_dir/assistant-workflow/viewing-route-preserves-active-behavior.txt" >"$search_ref_eval_dir/mutated.json"
+mv "$search_ref_eval_dir/mutated.json" "$search_ref_eval_dir/assistant-workflow/viewing-route-preserves-active-behavior.txt"
+if run_workflow_eval "$search_ref_eval_dir" "$search_ref_eval_output" \
+    || ! grep -Fq $'FAIL\tassistant-workflow\tviewing-route-preserves-active-behavior' "$search_ref_eval_output" \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$search_ref_eval_output"; then
+    fail "workflow grader accepted a missing inspected search-ref array"
+else
+    pass
+fi
+
+test_start "workflow prepare-only active roots and plan-document injections fail the actual grader"
+prepare_only_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-prepare-only-roots.XXXXXX")"
+prepare_only_eval_output="$(mktemp "${TMPDIR:-/tmp}/workflow-prepare-only-roots-output.XXXXXX")"
+p0p4_register_cleanup "$prepare_only_eval_dir" "$prepare_only_eval_output"
+write_workflow_eval_responses "$prepare_only_eval_dir" "$workflow_dir/evals/cases.json"
+prepare_only_mutation_failures=()
+expected_case_records_input="$(feature_prep_expected_case_records)"
+if ! feature_prep_case_manifest_is_valid "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("shared feature-preparation case manifest is invalid")
+fi
+if ! validate_case_records "$(manifest_case_records)" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("baseline case records are invalid")
+fi
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|plan_document/')" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("root-group mutation accepted")
+fi
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("forbidden-field delete accepted")
+fi
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("forbidden-field substitution accepted")
+fi
+if ! case_roots medium-prepare-only-readiness-does-not-wait-for-implementation-approval | awk '$0 == "completion_policy" { completion_policy = 1 } $0 == "validation_results" { validation_results = 1 } $0 == "feature_preparation_evidence" { feature_preparation_evidence = 1 } END { exit completion_policy && validation_results && feature_preparation_evidence ? 0 : 1 }'; then
+    prepare_only_mutation_failures+=("medium readiness root manifest omits a required root")
+fi
+manifest_case_ids="$(mutation_cases)"
+manifest_plan_none_case_ids="$(plan_none_cases)"
+if feature_prep_case_manifest_is_valid_for "$(printf '%s\n' "$manifest_case_ids" medium-prepare-only-terminal-route)" "$manifest_plan_none_case_ids" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("duplicate case id accepted")
+fi
+if feature_prep_case_manifest_is_valid_for "$(printf '%s\n' "$manifest_case_ids" | sed '/^combined-preparation-and-implementation-routes-end-to-end$/d')" "$manifest_plan_none_case_ids" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("omitted case id accepted")
+fi
+if feature_prep_case_manifest_is_valid_for "$manifest_case_ids" "$(printf '%s\n' "$manifest_plan_none_case_ids" | sed 's/^viewing-route-preserves-active-behavior$/combined-preparation-and-implementation-routes-end-to-end/')" "$expected_case_records_input"; then
+    prepare_only_mutation_failures+=("substituted plan-none case id accepted")
+fi
+while IFS= read -r workflow_case_id; do
+    scenario_roots=()
+    while IFS= read -r root_artifact; do
+        scenario_roots+=("$root_artifact")
+    done < <(case_roots "$workflow_case_id")
+    workflow_response="$prepare_only_eval_dir/assistant-workflow/$workflow_case_id.txt"
+    for root_artifact in "${scenario_roots[@]}"; do
+        cp "$workflow_response" "$workflow_response.original"
+        jq "del(.$root_artifact)" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
+        mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
+        if run_prepare_only_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
+            prepare_only_mutation_failures+=("$workflow_case_id:$root_artifact")
+        fi
+        mv "$workflow_response.original" "$workflow_response"
+    done
+    while IFS= read -r forbidden_artifact; do
+        cp "$workflow_response" "$workflow_response.original"
+        # plan_document injection alone
+        workflow_mutation='. + {plan_document: "Injected readiness plan document."}'
+        jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
+        mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
+        if run_prepare_only_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+            || ! grep -Eq 'forbidden_substring_hits=[1-9]' "$prepare_only_eval_output"; then
+            prepare_only_mutation_failures+=("$workflow_case_id:$forbidden_artifact")
+        fi
+        mv "$workflow_response.original" "$workflow_response"
+    done < <(forbidden_artifacts "$workflow_case_id")
+    if case_requires_plan_mode_mutation "$workflow_case_id"; then
+        cp "$workflow_response" "$workflow_response.original"
+        # completion_policy.plan_mode wrong alone
+        workflow_mutation='(.completion_policy.plan_mode) |= sub("none"; "inline")'
+        jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
+        mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
+        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
+            prepare_only_mutation_failures+=("$workflow_case_id:completion_policy.plan_mode")
+        fi
+        mv "$workflow_response.original" "$workflow_response"
+
+        cp "$workflow_response" "$workflow_response.original"
+        # triage_result.plan_mode wrong alone
+        workflow_mutation='(.triage_result.plan_mode) = "approval_required"'
+        jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
+        mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
+        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
+            prepare_only_mutation_failures+=("$workflow_case_id:triage_result.plan_mode")
+        fi
+        mv "$workflow_response.original" "$workflow_response"
+    fi
+done < <(plan_none_cases)
+if [[ ${#prepare_only_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow prepare-only root or plan-document mutations were accepted: ${prepare_only_mutation_failures[*]}"
+fi
 
 test_start "workflow routes dependency-shaped uncertainty through conditional Discover"
 missing=()
@@ -3260,10 +3402,15 @@ fi
 
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$skill_eval_invocation_count" -eq 25 && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+if [[ "$workflow_full_corpus_eval_count" -eq 26 \
+    && "$prepare_only_root_or_forbidden_mutation_count" -eq 43 \
+    && "$prepare_only_plan_mode_mutation_count" -eq 8 \
+    && "$prepare_only_mutation_invocation_count" -eq 51 \
+    && "$actual_grader_invocation_count" -eq $((workflow_full_corpus_eval_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
+    && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 25 full-corpus assistant-workflow eval invocations through one call site, found $skill_eval_invocation_count invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 full-corpus and 43 prepare-only mutation assistant-workflow eval invocations through one call site, with total accounting for all auxiliary evals; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_mutation_invocation_count mutation, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

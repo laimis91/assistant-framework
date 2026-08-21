@@ -183,19 +183,19 @@ gates:
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
       - id: D_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios with stable identity and verified evidence, selected design with unique selected alternative binding when alternatives exist, verification, invalidation conditions, and handoff refs. Discover starts handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs while downstream targets do not yet exist. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios with stable identity and verified evidence, selected design with unique selected alternative binding when alternatives exist, verification, invalidation conditions, and handoff refs. For prepare_only, Discover keeps handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs through Preparation Completion, including optional readiness Plan. For execution_intent != prepare_only, Discover starts discover_only and Plan or the plan_mode=none pre-Build boundary binds downstream refs before Build. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, create or refresh the typed pack, then add its reference to context map/journal and the next Plan or Decompose handoff."
+        on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, and create or refresh the typed Pack. For prepare_only, retain only its context/journal readiness reference through Preparation Completion. For execution_intent != prepare_only, add its reference to context map/journal and the next Plan or Decompose handoff before Build."
 
       - id: D_ARCHITECTURE_PACK_NO_PLAN_BINDING
-        check: "atomically sets handoff_binding_state=downstream_bound with compact inline task-packet/execution and inline review-scope refs before Discover exits to Build."
+        check: "For prepare_only, retains handoff_binding_state=discover_only with no invented plan_or_task_packet_ref or review_scope_ref through Preparation Completion. For execution_intent != prepare_only, atomically sets handoff_binding_state=downstream_bound with compact inline task-packet/execution and inline review-scope refs before Discover exits to Build."
         condition: "plan_mode == none and architecture_design_mode in [lightweight, required, review_intensive]"
-        on_fail: "Record both inline refs before Build."
+        on_fail: "For prepare_only, remove downstream refs and restore discover_only readiness context through Preparation Completion. For execution_intent != prepare_only, record both inline refs before Build."
 
       - id: D5
-        check: "When the candidate scope scan cannot resolve relevant files/boundaries directly or architecture_design_mode != not_applicable: a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"
+        check: "When the candidate scope scan cannot resolve relevant files/boundaries directly or architecture_design_mode != not_applicable: a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed. For prepare_only, carry it as readiness evidence/context through Preparation Completion without a task or plan packet; for execution_intent != prepare_only when state files are unavailable, include context map content in the task/plan packet."
         condition: "candidate_scope_scan has unresolved relevant boundaries or architecture_design_mode != not_applicable"
-        on_fail: "Perform local mapping or dispatch Code Mapper only when routing permits, then persist the compact map to {agent_state_dir}/context-map.md when allowed; otherwise carry it forward in the plan packet"
+        on_fail: "Perform local mapping or dispatch Code Mapper only when routing permits, then persist the compact map to {agent_state_dir}/context-map.md when allowed. For prepare_only, carry it forward only as readiness evidence/context through Preparation Completion without a task or plan packet; for execution_intent != prepare_only, otherwise carry it forward in the plan packet."
 
       - id: D7
         check: "constraints list is captured (may be empty, but must be explicitly set)"
@@ -294,32 +294,33 @@ gates:
     exit_assertions:
 
       - id: P_FEATURE_PREPARATION_REFERENCE
-        check: "An existing-system feature plan references the completed or approved feature-preparation evidence ref in its plan, task packet, and applicable Architecture Decision Pack. Prepare-only plans state that execution has not started; end-to-end and implement-only plans retain the evidence ref before Build."
+        check: "An existing-system feature plan references the completed or approved feature-preparation evidence ref. A prepare_only readiness plan carries the ref in readiness context only and has no executable task packet; end-to-end and implement-only plans retain the ref in their plan, task packet, and applicable Architecture Decision Pack before Build."
         condition: "feature_preparation_scope == existing_system"
-        on_fail: "Return to Discover, complete or resolve the canonical feature-preparation evidence artifact, then add its stable ref to the plan, task packet, and any applicable Pack."
+        on_fail: "For prepare_only readiness, return to Discover, complete or resolve the canonical feature-preparation evidence artifact, then carry its stable ref in readiness evidence/implications and record open decisions and the next implementation state without an executable packet or Build handoff. For execution_intent != prepare_only, add its stable ref to the plan, task packet, and any applicable Pack before Build."
 
       - id: P_ARTIFACT_CONTRACT
         check: "Plan includes artifact_contract before task packets with artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
+        condition: "execution_intent != prepare_only"
         on_fail: "Load references/artifact-first-output-contract.md and add the Artifact Contract before planning implementation steps"
 
       - id: P_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive and plan_mode!=none: Plan references the current Architecture Decision Pack, atomically sets handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref before Build, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive and plan_mode!=none: a prepare_only readiness plan may reference the current Architecture Decision Pack but does not set implementation task-packet or Build handoff bindings. For execution_intent != prepare_only, Plan references the current Architecture Decision Pack, atomically sets handoff_binding_state=downstream_bound with both plan_or_task_packet_ref and review_scope_ref before Build, maps its semantic interface/type commitments and quality verification to affected task packets, preserves primitive exceptions and public compatibility strategy, and names the independent review scope; review_intensive carries independent_challenge_evidence."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        on_fail: "Return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets."
+        on_fail: "For prepare_only readiness, return to the Architecture Decision Pack, refresh it if the revision or requirements changed, then retain its typed source-backed reference and readiness implications without task-packet or Build handoff bindings. For execution_intent != prepare_only, add its typed reference, contract commitments, verification, and reviewer scope to the plan/task packets before Build."
 
       - id: P_DONE_CONTRACT
         check: "For medium+ harness-capable work: accepted Done Contract exists before Build with done_when, not_done_when, verification, owner/consumer, acceptance_criteria, and debate_record with at least two perspectives; delegated mode uses subagent perspectives when available"
-        condition: "size in [medium, large, mega] and harness_capable == true"
+        condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
         on_fail: "Block Build, load references/harness-controller.md, return to Plan, write the Done Contract, collect at least two debate perspectives using subagents when subagent_execution_mode=delegated and available, and seek re-approval when scope or acceptance changes"
 
       - id: P_HARNESS_RECIPE
         check: "For medium+ harness-capable work: Harness Recipe is selected before Build from task/model/risk/context profile and records selected_recipe, recipe_rationale, required_artifacts, and corrective_action"
-        condition: "size in [medium, large, mega] and harness_capable == true"
+        condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
         on_fail: "Block Build, load references/harness-controller.md, return to Plan, classify task_profile, model_profile, risk_profile, and context_profile, select the Harness Recipe, and record the missing-recipe corrective action"
 
       - id: P_HARNESS_RUNTIME_ARTIFACTS
         check: "For medium+ harness-capable work: plan/task packets name Harness Run State, Trace Ledger, and Replay Packet artifact refs before Build"
-        condition: "size in [medium, large, mega] and harness_capable == true"
+        condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
         on_fail: "Return to Plan, add harness_run_state_ref, trace_ledger_ref, and replay_packet_ref to the task packet or plan, and record the corrective action for missing run-state/trace/replay evidence"
 
       - id: P_VERIFIED_DISTILLATION
@@ -328,11 +329,11 @@ gates:
 
       - id: P1
         check: "End-to-end/implement-only plans contain ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan consumes the approved slice manifest from Decompose without rediscovering boundaries. A prepare_only plan is optional readiness context and must not manufacture executable packets."
-        on_fail: "Add exact create/modify/test file paths to every implementation step or task packet, and carry the approved slice manifest forward for medium+ tasks"
+        on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, add exact create/modify/test file paths to every implementation step or task packet, and carry the approved slice manifest forward for medium+ tasks."
 
       - id: P2
         check: "Each end-to-end/implement-only implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify. A prepare_only readiness plan records only evidence-backed implications, open decisions, and the next implementation state."
-        on_fail: "Add behavior/acceptance criteria and test criteria to steps or task packets missing them"
+        on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, add behavior/acceptance criteria and test criteria to steps or task packets missing them."
 
       - id: P4
         check: "When execution_intent=prepare_only, readiness evidence and any optional plan do not wait for implementation approval; record the approval/delegation needed to implement next in feature_preparation_result.open_decisions and/or recommended_next_step. Otherwise, when plan_mode=approval_required, the user explicitly approved the plan and slice manifest when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
@@ -340,16 +341,17 @@ gates:
 
       - id: P5
         check: "Plan tier matches plan_mode and task size: compact for inline, standard for approval-required medium, and full for approval-required large/mega"
+        condition: "execution_intent != prepare_only"
         on_fail: "Upgrade or downgrade plan_mode and tier to match size, risk, uncertainty, and approval policy"
 
       - id: P6
         check: "For large/mega tasks: Security and Operability sections are populated"
-        condition: "size in [large, mega]"
+        condition: "execution_intent != prepare_only and size in [large, mega]"
         on_fail: "Fill Security and Operability sections per plan-template.md"
 
       - id: P7
         check: "For large+ tasks: implementation blueprint was produced by Architect subagent when subagent_execution_mode=delegated, or produced directly in fallback mode with equivalent architectural analysis"
-        condition: "size in [large, mega]"
+        condition: "execution_intent != prepare_only and size in [large, mega]"
         on_fail: "Produce implementation blueprint using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: P8
@@ -364,14 +366,16 @@ gates:
       - id: P9
         check: "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md and aligned one-to-one with approved Decompose slices. prepare_only has no executable packet requirement."
         condition: "size in [medium, large, mega]"
-        on_fail: "Rewrite vague implementation steps into executable task packets that consume slice_id and slice manifest fields directly"
+        on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, rewrite vague implementation steps into executable task packets that consume slice_id and slice manifest fields directly."
 
       - id: P10
         check: "Each implementation step or task packet has a verification command and expected success signal"
+        condition: "execution_intent != prepare_only"
         on_fail: "Add an exact verification command and expected success signal to each step or task packet"
 
       - id: P11
         check: "Each task packet includes a deviation/rollback rule, or small inline plan explicitly states how deviations are handled"
+        condition: "execution_intent != prepare_only"
         on_fail: "Add deviation/rollback handling before seeking plan approval"
 
       - id: P_WORKFLOW_EXPERIMENT_LEDGER
@@ -770,10 +774,10 @@ invariants:
     on_fail: "Return to Discover or Plan, refresh the Architecture Decision Pack with current source evidence and invalidation state, then reapprove if the selected design, scope, behavior, risk, or verification changed."
 
   - id: INV_ARCHITECTURE_PACK_HANDOFF_BINDING
-    check: "Architecture Decision Packs use handoff_binding_state=discover_only with context_or_journal_ref only during Discover; Plan atomically binds plan_or_task_packet_ref and review_scope_ref as downstream_bound before Build when plan_mode!=none; when plan_mode=none, the pre-Build boundary atomically binds compact inline task-packet/execution and inline review-scope refs before any Build action; Build, Review, and completion retain downstream_bound; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+    check: "For prepare_only, Architecture Decision Packs retain handoff_binding_state=discover_only with context_or_journal_ref only through Preparation Completion, including optional readiness Plan, and discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. For execution_intent != prepare_only, Plan atomically binds plan_or_task_packet_ref and review_scope_ref as downstream_bound before Build when plan_mode!=none; when plan_mode=none, the pre-Build boundary atomically binds compact inline task-packet/execution and inline review-scope refs before any Build action; Build, Review, and completion retain downstream_bound; material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     scope: all_phases
-    on_fail: "Stop downstream work, clear stale refs, refresh the Pack, re-plan and reapprove the bound refs before Build, Review, or completion continues."
+    on_fail: "For prepare_only, clear downstream refs and restore discover_only Pack context through Preparation Completion. For execution_intent != prepare_only, stop downstream work, clear stale refs, refresh the Pack, re-plan and reapprove the bound refs before Build, Review, or completion continues."
 
   - id: INV_SEMANTIC_TYPE_BOUNDARIES
     check: "When the Architecture Decision Pack introduces or changes a domain/public/lifecycle/unit/validation/ownership/extension concept, its Type Ledger uses a semantic type or records a concrete primitive exception with an owned conversion/validation boundary. Public or serialized changes retain compatibility/versioning/adapters and rollback evidence."

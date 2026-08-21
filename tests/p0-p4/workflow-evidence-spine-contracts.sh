@@ -19,12 +19,24 @@ fi
 
 test_start "baseline and candidate persist repaired task state before resume"
 candidate_workflow="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
-if p0p4_contains_text "$workflow_dir/SKILL.md" 'update the framework-owned `{agent_state_dir}/task.md` before acting or returning' \
-    && p0p4_contains_text "$workflow_dir/SKILL.md" "record the classification and reason, current task identity, and repaired exact next action" \
+state_repair_fragments_are_present() {
+    local file="$1"
+
+    p0p4_contains_text "$file" "stale" \
+        && p0p4_contains_text "$file" "superseded" \
+        && p0p4_contains_text "$file" "completed" \
+        && p0p4_contains_text "$file" '{agent_state_dir}/task.md' \
+        && p0p4_contains_text "$file" "before acting" \
+        && p0p4_contains_text "$file" "classification" \
+        && p0p4_contains_text "$file" "reason" \
+        && p0p4_contains_text "$file" "task identity" \
+        && p0p4_contains_text "$file" "exact next action"
+}
+
+if state_repair_fragments_are_present "$workflow_dir/SKILL.md" \
     && p0p4_contains_text "$workflow_dir/references/task-state-reconciliation.md" 'persist any `stale`, `superseded`, or `completed`' \
     && p0p4_contains_text "$workflow_dir/references/task-state-reconciliation.md" 'framework-owned `{agent_state_dir}/task.md`' \
-    && p0p4_contains_text "$candidate_workflow" 'update the framework-owned `{agent_state_dir}/task.md` before acting or returning' \
-    && p0p4_contains_text "$candidate_workflow" "record the classification and reason, current task identity, and repaired exact next action" \
+    && state_repair_fragments_are_present "$candidate_workflow" \
     && ! grep -Fq '.codex/task.md' "$workflow_dir/SKILL.md" \
     && ! grep -Fq '.codex/task.md' "$workflow_dir/references/task-state-reconciliation.md" \
     && ! grep -Fq '.codex/task.md' "$candidate_workflow"; then

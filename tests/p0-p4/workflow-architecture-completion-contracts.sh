@@ -435,13 +435,16 @@ if ! grep -Fq 'feature_preparation_scope == not_applicable' <<<"$docs_files_upda
     || ! grep -Fq 'feature_preparation_evidence_status == current' <<<"$docs_files_updated_block"; then
     docs_architecture_missing+=("files_updated safe no-write recovery condition")
 fi
-if ! grep -Fq 'schema_version: "3.0"' "$docs_output_contract"; then
-    docs_architecture_missing+=("assistant-docs output v3 schema_version")
+if ! grep -Fq 'schema_version: "4.0"' "$docs_output_contract"; then
+    docs_architecture_missing+=("assistant-docs output v4 schema_version")
 fi
-if ! grep -Fq 'schema_version: "3.0"' "$docs_input_contract"; then
-    docs_architecture_missing+=("assistant-docs input v3 schema_version")
+if ! grep -Fq 'schema_version: "4.0"' "$docs_input_contract"; then
+    docs_architecture_missing+=("assistant-docs input v4 schema_version")
 fi
 for term in \
+    'v4 replaces the v3 `feature_preparation_evidence_refs: string[]` transport' \
+    '`{evidence_ref, item_id, claim_or_question}` bindings' \
+    'v3 consumers must migrate each carried behavior claim or Product question' \
     'v3 adds feature-preparation completeness for ordinary and Pack-backed documentation' \
     'Existing v2 behavior keeps files_updated required/non-empty for ordinary and current-Pack documentation' \
     'permits omission for typed no-write recovery' \

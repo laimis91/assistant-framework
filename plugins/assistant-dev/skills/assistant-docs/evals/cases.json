@@ -132,13 +132,14 @@
       "setup_context": [
         "The assistant-docs skill instructions are active.",
         "architecture_design_mode is required and architecture_decision_pack_status is current.",
-        "A fresh compact architecture_decision_pack projection has ref=pack/parser-boundary, mode=required, canonical freshness_basis, facts=[{claim,source_ref}], assumptions=[{statement=The current parser format remains supported,status=safe_default,rationale_or_impact=Existing callers rely on it,source_ref=null}], canonical material_questions, boundaries_and_dependencies, design_pressure_checks, type_ledger, quality_scenarios, verification_and_rollback, invalidators, and no review-intensive challenge evidence. The current canonical Pack ref resolves the selected design and rationale."
+        "A fresh compact architecture_decision_pack projection has ref=pack/parser-boundary, mode=required, canonical freshness_basis, facts=[{claim,source_ref}], assumptions=[{statement=The current parser format remains supported,status=safe_default,rationale_or_impact=Existing callers rely on it,source_ref=null}], canonical material_questions, boundaries_and_dependencies, design_pressure_checks, type_ledger, quality_scenarios, verification_and_rollback, invalidators, and no review-intensive challenge evidence. The current canonical Pack ref resolves the selected design and rationale.",
+        "The carried parser-boundary behavior claim has exact current feature_preparation_evidence_refs binding {evidence_ref=prep/parser-boundary,item_id=parser-boundary-compatibility,claim_or_question=Preserve the current parser boundary compatibility while documenting the selected design.}."
       ],
       "expected_behavior": [
         "Uses the source Pack ref, matching mode, and canonical freshness basis before documenting the decision.",
         "Preserves facts[{claim,source_ref}] and assumptions[{statement,status=safe_default,rationale_or_impact,source_ref=null}] without translating or dropping nullable source_ref.",
         "Documents canonical material questions, boundaries/dependencies, design-pressure checks, Type Ledger, quality scenarios, verification/rollback, and invalidators without copying the full Pack.",
-        "Resolves selected design and rationale through the current canonical Pack ref and returns architecture_decision_pack_trace with source_pack_ref, documented_decision_refs, evidence_refs, and review_trace."
+        "Resolves selected design and rationale through the current canonical Pack ref and returns architecture_decision_pack_trace with source_pack_ref, documented_decision_refs, evidence_refs, exact feature_preparation_evidence_refs bindings, and review_trace."
       ],
       "pass_criteria": [
         "The response names architecture_design_mode, architecture_decision_pack_status=current, and architecture_decision_pack.",
@@ -159,6 +160,7 @@
           "architecture_decision_pack_trace",
           "evidence_refs",
           "review_trace",
+          "feature_preparation_evidence_refs",
           "freshness",
           "safe_default",
           "documented_decision_refs",
@@ -168,6 +170,21 @@
           "reconstruct the Pack",
           "invented architecture decision",
           "quality benefit confirmed without evidence"
+        ],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["architecture_design_mode"], "expected": "required"},
+          {"operator": "equals", "path": ["architecture_decision_pack_status"], "expected": "current"},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "current"},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "outcome"], "expected": "documented"},
+          {"operator": "nonempty_string", "path": ["architecture_decision_pack_trace", "source_pack_ref"]},
+          {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "documented_decision_refs"]},
+          {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "evidence_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"]},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/parser-boundary"},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "item_id"], "expected": "parser-boundary-compatibility"},
+          {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "claim_or_question"], "expected": "Preserve the current parser boundary compatibility while documenting the selected design."},
+          {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "review_trace"]}
         ]
       }
     },
@@ -420,6 +437,132 @@
       "machine_expectations": {
         "required_substrings": ["feature_preparation_evidence_trace", "blocked_incomplete_evidence", "recovery_action", "request_complete_evidence", "implementation", "behavioral tests", "review_trace"],
         "forbidden_substrings": ["files_updated", "outcome=validated", "created Architecture Decision Pack"],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["review_items"]},
+          {"operator": "nonempty_array", "path": ["safety_notes"]},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "incomplete"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "blocked_incomplete_evidence"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "recovery_action"], "expected": "request_complete_evidence"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-doc-requires-exact-evidence-binding",
+      "title": "Feature-preparation docs retain exact evidence-row bindings",
+      "category": "feature_preparation_evidence_binding",
+      "purpose": "Checks that a current existing-system documentation claim retains its exact canonical evidence artifact, row, and claim binding rather than only a broad artifact ref.",
+      "prompt": "Document the tested selection, map highlight, and viewport-focus behavior for the read-only VIEWING route. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "feature_preparation_scope=existing_system, feature_preparation_evidence_status=current, and architecture_design_mode=not_applicable.",
+        "prep/viewing-route item viewing-route-effects contains inspected implementation and behavioral-test evidence for the carried preservation claim.",
+        "The exact carried claim is: Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing."
+      ],
+      "expected_behavior": [
+        "Writes the documentation only after carrying the exact prep/viewing-route, viewing-route-effects, and claim binding.",
+        "Returns feature_preparation_evidence_trace outcome=validated with the same exact binding.",
+        "Does not replace the row binding with a broad artifact-only evidence ref."
+      ],
+      "pass_criteria": [
+        "The evidence trace identifies the exact canonical artifact and row.",
+        "The evidence trace retains the exact carried claim.",
+        "The response creates or updates the requested document from current evidence."
+      ],
+      "fail_signals": [
+        "Uses only prep/viewing-route without its item_id.",
+        "Writes the document with a mismatched or generic claim binding.",
+        "Treats the current artifact as evidence for an unbound claim."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_trace", "validated", "evidence_ref", "item_id", "claim_or_question", "prep/viewing-route", "viewing-route-effects", "VIEWING"],
+        "forbidden_substrings": ["broad artifact-only ref", "mismatched evidence item", "blocked_incomplete_evidence"],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["files_updated"], "fields": ["path", "change_type", "description"]},
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["safety_notes"]},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "current"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "validated"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "item_id"], "expected": "viewing-route-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "claim_or_question"], "expected": "Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing."},
+          {"operator": "empty_array", "path": ["review_items"]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-doc-rejects-mismatched-evidence-item",
+      "title": "Feature-preparation docs reject a mismatched evidence row",
+      "category": "feature_preparation_evidence_binding",
+      "purpose": "Checks that a current-looking artifact ref cannot document a carried claim when its item_id points at a different canonical evidence row.",
+      "prompt": "Document the tested selection, map highlight, and viewport-focus behavior for the read-only VIEWING route. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "feature_preparation_scope=existing_system and architecture_design_mode=not_applicable.",
+        "The supplied binding uses evidence_ref=prep/viewing-route with item_id=unrelated-route-effects for the VIEWING preservation claim.",
+        "Only viewing-route-effects is the admissible row for the carried claim, so the supplied binding is mismatched and feature_preparation_evidence_status must be treated as incomplete."
+      ],
+      "expected_behavior": [
+        "Does not create or update the requested document.",
+        "Returns feature_preparation_evidence_trace outcome=blocked_incomplete_evidence with request_complete_evidence.",
+        "Names the mismatched item and requests the exact canonical row binding."
+      ],
+      "pass_criteria": [
+        "The response rejects the mismatched item despite the broad artifact ref being current.",
+        "The recovery requests the exact evidence row before documentation."
+      ],
+      "fail_signals": [
+        "Writes the document because prep/viewing-route exists.",
+        "Silently replaces unrelated-route-effects with a guessed item.",
+        "Treats a broad evidence ref as sufficient."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_trace", "blocked_incomplete_evidence", "request_complete_evidence", "mismatched", "item_id", "viewing-route-effects"],
+        "forbidden_substrings": ["files_updated", "outcome=validated", "broad evidence ref is sufficient"],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["review_items"]},
+          {"operator": "nonempty_array", "path": ["safety_notes"]},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "incomplete"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "blocked_incomplete_evidence"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "recovery_action"], "expected": "request_complete_evidence"},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-doc-rejects-mismatched-evidence-claim",
+      "title": "Feature-preparation docs reject a mismatched evidence claim",
+      "category": "feature_preparation_evidence_binding",
+      "purpose": "Checks that a current canonical row cannot document a claim that differs from the exact carried evidence claim.",
+      "prompt": "Document the tested selection, map highlight, and viewport-focus behavior for the read-only VIEWING route. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "feature_preparation_scope=existing_system and architecture_design_mode=not_applicable.",
+        "The supplied binding uses evidence_ref=prep/viewing-route and item_id=viewing-route-effects, but claim_or_question says editing is enabled for VIEWING.",
+        "The admissible carried claim is: Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing."
+      ],
+      "expected_behavior": [
+        "Does not create or update the requested document.",
+        "Returns feature_preparation_evidence_trace outcome=blocked_incomplete_evidence with request_complete_evidence.",
+        "Requests the exact carried claim binding before documentation."
+      ],
+      "pass_criteria": [
+        "The response rejects the mismatched claim despite a correct artifact and item.",
+        "The recovery requests the exact evidence claim before documentation."
+      ],
+      "fail_signals": [
+        "Writes the document because the artifact and item are current.",
+        "Silently replaces the claim with a guessed binding.",
+        "Treats a row ref as sufficient without its carried claim."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_trace", "blocked_incomplete_evidence", "request_complete_evidence", "mismatched", "claim_or_question", "without enabling editing"],
+        "forbidden_substrings": ["files_updated", "outcome=validated", "row ref is sufficient"],
         "structured_json_assertions": [
           {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
           {"operator": "nonempty_string", "path": ["doc_coverage"]},

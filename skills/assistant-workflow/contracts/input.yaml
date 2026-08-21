@@ -33,7 +33,7 @@ fields:
     validation: "prepare_only ends after admissible feature-preparation evidence and a plan/readiness result; it must not manufacture Build, changed-files, or implementation verification evidence. implement_only consumes approved preparation/plan evidence. end_to_end follows the normal phased workflow."
     default: end_to_end
     on_missing: infer
-    infer_from: "Use prepare_only when the user asks for technical preparation, a repository-grounded feature/epic/story plan, or explicitly says do not implement. Use implement_only only when an approved executable packet already exists. Otherwise use end_to_end."
+    infer_from: "prepare_only: preparation. When a request combines preparation/planning with an affirmative implementation request to implement, build, or change, use end_to_end unless the user explicitly prohibits implementation. implement_only needs an approved packet; otherwise end_to_end."
 
   - name: risk_tier
     type: enum

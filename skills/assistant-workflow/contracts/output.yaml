@@ -201,9 +201,12 @@ artifacts:
     required: conditional
     condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"
     validation: >
-      When required, must contain paired entries for every phase that ran:
-      '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
-      Light/standard work without an exact-marker trigger records concise natural progress instead.
+      When required, must contain the exact declared phase-gate markers for every phase that ran,
+      using that gate's checkpoint_start and checkpoint_end as the sole marker authority.
+      This explicitly includes PREPARATION_COMPLETION start marker
+      '--- PHASE: PREPARATION COMPLETION ---' and end marker
+      '--- PHASE: PREPARATION COMPLETE ---'. Light/standard work without an
+      exact-marker trigger records concise natural progress instead.
     on_fail: "When exact markers were required, reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
     minimum_entries_rule: >
       Require the TRIAGE start marker plus paired start/complete markers for
@@ -655,7 +658,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A. When execution_intent == prepare_only, each unimplemented accepted requirement remains status=pending with an evidence_ref and readiness or next-implementation evidence; preparation does not fabricate passed verification. When execution_intent != prepare_only, every accepted requirement has status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -737,7 +740,7 @@ artifacts:
           - name: status
             type: enum
             required: true
-            enum_values: [passed, approved_exclusion]
+            enum_values: [pending, passed, approved_exclusion]
             on_missing: fail
           - name: exclusion_reason
             type: string
@@ -751,7 +754,7 @@ artifacts:
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
     validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios with stable identity and verified evidence; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real with stable selected binding, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
-    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
+    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, and complete the Type Ledger and quality scenarios. For prepare_only, retain the Pack as discover_only readiness context through Preparation Completion. For execution_intent != prepare_only, carry the Pack reference into Plan and Review."
     object_fields:
       - name: pack_id
         type: string
@@ -1111,9 +1114,9 @@ artifacts:
       - name: handoff_refs
         type: object
         required: true
-        description: "Discover records only durable context/journal state; Plan or the plan_mode=none pre-Build boundary atomically binds downstream refs before Build."
-        validation: "discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
-        on_fail: "Refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
+        description: "prepare_only retains Discover-only Pack context through Preparation Completion; execution lanes atomically bind downstream refs before Build."
+        validation: "For prepare_only, retain handoff_binding_state=discover_only through Preparation Completion even when optional readiness Plan/plan_mode runs; discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. For execution_intent != prepare_only, Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. For execution_intent != prepare_only, plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+        on_fail: "For prepare_only, restore discover_only Pack context and remove downstream refs before Preparation Completion. For execution_intent != prepare_only, refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
         object_fields:
           - name: handoff_binding_state
             type: enum
@@ -1266,7 +1269,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] and workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
     validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/context-map.md"
-    on_fail: "Create context map when configured and policy-allowed, or include context map in carried-forward plan/task packet"
+    on_fail: "Create context map when configured and policy-allowed. For prepare_only, include it only in carried-forward readiness evidence through Preparation Completion; for execution_intent != prepare_only, otherwise include it in the plan/task packet."
     location: "{agent_state_dir}/context-map.md"
 
   - name: context_budget_note
@@ -1275,7 +1278,7 @@ artifacts:
     condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
     description: "Record of exact, summarized, omitted, and split/delegated context"
     validation: "Must list exact/pinned material, summarized material, omitted/deferred material, and split/delegation plan or not_applicable reason"
-    on_fail: "Load references/context-budget-and-pattern-retrieval.md and add Context Budget note to plan/task packet"
+    on_fail: "Load references/context-budget-and-pattern-retrieval.md and add Context Budget note to readiness evidence for prepare_only or to the plan/task packet for execution_intent != prepare_only."
     object_fields:
       - name: exact_pinned
         type: string[]
@@ -1346,7 +1349,7 @@ artifacts:
   - name: artifact_contract
     type: object
     required: conditional
-    condition: "task proceeds beyond discovery into plan, build, or documentable deliverable"
+    condition: "execution_intent != prepare_only and task proceeds beyond discovery into plan, build, or documentable deliverable"
     description: "Artifact-first deliverable contract that makes the user-visible output concrete before implementation"
     validation: "Must include artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
     on_fail: "Load references/artifact-first-output-contract.md and define the Artifact Contract before Plan or Build"
@@ -2439,11 +2442,10 @@ artifacts:
     required: conditional
     condition: "plan_mode in [inline, approval_required]"
     validation: >
-      inline: compact plan with goal, files, risks, and tests.
-      approval_required medium: standard plan per plan-template.md.
-      approval_required large/mega: full plan per plan-template.md including Security and Operability.
+      For prepare_only, readiness-only plan text contains the evidence ref, readiness implications, open decisions, recommended next implementation state, and execution not started; it omits files, tests, Artifact Contract, executable steps/task packets, and full plan tiers.
+      For execution_intent != prepare_only: inline is a compact plan with goal, files, risks, and tests; approval_required medium is standard per plan-template.md; approval_required large/mega is full including Security and Operability.
       plan_mode=none: artifact is absent.
-    on_fail: "When plan_mode is inline or approval_required, write or update the proportional plan before proceeding; omit this artifact when plan_mode is none"
+    on_fail: "For prepare_only, write or repair only the readiness plan with evidence ref, implications, open decisions, recommended next state, and execution not started; do not add files, tests, or executable packets. For execution_intent != prepare_only, write or update the proportional execution plan when plan_mode is inline or approval_required; omit this artifact when plan_mode is none."
 
   - name: user_approval
     type: enum

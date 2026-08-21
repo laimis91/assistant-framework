@@ -493,13 +493,24 @@ for term in \
         missing_state_terms+=("phases.md: $term")
     fi
 done
-for term in \
-    "orchestrator-owned {agent_state_dir}/task.md state artifact" \
-    "a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_state_terms+=("phase-gates.yaml: $term")
-    fi
-done
+if ! ruby -ryaml -e '
+  gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")
+  d5 = gates.find { |gate| gate["phase"] == "DISCOVER" }
+    .fetch("exit_assertions")
+    .find { |assertion| assertion["id"] == "D5" }
+  check = d5.fetch("check")
+  valid = check.include?("context map exists at {agent_state_dir}/context-map.md") &&
+    check.include?("local state artifacts are configured and policy-allowed") &&
+    check.include?("For prepare_only") &&
+    check.include?("readiness evidence/context") &&
+    check.include?("without a task or plan packet") &&
+    check.include?("for execution_intent != prepare_only") &&
+    check.include?("state files are unavailable") &&
+    check.include?("task/plan packet")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+    missing_state_terms+=("phase-gates.yaml: D5 must branch local-state context-map, prepare-only readiness, and execution unavailable-state handling")
+fi
 for term in \
     "context_map_markdown" \
     "orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed"; do

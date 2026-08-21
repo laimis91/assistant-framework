@@ -166,8 +166,10 @@ workflow like this:
 | REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
 | HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
 
-`plan_mode=none` is limited to small, local, reversible, high-confidence work
-with known scope. `inline` records a short plan without an approval wait.
+For `execution_intent != prepare_only`, `plan_mode=none` is limited to small,
+local, reversible, high-confidence work with known scope. `inline` records a
+short plan without an approval wait. For `prepare_only` at any size, `plan_mode=none` is the default; optional readiness planning retains evidence and next-state context only, without executable packets or downstream Pack handoffs.
+For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
 `approval_required` applies to medium-or-larger work and to risk, policy, or
 public-impact changes. Build owns implementation, tests, verification, and
 a bounded repair loop: at most three attempts, a no-progress limit of two, and

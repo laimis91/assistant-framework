@@ -1,5 +1,5 @@
 # contract header
-schema_version: "3.0"
+schema_version: "4.0"
 contract: output
 skill: assistant-docs
 
@@ -67,7 +67,7 @@ artifacts:
     required: conditional
     condition: "feature_preparation_scope == existing_system"
     description: "Discriminated validation or recovery trace for any document carrying existing-system feature preparation"
-    validation: "feature_preparation_evidence_status=current requires outcome=validated with non-empty evidence_refs; incomplete requires outcome=blocked_incomplete_evidence, recovery_action=request_complete_evidence, and non-empty review_trace. An incomplete trace never permits files_updated or propagation of the unsupported claim."
+    validation: "feature_preparation_evidence_status=current requires outcome=validated with non-empty exact evidence_refs bindings for every carried claim or Product question; each binding must echo the exact input evidence_ref, item_id, and claim_or_question. incomplete requires outcome=blocked_incomplete_evidence, recovery_action=request_complete_evidence, and non-empty review_trace. An incomplete trace never permits files_updated or propagation of the unsupported claim."
     on_fail: "Stop writing the feature-preparation claim and request a complete canonical evidence artifact."
     object_fields:
       - name: outcome
@@ -76,11 +76,27 @@ artifacts:
         enum_values: [validated, blocked_incomplete_evidence]
         on_missing: fail
       - name: evidence_refs
-        type: string[]
+        type: object[]
         required: conditional
         condition: "outcome == validated"
         min_items: 1
         on_missing: fail
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+            validation: "Equals an exact current input feature_preparation_evidence_refs evidence_ref"
+            on_missing: fail
+          - name: item_id
+            type: string
+            required: true
+            validation: "Equals the exact input item_id under the paired evidence_ref"
+            on_missing: fail
+          - name: claim_or_question
+            type: string
+            required: true
+            validation: "Equals the exact carried claim or Product question from the paired input binding"
+            on_missing: fail
       - name: recovery_action
         type: enum
         required: conditional
@@ -129,13 +145,29 @@ artifacts:
         min_items: 1
         on_missing: fail
       - name: feature_preparation_evidence_refs
-        type: string[]
+        type: object[]
         required: conditional
         condition: "outcome == documented and feature_preparation_scope == existing_system"
-        description: "Admissible canonical evidence refs carried with documented existing-system feature decisions"
-        validation: "Every carried Product question resolves to these complete feature-preparation evidence rows; omit only when feature preparation is not applicable."
+        description: "Exact canonical evidence-row bindings carried with documented existing-system feature decisions"
+        validation: "Every carried behavior claim or Product question resolves to an exact current input binding with evidence_ref, item_id, and claim_or_question; omit only when feature preparation is not applicable."
         min_items: 1
         on_missing: fail
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+            validation: "Equals an exact current input feature_preparation_evidence_refs evidence_ref"
+            on_missing: fail
+          - name: item_id
+            type: string
+            required: true
+            validation: "Equals the exact input item_id under the paired evidence_ref"
+            on_missing: fail
+          - name: claim_or_question
+            type: string
+            required: true
+            validation: "Equals the exact carried claim or Product question from the paired input binding"
+            on_missing: fail
       - name: recovery_action
         type: enum
         required: conditional
