@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflow-kernel-activation-observation.contract.json",
+  "title": "Workflow Kernel Native Activation Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_kind", "evidence_class", "provenance", "bindings", "results"],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill", "user_request", "selected_skills"],
+      "properties": {
+        "skill": {"const": "assistant-workflow"},
+        "user_request": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "selected_skills": {"type": "array", "uniqueItems": true, "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 128}}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "observation_kind": {"const": "workflow_kernel_native_activation"},
+    "evidence_class": {"enum": ["manual_native_observation", "contract_test_fixture"]},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture_owner_kind", "capture_method", "native_host", "native_host_version", "captured_at_utc", "observed_selection_surface", "repository_runner_invoked_native_routing", "raw_session_retained"],
+      "properties": {
+        "capture_owner_kind": {"enum": ["human_evaluator", "repository_contract_test"]},
+        "capture_method": {"enum": ["manual_native_session", "static_contract_fixture"]},
+        "native_host": {"enum": ["codex", "not_applicable"]},
+        "native_host_version": {"type": "string", "minLength": 1, "maxLength": 160},
+        "captured_at_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+        "observed_selection_surface": {"type": "string", "minLength": 1, "maxLength": 240},
+        "repository_runner_invoked_native_routing": {"const": false},
+        "raw_session_retained": {"const": false}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill", "candidate_skill_sha256", "activation_cases_sha256"],
+      "properties": {
+        "skill": {"const": "assistant-workflow"},
+        "candidate_skill_sha256": {"$ref": "#/$defs/sha256"},
+        "activation_cases_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "results": {"type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": {"$ref": "#/$defs/selection"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"evidence_class": {"const": "manual_native_observation"}}}, "then": {"properties": {"provenance": {"properties": {"capture_owner_kind": {"const": "human_evaluator"}, "capture_method": {"const": "manual_native_session"}, "native_host": {"const": "codex"}}}}}},
+    {"if": {"properties": {"evidence_class": {"const": "contract_test_fixture"}}}, "then": {"properties": {"provenance": {"properties": {"capture_owner_kind": {"const": "repository_contract_test"}, "capture_method": {"const": "static_contract_fixture"}, "native_host": {"const": "not_applicable"}}}}}}
+  ]
+}

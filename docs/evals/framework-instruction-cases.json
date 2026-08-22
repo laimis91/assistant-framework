@@ -68,6 +68,62 @@
       }
     },
     {
+      "id": "viewing-route-technical-preparation",
+      "title": "Existing VIEWING behavior is preparation evidence, not a product question",
+      "category": "feature_preparation",
+      "purpose": "Checks source- and behavioral-test-grounded technical preparation preserves observed behavior without execution evidence.",
+      "setup_context": [
+        "The seeded repository has VIEWING_PREPARATION.md, src/route.ts, and tests/route.test.js only.",
+        "applyActiveRouteEffects calls selectRoute, highlightRoute, and focusViewport for ACTIVE; the named behavioral test uses assert.deepEqual.",
+        "Requirements extend read-only VIEWING without changing those effects. Return canonical feature_preparation_evidence ref prep/viewing-route with file hashes, exact symbols, test assertion, and bounded inspection event refs."
+      ],
+      "prompt": "Technically prepare VIEWING from the repository. Do not implement it.",
+      "expected_behavior": [
+        "Inspects current implementation and relevant behavioral tests before classification.",
+        "Classifies preservation as existing_behavior_to_preserve plus implementation_gap, not a Product question.",
+        "Returns preparation-only evidence with execution not started."
+      ],
+      "pass_criteria": [
+        "The grading artifact binds the observed implementation and behavioral test to prep/viewing-route and implementation_gap.",
+        "No changed files, test execution, review, or implementation evidence is claimed."
+      ],
+      "fail_signals": [
+        "Classifies the omitted visual detail as a Product question without source inspection.",
+        "Claims implementation or verification execution."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["VIEWING", "implementation_gap", "behavioral tests", "not started"],
+        "forbidden_substrings": ["Build started", "changed_files"]
+      }
+    },
+    {
+      "id": "pending-architecture-pack-verification",
+      "title": "Pending Architecture Pack quality scenario does not invent verification evidence",
+      "category": "architecture_design",
+      "purpose": "Checks planned verification remains pending until execution evidence exists.",
+      "setup_context": [
+        "A fresh Architecture Decision Pack carries a VIEWING implementation-gap quality scenario.",
+        "The verification is planned for future implementation and has no execution evidence yet.",
+        "Write .assistant-eval/pending-pack.json with exactly schema_version, quality_scenario_status, planned_verification, and verification_ref_present."
+      ],
+      "prompt": "Prepare the pending Architecture Pack quality scenario without implementation.",
+      "expected_behavior": [
+        "Keeps the quality scenario pending and retains its planned verification.",
+        "Omits verification_ref until verification evidence exists."
+      ],
+      "pass_criteria": [
+        "The grading artifact records pending status, planned verification, and no verification reference."
+      ],
+      "fail_signals": [
+        "Marks the scenario verified without execution evidence.",
+        "Adds a verification_ref before verification occurs."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["Architecture Pack", "pending", "planned verification"],
+        "forbidden_substrings": ["verification complete"]
+      }
+    },
+    {
       "id": "medium-feature-plans-before-build",
       "title": "Medium feature should plan before build",
       "category": "phase_gates",

@@ -13,6 +13,7 @@ readonly FEATURE_PREP_LIGHT_REQUIRED_ROOTS=(completion_policy validation_results
 readonly FEATURE_PREP_CASE_MANIFEST=(
     'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document'
     'medium-prepare-only-readiness-reports-pending-requirement-map|medium|plan_document'
+    'medium-prepare-only-qa-request-routing|medium|plan_document'
     'combined-preparation-and-implementation-routes-end-to-end|small|'
     'viewing-route-preserves-active-behavior|light|plan_document'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|plan_document'
@@ -204,7 +205,7 @@ build_medium_prepare_only_response() {
           execution_intent: "prepare_only",
           completion_policy: {
             controller_intensity: "standard",
-            build_execution_lane: "bounded_executor",
+            build_execution_lane: "inline_direct",
             plan_mode: $plan_mode,
             architecture_design_mode: "not_applicable",
             workflow_state_mode: "inline",
@@ -218,9 +219,11 @@ build_medium_prepare_only_response() {
             controller_intensity: "standard",
             plan_mode: $plan_mode,
             execution_intent: "prepare_only",
+            qa_evaluation_mode: "not_required",
+            harness_capable: false,
             architecture_design_mode: "not_applicable",
             architecture_design_trigger_reasons: ["No architecture boundary applies to this readiness work."],
-            build_execution_lane: "bounded_executor",
+            build_execution_lane: "inline_direct",
             workflow_state_mode: "inline",
             manual_verification_mode: "not_required",
             required_gates: ["feature-preparation evidence"],
@@ -298,6 +301,21 @@ build_medium_prepare_only_terminal_response() {
     build_medium_prepare_only_response "$response_path" "$summary" none
 }
 
+build_medium_prepare_only_qa_request_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_prepare_only_response "$response_path" "$summary" none
+    jq '
+        .feature_preparation_result.future_qa_acceptance_obligation = {
+          requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
+          execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."
+        }
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
 build_viewing_route_prepare_only_response() {
     local response_path="$1"
     local summary="$2"
@@ -361,13 +379,19 @@ build_large_prepare_only_terminal_response() {
     jq '
         .size = "large"
         | .completion_policy.controller_intensity = "strict"
-        | .completion_policy.build_execution_lane = "separated_workers"
+        | .completion_policy.build_execution_lane = "inline_direct"
+        | .completion_policy.workflow_state_mode = "journal"
         | .completion_policy.selection_reason = "Large preparation returns strict repository-backed readiness without implementation."
         | .triage_result.size = "large"
         | .triage_result.controller_intensity = "strict"
-        | .triage_result.build_execution_lane = "separated_workers"
+        | .triage_result.build_execution_lane = "inline_direct"
+        | .triage_result.workflow_state_mode = "journal"
+        | .feature_preparation_result.future_qa_acceptance_obligation = {
+            requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
+            execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."
+          }
         | .phase_checkpoints = [
-            ">> Triaged as: LARGE — phases: Discover, Preparation Completion",
+            "--- PHASE: TRIAGE ---",
             "--- PHASE: DISCOVER ---",
             "--- PHASE: DISCOVER COMPLETE ---",
             "--- PHASE: PREPARATION COMPLETION ---",
@@ -375,6 +399,166 @@ build_large_prepare_only_terminal_response() {
           ]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+}
+
+build_ordinary_medium_triage_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+      {
+        summary: $summary,
+        execution_intent: "end_to_end",
+        triage_result: {
+          task_type: "refactor",
+          risk_tier: "moderate",
+          size: "medium",
+          controller_intensity: "standard",
+          plan_mode: "approval_required",
+          execution_intent: "end_to_end",
+          qa_evaluation_mode: "not_required",
+          harness_capable: false,
+          architecture_design_mode: "not_applicable",
+          architecture_design_trigger_reasons: ["No architecture boundary applies to the bounded refactor."],
+          build_execution_lane: "bounded_executor",
+          workflow_state_mode: "journal",
+          manual_verification_mode: "not_required",
+          required_gates: ["requirements restated", "constraints recorded", "file scope identified", "verification commands listed", "tests/build executed", "spec review completed", "quality review completed"],
+          required_agents: ["bounded executor", "Code Reviewer"],
+          subagent_policy_state: "delegation_triggered",
+          subagent_execution_mode: "delegated",
+          subagent_trigger_scope: ["active skill: Build bounded executor and Review Code Reviewer"],
+          search_mode: "none",
+          candidate_scope_scan: {
+            likely_touched_paths: ["skills/assistant-workflow/contracts/output.yaml"],
+            symbols_or_terms_searched: ["triage_result", "qa_evaluation_mode", "harness_capable"],
+            adjacent_surfaces: ["tests/p0-p4/workflow-basics-contracts.sh"],
+            confidence: "high",
+            unknowns: []
+          }
+        }
+      }
+    ' >"$response_path"
+}
+
+build_existing_system_architecture_pack_binding_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+      {
+        summary: $summary,
+        execution_intent: "end_to_end",
+        architecture_design_mode: "required",
+        feature_preparation_scope: "existing_system",
+        architecture_decision_pack: {
+          pack_id: "pack/viewing-route",
+          mode: "required",
+          feature_preparation_evidence_ref: "prep/viewing-route",
+          single_goal: "Preserve the tested VIEWING route effects without enabling editing.",
+          freshness: {
+            basis_kind: "repository",
+            branch_or_project_state: "current working tree",
+            revision_or_context_ref: "HEAD",
+            evidence_refs: ["src/route.ts", "test/route_test.ts"],
+            invalidated_by: ["A route behavior or behavioral-test change."]
+          },
+          facts: [{
+            claim: "ACTIVE selection, highlight, and viewport focus are covered by implementation and behavioral tests.",
+            source_ref: "prep/viewing-route#viewing-route-effects",
+            verified_against: "src/route.ts and test/route_test.ts"
+          }],
+          assumptions: [{
+            statement: "VIEWING remains read-only.",
+            status: "safe_default",
+            rationale_or_impact: "The scoped requirement adds route effects without enabling edits."
+          }],
+          material_questions: [],
+          boundaries: [{
+            boundary: "Route effect dispatch",
+            owner: "Route controller",
+            lifecycle_or_data_flow: "VIEWING dispatches observable effects without edit commands.",
+            dependency_direction: "Route controller to selection and viewport services",
+            evidence_ref: "prep/viewing-route#viewing-route-effects"
+          }],
+          design_pressure_checks: [
+            {concern: "control_and_early_exit", status: "not_applicable", evidence_or_material_question: "The existing route dispatch is synchronous.", decision_implication: "No new cancellation control is introduced.", revalidation_point: "none: route remains synchronous"},
+            {concern: "ownership_and_disposal", status: "not_applicable", evidence_or_material_question: "The route does not own disposable resources.", decision_implication: "Keep existing service ownership.", revalidation_point: "none: no owned resource"},
+            {concern: "resource_envelope", status: "not_applicable", evidence_or_material_question: "The effects use existing bounded route services.", decision_implication: "No new resource envelope is introduced.", revalidation_point: "first route integration"},
+            {concern: "extension_registration", status: "not_applicable", evidence_or_material_question: "Existing route registration selects VIEWING.", decision_implication: "Do not introduce a new registry.", revalidation_point: "first new route type"},
+            {concern: "representative_path", status: "resolved", evidence_or_material_question: "VIEWING route dispatch reaches selection, highlight, and viewport focus.", decision_implication: "Adapt the existing ACTIVE effect path.", revalidation_point: "focused VIEWING route test"}
+          ],
+          type_ledger: [{
+            concept: "Route mode",
+            representation_policy: "semantic_type",
+            representation: "RouteMode",
+            boundary: "Route controller input",
+            semantics_or_exception_reason: "Route mode selects read-only behavior.",
+            conversion_or_validation_point: "Validate mode at route dispatch.",
+            extension_seam: "Existing RouteMode registration"
+          }],
+          interface_contracts: [{
+            consumer_or_owner: "Route controller",
+            exposure: "internal",
+            input_type: "RouteMode",
+            output_or_failure_type: "RouteEffectResult",
+            evolution_strategy: "Preserve the existing read-only route contract.",
+            evidence_ref: "prep/viewing-route#viewing-route-effects"
+          }],
+          quality_scenarios: [{
+            quality_scenario_id: "viewing-route-parity",
+            attribute: "reliability",
+            scenario: "VIEWING preserves the observable route effects.",
+            workload: "One VIEWING route activation.",
+            budget_or_explicit_unknown: "Focused behavioral assertions must pass.",
+            measurement: "Run the focused route behavior test.",
+            failure_condition: "Any selection, highlight, or viewport assertion fails.",
+            status: "pending"
+          }],
+          alternatives: [],
+          selected_design: "Adapt the existing ACTIVE route effects for read-only VIEWING.",
+          selected_design_rationale: "The canonical evidence row establishes preservation behavior and an implementation gap.",
+          verification: [{
+            verification_id: "verify-viewing-route-parity",
+            claim_or_constraint: "VIEWING preserves selection, highlight, and viewport focus without editing.",
+            method: "Focused route behavior test.",
+            success_signal: "The focused route behavior test passes.",
+            failure_condition: "Any preserved effect is missing or editing is enabled."
+          }],
+          handoff_refs: {
+            handoff_binding_state: "downstream_bound",
+            context_or_journal_ref: "journal/viewing-route#discover",
+            plan_or_task_packet_ref: "plan/viewing-route#packet",
+            review_scope_ref: "review/viewing-route#scope"
+          },
+          feature_preparation_evidence_bindings: [{
+            evidence_ref: "prep/viewing-route",
+            item_id: "viewing-route-effects",
+            claim_or_question: "Preserve selection, highlight, and viewport focus for VIEWING."
+          }]
+        }
+      }
+    ' >"$response_path"
+}
+
+build_medium_plan_triage_routing_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+      {
+        summary: $summary,
+        plan: {
+          tier: "medium",
+          triage_result: {
+            qa_evaluation_mode: "not_required",
+            harness_capable: false,
+            build_execution_lane: "bounded_executor",
+            workflow_state_mode: "journal"
+          }
+        }
+      }
+    ' >"$response_path"
 }
 
 build_small_end_to_end_response() {

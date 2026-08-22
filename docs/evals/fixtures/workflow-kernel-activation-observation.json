@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "observation_kind": "workflow_kernel_native_activation",
+  "evidence_class": "contract_test_fixture",
+  "provenance": {
+    "capture_owner_kind": "repository_contract_test",
+    "capture_method": "static_contract_fixture",
+    "native_host": "not_applicable",
+    "native_host_version": "not_applicable",
+    "captured_at_utc": "2026-08-22T00:00:00Z",
+    "observed_selection_surface": "static contract fixture",
+    "repository_runner_invoked_native_routing": false,
+    "raw_session_retained": false
+  },
+  "bindings": {
+    "skill": "assistant-workflow",
+    "candidate_skill_sha256": "b00c75f3f429263b657e27a7d1198e92cbad02ee52d60ba2e0df4391262824bb",
+    "activation_cases_sha256": "5351a926cf0b1e97fb9a5ce4a480c545be4aea1a2a52ea4d3b9f6497b222fc71"
+  },
+  "results": [
+    {"skill": "assistant-workflow", "user_request": "Implement this feature with verification.", "selected_skills": ["assistant-workflow"]},
+    {"skill": "assistant-workflow", "user_request": "Plan and build this refactor.", "selected_skills": ["assistant-workflow"]},
+    {"skill": "assistant-workflow", "user_request": "Technically prepare this feature for development from current code and tests; do not implement.", "selected_skills": ["assistant-workflow"]},
+    {"skill": "assistant-workflow", "user_request": "Technically prepare the VIEWING route from current implementation and behavioral tests; do not implement.", "selected_skills": ["assistant-workflow"]},
+    {"skill": "assistant-workflow", "user_request": "Prepare a pending Architecture Pack with planned verification and no verification ref.", "selected_skills": ["assistant-workflow"]},
+    {"skill": "assistant-workflow", "user_request": "Answer a narrow question about the existing implementation.", "selected_skills": []}
+  ]
+}

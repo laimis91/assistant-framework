@@ -1,167 +1,119 @@
 # Triage Rubric And Gate Packs
 
-Use this during `--- PHASE: TRIAGE ---` before choosing phases. Triage produces structured metadata, not just a size label.
-
 ## Required Triage Output
 
-Record these fields in the task journal for medium+ tasks and in the inline completion packet for small tasks:
-
-- `Task type`: `feature`, `bugfix`, `refactor`, `migration`, `rewrite`, `config`, `infra`, `security`, `docs`, or `spike`
-- `Risk tier`: `low`, `moderate`, `high`, or `critical`
-- `Triaged as`: `small`, `medium`, `large`, or `mega`
-- `Controller intensity`: `light`, `standard`, or `strict`
-- `Plan mode`: `none`, `inline`, or `approval_required`
-- `Architecture design mode`: `not_applicable`, `lightweight`, `required`, or `review_intensive`, plus concrete trigger reasons or a concrete not-applicable reason
-- `Required agents`: the roles required by concrete uncertainty, task type, risk, and explicit user/project routing
-- `Subagent policy state`: `not_required`, `delegation_triggered`, `delegation_opted_out`, `subagents_unavailable`, or `policy_disallowed`
-- `Subagent execution mode`: `delegated`, `direct_fallback`, or `not_applicable`
-- `Subagent trigger scope`: direct-user, applicable-`AGENTS.md`, or active-skill provenance plus covered roles/phases/actions; infer it without asking when delegation is relevant
-- `Required gates`: the common gates plus every applicable task-category gate pack
-- `Search mode`: `none`, `lightweight`, or `candidate_search`
-- `Candidate scope scan`: likely touched paths or modules, symbols/search terms checked, adjacent tests/docs/contracts/config/mirrors to inspect, confidence, and unknowns
+Record `task_type`, `risk_tier`, `size`, `controller_intensity`, `plan_mode`,
+`execution_intent`, `qa_evaluation_mode`, `harness_capable`,
+`architecture_design_mode`, `architecture_design_trigger_reasons`,
+`build_execution_lane`, `workflow_state_mode`, `manual_verification_mode`,
+`required_gates`, `required_agents`, `subagent_policy_state`,
+`subagent_execution_mode`, `subagent_trigger_scope`, `search_mode`, and
+`candidate_scope_scan` evidence.
 
 ## Size Rules
 
 | Size | Use when |
 |---|---|
-| `small` | One localized change, clear behavior, low risk, existing verification path, no public contract/data/security impact. |
-| `medium` | A feature, bugfix, refactor, endpoint, runtime integration, or contract change spanning several files or one boundary. |
-| `large` | Cross-module/layer work, public API/config/data behavior, weak baseline tests, or high uncertainty. |
-| `mega` | Rewrite, migration, port, legacy-to-new-structure work, 10+ files across layers, or behavior parity across subsystems. |
+| `small` | Local low-risk tested. |
+| `medium` | Multi-file feature/refactor/integration/contract. |
+| `large` | Cross-module public/config/data/weak-tests/uncertainty. |
+| `mega` | Rewrite/migration/legacy restructure/parity. |
 
-Escalate size when risk exceeds file count. Auth, PII, payments, destructive data changes, public API changes, or behavior-preserving legacy migration are at least `large` unless discovery proves they are isolated and fully covered.
+Auth/PII/payment/destructive-public-data/API/legacy-migration: `large`
+unless isolated/covered.
 
 ## Plan Mode Rules
 
 | Mode | Use when |
 |---|---|
-| `none` | prepare_only at any size retains `none`, including high/critical risk, unless an optional readiness plan is explicitly requested; approval_required is only for that requested plan. Otherwise trivial, localized, reversible, low-risk work has one obvious path, known files and verification, no material ambiguity, and no public contract/data/security/destructive/policy concern. |
-| `inline` | Bounded small work benefits from a compact multi-step plan but has no approval trigger. |
-| `approval_required` | For `execution_intent != prepare_only`, medium+ work, high/critical risk, destructive effects, public contract/data/security changes, material architecture/scope choices, repository policy, or an explicit approval request. |
-
-If Discover invalidates `none` or `inline` eligibility, re-triage before Build.
+| `none` | prepare_only at any size retains `none`, including high/critical risk, unless optional readiness planning is requested. |
+| `inline` | Bounded small, no approval trigger. |
+| `approval_required` | For execution_intent != prepare_only, medium+ work, high/critical, destructive/public/data/security, material architecture/scope, policy, or explicit approval. |
 
 ## Controller Intensity Rules
 
+For `prepare_only`, set `qa_evaluation_mode=not_required` and retain explicit
+QA/acceptance only in `feature_preparation_result.future_qa_acceptance_obligation`;
+risk/project criteria may still select strict preparation. QA request alone never promotes strict and remains a future obligation; QA request alone never selects harness_capable=true during prepare_only without separate harness evidence.
+
 | Intensity | Use when |
 |---|---|
-| `light` | Small low-risk localized work can use compact guidance and validation. |
-| `standard` | Ordinary medium+ source-changing work, including delegated work, when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
-| `strict` | High/critical risk, `harness_capable=true`, `qa_evaluation_mode=required`, or explicit trace/replay/harness/QA criteria. |
+| `light` | Small low-risk localized work. |
+| `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
+| `strict` | High/critical, `harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay; QA only outside `prepare_only`. |
 
-Do not infer `strict` from `size=medium+` or delegation alone. `standard` keeps ordinary medium non-harness work out of Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, and QA defaults.
+Never infer `strict` from size/delegation.
 
 ## Candidate Scope Scan
 
-Before finalizing Triage, run a quick read-only scan to avoid classifying from the prompt alone. Keep it bounded: named files from the prompt, likely modules/directories, obvious symbols/search terms, nearby tests, docs, contracts, config, generated mirrors, and runtime surfaces that can change the risk tier.
-
-Record:
-- `likely_touched_paths`: exact paths when known, otherwise directories/modules.
-- `symbols_or_terms_searched`: names, commands, or search terms checked.
-- `adjacent_surfaces`: tests, docs, contracts, config, generated mirrors, runtime integrations, or APIs that may need Discover coverage.
-- `confidence`: `low`, `medium`, or `high`.
-- `unknowns`: remaining scope/risk questions for Discover.
-
-This scan is not the Code Mapper context map. It is a shallow risk and size check. If the scan exposes broader references, weak tests, public contracts, or unclear ownership, escalate size/risk or required gates before Discover.
+Scan paths/symbols/tests/docs/contracts/config/mirrors/runtime; evidence.
 
 ## Risk Tier Rules
 
 | Risk tier | Use when |
 |---|---|
-| `low` | Local, reversible, tested, no public behavior or data impact. |
-| `moderate` | Multiple files, shared helpers, unclear edge cases, or moderate verification work. |
-| `high` | Public contracts, data shape, migration, behavior parity, security-sensitive paths, weak tests, or multi-layer coupling. |
-| `critical` | Irreversible data loss risk, auth bypass, secret exposure, payment/security boundary, or production outage risk. |
+| `low` | Local/reversible/tested. |
+| `moderate` | Shared helper/unclear edge. |
+| `high` | Public/data/migration/security/weak-test coupling. |
+| `critical` | Loss, auth bypass, secret exposure, payment/security, outage. |
 
 
 ## Search Mode Rules
 
-Use `search_mode` to decide how much pre-code option exploration is useful. Keep ordinary tasks fast; do not add candidate-search ceremony unless it reduces real uncertainty.
-
-- `none`: the safe path is obvious and acceptance criteria already constrain implementation.
-- `lightweight`: there are 1-3 obvious options worth comparing in the plan's Analysis section.
-- `candidate_search`: use Candidate Search when the request has explicit alternatives, open-ended architecture/design, optimization goals, high uncertainty, repeated failed attempts, unclear/flaky bugs, or a reviewer-requested pivot.
-
-When `candidate_search` is selected, load `references/candidate-search.md`. The goal tree must decompose existing acceptance criteria and slice acceptance/verification criteria; the archive is stored at `{agent_state_dir}/candidate-search.md` only when local state is configured and policy-allowed, otherwise inline in the plan/task packet.
+`none`: obvious path; `lightweight`: 1–3 options; `candidate_search`:
+alternatives/design/optimization/uncertainty, repeated failure/flaky bug, or
+pivot; loads `references/candidate-search.md`.
 
 ## Architecture Design Mode Rules
 
-Use `architecture_design_mode` to decide whether an Architecture Decision Pack
-is needed before executable planning. It is not a size-based ceremony.
+`architecture_design_mode` selects a pre-plan Architecture Decision Pack; size
+alone is not a trigger.
 
-- `not_applicable`: one evidenced local path; no meaningful changed boundary,
-  data lifecycle, public contract, resource target, extension seam, or viable
-  design choice. Record the concrete reason.
-- `lightweight`: one bounded decision about ownership, dependency direction,
-  semantic type, interface, or verification needs an explicit record.
-- `required`: a new system, cross-boundary/public contract, persistent data
-  lifecycle, material memory/performance/reliability/extensibility target, or
-  genuinely viable design choice is present.
-- `review_intensive`: high-risk or conflicting drivers need an independent
-  challenge after the pack is formed.
+- `not_applicable`: one evidenced path; reason.
+- `lightweight`: one bounded ownership/dependency/type/verification decision.
+- `required`: new/cross-boundary/public/persistent-lifecycle/material-quality-extensibility,
+  extension seam, or viable design choice.
+- `review_intensive`: independent high-risk/conflicting-driver challenge.
 
-When mode is not `not_applicable`, load
-`references/architecture-decision-pack.md`. The pack owns source facts versus
-assumptions, material design questions, semantic types and primitive
-exceptions, quality scenarios, verification, freshness, and handoff. It does
-not create a permanent architect role or replace the normal plan approval.
+Non-`not_applicable` loads `references/architecture-decision-pack.md`; Pack owns
+facts/questions/types/exceptions/verification/freshness/handoff.
+An extension seam or material extensibility makes `not_applicable` invalid.
 
-## Common Gates
+## Execution Gates
 
-Apply to every code task:
+For execution: record requirements/scope/verification; run tests, build, review.
 
-- requirements restated
-- constraints recorded
-- file scope identified
-- verification commands listed
-- tests/build executed
-- spec review completed
-- quality review completed
+## Preparation Gates
+
+For `prepare_only`, require exactly `feature-preparation evidence` and concrete
+Discover/preparation roles; no execution/task-category gates.
 
 ## Task Category Gate Packs
 
 ### Bugfix
-- reproduction or failing test/log evidence captured
-- root cause stated before fix
-- regression test or targeted assertion added
-- fix scope stays tied to the root cause
+Capture reproduction/root cause; add regression assertion; keep scope tied.
 
 ### Feature
-- user-visible or API acceptance criteria are binary and testable
-- new behavior has tests in the same build step
-- public contract, config, telemetry, and docs impact are checked
+Make acceptance binary; test new behavior; check contract/config/telemetry/docs.
 
 ### Refactor / Migration / Rewrite
-- baseline behavior inventory captured before edits
-- characterization, golden, or existing regression tests protect behavior parity
-- public contracts and external behavior invariants are listed
-- intentional behavior changes are explicitly approved
-- source and target boundaries are mapped before Build
+Inventory baseline; protect parity; list invariants; approve changes; map boundaries.
 
 ### Config / Infra
-- environment matrix or affected runtime contexts listed
-- rollback or disable path identified
-- secrets and local machine state are not hardcoded
-- dry-run or smoke verification exists when available
+List runtime/rollback; never hardcode secrets/local state; dry-run/smoke.
 
 ### Security / Input
-- threat or abuse case considered
-- validation, authorization, and trust-boundary checks listed
-- no secrets, credentials, PII, or sensitive data are logged
-- security review skill is loaded when auth, PII, payments, or external inputs are touched
+Consider abuse, validation, authorization, trust; never log sensitive data; load
+security review for auth, PII, payments, external input.
 
 ### Docs-Only
-- source evidence is cited from code, tests, or existing docs
-- no code/test requirement unless docs generation or examples change runnable behavior
-- outdated instructions are removed or reconciled with current behavior
+Documentation-only work does not require code or test changes unless it changes runnable behavior.
+Remove or reconcile outdated instructions with current behavior.
+
+### Spike
+Explore feasibility; no unsupported claims.
 
 ## Required Agents
 
-Start from the concrete decision/mapping need in `references/subagent-dispatch.md`, then add risk-driven roles:
-
-- `security` gate: load `assistant-security`
-- `refactor/migration/rewrite` gate: include Explorer for behavior tracing when parity is not fully test-covered
-- `config/infra` gate: include Builder/Tester smoke or dry-run verification
-- `docs-only`: no Code Writer/Builder handoff unless runnable examples or generated docs change
-
-If required agents differ from the standard size flow, record the reason in the task journal. Required agents name role responsibilities; `Subagent execution mode` determines whether those roles are delegated or performed as direct fallback evidence.
+Use `references/subagent-dispatch.md`; in `prepare_only`, QA is future only.
+Security -> `assistant-security`; parity -> Explorer; docs-only skips non-runnable Build.

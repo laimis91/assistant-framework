@@ -101,3 +101,12 @@ fields:
     validation: "When present, resolves under the exact canonical input feature_preparation_evidence_ref; a missing, stale, mismatched, or unresolved pair cannot validate promotion."
     default: null
     on_missing: skip
+
+  - name: feature_preparation_evidence_claim_or_question
+    type: string
+    required: false
+    condition: "tool == deep_think and existing-system feature preparation is in scope"
+    description: "Exact carried behavior claim or Product question paired with the canonical evidence artifact and row"
+    validation: "When a candidate is validated, this exact value completes the stable {evidence_ref, item_id, claim_or_question} binding. Missing, stale, mismatched, or unresolved triples cannot validate promotion."
+    default: null
+    on_missing: skip

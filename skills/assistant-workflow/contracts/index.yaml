@@ -21,8 +21,8 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [task_description,task_type,scope_hint,target_files,constraints,execution_intent,plan_mode,architecture_design_mode]
-    budget_words: 4000
+        names: [task_description,task_type,scope_hint,target_files,constraints,execution_intent,plan_mode,architecture_design_mode,manual_verification_mode,qa_evaluation_mode,harness_capable,build_execution_lane,workflow_state_mode]
+    budget_words: 3999
   architecture_design:
     references:
       - references/architecture-decision-pack.md
@@ -89,7 +89,7 @@ load_sets:
         section: invariants
         key: id
         names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY,INV_ARCHITECTURE_PACK_FRESHNESS,INV_ARCHITECTURE_PACK_HANDOFF_BINDING,INV_SEMANTIC_TYPE_BOUNDARIES,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_TERMINAL_ARCHIVAL,INV_PROGRESSIVE_REPEAT_READINESS]
-    budget_words: 7000
+    budget_words: 7003
   selected_handoff:
     selectors:
       - id: workflow-selected-handoff

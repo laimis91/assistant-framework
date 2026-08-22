@@ -8,6 +8,7 @@ readonly FEATURE_PREPARATION_CASE_ORACLE_LOADED=1
 readonly FEATURE_PREP_EXPECTED_CASE_RECORDS=(
     'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document'
     'medium-prepare-only-readiness-reports-pending-requirement-map|medium|plan_document'
+    'medium-prepare-only-qa-request-routing|medium|plan_document'
     'combined-preparation-and-implementation-routes-end-to-end|small|'
     'viewing-route-preserves-active-behavior|light|plan_document'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|plan_document'

@@ -13,6 +13,9 @@ semantic_verdict_schema="$FRAMEWORK_DIR/docs/evals/framework-semantic-review-ver
 promotion_decision_schema="$FRAMEWORK_DIR/docs/evals/framework-promotion-decision.schema.json"
 workflow_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
 eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+eval_package="$FRAMEWORK_DIR/tools/evals/package.json"
+eval_package_lock="$FRAMEWORK_DIR/tools/evals/package-lock.json"
+framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 
 test_sha256_stream() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum | awk '{print $1}'
@@ -278,6 +281,25 @@ if [[ -x "$eval_runner" ]]; then
     pass
 else
     fail "eval runner is missing or not executable: $eval_runner"
+fi
+
+test_start "framework CI installs the locked Draft 2020 validator dependency"
+ajv_version="$(jq -r '.devDependencies.ajv // empty' "$eval_package")"
+if [[ "$ajv_version" =~ ^8\.([1][89]|[2-9][0-9])\.[0-9]+$ ]] \
+    && jq -e --arg version "$ajv_version" '
+        .packages[""].devDependencies.ajv == $version
+        and .packages["node_modules/ajv"].version == $version
+    ' "$eval_package_lock" >/dev/null \
+    && grep -Fq 'uses: actions/setup-node@v4' "$framework_validation_workflow" \
+    && grep -Fq 'node-version: 22' "$framework_validation_workflow" \
+    && grep -Fq 'cache-dependency-path: tools/evals/package-lock.json' "$framework_validation_workflow" \
+    && grep -Fq 'working-directory: tools/evals' "$framework_validation_workflow" \
+    && grep -Fq 'run: npm ci --ignore-scripts' "$framework_validation_workflow" \
+    && grep -Fq 'command -v node' "$framework_validation_workflow" \
+    && grep -Fq 'command -v npm' "$framework_validation_workflow"; then
+    pass
+else
+    fail "framework CI does not install the exact safe Ajv lock used by Draft 2020 validation"
 fi
 
 test_start "docs eval runner validates fixture"
@@ -1017,7 +1039,7 @@ for variant in baseline candidate; do
          instruction_sha256:$instruction_hash,seed_workspace_sha256:("4"*64),requested_model:"test-model",
          runtime_model_attestation:"not_exposed_by_codex_jsonl",model_selection_evidence:"explicit_model_argument_only",
          requested_model_catalog_entry_sha256:null,codex_executable_sha256:null,
-         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v5"}}' \
+         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v6"}}' \
       >"$binding_traces/identity-pair-$variant.json"
 done
 jq -n '{planned_runs:2,fixture_sha256:("1"*64),requested_model:"test-model",cli_version:"codex-cli test",

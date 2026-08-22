@@ -23,13 +23,13 @@
   },
   "static_measurement": {
     "baseline_selected_initial_words": 2053,
-    "candidate_selected_initial_words": 985,
-    "selected_initial_word_delta": -1068,
+    "candidate_selected_initial_words": 446,
+    "selected_initial_word_delta": -1607,
     "baseline_total_initial_words": 2658,
-    "candidate_total_initial_words": 1590,
-    "baseline_selected_entry_words": 3998,
-    "candidate_selected_entry_words": 2930,
-    "selected_entry_word_delta": -1068,
+    "candidate_total_initial_words": 1051,
+    "baseline_selected_entry_words": 3385,
+    "candidate_selected_entry_words": 1778,
+    "selected_entry_word_delta": -1607,
     "standing_context_growth": 0,
     "measured_with": "tools/context-budget-report.sh --skill-overlay"
   },
@@ -42,9 +42,11 @@
     "small-fix-stays-lightweight",
     "stale-journal-yields-to-current-evidence",
     "requirements-map-through-completion",
-    "ordinary-medium-bounded-executor",
-    "seeded-code-review-regressions",
-    "medium-final-handoff-is-reconstructable"
+      "ordinary-medium-bounded-executor",
+      "seeded-code-review-regressions",
+      "medium-final-handoff-is-reconstructable",
+      "viewing-route-technical-preparation",
+      "pending-architecture-pack-verification"
   ],
   "pilot_repeats": 3,
   "status": "candidate"

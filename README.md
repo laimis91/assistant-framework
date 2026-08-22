@@ -403,6 +403,9 @@ fixture:
 ./tests/test-p0-p4-contracts.sh
 ```
 
+For the locked Draft 2020-12 evaluator checks in that aggregate, first use
+Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
+
 Pull requests and pushes to `main` also run
 `.github/workflows/framework-validation.yml`, which executes the aggregate
 contracts, skill and generated-mirror checks, and all three Unix installer
@@ -423,8 +426,8 @@ for this architecture; changes to those surfaces must rerun the hosted workflow.
 The previously recorded Terra snapshot predates the changed fixture and grader
 and remains historical, non-promoting evidence. A new live promotion claim
 requires fresh authorization for the exact four-call smoke and, if it passes,
-separate authorization for the six-case, three-repeat, two-variant pilot
-(36 calls / 18 pairs). Every automatic and human gate in
+separate authorization for the eight-case, three-repeat, two-variant pilot
+(48 calls / 24 pairs). Every automatic and human gate in
 `docs/evals/README.md` must pass.
 
 ## Structure

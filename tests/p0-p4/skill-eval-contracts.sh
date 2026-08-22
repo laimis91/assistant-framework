@@ -51,6 +51,7 @@ p0p4_activation_cases_are_adequate() {
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
+workflow_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
 
 p0p4_skill_eval_default_fixtures() {
     find "$FRAMEWORK_DIR/skills" \
@@ -182,8 +183,20 @@ p0p4_write_skill_eval_responses() {
                     medium-prepare-only-terminal-route)
                         build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
+                    medium-prepare-only-qa-request-routing)
+                        build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
+                        ;;
                     large-prepare-only-terminal-route)
                         build_large_prepare_only_terminal_response "$response_path" "$required_summary"
+                        ;;
+                    ordinary-medium-triage-routing)
+                        build_ordinary_medium_triage_response "$response_path" "$required_summary"
+                        ;;
+                    architecture-pack-existing-system-evidence-bindings)
+                        build_existing_system_architecture_pack_binding_response "$response_path" "$required_summary"
+                        ;;
+                    medium-plan-triage-routing-carry-forward)
+                        build_medium_plan_triage_routing_response "$response_path" "$required_summary"
                         ;;
                     feature-preparation-counterclassifies-unknown-conflict-and-gap)
                         build_feature_preparation_countercase_response "$response_path" "$required_summary"
@@ -239,16 +252,16 @@ p0p4_write_skill_eval_responses() {
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
                         ;;
                     assistant-thinking:feature-preparation-exact-evidence-binding)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["The canonical row preserves the tested ACTIVE effects for VIEWING."], recommendation: "Carry the preservation obligation into the implementation plan.", confidence: "medium", gaps_or_assumptions: ["VIEWING implementation has not started."], evidence_or_observations: ["prep/viewing-route#viewing-route-effects records inspected implementation and behavioral tests."], feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", rationale: "The exact canonical evidence row records inspected implementation and behavioral-test effects."}]}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["The canonical row preserves the tested ACTIVE effects for VIEWING."], recommendation: "Carry the preservation obligation into the implementation plan.", confidence: "medium", gaps_or_assumptions: ["VIEWING implementation has not started."], evidence_or_observations: ["prep/viewing-route#viewing-route-effects records inspected implementation and behavioral tests."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", feature_preparation_evidence_claim_or_question: "Preserve selection, highlight, and viewport focus for VIEWING", rationale: "The exact canonical evidence row records inspected implementation and behavioral-test effects."}]}' >"$response_path"
                         ;;
                     assistant-thinking:feature-preparation-mismatched-evidence-binding)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
                         ;;
                     assistant-diagrams:feature-preparation-diagram-traceability)
                         jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}], evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus", "VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
                         ;;
                     assistant-docs:architecture-doc-pack-backed-decision-trace)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/parser-boundary.md", change_type: "created", description: "Documents the current parser-boundary decision."}], evidence_sources: [{source: "pack/parser-boundary", claims_supported: "The selected parser boundary design and its compatibility claim are current."}], doc_coverage: "Documents the current parser boundary from the fresh Pack and exact feature-preparation row.", review_items: [], safety_notes: ["none"], architecture_design_mode: "required", architecture_decision_pack_status: "current", feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", architecture_decision_pack: {ref: "pack/parser-boundary", mode: "required", freshness: "current repository basis"}, architecture_decision_pack_trace: {outcome: "documented", source_pack_ref: "pack/parser-boundary", documented_decision_refs: ["pack/parser-boundary#selected-design"], evidence_refs: ["pack/parser-boundary#facts"], feature_preparation_evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["resolves selected design and rationale through the current canonical Pack ref"]}}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/parser-boundary.md", change_type: "created", description: "Documents the current parser-boundary decision."}], evidence_sources: [{source: "pack/parser-boundary", claims_supported: "The selected parser boundary design and its compatibility claim are current."}], doc_coverage: "Documents the current parser boundary from the fresh Pack and exact feature-preparation row.", review_items: [], safety_notes: ["none"], architecture_design_mode: "required", architecture_decision_pack_status: "current", feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", architecture_decision_pack: {ref: "pack/parser-boundary", mode: "required", freshness: "current repository basis"}, architecture_decision_pack_trace: {outcome: "documented", source_pack_ref: "pack/parser-boundary", documented_decision_refs: ["pack/parser-boundary#selected-design"], evidence_refs: ["pack/parser-boundary#facts"], feature_preparation_evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["resolves selected design and rationale through the current canonical Pack ref"]}, feature_preparation_evidence_trace: {outcome: "validated", evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["Exact evidence-row binding validated before documentation."]}}' >"$response_path"
                         ;;
                     assistant-docs:architecture-doc-blocks-incomplete-feature-preparation-pack)
                         jq -n --arg summary "$required_summary" '{summary: $summary, evidence_sources: [{source: "feature-preparation evidence status", claims_supported: "The Pack cannot document the unsupported route decision."}], doc_coverage: "No architecture decision was documented because the carried feature evidence is incomplete.", review_items: ["Inspect implementation and behavioral tests before documenting the Pack decision."], safety_notes: ["none"], feature_preparation_evidence_status: "incomplete", feature_preparation_evidence_trace: {outcome: "blocked_incomplete_evidence", recovery_action: "request_complete_evidence", review_trace: ["implementation and behavioral tests were not inspected"]}, architecture_decision_pack_trace: {outcome: "blocked_incomplete_pack", recovery_action: "request_complete_pack", review_trace: ["implementation and behavioral tests were not inspected"]}}' >"$response_path"
@@ -515,7 +528,7 @@ assistant-skill-creator|Create a new skill with contracts.|Update this skill's c
 assistant-tdd|Use TDD to fix this bug.|Write a failing regression test first.|Apply the known fix after the regression test already passes.
 assistant-telos|Create my Telos context.|Help define my mission and goals.|Update the project README with our established mission.
 assistant-thinking|Stress test this architecture decision.|Reason through this trade-off.|Implement the selected architecture decision.
-assistant-workflow|Implement this feature with verification.|Plan and build this refactor.|Answer a narrow question about the existing implementation.
+assistant-workflow|Technically prepare the VIEWING route from current implementation and behavioral tests; do not implement.|Prepare a pending Architecture Pack with planned verification and no verification ref.|Answer a narrow question about the existing implementation.
 EOF_CURATED
 if [[ ${#curated_activation_failures[@]} -eq 0 ]]; then
     pass
@@ -546,6 +559,29 @@ if "$skill_eval_runner" --activation-results "$activation_results_file" --skill 
     pass
 else
     fail "activation result adapter did not pass exact external observations"
+fi
+
+test_start "workflow activation observations select preparation and pending-Pack routes exactly"
+workflow_activation_results="$activation_results_root/workflow-results.json"
+workflow_activation_output="$activation_results_root/workflow-results.out"
+jq -n --arg skill "assistant-workflow" --slurpfile fixture "$workflow_fixture" '
+    {
+      schema_version: "1.0",
+      results: [
+        $fixture[0].activation_cases[]
+        | {
+            skill: $skill,
+            user_request,
+            selected_skills: (if .should_activate then [$skill] else [] end)
+          }
+      ]
+    }
+' >"$workflow_activation_results"
+if "$skill_eval_runner" --activation-results "$workflow_activation_results" --skill assistant-workflow >"$workflow_activation_output" 2>&1 \
+    && grep -Fq "Summary: total=6 passed=6 failed=0" "$workflow_activation_output"; then
+    pass
+else
+    fail "workflow activation adapter did not pass the exact preparation, Pack, and narrow-question observations"
 fi
 
 test_start "activation result adapter preserves trailing newlines in exact request keys"
@@ -1417,38 +1453,338 @@ else
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_thinking_output"; then
         feature_mutation_failures+=("thinking:base-outputs")
     fi
-    jq 'del(.evidence_sources, .doc_coverage, .review_items, .safety_notes)' \
-        "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-blocks-incomplete-feature-preparation-pack.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-blocks-incomplete-feature-preparation-pack.txt"
-    if "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_docs_output"; then
-        feature_mutation_failures+=("docs:base-outputs")
-    fi
-    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-requires-exact-evidence-binding.txt" \
-        "$feature_docs_responses/assistant-eval-feature-docs/feature-preparation-doc-requires-exact-evidence-binding.txt"
-    jq '(.feature_preparation_evidence_trace.evidence_refs[0].claim_or_question) = "Enable editing for VIEWING."' \
-        "$feature_docs_responses/assistant-eval-feature-docs/feature-preparation-doc-requires-exact-evidence-binding.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_docs_responses/assistant-eval-feature-docs/feature-preparation-doc-requires-exact-evidence-binding.txt"
-    if "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_docs_output"; then
-        feature_mutation_failures+=("docs:mismatched-claim")
-    fi
-    for pack_binding_field in evidence_ref item_id claim_or_question; do
-        cp "$passing_response_dir/assistant-docs/architecture-doc-pack-backed-decision-trace.txt" \
-            "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-pack-backed-decision-trace.txt"
-        jq "del(.architecture_decision_pack_trace.feature_preparation_evidence_refs[0].$pack_binding_field)" \
-            "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-pack-backed-decision-trace.txt" >"$feature_mutation_root/mutated.json"
-        mv "$feature_mutation_root/mutated.json" "$feature_docs_responses/assistant-eval-feature-docs/architecture-doc-pack-backed-decision-trace.txt"
-        if "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1 \
-            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_docs_output"; then
-            feature_mutation_failures+=("docs:pack-binding-$pack_binding_field")
+    for binding_mutation in \
+        'del(.candidate_concerns_or_criteria[0].feature_preparation_evidence_ref)' \
+        'del(.candidate_concerns_or_criteria[0].feature_preparation_evidence_item_id)' \
+        'del(.candidate_concerns_or_criteria[0].feature_preparation_evidence_claim_or_question)' \
+        '(.candidate_concerns_or_criteria[0].feature_preparation_evidence_ref) = "prep/stale"' \
+        '(.candidate_concerns_or_criteria[0].feature_preparation_evidence_item_id) = "mismatched-row"' \
+        '(.candidate_concerns_or_criteria[0].feature_preparation_evidence_claim_or_question) = "Mismatched claim."' \
+        '.candidate_concerns_or_criteria += [.candidate_concerns_or_criteria[0]]' \
+        '.candidate_concerns_or_criteria += [{concern_or_criterion: "Unrelated criterion", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/unrelated", feature_preparation_evidence_item_id: "unrelated-row", feature_preparation_evidence_claim_or_question: "Unrelated claim.", rationale: "Unrelated evidence must not be carried."}]'; do
+        cp "$passing_response_dir/assistant-thinking/feature-preparation-exact-evidence-binding.txt" \
+            "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
+        jq "$binding_mutation" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
+        if "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_thinking_output"; then
+            feature_mutation_failures+=("thinking:nested-binding:$binding_mutation")
         fi
+    done
+    cp "$passing_response_dir/assistant-thinking/feature-preparation-exact-evidence-binding.txt" \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
+    restore_feature_docs_responses() {
+        local case_id
+        for case_id in architecture-doc-pack-backed-decision-trace architecture-doc-blocks-incomplete-feature-preparation-pack feature-preparation-doc-blocks-incomplete-evidence-without-pack feature-preparation-doc-requires-exact-evidence-binding feature-preparation-doc-rejects-mismatched-evidence-item feature-preparation-doc-rejects-mismatched-evidence-claim; do
+            cp "$passing_response_dir/assistant-docs/$case_id.txt" "$feature_docs_responses/assistant-eval-feature-docs/$case_id.txt"
+        done
+    }
+    run_feature_docs_mutation() {
+        local label="$1"
+        local case_id="$2"
+        local mutation="$3"
+        local response_path="$feature_docs_responses/assistant-eval-feature-docs/$case_id.txt"
+
+        restore_feature_docs_responses
+        if ! "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1; then
+            feature_mutation_failures+=("docs:$label:baseline-before")
+            return
+        fi
+        jq "$mutation" "$response_path" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$response_path"
+        if "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1 \
+            || ! grep -Fq $'FAIL\tassistant-eval-feature-docs\t'"$case_id"$'\t' "$feature_docs_output" \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_docs_output"; then
+            feature_mutation_failures+=("docs:$label:target")
+        fi
+        restore_feature_docs_responses
+        if ! "$skill_eval_runner" --responses "$feature_docs_responses" --skill "$feature_docs_skill" >"$feature_docs_output" 2>&1; then
+            feature_mutation_failures+=("docs:$label:baseline-after")
+        fi
+    }
+    for base_field in files_updated evidence_sources doc_coverage review_items safety_notes; do
+        run_feature_docs_mutation "pack-base-$base_field" "architecture-doc-pack-backed-decision-trace" "del(.$base_field)"
+    done
+    for files_updated_field in path change_type description; do
+        run_feature_docs_mutation "pack-files-updated-$files_updated_field" "architecture-doc-pack-backed-decision-trace" "del(.files_updated[0].$files_updated_field)"
+    done
+    for evidence_sources_field in source claims_supported; do
+        run_feature_docs_mutation "pack-evidence-sources-$evidence_sources_field" "architecture-doc-pack-backed-decision-trace" "del(.evidence_sources[0].$evidence_sources_field)"
+    done
+    run_feature_docs_mutation "pack-safety-notes-unexpected" "architecture-doc-pack-backed-decision-trace" '(.safety_notes) = ["unexpected"]'
+    run_feature_docs_mutation "ordinary-mismatched-claim" "feature-preparation-doc-requires-exact-evidence-binding" '(.feature_preparation_evidence_trace.evidence_refs[0].claim_or_question) = "Enable editing for VIEWING."'
+    run_feature_docs_mutation "ordinary-missing-review-trace" "feature-preparation-doc-requires-exact-evidence-binding" 'del(.feature_preparation_evidence_trace.review_trace)'
+    run_feature_docs_mutation "ordinary-missing-evidence-refs" "feature-preparation-doc-requires-exact-evidence-binding" 'del(.feature_preparation_evidence_trace.evidence_refs)'
+    run_feature_docs_mutation "ordinary-extra-evidence-binding" "feature-preparation-doc-requires-exact-evidence-binding" '.feature_preparation_evidence_trace.evidence_refs += [{evidence_ref: "prep/invalid", item_id: "invalid-row", claim_or_question: "Invalid extra binding."}]'
+    run_feature_docs_mutation "ordinary-duplicate-valid-evidence-binding" "feature-preparation-doc-requires-exact-evidence-binding" '.feature_preparation_evidence_trace.evidence_refs += [.feature_preparation_evidence_trace.evidence_refs[0]]'
+    for pack_binding_field in evidence_ref item_id claim_or_question; do
+        run_feature_docs_mutation "pack-binding-$pack_binding_field" "architecture-doc-pack-backed-decision-trace" "del(.architecture_decision_pack_trace.feature_preparation_evidence_refs[0].$pack_binding_field)"
+    done
+    for trace_name in architecture_decision_pack_trace feature_preparation_evidence_trace; do
+        run_feature_docs_mutation "missing-$trace_name" "architecture-doc-pack-backed-decision-trace" "del(.$trace_name)"
+    done
+    run_feature_docs_mutation "pack-missing-review-trace" "architecture-doc-pack-backed-decision-trace" 'del(.architecture_decision_pack_trace.review_trace)'
+    run_feature_docs_mutation "root-missing-review-trace" "architecture-doc-pack-backed-decision-trace" 'del(.feature_preparation_evidence_trace.review_trace)'
+    run_feature_docs_mutation "pack-missing-evidence-refs" "architecture-doc-pack-backed-decision-trace" 'del(.architecture_decision_pack_trace.feature_preparation_evidence_refs)'
+    run_feature_docs_mutation "root-missing-evidence-refs" "architecture-doc-pack-backed-decision-trace" 'del(.feature_preparation_evidence_trace.evidence_refs)'
+    for binding_field in evidence_ref item_id claim_or_question; do
+        run_feature_docs_mutation "top-binding-$binding_field" "architecture-doc-pack-backed-decision-trace" "del(.feature_preparation_evidence_trace.evidence_refs[0].$binding_field)"
+    done
+    for evidence_path in '.architecture_decision_pack_trace.feature_preparation_evidence_refs' '.feature_preparation_evidence_trace.evidence_refs'; do
+        run_feature_docs_mutation "extra-binding-$evidence_path" "architecture-doc-pack-backed-decision-trace" "$evidence_path += [{evidence_ref: \"prep/invalid\", item_id: \"invalid-row\", claim_or_question: \"Invalid extra binding.\"}]"
+        run_feature_docs_mutation "duplicate-valid-binding-$evidence_path" "architecture-doc-pack-backed-decision-trace" "$evidence_path += [$evidence_path[0]]"
     done
 fi
 if [[ ${#feature_mutation_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "feature-preparation structured assertions did not reject omissions: ${feature_mutation_failures[*]}"
+fi
+
+test_start "actual grader rejects QA or execution routing in strict prepare-only readiness"
+prepare_only_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/prepare-only-routing-mutations.XXXXXX")"
+prepare_only_mutation_skill="$prepare_only_mutation_root/assistant-workflow"
+prepare_only_mutation_responses="$prepare_only_mutation_root/responses"
+prepare_only_mutation_output="$prepare_only_mutation_root/output"
+p0p4_register_cleanup "$prepare_only_mutation_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-workflow" "$prepare_only_mutation_skill"
+jq --argjson case "$(jq '.cases[] | select(.id == "large-prepare-only-terminal-route")' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")" \
+    '.cases = [$case]' "$prepare_only_mutation_skill/evals/cases.json" >"$prepare_only_mutation_root/cases.json"
+mv "$prepare_only_mutation_root/cases.json" "$prepare_only_mutation_skill/evals/cases.json"
+mkdir -p "$prepare_only_mutation_responses/assistant-workflow"
+prepare_only_response="$prepare_only_mutation_responses/assistant-workflow/large-prepare-only-terminal-route.txt"
+prepare_only_summary="$(jq -r '.cases[0].machine_expectations.required_substrings | join(" ")' "$prepare_only_mutation_skill/evals/cases.json")"
+build_large_prepare_only_terminal_response "$prepare_only_response" "$prepare_only_summary"
+prepare_only_mutation_failures=()
+if ! "$skill_eval_runner" --responses "$prepare_only_mutation_responses" --skill "$prepare_only_mutation_skill" >"$prepare_only_mutation_output" 2>&1; then
+    prepare_only_mutation_failures+=("baseline")
+else
+    for mutation in \
+        '(.triage_result.qa_evaluation_mode) = "required"' \
+        '(.triage_result.harness_capable) = true' \
+        '.triage_result.required_agents += ["QA Evaluator"]' \
+        '.triage_result.required_gates += ["tests/build executed"]' \
+        '(.triage_result.build_execution_lane) = "separated_workers"' \
+        '(.completion_policy.build_execution_lane) = "separated_workers"' \
+        '(.completion_policy.workflow_state_mode) = "inline"' \
+        'del(.phase_checkpoints[0])' \
+        '(.phase_checkpoints[0]) = "--- PHASE: BUILD ---"' \
+        '.phase_checkpoints += ["--- PHASE: BUILD COMPLETE ---"]' \
+        '(.phase_checkpoints) |= reverse'; do
+        build_large_prepare_only_terminal_response "$prepare_only_response" "$prepare_only_summary"
+        jq "$mutation" "$prepare_only_response" >"$prepare_only_mutation_root/mutated.json"
+        mv "$prepare_only_mutation_root/mutated.json" "$prepare_only_response"
+        if "$skill_eval_runner" --responses "$prepare_only_mutation_responses" --skill "$prepare_only_mutation_skill" >"$prepare_only_mutation_output" 2>&1 \
+            || ! grep -Fq $'FAIL\tassistant-workflow\tlarge-prepare-only-terminal-route\t' "$prepare_only_mutation_output" \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_mutation_output"; then
+            prepare_only_mutation_failures+=("$mutation")
+        fi
+        build_large_prepare_only_terminal_response "$prepare_only_response" "$prepare_only_summary"
+        if ! "$skill_eval_runner" --responses "$prepare_only_mutation_responses" --skill "$prepare_only_mutation_skill" >"$prepare_only_mutation_output" 2>&1; then
+            prepare_only_mutation_failures+=("baseline-after:$mutation")
+        fi
+    done
+fi
+if [[ ${#prepare_only_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "prepare-only routing mutations were not rejected by their target grader: ${prepare_only_mutation_failures[*]}"
+fi
+
+run_isolated_workflow_routing_mutations() {
+    local case_id="$1"
+    local builder="$2"
+    shift 2
+    local mutation_root
+    local mutation_skill
+    local mutation_responses
+    local mutation_output
+    local response_path
+    local summary
+    local mutation
+    local failures=()
+    WORKFLOW_ROUTING_MUTATION_FAILURE=""
+
+    mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-routing-mutations.XXXXXX")"
+    mutation_skill="$mutation_root/assistant-workflow"
+    mutation_responses="$mutation_root/responses"
+    mutation_output="$mutation_root/output"
+    p0p4_register_cleanup "$mutation_root"
+    cp -R "$FRAMEWORK_DIR/skills/assistant-workflow" "$mutation_skill"
+    jq --arg case_id "$case_id" '.cases = [.cases[] | select(.id == $case_id)]' "$mutation_skill/evals/cases.json" >"$mutation_root/cases.json"
+    mv "$mutation_root/cases.json" "$mutation_skill/evals/cases.json"
+    mkdir -p "$mutation_responses/assistant-workflow"
+    response_path="$mutation_responses/assistant-workflow/$case_id.txt"
+    summary="$(jq -r '.cases[0].machine_expectations.required_substrings | join(" ")' "$mutation_skill/evals/cases.json")"
+    "$builder" "$response_path" "$summary"
+    if ! "$skill_eval_runner" --responses "$mutation_responses" --skill "$mutation_skill" >"$mutation_output" 2>&1; then
+        WORKFLOW_ROUTING_MUTATION_FAILURE="baseline"
+        return 1
+    fi
+    for mutation in "$@"; do
+        "$builder" "$response_path" "$summary"
+        jq "$mutation" "$response_path" >"$mutation_root/mutated.json"
+        mv "$mutation_root/mutated.json" "$response_path"
+        if "$skill_eval_runner" --responses "$mutation_responses" --skill "$mutation_skill" >"$mutation_output" 2>&1 \
+            || ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id"$'\t' "$mutation_output" \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$mutation_output"; then
+            failures+=("$mutation")
+        fi
+        "$builder" "$response_path" "$summary"
+        if ! "$skill_eval_runner" --responses "$mutation_responses" --skill "$mutation_skill" >"$mutation_output" 2>&1; then
+            failures+=("baseline-after:$mutation")
+        fi
+    done
+    if [[ ${#failures[@]} -eq 0 ]]; then
+        return 0
+    fi
+    WORKFLOW_ROUTING_MUTATION_FAILURE="${failures[*]}"
+    return 1
+}
+
+test_start "actual grader isolates future-QA preparation routing from execution routing"
+if run_isolated_workflow_routing_mutations \
+    "medium-prepare-only-qa-request-routing" \
+    build_medium_prepare_only_qa_request_response \
+    '(.triage_result.qa_evaluation_mode) = "required"' \
+    '(.triage_result.harness_capable) = true' \
+    '(.triage_result.controller_intensity) = "strict"' \
+    '.triage_result.required_agents += ["QA Evaluator"]' \
+    '(.completion_policy.build_execution_lane) = "separated_workers"' \
+    '(.completion_policy.workflow_state_mode) = "journal"' \
+    '(.triage_result.workflow_state_mode) = "journal"' \
+    '(.triage_result.build_execution_lane) = "separated_workers"' \
+    '.triage_result.required_gates += ["tests/build executed"]' \
+    'del(.validation_results)' \
+    '(.validation_results) = {}' \
+    'del(.feature_preparation_evidence)' \
+    '(.feature_preparation_evidence) = {}' \
+    '(.size) = "small"' \
+    '(.feature_preparation_result.execution_status) = "completed"' \
+    '(.feature_preparation_result.scope) = "unrelated scope"' \
+    '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/stale"' \
+    '. + {plan_document: "Injected execution plan."}' \
+    'del(.feature_preparation_result.future_qa_acceptance_obligation)' \
+    '(.feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run unrelated security QA."' \
+    '(.feature_preparation_result.future_qa_acceptance_obligation.execution_prerequisite) = "Run now during preparation."'; then
+    pass
+else
+    fail "future-QA preparation routing mutations were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader preserves the exact future-QA obligation in every carrying preparation case"
+future_qa_mutation_failures=()
+for future_qa_case_and_builder in \
+    "medium-prepare-only-qa-request-routing build_medium_prepare_only_qa_request_response" \
+    "large-prepare-only-terminal-route build_large_prepare_only_terminal_response"; do
+    future_qa_case_id="${future_qa_case_and_builder%% *}"
+    future_qa_builder="${future_qa_case_and_builder#* }"
+    if ! run_isolated_workflow_routing_mutations \
+        "$future_qa_case_id" \
+        "$future_qa_builder" \
+        'del(.feature_preparation_result.future_qa_acceptance_obligation)' \
+        '(.feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run unrelated security QA."' \
+        '(.feature_preparation_result.future_qa_acceptance_obligation.execution_prerequisite) = "Run now during preparation."' \
+        '(.completion_policy.build_execution_lane) = "separated_workers"' \
+        '(.completion_policy.plan_mode) = "approval_required"' \
+        '(.triage_result.plan_mode) = "approval_required"' \
+        '.feature_preparation_result.open_decisions += ["Run the explicitly requested QA/acceptance evaluation."]' \
+        '.feature_preparation_result.implementation_implications += ["Run the explicitly requested QA/acceptance evaluation."]' \
+        '(.feature_preparation_result.recommended_next_step) = "Run the explicitly requested QA/acceptance evaluation."' \
+        '.changed_files = {}' \
+        '.test_results = {}' \
+        '.spec_review_result = {}' \
+        '.review_result = {}' \
+        '.qa_evaluation_result = {}' \
+        '.fresh_review_result = {}' \
+        '.manual_test_steps = {}' \
+        '.manual_verification_result = {}' \
+        '.subagent_evidence = {}' \
+        '.build_repair_state = {}' \
+        '.final_handoff = {}' \
+        '.artifact_reference_ledger = {}' \
+        '.done_contract = {}' \
+        '.harness_recipe = {}' \
+        '.harness_run_state = {}' \
+        '.trace_ledger = {}' \
+        '.replay_packet = {}' \
+        '.decomposition_plan_review = {}' \
+        '.slice_manifest = {}' \
+        '.single_slice_rationale = {}' \
+        '.slice_verification_summary = {}' \
+        '.user_approval = {}'; then
+        future_qa_mutation_failures+=("$future_qa_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#future_qa_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "future-QA obligation mutations were not rejected by every carrying case: ${future_qa_mutation_failures[*]}"
+fi
+
+test_start "actual grader requires Medium Plan triage routing carry-forward fields"
+if run_isolated_workflow_routing_mutations \
+    "medium-plan-triage-routing-carry-forward" \
+    build_medium_plan_triage_routing_response \
+    'del(.plan.triage_result.qa_evaluation_mode)' \
+    'del(.plan.triage_result.harness_capable)' \
+    'del(.plan.triage_result.build_execution_lane)' \
+    'del(.plan.triage_result.workflow_state_mode)'; then
+    pass
+else
+    fail "Medium Plan triage carry-forward deletions were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader requires ordinary medium QA and harness triage fields"
+if run_isolated_workflow_routing_mutations \
+    "ordinary-medium-triage-routing" \
+    build_ordinary_medium_triage_response \
+    'del(.triage_result.qa_evaluation_mode)' \
+    'del(.triage_result.harness_capable)' \
+    'del(.triage_result.build_execution_lane)' \
+    'del(.triage_result.workflow_state_mode)' \
+    '(.triage_result.qa_evaluation_mode) = "required"' \
+    '(.triage_result.harness_capable) = true' \
+    '(.triage_result.workflow_state_mode) = "inline"'; then
+    pass
+else
+    fail "ordinary medium triage mutations were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader requires exact existing-system Architecture Pack evidence bindings"
+if run_isolated_workflow_routing_mutations \
+    "architecture-pack-existing-system-evidence-bindings" \
+    build_existing_system_architecture_pack_binding_response \
+    'del(.architecture_decision_pack.pack_id)' \
+    'del(.architecture_decision_pack.single_goal)' \
+    'del(.architecture_decision_pack.freshness)' \
+    'del(.architecture_decision_pack.facts)' \
+    'del(.architecture_decision_pack.assumptions)' \
+    'del(.architecture_decision_pack.material_questions)' \
+    'del(.architecture_decision_pack.boundaries)' \
+    'del(.architecture_decision_pack.design_pressure_checks)' \
+    'del(.architecture_decision_pack.type_ledger)' \
+    'del(.architecture_decision_pack.interface_contracts)' \
+    'del(.architecture_decision_pack.quality_scenarios)' \
+    '(.architecture_decision_pack.quality_scenarios[0].status) = "verified"' \
+    '(.architecture_decision_pack.quality_scenarios[0].verification_ref) = "verify-viewing-route-parity"' \
+    'del(.architecture_decision_pack.alternatives)' \
+    'del(.architecture_decision_pack.selected_design)' \
+    'del(.architecture_decision_pack.selected_design_rationale)' \
+    'del(.architecture_decision_pack.verification)' \
+    'del(.architecture_decision_pack.handoff_refs)' \
+    'del(.architecture_decision_pack.feature_preparation_evidence_bindings)' \
+    'del(.architecture_decision_pack.feature_preparation_evidence_bindings[0].evidence_ref)' \
+    'del(.architecture_decision_pack.feature_preparation_evidence_bindings[0].item_id)' \
+    'del(.architecture_decision_pack.feature_preparation_evidence_bindings[0].claim_or_question)' \
+    '(.architecture_decision_pack.feature_preparation_evidence_bindings[0].evidence_ref) = "prep/stale"' \
+    '(.architecture_decision_pack.feature_preparation_evidence_bindings[0].item_id) = "mismatched-row"' \
+    '(.architecture_decision_pack.feature_preparation_evidence_bindings[0].claim_or_question) = "Mismatched claim."' \
+    '.architecture_decision_pack.feature_preparation_evidence_bindings += [.architecture_decision_pack.feature_preparation_evidence_bindings[0]]' \
+    '.architecture_decision_pack.feature_preparation_evidence_bindings += [{evidence_ref: "prep/extra", item_id: "extra-row", claim_or_question: "Extra claim."}]'; then
+    pass
+else
+    fail "existing-system Architecture Pack binding mutations were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
 fi
 
 test_start "skill eval runner validates safe structured JSON assertions and rejects unsafe JSON shapes"
@@ -1515,6 +1851,103 @@ else
             fail "structured JSON grader accepted unsafe shapes or invalid JSON: ${structured_negative_failures[*]}"
         fi
     fi
+fi
+
+test_start "equals structured assertions support only exact ordered primitive arrays"
+equals_array_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-equals-array.XXXXXX")"
+equals_array_skill="$equals_array_root/assistant-eval-equals-array"
+equals_array_responses="$equals_array_root/responses"
+equals_array_output="$equals_array_root/equals-array.out"
+equals_array_err="$equals_array_root/validation.err"
+p0p4_register_cleanup "$equals_array_root"
+p0p4_write_skill_eval_fixture "$equals_array_skill"
+jq '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"equals","path":["values"],"expected":["alpha","beta"]}]' "$equals_array_skill/evals/cases.json" >"$equals_array_root/cases.json"
+mv "$equals_array_root/cases.json" "$equals_array_skill/evals/cases.json"
+cp "$equals_array_skill/evals/cases.json" "$equals_array_root/valid-cases.json"
+mkdir -p "$equals_array_responses/assistant-eval-equals-array"
+printf '%s\n' '{"fixture":"fixture required fixture first fixture second","values":["alpha","beta"]}' >"$equals_array_responses/assistant-eval-equals-array/fixture-case.txt"
+equals_array_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$equals_array_skill" > /dev/null 2>"$equals_array_err"; then
+    equals_array_failures+=("valid array fixture: $(cat "$equals_array_err")")
+elif ! "$skill_eval_runner" --responses "$equals_array_responses" --skill "$equals_array_skill" >"$equals_array_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$equals_array_output"; then
+    equals_array_failures+=("valid ordered array")
+else
+    for mutation in \
+        '(.values) = ["alpha"]' \
+        '(.values) = ["alpha","beta","gamma"]' \
+        '(.values) = ["beta","alpha"]' \
+        '(.values) = ["alpha",2]'; do
+        jq "$mutation" <<<'{"fixture":"fixture required fixture first fixture second","values":["alpha","beta"]}' >"$equals_array_responses/assistant-eval-equals-array/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$equals_array_responses" --skill "$equals_array_skill" >"$equals_array_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$equals_array_output"; then
+            equals_array_failures+=("$mutation")
+        fi
+    done
+fi
+for invalid_expected in '{"value":"alpha"}' 'null' '[null]' '[{"x":1}]' '[["nested"]]'; do
+    jq --argjson expected "$invalid_expected" '(.cases[0].machine_expectations.structured_json_assertions[0].expected) = $expected' "$equals_array_skill/evals/cases.json" >"$equals_array_root/invalid.json"
+    mv "$equals_array_root/invalid.json" "$equals_array_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$equals_array_skill" > /dev/null 2>"$equals_array_err"; then
+        equals_array_failures+=("unsupported expected $invalid_expected")
+    fi
+    cp "$equals_array_root/valid-cases.json" "$equals_array_skill/evals/cases.json"
+done
+if [[ ${#equals_array_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "equals array assertions do not preserve exact ordered primitive-array semantics: ${equals_array_failures[*]}"
+fi
+
+test_start "path_absent structured assertions distinguish absent fields from null evidence"
+path_absent_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-path-absent.XXXXXX")"
+path_absent_skill="$path_absent_root/assistant-eval-path-absent"
+path_absent_responses="$path_absent_root/responses"
+path_absent_output="$path_absent_root/path-absent.out"
+path_absent_err="$path_absent_root/validation.err"
+p0p4_register_cleanup "$path_absent_root"
+p0p4_write_skill_eval_fixture "$path_absent_skill"
+jq '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"path_absent","path":["evidence","verification_ref"]}]' "$path_absent_skill/evals/cases.json" >"$path_absent_root/cases.json"
+mv "$path_absent_root/cases.json" "$path_absent_skill/evals/cases.json"
+cp "$path_absent_skill/evals/cases.json" "$path_absent_root/valid-cases.json"
+mkdir -p "$path_absent_responses/assistant-eval-path-absent"
+printf '%s\n' '{"fixture":"fixture required fixture first fixture second","evidence":{}}' >"$path_absent_responses/assistant-eval-path-absent/fixture-case.txt"
+path_absent_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$path_absent_skill" > /dev/null 2>"$path_absent_err"; then
+    path_absent_failures+=("valid absent-path fixture: $(cat "$path_absent_err")")
+elif ! "$skill_eval_runner" --responses "$path_absent_responses" --skill "$path_absent_skill" >"$path_absent_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$path_absent_output"; then
+    path_absent_failures+=("absent verification ref")
+else
+    for mutation in \
+        '(.evidence.verification_ref) = "verify/viewing-route"' \
+        '(.evidence.verification_ref) = null'; do
+        jq "$mutation" <<<'{"fixture":"fixture required fixture first fixture second","evidence":{}}' >"$path_absent_responses/assistant-eval-path-absent/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$path_absent_responses" --skill "$path_absent_skill" >"$path_absent_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$path_absent_output"; then
+            path_absent_failures+=("$mutation")
+        fi
+    done
+fi
+for invalid_assertion in \
+    '{"operator":"path_absent","path":[]}' \
+    '{"operator":"path_absent","path":"evidence.verification_ref"}' \
+    '{"operator":"path_absent","path":["evidence",-1]}' \
+    '{"operator":"path_absent","path":["evidence",{"unsafe":true}]}' \
+    '{"operator":"unknown","path":["evidence","verification_ref"]}'; do
+    jq --argjson assertion "$invalid_assertion" '(.cases[0].machine_expectations.structured_json_assertions) = [$assertion]' "$path_absent_root/valid-cases.json" >"$path_absent_root/invalid.json"
+    mv "$path_absent_root/invalid.json" "$path_absent_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$path_absent_skill" > /dev/null 2>"$path_absent_err"; then
+        path_absent_failures+=("unsafe fixture $invalid_assertion")
+    elif ! grep -Fq "structured_json_assertions" "$path_absent_err"; then
+        path_absent_failures+=("unclear schema error for $invalid_assertion")
+    fi
+    cp "$path_absent_root/valid-cases.json" "$path_absent_skill/evals/cases.json"
+done
+if [[ ${#path_absent_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "path_absent structured assertions do not enforce exact absent-field semantics: ${path_absent_failures[*]}"
 fi
 
 test_start "structured array item assertions require a non-empty target array"

@@ -20,8 +20,11 @@ For each scoped behavior or proposed open question, create one
 3. Inspect the behavioral tests and name the assertion, inspected absence, or
    access limitation.
 4. Compare the sources and classify the row on both axes.
-5. Carry the stable `ref` into the preparation plan, any applicable Architecture
-   Decision Pack, diagrams, and documentation.
+5. Treat `feature_preparation_evidence.ref` as the stable identity of the evidence artifact.
+   It is carried unchanged into preparation plans, task packets,
+   any applicable Architecture Decision Pack, diagrams, and documentation;
+   `item_id` and claim bindings add row-level meaning without replacing that
+   artifact identity.
 
 For `execution_intent=prepare_only`, finish with `Execution not started` and do
 not manufacture changed-files, Build, test-run, or code-review evidence. For
@@ -83,5 +86,9 @@ work, evidence gaps, open decisions, implementation implications, and a
 recommended next step. Medium+ preparation may include an optional readiness
 plan, but it does not wait for implementation approval: record the approval or
 delegation required for a later implementation workflow in `open_decisions`
-and/or `recommended_next_step`. It does not return invented changed files,
+and/or `recommended_next_step`. When an explicit QA/acceptance evaluation was
+requested, keep it only in
+`feature_preparation_result.future_qa_acceptance_obligation` while preparation
+uses `qa_evaluation_mode=not_required`.
+It does not return invented changed files,
 Build, test-run, review, or final-handoff evidence.

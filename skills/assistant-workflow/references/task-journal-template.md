@@ -35,6 +35,9 @@ Task type: [feature | bugfix | refactor | migration | rewrite | config | infra |
 Risk tier: [low | moderate | high | critical]
 Controller intensity: [light | standard | strict]
 Plan mode: [none | inline | approval_required]
+QA evaluation mode: [not_required | optional | required]
+Harness capable: [true | false]
+Future QA/acceptance obligation: [N/A unless prepare_only has an explicit QA/acceptance request; otherwise feature_preparation_result.future_qa_acceptance_obligation]
 Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 Architecture Decision Pack ref: [ref, or N/A with concrete reason]
 Pack handoff binding: [prepare_only: discover_only context/journal ref only through Preparation Completion, including optional readiness Plan and no downstream packet refs | execution_intent != prepare_only: Plan binds downstream context/journal + plan/task-packet + review-scope refs before Build; plan_mode=none binds compact inline task-packet/execution + review-scope refs before Build]
@@ -310,7 +313,7 @@ do not start the next slice until the current one is `VERIFIED`
 ## Lifecycle
 
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
-2. **Triage** records task/risk/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
+2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
 4. **Decompose/Plan** persists the slice manifest for medium+ work. Plan is omitted only for eligible `plan_mode=none`, inline mode records a no-wait compact plan, and approval-required mode captures approval.
 5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.

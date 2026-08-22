@@ -9,7 +9,7 @@
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   },
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"enum": ["1.0", "2.0"]},
     "decision_kind": {"const": "workflow_kernel_behavioral_promotion"},
     "bindings": {
       "type": "object",
@@ -19,6 +19,7 @@
         "candidate_manifest_sha256": {"$ref": "#/$defs/sha256"},
         "candidate_instruction_sha256": {"$ref": "#/$defs/sha256"},
         "context_budget_evidence_sha256": {"$ref": "#/$defs/sha256"},
+        "activation_observations_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
         "review_packet_sha256": {"$ref": "#/$defs/sha256"},
         "semantic_verdict_sha256": {"$ref": "#/$defs/sha256"},
         "trace_set_sha256": {"$ref": "#/$defs/sha256"},
@@ -27,6 +28,7 @@
     },
     "automatic_behavioral_gates_passed": {"type": "boolean"},
     "trusted_execution_profile_passed": {"type": "boolean"},
+    "native_activation_observation_passed": {"type": "boolean"},
     "semantic_false_positive_review": {
       "type": "object",
       "additionalProperties": false,
@@ -40,20 +42,51 @@
     "failed_gates": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"enum": ["pilot_coverage_or_automatic_gates", "semantic_review_not_approved", "untrusted_execution_profile"]}
+      "items": {"enum": ["pilot_coverage_or_automatic_gates", "semantic_review_not_approved", "untrusted_execution_profile", "native_activation_observation_not_admissible"]}
     },
     "behavioral_promotion_eligible": {"type": "boolean"}
   },
   "allOf": [
     {
+      "if": {"properties": {"schema_version": {"const": "2.0"}}},
+      "then": {
+        "required": ["native_activation_observation_passed"],
+        "properties": {
+          "native_activation_observation_passed": {"type": "boolean"},
+          "bindings": {"required": ["activation_observations_sha256"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"native_activation_observation_passed": {"const": true}},
+        "required": ["native_activation_observation_passed"]
+      },
+      "then": {
+        "properties": {
+          "bindings": {
+            "properties": {"activation_observations_sha256": {"$ref": "#/$defs/sha256"}},
+            "required": ["activation_observations_sha256"]
+          }
+        }
+      }
+    },
+    {
       "if": {"properties": {"behavioral_promotion_eligible": {"const": true}}},
       "then": {
         "properties": {
+          "schema_version": {"const": "2.0"},
           "automatic_behavioral_gates_passed": {"const": true},
           "trusted_execution_profile_passed": {"const": true},
+          "native_activation_observation_passed": {"const": true},
+          "bindings": {
+            "properties": {"activation_observations_sha256": {"$ref": "#/$defs/sha256"}},
+            "required": ["activation_observations_sha256"]
+          },
           "semantic_false_positive_review": {"properties": {"status": {"const": "approved"}}},
           "failed_gates": {"maxItems": 0}
-        }
+        },
+        "required": ["native_activation_observation_passed"]
       }
     },
     {
@@ -63,6 +96,7 @@
           {"properties": {"automatic_behavioral_gates_passed": {"const": false}}},
           {"properties": {"semantic_false_positive_review": {"properties": {"status": {"const": "rejected"}}}}},
           {"properties": {"trusted_execution_profile_passed": {"const": false}}}
+          ,{"allOf": [{"properties": {"schema_version": {"const": "2.0"}}}, {"required": ["native_activation_observation_passed"], "properties": {"native_activation_observation_passed": {"const": false}}}]}
         ]
       }
     },
@@ -79,10 +113,15 @@
       "then": {"properties": {"failed_gates": {"contains": {"const": "untrusted_execution_profile"}, "minContains": 1}}}
     },
     {
+      "if": {"allOf": [{"properties": {"schema_version": {"const": "2.0"}}}, {"required": ["native_activation_observation_passed"], "properties": {"native_activation_observation_passed": {"const": false}}}]},
+      "then": {"properties": {"failed_gates": {"contains": {"const": "native_activation_observation_not_admissible"}, "minContains": 1}}}
+    },
+    {
       "if": {
         "properties": {
           "automatic_behavioral_gates_passed": {"const": true},
           "trusted_execution_profile_passed": {"const": true},
+          "native_activation_observation_passed": {"const": true},
           "semantic_false_positive_review": {"properties": {"status": {"const": "approved"}}}
         }
       },

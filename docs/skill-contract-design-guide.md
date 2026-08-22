@@ -466,7 +466,12 @@ shapes native description routing and is separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
-Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, and `array_items_nonempty_fields`. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `path_absent`, `equals_path`, `required_when_equals`, `array_field_values_exact`, and `array_items_nonempty_fields`. `path_absent` passes only when its valid JSON path cannot be resolved; a present `null` is present and therefore fails. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+
+`equals` compares a string, number, boolean, or ordered primitive array
+exactly; an extra, missing, reordered, or type-mismatched array value fails.
+Object- and null-valued expectations remain unsupported so fixtures cannot
+encode arbitrary structures.
 
 **Current implementation: Levels 1-4 for every first-class skill, with complete first-class per-skill eval fixtures.** Level 3 is source structural validation; Level 4 is provider-neutral conformance fixtures plus semantic review. Local-only skill experiments remain opt-in through `--include-local`.
 

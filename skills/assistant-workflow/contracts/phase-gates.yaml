@@ -59,8 +59,8 @@ gates:
         on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
 
       - id: T_CONTROLLER_INTENSITY
-        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; strict is selected only for high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria"
-        on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; use standard when harness_capable=false and qa_evaluation_mode=not_required."
+        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; for execution_intent != prepare_only, strict is selected only for high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria; for prepare_only, risk/project criteria may select strict preparation but a QA request alone must not."
+        on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; for prepare_only, restore risk/project-selected strict, force qa_evaluation_mode=not_required, and carry QA/acceptance request only into feature_preparation_result.future_qa_acceptance_obligation."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
         check: "plan_mode is none, inline, or approval_required; workflow_state_mode is inline or journal; and manual_verification_mode is not_required, optional, or required"
@@ -75,16 +75,23 @@ gates:
         on_fail: "Load references/architecture-decision-pack.md, inspect the candidate scope scan, select the proportional architecture design mode, and record trigger reasons or a concrete not-applicable reason."
 
       - id: T6
-        check: "required_gates includes common gates plus every applicable task-category gate pack"
-        on_fail: "Load references/triage-rubric.md and add the required gate packs for the task type before continuing"
+        check: "required_gates includes execution common gates plus every applicable task-category gate pack"
+        condition: "execution_intent != prepare_only"
+        on_fail: "Load references/triage-rubric.md and add the execution gate packs for the task type before continuing"
 
       - id: T7
         check: "build_execution_lane and required_agents/fallback roles are populated from risk and verification shape: inline_direct for light localized work; bounded_executor plus independent Code Reviewer for ordinary medium standard-risk work; separated_workers with Code Writer, Builder/Tester, and Code Reviewer only for high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        condition: "execution_intent != prepare_only"
         on_fail: "Select the smallest safe build_execution_lane and matching roles; do not require separated workers from size alone."
+
+      - id: T_PREPARATION_ADMISSIBILITY
+        check: "required_gates contains only feature-preparation evidence with no execution or task-category gate; qa_evaluation_mode=not_required and build_execution_lane=inline_direct; harness_capable=false unless separately recorded independent harness evidence applies, and a QA request alone never promotes harness or QA. required_agents contains only concrete Discover or preparation roles; do not select Build, Review, QA Evaluator, Code Writer, Builder/Tester, or Code Reviewer roles for preparation alone. workflow_state_mode remains inline for QA-only preparation; retain journal or other state only when risk, delegation, or independent harness evidence separately requires it."
+        condition: "execution_intent == prepare_only"
+        on_fail: "Remove every execution/task-category gate and execution role, retain only feature-preparation evidence and concrete Discover/preparation roles, and record future implementation obligations in feature_preparation_result."
 
       - id: T_QA_EVALUATOR
         check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to the selected Build lane roles and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
-        condition: "qa_evaluation_mode == required"
+        condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
       - id: T9
@@ -125,7 +132,7 @@ gates:
         on_fail: "Load references/requirement-acceptance-map.md, map every accepted requirement, resolve material questions, and do not decompose from an untraceable criteria list"
 
       - id: D1A
-        check: "Discovery confirms or updates task_type, risk_tier, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
+        check: "Discovery confirms or updates task_type, risk_tier, qa_evaluation_mode, harness_capable, build_execution_lane, workflow_state_mode, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
         on_fail: "Re-triage with code/context evidence before proceeding"
 
       - id: D2
@@ -153,9 +160,9 @@ gates:
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D_FEATURE_PREPARATION_EVIDENCE
-        check: "For existing-system feature work, prepare_only/end_to_end discovery completes feature_preparation_evidence before any question, plan, or Build is finalized; implement_only resolves an approved_feature_preparation_evidence_ref covering the current packet. Product question admissibility fails closed: absence from requirements/design alone is insufficient; current implementation and relevant behavioral tests are inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible/uninspected evidence is evidence_gap; contradictory evidence is source_conflict; existing behavior extended to a new route/scope is existing_behavior_to_preserve + implementation_gap."
+        check: "For existing-system feature work, prepare_only/end_to_end discovery completes feature_preparation_evidence before any question, plan, or Build is finalized; implement_only resolves an approved_feature_preparation_evidence_ref covering the current packet. feature_preparation_evidence.ref is the stable identity of that artifact and is carried unchanged to preparation plans, task packets, Architecture Decision Packs, diagrams, and documentation. Every Architecture Decision Pack carried behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding to its canonical row; missing, extra, duplicate, stale, or mismatched bindings block the Pack. Product question admissibility fails closed: absence from requirements/design alone is insufficient; current implementation and relevant behavioral tests are inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible/uninspected evidence is evidence_gap; contradictory evidence is source_conflict; existing behavior extended to a new route/scope is existing_behavior_to_preserve + implementation_gap."
         condition: "feature_preparation_scope == existing_system"
-        on_fail: "For prepare_only/end_to_end, load references/feature-preparation-evidence.md, trace the behavior path and tests, classify each item, and replace unsupported Product questions with an implementation gap, source conflict, or evidence gap. For implement_only, stop until the approved evidence ref resolves to the current packet."
+        on_fail: "For prepare_only/end_to_end, load references/feature-preparation-evidence.md, trace the behavior path and tests, classify each item, preserve the stable evidence identity unchanged, and replace unsupported Product questions with an implementation gap, source conflict, or evidence gap. For implement_only, stop until the approved evidence ref resolves to the current packet."
 
       - id: D_PROGRESSIVE_DISCOVERY_HOLD
         check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
@@ -183,7 +190,7 @@ gates:
         on_fail: "Load references/context-budget-and-pattern-retrieval.md and add the Context Budget note before planning/building"
 
       - id: D_ARCHITECTURE_DECISION_PACK
-        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for the repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, falsifiable quality scenarios with stable identity and verified evidence, selected design with unique selected alternative binding when alternatives exist, verification, invalidation conditions, and handoff refs. For prepare_only, Discover keeps handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs through Preparation Completion, including optional readiness Plan. For execution_intent != prepare_only, Discover starts discover_only and Plan or the plan_mode=none pre-Build boundary binds downstream refs before Build. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
+        check: "When architecture_design_mode is lightweight, required, or review_intensive: architecture_decision_pack is current for repository revision or greenfield assumptions; separates facts from assumptions; has no unresolved blocking material questions; records boundary ownership/lifecycle, design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and representative path, semantic Type Ledger with primitive exceptions/conversion points, interface evolution, and quality scenarios with stable identity and explicit quality scenario status/evidence state. verified evidence and verification_ref are permitted only when status=verified; pending/unknown retain evidence state without invented verified evidence or refs. Pack records selected design with unique selected alternative binding when alternatives exist, verification, invalidation conditions, and handoff refs. For prepare_only, Discover keeps handoff_binding_state=discover_only with context_or_journal_ref and forbids invented downstream refs through Preparation Completion, including optional readiness Plan. For execution_intent != prepare_only, Discover starts discover_only and Plan or the plan_mode=none pre-Build boundary binds downstream refs before Build. architecture_decision_pack.mode equals canonical architecture_design_mode. When review_intensive, independent_challenge_evidence includes challenge, dissent/validation, resolution, and selected-design impact; a weaker nested mode cannot evade it."
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         on_fail: "Load references/architecture-decision-pack.md, finish local evidence discovery and material question resolution, and create or refresh the typed Pack. For prepare_only, retain only its context/journal readiness reference through Preparation Completion. For execution_intent != prepare_only, add its reference to context map/journal and the next Plan or Decompose handoff before Build."
 
@@ -294,7 +301,7 @@ gates:
     exit_assertions:
 
       - id: P_FEATURE_PREPARATION_REFERENCE
-        check: "An existing-system feature plan references the completed or approved feature-preparation evidence ref. A prepare_only readiness plan carries the ref in readiness context only and has no executable task packet; end-to-end and implement-only plans retain the ref in their plan, task packet, and applicable Architecture Decision Pack before Build."
+        check: "An existing-system feature plan references the completed or approved feature-preparation evidence ref. A prepare_only readiness plan carries the ref in readiness context only and has no executable task packet; end-to-end and implement-only plans retain the ref in their plan, task packet, and applicable Architecture Decision Pack before Build. Each Pack-carried behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding."
         condition: "feature_preparation_scope == existing_system"
         on_fail: "For prepare_only readiness, return to Discover, complete or resolve the canonical feature-preparation evidence artifact, then carry its stable ref in readiness evidence/implications and record open decisions and the next implementation state without an executable packet or Build handoff. For execution_intent != prepare_only, add its stable ref to the plan, task packet, and any applicable Pack before Build."
 
@@ -589,12 +596,12 @@ gates:
 
       - id: R2A_CODE_REVIEWER_DISTINCT
         check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
-        condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
+        condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or qa_evaluation_mode == required)"
         on_fail: "Run the Review-owned assistant-review lane after Build, validate its canonical outputs, and populate review_result refs plus subagent_evidence.code_reviewer_evidence. Keep QA Evaluator entries separate."
 
       - id: R_QA_EVALUATION
         check: "When qa_evaluation_mode is required: assistant-review owns QAEvaluator dispatch and return validation after build/test and Code Reviewer evidence; workflow records validated canonical qa_evaluation_result and qa_evaluation_delegation_path refs"
-        condition: "qa_evaluation_mode == required"
+        condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
         on_fail: "Load and follow assistant-review QA contracts. assistant-review owns QAEvaluator dispatch and return validation; do not complete Review until workflow holds validated canonical QA result refs or assistant-review reports a canonical blocked result."
 
       - id: R_PIVOT_RESTART_DECISION
@@ -698,11 +705,11 @@ gates:
     exit_assertions:
 
       - id: PC1
-        check: "completion_policy and feature_preparation_result are present with execution_status=not_started"
-        on_fail: "Return the typed preparation completion result before ending the workflow."
+        check: "completion_policy, validation_results, and feature_preparation_result are present with execution_status=not_started"
+        on_fail: "Restore validation_results and the typed feature_preparation_result before ending the workflow."
 
       - id: PC2
-        check: "For existing-system preparation, feature_preparation_evidence is complete and feature_preparation_result carries its exact ref"
+        check: "For existing-system preparation, feature_preparation_evidence is complete and feature_preparation_result carries its exact unchanged stable identity ref"
         condition: "feature_preparation_scope == existing_system"
         on_fail: "Return to Discover and complete the canonical evidence matrix before preparation completion."
 
@@ -731,7 +738,7 @@ invariants:
     on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing', or return to Triage and correct plan_mode before proceeding"
 
   - id: INV3
-    check: "When controller_intensity is strict, explicit project policy requires markers, or the user requests exact markers, every executed phase prints its start checkpoint before work and its end checkpoint after assertions pass"
+    check: "When controller_intensity is strict, explicit project policy requires markers, or the user requests exact markers, every executed phase prints each declared non-null checkpoint: start before work and end after assertions pass; a null checkpoint is not invented"
     condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"
     scope: all_phases
     on_fail: "Re-print the missing required checkpoint marker and note the protocol repair in the configured task journal or equivalent carried-forward state. Light/standard work without a marker trigger uses concise natural progress updates instead."
@@ -754,6 +761,7 @@ invariants:
   - id: INV_CONTROLLER_INTENSITY_STANDARD
     check: "controller_intensity == standard with harness_capable=false and qa_evaluation_mode=not_required does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation"
     scope: all_phases
+    condition: "execution_intent != prepare_only"
     on_fail: "Remove accidental strict/harness/QA requirements, or re-triage with explicit independent criteria before promoting controller_intensity to strict."
 
   - id: INV_BUILD_REPAIR_BOUNDED

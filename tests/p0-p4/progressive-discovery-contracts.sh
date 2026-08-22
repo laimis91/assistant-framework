@@ -340,8 +340,20 @@ write_workflow_eval_responses() {
                 medium-prepare-only-terminal-route)
                     build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
+                medium-prepare-only-qa-request-routing)
+                    build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
+                    ;;
                 large-prepare-only-terminal-route)
                     build_large_prepare_only_terminal_response "$response_path" "$required_summary"
+                    ;;
+                ordinary-medium-triage-routing)
+                    build_ordinary_medium_triage_response "$response_path" "$required_summary"
+                    ;;
+                architecture-pack-existing-system-evidence-bindings)
+                    build_existing_system_architecture_pack_binding_response "$response_path" "$required_summary"
+                    ;;
+                medium-plan-triage-routing-carry-forward)
+                    build_medium_plan_triage_routing_response "$response_path" "$required_summary"
                     ;;
                 feature-preparation-counterclassifies-unknown-conflict-and-gap)
                     build_feature_preparation_countercase_response "$response_path" "$required_summary"
@@ -693,6 +705,45 @@ if [[ "${#state_mode_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive state-mode inference contract missing: ${state_mode_missing[*]}"
+fi
+
+test_start "progressive fallback remains inline for prepare-only when local state is unavailable or disallowed"
+if ruby -ryaml -e '
+  fields = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  state = fields.fetch("workflow_state_mode")
+  text = [state.fetch("validation"), state.fetch("infer_from")].join(" ")
+  controller = File.read(ARGV.fetch(1)).gsub(/\s+/, " ")
+  output = YAML.load_file(ARGV.fetch(2)).fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  output_text = %w[triage_result completion_policy].flat_map { |name| output.fetch(name).fetch("object_fields") }
+    .select { |field| field.fetch("name") == "workflow_state_mode" }
+    .map { |field| field.fetch("validation") }.join(" ")
+  progressive = [
+    "uncertainty_shape == progressive",
+    "local state artifacts are configured and policy allows them",
+    "unavailable/policy-disallowed progressive",
+    "equivalent carried-state fallback inline",
+    "prepare_only",
+    "uncertainty_shape == bounded"
+  ]
+  durable = [
+    "clarification wait",
+    "delegated workflow roles during execution",
+    "cross-session/compaction continuation",
+    "explicit persisted state",
+    "controller_intensity == strict",
+    "harness_capable == true",
+    "execution_intent != prepare_only and qa_evaluation_mode == required",
+    "Size alone never requires journal"
+  ]
+  valid = progressive.all? { |term| text.include?(term) } &&
+    durable.all? { |term| text.include?(term) && controller.include?(term) && output_text.include?(term) } &&
+    text.include?("unavailable/policy-disallowed progressive") &&
+    !state.fetch("infer_from").include?("execution_intent != prepare_only, otherwise inline")
+  exit(valid ? 0 : 1)
+' "$input_contract" "$workflow_controller" "$output_contract"; then
+    pass
+else
+    fail "prepare-only progressive state fallback is not explicitly inline and carried-state based"
 fi
 
 test_start "workflow persists blocked decision reasons and unblock conditions"
@@ -3403,14 +3454,14 @@ fi
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
 if [[ "$workflow_full_corpus_eval_count" -eq 26 \
-    && "$prepare_only_root_or_forbidden_mutation_count" -eq 43 \
-    && "$prepare_only_plan_mode_mutation_count" -eq 8 \
-    && "$prepare_only_mutation_invocation_count" -eq 51 \
+    && "$prepare_only_root_or_forbidden_mutation_count" -eq 51 \
+    && "$prepare_only_plan_mode_mutation_count" -eq 10 \
+    && "$prepare_only_mutation_invocation_count" -eq 61 \
     && "$actual_grader_invocation_count" -eq $((workflow_full_corpus_eval_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
     && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 26 full-corpus and 43 prepare-only mutation assistant-workflow eval invocations through one call site, with total accounting for all auxiliary evals; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_mutation_invocation_count mutation, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 full-corpus and 51 root-or-forbidden plus 10 plan-mode prepare-only mutation assistant-workflow eval invocations through one call site, with total accounting for all auxiliary evals; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_root_or_forbidden_mutation_count root-or-forbidden, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_mutation_invocation_count mutation, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

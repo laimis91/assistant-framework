@@ -161,6 +161,24 @@ without_docs_eval_forbidden() {
     ' "$source" >"$destination"
 }
 
+test_start "architecture triage treats extension seams and material extensibility as Pack triggers"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  mode = input.fetch("fields").find { |field| field.fetch("name") == "architecture_design_mode" }
+  reasons = input.fetch("fields").find { |field| field.fetch("name") == "architecture_design_trigger_reasons" }
+  triage = File.read(ARGV.fetch(1))
+  valid = mode.fetch("validation").include?("extension seam") &&
+    mode.fetch("validation").include?("material extensibility") &&
+    reasons.fetch("validation").include?("material extensibility") &&
+    triage.include?("extension seam") && triage.include?("material extensibility") &&
+    triage.include?("makes `not_applicable` invalid")
+  exit(valid ? 0 : 1)
+' "$input_contract" "$workflow_dir/references/triage-rubric.md"; then
+    pass
+else
+    fail "architecture Pack routing does not preserve extension-seam and material-extensibility triggers"
+fi
+
 test_start "Architecture packs preserve challenge evidence and small required traceability"
 workflow_missing=()
 trigger_reasons_block="$(contract_field_block "$input_contract" architecture_design_trigger_reasons)"
@@ -779,6 +797,39 @@ elif grep -Fq 'Small low-risk work uses an inline plan' "$candidate_skill"; then
     fail "workflow-kernel-v1 still forces every small low-risk task through an inline plan"
 else
     pass
+fi
+
+test_start "workflow-kernel overlay preserves native activation selection and conditional preparation/Pack routes"
+overlay_description="$(awk 'BEGIN { in_frontmatter=0 } /^---$/ { in_frontmatter++; next } in_frontmatter == 1 && /^description:/ { sub(/^description: */, ""); gsub(/^"|"$/, ""); print; exit }' "$candidate_skill")"
+overlay_activation_missing=()
+for term in prepare 'technical preparation' plan build implement fix migrate refactor resume; do
+    if [[ "$overlay_description" != *"$term"* ]]; then
+        overlay_activation_missing+=("$term")
+    fi
+done
+if [[ ${#overlay_activation_missing[@]} -gt 0 ]]; then
+    fail "workflow-kernel overlay description misses native activation positives: ${overlay_activation_missing[*]}"
+elif [[ "$overlay_description" == *"narrow question"* || "$overlay_description" == *"answer question"* ]]; then
+    fail "workflow-kernel overlay description broadens into nearby non-activation routing"
+elif ! grep -Fq 'feature_preparation' "$candidate_skill" \
+    || ! grep -Fq 'repository-grounded existing behavior' "$candidate_skill" \
+    || ! grep -Fq 'requirements, design, current implementation, and behavioral tests' "$candidate_skill" \
+    || ! grep -Fq 'architecture_design' "$candidate_skill" \
+    || ! grep -Fq 'Pack trigger' "$candidate_skill" \
+    || ! grep -Fq 'pending quality scenarios keep verification_ref absent' "$candidate_skill"; then
+    fail "workflow-kernel overlay omits evidence-backed preparation or pending-Pack routing"
+else
+    pass
+fi
+
+test_start "workflow-kernel overlay conditionally loads phase, controller, and progressive routes"
+if grep -Fq 'references/phases.md' "$candidate_skill" \
+    && grep -Fq 'references/workflow-controller.md' "$candidate_skill" \
+    && grep -Fq 'progressive_discovery' "$candidate_skill" \
+    && grep -Fq 'references/progressive-discovery.md' "$candidate_skill"; then
+    pass
+else
+    fail "workflow-kernel overlay omits the compact conditional phase/controller/progressive route loads"
 fi
 
 test_start "Discover applies deterministic safe defaults without asking"

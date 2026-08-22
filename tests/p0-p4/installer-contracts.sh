@@ -605,6 +605,11 @@ mkdir -p "$INSTALL_HOME_EIGHT/.codex/tools/evals/lib"
 printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
 printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
 printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/validate-promotion-decision-schema.cjs"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/package.json"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/package-lock.json"
+mkdir -p "$INSTALL_HOME_EIGHT/.codex/tools/evals/node_modules/stale/nested"
+printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/evals/node_modules/stale/nested/package.json"
 printf 'stale\n' >"$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
 if HOME="$INSTALL_HOME_EIGHT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-evals.out 2>/tmp/p0p4-install-evals.err; then
     installed_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-framework-instruction-evals.sh"
@@ -612,12 +617,20 @@ if HOME="$INSTALL_HOME_EIGHT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --s
     installed_codex_runner="$INSTALL_HOME_EIGHT/.codex/tools/evals/run-codex-framework-evals.sh"
     installed_finalizer="$INSTALL_HOME_EIGHT/.codex/tools/evals/finalize-workflow-kernel-review.sh"
     installed_evidence_lib="$INSTALL_HOME_EIGHT/.codex/tools/evals/lib/context-budget-evidence.sh"
+    installed_promotion_validator="$INSTALL_HOME_EIGHT/.codex/tools/evals/validate-promotion-decision-schema.cjs"
+    installed_eval_package="$INSTALL_HOME_EIGHT/.codex/tools/evals/package.json"
+    installed_eval_package_lock="$INSTALL_HOME_EIGHT/.codex/tools/evals/package-lock.json"
+    installed_eval_node_modules="$INSTALL_HOME_EIGHT/.codex/tools/evals/node_modules"
     installed_context_reporter="$INSTALL_HOME_EIGHT/.codex/tools/context-budget-report.sh"
     if [[ -x "$installed_runner" ]] \
         && [[ -f "$installed_fixture" ]] \
         && [[ ! -e "$installed_codex_runner" ]] \
         && [[ ! -e "$installed_finalizer" ]] \
         && [[ ! -e "$installed_evidence_lib" ]] \
+        && [[ ! -e "$installed_promotion_validator" ]] \
+        && [[ ! -e "$installed_eval_package" ]] \
+        && [[ ! -e "$installed_eval_package_lock" ]] \
+        && [[ ! -e "$installed_eval_node_modules" ]] \
         && [[ ! -e "$installed_context_reporter" ]] \
         && HOME="$INSTALL_HOME_EIGHT" "$installed_runner" --validate-fixture >/tmp/p0p4-installed-eval-runner.out 2>/tmp/p0p4-installed-eval-runner.err; then
         pass

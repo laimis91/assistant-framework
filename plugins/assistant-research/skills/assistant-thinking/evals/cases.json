@@ -268,9 +268,9 @@
       "title": "Deep Think validates promotion only with the exact canonical evidence row",
       "category": "feature_preparation_promotion_binding",
       "purpose": "Checks that a validated concern repeats the exact canonical evidence reference and resolves a named evidence item.",
-      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects. Return the complete response as one valid JSON object.",
+      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects for the claim Preserve selection, highlight, and viewport focus for VIEWING. Return the complete response as one valid JSON object.",
       "setup_context": [
-        "feature_preparation_evidence_ref=prep/viewing-route and feature_preparation_evidence_item_id=viewing-route-effects are canonical and admissible.",
+        "feature_preparation_evidence_ref=prep/viewing-route, feature_preparation_evidence_item_id=viewing-route-effects, and feature_preparation_evidence_claim_or_question=Preserve selection, highlight, and viewport focus for VIEWING are canonical and admissible.",
         "That row records inspected implementation and behavioral tests for ACTIVE selection, highlight, and viewport focus."
       ],
       "expected_behavior": [
@@ -294,11 +294,14 @@
           {"operator": "equals", "path": ["confidence"], "expected": "medium"},
           {"operator": "nonempty_array", "path": ["gaps_or_assumptions"]},
           {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
-          {"operator": "equals", "path": ["feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
-          {"operator": "equals", "path": ["feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"},
           {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "validated_by_feature_preparation_evidence"},
           {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
-          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"}
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"},
+          {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "feature_preparation_evidence_claim_or_question"], "expected": "Preserve selection, highlight, and viewport focus for VIEWING"},
+          {"operator": "array_items_nonempty_fields", "path": ["candidate_concerns_or_criteria"], "fields": ["concern_or_criterion", "promotion_status", "feature_preparation_evidence_ref", "feature_preparation_evidence_item_id", "feature_preparation_evidence_claim_or_question", "rationale"]},
+          {"operator": "array_field_values_exact", "path": ["candidate_concerns_or_criteria"], "field": "feature_preparation_evidence_ref", "expected_values": ["prep/viewing-route"]},
+          {"operator": "array_field_values_exact", "path": ["candidate_concerns_or_criteria"], "field": "feature_preparation_evidence_item_id", "expected_values": ["viewing-route-effects"]},
+          {"operator": "array_field_values_exact", "path": ["candidate_concerns_or_criteria"], "field": "feature_preparation_evidence_claim_or_question", "expected_values": ["Preserve selection, highlight, and viewport focus for VIEWING"]}
         ]
       }
     },
@@ -307,7 +310,7 @@
       "title": "Deep Think rejects mismatched feature-preparation evidence binding",
       "category": "feature_preparation_promotion_binding",
       "purpose": "Checks that a stale or mismatched candidate reference cannot validate promotion.",
-      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects, but a candidate cites prep/old-route. Return the complete response as one valid JSON object.",
+      "prompt": "Use Deep Think with canonical feature-preparation evidence prep/viewing-route row viewing-route-effects for the claim Preserve selection, highlight, and viewport focus for VIEWING, but a candidate cites prep/old-route. Return the complete response as one valid JSON object.",
       "setup_context": [
         "The canonical input ref is prep/viewing-route with row viewing-route-effects.",
         "The candidate's prep/old-route reference is stale and does not resolve to the input evidence."
@@ -333,8 +336,6 @@
           {"operator": "equals", "path": ["confidence"], "expected": "medium"},
           {"operator": "nonempty_array", "path": ["gaps_or_assumptions"]},
           {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
-          {"operator": "equals", "path": ["feature_preparation_evidence_ref"], "expected": "prep/viewing-route"},
-          {"operator": "equals", "path": ["feature_preparation_evidence_item_id"], "expected": "viewing-route-effects"},
           {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "requires_feature_preparation_evidence"},
           {"operator": "nonempty_string", "path": ["candidate_concerns_or_criteria", 0, "rationale"]}
         ]

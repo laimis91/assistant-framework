@@ -1464,6 +1464,48 @@ function Remove-ExactManagedFiles {
     }
 }
 
+function Remove-ExactManagedDirectories {
+    param(
+        [Parameter(Mandatory = $true)][string]$TargetRoot,
+        [Parameter(Mandatory = $true)][string]$ManagedRoot,
+        [Parameter(Mandatory = $true)][string[]]$RelativePaths,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $safeTargetRoot = Assert-SafeManagedChild -LiteralPath $TargetRoot -ManagedRoot $ManagedRoot -Purpose "$Label root"
+    $validatedDirectories = New-Object System.Collections.Generic.List[string]
+    foreach ($relativePath in $RelativePaths) {
+        $normalized = $relativePath.Replace('\', '/').Trim('/')
+        if ([string]::IsNullOrWhiteSpace($normalized) -or
+            [System.IO.Path]::IsPathRooted($relativePath) -or
+            @($normalized -split '/' | Where-Object { $_ -eq '.' -or $_ -eq '..' }).Count -gt 0) {
+            throw "Refusing unsafe relative path for ${Label}: $relativePath"
+        }
+
+        $candidate = Join-Path $safeTargetRoot $relativePath
+        $safeDirectory = Assert-SafeManagedChild -LiteralPath $candidate -ManagedRoot $safeTargetRoot -Purpose "$Label directory"
+        $item = Get-Item -LiteralPath $safeDirectory -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) { continue }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $item.PSIsContainer) {
+            throw "Refusing to remove a managed target for $Label that is not a real directory: $safeDirectory"
+        }
+        if (@(Get-ChildItem -LiteralPath $safeDirectory -Force -Recurse -ErrorAction Stop | Where-Object { ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 }).Count -gt 0) {
+            throw "Refusing to remove a managed target for $Label containing a reparse point: $safeDirectory"
+        }
+        $validatedDirectories.Add($safeDirectory)
+    }
+
+    foreach ($safeDirectory in $validatedDirectories) {
+        if ($DryRun) {
+            Write-DryRun "Remove managed installed directory for ${Label}: $safeDirectory"
+            continue
+        }
+        [void](Assert-SafeManagedChild -LiteralPath $safeDirectory -ManagedRoot $safeTargetRoot -Purpose "$Label deletion")
+        Remove-Item -LiteralPath $safeDirectory -Recurse -Force
+        Write-Ok "Removed managed installed directory for ${Label}: $safeDirectory"
+    }
+}
+
 function Get-JsonPropertyInfoExact {
     param($Object, [string]$Name)
     if ($null -eq $Object) { return $null }
@@ -2263,12 +2305,17 @@ function Invoke-AssistantFrameworkInstall {
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
-    $sourceOnly = @(
+    $sourceOnlyFiles = @(
         'context-budget-report.sh',
         'evals/run-codex-framework-evals.sh',
         'evals/finalize-workflow-kernel-review.sh',
-        'evals/lib/context-budget-evidence.sh'
+        'evals/lib/context-budget-evidence.sh',
+        'evals/validate-promotion-decision-schema.cjs',
+        'evals/package.json',
+        'evals/package-lock.json'
     )
+    $sourceOnlyDirectories = @('evals/node_modules')
+    $sourceOnly = @($sourceOnlyFiles + $sourceOnlyDirectories)
     $retiredManagedTools = @(
         'cleanup-memory-graph.ps1',
         'cleanup-memory-graph.sh'
@@ -2301,7 +2348,8 @@ function Invoke-AssistantFrameworkInstall {
     $installedAgentFiles = @()
     try {
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
+            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyFiles -Label 'source-only tools'
+            Remove-ExactManagedDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyDirectories -Label 'source-only tools'
             Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedTools -Label 'retired managed tools'
         }
 

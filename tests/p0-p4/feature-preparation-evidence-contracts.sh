@@ -149,7 +149,7 @@ if ruby -ryaml -e '
     scoped_handoffs &&
     [architect_step_ref, code_writer_ref, builder_ref].all? { |field| field && field["condition"] == "feature_preparation_scope == existing_system" } &&
     tiers &&
-    preparation_tier.fetch("required_artifacts") == %w[completion_policy feature_preparation_result] &&
+    preparation_tier.fetch("required_artifacts") == %w[completion_policy validation_results feature_preparation_result] &&
     !preparation_tier.fetch("required_artifacts").any? { |artifact| %w[triage_result feature_preparation_evidence final_handoff changed_files test_results review_result].include?(artifact) } &&
     %w[triage_result feature_preparation_evidence plan_document].all? { |artifact| preparation_tier.fetch("conditional_artifacts").include?(artifact) } &&
     preparation_result["required"] == "conditional" &&
@@ -209,6 +209,211 @@ else
     fail "prepare-only completion still requires implementation spec review, code review, or slice verification evidence"
 fi
 
+test_start "prepare-only QA requests remain future acceptance obligations without overriding risk-selected strict preparation"
+if ruby -ryaml -rjson -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  output = YAML.load_file(ARGV.fetch(1))
+  gates = YAML.load_file(ARGV.fetch(2))
+  cases = JSON.parse(File.read(ARGV.fetch(3))).fetch("cases")
+  controller = File.read(ARGV.fetch(4))
+  triage = File.read(ARGV.fetch(5))
+  input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  qa = input_fields.fetch("qa_evaluation_mode")
+  intensity = input_fields.fetch("controller_intensity")
+  state = input_fields.fetch("workflow_state_mode")
+  state_text = [state.fetch("validation"), state.fetch("infer_from")].join(" ")
+  lane = input_fields.fetch("build_execution_lane")
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  triage_fields = artifacts.fetch("triage_result").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  completion_fields = artifacts.fetch("completion_policy").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  subagent_qa = artifacts.fetch("subagent_evidence").fetch("object_fields").find { |field| field["name"] == "qa_evaluator_evidence" }
+  triage_gate = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }
+  review_gate = gates.fetch("gates").find { |gate| gate["phase"] == "REVIEW" }
+  t_qa = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_QA_EVALUATOR" }
+  r2a = review_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "R2A_CODE_REVIEWER_DISTINCT" }
+  r_qa = review_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "R_QA_EVALUATION" }
+  t_intensity = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_CONTROLLER_INTENSITY" }
+  t6 = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T6" }
+  t7 = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T7" }
+  t_preparation = triage_gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PREPARATION_ADMISSIBILITY" }
+  large = cases.find { |entry| entry["id"] == "large-prepare-only-terminal-route" }
+  assertions = large&.dig("machine_expectations", "structured_json_assertions") || []
+  valid = qa.fetch("validation").include?("prepare_only") &&
+    qa.fetch("infer_from").include?("prepare_only") &&
+    qa.fetch("infer_from").include?("not_required") &&
+    intensity.fetch("infer_from").include?("execution_intent != prepare_only") &&
+    intensity.fetch("infer_from").include?("risk/project criteria may still select strict preparation") &&
+    intensity.fetch("infer_from").include?("QA request alone never promotes strict") &&
+    state_text.include?("uncertainty_shape == progressive") &&
+    state_text.include?("local state artifacts are configured and policy allows them") &&
+    state_text.include?("unavailable/policy-disallowed progressive") &&
+    state_text.include?("equivalent carried-state fallback inline") &&
+    state_text.include?("prepare_only") &&
+    !state.fetch("infer_from").include?("execution_intent != prepare_only, otherwise inline") &&
+    artifacts.fetch("qa_evaluation_result")["condition"] == "execution_intent != prepare_only and qa_evaluation_mode == required" &&
+    subagent_qa["condition"] == "execution_intent != prepare_only and qa_evaluation_mode == required" &&
+    t_qa["condition"] == "execution_intent != prepare_only and qa_evaluation_mode == required" &&
+    r2a["condition"].include?("execution_intent != prepare_only") &&
+    r_qa["condition"] == "execution_intent != prepare_only and qa_evaluation_mode == required" &&
+    t6["condition"] == "execution_intent != prepare_only" &&
+    t7["condition"] == "execution_intent != prepare_only" &&
+    t_preparation["condition"] == "execution_intent == prepare_only" &&
+    t_preparation["check"].include?("only feature-preparation evidence") &&
+    t_preparation["check"].include?("no execution or task-category gate") &&
+    triage_fields.fetch("qa_evaluation_mode")["required"] == true &&
+    triage_fields.fetch("qa_evaluation_mode").fetch("enum_values") == %w[not_required optional required] &&
+    triage_fields.fetch("harness_capable")["required"] == true &&
+    triage_fields.fetch("harness_capable")["type"] == "boolean" &&
+    triage_fields.fetch("required_gates")["validation"].include?("exactly [feature-preparation evidence]") &&
+    triage_fields.fetch("required_agents")["validation"].include?("execution_intent=prepare_only") &&
+    lane.fetch("infer_from").start_with?("For execution_intent == prepare_only, use inline_direct") &&
+    lane.fetch("validation").include?("execution_intent == prepare_only") &&
+    triage_fields.fetch("build_execution_lane")["validation"].include?("execution_intent=prepare_only") &&
+    completion_fields.fetch("build_execution_lane")["validation"].include?("prepare_only") &&
+    File.read(ARGV.fetch(1)).include?("If execution_intent != prepare_only and qa_evaluation_mode=required") &&
+    controller.include?("For `prepare_only`, force `qa_evaluation_mode=not_required`") &&
+    controller.include?("Risk/project criteria may still select strict preparation") &&
+    controller.include?("QA request alone must not select strict") &&
+    controller.include?("Progressive uncertainty may still use") &&
+    triage.include?("For `prepare_only`, set `qa_evaluation_mode=not_required`") &&
+    triage.include?("risk/project criteria may still select strict preparation") &&
+    t_intensity.fetch("check").include?("risk/project criteria may select strict preparation") &&
+    t_intensity.fetch("check").include?("QA request alone") &&
+    large &&
+    large.fetch("setup_context").join(" ").include?("explicitly requests independent QA/acceptance evaluation") &&
+    large.fetch("setup_context").join(" ").include?("QA request is not the strictness trigger") &&
+    large.fetch("setup_context").join(" ").include?("outcome-shaping uncertainty is progressive") &&
+    large.fetch("setup_context").join(" ").include?("local state artifacts are configured and policy allows journal state") &&
+    large.fetch("expected_behavior").join(" ").include?("risk-selected strict preparation") &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["completion_policy", "controller_intensity"] && assertion["expected"] == "strict" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "controller_intensity"] && assertion["expected"] == "strict" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "qa_evaluation_mode"] && assertion["expected"] == "not_required" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "harness_capable"] && assertion["expected"] == false } &&
+    assertions.any? { |assertion| assertion["operator"] == "empty_array" && assertion["path"] == ["triage_result", "required_agents"] } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "workflow_state_mode"] && assertion["expected"] == "journal" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "required_gates"] && assertion["expected"] == ["feature-preparation evidence"] } &&
+    large.fetch("machine_expectations").fetch("required_substrings").include?("future_qa_acceptance_obligation") &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["feature_preparation_result", "future_qa_acceptance_obligation", "requested_scope"] && assertion["expected"] == "Run the explicitly requested QA/acceptance evaluation." } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["feature_preparation_result", "future_qa_acceptance_obligation", "execution_prerequisite"] && assertion["expected"].include?("Build and Code Reviewer") }
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/evals/cases.json" "$workflow_dir/references/workflow-controller.md" "$workflow_dir/references/triage-rubric.md"; then
+    pass
+else
+    fail "prepare-only QA routing can override risk-selected strict preparation or discard an explicit future QA obligation"
+fi
+
+test_start "ordinary medium triage always records QA and harness routing"
+if ruby -rjson -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  ordinary = cases.find { |entry| entry["id"] == "ordinary-medium-triage-routing" }
+  assertions = ordinary&.dig("machine_expectations", "structured_json_assertions") || []
+  expected = {
+    ["triage_result", "execution_intent"] => "end_to_end",
+    ["triage_result", "qa_evaluation_mode"] => "not_required",
+    ["triage_result", "harness_capable"] => false,
+    ["triage_result", "build_execution_lane"] => "bounded_executor",
+    ["triage_result", "workflow_state_mode"] => "journal"
+  }
+  valid = ordinary && expected.all? { |path, value| assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == path && assertion["expected"] == value } }
+  exit(valid ? 0 : 1)
+' "$workflow_dir/evals/cases.json"; then
+    pass
+else
+    fail "ordinary medium triage fixture does not require QA and harness routing fields"
+fi
+
+test_start "medium Plan carries four triage routing values as separate fields"
+if ruby -e '
+  template = File.read(ARGV.fetch(0)); phases = File.read(ARGV.fetch(1))
+  triage = template[/^## Triage result$.*?(?=^## )/m]
+  plan_step = phases.lines.find { |line| line.start_with?("10. ") }
+  fields = [
+    "- QA evaluation mode: [not_required | optional | required]",
+    "- Harness capable: [true | false]",
+    "- Build execution lane: [inline_direct | bounded_executor | separated_workers]",
+    "- Workflow state mode: [inline | journal]"
+  ]
+  valid = triage && fields.all? { |field| triage.include?(field) } &&
+    plan_step && %w[qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode].all? { |field| plan_step.include?(field) }
+  exit(valid ? 0 : 1)
+' "$workflow_dir/references/plan-template.md" "$workflow_dir/references/phases.md"; then
+    pass
+else
+    fail "medium Plan does not carry each Triage routing value separately"
+fi
+
+test_start "feature-preparation evidence refs are stable artifact identities across all consumers"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  output = YAML.load_file(ARGV.fetch(1))
+  gates = YAML.load_file(ARGV.fetch(2))
+  reference = File.read(ARGV.fetch(3))
+  input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  approved = input_fields.fetch("approved_feature_preparation_evidence_ref")
+  evidence = output.fetch("artifacts").find { |artifact| artifact["name"] == "feature_preparation_evidence" }
+  ref = evidence.fetch("object_fields").find { |field| field["name"] == "ref" }
+  result = output.fetch("artifacts").find { |artifact| artifact["name"] == "feature_preparation_result" }
+  result_ref = result.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
+  discover = gates.fetch("gates").find { |gate| gate["phase"] == "DISCOVER" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "D_FEATURE_PREPARATION_EVIDENCE" }
+  completion = gates.fetch("gates").find { |gate| gate["phase"] == "PREPARATION_COMPLETION" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "PC2" }
+  required = "stable identity"
+  valid = ref.fetch("description").downcase.include?(required) &&
+    ref.fetch("validation").downcase.include?("carried unchanged") &&
+    ref.fetch("validation").include?("preparation plans") &&
+    ref.fetch("validation").include?("task packets") &&
+    ref.fetch("validation").include?("Architecture Decision Packs") &&
+    ref.fetch("validation").include?("diagrams") &&
+    ref.fetch("validation").include?("documentation") &&
+    approved.fetch("validation").include?(required) &&
+    approved.fetch("validation").include?("unchanged") &&
+    result_ref.fetch("validation").include?(required) &&
+    discover.fetch("check").include?("stable identity") &&
+    completion.fetch("check").include?("unchanged") &&
+    reference.include?("stable identity of the evidence artifact") &&
+    reference.include?("carried unchanged")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/references/feature-preparation-evidence.md"; then
+    pass
+else
+    fail "feature-preparation evidence refs can be reinterpreted instead of preserved as stable artifact identities"
+fi
+
+test_start "preparation manifest and PC1 require the same unconditional readiness artifacts"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  artifacts = output.fetch("artifacts")
+  unconditional = artifacts.select { |artifact| artifact["required"] == true && artifact["condition"] == "always" }.map { |artifact| artifact.fetch("name") }
+  expected = unconditional + ["feature_preparation_result"]
+  actual = output.fetch("completion_tiers").fetch("preparation_only").fetch("required_artifacts")
+  pc1 = gates.fetch("gates").find { |gate| gate["phase"] == "PREPARATION_COMPLETION" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "PC1" }
+  required_mentions = expected.all? { |artifact| pc1.fetch("check").include?(artifact) }
+  recovery_mentions = %w[validation_results feature_preparation_result].all? { |artifact| pc1.fetch("on_fail").include?(artifact) }
+  forbidden = %w[changed_files test_results review_result final_handoff]
+  exit(actual == expected && required_mentions && recovery_mentions && forbidden.none? { |artifact| actual.include?(artifact) } ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "preparation manifest and preparation completion gate disagree about unconditional readiness artifacts"
+fi
+
+test_start "prepare-only excludes every implementation-only completion and harness obligation"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  contents = File.read(ARGV.fetch(0))
+  implementation_artifacts = %w[changed_files test_results spec_review_result review_result qa_evaluation_result final_handoff subagent_evidence slice_manifest slice_verification_summary harness_run_state trace_ledger replay_packet artifact_reference_ledger]
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  completeness = contents.lines.grep(/^# (2|3|4|5|6|10)\./)
+  valid = implementation_artifacts.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
+    completeness.length == 6 && completeness.all? { |line| line.include?("execution_intent != prepare_only") }
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml"; then
+    pass
+else
+    fail "prepare-only can inherit an implementation-only completeness or harness obligation"
+fi
+
 test_start "medium preparation may record readiness without waiting for implementation approval"
 if ruby -ryaml -rjson -e '
   input = YAML.load_file(ARGV.fetch(0))
@@ -233,7 +438,7 @@ if ruby -ryaml -rjson -e '
     controller.match?(/`prepare_only` at any size may retain `plan_mode=none`\s+unless an optional readiness plan is specifically requested/) &&
     controller.match?(/For `execution_intent != prepare_only`, use\s+`plan_mode=approval_required` for medium+/) &&
     triage.include?("prepare_only at any size retains `none`, including high/critical risk") &&
-    triage.include?("For `execution_intent != prepare_only`, medium+ work") &&
+    triage.include?("For execution_intent != prepare_only, medium+ work") &&
     t_plan_mode.fetch("check").include?("prepare_only at any size retains none") &&
     t_plan_mode.fetch("check").include?("For execution_intent != prepare_only, approval_required") &&
     !skill.include?("non-prepare-only medium+, risky") &&
@@ -253,6 +458,8 @@ if ruby -ryaml -rjson -e '
     terminal_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
     terminal_case.fetch("expected_behavior").join(" ").include?("Preparation Completion") &&
     terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" } &&
+    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
+    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
     !large_case.nil? &&
     large_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
     large_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" }
@@ -285,7 +492,7 @@ if ruby -ryaml -rjson -e '
     completion.fetch("condition") == "execution_intent == prepare_only" &&
     %w[PC1 PC2 PC3].all? { |id| completion_ids.include?(id) } &&
     invariant.fetch("check").include?("prepare_only") &&
-    tier.fetch("required_artifacts") == %w[completion_policy feature_preparation_result] &&
+    tier.fetch("required_artifacts") == %w[completion_policy validation_results feature_preparation_result] &&
     preparation_forbidden.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
     eval_ids.all? { |id| cases.any? { |item| item["id"] == id } }
   exit valid ? 0 : 1
@@ -450,7 +657,7 @@ if grep -Fq '"completion_policy", "plan_mode"' "$workflow_dir/evals/cases.json" 
 
 test_start "shared helper owns executable case-root manifest and full grader-call accounting"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
-if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_artifacts' "$helper" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq '43' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "grader suites duplicate case mappings or undercount corpus-expanded actual grader calls"; fi
+if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_artifacts' "$helper" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_root_or_forbidden_mutation_count" -eq 51' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 10' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 61' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "grader suites duplicate case mappings or undercount corpus-expanded actual grader calls"; fi
 
 test_start "actual graders mutate every prepare-only active root, forbid plan documents, and journal branches detailed refs"
 if ruby -ryaml -e '
@@ -609,23 +816,39 @@ else
     fail "feature-preparation response graders duplicate incomplete fixture builders instead of sharing canonical complete responses"
 fi
 
-test_start "docs positive binding eval carries the exact claim and rejects a mismatched-claim mutation"
+test_start "docs validated evidence traces retain exact one-row bindings and review evidence"
 if ruby -rjson -e '
   cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
   positive = cases.find { |entry| entry["id"] == "feature-preparation-doc-requires-exact-evidence-binding" }
+  pack_backed = cases.find { |entry| entry["id"] == "architecture-doc-pack-backed-decision-trace" }
   negative = cases.find { |entry| entry["id"] == "feature-preparation-doc-rejects-mismatched-evidence-item" }
   assertions = positive&.dig("machine_expectations", "structured_json_assertions") || []
   claim = assertions.find { |assertion| assertion["path"] == ["feature_preparation_evidence_trace", "evidence_refs", 0, "claim_or_question"] }
   review_items = assertions.find { |assertion| assertion["path"] == ["review_items"] }
+  top_review = assertions.find { |assertion| assertion["operator"] == "nonempty_string" && assertion["path"] == ["feature_preparation_evidence_trace", "review_trace", 0] }
+  top_exact = %w[evidence_ref item_id claim_or_question].all? do |field|
+    assertions.any? { |assertion| assertion["operator"] == "array_field_values_exact" && assertion["path"] == ["feature_preparation_evidence_trace", "evidence_refs"] && assertion["field"] == field && assertion["expected_values"].length == 1 }
+  end
+  pack_assertions = pack_backed&.dig("machine_expectations", "structured_json_assertions") || []
+  pack_top = pack_assertions.find { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["feature_preparation_evidence_trace", "outcome"] && assertion["expected"] == "validated" }
+  pack_reviews = [["architecture_decision_pack_trace", "review_trace", 0], ["feature_preparation_evidence_trace", "review_trace", 0]].all? do |path|
+    pack_assertions.any? { |assertion| assertion["operator"] == "nonempty_string" && assertion["path"] == path }
+  end
+  pack_exact = [["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], ["feature_preparation_evidence_trace", "evidence_refs"]].all? do |path|
+    %w[evidence_ref item_id claim_or_question].all? do |field|
+      pack_assertions.any? { |assertion| assertion["operator"] == "array_field_values_exact" && assertion["path"] == path && assertion["field"] == field && assertion["expected_values"].length == 1 }
+    end
+  end
   mismatched_claim = cases.find { |entry| entry["id"] == "feature-preparation-doc-rejects-mismatched-evidence-claim" }
   valid = claim && claim["operator"] == "equals" && claim["expected"] == "Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing." &&
     review_items && review_items["operator"] == "empty_array" &&
+    top_review && top_exact && pack_backed && pack_top && pack_reviews && pack_exact &&
     negative && mismatched_claim && mismatched_claim.fetch("purpose").include?("claim")
   exit(valid ? 0 : 1)
 ' "$docs_dir/evals/cases.json"; then
     pass
 else
-    fail "docs exact-binding eval does not carry the exact claim, review items, and mismatched-claim rejection"
+    fail "docs validated evidence traces do not enforce exact bindings, review evidence, and Pack/top-level separation"
 fi
 
 test_start "thinking retains feature-preparation concerns as candidates until evidence validates them"
@@ -853,6 +1076,213 @@ if ruby -ryaml -e '
     pass
 else
     fail "feature-preparation evidence schema permits omission of a central evidence dimension"
+fi
+
+test_start "feature-preparation contracts bind every carried claim and future QA to typed exact locations"
+if ruby -ryaml -e '
+  workflow = YAML.load_file(ARGV.fetch(0))
+  thinking_input = YAML.load_file(ARGV.fetch(1))
+  thinking_output = YAML.load_file(ARGV.fetch(2))
+  workflow_input = YAML.load_file(ARGV.fetch(3))
+  preparation_reference = File.read(ARGV.fetch(4))
+  triage_reference = File.read(ARGV.fetch(5))
+  artifact = workflow.fetch("artifacts").find { |entry| entry["name"] == "feature_preparation_result" }
+  fields = artifact.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  candidates = thinking_output.fetch("artifacts").find { |entry| entry["name"] == "candidate_concerns_or_criteria" }
+  candidate_fields = candidates.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  input_names = thinking_input.fetch("fields").map { |entry| entry.fetch("name") }
+  routing_fields = workflow_input.fetch("fields").to_h { |entry| [entry.fetch("name"), entry] }
+  valid = fields.fetch("future_qa_acceptance_obligation").fetch("required") == "conditional" &&
+    fields.fetch("future_qa_acceptance_obligation").fetch("condition").include?("qa") &&
+    !fields.fetch("open_decisions").fetch("description").include?("include an explicit QA/acceptance request") &&
+    !fields.fetch("implementation_implications").fetch("description").include?("explicit future QA/acceptance obligation") &&
+    !fields.fetch("recommended_next_step").fetch("description").include?("including any explicitly requested QA/acceptance evaluation") &&
+    routing_fields.fetch("required_agents").fetch("validation").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    routing_fields.fetch("qa_evaluation_mode").fetch("validation").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    routing_fields.fetch("qa_evaluation_mode").fetch("infer_from").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    preparation_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    !preparation_reference.include?("open_decisions`, `implementation_implications`, and/or") &&
+    triage_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    input_names.include?("feature_preparation_evidence_claim_or_question") &&
+    candidate_fields.fetch("feature_preparation_evidence_claim_or_question").fetch("condition").include?("validated_by_feature_preparation_evidence")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml" "$thinking_dir/contracts/input.yaml" "$thinking_dir/contracts/output.yaml" "$workflow_dir/contracts/input.yaml" "$workflow_dir/references/feature-preparation-evidence.md" "$workflow_dir/references/triage-rubric.md"; then
+    pass
+else
+    fail "feature-preparation contracts do not bind future QA and every promoted claim to typed locations"
+fi
+
+test_start "existing-system Architecture Pack eval binds the exact carried evidence-row set"
+if ruby -rjson -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  reference = File.read(ARGV.fetch(2))
+  cases = JSON.parse(File.read(ARGV.fetch(3))).fetch("cases")
+  pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+  binding = pack.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_bindings" }
+  discover = gates.fetch("gates").find { |gate| gate["phase"] == "DISCOVER" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "D_FEATURE_PREPARATION_EVIDENCE" }
+  candidate = cases.find { |entry| entry["id"] == "architecture-pack-existing-system-evidence-bindings" }
+  assertions = candidate&.dig("machine_expectations", "structured_json_assertions") || []
+  expected = {
+    "evidence_ref" => ["prep/viewing-route"],
+    "item_id" => ["viewing-route-effects"],
+    "claim_or_question" => ["Preserve selection, highlight, and viewport focus for VIEWING."]
+  }
+  exact = expected.all? { |field, values| assertions.any? { |assertion| assertion["operator"] == "array_field_values_exact" && assertion["path"] == ["architecture_decision_pack", "feature_preparation_evidence_bindings"] && assertion["field"] == field && assertion["expected_values"] == values } }
+  quality_fields = %w[quality_scenario_id attribute scenario workload budget_or_explicit_unknown measurement failure_condition status]
+  pending_quality = assertions.any? { |assertion| assertion["operator"] == "array_field_values_exact" && assertion["path"] == ["architecture_decision_pack", "quality_scenarios"] && assertion["field"] == "status" && assertion["expected_values"] == ["pending"] }
+  quality_fields_are_conditional = assertions.any? { |assertion| assertion["operator"] == "array_items_nonempty_fields" && assertion["path"] == ["architecture_decision_pack", "quality_scenarios"] && assertion["fields"] == quality_fields }
+  verification_ref_absent = assertions.any? { |assertion| assertion["operator"] == "path_absent" && assertion["path"] == ["architecture_decision_pack", "quality_scenarios", 0, "verification_ref"] }
+  quality_contract = pack.fetch("object_fields").find { |field| field["name"] == "quality_scenarios" }
+  verification_ref = quality_contract.fetch("object_fields").find { |field| field["name"] == "verification_ref" }
+  inherited = [
+    ["nonempty_string", ["architecture_decision_pack", "pack_id"]],
+    ["nonempty_string", ["architecture_decision_pack", "single_goal"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "facts"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "boundaries"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "design_pressure_checks"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "type_ledger"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "interface_contracts"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "quality_scenarios"]],
+    ["array_items_nonempty_fields", ["architecture_decision_pack", "verification"]],
+    ["nonempty_string", ["architecture_decision_pack", "selected_design"]],
+    ["nonempty_string", ["architecture_decision_pack", "selected_design_rationale"]],
+    ["equals", ["architecture_decision_pack", "handoff_refs", "handoff_binding_state"]]
+  ]
+  inherited_complete = inherited.all? { |operator, path| assertions.any? { |assertion| assertion["operator"] == operator && assertion["path"] == path } }
+  fields = binding.fetch("object_fields").map { |field| field.fetch("name") }
+  valid = binding.fetch("validation").include?("missing, extra, duplicate, stale, or mismatched") &&
+    fields == %w[evidence_ref item_id claim_or_question] &&
+    discover.fetch("check").include?("exactly one stable") &&
+    reference.include?("exactly one binding per carried claim/question") &&
+    verification_ref.fetch("condition") == "status == verified" &&
+    candidate.fetch("setup_context").join(" ").include?("implementation_gap") &&
+    candidate.fetch("setup_context").join(" ").include?("planned verification") &&
+    candidate && exact && inherited_complete && pending_quality && quality_fields_are_conditional && verification_ref_absent
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/references/architecture-decision-pack.md" "$workflow_dir/evals/cases.json"; then
+    pass
+else
+    fail "existing-system Architecture Pack evidence bindings lack exact executable coverage"
+fi
+
+test_start "existing-system Pack fixture keeps implementation-gap verification pending without evidence inflation"
+pending_pack_response="$(mktemp "${TMPDIR:-/tmp}/existing-system-pack-pending.XXXXXX")"
+p0p4_register_cleanup "$pending_pack_response"
+build_existing_system_architecture_pack_binding_response "$pending_pack_response" "Architecture Decision Pack prep/viewing-route viewing-route-effects feature_preparation_evidence_bindings"
+if jq -e '
+  (.architecture_decision_pack.quality_scenarios | length == 1) and
+  (.architecture_decision_pack.quality_scenarios[0].status == "pending") and
+  (.architecture_decision_pack.quality_scenarios[0] | has("verification_ref") | not) and
+  ([.architecture_decision_pack.verification[] | .verification_id] | index("verify-viewing-route-parity"))
+' "$pending_pack_response" >/dev/null; then
+    pass
+else
+    fail "existing-system Pack fixture inflates pending implementation-gap verification evidence"
+fi
+
+test_start "preparation QA evals, strict checkpoints, completion producer, and Pack quality evidence remain cross-contract exact"
+if ruby -rjson -ryaml -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  gates = YAML.load_file(ARGV.fetch(1))
+  output = YAML.load_file(ARGV.fetch(2))
+  phases = File.read(ARGV.fetch(3))
+  medium = cases.find { |entry| entry["id"] == "medium-prepare-only-qa-request-routing" }
+  large = cases.find { |entry| entry["id"] == "large-prepare-only-terminal-route" }
+  assertion = lambda { |entry, path| entry.fetch("machine_expectations").fetch("structured_json_assertions").find { |item| item["operator"] == "equals" && item["path"] == path } }
+  future_paths = [
+    ["feature_preparation_result", "future_qa_acceptance_obligation", "requested_scope"],
+    ["feature_preparation_result", "future_qa_acceptance_obligation", "execution_prerequisite"],
+    ["feature_preparation_result", "open_decisions"],
+    ["feature_preparation_result", "implementation_implications"],
+    ["feature_preparation_result", "recommended_next_step"]
+  ]
+  medium_policy = %w[controller_intensity build_execution_lane workflow_state_mode plan_mode].all? { |field| assertion.call(medium, ["completion_policy", field])&.fetch("expected") == assertion.call(medium, ["triage_result", field])&.fetch("expected") } && assertion.call(medium, ["triage_result", "controller_intensity"])&.fetch("expected") == "standard"
+  large_policy = %w[controller_intensity build_execution_lane workflow_state_mode plan_mode].all? { |field| assertion.call(large, ["completion_policy", field])&.fetch("expected") == assertion.call(large, ["triage_result", field])&.fetch("expected") } && assertion.call(large, ["triage_result", "controller_intensity"])&.fetch("expected") == "strict"
+  exact_future = [medium, large].all? { |entry| future_paths.all? { |path| assertion.call(entry, path) } }
+  markers = %w[TRIAGE DISCOVER PREPARATION_COMPLETION].flat_map do |phase|
+    gate = gates.fetch("gates").find { |entry| entry["phase"] == phase }
+    [gate["checkpoint_start"], gate["checkpoint_end"]].compact
+  end
+  exact_checkpoints = assertion.call(large, ["phase_checkpoints"])&.fetch("operator") == "equals" && assertion.call(large, ["phase_checkpoints"])&.fetch("expected") == markers
+  pc = gates.fetch("gates").find { |gate| gate["phase"] == "PREPARATION_COMPLETION" }.fetch("exit_assertions").find { |item| item["id"] == "PC1" }
+  pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack" }
+  discover = gates.fetch("gates").find { |gate| gate["phase"] == "DISCOVER" }.fetch("exit_assertions").find { |item| item["id"] == "D_ARCHITECTURE_DECISION_PACK" }
+  valid = medium_policy && large_policy && exact_future && exact_checkpoints &&
+    phases.include?("`validation_results`") && phases.include?("PC1") &&
+    pack.fetch("validation").include?("quality scenario status") &&
+    pack.fetch("validation").include?("verified evidence") &&
+    discover.fetch("check").include?("quality scenario status") &&
+    discover.fetch("check").include?("verified evidence") &&
+    discover.fetch("check").include?("pending") && discover.fetch("check").include?("unknown")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/evals/cases.json" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/references/phases.md"; then
+    pass
+else
+    fail "preparation QA, strict checkpoint, completion producer, or Pack quality evidence contracts drifted"
+fi
+
+test_start "prepare-only QA evals exactly retain triage, completion, absent execution roots, and declared checkpoints"
+if ruby -rjson -ryaml -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  gates = YAML.load_file(ARGV.fetch(1))
+  invariant = gates.fetch("invariants").find { |item| item["id"] == "INV3" }
+  expected_absent = %w[changed_files test_results spec_review_result review_result qa_evaluation_result fresh_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary user_approval]
+  phase_names = %w[TRIAGE DISCOVER PREPARATION_COMPLETION]
+  declared = phase_names.flat_map do |name|
+    gate = gates.fetch("gates").find { |entry| entry["phase"] == name }
+    [gate["checkpoint_start"], gate["checkpoint_end"]].compact
+  end
+  valid = [
+    ["medium-prepare-only-qa-request-routing", "standard", "inline"],
+    ["large-prepare-only-terminal-route", "strict", "journal"]
+  ].all? do |id, intensity, state|
+    entry = cases.find { |candidate| candidate["id"] == id }
+    assertions = entry.fetch("machine_expectations").fetch("structured_json_assertions")
+    exact = lambda { |path, value| assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == path && assertion["expected"] == value } }
+    consistent = %w[controller_intensity build_execution_lane workflow_state_mode plan_mode].all? do |field|
+      assertions.any? { |assertion| assertion["operator"] == "equals_path" && assertion["path"] == ["completion_policy", field] && assertion["other_path"] == ["triage_result", field] }
+    end
+    absent = expected_absent.all? { |root| assertions.any? { |assertion| assertion["operator"] == "path_absent" && assertion["path"] == [root] } }
+    exact.call(["triage_result", "execution_intent"], "prepare_only") &&
+      exact.call(["triage_result", "plan_mode"], "none") &&
+      exact.call(["completion_policy", "plan_mode"], "none") &&
+      exact.call(["triage_result", "controller_intensity"], intensity) &&
+      exact.call(["triage_result", "workflow_state_mode"], state) && consistent && absent &&
+      (id != "large-prepare-only-terminal-route" || assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["phase_checkpoints"] && assertion["expected"] == declared })
+  end
+  exit(valid && invariant.fetch("check").include?("declared non-null") ? 0 : 1)
+' "$workflow_dir/evals/cases.json" "$workflow_dir/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "prepare-only QA evals do not exactly preserve triage/completion/absence/checkpoint semantics"
+fi
+
+test_start "medium future-QA preparation inherits the complete medium readiness root oracle"
+if ruby -rjson -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  record_sets = ARGV.drop(1).map { |path| File.readlines(path, chomp: true).reject(&:empty?) }
+  case_id = "medium-prepare-only-qa-request-routing"
+  entry = cases.find { |candidate| candidate["id"] == case_id }
+  assertions = entry&.dig("machine_expectations", "structured_json_assertions") || []
+  exact = lambda { |path, expected| assertions.any? { |item| item["operator"] == "equals" && item["path"] == path && item["expected"] == expected } }
+  nonempty = lambda { |path| assertions.any? { |item| item["operator"] == "nonempty_array" && item["path"] == path } }
+  absent = assertions.any? { |item| item["operator"] == "path_absent" && item["path"] == ["plan_document"] }
+  roots = %w[validation_results feature_preparation_evidence]
+  complete = exact.call(["size"], "medium") &&
+    exact.call(["feature_preparation_result", "execution_status"], "not_started") &&
+    exact.call(["feature_preparation_result", "scope"], "existing_system read-only VIEWING route") &&
+    exact.call(["feature_preparation_evidence", "ref"], "prep/medium-feature") &&
+    exact.call(["feature_preparation_result", "feature_preparation_evidence_ref"], "prep/medium-feature") &&
+    roots.all? { |root| nonempty.call([root]) || root == "feature_preparation_evidence" && exact.call([root, "ref"], "prep/medium-feature") } && absent
+  record = "#{case_id}|medium|plan_document"
+  exit(entry && complete && record_sets.all? { |records| records.any? { |line| line.include?(record) } } ? 0 : 1)
+' "$workflow_dir/evals/cases.json" \
+  "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh" \
+  "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-case-oracle.sh"; then
+    pass
+else
+    fail "future-QA medium preparation omits a complete medium readiness root, stable evidence identity, or plan-document exclusion"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

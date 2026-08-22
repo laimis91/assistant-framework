@@ -128,7 +128,7 @@
       "title": "Architecture docs trace a fresh Pack without copying it",
       "category": "pack_backed_architecture_docs",
       "purpose": "Checks that applicable architecture documentation consumes the compact fresh Pack projection and returns a trace instead of recreating architecture decisions.",
-      "prompt": "Document the architecture decision carried by the fresh workflow Architecture Decision Pack for the parser boundary.",
+      "prompt": "Document the architecture decision carried by the fresh workflow Architecture Decision Pack for the parser boundary. Return exactly one complete valid JSON object and no surrounding prose.",
       "setup_context": [
         "The assistant-docs skill instructions are active.",
         "architecture_design_mode is required and architecture_decision_pack_status is current.",
@@ -139,11 +139,13 @@
         "Uses the source Pack ref, matching mode, and canonical freshness basis before documenting the decision.",
         "Preserves facts[{claim,source_ref}] and assumptions[{statement,status=safe_default,rationale_or_impact,source_ref=null}] without translating or dropping nullable source_ref.",
         "Documents canonical material questions, boundaries/dependencies, design-pressure checks, Type Ledger, quality scenarios, verification/rollback, and invalidators without copying the full Pack.",
-        "Resolves selected design and rationale through the current canonical Pack ref and returns architecture_decision_pack_trace with source_pack_ref, documented_decision_refs, evidence_refs, exact feature_preparation_evidence_refs bindings, and review_trace."
+        "Resolves selected design and rationale through the current canonical Pack ref and returns architecture_decision_pack_trace with source_pack_ref, documented_decision_refs, evidence_refs, exact feature_preparation_evidence_refs bindings, and review_trace.",
+        "Returns a separately mandatory top-level feature_preparation_evidence_trace outcome=validated with exactly one carried evidence_ref, item_id, and claim_or_question binding plus a non-empty review_trace."
       ],
       "pass_criteria": [
         "The response names architecture_design_mode, architecture_decision_pack_status=current, and architecture_decision_pack.",
         "The response includes architecture_decision_pack_trace, source_pack_ref, and documented_decision_refs.",
+        "The response includes a separately validated top-level feature_preparation_evidence_trace with exactly the carried evidence binding and review trace.",
         "The response keeps unverified or stale decision claims in review_trace or review_items.",
         "The response does not invent a new decision, freshness basis, or quality result."
       ],
@@ -158,6 +160,7 @@
           "architecture_decision_pack",
           "source_pack_ref",
           "architecture_decision_pack_trace",
+          "feature_preparation_evidence_trace",
           "evidence_refs",
           "review_trace",
           "feature_preparation_evidence_refs",
@@ -172,6 +175,11 @@
           "quality benefit confirmed without evidence"
         ],
         "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["files_updated"], "fields": ["path", "change_type", "description"]},
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "empty_array", "path": ["review_items"]},
+          {"operator": "equals", "path": ["safety_notes"], "expected": ["none"]},
           {"operator": "equals", "path": ["architecture_design_mode"], "expected": "required"},
           {"operator": "equals", "path": ["architecture_decision_pack_status"], "expected": "current"},
           {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
@@ -181,10 +189,21 @@
           {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "documented_decision_refs"]},
           {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "evidence_refs"]},
           {"operator": "array_items_nonempty_fields", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"]},
+          {"operator": "array_field_values_exact", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], "field": "evidence_ref", "expected_values": ["prep/parser-boundary"]},
+          {"operator": "array_field_values_exact", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["parser-boundary-compatibility"]},
+          {"operator": "array_field_values_exact", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs"], "field": "claim_or_question", "expected_values": ["Preserve the current parser boundary compatibility while documenting the selected design."]},
           {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/parser-boundary"},
           {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "item_id"], "expected": "parser-boundary-compatibility"},
           {"operator": "equals", "path": ["architecture_decision_pack_trace", "feature_preparation_evidence_refs", 0, "claim_or_question"], "expected": "Preserve the current parser boundary compatibility while documenting the selected design."},
-          {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "review_trace"]}
+          {"operator": "nonempty_array", "path": ["architecture_decision_pack_trace", "review_trace"]},
+          {"operator": "nonempty_string", "path": ["architecture_decision_pack_trace", "review_trace", 0]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "validated"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "evidence_ref", "expected_values": ["prep/parser-boundary"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "item_id", "expected_values": ["parser-boundary-compatibility"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "claim_or_question", "expected_values": ["Preserve the current parser boundary compatibility while documenting the selected design."]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence_trace", "review_trace"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
         ]
       }
     },
@@ -463,12 +482,12 @@
       ],
       "expected_behavior": [
         "Writes the documentation only after carrying the exact prep/viewing-route, viewing-route-effects, and claim binding.",
-        "Returns feature_preparation_evidence_trace outcome=validated with the same exact binding.",
+        "Returns feature_preparation_evidence_trace outcome=validated with the same exact binding and a non-empty review_trace.",
         "Does not replace the row binding with a broad artifact-only evidence ref."
       ],
       "pass_criteria": [
         "The evidence trace identifies the exact canonical artifact and row.",
-        "The evidence trace retains the exact carried claim.",
+        "The evidence trace retains exactly the carried claim and includes a non-empty review trace.",
         "The response creates or updates the requested document from current evidence."
       ],
       "fail_signals": [
@@ -477,7 +496,7 @@
         "Treats the current artifact as evidence for an unbound claim."
       ],
       "machine_expectations": {
-        "required_substrings": ["feature_preparation_evidence_trace", "validated", "evidence_ref", "item_id", "claim_or_question", "prep/viewing-route", "viewing-route-effects", "VIEWING"],
+        "required_substrings": ["feature_preparation_evidence_trace", "validated", "evidence_ref", "item_id", "claim_or_question", "review_trace", "prep/viewing-route", "viewing-route-effects", "VIEWING"],
         "forbidden_substrings": ["broad artifact-only ref", "mismatched evidence item", "blocked_incomplete_evidence"],
         "structured_json_assertions": [
           {"operator": "array_items_nonempty_fields", "path": ["files_updated"], "fields": ["path", "change_type", "description"]},
@@ -487,9 +506,15 @@
           {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
           {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "current"},
           {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "validated"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"]},
           {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
           {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "item_id"], "expected": "viewing-route-effects"},
           {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "claim_or_question"], "expected": "Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing."},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "evidence_ref", "expected_values": ["prep/viewing-route"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "item_id", "expected_values": ["viewing-route-effects"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "claim_or_question", "expected_values": ["Preserve selection, map highlight, and viewport focus for VIEWING without enabling editing."]},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence_trace", "review_trace"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]},
           {"operator": "empty_array", "path": ["review_items"]}
         ]
       }

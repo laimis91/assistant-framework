@@ -159,7 +159,7 @@ artifacts:
     required: conditional
     condition: "tool_used == deep_think and existing-system feature preparation is in scope"
     description: "Candidate concerns or criteria surfaced by Deep Think before workflow evidence validates promotion"
-    validation: "Each candidate remains unpromoted with candidate_only or requires_feature_preparation_evidence unless the exact canonical input feature_preparation_evidence_ref and feature_preparation_evidence_item_id resolve to an admissible row. Missing, stale, mismatched, or unresolved input evidence keeps the candidate unpromoted. Deep Think never promotes a candidate to a requirement or Product question merely because requirements/design omit a behavior."
+    validation: "Each candidate remains unpromoted with candidate_only or requires_feature_preparation_evidence unless its exact nested stable {feature_preparation_evidence_ref, feature_preparation_evidence_item_id, feature_preparation_evidence_claim_or_question} binding resolves to the canonical input triple. Every carried behavior claim or Product question has exactly one nested binding; missing, stale, mismatched, duplicate, or extra bindings keep the candidate unpromoted. Deep Think never promotes a candidate to a requirement or Product question merely because requirements/design omit a behavior."
     on_fail: "Return candidates to workflow feature preparation, inspect implementation and behavioral tests, and retain candidate_only until the evidence row is complete."
     object_fields:
       - name: concern_or_criterion
@@ -182,6 +182,12 @@ artifacts:
         required: conditional
         condition: "promotion_status == validated_by_feature_preparation_evidence"
         validation: "Must resolve to an admissible evidence row under the exact canonical input feature_preparation_evidence_ref."
+        on_missing: fail
+      - name: feature_preparation_evidence_claim_or_question
+        type: string
+        required: conditional
+        condition: "promotion_status == validated_by_feature_preparation_evidence"
+        validation: "Must equal the exact canonical input feature_preparation_evidence_claim_or_question paired with the nested ref and item; broad artifact-only or mismatched claims are invalid."
         on_missing: fail
       - name: rationale
         type: string

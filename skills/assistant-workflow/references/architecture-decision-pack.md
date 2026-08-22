@@ -120,7 +120,7 @@ nested Pack mode cannot be weakened to evade that evidence.
 
 ### Existing-system feature-preparation evidence (when applicable)
 - Evidence ref: [feature_preparation_evidence.ref]
-- Carried Product question: [item id, only if its evidence row is admissible]
+- Carried behavior claim or Product question: [{evidence_ref, item_id, claim_or_question}, exactly one binding per carried claim/question and only if its evidence row is admissible]
 - Preserve/change classification: [behavior_status + work_status]
 - Do not carry an unsupported Product question: incomplete inspection is an
   evidence gap and contradictory sources are

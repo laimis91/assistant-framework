@@ -1,8 +1,8 @@
 # Harness Controller
 
 Use this reference only for medium+ work that is explicitly harness-capable:
-long-running, trace/replay-ready multi-slice, high-risk harness,
-subjective/domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly
+long-running, trace/replay-ready multi-slice, high-risk harness, subjective,
+domain-scored work or UI/visual/product/UX/docs/DX-facing work, or explicitly
 requested as harness work. Do not load it for small local fixes, ordinary
 medium+ source changes, or delegation alone.
 

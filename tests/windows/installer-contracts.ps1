@@ -1232,7 +1232,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
             Assert-NotContains $config 'Invoke-Expression' 'MCP config introduces evaluated command text'
 
-            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh')) {
+            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh', 'evals\validate-promotion-decision-schema.cjs', 'evals\package.json', 'evals\package-lock.json', 'evals\node_modules')) {
                 Assert-False (Test-Path -LiteralPath (Join-Path (Join-Path $hostileCodexHome 'tools') $excluded)) "Source-only tool was installed: $excluded"
             }
         }
@@ -1388,6 +1388,9 @@ requires:
                 'evals\run-codex-framework-evals.sh',
                 'evals\finalize-workflow-kernel-review.sh',
                 'evals\lib\context-budget-evidence.sh',
+                'evals\validate-promotion-decision-schema.cjs',
+                'evals\package.json',
+                'evals\package-lock.json',
                 'cleanup-memory-graph.ps1',
                 'cleanup-memory-graph.sh'
             )
@@ -1396,6 +1399,9 @@ requires:
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $target))
                 [System.IO.File]::WriteAllText($target, 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
             }
+            $sourceOnlyDirectory = Join-Path $toolsRoot 'evals\node_modules'
+            [void][System.IO.Directory]::CreateDirectory((Join-Path $sourceOnlyDirectory 'stale\nested'))
+            [System.IO.File]::WriteAllText((Join-Path $sourceOnlyDirectory 'stale\nested\package.json'), 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
             $sentinel = Join-Path $toolsRoot 'company-custom-tool.txt'
             $sentinelBytes = [byte[]](0, 1, 2, 13, 10, 255)
             [System.IO.File]::WriteAllBytes($sentinel, $sentinelBytes)
@@ -1410,6 +1416,7 @@ requires:
             foreach ($relativePath in $retiredManagedTargets) {
                 Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed managed target: $relativePath"
             }
+            Assert-True (Test-Path -LiteralPath $sourceOnlyDirectory -PathType Container) 'Dry run removed the source-only node_modules directory'
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Dry run changed unrelated tools sibling'
 
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
@@ -1417,6 +1424,7 @@ requires:
             foreach ($relativePath in $retiredManagedTargets) {
                 Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Managed target survived reinstall: $relativePath"
             }
+            Assert-False (Test-Path -LiteralPath $sourceOnlyDirectory) 'Source-only node_modules directory survived reinstall'
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Reinstall changed unrelated top-level tools sibling'
         }
     }

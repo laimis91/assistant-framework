@@ -555,14 +555,20 @@ remove_source_only_promotion_tools() {
         [[ -n "$relative_path" ]] || continue
         if $DRY_RUN; then
             dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
+        elif [[ "$relative_path" == "evals/node_modules" ]]; then
+            rm -rf -- "$tools_target/$relative_path"
         else
-            rm -f "$tools_target/$relative_path"
+            rm -f -- "$tools_target/$relative_path"
         fi
     done <<'EOF'
 context-budget-report.sh
 evals/run-codex-framework-evals.sh
 evals/finalize-workflow-kernel-review.sh
 evals/lib/context-budget-evidence.sh
+evals/validate-promotion-decision-schema.cjs
+evals/package.json
+evals/package-lock.json
+evals/node_modules
 EOF
 }
 
@@ -749,6 +755,10 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='/evals/run-codex-framework-evals.sh' \
             --exclude='/evals/finalize-workflow-kernel-review.sh' \
             --exclude='/evals/lib/context-budget-evidence.sh' \
+            --exclude='/evals/validate-promotion-decision-schema.cjs' \
+            --exclude='/evals/package.json' \
+            --exclude='/evals/package-lock.json' \
+            --exclude='/evals/node_modules' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"

@@ -20,16 +20,29 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/evals/package-lock.json
+
       - name: Install required packages
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ripgrep
+
+      - name: Install evaluation dependencies
+        working-directory: tools/evals
+        run: npm ci --ignore-scripts
 
       - name: Verify runner prerequisites
         run: |
           command -v bash
           command -v git
           command -v jq
+          command -v node
+          command -v npm
           command -v rg
           command -v rsync
 

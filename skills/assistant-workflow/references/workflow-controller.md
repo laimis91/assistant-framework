@@ -44,6 +44,16 @@ file centralizes decision boundaries that cut across phase details while
 - `prepare_only`: use `plan_mode=approval_required` only when an optional
   readiness plan is explicitly requested; otherwise retain `plan_mode=none`,
   including at high/critical risk.
+- For `prepare_only`, force `qa_evaluation_mode=not_required`, even when the
+  request explicitly asks for QA or acceptance evaluation. Preserve that request
+  only in `feature_preparation_result.future_qa_acceptance_obligation`; it must
+  not activate Build, Review, QA Evaluator, strict control, or persisted
+  workflow state solely from that request. Progressive uncertainty may still use
+  journal state when local artifacts are configured and policy allows it.
+- QA request alone never makes harness_capable=true during prepare_only;
+  independent explicit harness evidence may still do so. Record a QA request at
+  `feature_preparation_result.future_qa_acceptance_obligation`, never as a
+  broad readiness substring.
 - `plan_mode=inline`: bounded small work with more than one useful step but no
   approval trigger. Record the compact plan and continue without waiting.
 - `plan_mode=approval_required`: For `execution_intent != prepare_only`, use
@@ -68,16 +78,16 @@ file centralizes decision boundaries that cut across phase details while
   fresh direct-fallback result. It requires an approved plan, Build
   verification, and independent review, but no harness, split-worker, or QA
   ceremony by size.
-- `strict`: select only for high/critical risk,
+- `strict`: for `execution_intent != prepare_only`, select for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
-  explicit harness/QA criteria, or explicit strict control.
+  explicit harness/QA criteria, or explicit strict control. Risk/project criteria may still select strict preparation for
+  `prepare_only`, but a QA request alone must not select strict.
 - Do not infer `strict`, `harness_capable=true`, or required QA from
   size=medium+ or delegation alone.
 - Treat `harness_capable` as false unless the task is long-running,
-  trace/replay-ready, high-risk harness work, domain-scored,
-  UI/visual/product/UX/docs/DX-facing, explicitly requested as harness/QA work,
+  trace/replay-ready, high-risk harness work, domain-scored work or UI/visual/product/UX/docs/DX-facing work, explicitly requested as harness/QA work,
   or already has an accepted Done Contract/Harness Recipe.
-- Treat `qa_evaluation_mode=not_required` unless explicit QA/acceptance
+- Treat `qa_evaluation_mode=not_required` unless `execution_intent != prepare_only` and explicit QA/acceptance
   evaluation, accepted Done Contract, harness-capable acceptance scope,
   domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance applies.
 
@@ -101,15 +111,17 @@ gates.
   Compare the newest user request and current repository identity/evidence,
   classify the state as `active`, `stale`, `superseded`, or `completed`, and
   use the recorded next action only when the state is reconciled active.
-- Use `workflow_state_mode=inline` unless state must survive clarification,
-  delegation, compaction/cross-session continuation, explicit persistence, or
-  strict/harness/required-QA execution. Medium+ size alone does not force a task
-  journal; `journal` owns durable state when one of those triggers applies.
-- Progressive uncertainty selects `workflow_state_mode=journal` when local
-  state artifacts are configured and policy allows them; otherwise use the
-  equivalent carried-state fallback. Keep `progressive_discovery_state` and its
-  compact decision refs in the existing journal/equivalent carried state, never
-  a second store.
+- For `uncertainty_shape == progressive`, use `workflow_state_mode=journal`
+  only when local state artifacts are configured and policy allows them;
+  unavailable/policy-disallowed progressive state uses an equivalent
+  carried-state fallback inline, including `prepare_only`. Otherwise inline
+  requires `uncertainty_shape == bounded` absent clarification wait, delegated
+  workflow roles during execution, cross-session/compaction continuation,
+  explicit persisted state, `controller_intensity == strict`,
+  `harness_capable == true`, or `execution_intent != prepare_only and
+  qa_evaluation_mode == required`; those require journal. Size alone never
+  requires journal. Keep `progressive_discovery_state` and compact decision
+  refs in the existing journal/equivalent carried state, never a second store.
 - Progressive Discover is a no-execution boundary. Any mutating prerequisite
   must use a separate approved workflow that returns evidence; this controller
   does not authorize project/source mutation, external writes, or branch work
@@ -174,7 +186,7 @@ gates.
   evidence. Any security, high-risk, harness, or QA trigger promotes the work out
   of this lane.
 - Code Reviewer and QA Evaluator responsibilities stay separate.
-- QA Evaluator runs only when `qa_evaluation_mode=required`, after build/test
+- QA Evaluator runs only when `qa_evaluation_mode=required` for `execution_intent != prepare_only`, after build/test
   and Code Reviewer evidence exist.
 - QA Evaluator owns acceptance, Done Contract readiness, verification evidence,
   final readiness, and scoped domain quality.

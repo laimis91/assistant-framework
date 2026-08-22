@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/context-budget-evidence.sh"
 FIXTURE="$REPO_ROOT/docs/evals/framework-instruction-cases.json"
 SYNTHETIC_FIXTURE_REF="docs/evals/fixtures/seeded-code-review-regressions"
 SYNTHETIC_FIXTURE_DIR="$REPO_ROOT/$SYNTHETIC_FIXTURE_REF"
-ADAPTER_VERSION="codex-framework-eval-v5"
+ADAPTER_VERSION="codex-framework-eval-v6"
 MODE="plan"
 RESUME=false
 MODEL="gpt-5.6-sol"
@@ -42,6 +42,9 @@ ACTIVE_CHILD_GRACE_SECONDS=5
 EVALUATION_STARTED_AT=0
 MAX_INCOMPLETE_PAIRS=1
 FAILURE_DIAGNOSTIC_MAX_BYTES=4194304
+ACTIVATION_OBSERVATIONS_FILE=""
+ACTIVATION_OBSERVATIONS_SHA256=""
+ACTIVATION_OBSERVATION_SUMMARY='{"supplied":false,"evidence_class":"not_supplied","manual_native_admissible":false}'
 
 usage() {
     cat <<'EOF'
@@ -68,6 +71,8 @@ Options:
   --total-timeout-seconds N Total execution cap, 1-21600 (default: 5400).
   --model-catalog-timeout-seconds N Catalog lookup cap, 1-120 (default: 30).
   --codex-bin PATH        Codex executable override, useful for offline tests.
+  --activation-observations FILE
+                           Externally captured native activation observations; this runner never invokes native routing.
   -h, --help              Show this help.
 
 Execution uses an isolated temporary workspace, workspace-write sandboxing
@@ -75,6 +80,72 @@ confined to that disposable fixture, JSONL events, and a blind runtime prompt.
 Raw events and final responses live only in mode-0700 temporary storage and are
 deleted by default.
 EOF
+}
+
+activation_cases_sha256() {
+    jq -cS '.activation_cases' "$REPO_ROOT/skills/assistant-workflow/evals/cases.json" | hash_stream
+}
+
+activation_timestamp_is_current() {
+    python3 - "$1" <<'PY'
+import datetime, sys
+try:
+    captured = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+except ValueError:
+    raise SystemExit(1)
+now = datetime.datetime.now(datetime.timezone.utc)
+age = (now - captured).total_seconds()
+raise SystemExit(0 if -300 <= age <= 86400 else 1)
+PY
+}
+
+materialized_candidate_skill_sha256() {
+    local temporary result
+    if [[ -n "${CANDIDATE_MATERIALIZED_SKILL_SHA256:-}" ]]; then
+        printf '%s\n' "$CANDIDATE_MATERIALIZED_SKILL_SHA256"
+        return 0
+    fi
+    temporary="$(mktemp -d "${TMPDIR:-/tmp}/workflow-kernel-activation.XXXXXX")" || return 1
+    materialize_variant "$candidate_overlay" "$temporary" || { rm -rf "$temporary"; return 1; }
+    result="$(hash_file "$temporary/SKILL.md")"
+    rm -rf "$temporary"
+    printf '%s\n' "$result"
+}
+
+validate_activation_observations() {
+    [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]] || return 0
+    [[ -f "$ACTIVATION_OBSERVATIONS_FILE" && ! -L "$ACTIVATION_OBSERVATIONS_FILE" ]] \
+        || die "--activation-observations must be a regular non-symlink JSON file."
+    local size candidate_skill_sha cases_sha
+    size="$(wc -c <"$ACTIVATION_OBSERVATIONS_FILE" | tr -d '[:space:]')"
+    [[ "$size" =~ ^[0-9]+$ && "$size" -ge 1 && "$size" -le 65536 ]] \
+        || die "--activation-observations must be at most 65536 bytes."
+    candidate_skill_sha="$(materialized_candidate_skill_sha256)" \
+        || die "Could not materialize the candidate skill identity for activation validation."
+    cases_sha="$(activation_cases_sha256)"
+    jq -e --arg candidate_skill_sha "$candidate_skill_sha" --arg cases_sha "$cases_sha" --arg cli_version "$CLI_VERSION" \
+      --slurpfile evals "$REPO_ROOT/skills/assistant-workflow/evals/cases.json" '
+      (keys | sort) == ["bindings","evidence_class","observation_kind","provenance","results","schema_version"]
+      and .schema_version == "1.0"
+      and .observation_kind == "workflow_kernel_native_activation"
+      and (.evidence_class == "manual_native_observation" or .evidence_class == "contract_test_fixture")
+      and (.provenance | type == "object" and (keys | sort) == ["capture_method","capture_owner_kind","captured_at_utc","native_host","native_host_version","observed_selection_surface","raw_session_retained","repository_runner_invoked_native_routing"])
+      and (.provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false)
+      and (.provenance.captured_at_utc | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+      and (.provenance.native_host_version | type == "string" and length >= 1 and length <= 160)
+      and (.provenance.observed_selection_surface | type == "string" and length >= 1 and length <= 240)
+      and (.bindings | type == "object" and (keys | sort) == ["activation_cases_sha256","candidate_skill_sha256","skill"] and .skill == "assistant-workflow" and .candidate_skill_sha256 == $candidate_skill_sha and .activation_cases_sha256 == $cases_sha)
+      and (.results | type == "array" and length == 6
+           and . == [$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow"] else [] end)}])
+      and (if .evidence_class == "manual_native_observation" then (.provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version) else (.provenance.capture_owner_kind == "repository_contract_test" and .provenance.capture_method == "static_contract_fixture" and .provenance.native_host == "not_applicable") end)
+    ' "$ACTIVATION_OBSERVATIONS_FILE" >/dev/null \
+      || die "--activation-observations is malformed, stale, or does not exactly bind the six workflow activation cases."
+    if [[ "$(jq -r '.evidence_class' "$ACTIVATION_OBSERVATIONS_FILE")" == "manual_native_observation" ]]; then
+        activation_timestamp_is_current "$(jq -r '.provenance.captured_at_utc' "$ACTIVATION_OBSERVATIONS_FILE")" \
+            || die "Manual native activation observation is stale or outside the permitted future skew."
+    fi
+    ACTIVATION_OBSERVATIONS_SHA256="$(hash_file "$ACTIVATION_OBSERVATIONS_FILE")"
+    ACTIVATION_OBSERVATION_SUMMARY="$(jq -cS --arg sha "$ACTIVATION_OBSERVATIONS_SHA256" --arg cli_version "$CLI_VERSION" '{supplied:true,sha256:$sha,evidence_class,manual_native_admissible:(.evidence_class == "manual_native_observation" and .provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version and .provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false),result_count:(.results|length)}' "$ACTIVATION_OBSERVATIONS_FILE")"
 }
 
 die() {
@@ -539,7 +610,7 @@ validate_candidate_manifest() {
       and .semantic_review.unclassified_finding_policy == "block"
       and .semantic_review.raw_response_retained == false
       and .smoke_cases == ["small-fix-stays-lightweight","seeded-code-review-regressions"]
-      and .pilot_cases == ["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable"]
+      and .pilot_cases == ["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable","viewing-route-technical-preparation","pending-architecture-pack-verification"]
       and .smoke_repeats == 1
       and .pilot_repeats == 3
     ' "$CANDIDATE_MANIFEST" >/dev/null \
@@ -833,15 +904,18 @@ write_plan() {
         --arg fixture_sha256 "$fixture_hash" \
         --arg baseline_sha256 "$baseline_hash" \
         --arg candidate_sha256 "$candidate_hash" \
+        --arg candidate_materialized_skill_sha256 "$CANDIDATE_MATERIALIZED_SKILL_SHA256" \
         --arg candidate_manifest_sha256 "$CANDIDATE_MANIFEST_HASH" \
         --arg context_budget_evidence_sha256 "$CONTEXT_BUDGET_EVIDENCE_HASH" \
+        --arg activation_observations_sha256 "$ACTIVATION_OBSERVATIONS_SHA256" \
+        --argjson activation_observation "$ACTIVATION_OBSERVATION_SUMMARY" \
         --slurpfile context_budget_evidence "$CONTEXT_BUDGET_EVIDENCE_FILE" \
         --argjson repeats "$REPEATS" \
         --argjson run_timeout_seconds "$RUN_TIMEOUT_SECONDS" \
         --argjson total_timeout_seconds "$TOTAL_TIMEOUT_SECONDS" \
         --argjson model_catalog_timeout_seconds "$MODEL_CATALOG_TIMEOUT_SECONDS" '
       {
-        schema_version: "1.0",
+        schema_version: "2.0",
         mode: $mode,
         requested_model: $requested_model,
         model_selection_evidence: {
@@ -866,10 +940,12 @@ write_plan() {
         max_incomplete_pairs: 1,
         fixture_sha256: $fixture_sha256,
         baseline_variant: {instruction_sha256: $baseline_sha256},
-        candidate_variant: {instruction_sha256: $candidate_sha256},
+        candidate_variant: {instruction_sha256: $candidate_sha256,materialized_skill_sha256:$candidate_materialized_skill_sha256},
         candidate_manifest_sha256: (if $candidate_manifest_sha256 == "" then null else $candidate_manifest_sha256 end),
         context_budget_evidence_sha256: $context_budget_evidence_sha256,
         context_budget_evidence: $context_budget_evidence[0],
+        activation_observations_sha256:(if $activation_observations_sha256 == "" then null else $activation_observations_sha256 end),
+        activation_observation:$activation_observation,
         planned_pairs: ([.[].pair_id] | unique | length),
         planned_runs: length,
         runs: .
@@ -963,7 +1039,7 @@ validate_resume_output() {
     while IFS= read -r entry; do
         name="$(basename "$entry")"
         case "$name" in
-            run-plan.json|comparison.json|semantic-review-packet.json) [[ -f "$entry" && ! -L "$entry" ]] || die "Invalid resume artifact: $name" ;;
+            run-plan.json|comparison.json|semantic-review-packet.json|activation-observations.json) [[ -f "$entry" && ! -L "$entry" ]] || die "Invalid resume artifact: $name" ;;
             traces|semantic-checkpoints|run-attempts) [[ -d "$entry" && ! -L "$entry" ]] || die "Invalid resume directory: $name" ;;
             *) die "Unknown file in resume output: $name" ;;
         esac
@@ -972,6 +1048,13 @@ validate_resume_output() {
     if [[ -f "$OUTPUT_DIR/run-plan.json" ]]; then
         cmp -s "$expected_plan" "$OUTPUT_DIR/run-plan.json" \
             || die "Existing run plan does not exactly match current trusted snapshots and execution inputs."
+        if [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]]; then
+            [[ -f "$OUTPUT_DIR/activation-observations.json" && ! -L "$OUTPUT_DIR/activation-observations.json" \
+                && "$(hash_file "$OUTPUT_DIR/activation-observations.json")" == "$ACTIVATION_OBSERVATIONS_SHA256" ]] \
+                || die "Existing activation observation does not match the current exact observation binding."
+        elif [[ -e "$OUTPUT_DIR/activation-observations.json" ]]; then
+            die "Existing activation observation is unexpected without --activation-observations."
+        fi
     else
         find "$OUTPUT_DIR" -mindepth 1 -print -quit | grep -q . \
             && die "Resume output without a run plan contains non-temporary artifacts."
@@ -1456,6 +1539,8 @@ path_allowed_for_case() {
         medium-final-handoff-is-reconstructable:.assistant-eval/review-attempt) return 0 ;;
         medium-final-handoff-is-reconstructable:.assistant-eval/review-evidence.json) return 0 ;;
         medium-final-handoff-is-reconstructable:.assistant-eval/final-handoff.json) return 0 ;;
+        viewing-route-technical-preparation:.assistant-eval/viewing-preparation.json) return 0 ;;
+        pending-architecture-pack-verification:.assistant-eval/pending-pack.json) return 0 ;;
         codex-role-constraints-native:docs/evals/framework-instruction-cases.json) return 0 ;;
         codex-role-constraints-native:docs/evals/README.md) return 0 ;;
         *) return 1 ;;
@@ -1521,7 +1606,7 @@ workspace_json_check() {
 ordered_workflow_event_evidence() {
     local jsonl="$1"
 
-    jq -cs '
+    jq -cse '
       def command_text:
         (.item.command // .item.command_line // .item.text // "" | tostring);
       def command_output:
@@ -1594,6 +1679,53 @@ ordered_workflow_event_evidence() {
           final_handoff_written: $final_handoff_written
         }
     ' "$jsonl"
+}
+
+viewing_inspection_event_evidence() {
+    local jsonl="$1"
+    jq -cse '
+      def is_exact_command($shell_command; $argv):
+        (.item.command // .item.command_line // "") as $command
+        | if ($command | type) == "array" then
+            ($command == $argv)
+            or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+              $command == [., "-lc", $shell_command])
+          else
+            ($command | tostring) as $text
+            | ($text == $shell_command)
+              or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+                $text == (. + " -lc \u0027" + $shell_command + "\u0027")
+                or $text == (. + " -lc \"" + $shell_command + "\""))
+          end;
+      . as $events
+      | def matching($shell_command; $argv; $needles):
+          [ $events[] | select(.type == "item.completed" and .item.type == "command_execution"
+            and is_exact_command($shell_command; $argv)
+            and (.item.id | type == "string" and length > 0)
+            and .item.status == "completed"
+            and (.item.exit_code | type == "number") and .item.exit_code == 0
+            and (((.item.aggregated_output // "") | tostring) as $out
+              | all($needles[]; . as $needle | $out | contains($needle)))) ];
+        matching("rg -n \u0027applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport\u0027 src/route.ts"; ["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]; ["selectRoute","highlightRoute","focusViewport","applyActiveRouteEffects"]) as $source_events
+      | matching("rg -n \u0027assert\\.deepEqual\u0027 tests/route.test.js"; ["rg","-n","assert\\.deepEqual","tests/route.test.js"]; ["assert.deepEqual","applyActiveRouteEffects","select:ACTIVE","highlight:ACTIVE","focus:ACTIVE"]) as $test_events
+      | if (([$events[] | select(.type == "item.completed" and .item.type == "command_execution") | .item.id] | unique | length)
+          == ([$events[] | select(.type == "item.completed" and .item.type == "command_execution")] | length)
+          and ($source_events | length == 1)
+          and ($test_events | length == 1))
+        then {
+          "viewing-source-search":$source_events[0].item.id,
+          "viewing-test-search":$test_events[0].item.id
+        }
+        else empty
+        end
+    ' "$jsonl"
+}
+
+viewing_seed_workspace_is_trusted() {
+    local workspace="$1" source="$workspace/src/route.ts" test="$workspace/tests/route.test.js"
+    [[ -f "$source" && ! -L "$source" && -f "$test" && ! -L "$test" ]] \
+        && [[ "$(hash_file "$source")" == "$(hash_file "$REPO_ROOT/docs/evals/fixtures/viewing-route-technical-preparation/src/route.ts")" ]] \
+        && [[ "$(hash_file "$test")" == "$(hash_file "$REPO_ROOT/docs/evals/fixtures/viewing-route-technical-preparation/tests/route.test.js")" ]]
 }
 
 verify_workspace() {
@@ -1730,6 +1862,60 @@ verify_workspace() {
               and (.implementation_owner_scope | sort) == (["RED", "GREEN", "focused_verification"] | sort)'
             workspace_json_check "$artifact" "workspace-005" '.independent_reviewer == true'
             workspace_json_check "$artifact" "workspace-006" '.separated_workers_triggered == false'
+            ;;
+        viewing-route-technical-preparation)
+            status="passed"
+            artifact="$workspace/.assistant-eval/viewing-preparation.json"
+            if [[ "$scope_deviations" -gt 0 ]]; then
+                workspace_record_check "workspace-002" false
+            else
+                workspace_artifact_preflight "$workspace" "$artifact" "workspace-001"
+                viewing_source_sha="$(hash_file "$workspace/src/route.ts")"
+                viewing_test_sha="$(hash_file "$workspace/tests/route.test.js")"
+                viewing_event_map="$(viewing_inspection_event_evidence "$jsonl")" || viewing_event_map='{}'
+                if [[ "$workspace_artifact_safe" == "true" ]] \
+                && viewing_seed_workspace_is_trusted "$workspace" \
+                && rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts" >/dev/null \
+                && rg -n 'assert\.deepEqual' "$workspace/tests/route.test.js" >/dev/null \
+                && jq -e --arg source_sha "$viewing_source_sha" --arg test_sha "$viewing_test_sha" --argjson event_map "$viewing_event_map" '
+                  type == "object"
+                  and (keys | sort) == ["feature_preparation_evidence", "feature_preparation_result", "schema_version"]
+                  and .schema_version == "1.0"
+                  and .feature_preparation_evidence.ref == "prep/viewing-route"
+                  and (.feature_preparation_evidence.items | type == "array" and length == 1)
+                  and (.feature_preparation_evidence.items[0] as $item
+                    | ($item | keys | sort) == ["behavior_status", "behavioral_test_evidence", "conflict_analysis", "design_evidence", "evidence_gaps", "implementation_evidence", "implementation_implication", "item_id", "rationale", "requirements_evidence", "work_status"]
+                    and $item.item_id == "viewing-observable-route-effects"
+                    and $item.behavior_status == "existing_behavior_to_preserve"
+                    and $item.work_status == "implementation_gap"
+                    and $item.evidence_gaps == []
+                    and $item.requirements_evidence == ["VIEWING_PREPARATION.md#read-only-viewing"]
+                    and $item.design_evidence == {status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."}
+                    and $item.implementation_evidence == {status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."}
+                    and $item.behavioral_test_evidence == {status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."}
+                    and ($item.implementation_evidence.traces[0].inspection_event_ref as $source_ref
+                      | $event_map[$source_ref] | type == "string" and length > 0)
+                    and ($item.behavioral_test_evidence.inspection_event_ref as $test_ref
+                      | $event_map[$test_ref] | type == "string" and length > 0))
+                  and .feature_preparation_result == {execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}
+                ' "$artifact" >/dev/null; then
+                    workspace_record_check "workspace-002" true
+                else
+                    workspace_record_check "workspace-002" false
+                fi
+            fi
+            ;;
+        pending-architecture-pack-verification)
+            status="passed"
+            artifact="$workspace/.assistant-eval/pending-pack.json"
+            workspace_artifact_preflight "$workspace" "$artifact" "workspace-001"
+            workspace_json_check "$artifact" "workspace-002" '
+              type == "object"
+              and (keys | sort) == ["planned_verification", "quality_scenario_status", "schema_version", "verification_ref_present"]
+              and .schema_version == "1.0"
+              and .quality_scenario_status == "pending"
+              and (.planned_verification | type == "string" and length > 0)
+              and .verification_ref_present == false'
             ;;
         medium-final-handoff-is-reconstructable)
             status="passed"
@@ -1902,6 +2088,12 @@ seed_case_workspace() {
 - Safe default: limit 20 results when the caller omits a limit.
 EOF
             ;;
+        viewing-route-technical-preparation)
+            cp -R "$REPO_ROOT/docs/evals/fixtures/viewing-route-technical-preparation"/. "$workspace/"
+            ;;
+        pending-architecture-pack-verification)
+            printf '%s\n' 'VIEWING quality scenario has planned verification after implementation.' >"$workspace/PENDING_ARCHITECTURE_PACK.md"
+            ;;
         medium-final-handoff-is-reconstructable)
             mkdir -p "$workspace/src" "$workspace/tests"
             cat >"$workspace/CHANGE_SUMMARY.md" <<'EOF'
@@ -2060,6 +2252,11 @@ execute_one_run() {
     cp -R "$instruction_dir"/. "$workspace/.agents/skills/assistant-workflow/"
     seed_case_workspace "$workspace" "$case_id"
     seed_workspace_hash="$(hash_seed_workspace "$workspace")"
+    if [[ "$case_id" == "viewing-route-technical-preparation" ]]; then
+        viewing_seed_workspace_is_trusted "$workspace" \
+            && node --test "$workspace/tests/route.test.js" >/dev/null \
+            || die "VIEWING seed fixture is not a regular, hash-bound, executable trusted fixture."
+    fi
     git -C "$workspace" init -q
     git -C "$workspace" add -A
     git -C "$workspace" \
@@ -2509,6 +2706,7 @@ while [[ $# -gt 0 ]]; do
         --run-timeout-seconds) [[ $# -ge 2 ]] || die "Missing value for --run-timeout-seconds."; RUN_TIMEOUT_SECONDS="$2"; shift 2 ;;
         --total-timeout-seconds) [[ $# -ge 2 ]] || die "Missing value for --total-timeout-seconds."; TOTAL_TIMEOUT_SECONDS="$2"; shift 2 ;;
         --model-catalog-timeout-seconds) [[ $# -ge 2 ]] || die "Missing value for --model-catalog-timeout-seconds."; MODEL_CATALOG_TIMEOUT_SECONDS="$2"; shift 2 ;;
+        --activation-observations) [[ $# -ge 2 ]] || die "Missing file for --activation-observations."; ACTIVATION_OBSERVATIONS_FILE="$2"; shift 2 ;;
         --output) [[ $# -ge 2 ]] || die "Missing directory for --output."; OUTPUT_DIR="$2"; shift 2 ;;
         --codex-bin) [[ $# -ge 2 ]] || die "Missing path for --codex-bin."; CODEX_BIN="$2"; CODEX_BIN_OVERRIDDEN=true; shift 2 ;;
         -h|--help) usage; exit 0 ;;
@@ -2561,6 +2759,7 @@ materialize_variant "$baseline_overlay" "$baseline_dir"
 materialize_variant "$candidate_overlay" "$candidate_dir"
 baseline_hash="$(hash_directory "$baseline_dir")"
 candidate_hash="$(hash_directory "$candidate_dir")"
+CANDIDATE_MATERIALIZED_SKILL_SHA256="$(hash_file "$candidate_dir/SKILL.md")"
 fixture_hash="$(hash_file "$FIXTURE")"
 CONTEXT_BUDGET_EVIDENCE_FILE="$WORK_ROOT/context-budget-evidence.json"
 context_budget_build_evidence \
@@ -2579,6 +2778,7 @@ if [[ -n "$CANDIDATE_MANIFEST" ]]; then
 fi
 
 prepare_model_selection_evidence
+validate_activation_observations
 expected_plan="$WORK_ROOT/expected-run-plan.json"
 write_plan "$baseline_hash" "$candidate_hash" "$fixture_hash" "$expected_plan"
 RUN_PLAN_HASH="$(hash_file "$expected_plan")"
@@ -2592,6 +2792,9 @@ else
     [[ -d "$OUTPUT_DIR" && ! -L "$OUTPUT_DIR" ]] || die "--output must resolve to a real directory."
     chmod 700 "$OUTPUT_DIR"
     atomic_write_json "$OUTPUT_DIR/run-plan.json" <"$expected_plan"
+    if [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]]; then
+        atomic_write_json "$OUTPUT_DIR/activation-observations.json" <"$ACTIVATION_OBSERVATIONS_FILE"
+    fi
 fi
 
 if [[ "$MODE" == "plan" ]]; then
