@@ -162,16 +162,20 @@ validate_fixture() {
         def scalar:
           type == "string" or type == "number" or type == "boolean" or type == "null";
 
+        def equality_value:
+          type == "string" or type == "number" or type == "boolean"
+          or (type == "array" and all(.[]; type == "string" or type == "number" or type == "boolean"));
+
         def structured_assertion_error($index; $assertion_index):
           if type != "object" then
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] must be an object"
           elif (.operator? | nonempty_string | not) then
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] missing or invalid operator"
           elif .operator == "equals" then
-            if (.path? | json_path | not) or (has("expected") | not) or (.expected | scalar | not) then
+            if (.path? | json_path | not) or (has("expected") | not) or (.expected | equality_value | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid equals assertion"
             else empty end
-          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" then
+          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "path_absent" then
             if (.path? | json_path | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid \(.operator) path"
             else empty end

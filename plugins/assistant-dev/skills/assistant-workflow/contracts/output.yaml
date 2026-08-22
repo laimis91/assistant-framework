@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "8.0"
+schema_version: "11.0"
 contract: output
 skill: assistant-workflow
 
@@ -14,23 +14,29 @@ skill: assistant-workflow
 # standard -> ordinary medium+ non-harness, strict -> large/critical or
 # explicit strict/harness/QA criteria.
 completion_tiers:
+  preparation_only:
+    execution_intent: prepare_only
+    required_artifacts: [completion_policy, validation_results, feature_preparation_result]
+    conditional_artifacts: [triage_result, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet]
+    review_gate: "Preparation-evidence admissibility audit only; no Build, changed-files, implementation test, code-review, or final-handoff claim is permitted."
+    checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, architecture_decision_pack, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, architecture_decision_pack, single_slice_rationale, slice_review_evidence, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -39,8 +45,8 @@ artifacts:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
-    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, architecture_design_mode and trigger reasons, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
-    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, architecture design mode/reasons, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
+    validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, execution_intent, qa_evaluation_mode, harness_capable, architecture_design_mode and trigger reasons, build_execution_lane, workflow_state_mode, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
+    on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, execution_intent, qa_evaluation_mode, harness_capable, architecture design mode/reasons, build_execution_lane, workflow_state_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
     object_fields:
       - name: task_type
         type: enum
@@ -63,7 +69,20 @@ artifacts:
         type: enum
         required: true
         enum_values: [none, inline, approval_required]
-        validation: "Matches task size, risk, uncertainty, reversibility, approval policy, and the input contract eligibility rules"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        validation: "prepare_only records preparation completion without Build or changed-files evidence; implement_only consumes approved preparation evidence; end_to_end follows the selected phased workflow and input eligibility rules."
+      - name: qa_evaluation_mode
+        type: enum
+        required: true
+        enum_values: [not_required, optional, required]
+        validation: "prepare_only always records not_required; required applies only when execution_intent != prepare_only and an independent QA trigger is present."
+      - name: harness_capable
+        type: boolean
+        required: true
+        validation: "prepare_only records false unless independent harness evidence is explicitly carried; an explicit QA/acceptance request alone is not independent harness evidence, and strict risk preparation alone does not imply a harness."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -78,12 +97,12 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline_direct, bounded_executor, separated_workers]
-        validation: "Ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        validation: "For execution_intent=prepare_only, inline_direct records no Build lane. Otherwise ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
       - name: workflow_state_mode
         type: enum
         required: true
         enum_values: [inline, journal]
-        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger; size alone does not require journal"
+        validation: "Matches canonical inference: for uncertainty_shape == progressive, journal only when local state artifacts are configured and policy allows them; unavailable/policy-disallowed progressive state uses equivalent carried-state fallback inline, including prepare_only. Otherwise inline requires uncertainty_shape == bounded absent clarification wait, delegated workflow roles during execution, cross-session/compaction continuation, explicit persisted state, controller_intensity == strict, harness_capable == true, or execution_intent != prepare_only and qa_evaluation_mode == required; those require journal. Size alone never requires journal."
       - name: manual_verification_mode
         type: enum
         required: true
@@ -92,11 +111,11 @@ artifacts:
       - name: required_gates
         type: string[]
         required: true
-        validation: "At least the common gates plus every applicable task-category gate pack"
+        validation: "For execution_intent=prepare_only, required_gates is exactly [feature-preparation evidence] with no execution common or task-category gate. Otherwise include execution common gates plus every applicable task-category gate pack."
       - name: required_agents
         type: string[]
         required: true
-        validation: "Required workflow roles and skills selected from size, task type, and risk tier"
+        validation: "For execution_intent=prepare_only, include only concrete Discover/preparation roles and exclude Build, Review, QA Evaluator, Code Writer, Builder/Tester, and Code Reviewer roles. Otherwise select required workflow roles and skills from size, task type, and risk tier."
       - name: subagent_policy_state
         type: enum
         required: true
@@ -164,6 +183,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline_direct, bounded_executor, separated_workers]
+        validation: "For execution_intent=prepare_only, inline_direct records that no Build lane runs. Otherwise select the execution lane from risk and verification shape."
       - name: plan_mode
         type: enum
         required: true
@@ -176,7 +196,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [inline, journal]
-        validation: "Matches canonical inference: use journal for uncertainty_shape == progressive when local state is allowed; otherwise use the equivalent carried-state fallback, while inline ordinary work requires uncertainty_shape == bounded absent another persistence trigger"
+        validation: "Matches canonical inference: for uncertainty_shape == progressive, journal only when local state artifacts are configured and policy allows them; unavailable/policy-disallowed progressive state uses equivalent carried-state fallback inline, including prepare_only. Otherwise inline requires uncertainty_shape == bounded absent clarification wait, delegated workflow roles during execution, cross-session/compaction continuation, explicit persisted state, controller_intensity == strict, harness_capable == true, or execution_intent != prepare_only and qa_evaluation_mode == required; those require journal. Size alone never requires journal."
       - name: manual_verification_mode
         type: enum
         required: true
@@ -191,9 +211,12 @@ artifacts:
     required: conditional
     condition: "controller_intensity == strict or explicit project policy requires exact phase markers or user requested exact phase markers"
     validation: >
-      When required, must contain paired entries for every phase that ran:
-      '--- PHASE: {name} ---' at start and '--- PHASE: {name} COMPLETE ---' at end.
-      Light/standard work without an exact-marker trigger records concise natural progress instead.
+      When required, must contain the exact declared phase-gate markers for every phase that ran,
+      using that gate's checkpoint_start and checkpoint_end as the sole marker authority.
+      This explicitly includes PREPARATION_COMPLETION start marker
+      '--- PHASE: PREPARATION COMPLETION ---' and end marker
+      '--- PHASE: PREPARATION COMPLETE ---'. Light/standard work without an
+      exact-marker trigger records concise natural progress instead.
     on_fail: "When exact markers were required, reconstruct phase_checkpoints from executed phases or re-run missing phase gates before completion"
     minimum_entries_rule: >
       Require the TRIAGE start marker plus paired start/complete markers for
@@ -203,10 +226,10 @@ artifacts:
 
   - name: changed_files
     type: object[]
-    required: true
-    condition: always
-    validation: "At least 1 entry unless task was determined unnecessary during Discovery"
-    on_fail: "List changed files or record that Discovery determined no change was necessary"
+    required: conditional
+    condition: "execution_intent != prepare_only"
+    validation: "At least 1 entry unless task was determined unnecessary during Discovery. preparation-only work must omit this artifact rather than fabricating a change."
+    on_fail: "List changed files, record that Discovery determined no change was necessary, or use prepare_only completion without a changed-files claim"
     object_fields:
       - name: path
         type: string
@@ -260,8 +283,8 @@ artifacts:
 
   - name: test_results
     type: object
-    required: true
-    condition: "runnable tests exist or task changes behavior"
+    required: conditional
+    condition: "execution_intent != prepare_only and (runnable tests exist or task changes behavior)"
     validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. When TDD Architecture Decision Pack obligations apply, architecture_obligation_coverage aggregates the selected Build owner return: bounded_executor CodeWriter or separated_workers BuilderTester, with exact-once stable obligation_id coverage. Use validation_results when tests are not applicable."
     on_fail: "Re-run tests or move non-test verification to validation_results with explicit not-applicable reason for tests"
     object_fields:
@@ -322,7 +345,7 @@ artifacts:
   - name: fresh_review_result
     type: object
     required: conditional
-    condition: "controller_intensity == light"
+    condition: "execution_intent != prepare_only and controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
     validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path."
     on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
@@ -372,7 +395,7 @@ artifacts:
   - name: review_result
     type: object
     required: conditional
-    condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
+    condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical])"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
     validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. When an Architecture Decision Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review and declares that exact contract. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
     on_fail: "Load and follow assistant-review, validate its final_summary, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
@@ -412,7 +435,7 @@ artifacts:
   - name: qa_evaluation_result
     type: object
     required: conditional
-    condition: "qa_evaluation_mode == required"
+    condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
     description: "Workflow reference wrapper for canonical assistant-review QA artifacts. QA evaluation does not replace review_result."
     validation: "canonical_result_ref resolves to a validated assistant-review qa_evaluation_result; delegation_path_ref resolves to its qa_evaluation_delegation_path; both declare their exact canonical contracts."
     on_fail: "Load and follow the assistant-review QA loop, validate its canonical QA result and delegation path, and record stable refs. Do not substitute Code Reviewer findings for QA evaluation."
@@ -441,7 +464,7 @@ artifacts:
   - name: spec_review_result
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
+    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical])"
     validation: >
       Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
       Must be distinct from assistant-review quality findings. At completion, status must
@@ -480,14 +503,14 @@ artifacts:
   - name: manual_test_steps
     type: string[]
     required: conditional
-    condition: "manual_verification_mode == required"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required"
     validation: "At least 1 actionable step the user can follow to verify the change"
     on_fail: "Add actionable manual validation steps or state why manual validation is not applicable"
 
   - name: manual_verification_result
     type: object
     required: conditional
-    condition: "manual_verification_mode == required"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required"
     description: "Evidence for the exceptional manual acceptance gate; it does not require ritual user confirmation when an equivalent observation proves the result."
     validation: "trigger is one allowed reason, result is passed, and evidence names the observation, user report, external check, or manual run that passed."
     on_fail: "Perform the scoped manual verification, record passed evidence, or return blocked without claiming workflow completion."
@@ -507,7 +530,7 @@ artifacts:
   - name: subagent_evidence
     type: object
     required: conditional
-    condition: "controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
+    condition: "execution_intent != prepare_only and controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
     description: "Standard/strict completion evidence whose Build and Review responsibilities are recorded separately."
     validation: "Evidence matches build_execution_lane. Build records only selected-lane implementation/verification evidence: one bounded executor or Code Writer plus Builder/Tester. Independent Code Reviewer evidence remains required at completion for both lanes, but Review owns and emits it after Build. direct_fallback preserves the same phase ownership with an explicit policy reason."
     on_fail: "Record selected-lane Build evidence, then record Review-owned independent Code Reviewer evidence after Build. Do not require reviewer evidence to leave Build or invent Builder/Tester dispatch in bounded_executor mode."
@@ -577,7 +600,7 @@ artifacts:
       - name: qa_evaluator_evidence
         type: object
         required: conditional
-        condition: "qa_evaluation_mode == required"
+        condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
         validation: "Contains QAEvaluator dispatch/result evidence in delegated mode, or QAEvaluator direct evidence with fallback reason in direct_fallback mode"
         object_fields:
           - name: qa_evaluator_dispatch
@@ -645,7 +668,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A, and status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A. When execution_intent == prepare_only, each unimplemented accepted requirement remains status=pending with an evidence_ref and readiness or next-implementation evidence; preparation does not fabricate passed verification. When execution_intent != prepare_only, every accepted requirement has status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -727,7 +750,7 @@ artifacts:
           - name: status
             type: enum
             required: true
-            enum_values: [passed, approved_exclusion]
+            enum_values: [pending, passed, approved_exclusion]
             on_missing: fail
           - name: exclusion_reason
             type: string
@@ -740,14 +763,45 @@ artifacts:
     required: conditional
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     description: "Typed, source-backed architecture decision artifact defined by references/architecture-decision-pack.md"
-    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios with stable identity and verified evidence; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real with stable selected binding, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
-    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, complete the Type Ledger and quality scenarios, then carry the pack reference into Plan and Review."
+    validation: "Has one goal; current source/greenfield freshness basis; facts separate from assumptions; every open material question is grouped by topic and states impact/risk/default; explicit boundary ownership/lifecycle; design-pressure checks for control/early exit, ownership/disposal, resource envelope, extension registration, and a representative path; a semantic Type Ledger with primitive exceptions only at named boundaries; falsifiable quality scenarios with stable identity and explicit quality scenario status/evidence state: verified evidence and verification_ref only when status=verified, while pending or unknown retain their non-verified evidence state without an invented verification_ref; typed architecture_test_obligations when TDD applies; selected design, viable alternatives only when real with stable selected binding, verification, invalidation conditions, and carried handoff/review references. No memory/performance/extensibility claim is accepted without workload, budget/explicit unknown, measurement, and failure condition."
+    on_fail: "Load references/architecture-decision-pack.md, refresh source evidence, resolve or record material questions, and complete the Type Ledger and quality scenarios. For prepare_only, retain the Pack as discover_only readiness context through Preparation Completion. For execution_intent != prepare_only, carry the Pack reference into Plan and Review."
     object_fields:
       - name: pack_id
         type: string
         required: true
         description: "Stable task-scoped pack identity"
         on_missing: fail
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Canonical existing-system feature-preparation evidence ref carried into the Pack"
+        validation: "Resolves to the complete evidence artifact produced during prepare_only/end_to_end discovery or the approved input ref consumed by implement_only work before the Pack carries any Product question; absence from requirements/design alone is not admissible."
+        on_missing: fail
+      - name: feature_preparation_evidence_bindings
+        type: object[]
+        required: conditional
+        condition: "feature_preparation_scope == existing_system and the Pack carries any behavior claim or Product question"
+        description: "Exact evidence-row bindings for every carried existing-system behavior claim or Product question"
+        validation: "Each carried claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; every evidence_ref equals feature_preparation_evidence_ref, every item_id resolves under that artifact, and missing, extra, duplicate, stale, or mismatched bindings block the Pack."
+        min_items: 1
+        on_missing: fail
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+            validation: "Equals the carried stable feature_preparation_evidence_ref."
+            on_missing: fail
+          - name: item_id
+            type: string
+            required: true
+            validation: "Resolves to the exact canonical evidence row under evidence_ref."
+            on_missing: fail
+          - name: claim_or_question
+            type: string
+            required: true
+            validation: "Equals one carried behavior claim or Product question and has no broad artifact-only substitute."
+            on_missing: fail
       - name: mode
         type: enum
         required: true
@@ -1094,9 +1148,9 @@ artifacts:
       - name: handoff_refs
         type: object
         required: true
-        description: "Discover records only durable context/journal state; Plan or the plan_mode=none pre-Build boundary atomically binds downstream refs before Build."
-        validation: "discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
-        on_fail: "Refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
+        description: "prepare_only retains Discover-only Pack context through Preparation Completion; execution lanes atomically bind downstream refs before Build."
+        validation: "For prepare_only, retain handoff_binding_state=discover_only through Preparation Completion even when optional readiness Plan/plan_mode runs; discover_only forbids invented plan_or_task_packet_ref and review_scope_ref. For execution_intent != prepare_only, Plan atomically binds plan_or_task_packet_ref and review_scope_ref before Build when plan_mode!=none. For execution_intent != prepare_only, plan_mode=none atomically binds downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action. Build, Review, and completion retain handoff_binding_state=downstream_bound. Material invalidation clears stale downstream refs through refresh, re-plan, and reapproval."
+        on_fail: "For prepare_only, restore discover_only Pack context and remove downstream refs before Preparation Completion. For execution_intent != prepare_only, refresh the Pack and re-plan/reapprove before Build when downstream refs are missing or stale."
         object_fields:
           - name: handoff_binding_state
             type: enum
@@ -1118,7 +1172,7 @@ artifacts:
   - name: build_repair_state
     type: object
     required: conditional
-    condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
+    condition: "execution_intent != prepare_only and an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
     description: "Bounded ordinary Build repair controller state; harness-specific loops keep their existing controller artifacts"
     validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across worker/context/session changes, and reaching either bound sets terminal_route to pivot or block rather than another retry."
     on_fail: "Stop the retry, reconstruct the repair state from Build evidence, and create a pivot_restart_decision or return blocked before any further implementation attempt."
@@ -1174,7 +1228,7 @@ artifacts:
   - name: final_handoff
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
     validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
     on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
@@ -1249,7 +1303,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] and workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
     validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/context-map.md"
-    on_fail: "Create context map when configured and policy-allowed, or include context map in carried-forward plan/task packet"
+    on_fail: "Create context map when configured and policy-allowed. For prepare_only, include it only in carried-forward readiness evidence through Preparation Completion; for execution_intent != prepare_only, otherwise include it in the plan/task packet."
     location: "{agent_state_dir}/context-map.md"
 
   - name: context_budget_note
@@ -1258,7 +1312,7 @@ artifacts:
     condition: "size in [medium, large, mega] or material exceeds faithful single-context review"
     description: "Record of exact, summarized, omitted, and split/delegated context"
     validation: "Must list exact/pinned material, summarized material, omitted/deferred material, and split/delegation plan or not_applicable reason"
-    on_fail: "Load references/context-budget-and-pattern-retrieval.md and add Context Budget note to plan/task packet"
+    on_fail: "Load references/context-budget-and-pattern-retrieval.md and add Context Budget note to readiness evidence for prepare_only or to the plan/task packet for execution_intent != prepare_only."
     object_fields:
       - name: exact_pinned
         type: string[]
@@ -1329,7 +1383,7 @@ artifacts:
   - name: artifact_contract
     type: object
     required: conditional
-    condition: "task proceeds beyond discovery into plan, build, or documentable deliverable"
+    condition: "execution_intent != prepare_only and task proceeds beyond discovery into plan, build, or documentable deliverable"
     description: "Artifact-first deliverable contract that makes the user-visible output concrete before implementation"
     validation: "Must include artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command/method, expected success signal, owner/consumer, and non-goals/exclusions"
     on_fail: "Load references/artifact-first-output-contract.md and define the Artifact Contract before Plan or Build"
@@ -1363,7 +1417,7 @@ artifacts:
   - name: artifact_reference_ledger
     type: object[]
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Typed producer/consumer ledger for artifacts passed between subagents during harness work."
     validation: "Each entry includes artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary; ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable."
     on_fail: "Before Build, Review, completion, or handoff, create or repair the Artifact Reference Ledger in the plan/task journal; re-dispatch the producer when a required typed artifact reference is missing, stale, invalid, or lacks a consumer validation status."
@@ -1415,7 +1469,7 @@ artifacts:
   - name: done_contract
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Accepted pre-Build Done Contract for harness-capable work"
     validation: "Must include done_when, not_done_when, verification, owner_consumer, acceptance_criteria, debate_record with at least two perspectives, and accepted_by before Build starts"
     on_fail: "Block Build, load references/harness-controller.md, return to Plan, write the missing Done Contract, collect at least two debate perspectives using subagents when delegated mode is available, and record approval or scope-change re-approval"
@@ -1463,7 +1517,7 @@ artifacts:
   - name: harness_recipe
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "Pre-Build controller recipe selected from task/model/risk/context profile"
     validation: "Must classify task_profile, model_profile, risk_profile, and context_profile, then name selected_recipe, recipe_rationale, required_artifacts, and corrective_action"
     on_fail: "Block Build, load references/harness-controller.md, return to Plan, classify the task/model/risk/context profile, select a Harness Recipe, and record the corrective action for missing or stale recipe evidence"
@@ -1504,7 +1558,7 @@ artifacts:
   - name: harness_run_state
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Harness Run State artifact for recovering active harness execution after compaction, failure, or handoff."
     validation: "Must record task_id, task_name, phase, slice, status, blockers, last_verification, next_action, and recovery_pointer; update it as Build, Review, and Document progress. When a pivot/restart is active, it also records pivot_restart_decision_ref and the exact next action after restart."
     on_fail: "Pause advancement, update the task journal or carried-forward state with a complete Harness Run State block, point recovery_pointer at the current task packet or ledger entry, then resume from next_action."
@@ -1579,7 +1633,7 @@ artifacts:
   - name: trace_ledger
     type: object[]
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Trace Ledger artifact for ordered harness execution evidence."
     validation: "Records timestamped/ordered agent events, decisions, verification commands/results, plan deviations, and artifact refs as execution progresses."
     on_fail: "Append missing trace entries before advancing: reconstruct from Agent Dispatch Log, Key Decisions, verification output, plan deviations, and Artifact Registry; mark any unrecoverable gap explicitly."
@@ -1620,7 +1674,7 @@ artifacts:
   - name: replay_packet
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] and harness_capable == true"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"
     description: "First-class Replay Packet artifact that lets the workflow resume after compaction, failure, or handoff."
     validation: "Captures pinned_context, artifact_refs, validation_state, exact_next_action, run_state_ref, trace_ledger_ref, recovery_pointer, and pivot_restart_decision_ref when active with enough detail to recover without replaying stale reasoning."
     on_fail: "Create or repair the Replay Packet before ending the turn or crossing a phase boundary; copy pinned context from the approved plan/task packet, cite artifact refs, summarize validation state, and name the exact_next_action."
@@ -1758,7 +1812,7 @@ artifacts:
   - name: decomposition_plan_review
     type: object
     required: conditional
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     description: "Cheap-before-expensive review of slice/subagent decomposition before Plan/Build"
     validation: "Must state scope understanding, slice/subagent count sanity, step/cost budget, dependency order, output-plan match, fallback path, broad-split rejection proof, and proceed/revise/return decision"
     on_fail: "Load references/decomposition-plan-review.md and repair the decomposition review packet before entering Plan"
@@ -1793,12 +1847,12 @@ artifacts:
   - name: slice_manifest
     type: object[]
     required: true
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     validation: >
       Contains one or more smallest iterable slices in dependency order. Each
       slice has the strict slice schema, exact files, observable increment,
       acceptance criteria, verification command, expected success signal, and
-      deviation rollback rule. slice_id values are unique branch/path-safe
+      deviation rollback rule. slice_id values are unique path-safe
       identifiers, and depends_on entries reference only declared slice_id values
       without self dependencies or circular dependencies.
       Layer-only, module-only, folder-only, feature-only, setup-only,
@@ -1810,35 +1864,9 @@ artifacts:
       - name: slice_id
         type: string
         required: true
-        description: "Stable descriptive outcome-oriented slice identifier that is branch/path-safe and reused for branches, worktrees, brief filenames, and depends_on references"
-        validation: "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, path traversal, or branch separators. Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"
+        description: "Stable descriptive outcome-oriented slice identifier reused in task packets and depends_on references"
+        validation: "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, or path traversal. Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"
         examples: [notification-validation, email-delivery]
-      - name: target_branch
-        type: string
-        required: conditional
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        validation: "Repository target ref for the umbrella task branch."
-      - name: target_base_sha
-        type: string
-        required: conditional
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        validation: "Canonical 40- or 64-character lowercase immutable target commit SHA; ancestor of target_branch and task_branch."
-      - name: task_branch
-        type: string
-        required: conditional
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        validation: "Uses feature/<task> and shares the immutable target_base_sha with every slice."
-      - name: slice_branch
-        type: string
-        required: conditional
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        validation: "Uses slice/<task>/<slice_id>."
-      - name: promotion_mode
-        type: enum
-        required: conditional
-        condition: "slice_manifest has more than one item or slice_promotion_mode == review_gated"
-        enum_values: [local, review_gated]
-        validation: "All slices in a task share this promotion mode."
       - name: name
         type: string
         required: true
@@ -1874,7 +1902,8 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
-        validation: "Canonical argv vector: item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing"
+        description: "Portable direct-execution specification for the slice verification command"
+        validation: "Canonical argv vector: execute item 0 directly as the executable and pass each remaining item as one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing"
       - name: expected_success_signal
         type: string
         required: true
@@ -1889,7 +1918,7 @@ artifacts:
   - name: single_slice_rationale
     type: string
     required: conditional
-    condition: "size in [medium, large, mega] and slice_manifest has exactly one item"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega] and slice_manifest has exactly one item"
     description: "Required when medium+ emits one slice; proves the one slice is the smallest iterable decomposition and not a broad fallback."
     validation: "single_slice_rationale must be present and non-blank, explaining why the task cannot be split into smaller independently verifiable slices without losing the observable increment"
     on_fail: "Return to DECOMPOSE/PLAN and either split the work into multiple strict slices or provide a non-blank single_slice_rationale"
@@ -1897,15 +1926,13 @@ artifacts:
   - name: slice_verification_summary
     type: object[]
     required: true
-    condition: "size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     validation: >
       Contains one entry per slice from the manifest, in order, with task
       packet id, RED status when TDD was active, implementation status,
       verification command/result, acceptance criteria checked, self-check
-      result, and final status. REVIEW_PENDING and BLOCKED are active
-      non-completion states; Every slice final status must be VERIFIED before
-      WORKFLOW COMPLETE. Detailed review lifecycle states belong in
-      slice_review_evidence.
+      result, and final status. BLOCKED is a non-completion state; every slice
+      final status must be VERIFIED before WORKFLOW COMPLETE.
     on_fail: "Run and record per-slice verification evidence until every slice final_status is VERIFIED"
     object_fields:
       - name: slice_id
@@ -1940,72 +1967,7 @@ artifacts:
       - name: final_status
         type: enum
         required: true
-        enum_values: [REVIEW_PENDING, BLOCKED, VERIFIED]
-
-  - name: slice_review_evidence
-    type: object[]
-    required: conditional
-    condition: "slice_promotion_mode == review_gated"
-    validation: "Provider-neutral evidence binds a review request and gate outcome to the exact locally verified SHA pair. REVIEW_PENDING never satisfies VERIFIED."
-    object_fields:
-      - name: schema_version
-        type: string
-        required: true
-      - name: slice_id
-        type: string
-        required: true
-      - name: state
-        type: enum
-        required: true
-        enum_values: [REVIEW_PENDING, REVIEW_APPROVED, REVIEW_REJECTED, REVIEW_STALE]
-      - name: promotion_mode
-        type: enum
-        required: true
-        enum_values: [review_gated]
-        validation: "Review evidence is valid only for review_gated promotion."
-      - name: target_branch
-        type: string
-        required: true
-      - name: target_base_sha
-        type: string
-        required: true
-        validation: "Canonical 40- or 64-character lowercase commit SHA, immutable for the task and an ancestor of both current target_branch and task_branch."
-      - name: task_branch
-        type: string
-        required: true
-      - name: slice_branch
-        type: string
-        required: true
-      - name: review_base_ref
-        type: string
-        required: true
-      - name: review_head_ref
-        type: string
-        required: true
-      - name: verified_base_sha
-        type: string
-        required: true
-      - name: verified_head_sha
-        type: string
-        required: true
-      - name: verification_evidence_ref
-        type: string
-        required: true
-        validation: "Nonblank, non-whitespace-only local verifier evidence reference."
-      - name: review_request_ref
-        type: string
-        required: conditional
-        condition: "state in [REVIEW_APPROVED, REVIEW_REJECTED, REVIEW_STALE]"
-        validation: "Nonblank, non-whitespace-only opaque adapter reference when a review outcome has been recorded; absent from core REVIEW_PENDING evidence."
-      - name: provider_gate_state
-        type: enum
-        required: true
-        enum_values: [not_evaluated, passed, failed]
-      - name: provider_gate_evidence_ref
-        type: string
-        required: conditional
-        condition: "provider_gate_state in [passed, failed]"
-        validation: "Required nonblank, non-whitespace-only provider-neutral gate evidence when provider_gate_state is passed or failed; not required while not_evaluated."
+        enum_values: [BLOCKED, VERIFIED]
 
   - name: decision_map
     type: object
@@ -2514,32 +2476,236 @@ artifacts:
     required: conditional
     condition: "plan_mode in [inline, approval_required]"
     validation: >
-      inline: compact plan with goal, files, risks, and tests.
-      approval_required medium: standard plan per plan-template.md.
-      approval_required large/mega: full plan per plan-template.md including Security and Operability.
+      For prepare_only, readiness-only plan text contains the evidence ref, readiness implications, open decisions, recommended next implementation state, and execution not started; it omits files, tests, Artifact Contract, executable steps/task packets, and full plan tiers.
+      For execution_intent != prepare_only: inline is a compact plan with goal, files, risks, and tests; approval_required medium is standard per plan-template.md; approval_required large/mega is full including Security and Operability.
       plan_mode=none: artifact is absent.
-    on_fail: "When plan_mode is inline or approval_required, write or update the proportional plan before proceeding; omit this artifact when plan_mode is none"
+    on_fail: "For prepare_only, write or repair only the readiness plan with evidence ref, implications, open decisions, recommended next state, and execution not started; do not add files, tests, or executable packets. For execution_intent != prepare_only, write or update the proportional execution plan when plan_mode is inline or approval_required; omit this artifact when plan_mode is none."
 
   - name: user_approval
     type: enum
     required: conditional
-    condition: "manual_verification_mode == required and the selected manual verification trigger specifically needs user observation or confirmation"
+    condition: "execution_intent != prepare_only and manual_verification_mode == required and the selected manual verification trigger specifically needs user observation or confirmation"
     enum_values: [confirmed, confirmed_with_issues, not_required_small]
     validation: "Records user confirmation only when the scoped manual verification actually depends on the user's observation; plan approval is enforced separately and user confirmation is not ritual."
     on_fail: "Request the specific user observation needed for manual verification, or record equivalent non-user evidence when the trigger does not require user confirmation."
 
+  - name: feature_preparation_result
+    type: object
+    required: conditional
+    condition: "execution_intent == prepare_only"
+    description: "Typed no-execution readiness handoff for provider-neutral technical preparation"
+    validation: "Records execution_status=not_started, exact scoped preparation outcome, evidence ref only when existing-system behavior is in scope, evidence gaps, open decisions, implementation implications, and a recommended next step. An explicit QA/acceptance request is retained only in future_qa_acceptance_obligation while qa_evaluation_mode remains not_required. It must not claim changed files, Build, test execution, review, or final handoff."
+    on_fail: "Return to feature preparation, complete the scoped readiness record, and explicitly keep execution not started."
+    object_fields:
+      - name: execution_status
+        type: enum
+        required: true
+        enum_values: [not_started]
+        on_missing: fail
+      - name: scope
+        type: string
+        required: true
+        description: "Concrete feature-preparation scope, not an implementation completion claim"
+        on_missing: fail
+      - name: feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        description: "Stable identity of the canonical completed evidence artifact for an existing-system preparation"
+        validation: "Matches the stable identity feature_preparation_evidence.ref unchanged; it identifies the same artifact rather than a row, claim, plan, or derived alias."
+        on_missing: fail
+      - name: evidence_gaps
+        type: string[]
+        required: true
+        description: "Unresolved source or inspection limitations; empty only when none remain"
+        on_missing: fail
+      - name: open_decisions
+        type: string[]
+        required: true
+        description: "Admissible remaining Product or technical decisions; never duplicate an explicit QA/acceptance request, which belongs only in future_qa_acceptance_obligation; empty only when none remain"
+        on_missing: fail
+      - name: implementation_implications
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Concrete future implementation work, preservation obligation, conflict resolution, or explicit no-change result; do not duplicate an explicit QA/acceptance request outside future_qa_acceptance_obligation"
+        on_missing: fail
+      - name: future_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "an explicit qa or acceptance request was supplied during prepare_only"
+        description: "Typed deferred QA/acceptance work that cannot activate execution during preparation"
+        validation: "Records the exact requested QA/acceptance scope and the future execution prerequisite; it is absent when no explicit QA/acceptance request exists and cannot be inferred from generic readiness wording."
+        on_missing: fail
+        object_fields:
+          - name: requested_scope
+            type: string
+            required: true
+            on_missing: fail
+          - name: execution_prerequisite
+            type: string
+            required: true
+            validation: "Names the later implementation workflow after Build and Code Reviewer evidence."
+            on_missing: fail
+      - name: recommended_next_step
+        type: string
+        required: true
+        description: "Next safe action after preparation, such as seek a decision, approve a plan, or begin a separate implementation workflow; do not duplicate an explicit QA/acceptance request outside future_qa_acceptance_obligation"
+        on_missing: fail
+
+  - name: feature_preparation_evidence
+    type: object
+    required: conditional
+    condition: "execution_intent in [prepare_only, end_to_end] and feature_preparation_scope == existing_system"
+    description: "Canonical, provider-neutral evidence matrix for existing-system feature preparation before questions, plans, Architecture Decision Packs, diagrams, or documentation can treat behavior as unknown."
+    validation: "Every item traces generic requirements, design evidence or an explicit not_applicable/unavailable disposition, current implementation and observable execution behavior or a typed inspection gap, behavioral tests/assertions or inspected absence/access gap, conflict analysis, evidence gaps, rationale, and implementation implication. Product question admissibility fails closed: absence from requirements/design alone is insufficient; implementation and relevant tests must be inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible or uninspected evidence is evidence_gap; contradictory sources are source_conflict plus source_conflict_resolution; an existing behavior adapted to a new route/scope is existing_behavior_to_preserve plus implementation_gap."
+    on_fail: "Inspect the requirement/design sources, current implementation path, and relevant behavioral tests; classify each item before asking a Product question or finalizing a preparation plan."
+    object_fields:
+      - name: ref
+        type: string
+        required: true
+        description: "Stable identity of this evidence artifact used unchanged by downstream consumers"
+        validation: "Carried unchanged into preparation plans, task packets, Architecture Decision Packs, diagrams, and documentation; item_id and claim bindings add row-level meaning without replacing this artifact identity."
+        on_missing: fail
+      - name: items
+        type: object[]
+        required: true
+        min_items: 1
+        description: "One evidence row for each behavior, gap, or proposed open question"
+        on_missing: fail
+        object_fields:
+          - name: item_id
+            type: string
+            required: true
+            on_missing: fail
+          - name: requirements_evidence
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Generic requirement/source references and their relevant behavior"
+            on_missing: fail
+          - name: design_evidence
+            type: object
+            required: true
+            description: "Design evidence or explicit not-applicable/unavailable disposition"
+            on_missing: fail
+            object_fields:
+              - name: status
+                type: enum
+                required: true
+                enum_values: [provided, not_applicable, unavailable]
+                on_missing: fail
+              - name: source_refs
+                type: string[]
+                required: true
+                validation: "Non-empty for provided; empty only with a concrete not_applicable or unavailable rationale"
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                on_missing: fail
+          - name: implementation_evidence
+            type: object
+            required: true
+            description: "Current implementation trace, inspected absence, or access limitation for this item"
+            on_missing: fail
+            object_fields:
+              - name: status
+                type: enum
+                required: true
+                enum_values: [inspected, inspected_absent, inaccessible]
+                on_missing: fail
+              - name: traces
+                type: object[]
+                required: true
+                validation: "Non-empty when status=inspected; empty only when status is inspected_absent or inaccessible with concrete search_or_access_refs and rationale."
+                on_missing: fail
+                object_fields:
+                  - name: file
+                    type: string
+                    required: true
+                    on_missing: fail
+                  - name: symbols
+                    type: string[]
+                    required: true
+                    min_items: 1
+                    on_missing: fail
+                  - name: execution_behavior
+                    type: string
+                    required: true
+                    on_missing: fail
+              - name: search_or_access_refs
+                type: string[]
+                required: true
+                validation: "Non-empty for inspected_absent or inaccessible; may be empty for inspected when traces already identify the evidence."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                on_missing: fail
+          - name: behavioral_test_evidence
+            type: object
+            required: true
+            description: "Relevant behavioral tests/assertions, inspected absence, or access limitation"
+            on_missing: fail
+            object_fields:
+              - name: status
+                type: enum
+                required: true
+                enum_values: [inspected, inspected_absent, inaccessible]
+                on_missing: fail
+              - name: assertions_or_search_refs
+                type: string[]
+                required: true
+                min_items: 1
+                validation: "Names assertions, bounded absence searches, or the concrete access limitation; never use an empty array to imply inspection."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                on_missing: fail
+          - name: conflict_analysis
+            type: string
+            required: true
+            description: "Agreement, explicit behavior change, source conflict, or materially unknown analysis"
+            on_missing: fail
+          - name: evidence_gaps
+            type: string[]
+            required: true
+            description: "Uninspected, inaccessible, or still-material evidence gaps; empty only when none remain"
+            on_missing: fail
+          - name: behavior_status
+            type: enum
+            required: true
+            enum_values: [existing_behavior_to_preserve, new_behavior, explicit_change, source_conflict, materially_unknown]
+            on_missing: fail
+          - name: work_status
+            type: enum
+            required: true
+            enum_values: [implementation_gap, technical_design_decision, source_conflict_resolution, product_question, evidence_gap, no_open_decision]
+            validation: "product_question requires behavior_status=materially_unknown, implementation and behavioral-test statuses inspected or inspected_absent, evidence_gaps=[], and no source conflict. behavior_status=source_conflict requires source_conflict_resolution. Any inaccessible or still-uninspected evidence requires evidence_gap."
+            on_missing: fail
+          - name: rationale
+            type: string
+            required: true
+            on_missing: fail
+          - name: implementation_implication
+            type: string
+            required: true
+            on_missing: fail
+
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
-# 1. All required artifacts for the task's completion_tier are present and controller_intensity matches the selected tier
-# 2. test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
-# 3. When size is medium/large/mega or risk_tier is high/critical: spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. When size is medium/large/mega or risk_tier is high/critical: review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts, plus architecture_decision_pack_review_ref and its exact canonical contract when a Pack applies
-# 5. If qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
-# 6. For medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
+# 1. execution_intent=prepare_only selects completion_tiers.preparation_only and returns feature_preparation_result plus every applicable preparation artifact (including feature_preparation_evidence for existing_system); it excludes Build, changed-file, test, review, and final-handoff claims. Otherwise all required artifacts for the selected completion tier are present and controller_intensity matches the selected tier.
+# 2. When execution_intent != prepare_only, test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
+# 3. When execution_intent != prepare_only and (size is medium/large/mega or risk_tier is high/critical): spec_review_result.status == PASS and required_fixes are empty or resolved
+# 4. When execution_intent != prepare_only and (size is medium/large/mega or risk_tier is high/critical): review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts, plus architecture_decision_pack_review_ref and its exact canonical contract when a Pack applies
+# 5. If execution_intent != prepare_only and qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
+# 6. When execution_intent != prepare_only, for medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
 # 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops or a second/sequential progressive decision activation and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
 # 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
-# 10. For medium+ harness-capable work, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger exist and are current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
+# 10. When execution_intent != prepare_only, medium+ harness-capable work has harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
 # 11. manual_verification_result exists only when manual_verification_mode=required; user_approval exists only when that scoped check depends on user observation. Metrics never block completion.
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
   - name: verified_skill_distillation

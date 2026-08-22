@@ -13,23 +13,39 @@ jobs:
   framework-contracts:
     name: Framework contracts and installs
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The aggregate directly checks every top-level P0-P4 suite before running its combined sourced set.
+    # Hosted run 32586858443 reached 60m15s with passing assertions and unfinished suites;
+    # 90 minutes retains a finite cap plus 29m45s of headroom over that observed lower bound.
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
         with:
           persist-credentials: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/evals/package-lock.json
+
       - name: Install required packages
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ripgrep
+
+      - name: Install evaluation dependencies
+        working-directory: tools/evals
+        run: npm ci --ignore-scripts
 
       - name: Verify runner prerequisites
         run: |
           command -v bash
           command -v git
           command -v jq
+          command -v node
+          command -v npm
           command -v rg
           command -v rsync
 

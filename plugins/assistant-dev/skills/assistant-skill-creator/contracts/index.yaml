@@ -42,7 +42,7 @@ load_sets:
         section: fields
         key: name
         names: [skill_category]
-    budget_words: 5000
+    budget_words: 5250
   harness_design:
     references:
       - references/skill-contract-design-guide.md

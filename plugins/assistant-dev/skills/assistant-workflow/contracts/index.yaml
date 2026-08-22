@@ -1,4 +1,4 @@
-schema_version: "8.0"
+schema_version: "11.0"
 contract: index
 skill: assistant-workflow
 
@@ -21,8 +21,8 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [task_description,task_type,scope_hint,target_files,constraints,acceptance_criteria,plan_mode,architecture_design_mode,architecture_design_trigger_reasons]
-    budget_words: 4000
+        names: [task_description,task_type,scope_hint,target_files,constraints,execution_intent,plan_mode,architecture_design_mode,manual_verification_mode,qa_evaluation_mode,harness_capable,build_execution_lane,workflow_state_mode]
+    budget_words: 3999
   architecture_design:
     references:
       - references/architecture-decision-pack.md
@@ -38,6 +38,21 @@ load_sets:
         key: name
         names: [architecture_decision_pack]
     budget_words: 7000
+  feature_preparation:
+    references:
+      - references/feature-preparation-evidence.md
+    selectors:
+      - id: workflow-feature-preparation-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [execution_intent, feature_preparation_scope, approved_feature_preparation_evidence_ref]
+      - id: workflow-feature-preparation-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [feature_preparation_evidence, feature_preparation_result]
+    budget_words: 5000
   progressive_discovery:
     references:
       - references/progressive-discovery.md
@@ -52,7 +67,7 @@ load_sets:
         section: artifacts
         key: name
         names: [decision_map, decision_item,deferred_uncertainty,decision_frontier,decision_resolution,route_clear_handoff,loop_readiness_assessment,progressive_terminal_archival]
-    budget_words: 8188
+    budget_words: 8500
   delegation:
     selectors:
       - id: workflow-delegation-fields
@@ -60,17 +75,7 @@ load_sets:
         section: fields
         key: name
         names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]
-    budget_words: 2522
-  slice_review:
-    references:
-      - references/slice-review-topology.md
-    selectors:
-      - id: workflow-slice-review-mode
-        path: contracts/input.yaml
-        section: fields
-        key: name
-        names: [slice_promotion_mode]
-    budget_words: 2576
+    budget_words: 3000
   current_phase:
     selectors:
       - id: workflow-current-phase-gate
@@ -78,13 +83,13 @@ load_sets:
         section: gates
         key: phase
         name_from: active_workflow_phase
-        allowed_names: [TRIAGE,DISCOVER,DECOMPOSE,PLAN,DESIGN,BUILD,REVIEW,DOCUMENT]
+        allowed_names: [TRIAGE,DISCOVER,DECOMPOSE,PLAN,DESIGN,BUILD,REVIEW,DOCUMENT,PREPARATION_COMPLETION]
       - id: workflow-phase-invariants
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_ARCHITECTURE_PACK_FRESHNESS,INV_ARCHITECTURE_PACK_HANDOFF_BINDING,INV_SEMANTIC_TYPE_BOUNDARIES,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_TERMINAL_ARCHIVAL,INV_PROGRESSIVE_REPEAT_READINESS]
-    budget_words: 6509
+        names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY,INV_ARCHITECTURE_PACK_FRESHNESS,INV_ARCHITECTURE_PACK_HANDOFF_BINDING,INV_SEMANTIC_TYPE_BOUNDARIES,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_TERMINAL_ARCHIVAL,INV_PROGRESSIVE_REPEAT_READINESS]
+    budget_words: 7003
   selected_handoff:
     selectors:
       - id: workflow-selected-handoff
@@ -101,7 +106,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [triage_result,completion_policy,phase_checkpoints,changed_files,debugging_result,test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, architecture_decision_pack, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, slice_review_evidence, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
+        allowed_names: [triage_result,completion_policy,phase_checkpoints,changed_files,debugging_result,test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, architecture_decision_pack, feature_preparation_evidence, feature_preparation_result, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
     budget_words: 12000
 
 fallback:

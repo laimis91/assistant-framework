@@ -50,7 +50,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 ## Constraints
 
-- Default to audit mode when the user asks to provide, report, list, or summarize findings.
+- Infer review mode from semantic modification authority, not fixed wording, authorship, platform, or connector metadata. Clear report-only intent selects audit; clear source-modification authorization selects review-fix. A carried active approved implementation workflow authorizes only bounded, in-scope review fixes. Only when audit versus editing remains materially unresolved, ask: "Should I only report findings, or also implement and verify fixes?" Do not review or mutate until answered.
 - Do not emit intermediate review summaries; present one final summary after loop exit.
 - Use concrete risk categories for refactor-related findings.
 - Treat clean-code principles as evidence lenses, not acronym-driven style rules.
@@ -60,13 +60,15 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 Prefer explicit files/content/diff, then uncommitted changes, then the active task journal or packet, then requested current-file audit. Ask only when no review material can be determined.
 
-A standalone `review this` with no carried workflow evidence performs Spec Review against the user request and user scope, records a PASS evidence pointer before Reviewer dispatch, and blocks dispatch on FAIL until the scope mismatch is fixed and Spec Review passes. Standalone review does not require a task journal; `task_journal_path` remains optional.
+A standalone `review this` without carried workflow evidence runs Spec Review against user scope. In review-fix mode, repair an authorized mismatch and repeat to a PASS pointer before Reviewer dispatch. In audit mode, record Spec Review FAIL as a finding and exit without source mutation or Reviewer dispatch. Standalone does not require a task journal; `task_journal_path` is optional.
 
 A workflow-composed review consumes the carried Spec Review PASS pointer and carried current build/test evidence. After any source fix, every subsequent Reviewer dispatch requires real current passed build/test evidence; a not-applicable marker is invalid.
 
 ## Review Modes
 
 Use the smallest applicable combination: spec, regression, test, maintainability, bugfix evidence, semantic contract, behavioral contract, agentic loop safety, and security. Contract and loop modes are enabled by the three entry flags; security-sensitive surfaces route to `assistant-security`.
+
+Authorship, branch/PR ownership, platform, and connector availability may identify material but never authorize source changes. Carried workflow authorization permits only evidence-backed in-scope fixes. Findings expanding scope, requirements, or architecture return to the composing workflow for planning or approval.
 
 Findings include severity (`must-fix`, `should-fix`, or `nit`), file/line evidence, concrete impact, smallest useful fix, and evidence-calibrated confidence. Speculative concerns remain non-blocking Observations.
 

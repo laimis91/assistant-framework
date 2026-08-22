@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "Run proportional development phases and resume persisted task state. Use to plan, build, implement, fix, migrate, refactor, or continue project artifacts."
+description: "Prepare, plan, build, or resume persisted task state. Use for repository-grounded feature/epic/story technical preparation, implementation, fixes, migrations, refactors, and project artifacts."
 ---
 
 # Development Workflow
@@ -15,23 +15,24 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 
 - Scale phases to risk; Decompose, Design, and durable state run only when triggered.
 - Before resume, reconcile the newest user request and repository evidence.
-- If resume reconciliation classifies persisted state as stale, superseded, or completed, update the framework-owned `{agent_state_dir}/task.md` before acting or returning; record the classification and reason, current task identity, and repaired exact next action.
-- `plan_mode` keeps planning proportional: trivial safe work may use `none`, bounded small work may use `inline`, and medium+, risky, destructive, or scope-shaping work uses `approval_required`. When `plan_mode=inline`, small work has an inline plan and proceeds without ceremony unless risk requires approval.
+- On stale, superseded, or completed resume state, update `{agent_state_dir}/task.md` before acting; record classification, reason, task identity, and exact next action.
+- `plan_mode`: bounded small uses no-wait `inline`; For `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, scope changes. `prepare_only`: `approval_required` only for explicitly requested readiness planning; otherwise `none`.
 - `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
-- When `architecture_design_mode` is triggered, the Architecture Decision Pack is source-backed, freshness-checked, uses semantic interface types with explicit primitive exceptions, and travels from Discover-only context binding through atomic Plan binding, task packets, Build, handoff, and Review.
+- Triggered Architecture Decision Packs are source-backed and fresh. `prepare_only` retains Discover-only Pack context through Preparation Completion; `execution_intent != prepare_only` continues through Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
+- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; optional readiness plans contain evidence ref, implications, open decisions, and next state, with Pack handoff discover_only. Product questions need evidence.
 - Review, QA, and security routing apply when triggered.
-- Medium+ final output follows `references/final-handoff.md`; small output gives changed files, evidence, review status, risks, and next steps.
+- Medium+ output follows `references/final-handoff.md`; prepare_only returns readiness and next implementation state.
 
 ## Constraints
 
 - Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals.
-- Do not skip applicable phases; Plan is inapplicable only when the explicit `plan_mode=none` eligibility gate passes.
+- Run phases. `prepare_only`: Discover -> Preparation Completion; readiness optional, implementation gates inapplicable. Other work skips Plan only when eligible.
 - Do not ask ritual questions when code/context makes the next safe action clear.
-- Ask every material clarification before planning only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification. Group questions by topic; never impose an arbitrary numeric question cap.
+- Ask material clarifications only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; group by topic.
 - assistant-clarify owns prompt-level ambiguity when its routing matches; clear prompts do not invoke it. Existing workflow clarification owns precise, answerable questions and safe defaults.
 - Load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, `progressive_route_clear_consumption_state in [pending, consumed]`, `progressive_sequence_readiness_state in [active, closed]`, or `progressive_artifact_retention_state=terminally_archived`. The durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained, so invalid carried state fails closed instead of releasing artifacts. Retained state keeps active/resumable progressive artifacts available after `uncertainty_shape=bounded`. `terminally_archived` is allowed only with a typed `progressive_terminal_archival` tombstone binding the current task, final decision map, archival/termination basis, and resolvable evidence proving continuation and reference resolution are impossible; `Task state: completed` does not qualify by itself, and terminally archived state cannot revert. Fully specified tasks with `not_applicable` markers stay bounded, and size alone is not a trigger.
 - Progressive Discover is a no-execution boundary; any mutating prerequisite uses a separate approved workflow that returns evidence before normal workflow gates continue.
@@ -46,6 +47,7 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
+- `feature_preparation`: for repository-grounded preparation or existing behavior, load `references/feature-preparation-evidence.md`; resolve its evidence ref before Decompose, Plan, or Build and retain it in downstream artifacts.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -56,10 +58,10 @@ Selectors resolve by unique id plus canonical path, section, key, and explicit n
 
 Missing or invalid selector: `load_full_authoritative_file`; validate the full named canonical file and record recovery.
 
-Migration note: assistant-workflow contracts are v8; consumed all-excluded route-clear maps may keep `entries=[]` only with complete exclusion lineage; Pack alternatives use stable `selected_alternative_id` bindings and verified `quality_scenario_id` scenarios use resolvable verification identity. Pack `review_result` retains canonical refs. v6: `semantic_type_inspection`, `contributor_evidence`. v4 consumers use `handoff_binding_state=discover_only`
+Migration note: assistant-workflow contracts are v11. v10: `prepare_only` uses `feature_preparation_result`, records execution not started, omits Build/test/review/final-handoff claims, and retains `handoff_binding_state=discover_only` through Preparation Completion even for optional readiness planning. v9: `execution_intent`; existing-system preparation produces or carries `feature_preparation_evidence`. Bash/provider review runners are removed; native task packets retain scope and verification. v8: consumed all-excluded route-clear maps may keep `entries=[]` only with complete exclusion lineage; Pack alternatives use stable `selected_alternative_id` bindings and verified `quality_scenario_id` scenarios use resolvable verification identity. Pack `review_result` retains canonical refs. v6: `semantic_type_inspection`, `contributor_evidence`. v4 consumers use `handoff_binding_state=discover_only`
 with Discover context/journal.
-Plan atomically binds task/review refs as
-`downstream_bound` before Build when `plan_mode!=none`; plan_mode=none binds
+For `execution_intent != prepare_only`, Plan atomically binds task/review refs
+as `downstream_bound` before Build when `plan_mode!=none`; plan_mode=none binds
 inline task/review refs at the pre-Build boundary.
 Material invalidation clears stale downstream refs through refresh, re-plan,
 and reapproval. Direct-user, applicable
@@ -111,6 +113,7 @@ plan mode, subagent state, and search mode. Ideas need binary criteria.
 
 | Size | Phases |
 |---|---|
+| **Prepare-only** | Discover -> [readiness] -> Preparation Completion; no implementation |
 | **Small** | Discover quick -> [Plan] -> Build -> Review -> Document; `plan_mode=none` only for trivial safe work, otherwise inline or approval-required |
 | **Medium** | Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document |
 | **Large** | Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document |
@@ -130,12 +133,13 @@ Load `references/phases.md` for the current phase. Load `references/workflow-con
 | Phase | When | Key Actions |
 |---|---|---|
 | Discover | All | Inspect request/repo and unknowns; create a source map only when the current file/boundary cannot be resolved directly; unknown-cause bugfixes: load `assistant-debugging`. |
-| Decompose | Medium+ | Smallest slices with acceptance and verification. |
-| Plan | `plan_mode != none` | Inline stays concise; approval-required waits for approved scope, packets, files, checks, and risks. |
-| Design | UI only | Direction, checklist, approval. |
-| Build | All | Light direct; ordinary medium one edit/test executor; separation only for high-risk or broad/noisy/environment-heavy verification. Tests/validation travel with code. |
-| Review | All | Light fresh self-review; standard/strict Spec Review then independent `assistant-review`; QA only when required. |
-| Document | All | Apply state/manual-verification modes; metrics optional and non-blocking. |
+| Decompose | Medium+ implementation work | Smallest slices with acceptance and verification. |
+| Plan | `plan_mode != none`; optional prepare_only readiness | Inline/approval routing. |
+| Design | UI only; `execution_intent != prepare_only` | Direction, checklist, approval. |
+| Build | `execution_intent != prepare_only` | Light direct; ordinary medium one edit/test executor; separation only for high-risk or broad/noisy/environment-heavy verification. Tests/validation travel with code. |
+| Review | `execution_intent != prepare_only` | Light fresh self-review; standard/strict Spec Review then independent `assistant-review`; QA only when required. |
+| Document | `execution_intent != prepare_only` | Apply state/manual-verification modes; metrics optional and non-blocking. |
+| Preparation Completion | `prepare_only` | Return readiness; approval is next. |
 
 For subagent rules, load `references/subagent-dispatch.md` and resolve
 `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`,
@@ -147,7 +151,6 @@ external-write, install, destructive-operation, and secrets safeguards.
 
 Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
 Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
-For review-gated multi-slice work, load `references/slice-review-topology.md` before emitting or consuming slice review evidence.
 
 ## Output
 
@@ -165,5 +168,5 @@ Do not use phrases like "should work", "probably fixed", or "looks good" unless 
 
 - Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
 - Stop before Build when `plan_mode=approval_required` until plan approval.
-- Stop before final response if build, tests, required review, or output contract evidence is missing.
+- Stop before response if required output-contract evidence is missing; implementation also requires build, tests, and review evidence.
 - Stop when a plan deviation changes approved scope, files, behavior, risk, verification, or acceptance criteria; record the deviation and get approval before continuing.

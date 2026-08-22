@@ -3,26 +3,16 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "8.0"
+schema_version: "11.0"
 contract: input
 skill: assistant-workflow
 
 fields:
-  - name: slice_promotion_mode
-    type: enum
-    required: false
-    enum_values: [local, review_gated]
-    description: "Promotion policy for new multi-slice topology; review_gated emits portable review evidence rather than performing remote actions"
-    default: local
-    validation: "review_gated requires explicit task/slice topology and any remote-write authorization remains outside the core workflow"
-    on_missing: infer
-    infer_from: "Use local unless the approved task or configured adapter selects review_gated."
-
   - name: task_description
     type: string
     required: true
-    description: "What to build, fix, refactor, or investigate"
-    validation: "Non-empty string. Must describe a concrete action or desired outcome."
+    description: "Outcome."
+    validation: "Non-empty concrete action or outcome."
     on_missing: ask
     ask_prompt: "What would you like me to build, fix, or change?"
 
@@ -30,16 +20,26 @@ fields:
     type: enum
     required: true
     enum_values: [feature, bugfix, refactor, migration, rewrite, config, infra, security, docs, spike]
-    description: "Category of work — drives which task-category gate packs and prompt packs load"
+    description: "Type."
     validation: "Must be one of the enum values"
     on_missing: infer
-    infer_from: "task_description keywords: 'fix/bug/broken' -> bugfix, 'rewrite/port' -> rewrite, 'migrate/migration' -> migration, 'refactor/clean/reorganize' -> refactor, 'config/setting/env' -> config, 'infra/deploy/lifecycle/install' -> infra, 'security/auth/PII/payment/input validation' -> security, 'docs/readme/document/changelog' -> docs, 'spike/explore/investigate' -> spike, else -> feature"
+    infer_from: "fix/bug/broken -> bugfix; rewrite/port -> rewrite; migrate/migration -> migration; refactor/clean/reorganize -> refactor; config/setting/env -> config; infra/deploy/lifecycle/install -> infra; security/auth/PII/payment/input validation -> security; docs/readme/document/changelog -> docs; spike/explore/investigate -> spike; else feature. Select the corresponding Task Category Gate Pack."
+
+  - name: execution_intent
+    type: enum
+    required: false
+    enum_values: [prepare_only, implement_only, end_to_end]
+    description: "Intent."
+    validation: "prepare_only ends at readiness without Build/changed-files; implement_only consumes approved evidence; end_to_end is phased."
+    default: end_to_end
+    on_missing: infer
+    infer_from: "Preparation only -> prepare_only. When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation. implement_only needs approved packet."
 
   - name: risk_tier
     type: enum
     required: false
     enum_values: [low, moderate, high, critical]
-    description: "Triage risk tier inferred during Triage from impact, uncertainty, reversibility, and affected boundaries"
+    description: "Triage risk tier."
     validation: "Must be one of the enum values when present"
     default: null
     on_missing: skip
@@ -48,16 +48,16 @@ fields:
   - name: required_gates
     type: string[]
     required: false
-    description: "Gate names selected during Triage from the common gates and task-category gate packs"
-    validation: "Each entry is a short gate label from references/triage-rubric.md or a clearly justified project-specific gate"
+    description: "Triage-selected gates."
+    validation: "For execution_intent == prepare_only, required_gates is exactly [feature-preparation evidence] and excludes execution common and task-category gates. Otherwise each entry is a short gate label from references/triage-rubric.md or a clearly justified project-specific gate."
     default: []
     on_missing: skip
 
   - name: required_agents
     type: string[]
     required: false
-    description: "Agent or skill roles required by concrete task uncertainty, task type, risk tier, and explicit user/project routing"
-    validation: "Entries must be known workflow roles or installed skills, or state a clear project-specific role. For standard/strict source changes, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect are selected only for a concrete mapping, lifecycle, or Architecture Decision Pack uncertainty, not from size alone. Reviewer may satisfy only compatibility routing for existing/legacy handoffs. Light small low-risk work may keep required_agents empty and execute inline/direct when it records relevant validation and a fresh review."
+    description: "Routing-required roles."
+    validation: "Entries are known workflow roles, installed skills, or a justified project role. For execution_intent=prepare_only, required_agents contains only concrete Discover/preparation roles and excludes QA Evaluator, Build, Review, Code Writer, Builder/Tester, and Code Reviewer roles; retain an explicit QA request only in feature_preparation_result.future_qa_acceptance_obligation. For execution_intent != prepare_only, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect need concrete mapping, lifecycle, or Pack uncertainty; Reviewer may satisfy only compatibility routing. Light low-risk work may keep required_agents empty with validation and fresh review."
     default: []
     on_missing: skip
 
@@ -65,7 +65,7 @@ fields:
     type: enum
     required: false
     enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
-    description: "Whether an applicable instruction triggers delegation or requires evidenced fallback"
+    description: "Delegation trigger/fallback status."
     validation: "Must describe the current trigger, opt-out, availability, or exact policy-block state before any subagent dispatch occurs"
     default: not_required
     on_missing: infer
@@ -75,7 +75,7 @@ fields:
     type: enum
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
-    description: "How role responsibilities will be executed for this task"
+    description: "Role execution mode."
     validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
     default: not_applicable
     on_missing: infer
@@ -84,7 +84,7 @@ fields:
   - name: subagent_trigger_scope
     type: string[]
     required: false
-    description: "Trigger provenance plus roles, phases, and actions covered by direct user, applicable AGENTS.md, or active skill instruction"
+    description: "Delegation trigger provenance."
     validation: "Non-empty when delegation is relevant; records provenance and covered roles/phases/actions, inferred without asking. Empty only when subagent_policy_state=not_required."
     default: []
     on_missing: infer
@@ -93,7 +93,7 @@ fields:
     type: string
     required: conditional
     condition: "subagent_policy_state == policy_disallowed"
-    description: "Exact active rule that blocks spawning after confirming no applicable user, AGENTS, or skill exception"
+    description: "Policy preventing delegation."
     validation: "Non-empty; names the blocking rule and confirms why no applicable exception permits delegation. A conditional rule that defers spawning unless the user or applicable AGENTS/skill asks does not make policy_disallowed when the active skill requires subagents."
     on_missing: fail
 
@@ -101,35 +101,30 @@ fields:
     type: enum
     required: false
     enum_values: [small, medium, large, mega]
-    description: "User-provided size estimate. Triage may override."
+    description: "Size."
     default: null
     on_missing: skip
 
   - name: target_files
     type: string[]
     required: false
-    description: "Specific files the user wants changed"
-    validation: "Each entry must be a valid relative file path"
+    description: "Files."
+    validation: "Valid relative paths"
     default: []
     on_missing: skip
 
   - name: constraints
     type: string[]
     required: false
-    description: "Boundaries the agent must not cross"
-    validation: "Each entry is a plain-language constraint. Constraints only accumulate — never remove without explicit user instruction."
+    description: "Constraints."
+    validation: "Plain-language constraints only accumulate unless the user explicitly changes them"
     default: []
     on_missing: skip
-    examples:
-      - "Don't touch ProjectA"
-      - "Stay on .NET 8"
-      - "No new NuGet packages"
-      - "Backend only, no UI"
 
   - name: tdd_mode
     type: boolean
     required: false
-    description: "Whether workflow enforces tests-first Red-Green-Refactor via assistant-tdd. Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors unless a not-feasible exception is recorded."
+    description: "Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors."
     default: false
     on_missing: infer
     infer_from: "User says 'TDD', 'tests first', 'red green refactor' -> true; task_type in [feature, bugfix] with behavior change and enough evidence to write a RED test -> true; interface-affecting refactor -> true; unknown-cause bugfix -> run assistant-debugging first, then infer true once failure mechanism is understood; non-behavior docs/config/spike/prototype/generated-code/layout-only work -> false with recorded reason"
@@ -139,7 +134,7 @@ fields:
     type: enum
     required: false
     enum_values: [not_applicable, root_cause_unknown, root_cause_known, completed, blocked]
-    description: "Whether assistant-debugging must run before bugfix implementation/TDD"
+    description: "Bugfix debugging state."
     default: not_applicable
     on_missing: infer
     infer_from: "task_type == bugfix and cause is not already evidenced -> root_cause_unknown; task_type == bugfix with clear reproduction/root-cause evidence -> root_cause_known; non-bugfix -> not_applicable"
@@ -148,7 +143,7 @@ fields:
   - name: acceptance_criteria
     type: string[]
     required: false
-    description: "Compatibility list of atomic success criteria derived from requirement_acceptance_map when present"
+    description: "Atomic acceptance criteria."
     validation: "Each criterion is atomic, binary (pass/fail), and testable (8-12 words)"
     default: []
     on_missing: skip
@@ -158,7 +153,7 @@ fields:
     type: object
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
-    description: "Stable requirement-to-evidence traceability created after material clarification and consumed by slices, review, and completion; a pending route-clear handoff prepares this completed map without requiring it yet"
+    description: "Accepted requirement traceability."
     validation: "Every accepted requirement has one stable requirement_id, atomic acceptance criterion, verification method, manual scenario or explicit N/A, and a status; exclusions require explicit approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff retired_or_excluded_deferred_uncertainty_refs entry is traced exactly once as a non-goal or approved exclusion."
     on_missing: fail
     object_fields:
@@ -266,113 +261,77 @@ fields:
   - name: harness_capable
     type: boolean
     required: false
-    description: "Whether the task is scoped into the harness controller; ordinary medium+ workflow tasks default to false."
-    validation: "False by default. True only for explicitly requested harness work, long-running work, trace/replay-ready multi-slice work, high-risk harness work, domain-scored work, UI/visual/product/UX/docs/DX-facing work, or accepted Done Contract/Harness Recipe presence."
+    description: "Whether task uses harness; ordinary medium+ workflow tasks default to false, including source-changing workflow tasks."
+    validation: "Default false. True only for explicitly requested harness work; long-running or trace/replay-ready multi-slice; high-risk harness; domain-scored work or UI/visual/product/UX/docs/DX-facing work; or accepted Done Contract/Harness Recipe. In prepare_only QA/acceptance alone never makes it true; require independent evidence. Do not infer true from size=medium+, delegation alone, or ordinary source-changing work."
     default: false
     on_missing: infer
-    infer_from: >
-      Default false. Set true only when the user or approved plan explicitly requests harness work,
-      the work is long-running, trace/replay-ready multi-slice work, high-risk harness work,
-      domain-scored, UI/visual/product/UX/docs/DX-facing, or already has an accepted Done Contract
-      or Harness Recipe. Do not infer true from size=medium+, delegation alone, or ordinary
-      source-changing workflow tasks.
+    infer_from: "Listed harness evidence -> true; otherwise false, never size, delegation, ordinary source changes, or prepare_only QA alone."
 
   - name: build_execution_lane
     type: enum
     required: false
     enum_values: [inline_direct, bounded_executor, separated_workers]
-    description: "Ownership shape for the Build edit/test loop"
+    description: "Build lane."
     default: bounded_executor
     on_missing: infer
-    infer_from: "light localized work -> inline_direct; ordinary medium standard-risk work -> bounded_executor; high/critical risk, broad or noisy verification, environment-heavy validation, independent TDD evidence, or explicit separation -> separated_workers"
-    validation: "Size alone does not require separated_workers. bounded_executor still records valid RED before production code, focused GREEN/regression verification, and independent Code Reviewer evidence."
+    infer_from: "For execution_intent == prepare_only, use inline_direct; otherwise light local -> inline_direct, ordinary medium -> bounded_executor, separated_workers only for high/critical, broad/noisy, environment-heavy, independent TDD, or explicit separation."
+    validation: "For execution_intent == prepare_only, inline_direct records no Build lane. Size alone never requires separated_workers; bounded_executor records RED, focused GREEN/regression, and independent Code Reviewer evidence."
 
   - name: plan_mode
     type: enum
     required: false
     enum_values: [none, inline, approval_required]
-    description: "Whether this task skips a separate Plan phase, records a compact no-wait plan, or waits for explicit plan approval"
-    validation: "none is allowed only for trivial, localized, reversible, low-risk work with one obvious implementation path, known files, known verification, no material ambiguity, and no public contract/data/security/destructive effect. inline is limited to bounded small work with no approval trigger. approval_required is mandatory for medium+, high/critical risk, destructive work, public contract/data/security changes, material architecture or scope choices, repository policy, or an explicit user request."
+    description: "requires explicit plan approval before implementation work; prepare_only readiness never waits for implementation approval."
+    validation: "prepare_only at any size uses none unless explicit readiness plan; approval_required then covers only it. For execution_intent != prepare_only, approval_required applies to medium+/risk/policy/scope/explicit; none trivial-safe, inline bounded-small."
     default: none
     on_missing: infer
-    infer_from: "Use approval_required for medium+ or any approval trigger. Use inline for small work that benefits from multiple recorded steps but has no approval trigger. Use none only when the next safe edit and verification are obvious after Discover."
+    infer_from: "prepare_only -> none; approval_required only for explicit readiness. For execution_intent != prepare_only, approval_required applies to medium+/triggers; inline bounded-small."
 
   - name: controller_intensity
     type: enum
     required: false
     enum_values: [light, standard, strict]
-    description: "Completion/gate intensity selected during Triage; maps onto existing completion_tiers and gate_tiers."
-    validation: "light uses small/low-risk guidance, standard uses ordinary medium+ completion/review without harness/QA defaults, and strict uses strict gates or harness/QA artifacts only when their existing conditions apply."
+    description: "Controller intensity."
+    validation: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required; strict only high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay; never generic acceptance."
     default: standard
     on_missing: infer
-    infer_from: >
-      Use light for small low-risk localized work. Use standard for ordinary medium+
-      source-changing work, including delegated work, when harness_capable == false
-      and qa_evaluation_mode == not_required. Use strict only for high/critical risk,
-      harness_capable == true, qa_evaluation_mode == required,
-      explicit harness/QA acceptance work, or trace/replay-ready work. Do not infer
-      strict from size=medium+ or delegation alone.
+    infer_from: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required. For execution_intent != prepare_only, strict only high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay. Do not infer strict from size=medium+ or delegation alone, or generic acceptance. In prepare_only, risk/project criteria may still select strict preparation; QA request alone never promotes strict and remains future_qa_acceptance_obligation."
 
   - name: workflow_state_mode
     type: enum
     required: false
     enum_values: [inline, journal]
-    description: "Whether workflow state stays in the current response/plan packet or is persisted in the durable task journal."
-    validation: "inline is valid when uncertainty_shape == bounded for light or standard work that does not need persistence. For progressive uncertainty, inline is only the equivalent carried-state fallback when local state artifacts are unavailable or policy-disallowed. journal is required when uncertainty_shape == progressive and local state artifacts are configured and policy allows them, or when clarification wait, delegation, cross-session continuation, explicit state persistence, strict control, harness artifacts, or required QA needs durable state. Size alone does not require journal mode."
+    description: "State storage mode."
+    validation: "For uncertainty_shape == progressive, journal only when local state artifacts are configured and policy allows them; unavailable/policy-disallowed progressive state uses equivalent carried-state fallback inline, including prepare_only. Ordinary inline requires uncertainty_shape == bounded absent clarification wait, delegated workflow roles during execution, cross-session/compaction continuation, explicit persisted state, controller_intensity == strict, harness_capable == true, or execution_intent != prepare_only and qa_evaluation_mode == required; those require journal. Size alone never requires journal."
     default: inline
     on_missing: infer
-    infer_from: >
-      Use journal when uncertainty_shape == progressive and local state artifacts are configured
-      and policy allows them, or when the task enters clarification wait, uses delegated workflow
-      roles, is expected to cross sessions or compaction boundaries, explicitly requests persisted
-      workflow state, uses controller_intensity == strict, harness_capable == true, or
-      qa_evaluation_mode == required. When progressive local state artifacts are unavailable or
-      policy-disallowed, use inline with the equivalent carried-state fallback. Otherwise use
-      inline only when uncertainty_shape == bounded, including small low-risk work and ordinary
-      standard work whose approved plan and evidence fit safely in the active packet.
+    infer_from: "For uncertainty_shape == progressive, journal only when local state artifacts are configured and policy allows them; unavailable/policy-disallowed progressive state uses equivalent carried-state fallback inline, including prepare_only. Otherwise inline requires uncertainty_shape == bounded absent clarification wait, delegated workflow roles during execution, cross-session/compaction continuation, explicit persisted state, controller_intensity == strict, harness_capable == true, or execution_intent != prepare_only and qa_evaluation_mode == required; those require journal. Size alone never requires journal."
 
   - name: manual_verification_mode
     type: enum
     required: false
     enum_values: [not_required, optional, required]
-    description: "Whether completion needs a manual acceptance check after automated Build and Review evidence."
-    validation: "required only for an explicit user request, subjective or UI acceptance, external effects that cannot be proven locally, destructive or migration work, or inadequate automated verification. Task size, controller intensity, and user confirmation rituals alone do not make manual verification required."
+    description: "Manual verification."
+    validation: "required only for explicit manual, subjective/UI, unprovable external, destructive/migration, or inadequate automation; never size/intensity/ritual."
     default: not_required
     on_missing: infer
-    infer_from: >
-      Use required only when the user explicitly asks to test or confirm the result manually,
-      acceptance is subjective or UI-facing, the change has external effects that local checks
-      cannot prove, the work is destructive or migration-related, or automated verification is
-      inadequate. Use optional when helpful manual checks exist but automated verification is
-      sufficient. Otherwise use not_required.
+    infer_from: "required for explicit manual, subjective/UI, unprovable external, destructive or migration-related, or inadequate automation; optional when helpful; else not_required."
 
   - name: qa_evaluation_mode
     type: enum
     required: false
     enum_values: [not_required, optional, required]
-    description: "Whether Review phase should run the independent QA Evaluator acceptance loop after build/test and code-review evidence"
-    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
+    description: "QA mode."
+    validation: "prepare_only -> not_required plus feature_preparation_result.future_qa_acceptance_obligation. Use required when the user explicitly requests QA/acceptance evaluation or harness_capable == true and acceptance evaluation is in scope. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work. Use not_required for ordinary medium+ code-review-only/source-changing work."
     default: not_required
     on_missing: infer
-    infer_from: >
-      Use required only for QA required positive triggers: explicit QA/acceptance evaluation request,
-      accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped
-      UI/visual/product/UX/docs/DX acceptance.
-      Use required when the user explicitly requests QA/acceptance evaluation, the task has an
-      accepted Done Contract, harness_capable == true and acceptance evaluation is in scope, the task
-      is domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
-      QA non-triggers: template labels/placeholders, generic acceptance criteria labels,
-      optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+
-      code-review-only/source-changing work.
-      Use optional when acceptance material exists but QA is not required.
-      Use not_required for ordinary medium+ code-review-only/source-changing work with no separate
-      acceptance evidence need.
+    infer_from: "prepare_only -> not_required plus feature_preparation_result.future_qa_acceptance_obligation; otherwise validation triggers -> required, helpful -> optional, else not_required."
 
   - name: search_mode
     type: enum
     required: false
     enum_values: [none, lightweight, candidate_search]
-    description: "Whether planning should evaluate one obvious path, a lightweight options list, or a BES-style candidate search before committing to an approach. Allowed values: none, lightweight, candidate_search"
+    description: "Candidate-search mode."
     validation: "Must be one of: none, lightweight, candidate_search. candidate_search triggers only for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failed attempts, unclear/flaky bugs, or reviewer-requested pivots."
     default: none
     on_missing: infer
@@ -382,25 +341,25 @@ fields:
     type: enum
     required: false
     enum_values: [not_applicable, lightweight, required, review_intensive]
-    description: "Whether the task needs a typed Architecture Decision Pack before executable planning"
-    validation: "not_applicable requires a concrete reason that the change has one evidenced local path and no meaningful changed boundary, data lifecycle, public contract, resource target, extension seam, or competing design. lightweight records one bounded design decision. required covers new systems, cross-boundary/public contracts, persistent data lifecycle, material extensibility/resource targets, or genuinely viable designs. review_intensive adds independent challenge for high-risk or conflicting drivers. Size alone is never a trigger."
+    description: "Architecture mode."
+    validation: "not_applicable needs concrete one-path reason and is invalid for extension seam/material extensibility. lightweight records bounded decision. required covers new/cross-boundary/public/persistent/material-quality-extensibility/extension-seam/viable-design work; review_intensive adds challenge. Size never triggers it."
     default: not_applicable
     on_missing: infer
-    infer_from: "Use required when the task creates a system or changes a cross-boundary/public contract, persistent data lifecycle, material memory/performance/reliability/extensibility target, or has genuinely viable architectures. Use lightweight for one local owner/dependency/type/verification decision. Use review_intensive only for high-risk or conflicting drivers that need independent challenge. Otherwise use not_applicable and record the concrete reason."
+    infer_from: "required for new/cross-boundary/public/persistent/material quality-extensibility/extension-seam/viable-design work; lightweight bounded decision; review_intensive high-risk/conflict; else not_applicable with reason."
 
   - name: architecture_design_trigger_reasons
     type: string[]
     required: true
     min_items: 1
-    description: "Concrete architecture trigger reasons or not-applicable rationale selected during Triage"
-    validation: "Non-empty. Each entry names an observed trigger such as cross-boundary contract, data lifecycle, resource target, extension seam, genuinely viable alternative, or conflicting driver; when architecture_design_mode=not_applicable, record the concrete evidenced local-path reason."
+    description: "Architecture trigger rationale."
+    validation: "Non-empty. Observed trigger/rationale: cross-boundary contract, data lifecycle, resource/quality target, extension seam, material extensibility, viable alternative, or conflicting driver; when architecture_design_mode=not_applicable, record the concrete evidenced local-path reason."
     on_missing: infer
     infer_from: "Derive from the request and candidate scope scan; record only triggers supported by local or user evidence. Concrete reason required even when architecture_design_mode=not_applicable."
 
   - name: candidate_search_goal
     type: string
     required: false
-    description: "Single objective used to decompose the goal tree when search_mode=candidate_search"
+    description: "Candidate-search objective."
     validation: "Derived from acceptance criteria and slice acceptance/verification criteria; must not create a second source of truth."
     default: null
     on_missing: skip
@@ -408,7 +367,7 @@ fields:
   - name: candidate_search_constraints
     type: string[]
     required: false
-    description: "Constraints and non-goals that every candidate must satisfy"
+    description: "Candidate constraints/non-goals."
     validation: "Each entry must come from user constraints, approved plan boundaries, policy constraints, or discovered project constraints."
     default: []
     on_missing: skip
@@ -417,7 +376,7 @@ fields:
     type: enum
     required: false
     enum_values: [bounded, progressive]
-    description: "Whether outcome-shaping uncertainty is already precise enough for ordinary Discover or must be resolved progressively before executable planning"
+    description: "Outcome uncertainty shape."
     validation: "bounded is the default. Use progressive only when a not-yet-precise outcome-shaping unknown is unlocked by a predecessor; fully specified tasks remain bounded, and size alone is not a trigger."
     default: bounded
     on_missing: infer
@@ -541,6 +500,24 @@ fields:
         type: string
         required: true
         description: "Why this value is safe, reversible, and does not materially change scope"
+
+  - name: feature_preparation_scope
+    type: enum
+    required: false
+    enum_values: [not_applicable, existing_system]
+    description: "Whether the task prepares a feature against behavior already implemented in the repository"
+    validation: "existing_system is required for prepare_only or end_to_end feature/spike work that can affect an existing user-visible route, scope, selection, highlight, focus, side effect, or compatibility behavior. For implement_only, carry existing_system when the approved packet was prepared against such behavior."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use existing_system when technical preparation concerns an existing repository behavior or route. Otherwise use not_applicable."
+
+  - name: approved_feature_preparation_evidence_ref
+    type: string
+    required: conditional
+    condition: "execution_intent == implement_only and feature_preparation_scope == existing_system"
+    description: "Approved canonical evidence reference consumed by implementation-only work against existing behavior"
+    validation: "Must resolve to the stable identity of a complete feature_preparation_evidence artifact whose current revision and scope cover the implementation packet; carry that identity unchanged, do not reconstruct missing evidence or downgrade it to a Product question."
+    on_missing: fail
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.

@@ -120,15 +120,13 @@ else
     fail "agentic loop safety lacks low-confidence escalation in: ${missing_loop_safety_terms[*]}"
 fi
 
-test_start "workflow templates and scripts do not use stale Build & Test or VERIFYING labels"
+test_start "workflow templates do not use stale Build & Test or VERIFYING labels"
 if rg -n "Build & Test|VERIFYING" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/decompose.sh" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/generate-agents-md.sh" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" >/tmp/p0p4-stale-workflow-labels.out; then
-    fail "found stale workflow template/script labels; see /tmp/p0p4-stale-workflow-labels.out"
+    fail "found stale workflow template labels; see /tmp/p0p4-stale-workflow-labels.out"
 else
     pass
 fi
@@ -138,15 +136,6 @@ missing_triage_terms=()
 triage_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"
 for term in \
     "Required Triage Output" \
-    "Task type" \
-    "Risk tier" \
-    "Controller intensity" \
-    "Required gates" \
-    "Required agents" \
-    "Subagent policy state" \
-    "Subagent execution mode" \
-    "Subagent trigger scope" \
-    "Candidate scope scan" \
     "Bugfix" \
     "Feature" \
     "Refactor / Migration / Rewrite" \
@@ -184,7 +173,6 @@ for term in \
     "T10" \
     "risk_tier is set" \
     "controller_intensity is set" \
-    "required_gates includes common gates" \
     "build_execution_lane and required_agents/fallback roles are populated" \
     "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized" \
     "candidate_scope_scan is populated from a quick read-only scan"; do
@@ -196,6 +184,8 @@ for term in \
     "Task type:" \
     "Risk tier:" \
     "Controller intensity:" \
+    "QA evaluation mode" \
+    "Harness capable" \
     "Required gates:" \
     "Required agents:" \
     "Subagent policy state:" \
@@ -210,6 +200,57 @@ if [[ "${#missing_triage_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
+fi
+
+test_start "triage output lists every required triage_result routing field"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  triage = File.read(ARGV.fetch(1))
+  result = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "triage_result" }
+  section = triage[/^## Required Triage Output\n(.*?)(?=^## |\z)/m, 1]
+  required = result.fetch("object_fields").select { |field| field.fetch("required") == true }.map { |field| field.fetch("name") }
+  exit(section && required.all? { |name| section.include?("`#{name}`") } ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" "$triage_file"; then
+    pass
+else
+    fail "triage Required Triage Output omits a required triage_result routing field"
+fi
+
+test_start "Docs-Only gate does not require code or test changes absent runnable behavior"
+docs_only_section="$(sed -n '/^### Docs-Only$/,/^### /p' "$triage_file")"
+if [[ "$docs_only_section" == *"Documentation-only work does not require code or test changes unless it changes runnable behavior."* ]] \
+    && [[ "$docs_only_section" != *"require code/tests only for runnable behavior"* ]]; then
+    pass
+else
+    fail "Docs-Only gate retains an outdated code/test-change requirement"
+fi
+
+test_start "Docs-Only gate removes or reconciles outdated instructions with current behavior"
+if [[ "$docs_only_section" == *"Remove or reconcile outdated instructions with current behavior."* ]]; then
+    pass
+else
+    fail "Docs-Only gate does not require current-behavior reconciliation for outdated instructions"
+fi
+
+test_start "workflow triage gates separate execution requirements from preparation admissibility"
+if ruby -ryaml -e '
+  gates = YAML.load_file(ARGV.fetch(0))
+  triage = gates.fetch("gates").find { |gate| gate.fetch("phase") == "TRIAGE" }
+  assertions = triage.fetch("exit_assertions").to_h { |assertion| [assertion.fetch("id"), assertion] }
+  t6 = assertions.fetch("T6")
+  t7 = assertions.fetch("T7")
+  preparation = assertions.fetch("T_PREPARATION_ADMISSIBILITY")
+  valid = t6.fetch("condition") == "execution_intent != prepare_only" &&
+    t6.fetch("check").include?("execution common gates") &&
+    t7.fetch("condition") == "execution_intent != prepare_only" &&
+    preparation.fetch("condition") == "execution_intent == prepare_only" &&
+    preparation.fetch("check").include?("only feature-preparation evidence") &&
+    preparation.fetch("check").include?("no execution or task-category gate")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "workflow triage gates do not distinguish execution gates from exact preparation admissibility"
 fi
 
 test_start "workflow discovery maps behaviorally relevant references"
@@ -495,13 +536,24 @@ for term in \
         missing_state_terms+=("phases.md: $term")
     fi
 done
-for term in \
-    "orchestrator-owned {agent_state_dir}/task.md state artifact" \
-    "a compact context map exists at {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed, or context map content is included in the task/plan packet when state files are unavailable"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_state_terms+=("phase-gates.yaml: $term")
-    fi
-done
+if ! ruby -ryaml -e '
+  gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")
+  d5 = gates.find { |gate| gate["phase"] == "DISCOVER" }
+    .fetch("exit_assertions")
+    .find { |assertion| assertion["id"] == "D5" }
+  check = d5.fetch("check")
+  valid = check.include?("context map exists at {agent_state_dir}/context-map.md") &&
+    check.include?("local state artifacts are configured and policy-allowed") &&
+    check.include?("For prepare_only") &&
+    check.include?("readiness evidence/context") &&
+    check.include?("without a task or plan packet") &&
+    check.include?("for execution_intent != prepare_only") &&
+    check.include?("state files are unavailable") &&
+    check.include?("task/plan packet")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+    missing_state_terms+=("phase-gates.yaml: D5 must branch local-state context-map, prepare-only readiness, and execution unavailable-state handling")
+fi
 for term in \
     "context_map_markdown" \
     "orchestrator to persist to {agent_state_dir}/context-map.md when local state artifacts are configured and policy-allowed"; do
@@ -516,6 +568,96 @@ if [[ "${#missing_state_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow state artifact ownership missing terms: ${missing_state_terms[*]}"
+fi
+
+test_start "workflow preparation routing keeps QA, harness, delegated state, and future QA obligations distinct"
+preparation_routing_failures=()
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::QA request alone never makes harness_capable=true during prepare_only" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::workflow_state_mode=journal" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::feature_preparation_result.future_qa_acceptance_obligation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::QA request alone never selects harness_capable=true during prepare_only" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Carry forward \`qa_evaluation_mode\`" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Future QA/acceptance obligation"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        preparation_routing_failures+=("${file#$FRAMEWORK_DIR/}: $term")
+    fi
+done
+if [[ "${#preparation_routing_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow preparation routing distinction is incomplete: ${preparation_routing_failures[*]}"
+fi
+
+test_start "workflow entry and preparation admissibility retain explicit QA, harness, lane, state, and manual-verification boundaries"
+if ruby -ryaml -e '
+  index = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  entry = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "workflow-entry-fields" }.fetch("names")
+  triage = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }
+  admissibility = triage.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PREPARATION_ADMISSIBILITY" }
+  check = admissibility.fetch("check")
+  input = YAML.load_file(ARGV.fetch(2))
+  manual = input.fetch("fields").find { |field| field.fetch("name") == "manual_verification_mode" }
+  valid = %w[qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
+    manual.fetch("infer_from").include?("destructive or migration-related") &&
+    check.include?("qa_evaluation_mode=not_required") &&
+    check.include?("build_execution_lane=inline_direct") &&
+    check.include?("harness_capable=false") &&
+    check.include?("independent harness evidence") &&
+    check.include?("QA request alone") &&
+    check.include?("workflow_state_mode") &&
+    check.include?("risk, delegation, or independent harness")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
+    pass
+else
+    fail "workflow entry loading or preparation admissibility does not preserve explicit QA, harness, lane, state, and manual-verification boundaries"
+fi
+
+test_start "workflow task classification maps compact high-signal aliases to exact categories and gate packs"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  task_type = input.fetch("fields").find { |field| field.fetch("name") == "task_type" }
+  triage = File.read(ARGV.fetch(1))
+  mapping = {
+    "fix/bug/broken" => ["bugfix", "Bugfix"],
+    "rewrite/port" => ["rewrite", "Refactor / Migration / Rewrite"],
+    "migrate/migration" => ["migration", "Refactor / Migration / Rewrite"],
+    "refactor/clean/reorganize" => ["refactor", "Refactor / Migration / Rewrite"],
+    "config/setting/env" => ["config", "Config / Infra"],
+    "infra/deploy/lifecycle/install" => ["infra", "Config / Infra"],
+    "security/auth/PII/payment/input validation" => ["security", "Security / Input"],
+    "docs/readme/document/changelog" => ["docs", "Docs-Only"],
+    "spike/explore/investigate" => ["spike", "Spike"]
+  }
+  valid = mapping.all? do |aliases, (category, gate)|
+    task_type.fetch("infer_from").include?("#{aliases} -> #{category}") && triage.include?("### #{gate}")
+  end
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"; then
+    pass
+else
+    fail "workflow task aliases or gate-pack routing drifted"
+fi
+
+test_start "workflow routing retains exact execution, lane, plan, and prepare-only strict boundaries"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  triage = File.read(ARGV.fetch(1))
+  valid = input.fetch("execution_intent").fetch("infer_from").include?("When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation") &&
+    input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use inline_direct") &&
+    triage.include?("For execution_intent != prepare_only, medium+ work") &&
+    input.fetch("controller_intensity").fetch("infer_from").include?("QA request alone never promotes strict") &&
+    triage.include?("QA request alone never promotes strict") &&
+    input.fetch("controller_intensity").fetch("infer_from").include?("future_qa_acceptance_obligation")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" "$triage_file"; then
+    pass
+else
+    fail "workflow execution, lane, plan, or prepare-only strict routing drifted"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

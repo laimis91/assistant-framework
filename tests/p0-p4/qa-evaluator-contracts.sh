@@ -232,7 +232,7 @@ require_terms "QA loop routing" "$review_dir/references/qa-evaluation-loop.md" \
     "The task is harness-capable and acceptance evaluation is in scope." \
     "Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope"
 require_terms "workflow QA output mode" "$workflow_dir/contracts/output.yaml" \
-    'condition: "qa_evaluation_mode == required"' \
+    'condition: "execution_intent != prepare_only and qa_evaluation_mode == required"' \
     "QA evaluation does not replace review_result"
 
 test_start "workflow and review QA trigger wording is mirrored"

@@ -99,7 +99,7 @@ its compact validation plus fresh-review evidence instead.
 | **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
 | **Medium** | Bounded executor → Code Reviewer, plus mapping/design roles only when their concrete trigger applies | Ordinary default; add Builder/Tester only when separated_workers triggers |
 | **Large** | Current-boundary mapping/analysis/design roles as needed → Code Writer/Builder-Tester when selected → Code Reviewer → QA Evaluator when required | Full evidence path is selected by risk and uncertainty, not by role count |
-| **Mega** | Parallel writers/role specialists only for independently executable slices and concrete triggers | Integration still requires current verification/review evidence; do not add roles as ceremony |
+| **Mega** | Source-changing Writers are sequential in shared or unknown workspaces; read-only specialists may parallel | Parallel source-changing Writers require runtime-proven isolated workspaces. Integration still requires current verification/review evidence; do not add roles as ceremony |
 
 ## Dispatch guidelines
 
@@ -132,7 +132,7 @@ its compact validation plus fresh-review evidence instead.
   fails the completion gates.
 - **QA evidence gate**: when QA is required, delegated mode is not complete until the task journal Agent Dispatch Log records QA Evaluator dispatch/result evidence after Builder/Tester and Code Reviewer evidence. Direct fallback must record fresh QA Evaluator direct evidence separately from Code Reviewer direct evidence. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 - **Architect is conditional**: use it only when a Pack/slice boundary has genuine uncertainty; in direct work the same compact decision criteria and evidence are recorded without inventing an Architect dispatch.
-- **Launch in parallel** when agents are independent (e.g., Code Mapper + Explorer on different modules)
+- **Parallel read-only analysis remains allowed** when agents are independent (for example, Code Mapper + Explorer on different modules). Source-changing packets in a shared or unknown workspace run sequentially; parallel source-changing packets require runtime proof of isolated workspaces.
 - **Code Mapper runs only when needed** to resolve current files/boundaries; its compact output feeds the current plan/implementation packet without becoming durable global memory.
 - **Code Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is triggered; `reviewer` is the compatibility route for older handoffs. Direct fallback must reset review context and record how stale-context risk was controlled.
 - **QA Evaluator gets a fresh dispatch each QA round** when QA is required and delegated mode is triggered. Direct fallback must reset acceptance-evaluation context and record how stale-context risk was controlled.

@@ -555,14 +555,20 @@ remove_source_only_promotion_tools() {
         [[ -n "$relative_path" ]] || continue
         if $DRY_RUN; then
             dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
+        elif [[ "$relative_path" == "evals/node_modules" ]]; then
+            rm -rf -- "$tools_target/$relative_path"
         else
-            rm -f "$tools_target/$relative_path"
+            rm -f -- "$tools_target/$relative_path"
         fi
     done <<'EOF'
 context-budget-report.sh
 evals/run-codex-framework-evals.sh
 evals/finalize-workflow-kernel-review.sh
 evals/lib/context-budget-evidence.sh
+evals/validate-promotion-decision-schema.cjs
+evals/package.json
+evals/package-lock.json
+evals/node_modules
 EOF
 }
 
@@ -645,16 +651,6 @@ for skill in "${SKILLS[@]}"; do
         rsync -a --delete \
             --exclude='.DS_Store' \
             "$source_dir/" "$target_dir/"
-
-        # Swap agent.conf to the correct preset if one exists before path substitution.
-        if [[ "$AGENT" != "claude" ]]; then
-            agent_preset="$target_dir/agents/${AGENT}.conf"
-            agent_conf="$target_dir/agent.conf"
-            if [[ -f "$agent_preset" && -f "$agent_conf" ]]; then
-                cp "$agent_preset" "$agent_conf"
-            fi
-
-        fi
 
         # Substitute agent-specific state directory placeholders in instruction/config files.
         while IFS= read -r instruction_file; do
@@ -759,6 +755,10 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='/evals/run-codex-framework-evals.sh' \
             --exclude='/evals/finalize-workflow-kernel-review.sh' \
             --exclude='/evals/lib/context-budget-evidence.sh' \
+            --exclude='/evals/validate-promotion-decision-schema.cjs' \
+            --exclude='/evals/package.json' \
+            --exclude='/evals/package-lock.json' \
+            --exclude='/evals/node_modules' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"

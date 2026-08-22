@@ -39,11 +39,14 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 ### Task [ID]: [short name]
 - name: [task packet name; must populate current_task_packet.name]
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
-- Slice topology: target_branch: [target] | target_base_sha: [immutable target commit SHA] | task_branch: feature/[task] | slice_branch: slice/[task]/[slice_id] | promotion_mode: [local | review_gated]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
+- QA evaluation mode: [carry triage value: not_required | optional | required]
+- Harness capable: [carry triage value: true | false]
+- Build execution lane: [carry triage value: inline_direct | bounded_executor | separated_workers]
+- Workflow state mode: [carry triage value: inline | journal]
 - Pack handoff binding: [discover_only only before Plan; otherwise downstream_bound | context/journal ref | plan/task-packet ref | review-scope ref]
 - Plan-mode-none Pack binding: [before Build, atomically set downstream_bound with compact inline task-packet/execution and inline review-scope refs]
 - Architecture test obligations: [when TDD applies to a Pack, carry each stable obligation_id, obligation kind, behavior, and verification into CodeWriter/BuilderTester; selected Build owner returns exact-once architecture_obligation_coverage]
@@ -103,11 +106,6 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 
 ## Slice Manifest
 
-For `review_gated`, copy the complete topology metadata into every packet and
-record `REVIEW_PENDING` review evidence rather than calling the slice VERIFIED.
-Use `references/slice-review-topology.md` for the exact evidence and adapter
-boundary; legacy briefs are a separate compatibility format and cannot mix.
-
 For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
 
 ```markdown
@@ -153,6 +151,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
 - Plan mode: [approval_required]
+- QA evaluation mode: [not_required | optional | required]
+- Harness capable: [true | false]
+- Build execution lane: [inline_direct | bounded_executor | separated_workers]
+- Workflow state mode: [inline | journal]
 - Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 - Architecture trigger reasons: [concrete evidence, or N/A reason]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
@@ -278,6 +280,20 @@ Use the shared Slice Manifest structure above. Paste the approved Decompose mani
 
 ## Task packets
 Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
+
+## Existing-system feature preparation (when `feature_preparation_scope=existing_system`)
+- Feature-preparation evidence ref: [stable `feature_preparation_evidence.ref`]
+- Behavior/work classification: [each scoped item id + behavior_status + work_status]
+- Execution status: [`Execution not started` for prepare-only | evidence completed before Build for end-to-end | approved evidence ref resolved for implement-only]
+- Plan/readiness result: [implementation steps or the exact evidence gap/conflict]
+- Product questions: [only rows admitted by the canonical evidence matrix]
+
+For `prepare_only`, return `feature_preparation_result` instead of an execution
+handoff: scope, evidence ref when applicable, evidence gaps, open decisions,
+implementation implications, recommended next step, and `execution_status=not_started`.
+For medium+ preparation, an optional readiness plan may be recorded without
+waiting for implementation approval; name that approval or delegation as the
+next implementation state rather than treating it as a gate on preparation.
 
 ## Tests to run
 - [command]: [what it validates]

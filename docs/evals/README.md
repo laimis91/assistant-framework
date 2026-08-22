@@ -41,6 +41,10 @@ under common operating conditions:
   `framework-semantic-review-verdict.schema.json`, and
   `framework-promotion-decision.schema.json` - bounded synthetic-review and
   fail-closed promotion contracts.
+- `workflow-kernel-activation-observation.schema.json` and
+  `fixtures/workflow-kernel-activation-observation.contract.json` - bounded
+  external native-selection attestation. The checked-in companion fixture is a
+  `contract_test_fixture`, validates mechanics only, and can never promote.
 - `../../tools/evals/run-framework-instruction-evals.sh` - offline helper for
   validating the fixture and imported traces, listing cases, emitting prompt
   packets, grading captured responses, and comparing variants locally.
@@ -50,6 +54,17 @@ under common operating conditions:
   verdict template and promotion finalizer; it invokes no model.
 
 ### How To Use
+
+The Draft 2020-12 promotion-decision contract test uses the locked local Ajv
+tooling dependency. Before running that contract suite, install it once with
+Node.js 22 and npm:
+
+```bash
+(cd tools/evals && npm ci --ignore-scripts)
+```
+
+The suite fails clearly when Node, npm, or this locked dependency is absent; it
+never installs packages during validation.
 
 Validate the fixture before using it:
 
@@ -142,7 +157,7 @@ canonical `assistant-workflow` contracts and references into both disposable
 workspaces, then replaces only the root file. This holds behavior contracts
 constant while measuring the smaller kernel intervention.
 
-Before any model call, adapter v5 runs only the reporter from the evaluator's
+Before any model call, adapter v6 runs only the reporter from the evaluator's
 trusted repository; variant inputs can never supply executable tooling. It uses
 `LC_ALL=C` over the already materialized snapshot root files. The run plan embeds one canonical,
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
@@ -150,7 +165,7 @@ reporter and both materialized instruction hashes. Generic manifest-free A/B
 plans retain structural counts without applying workflow-kernel policy.
 Manifest-backed promotion enforces fixed selected-skill caps of 1050 initial
 words and 3000 entry-boundary words, zero standing-context growth, and the
-hardcoded two-case smoke and six-case/three-repeat pilot. Internally consistent
+hardcoded two-case smoke and eight-case/three-repeat pilot. Internally consistent
 but false or loosened manifests fail closed. The evidence contains no
 instruction bodies or absolute paths.
 
@@ -365,7 +380,7 @@ two-artifact decision is rejected.
 
 `grader_sha256` binds both the canonical case grading contract and the complete
 Codex eval-runner implementation. Current promotion evidence requires adapter
-`codex-framework-eval-v5`; changing the contract or runner invalidates existing
+`codex-framework-eval-v6`; changing the contract or runner invalidates existing
 traces instead of retroactively re-grading deleted response or workspace data.
 
 Metrics without native Codex event timestamps are explicitly labeled as
@@ -395,11 +410,29 @@ tools/context-budget-report.sh --agent codex --skill assistant-workflow \
 
 Use the exact `smoke_cases` and `pilot_cases` declared in the variant manifest.
 The smoke uses one repeat (four runs total). Only after valid/redaction-safe
-traces, expand to the six-case three-repeat pilot (36 runs), sequentially and
+traces, expand to the eight-case three-repeat pilot (48 runs), sequentially and
 with the approved time/quota cap.
+
+Native routing is not invoked by this repository. A human evaluator may capture
+the six exact `assistant-workflow` activation selections from a native Codex
+session, without retaining raw session content, then supply that bounded JSON
+artifact to the adapter:
+
+```bash
+tools/evals/run-codex-framework-evals.sh --activation-observations /tmp/workflow-native-activation.json ...
+```
+
+The adapter records the artifact hash and a redacted admissibility summary in
+`run-plan.json`, then copies the validated observation to
+`activation-observations.json`. Promotion requires a fresh
+`manual_native_observation` with `human_evaluator`, `manual_native_session`,
+and `native_host=codex`, bound to the exact candidate skill and six activation
+cases. Missing evidence, stale hashes, or the checked-in
+`contract_test_fixture` fail closed with
+`native_activation_observation_not_admissible`.
 Authorization is invocation-bound: a replacement smoke, pilot, or retry that
 would make new model calls needs fresh explicit authorization for its exact call
-count. Prior authorization and a human verdict do not authorize a new 36-call
+count. Prior authorization and a human verdict do not authorize a new 48-call
 execution.
 
 GPT-5.6-Terra represents the common simple-task smoke profile. Pin it explicitly
@@ -422,7 +455,8 @@ The committed ordered-workflow fixture and runner changed the case and grader
 hashes. Any earlier Terra snapshot is therefore historical evidence only and
 cannot establish current behavioral promotion. Do not describe the architecture
 as currently Terra-validated unless a newly authorized exact pilot completes
-36/36 runs and 18/18 pairs against the current source, every automatic gate
+48/48 runs and 24/24 pairs against the current source, an admissible
+hash-bound manual native activation observation, every automatic gate
 passes, the bounded human semantic verdict covers the current packet, and the
 finalizer writes `behavioral_promotion_eligible=true`. Repository contract tests
 can validate the framework mechanics without consuming model quota, but they do

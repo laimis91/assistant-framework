@@ -5,16 +5,23 @@ description: "Create Mermaid architecture, sequence, ER, flow, class, or state d
 
 # Diagram Generator
 
+Migration note: diagram contracts are v3. Consumers of v2 must replace the
+singular feature-preparation evidence ref with exact
+`{evidence_ref, item_id}` bindings at the root and for every traced node and
+edge. `source_refs` remain the underlying code, configuration, test, or
+user-provided evidence; `coverage_gaps` still disclose unavailable behavior.
+
 ## Contracts
 
 | File | Purpose |
 |---|---|
-| [`contracts/input.yaml`](contracts/input.yaml) | diagram_type, scope, source_files[], format |
-| [`contracts/output.yaml`](contracts/output.yaml) | diagram_code, diagram_type, description |
+| [`contracts/input.yaml`](contracts/input.yaml) | diagram_type, scope, source_files[], format, optional exact feature-preparation evidence-row bindings |
+| [`contracts/output.yaml`](contracts/output.yaml) | diagram_code, diagram_type, description, evidence sources, element trace, coverage gaps |
 
 - `diagram_type` and `scope` are required; `format` defaults to mermaid
 - `diagram_code` must be valid syntax parseable by the target renderer
 - `diagram_type` is echoed back in output to confirm what was generated
+- Feature-preparation diagrams carry exact `{evidence_ref, item_id}` bindings at the root and for every traced element, and disclose untraced elements as coverage gaps
 
 Creates accurate Mermaid diagrams from code analysis. Covers the developer's visual documentation weakness.
 

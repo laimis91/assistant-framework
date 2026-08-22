@@ -18,7 +18,7 @@ TEMPLATE_FILE=""
 TRACE_VALIDATOR="$REPO_ROOT/tools/evals/run-framework-instruction-evals.sh"
 COMPARISON_PROGRAM="$SCRIPT_DIR/lib/framework-comparison.jq"
 CODEX_EVAL_RUNNER="$SCRIPT_DIR/run-codex-framework-evals.sh"
-EXPECTED_ADAPTER_VERSION="codex-framework-eval-v5"
+EXPECTED_ADAPTER_VERSION="codex-framework-eval-v6"
 CURRENT_BASELINE_INSTRUCTION_HASH=""
 CURRENT_CANDIDATE_INSTRUCTION_HASH=""
 CURRENT_CONTEXT_BUDGET_EVIDENCE_HASH=""
@@ -235,9 +235,6 @@ materialize_variant() {
     while IFS= read -r entry; do cp -R "$entry" "$destination/"; done \
         < <(find "$REPO_ROOT/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
     cp "$overlay" "$destination/SKILL.md"
-    if [[ -f "$destination/agents/codex.conf" ]]; then
-        cp "$destination/agents/codex.conf" "$destination/agent.conf"
-    fi
     while IFS= read -r instruction_file; do
         sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
         rm -f "${instruction_file}.bak"
@@ -258,6 +255,27 @@ materialized_variant_hash() {
 
 # Source-compatible name retained for focused contract tests and downstream callers.
 materialized_candidate_hash() { materialized_variant_hash "$1"; }
+
+materialized_candidate_skill_sha256() {
+    local overlay="$1" temporary result
+    temporary="$(mktemp -d "${TMPDIR:-/tmp}/workflow-kernel-finalizer-activation.XXXXXX")" || return 1
+    materialize_variant "$overlay" "$temporary" || { rm -rf "$temporary"; return 1; }
+    result="$(hash_file "$temporary/SKILL.md")"
+    rm -rf "$temporary"
+    printf '%s\n' "$result"
+}
+
+activation_timestamp_is_current() {
+    python3 - "$1" <<'PY'
+import datetime, sys
+try:
+    captured = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+except ValueError:
+    raise SystemExit(1)
+age = (datetime.datetime.now(datetime.timezone.utc) - captured).total_seconds()
+raise SystemExit(0 if -300 <= age <= 86400 else 1)
+PY
+}
 
 validate_current_context_evidence() {
     local plan="$1" baseline_overlay candidate_overlay fresh embedded_hash fresh_hash materialized_root
@@ -485,12 +503,12 @@ validate_exact_pilot_evidence() {
       | $plan[0] as $plan
       | $comparison[0] as $comparison
       | $packet[0] as $packet
-      | (["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable"] | sort) as $pilot_cases
+      | (["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable","viewing-route-technical-preparation","pending-architecture-pack-verification"] | sort) as $pilot_cases
       | 3 as $pilot_repeats
       | ($pilot_cases | length) as $case_count
       | ($case_count * $pilot_repeats) as $expected_pairs
       | ($manifest.smoke_cases == ["small-fix-stays-lightweight","seeded-code-review-regressions"])
-      and ($manifest.pilot_cases == ["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable"])
+      and ($manifest.pilot_cases == ["small-fix-stays-lightweight","stale-journal-yields-to-current-evidence","requirements-map-through-completion","ordinary-medium-bounded-executor","seeded-code-review-regressions","medium-final-handoff-is-reconstructable","viewing-route-technical-preparation","pending-architecture-pack-verification"])
       and ($manifest.smoke_repeats == 1)
       and ($manifest.pilot_repeats == 3)
       and ($plan.repeats == $pilot_repeats)
@@ -520,6 +538,42 @@ validate_exact_pilot_evidence() {
       and (($packet.pairs | length) == $pilot_repeats)
       and (([$packet.pairs[].trial_index] | sort) == [range(1; $pilot_repeats + 1)])
     ' "$manifest" >/dev/null
+}
+
+native_activation_observation_status() {
+    local plan="$1" observation="$RESULTS_DIR/activation-observations.json"
+    [[ -f "$observation" && ! -L "$observation" ]] || { printf '%s\n' false; return 0; }
+    local size candidate_overlay candidate_sha cases_sha observed_sha
+    size="$(wc -c <"$observation" | tr -d '[:space:]')"
+    [[ "$size" =~ ^[0-9]+$ && "$size" -ge 1 && "$size" -le 65536 ]] || return 1
+    candidate_overlay="$(resolve_overlay_file "$CANDIDATE_VARIANT")" || return 1
+    candidate_sha="$(materialized_candidate_skill_sha256 "$candidate_overlay")" || return 1
+    cases_sha="$(jq -cS '.activation_cases' "$REPO_ROOT/skills/assistant-workflow/evals/cases.json" | hash_stream)"
+    observed_sha="$(hash_file "$observation")"
+    jq -e --arg observed_sha "$observed_sha" --arg candidate_sha "$candidate_sha" --arg cases_sha "$cases_sha" --arg cli_version "$(jq -r '.cli_version // ""' "$plan")" \
+      --slurpfile plan "$plan" --slurpfile evals "$REPO_ROOT/skills/assistant-workflow/evals/cases.json" '
+      (keys | sort) == ["bindings","evidence_class","observation_kind","provenance","results","schema_version"]
+      and .schema_version == "1.0"
+      and .observation_kind == "workflow_kernel_native_activation"
+      and (.evidence_class == "manual_native_observation" or .evidence_class == "contract_test_fixture")
+      and (.provenance | type == "object" and (keys | sort) == ["capture_method","capture_owner_kind","captured_at_utc","native_host","native_host_version","observed_selection_surface","raw_session_retained","repository_runner_invoked_native_routing"])
+      and .provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false
+      and (.provenance.captured_at_utc | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+      and (.bindings == {skill:"assistant-workflow",candidate_skill_sha256:$candidate_sha,activation_cases_sha256:$cases_sha})
+      and (.results == [$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow"] else [] end)}])
+      and ($plan[0].schema_version == "2.0")
+      and ($plan[0].candidate_variant.materialized_skill_sha256 == $candidate_sha)
+      and ($plan[0].activation_observations_sha256 == $observed_sha)
+      and ($plan[0].activation_observation.sha256 == $observed_sha)
+      and ($plan[0].activation_observation.evidence_class == .evidence_class)
+      and (if .evidence_class == "manual_native_observation" then (.provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version) else (.provenance.capture_owner_kind == "repository_contract_test" and .provenance.capture_method == "static_contract_fixture" and .provenance.native_host == "not_applicable") end)
+    ' "$observation" >/dev/null || return 1
+    if jq -e '.evidence_class == "manual_native_observation"' "$observation" >/dev/null \
+        && activation_timestamp_is_current "$(jq -r '.provenance.captured_at_utc' "$observation")"; then
+        printf '%s\n' true
+    else
+        printf '%s\n' false
+    fi
 }
 
 current_model_selection_evidence_matches() {
@@ -578,7 +632,7 @@ trusted_execution_profile_passes() {
             and (.provenance.requested_model_catalog_entry_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance.codex_executable_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance | has("resolved_model") | not)
-            and .provenance.adapter_version == "codex-framework-eval-v5")
+            and .provenance.adapter_version == "codex-framework-eval-v6")
         ' "$traces_dir"/*.json >/dev/null \
         && current_model_selection_evidence_matches "$plan"
 }
@@ -676,33 +730,38 @@ finalize() {
         done
     done < <(jq -r '.pairs[] | [.pair_id,.pair_sha256] | @tsv' "$packet")
 
-    local automatic semantic_approved trusted_profile eligible failed='[]'
+    local automatic semantic_approved trusted_profile native_activation eligible failed='[]'
     automatic="$(jq -r '.automatic_behavioral_gates_passed == true' "$comparison")"
     semantic_approved="$(jq -r '.overall_verdict == "approved" and all(.pair_verdicts[]; .verdict == "approved") and all(.pair_verdicts[].candidate_findings[]; .verdict == "supported")' "$VERDICT_FILE")"
     if trusted_execution_profile_passes "$plan" "$RESULTS_DIR/traces"; then trusted_profile=true; else trusted_profile=false; fi
+    native_activation="$(native_activation_observation_status "$plan")" \
+        || die "Activation observation is malformed, stale, or does not bind the current candidate and six activation cases."
     [[ "$automatic" == true ]] || failed="$(jq -c '. + ["pilot_coverage_or_automatic_gates"]' <<<"$failed")"
     [[ "$semantic_approved" == true ]] || failed="$(jq -c '. + ["semantic_review_not_approved"]' <<<"$failed")"
     [[ "$trusted_profile" == true ]] || failed="$(jq -c '. + ["untrusted_execution_profile"]' <<<"$failed")"
-    if [[ "$automatic" == true && "$semantic_approved" == true && "$trusted_profile" == true ]]; then eligible=true; else eligible=false; fi
+    [[ "$native_activation" == true ]] || failed="$(jq -c '. + ["native_activation_observation_not_admissible"]' <<<"$failed")"
+    if [[ "$automatic" == true && "$semantic_approved" == true && "$trusted_profile" == true && "$native_activation" == true ]]; then eligible=true; else eligible=false; fi
 
     jq -cS . "$VERDICT_FILE" | atomic_write_json "$semantic_artifact"
     jq -n \
       --arg candidate_manifest_sha256 "$current_manifest_hash" \
       --arg candidate_instruction_sha256 "$current_instruction_hash" \
       --arg context_budget_evidence_sha256 "$CURRENT_CONTEXT_BUDGET_EVIDENCE_HASH" \
+      --arg activation_observations_sha256 "$(jq -r '.activation_observations_sha256 // ""' "$plan")" \
       --arg review_packet_sha256 "$(hash_file "$packet")" \
       --arg semantic_verdict_sha256 "$(hash_file "$semantic_artifact")" \
       --arg trace_set_sha256 "$current_trace_set_hash" \
       --arg semantic_status "$(if [[ "$semantic_approved" == true ]]; then echo approved; else echo rejected; fi)" \
-      --argjson automatic "$automatic" --argjson trusted_profile "$trusted_profile" --argjson eligible "$eligible" --argjson failed "$failed" \
+      --argjson automatic "$automatic" --argjson trusted_profile "$trusted_profile" --argjson native_activation "$native_activation" --argjson eligible "$eligible" --argjson failed "$failed" \
       --argjson pair_hashes "$(jq '[.pairs[].pair_sha256]' "$packet")" \
       --argjson reviewed_pairs "$(jq '.pair_verdicts | length' "$VERDICT_FILE")" \
       --argjson reviewed_findings "$(jq '[.pair_verdicts[].candidate_findings[]] | length' "$VERDICT_FILE")" '
       {
-        schema_version:"1.0",decision_kind:"workflow_kernel_behavioral_promotion",
-        bindings:{candidate_manifest_sha256:$candidate_manifest_sha256,candidate_instruction_sha256:$candidate_instruction_sha256,context_budget_evidence_sha256:$context_budget_evidence_sha256,review_packet_sha256:$review_packet_sha256,semantic_verdict_sha256:$semantic_verdict_sha256,trace_set_sha256:$trace_set_sha256,pair_sha256:$pair_hashes},
+        schema_version:"2.0",decision_kind:"workflow_kernel_behavioral_promotion",
+        bindings:{candidate_manifest_sha256:$candidate_manifest_sha256,candidate_instruction_sha256:$candidate_instruction_sha256,context_budget_evidence_sha256:$context_budget_evidence_sha256,activation_observations_sha256:(if $activation_observations_sha256 == "" then null else $activation_observations_sha256 end),review_packet_sha256:$review_packet_sha256,semantic_verdict_sha256:$semantic_verdict_sha256,trace_set_sha256:$trace_set_sha256,pair_sha256:$pair_hashes},
         automatic_behavioral_gates_passed:$automatic,
         trusted_execution_profile_passed:$trusted_profile,
+        native_activation_observation_passed:$native_activation,
         semantic_false_positive_review:{status:$semantic_status,reviewed_pairs:$reviewed_pairs,reviewed_candidate_findings:$reviewed_findings},
         failed_gates:$failed,behavioral_promotion_eligible:$eligible
       }

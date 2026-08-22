@@ -117,6 +117,80 @@
           "guess the architecture"
         ]
       }
+    },
+    {
+      "id": "feature-preparation-diagram-traceability",
+      "title": "Feature-preparation diagrams disclose each traced behavior and gap",
+      "category": "feature_preparation_traceability",
+      "purpose": "Checks that a diagram cannot make an incomplete behavior path look complete during technical preparation.",
+      "prompt": "Draw the route behavior diagram for ACTIVE and read-only VIEWING. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "Canonical feature_preparation_evidence_refs=[{evidence_ref=prep/viewing-route,item_id=active-route-effects},{evidence_ref=prep/viewing-route,item_id=viewing-route-gap}] are available.",
+        "active-route-effects traces ACTIVE selection, map highlight, and viewport focus.",
+        "viewing-route-gap traces the VIEWING requirement and proposed relationship; VIEWING implementation is not yet present."
+      ],
+      "expected_behavior": [
+        "Echoes both exact feature_preparation_evidence_refs bindings for prep/viewing-route active-route-effects and viewing-route-gap.",
+        "Returns evidence_sources and an element_trace for every node and edge; ACTIVE elements bind active-route-effects and VIEWING elements bind viewing-route-gap.",
+        "Lists the proposed VIEWING relationship in coverage_gaps instead of presenting it as existing behavior.",
+        "Uses the evidence matrix to distinguish preserved ACTIVE effects from the implementation gap."
+      ],
+      "pass_criteria": [
+        "Every rendered element is traceable to source evidence and its relevant exact feature-preparation evidence row.",
+        "The incomplete VIEWING path is clearly disclosed as a gap."
+      ],
+      "fail_signals": [
+        "Renders the proposed route as established repository behavior.",
+        "Omits source traces or binds a node or edge to the wrong admissible evidence row."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["feature_preparation_evidence_refs", "evidence_ref", "item_id", "prep/viewing-route", "active-route-effects", "viewing-route-gap", "evidence_sources", "element_trace", "coverage_gaps", "selection", "highlight", "viewport focus"],
+        "forbidden_substrings": ["complete diagram with no evidence", "VIEWING implementation already exists"],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["diagram_code"], "expected": "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["active-route-effects", "viewing-route-gap"]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_refs", 0, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_refs", 1, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_refs", 1, "item_id"], "expected": "viewing-route-gap"},
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source_ref"]},
+          {"operator": "nonempty_array", "path": ["evidence_sources", 0, "supported_elements_or_relationships"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace"], "fields": ["element_id", "element_kind"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace"], "field": "element_id", "expected_values": ["active-route", "active-effects", "active-to-effects", "viewing-route", "viewing-to-effects"]},
+          {"operator": "equals", "path": ["element_trace", 0, "element_id"], "expected": "active-route"},
+          {"operator": "nonempty_array", "path": ["element_trace", 0, "source_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace", 0, "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace", 0, "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["active-route-effects"]},
+          {"operator": "equals", "path": ["element_trace", 0, "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["element_trace", 0, "feature_preparation_evidence_refs", 0, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["element_trace", 1, "element_id"], "expected": "active-effects"},
+          {"operator": "nonempty_array", "path": ["element_trace", 1, "source_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace", 1, "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace", 1, "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["active-route-effects"]},
+          {"operator": "equals", "path": ["element_trace", 1, "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["element_trace", 1, "feature_preparation_evidence_refs", 0, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["element_trace", 2, "element_id"], "expected": "active-to-effects"},
+          {"operator": "nonempty_array", "path": ["element_trace", 2, "source_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace", 2, "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace", 2, "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["active-route-effects"]},
+          {"operator": "equals", "path": ["element_trace", 2, "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["element_trace", 2, "feature_preparation_evidence_refs", 0, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["element_trace", 3, "element_id"], "expected": "viewing-route"},
+          {"operator": "nonempty_array", "path": ["element_trace", 3, "source_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace", 3, "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace", 3, "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["viewing-route-gap"]},
+          {"operator": "equals", "path": ["element_trace", 3, "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["element_trace", 3, "feature_preparation_evidence_refs", 0, "item_id"], "expected": "viewing-route-gap"},
+          {"operator": "equals", "path": ["element_trace", 4, "element_id"], "expected": "viewing-to-effects"},
+          {"operator": "nonempty_array", "path": ["element_trace", 4, "source_refs"]},
+          {"operator": "array_items_nonempty_fields", "path": ["element_trace", 4, "feature_preparation_evidence_refs"], "fields": ["evidence_ref", "item_id"]},
+          {"operator": "array_field_values_exact", "path": ["element_trace", 4, "feature_preparation_evidence_refs"], "field": "item_id", "expected_values": ["viewing-route-gap"]},
+          {"operator": "equals", "path": ["element_trace", 4, "feature_preparation_evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["element_trace", 4, "feature_preparation_evidence_refs", 0, "item_id"], "expected": "viewing-route-gap"},
+          {"operator": "nonempty_string", "path": ["coverage_gaps", 0]}
+        ]
+      }
     }
   ]
 }

@@ -90,7 +90,7 @@ Print: `>> Direct execution-path trace` when that question remains but analysis 
 5. For each unresolved implementation-shaping field, apply and record a deterministic safe default without asking when repository evidence, policy, or a stable local convention makes one available. Record topic, value, source, and rationale; set `Clarification defaults applied: true`. Ask every remaining admissible clarification, grouped by decision topic: the answer affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; cannot be discovered from code/context; has no safe default; and includes the risk if guessed. There is no numeric question cap.
 6. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and create or refresh the typed pack from the context map. Its facts name source evidence; its assumptions and questions remain explicit; it records boundary ownership, Type Ledger, interface evolution, falsifiable quality scenarios, verification, and invalidation. Discover uses discover_only with context_or_journal_ref only and forbids future refs. For predecessor-unlocked design uncertainty, use the existing progressive decision map rather than a second architecture workflow.
 7. Restate requirements in 1-3 sentences after clarification is resolved. For medium+, small work promoted by ambiguity, risk, or multiple material requirements, or small work with architecture_design_mode required/review_intensive, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
-8. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Architecture design mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. If discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
+8. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `QA evaluation mode`, `Harness capable`, `Architecture design mode`, `Build execution lane`, `Workflow state mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. Carry forward `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode` together; if discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
 9. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
 
 **Clarification format:**
@@ -206,28 +206,40 @@ Print: `--- PHASE: DECOMPOSE COMPLETE ---`
 
 ## Phase: Plan
 
-**Run condition:** `plan_mode` is `inline` or `approval_required`. When
-`plan_mode=none`, Discover carries the obvious file scope, constraints,
-acceptance check, and verification argv directly into the Discover exit
-transition, which atomically sets `handoff_binding_state=downstream_bound` with compact
-inline task-packet/execution and inline review-scope refs before any Build
-action; do not create a Plan checkpoint or `plan_document`.
+**Run condition:** `plan_mode` is `inline` or `approval_required`. For
+`prepare_only`, this is optional readiness planning and never waits for
+implementation approval. When
+`plan_mode=none` with `execution_intent=prepare_only`, Discover carries the
+evidence ref and readiness implications directly to Preparation Completion;
+do not create a Plan checkpoint, task-packet/execution refs, or
+`plan_document`. For `plan_mode=none` with `execution_intent != prepare_only`,
+Discover carries the obvious file scope, constraints, acceptance check, and
+verification argv into its exit transition, which atomically sets
+`handoff_binding_state=downstream_bound` with compact inline
+task-packet/execution and inline review-scope refs before any Build action.
 
 Print: `--- PHASE: PLAN ---`
 
-**Goal:** Concrete, reviewable implementation plan.
+**Goal:** Concrete, reviewable implementation plan for execution work, or a
+bounded evidence-backed readiness plan for `prepare_only`.
 
-When `architecture_design_mode` is `required` or `review_intensive`, or when a concrete unresolved boundary cannot be represented by the ordinary plan, produce an Architect-level implementation blueprint from existing patterns and the compact map. Dispatch **Architect** only when delegation is explicitly requested or otherwise applicable; otherwise perform the same bounded design work directly. Do not introduce an Architect role merely because the task is large.
+Architect implementation blueprint and dispatch apply only when `execution_intent != prepare_only`. For that execution lane, when `architecture_design_mode` is `required` or `review_intensive`, or when a concrete unresolved boundary cannot be represented by the ordinary plan, produce an Architect-level implementation blueprint from existing patterns and the compact map. Dispatch **Architect** only when delegation is explicitly requested or otherwise applicable; otherwise perform the same bounded design work directly. Do not introduce an Architect role merely because the task is large.
 
-Print: `>> Dispatching Architect` (when `subagent_execution_mode=delegated`)
-Print: `>> Direct fallback Architect responsibility` (when `subagent_execution_mode=direct_fallback`)
+For `prepare_only`, prepare_only does not create an implementation blueprint or dispatch **Architect** for implementation. It may retain current source-backed Architecture Decision Pack and readiness evidence without executable implementation artifacts.
+
+Print: `>> Dispatching Architect` (when `execution_intent != prepare_only` and `subagent_execution_mode=delegated`)
+Print: `>> Direct fallback Architect responsibility` (when `execution_intent != prepare_only` and `subagent_execution_mode=direct_fallback`)
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation. When architecture design applies, the Architecture Decision Pack must also be fresh for the current revision and have no unresolved blocking material questions.
 
-Before writing the plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
+For `prepare_only`, record only the evidence ref, readiness implications, open decisions, and recommended next implementation state. prepare_only readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements.
+
+For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply. Before writing that plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Carry forward the exact Triage values separately: `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode`. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
 - `inline`: compact small plan (goal, files, risks, tests); do not wait.
 - `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
 - `approval_required` large/mega: full plan (all sections including Security and Operability).
+
+For `execution_intent != prepare_only`:
 
 1. Research codebase: modules, patterns, entrypoints
 2. Evaluate architecture proportionally: use the Architecture Decision Pack when triggered, otherwise record a concrete not-applicable reason; review_intensive carries independent challenge evidence into Plan and Review.
@@ -238,7 +250,7 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 7. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
 8. Write ordered implementation steps with file paths
 9. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
-10. Carry `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
+10. Carry `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, `workflow_state_mode`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.
 11. If `search_mode: candidate_search`, load `references/candidate-search.md`, create the goal tree from acceptance/slice criteria, score candidates, record the archive location, and treat post-approval pivots as plan deviations requiring re-approval when scope/files/behavior/risk change.
 12. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
@@ -251,9 +263,11 @@ Before writing the plan, load `references/artifact-first-output-contract.md` and
 
 ### Approval gate
 
-For `plan_mode=inline`, print the inline plan and continue directly to Build. If ambiguity, user-requested approval, destructive operations, public contract/data/security impact, or scope-changing choices appear, return to Triage and promote to `approval_required`.
+For `execution_intent=prepare_only`, record the optional readiness plan, return the required preparation evidence, and continue to Preparation Completion without waiting for implementation approval. Print: `--- PHASE: PLAN COMPLETE ---` when this optional Plan runs.
 
-For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`
+For `execution_intent != prepare_only` and `plan_mode=inline`, print the inline plan and continue directly to Build. If ambiguity, user-requested approval, destructive operations, public contract/data/security impact, or scope-changing choices appear, return to Triage and promote to `approval_required`.
+
+For `execution_intent != prepare_only` and `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`
 
 Present the plan and WAIT:
 ```
@@ -263,9 +277,11 @@ Review the plan:
 - Questions -- I'll address before proceeding
 ```
 
-Print: `--- PHASE: PLAN COMPLETE (approved) ---` for approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for inline plans.
+Print: `--- PHASE: PLAN COMPLETE (approved) ---` for non-prepare-only approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for non-prepare-only inline plans.
 
 ## Phase: Design (UI/UX only, skip for backend)
+
+**Run condition:** `execution_intent != prepare_only`.
 
 Print: `--- PHASE: DESIGN ---`
 
@@ -281,6 +297,8 @@ Show mockup and WAIT for approval.
 Print: `--- PHASE: DESIGN COMPLETE (approved) ---`
 
 ## Phase: Build
+
+**Run condition:** `execution_intent != prepare_only`.
 
 Print: `--- PHASE: BUILD ---`
 
@@ -319,11 +337,6 @@ verification. In `separated_workers`, run Code Writer then Builder/Tester.
 Verify each acceptance criterion, record lane-matched slice ledger evidence,
 and mark the slice `VERIFIED` before advancing.
 
-For `promotion_mode=review_gated`, load `references/slice-review-topology.md`.
-After local verification, record `REVIEW_PENDING` evidence with exact SHAs; do
-not mutate the task branch, mark the slice VERIFIED, or unlock dependents until
-the portable adapter evidence and fresh verification gates are satisfied.
-
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
 `subagent_policy_state=not_required`, and
@@ -360,6 +373,8 @@ Print: `--- PHASE: BUILD COMPLETE ---`
 
 ## Phase: Review
 
+**Run condition:** `execution_intent != prepare_only`.
+
 Print: `--- PHASE: REVIEW ---`
 
 Load `references/review-qa-router.md`. Light work uses its compact fresh-review
@@ -389,6 +404,8 @@ Print: `--- PHASE: REVIEW COMPLETE ---`
 
 ## Phase: Document
 
+**Run condition:** `execution_intent != prepare_only`.
+
 Print: `--- PHASE: DOCUMENT ---`
 
 Load `references/completion-controller.md` and, for medium+ work,
@@ -402,3 +419,17 @@ optional and non-blocking. Refresh harness runtime artifacts only when
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
 Print: `--- WORKFLOW COMPLETE ---`
+
+## Phase: Preparation Completion
+
+**Run condition:** `execution_intent=prepare_only` after Discover. Optional
+readiness planning does not create executable packets or delay completion.
+Print: `--- PHASE: PREPARATION COMPLETION ---` before the completion checks and
+`--- PHASE: PREPARATION COMPLETE ---` after they pass. These exact markers are
+declared by `contracts/phase-gates.yaml`; do not derive a synthetic
+`PREPARATION_COMPLETION COMPLETE` marker.
+Return `completion_policy`, `validation_results`, and `feature_preparation_result`
+as required by PC1 and the `preparation_only` completion tier, plus complete
+`feature_preparation_evidence` for existing-system work. Keep execution
+`not_started`; do not claim Build, changed files, tests, review, final handoff,
+or implementation documentation.

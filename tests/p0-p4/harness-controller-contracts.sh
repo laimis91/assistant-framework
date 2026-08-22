@@ -129,6 +129,22 @@ require_terms "workflow input contract" "$workflow_dir/contracts/input.yaml" \
     "ordinary medium+ workflow tasks default to false" \
     "source-changing workflow tasks"
 
+test_start "harness trigger wording keeps domain-scored and UX-facing work parity"
+harness_trigger_missing=()
+for file in \
+    "$workflow_dir/contracts/input.yaml" \
+    "$workflow_controller_ref" \
+    "$harness_ref"; do
+    if ! grep -Fq -- "domain-scored work or UI/visual/product/UX/docs/DX-facing work" "$file"; then
+        harness_trigger_missing+=("${file#$FRAMEWORK_DIR/}: domain-scored/UI-facing work trigger")
+    fi
+done
+if [[ "${#harness_trigger_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "harness trigger wording is not parity-aligned: ${harness_trigger_missing[*]}"
+fi
+
 test_start "controller intensity keeps ordinary medium work at standard"
 require_terms "controller intensity input contract" "$workflow_dir/contracts/input.yaml" \
     "- name: controller_intensity" \
@@ -150,6 +166,24 @@ if rg -n 'size=medium\+?[[:space:]]*->[[:space:]]*strict|strict (for|when|becaus
     fail "controller intensity must not promote medium size or delegation alone to strict; see /tmp/p0p4-controller-intensity-bad-promotion.out"
 else
     pass
+fi
+
+test_start "controller intensity routes explicit harness and required QA to strict"
+if ruby -ryaml -e '
+  fields = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  controller = fields.fetch("controller_intensity")
+  positive_routes = {
+    "harness_capable == true" => "strict",
+    "qa_evaluation_mode == required" => "strict"
+  }
+  valid = positive_routes.all? do |trigger, expected|
+    expected == "strict" && controller.fetch("validation").include?(trigger) && controller.fetch("infer_from").include?(trigger)
+  end
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml"; then
+    pass
+else
+    fail "controller intensity does not map explicit harness or required QA to strict"
 fi
 
 test_start "workflow controller preserves ordinary defaults and harness boundary"
@@ -213,7 +247,7 @@ test_start "output contract defines Done Contract and Harness Recipe artifacts"
 output_contract="$workflow_dir/contracts/output.yaml"
 require_terms "output contract" "$output_contract" \
     "- name: done_contract" \
-    'condition: "size in [medium, large, mega] and harness_capable == true"' \
+    'condition: "execution_intent != prepare_only and size in [medium, large, mega] and harness_capable == true"' \
     "done_when" \
     "not_done_when" \
     "verification" \

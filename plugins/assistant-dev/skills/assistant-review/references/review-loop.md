@@ -8,8 +8,9 @@ previously_fixed = []
 score_history = []
 
 PREPARE
+  - Infer review mode before review or mutation. Clear report-only intent selects audit; clear source-modification authorization or a carried active approved implementation workflow with bounded in-scope repairs selects review-fix. Only if audit versus editing remains unresolved, ask exactly: "Should I only report findings, or also implement and verify fixes?" Stop until answered; authorship, branch/PR ownership, platform, and connector never authorize edits.
   - Workflow-composed review: consume the carried Spec Review PASS pointer and carried current build/test evidence refs.
-  - Standalone review: no task journal is required. Run Spec Review against the user request and review scope, record `spec_review_pass_ref`, and do not dispatch Reviewer on FAIL; fix the scope mismatch and repeat Spec Review until PASS.
+  - Standalone review: no task journal is required. Run Spec Review against user scope. In review-fix mode, correct only an authorized mismatch and repeat until `spec_review_pass_ref` exists. In audit mode, record the mismatch as a finding and exit without source mutation or Reviewer dispatch.
   - Populate required `build_test_verification_ref` with real current passed evidence whenever source fix/build work is in scope.
   - Use `not_applicable: audit_only|read_only|no_build_scope` only when no source fix or build is in scope.
 
@@ -68,9 +69,10 @@ while round <= 10:
      never starts round 11.
 
   3. FIX
-     - Fix ALL must-fix and should-fix items (not just must-fix)
+     - Run only in review-fix mode. Fix ALL evidence-backed must-fix and should-fix items that remain within explicit authorization or bounded carried workflow scope.
      - Prioritize lowest-scoring rubric dimensions first
      - Add each fixed item to previously_fixed with description
+     - If a finding expands scope, requirements, architecture, files, risk, verification, or acceptance criteria, do not mutate it here. Return it to the composing workflow for planning or approval.
 
   4. VALIDATE
      - Run build + tests if applicable

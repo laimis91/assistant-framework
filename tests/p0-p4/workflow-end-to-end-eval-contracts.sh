@@ -8,11 +8,16 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 fixture="$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"
 manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
 runner="$FRAMEWORK_DIR/tools/evals/run-codex-framework-evals.sh"
+finalizer="$FRAMEWORK_DIR/tools/evals/finalize-workflow-kernel-review.sh"
 behavioral_contracts="$FRAMEWORK_DIR/tests/p0-p4/codex-behavioral-eval-contracts.sh"
 readme="$FRAMEWORK_DIR/README.md"
 eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+pilot_cases_count="$(jq -r '.pilot_cases | length' "$manifest")"
+pilot_repeats="$(jq -r '.pilot_repeats' "$manifest")"
+pilot_pairs_expected=$((pilot_cases_count * pilot_repeats))
+pilot_runs_expected=$((pilot_pairs_expected * 2))
 
-test_start "Terra pilot remains six cases, eighteen pairs, and thirty-six calls"
+test_start "Terra pilot includes preparation and pending-Pack cases across eight cases"
 if jq -e '
     .pilot_cases == [
       "small-fix-stays-lightweight",
@@ -20,15 +25,51 @@ if jq -e '
       "requirements-map-through-completion",
       "ordinary-medium-bounded-executor",
       "seeded-code-review-regressions",
-      "medium-final-handoff-is-reconstructable"
+      "medium-final-handoff-is-reconstructable",
+      "viewing-route-technical-preparation",
+      "pending-architecture-pack-verification"
     ]
     and .pilot_repeats == 3
-    and ((.pilot_cases | length) * .pilot_repeats) == 18
-    and ((.pilot_cases | length) * .pilot_repeats * 2) == 36
+    and ((.pilot_cases | length) * .pilot_repeats) == 24
+    and ((.pilot_cases | length) * .pilot_repeats * 2) == 48
   ' "$manifest" >/dev/null; then
     pass
 else
-    fail "the promotion profile no longer preserves the reviewed six-case, 18-pair, 36-call shape"
+    fail "the promotion profile omits repository-grounded preparation or pending-Pack pilot coverage"
+fi
+
+test_start "native activation evidence is hash-bound and contract fixtures cannot promote"
+activation_schema="$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.contract.json"
+activation_fixture="$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json"
+activation_terms=(
+    --activation-observations
+    activation-observations.json
+    workflow_kernel_native_activation
+    manual_native_observation
+    contract_test_fixture
+    native_activation_observation_not_admissible
+)
+missing_activation_terms=()
+for term in "${activation_terms[@]}"; do
+    if ! grep -Fq -- "$term" "$runner" \
+        && ! grep -Fq -- "$term" "$finalizer" \
+        && ! grep -Fq -- "$term" "$activation_schema" 2>/dev/null \
+        && ! grep -Fq -- "$term" "$activation_fixture" 2>/dev/null; then
+        missing_activation_terms+=("$term")
+    fi
+done
+if [[ -f "$activation_schema" && -f "$activation_fixture" ]] \
+    && [[ ${#missing_activation_terms[@]} -eq 0 ]] \
+    && jq -e '
+      .schema_version == "1.0"
+      and .observation_kind == "workflow_kernel_native_activation"
+      and .evidence_class == "contract_test_fixture"
+      and .provenance.repository_runner_invoked_native_routing == false
+      and (.results | length) == 6
+    ' "$activation_fixture" >/dev/null; then
+    pass
+else
+    fail "native activation evidence contract or non-promoting fixture is missing: ${missing_activation_terms[*]}"
 fi
 
 test_start "medium handoff fixture declares the complete ordered repair workflow"
@@ -209,17 +250,29 @@ if rg -i "$claim_pattern" "$readme" "$eval_readme" >/dev/null; then
     evidence_file="$(find "$FRAMEWORK_DIR/docs" -maxdepth 1 -type f -name 'assistant-framework-architecture-completion-*.md' -print | LC_ALL=C sort | tail -n 1)"
     if [[ -n "$evidence_file" ]] \
         && grep -Fq 'gpt-5.6-terra' "$evidence_file" \
-        && grep -Fq '36/36' "$evidence_file" \
-        && grep -Fq '18/18' "$evidence_file" \
+        && grep -Fq "${pilot_runs_expected}/${pilot_runs_expected}" "$evidence_file" \
+        && grep -Fq "${pilot_pairs_expected}/${pilot_pairs_expected}" "$evidence_file" \
         && grep -Fq 'automatic_behavioral_gates_passed=true' "$evidence_file" \
         && grep -Fq 'behavioral_promotion_eligible=true' "$evidence_file" \
         && grep -Eq '[0-9a-f]{64}' "$evidence_file"; then
         pass
     else
-        fail "current validation is claimed without a source-bound 36-run eligible Terra completion record"
+        fail "current validation is claimed without a source-bound ${pilot_runs_expected}-run eligible Terra completion record"
     fi
 else
     pass
+fi
+
+test_start "README and eval guide retain exact eight-case, 48-run, 24-pair activation-gated accounting"
+if grep -Fq 'eight-case' "$readme" \
+    && grep -Fq '48 calls / 24 pairs' "$readme" \
+    && grep -Fq "eight-case three-repeat pilot (${pilot_runs_expected} runs)" "$eval_readme" \
+    && grep -Fq "${pilot_runs_expected}/${pilot_runs_expected} runs and ${pilot_pairs_expected}/${pilot_pairs_expected} pairs" "$eval_readme" \
+    && grep -Fq 'manual_native_observation' "$eval_readme" \
+    && grep -Fq 'contract_test_fixture' "$eval_readme"; then
+    pass
+else
+    fail "published evaluation accounting or native-activation non-promotion boundary drifted"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
