@@ -22,7 +22,9 @@ else
         "push:" \
         "contents: read" \
         "persist-credentials: false" \
-        "timeout-minutes: 60" \
+        "60m15s with passing assertions and unfinished suites" \
+        "90 minutes retains a finite cap plus 29m45s of headroom" \
+        "timeout-minutes: 90" \
         "./tests/test-p0-p4-contracts.sh" \
         "tools/skills/validate-skills.sh" \
         "tools/plugins/sync-plugin-skills.sh --check" \
@@ -38,7 +40,7 @@ else
         || framework_validation_failures+=("framework-validation.yml: expected one checkout@v5 step")
     [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
-    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 60[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 90[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the framework-contract job must use the bounded timeout")
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")
@@ -249,13 +251,18 @@ if [[ -z "${P0P4_DIRECT_RUN_GUARD:-}" ]]; then
     for suite_file in "$P0P4_SUITE_DIR"/*.sh; do
         [[ -f "$suite_file" ]] || continue
 
-        suite_output="$direct_run_tmp/$(basename -- "$suite_file").out"
+        suite_name="$(basename -- "$suite_file")"
+        suite_output="$direct_run_tmp/$suite_name.out"
+        suite_started_at_seconds=$SECONDS
+        printf '\n    direct-run start: %s\n' "$suite_name"
         # Prevent this guard suite from recursively launching the full direct-run check.
         if P0P4_DIRECT_RUN_GUARD=1 bash "$suite_file" >"$suite_output" 2>&1; then
+            printf '    direct-run complete: %s (%ss)\n' "$suite_name" "$((SECONDS - suite_started_at_seconds))"
             continue
         fi
 
-        direct_run_failures+=("$(basename -- "$suite_file")")
+        printf '    direct-run failed: %s (%ss)\n' "$suite_name" "$((SECONDS - suite_started_at_seconds))"
+        direct_run_failures+=("$suite_name")
     done
 
     if [[ "${#direct_run_failures[@]}" -eq 0 ]]; then
