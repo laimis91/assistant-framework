@@ -35,7 +35,7 @@ For each selected lens:
 2. List candidate concerns or criteria discovered; in existing-system feature preparation these are not requirements or Product questions until the canonical workflow evidence row validates them
 3. Note any criteria from previous lenses that need refinement
 
-After all lenses: synthesize into a consolidated list of candidate concerns or criteria. Promote only through an admissible feature-preparation evidence row when existing behavior is in scope. A validated promotion repeats the exact canonical input evidence ref and its item id; a missing, stale, mismatched, or unresolved pair remains candidate-only.
+After all lenses: synthesize into a consolidated list of candidate concerns or criteria. Promote only through an admissible feature-preparation evidence row when existing behavior is in scope. Each validated promotion repeats one exact canonical input `{evidence_ref, item_id, claim_or_question}` binding; a missing, stale, mismatched, duplicate, or extra binding remains candidate-only. Multiple validated concerns may use different supplied bindings.
 
 ## Output format
 

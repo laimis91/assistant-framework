@@ -632,14 +632,23 @@ tools/evals/run-skill-evals.sh --activation-results /tmp/clarify-activation-resu
 Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
-`equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`,
-`required_when_equals`, `array_field_values_exact`, and
+`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `path_absent`, `equals_path`,
+`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
 `array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
 in every object must be a non-empty string.
 `empty_array` requires the target path to resolve to an empty array.
+In this exhaustive fixed operator list, `path_absent` passes only when its target
+path cannot resolve; a present `null` value is present and therefore fails.
+`one_of` requires exact membership in its bounded declared scalar values.
+`array_object_values_exact` compares each target object’s declared `fields` as
+an unordered exact multiset against bounded `expected_objects`, preserving the
+correlation among the declared fields while allowing response-object reordering.
+`one_of` permits at most 32 scalar values. `array_object_values_exact` permits
+at most 16 unique fields and 32 expected objects; absent projected fields fail,
+while a present `null` matches only a present `null`.
 
 Include local-only skill experiments explicitly:
 

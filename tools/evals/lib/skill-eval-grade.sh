@@ -212,8 +212,13 @@ count_structured_json_assertion_failures() {
                 end
               ) | .exists;
             def value_at($path): getpath($path);
+            def object_field_tuples($items; $fields):
+              [$items[] | . as $item | [$fields[] as $field | $item[$field]]];
             if $assertion.operator == "equals" then
               path_exists($assertion.path) and value_at($assertion.path) == $assertion.expected
+            elif $assertion.operator == "one_of" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) as $actual | ($assertion.expected_values | index($actual)) != null)
             elif $assertion.operator == "nonempty_string" then
               path_exists($assertion.path) and (value_at($assertion.path) | type == "string" and test("[^[:space:]]"))
             elif $assertion.operator == "nonempty_array" then
@@ -240,6 +245,12 @@ count_structured_json_assertion_failures() {
               and (value_at($assertion.path) | type == "array")
               and (value_at($assertion.path) | length > 0)
               and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | ($item[$field] | type == "string" and test("[^[:space:]]"))))
+            elif $assertion.operator == "array_object_values_exact" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "array")
+              and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | $item | has($field)))
+              and (object_field_tuples(value_at($assertion.path); $assertion.fields) | sort)
+                == (object_field_tuples($assertion.expected_objects; $assertion.fields) | sort)
             else false end
         ' "$response_path" >/dev/null; then
             failures=$((failures + 1))

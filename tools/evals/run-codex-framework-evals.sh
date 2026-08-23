@@ -1355,6 +1355,19 @@ validate_event_stream() {
         or . == "turn.completed"
         or . == "turn.failed"
         or . == "error")
+      and ([.[] | select(.type == "item.completed" and .item.type == "command_execution")] as $commands
+           | ($commands | length <= 64)
+           and ($commands | all(.[];
+             (.item.command // .item.command_line // null) as $command
+             | if ($command | type) == "string" then ($command | length <= 4096)
+               elif ($command | type) == "array" then
+                 ($command | length <= 64)
+                 and ($command | all(.[]; type == "string" and length <= 4096))
+               else false
+               end))
+           and ([$commands[]
+                 | (.item.command // .item.command_line)
+                 | if type == "string" then length else map(length) | add end] | add <= 65536))
       and all(.[];
         if .type == "thread.started" then (.thread_id | type == "string" and length > 0)
         elif (.type == "item.started" or .type == "item.updated" or .type == "item.completed") then (.item | type == "object")
@@ -1703,14 +1716,115 @@ viewing_inspection_event_evidence() {
             | sub("[\\\"\u0027]$"; "")
           else $raw
           end;
-      def allowed_rg_option:
-        . == "-n" or . == "-F" or . == "-i" or . == "-nF" or . == "-Fn" or . == "-ni" or . == "-in" or . == "--line-number" or . == "--no-heading" or . == "--with-filename" or . == "--fixed-strings" or . == "--ignore-case";
-      def safe_rg_pattern:
-        type == "string" and test("^[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*$");
+      def forbidden_rg_option:
+        test("^(?:--(?:pre|pre-glob|hostname-bin|replace|field-match-separator|field-context-separator|context-separator|hyperlink-format|file|glob-from|ignore-file(?:-case-insensitive)?|colors)(?:=.*)?|-[A-Za-z0-9]*[rf].*)$");
+      def safe_rg_value:
+        type == "string"
+        and test("^[A-Za-z0-9 _.|:?*+^=,;()\\[\\]{}\"\\\\/!$-]+$");
+      def shell_unquoted_fragment:
+        "[A-Za-z0-9_.:+=,/-]";
+      def shell_single_quoted_fragment:
+        "\u0027[^\u0027]*\u0027";
+      def shell_double_quoted_fragment:
+        "\"(?:[^\"\\\\]|\\\\.)*\"";
+      def shell_word_pattern:
+        "(?:" + shell_unquoted_fragment + "|" + shell_single_quoted_fragment + "|" + shell_double_quoted_fragment + ")+";
+      def shell_token_value:
+        . as $word
+        | select(test("^" + shell_word_pattern + "$"))
+        | select(test("^(?:\u0027\u0027|\"\")*=") | not)
+        | select([scan(shell_double_quoted_fragment) | .[1:-1] | ((test("[\\r\\n\\x60]") | not) and (test("^[^$]*$") or test("^[^$]*\\$$")))] | all)
+        | gsub("\u0027|\""; "");
+      def shell_tokens:
+        . as $raw
+        | select($raw | length <= 4096)
+        | if ($raw | test("^[ \\t]*" + shell_word_pattern + "(?:[ \\t]+" + shell_word_pattern + ")*[ \\t]*$")) then
+            [scan(shell_word_pattern) | shell_token_value]
+          else empty
+          end;
+      def rg_option_value_kind:
+        if . == "-e" or . == "--regexp" then "pattern"
+        elif . == "-C" or . == "-A" or . == "-B" or . == "--context" or . == "--before-context" or . == "--after-context" then "context"
+        elif . == "--sort" or . == "--sortr" then "sort"
+        elif . == "-g" or . == "--glob" or . == "--iglob" then "glob"
+        elif . == "-t" or . == "--type" then "type"
+        elif . == "-T" or . == "--type-not" then "type"
+        elif . == "-E" or . == "--encoding" then "encoding"
+        elif . == "--engine" then "engine"
+        elif . == "--color" then "color"
+        elif . == "--path-separator" then "path_separator"
+        elif . == "-m" or . == "--max-count" or . == "-d" or . == "--max-depth" or . == "--maxdepth" or . == "-M" or . == "--max-columns" or . == "-j" or . == "--threads" then "number"
+        elif . == "--max-filesize" or . == "--dfa-size-limit" or . == "--regex-size-limit" then "size"
+        else null
+        end;
+      def assigned_rg_option:
+        if test("^--regexp=") then {kind: "pattern", value: sub("^--regexp="; "")}
+        elif test("^--(?:context|before-context|after-context)=") then {kind: "context", value: sub("^--(?:context|before-context|after-context)="; "")}
+        elif test("^--(?:sort|sortr)=") then {kind: "sort", value: sub("^--(?:sort|sortr)="; "")}
+        elif test("^--(?:glob|iglob)=") then {kind: "glob", value: sub("^--(?:glob|iglob)="; "")}
+        elif test("^--(?:type|type-not)=") then {kind: "type", value: sub("^--(?:type|type-not)="; "")}
+        elif test("^--encoding=") then {kind: "encoding", value: sub("^--encoding="; "")}
+        elif test("^--engine=") then {kind: "engine", value: sub("^--engine="; "")}
+        elif test("^--color=") then {kind: "color", value: sub("^--color="; "")}
+        elif test("^--path-separator=") then {kind: "path_separator", value: sub("^--path-separator="; "")}
+        elif test("^--(?:max-count|max-depth|maxdepth|max-columns|threads)=") then {kind: "number", value: sub("^--(?:max-count|max-depth|maxdepth|max-columns|threads)="; "")}
+        elif test("^--(?:max-filesize|dfa-size-limit|regex-size-limit)=") then {kind: "size", value: sub("^--(?:max-filesize|dfa-size-limit|regex-size-limit)="; "")}
+        elif test("^-[CAB][0-9]+$") then {kind: "context", value: .[2:]}
+        elif test("^-e.+") then {kind: "pattern", value: .[2:]}
+        elif test("^-g.+") then {kind: "glob", value: .[2:]}
+        elif test("^-t.+") then {kind: "type", value: .[2:]}
+        elif test("^-T.+") then {kind: "type", value: .[2:]}
+        elif test("^-E.+") then {kind: "encoding", value: .[2:]}
+        elif test("^-(?:m|d|M|j)[0-9]+$") then {kind: "number", value: .[2:]}
+        else null
+        end;
+      def valid_rg_option_value($kind; $value):
+        ($value | safe_rg_value)
+        and (if $kind == "context" then ($value | test("^[0-9]+$"))
+             elif $kind == "sort" then ($value == "path" or $value == "none" or $value == "modified" or $value == "accessed" or $value == "created")
+             elif $kind == "type" then ($value | test("^[A-Za-z0-9_-]+$"))
+             elif $kind == "encoding" then ($value | test("^[A-Za-z0-9._-]+$"))
+             elif $kind == "engine" then ($value == "default" or $value == "pcre2" or $value == "auto")
+             elif $kind == "color" then ($value == "always" or $value == "auto" or $value == "never" or $value == "ansi")
+             elif $kind == "path_separator" then ($value == "/" or $value == "\\")
+             elif $kind == "number" then ($value | test("^[0-9]+$"))
+             elif $kind == "size" then ($value | test("^[0-9]+(?:[KMGTP]i?B?)?$"))
+             else true
+             end);
+      def safe_rg_flag:
+        type == "string"
+        and test("^(?:--[A-Za-z][A-Za-z0-9-]*|-[A-Za-z0-9]+)$")
+        and (forbidden_rg_option | not);
       def rg_arguments_valid:
-        length >= 1
-        and (.[-1] | safe_rg_pattern)
-        and all(.[0:-1][]; allowed_rg_option);
+        reduce .[] as $token
+          ({valid: true, after_double_dash: false, pending: null, positional_patterns: 0, explicit_patterns: 0};
+            if (.valid | not) then .
+            elif .pending != null then
+              if valid_rg_option_value(.pending; $token) then
+                (if .pending == "pattern" then .explicit_patterns += 1 else . end) | .pending = null
+              else .valid = false
+              end
+            elif .after_double_dash then
+              if (($token | safe_rg_value) and .explicit_patterns == 0 and .positional_patterns == 0) then .positional_patterns = 1 else .valid = false end
+            elif $token == "--" then .after_double_dash = true
+            else
+              ($token | assigned_rg_option) as $assigned
+              | if $assigned != null then
+                  if valid_rg_option_value($assigned.kind; $assigned.value) then
+                    if $assigned.kind == "pattern" then .explicit_patterns += 1 else . end
+                  else .valid = false
+                  end
+                elif ($token | forbidden_rg_option) then .valid = false
+                else
+                  ($token | rg_option_value_kind) as $kind
+                  | if $kind != null then .pending = $kind
+                    elif ($token | safe_rg_flag) then .
+                    elif (($token | safe_rg_value) and .explicit_patterns == 0 and .positional_patterns == 0) then .positional_patterns = 1
+                    else .valid = false
+                    end
+                end
+            end)
+        | .valid and .pending == null and (.positional_patterns + .explicit_patterns >= 1) and (.positional_patterns == 0 or .explicit_patterns == 0);
       def cat_option_pattern:
         "(?:-A|-b|-e|-E|-n|-s|-t|-T|-u|-v)";
       def allowed_cat_option:
@@ -1719,20 +1833,17 @@ viewing_inspection_event_evidence() {
         length >= 1
         and .[-1] == $path
         and all(.[0:-1][]; allowed_cat_option);
-      def approved_rg_string($path):
-        if $path == "src/route.ts" then
-          "^rg(?:[ \\t]+(?:-n|-F|-i|-nF|-Fn|-ni|-in|--line-number|--no-heading|--with-filename|--fixed-strings|--ignore-case))*[ \\t]+(?:\u0027[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0027|\u0022[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0022|[A-Za-z0-9_.:?*+^=,\\\\/][A-Za-z0-9_.:?*+^=,\\\\/-]*)[ \\t]+(?:src/route\\.ts(?:[ \\t]+tests/route\\.test\\.js)?|tests/route\\.test\\.js[ \\t]+src/route\\.ts)$"
-        else
-          "^rg(?:[ \\t]+(?:-n|-F|-i|-nF|-Fn|-ni|-in|--line-number|--no-heading|--with-filename|--fixed-strings|--ignore-case))*[ \\t]+(?:\u0027[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0027|\u0022[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0022|[A-Za-z0-9_.:?*+^=,\\\\/][A-Za-z0-9_.:?*+^=,\\\\/-]*)[ \\t]+(?:tests/route\\.test\\.js(?:[ \\t]+src/route\\.ts)?|src/route\\.ts[ \\t]+tests/route\\.test\\.js)$"
+      def normalize_shell_token:
+        if test("^\u0027[^\u0027]*\u0027$") then .[1:-1]
+        elif test("^\u0022[^\u0022]*\u0022$") then .[1:-1]
+        else .
         end;
       def approved_cat_string($path):
         "^cat(?:[ \\t]+" + cat_option_pattern + ")*[ \\t]+" + path_pattern($path) + "$";
       def approved_string($path):
         shell_string_body as $body
         | path_pattern($path) as $path_re
-        | ($body | test(approved_rg_string($path))
-           and (test("(^|[ \\t])--pre(=|[ \\t])") | not))
-          or ($body | test(approved_cat_string($path)))
+        | ($body | test(approved_cat_string($path)))
           or ($body | test("^sed[[:space:]]+-n[[:space:]]+(\\\"[0-9]+(,[0-9]+)?p\\\"|\u0027[0-9]+(,[0-9]+)?p\u0027|[0-9]+(,[0-9]+)?p)[[:space:]]+" + $path_re + "$"));
       def approved_argv($path):
         . as $argv
@@ -1755,15 +1866,26 @@ viewing_inspection_event_evidence() {
                  ($argv | length == 4) and $argv[1] == "-n" and ($argv[2] | test("^[0-9]+(,[0-9]+)?p$")) and $argv[3] == $path
                else false
                end);
+      def approved_rg_string($path):
+        shell_string_body
+        | shell_tokens
+        | approved_argv($path);
+      def approved_command_string($path):
+        shell_string_body as $body
+        | select($body | length <= 4096)
+        | if ($body | test("^rg(?:[ \\t]|$)")) then
+            ($body | approved_rg_string($path))
+          else ($body | approved_string($path))
+          end;
       def approved_inspection_command($path):
         (.item.command // .item.command_line // "") as $command
         | if ($command | type) == "array" then
             if ($command | (length == 3 and (.[0] == "/bin/bash" or .[0] == "/bin/zsh" or .[0] == "/bin/sh"))) then
-              ($command[1] == "-lc" and ($command[2] | type == "string") and ($command[2] | approved_string($path)))
+              ($command[1] == "-lc" and ($command[2] | type == "string") and ($command[2] | approved_command_string($path)))
             else ($command | approved_argv($path))
             end
           elif ($command | type) == "string" then
-            ($command | approved_string($path))
+            ($command | approved_command_string($path))
           else false
           end;
       . as $events
@@ -1773,10 +1895,11 @@ viewing_inspection_event_evidence() {
             and (.item.id | type == "string" and length > 0)
             and .item.status == "completed"
             and (.item.exit_code | type == "number") and .item.exit_code == 0
-            and (((.item.aggregated_output // "") | tostring) as $out
+            and ((.item.aggregated_output // "") | type == "string" and length <= 65536)
+            and ((.item.aggregated_output // "") as $out
               | all($needles[]; . as $needle | $out | contains($needle)))) ];
-        matching("src/route.ts"; ["selectRoute","highlightRoute","focusViewport","applyActiveRouteEffects"]) as $source_events
-      | matching("tests/route.test.js"; ["assert.deepEqual","applyActiveRouteEffects","select:ACTIVE","highlight:ACTIVE","focus:ACTIVE"]) as $test_events
+        matching("src/route.ts"; ["function applyActiveRouteEffects() {","selectRoute(\"ACTIVE\", effects);","highlightRoute(\"ACTIVE\", effects);","focusViewport(\"ACTIVE\", effects);"]) as $source_events
+      | matching("tests/route.test.js"; ["assert.deepEqual(applyActiveRouteEffects(), [\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"]);"]) as $test_events
       | if (([$events[] | select(.type == "item.completed" and .item.type == "command_execution") | .item.id] | unique | length)
           == ([$events[] | select(.type == "item.completed" and .item.type == "command_execution")] | length)
           and ($source_events | length >= 1)

@@ -37,10 +37,14 @@ Reasoning must be company-safe and evidence-aware: prefer local/repo evidence, d
 
 ## Constraints
 
-Migration note: assistant-thinking contracts are v5. v4 consumers must bind
-every validated Deep Think promotion to the exact canonical feature-preparation
-evidence ref and item id; missing, stale, mismatched, or unresolved evidence
-remains candidate-only. v3 consumers must retain
+Migration note: assistant-thinking contracts are v6. v5 consumers must replace
+the scalar Deep Think feature-preparation evidence inputs with up to 32 exact
+`feature_preparation_evidence_bindings` entries `{evidence_ref, item_id,
+claim_or_question}`. Every validated candidate must match exactly one input
+entry; missing, stale, mismatched, duplicate, or extra bindings remain
+candidate-only. v4 consumers must bind every validated Deep Think promotion to
+the exact canonical feature-preparation evidence ref and item id; missing,
+stale, mismatched, or unresolved evidence remains candidate-only. v3 consumers must retain
 Deep Think output as candidate concerns or criteria until a canonical
 feature-preparation evidence row validates promotion in existing-system feature
 preparation. v2 consumers must add the
@@ -130,7 +134,7 @@ Return:
 - **Evidence / observations** - facts, observations, test results, or user constraints used in the reasoning.
 - **Decision artifacts** - for decision outputs: options considered, criteria, selected option, and validation/rollback step.
 - **Architecture Pack update** - when supplied: the Pack reference, whether it remains fresh, questions or claims it invalidates, semantic type/primitive-exception findings, and quality-scenario verification implications.
-- **Candidate concerns or criteria** - for Deep Think in existing-system feature preparation: candidate-only observations plus their evidence-promotion status and canonical evidence ref only when validated.
+- **Candidate concerns or criteria** - for Deep Think in existing-system feature preparation: candidate-only observations plus their evidence-promotion status and, only when validated, one exact per-candidate `{evidence_ref, item_id, claim_or_question}` binding from the canonical input set.
 - **Independent challenge evidence** - for `review_intensive` Pack updates: challenge reference, dissent or validation, resolution, and effect on the selected design.
 - **Delegation path** - for Perspectives and Stress Test: delegated vs sequential fallback, policy state, execution mode, and trigger scope.
 - **Debug artifacts** - for debugging outputs: hypotheses, tests, disconfirming evidence, and conclusion.

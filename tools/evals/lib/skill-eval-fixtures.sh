@@ -166,6 +166,22 @@ validate_fixture() {
           type == "string" or type == "number" or type == "boolean"
           or (type == "array" and all(.[]; type == "string" or type == "number" or type == "boolean"));
 
+        def scalar_array($maximum):
+          type == "array" and length > 0 and length <= $maximum
+          and all(.[]; scalar);
+
+        def distinct_bounded_fields:
+          type == "array" and length > 0 and length <= 16
+          and all(.[]; type == "string" and length > 0)
+          and (unique | length == length);
+
+        def exact_expected_objects($fields):
+          type == "array" and length > 0 and length <= 32
+          and all(.[];
+            type == "object"
+            and (keys | sort) == ($fields | sort)
+            and (. as $object | all($fields[]; . as $field | $object[$field] | scalar)));
+
         def structured_assertion_error($index; $assertion_index):
           if type != "object" then
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] must be an object"
@@ -174,6 +190,10 @@ validate_fixture() {
           elif .operator == "equals" then
             if (.path? | json_path | not) or (has("expected") | not) or (.expected | equality_value | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid equals assertion"
+            else empty end
+          elif .operator == "one_of" then
+            if (.path? | json_path | not) or (.expected_values? | scalar_array(32) | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid one_of assertion"
             else empty end
           elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "path_absent" then
             if (.path? | json_path | not) then
@@ -195,6 +215,11 @@ validate_fixture() {
           elif .operator == "array_items_nonempty_fields" then
             if (.path? | json_path | not) or (.fields? | nonempty_string_array | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_items_nonempty_fields assertion"
+            else empty end
+          elif .operator == "array_object_values_exact" then
+            .fields as $fields |
+            if (.path? | json_path | not) or ($fields | distinct_bounded_fields | not) or (.expected_objects? | exact_expected_objects($fields) | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_object_values_exact assertion"
             else empty end
           else
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] unsupported operator: \(.operator)"

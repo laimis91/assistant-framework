@@ -654,6 +654,12 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             nonzero) source_exit_code=1 ;;
             wrapped) ;;
             argv_wrapped) ;;
+            wrapped_context_rg)
+                source_command="rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --before-context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --before-context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
             equivalent)
                 source_command='sed -n "1,200p" src/route.ts'
                 source_output="$(sed -n '1,200p' "$workspace/src/route.ts")"
@@ -687,12 +693,108 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             rg_preprocessor_as_pattern)
                 source_command="rg -n '--pre=/bin/cat' src/route.ts"
                 ;;
+            rg_preprocessor_separate)
+                source_command="rg --pre cat -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_pre_glob)
+                source_command="rg --pre-glob='*.ts' -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_hostname_bin)
+                source_command="rg --hostname-bin=hostname -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_replace)
+                source_command="rg --replace=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_field_match_separator)
+                source_command="rg --field-match-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_field_context_separator)
+                source_command="rg --field-context-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_context_separator)
+                source_command="rg --context-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_hyperlink_format)
+                source_command="rg --hyperlink-format=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_replace)
+                source_command="rg -nr 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_replace_assignment)
+                source_command="rg -r=spoof 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_file)
+                source_command="rg -f .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_short_file_attached)
+                source_command="rg -f.assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_clustered_short_file)
+                source_command="rg -nf .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_long_file)
+                source_command="rg --file .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_ignore_file)
+                source_command="rg --ignore-file .assistant-eval/blank-patterns 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_target_path_as_glob)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --glob src/route.ts"
+                ;;
+            rg_positional_then_explicit)
+                source_command="rg 'applyActiveRouteEffects' -e 'selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_explicit_then_positional)
+                source_command="rg -e 'applyActiveRouteEffects' 'selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_unquoted_glob)
+                source_command="rg --glob * -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            wrapped_unquoted_glob)
+                source_command="rg --glob * -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_colors)
+                source_command="rg --colors match:none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_path_separator_missing)
+                source_command="rg --path-separator -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_path_separator_invalid)
+                source_command="rg --path-separator . -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_path_separator_multibyte)
+                source_command="rg --path-separator // -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_target_path_as_path_separator)
+                source_command="rg --path-separator src/route.ts -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport'"
+                ;;
             argv_rg_preprocessor)
                 source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
                 ;;
-            argv_rg_preprocessor_as_pattern) ;;
+            argv_rg_preprocessor_as_pattern|argv_rg_preprocessor_separate|argv_rg_pre_glob|argv_rg_hostname_bin|argv_rg_replace|argv_rg_field_match_separator|argv_rg_field_context_separator|argv_rg_context_separator|argv_rg_hyperlink_format|argv_rg_short_file|argv_rg_short_file_attached|argv_rg_clustered_short_file|argv_rg_long_file|argv_rg_ignore_file|argv_rg_target_path_as_glob|argv_rg_positional_then_explicit|argv_rg_explicit_then_positional|argv_rg_colors|argv_rg_path_separator_missing|argv_rg_path_separator_invalid|argv_rg_path_separator_multibyte|argv_rg_target_path_as_path_separator) ;;
             shell_substitution)
                 source_command='cat $(pwd)/src/route.ts'
+                ;;
+            double_quoted_substitution)
+                source_command='rg -n "$(cat src/route.ts)" src/route.ts'
+                ;;
+            double_quoted_parameter)
+                source_command='rg -n "$HOME" src/route.ts'
+                ;;
+            double_quoted_legacy_arithmetic|bash_wrapped_legacy_arithmetic)
+                source_command='rg -n "$[1+1]" src/route.ts'
+                ;;
+            double_quoted_legacy_subscript|bash_wrapped_legacy_subscript)
+                source_command='rg -n "$[variable]" src/route.ts'
+                ;;
+            double_quoted_zsh_split|zsh_wrapped_split)
+                source_command='rg -n "$=source_args" src/route.ts'
+                ;;
+            zsh_equals|wrapped_zsh_equals)
+                source_command='rg -n =false src/route.ts'
+                ;;
+            multi_double_fragment_expansion|wrapped_multi_double_fragment_expansion)
+                source_command='rg -n "safe""$[1+1]" src/route.ts'
                 ;;
             redirection)
                 source_command='cat src/route.ts > evidence.txt'
@@ -706,8 +808,32 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             pipeline_spoof)
                 source_command='rg -n applyActiveRouteEffects src/route.ts | cat src/route.ts'
                 ;;
+            no_space_pipeline)
+                source_command='rg -n definitelynotpresent|cat src/route.ts'
+                ;;
+            wrapped_no_space_pipeline)
+                source_command='rg -n definitelynotpresent|cat src/route.ts'
+                ;;
+            no_space_semicolon|wrapped_no_space_semicolon)
+                source_command='rg -n definitelynotpresent;cat src/route.ts'
+                ;;
+            brace_expansion|wrapped_brace_expansion)
+                source_command="rg -n applyActiveRouteEffects {src,tests}/route.ts"
+                ;;
+            no_space_ampersand)
+                source_command='rg -n definitelynotpresent&cat src/route.ts'
+                ;;
+            no_space_process_substitution)
+                source_command='rg -n applyActiveRouteEffects<(cat src/route.ts) src/route.ts'
+                ;;
+            no_space_glob_pattern)
+                source_command='rg -n definitely* src/route.ts'
+                ;;
             extra_path_operand)
                 source_command='rg -n applyActiveRouteEffects src/route.ts src/route.ts'
+                ;;
+            extensionless_extra_path)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src src/route.ts"
                 ;;
             rg_backtick_substitution)
                 source_command='rg -n `printf applyActiveRouteEffects` src/route.ts'
@@ -721,7 +847,7 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
                 test_command='echo no-second-inspection'
                 test_output='no second inspection'
                 ;;
-            argv_cat_extra_path) ;;
+            argv_cat_extra_path|argv_extensionless_extra_path) ;;
             argv_grouped_rg)
                 source_command="rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' src/route.ts"
                 source_output="$(rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' "$workspace/src/route.ts")"
@@ -742,6 +868,127 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
                 test_command='echo no-second-inspection'
                 test_output='no second inspection'
                 ;;
+            string_context_rg)
+                source_command="rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_context_rg)
+                source_command="rg -B 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -B 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --after-context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --after-context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_separated_value_rg)
+                source_command="rg --sort path -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --sort path -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --sort path -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --sort path -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_regexp_rg)
+                source_command="rg --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_glob_rg|argv_glob_rg)
+                source_command="rg --glob '*.ts' -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --glob '*.ts' -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --glob '*.js' -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --glob '*.js' -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_max_count_rg|argv_max_count_rg)
+                source_command="rg --max-count 20 -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --max-count 20 -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --max-count 20 -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --max-count 20 -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_sort_none_rg|argv_sort_none_rg)
+                source_command="rg --sort none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --sort none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --sort none -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --sort none -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_path_separator_rg|argv_path_separator_rg)
+                source_command="rg --path-separator / -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --path-separator / -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --path-separator / -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --path-separator / -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_anchored_rg|argv_anchored_rg)
+                source_command="rg -e '^(function applyActiveRouteEffects\\(\\) \\{|  selectRoute\\(\"ACTIVE\", effects\\);|  highlightRoute\\(\"ACTIVE\", effects\\);|  focusViewport\\(\"ACTIVE\", effects\\);)\$' src/route.ts"
+                source_output="$(rg -e '^(function applyActiveRouteEffects\(\) \{|  selectRoute\("ACTIVE", effects\);|  highlightRoute\("ACTIVE", effects\);|  focusViewport\("ACTIVE", effects\);)$' "$workspace/src/route.ts")"
+                test_command="rg -e '^  assert\\.deepEqual\\(applyActiveRouteEffects\\(\\), \\[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\\]\\);\$' tests/route.test.js"
+                test_output="$(rg -e '^  assert\.deepEqual\(applyActiveRouteEffects\(\), \["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"\]\);$' "$workspace/tests/route.test.js")"
+                ;;
+            double_quoted_anchored_rg)
+                source_command='rg -e "^(function applyActiveRouteEffects\(\) \{|  selectRoute\(\"ACTIVE\", effects\);|  highlightRoute\(\"ACTIVE\", effects\);|  focusViewport\(\"ACTIVE\", effects\);)$" src/route.ts'
+                source_output="$(rg -e '^(function applyActiveRouteEffects\(\) \{|  selectRoute\("ACTIVE", effects\);|  highlightRoute\("ACTIVE", effects\);|  focusViewport\("ACTIVE", effects\);)$' "$workspace/src/route.ts")"
+                test_command='rg -e "^  assert\.deepEqual\(applyActiveRouteEffects\(\), \[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\]\);$" tests/route.test.js'
+                test_output="$(rg -e '^  assert\.deepEqual\(applyActiveRouteEffects\(\), \["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"\]\);$' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_positional_before_rg)
+                source_command="rg --color never 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --color never 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --color never 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --color never 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_positional_after_rg)
+                source_command="rg 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never src/route.ts"
+                source_output="$(rg 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never "$workspace/src/route.ts")"
+                test_command="rg 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never tests/route.test.js"
+                test_output="$(rg 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never "$workspace/tests/route.test.js")"
+                ;;
+            string_color_explicit_before_rg)
+                source_command="rg --color never -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --color never -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --color never -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --color never -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_explicit_after_rg)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never src/route.ts"
+                source_output="$(rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never "$workspace/tests/route.test.js")"
+                ;;
+            string_word_concat_rg|wrapped_word_concat_rg)
+                source_command="rg --glob='*.ts' --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --glob='*.ts' --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --glob='*.js' -e'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --glob='*.js' -e'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_attached_short_values_rg|argv_attached_short_values_rg)
+                source_command="rg -Eutf-8 -g'*.ts' -tts -e'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -Eutf-8 -g'*.ts' -tts -e'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -Eutf-8 -g'*.js' -tjs -e'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -Eutf-8 -g'*.js' -tjs -e'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_literal_dollar_rg)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|\$literal' src/route.ts"
+                source_output="$(rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|$literal' "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|\$literal' tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|$literal' "$workspace/tests/route.test.js")"
+                ;;
+            string_quoted_equals_rg)
+                source_command="rg -e '=false|applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -e '=false|applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -e '=false|assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -e '=false|assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            quoted_space_rg|argv_quoted_space_rg)
+                source_command="rg -C 20 'function applyActiveRouteEffects' src/route.ts"
+                source_output="$(rg -C 20 'function applyActiveRouteEffects' "$workspace/src/route.ts")"
+                test_command="rg -C 20 'assert.deepEqual' tests/route.test.js"
+                test_output="$(rg -C 20 'assert\.deepEqual' "$workspace/tests/route.test.js")"
+                ;;
+            oversized_output)
+                source_output="$(printf '%65537s' '' | tr ' ' x)$source_output"
+                ;;
+            symbol_spoof)
+                source_output='selectRoute highlightRoute focusViewport applyActiveRouteEffects'
+                test_output='assert.deepEqual applyActiveRouteEffects select:ACTIVE highlight:ACTIVE focus:ACTIVE'
+                ;;
             argv_wrapper_additional_command) ;;
             combined_rg)
                 source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual' src/route.ts tests/route.test.js"
@@ -758,10 +1005,16 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
         esac
         source_command_json="$(jq -cn --arg command "$source_command" '$command')"
         test_command_json="$(jq -cn --arg command "$test_command" '$command')"
-        if [[ "$viewing_event_mode" == wrapped ]]; then
+        if [[ "$viewing_event_mode" == wrapped || "$viewing_event_mode" == wrapped_context_rg || "$viewing_event_mode" == wrapped_word_concat_rg || "$viewing_event_mode" == wrapped_unquoted_glob || "$viewing_event_mode" == wrapped_no_space_pipeline || "$viewing_event_mode" == wrapped_no_space_semicolon || "$viewing_event_mode" == wrapped_brace_expansion || "$viewing_event_mode" == wrapped_zsh_equals || "$viewing_event_mode" == wrapped_multi_double_fragment_expansion ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '"/bin/zsh -lc \"" + $command + "\""')"
             test_command_json="$(jq -cn --arg command "$test_command" '"/bin/zsh -lc \"" + $command + "\""')"
         elif [[ "$viewing_event_mode" == argv_wrapped ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command]')"
+            test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == bash_wrapped_legacy_arithmetic || "$viewing_event_mode" == bash_wrapped_legacy_subscript ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/bash","-lc",$command]')"
+            test_command_json="$(jq -cn --arg command "$test_command" '["/bin/bash","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == zsh_wrapped_split ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command]')"
             test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
         elif [[ "$viewing_event_mode" == argv_sed_write_ending_p ]]; then
@@ -770,14 +1023,91 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             source_command_json='["rg","--pre=cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
         elif [[ "$viewing_event_mode" == argv_rg_preprocessor_as_pattern ]]; then
             source_command_json='["rg","-n","--pre=/bin/cat","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor_separate ]]; then
+            source_command_json='["rg","--pre","cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_pre_glob ]]; then
+            source_command_json='["rg","--pre-glob=*.ts","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_hostname_bin ]]; then
+            source_command_json='["rg","--hostname-bin=hostname","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_replace ]]; then
+            source_command_json='["rg","--replace=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_field_match_separator ]]; then
+            source_command_json='["rg","--field-match-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_field_context_separator ]]; then
+            source_command_json='["rg","--field-context-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_context_separator ]]; then
+            source_command_json='["rg","--context-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_hyperlink_format ]]; then
+            source_command_json='["rg","--hyperlink-format=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_short_file ]]; then
+            source_command_json='["rg","-f",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_short_file_attached ]]; then
+            source_command_json='["rg","-f.assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_clustered_short_file ]]; then
+            source_command_json='["rg","-nf",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_long_file ]]; then
+            source_command_json='["rg","--file",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_ignore_file ]]; then
+            source_command_json='["rg","--ignore-file",".assistant-eval/blank-patterns","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_target_path_as_glob ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","--glob","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_positional_then_explicit ]]; then
+            source_command_json='["rg","applyActiveRouteEffects","-e","selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_explicit_then_positional ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects","selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_colors ]]; then
+            source_command_json='["rg","--colors","match:none","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_missing ]]; then
+            source_command_json='["rg","--path-separator","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_invalid ]]; then
+            source_command_json='["rg","--path-separator",".","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_multibyte ]]; then
+            source_command_json='["rg","--path-separator=//","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_target_path_as_path_separator ]]; then
+            source_command_json='["rg","--path-separator","src/route.ts","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport"]'
         elif [[ "$viewing_event_mode" == argv_combined_rg ]]; then
             source_command_json='["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual","src/route.ts","tests/route.test.js"]'
         elif [[ "$viewing_event_mode" == argv_cat_extra_path ]]; then
             source_command_json='["cat","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_extensionless_extra_path ]]; then
+            source_command_json='["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src","src/route.ts"]'
         elif [[ "$viewing_event_mode" == argv_grouped_rg ]]; then
             source_command_json='["rg","-n","(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)","src/route.ts"]'
         elif [[ "$viewing_event_mode" == reversed_ignore_case_rg ]]; then
             source_command_json='["rg","-i","ACTIVE|assert\\.deepEqual","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_context_rg ]]; then
+            source_command_json='["rg","-B","20","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--after-context=20","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_separated_value_rg ]]; then
+            source_command_json='["rg","--sort","path","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--sort","path","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_regexp_rg ]]; then
+            source_command_json='["rg","--regexp=applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_glob_rg ]]; then
+            source_command_json='["rg","--glob","*.ts","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--glob=*.js","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_max_count_rg ]]; then
+            source_command_json='["rg","--max-count","20","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--max-count=20","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_sort_none_rg ]]; then
+            source_command_json='["rg","--sort","none","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--sortr=none","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_path_separator_rg ]]; then
+            source_command_json='["rg","--path-separator","/","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--path-separator=\\","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_anchored_rg ]]; then
+            source_command_json='["rg","-e","^(function applyActiveRouteEffects\\(\\) \\{|  selectRoute\\(\"ACTIVE\", effects\\);|  highlightRoute\\(\"ACTIVE\", effects\\);|  focusViewport\\(\"ACTIVE\", effects\\);)$","src/route.ts"]'
+            test_command_json='["rg","-e","^  assert\\.deepEqual\\(applyActiveRouteEffects\\(\\), \\[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\\]\\);$","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_quoted_space_rg ]]; then
+            source_command_json='["rg","-C","20","function applyActiveRouteEffects","src/route.ts"]'
+            test_command_json='["rg","-C","20","assert.deepEqual","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_attached_short_values_rg ]]; then
+            source_command_json='["rg","-Eutf-8","-g*.ts","-tts","-eapplyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","-Eutf-8","-g*.js","-tjs","-eassert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_literal_dollar_rg ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|$literal","src/route.ts"]'
+            test_command_json='["rg","-e","assert\\.deepEqual|$literal","tests/route.test.js"]'
         elif [[ "$viewing_event_mode" == argv_wrapper_additional_command ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command,"touch evidence.txt"]')"
         fi
@@ -2257,6 +2587,96 @@ else
     fail "preparation or pending-Pack pilot verifier accepted inflation: ${pilot_mode_failures[*]}"
 fi
 
+test_start "command-event bounds reject pathological shell input before expensive parsing"
+event_bounds_lib="$fixture_root/event-bounds-functions.sh"
+awk '
+    /^validate_event_stream\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >"$event_bounds_lib"
+awk '
+    /^viewing_inspection_event_evidence\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+# shellcheck source=/dev/null
+source "$event_bounds_lib"
+
+event_bounds_64="$fixture_root/event-bounds-64.jsonl"
+event_bounds_65="$fixture_root/event-bounds-65.jsonl"
+event_bounds_4096="$fixture_root/event-bounds-4096.jsonl"
+event_bounds_4097="$fixture_root/event-bounds-4097.jsonl"
+event_bounds_argv_64_path="$fixture_root/event-bounds-argv-64.jsonl"
+event_bounds_argv_65_path="$fixture_root/event-bounds-argv-65.jsonl"
+event_bounds_argv_oversized_path="$fixture_root/event-bounds-argv-oversized.jsonl"
+event_bounds_raw="$fixture_root/event-bounds-raw.jsonl"
+event_bounds_wrapper="$fixture_root/event-bounds-wrapper.jsonl"
+event_bounds_small_command='rg'
+event_bounds_command_4096="$(printf '%4096s' '' | tr ' ' x)"
+event_bounds_command_4097="${event_bounds_command_4096}x"
+event_bounds_argv_64=''
+event_bounds_argv_65=''
+event_bounds_argv_oversized=''
+event_bounds_argv_64="$(jq -cn '[range(0; 64) | "x"]')"
+event_bounds_argv_65="$(jq -cn '[range(0; 65) | "x"]')"
+event_bounds_argv_oversized="$(jq -cn --arg token "$event_bounds_command_4097" '["rg", $token]')"
+
+for event_bounds_count in 64 65; do
+    jq -cn --arg command "$event_bounds_small_command" --argjson count "$event_bounds_count" \
+        '[range(0; $count) | {type:"item.completed", item:{type:"command_execution", command:$command}}]' \
+        | jq -c '.[]' >"$fixture_root/event-bounds-$event_bounds_count.jsonl"
+done
+for event_bounds_path in "$event_bounds_4096" "$event_bounds_4097"; do
+    if [[ "$event_bounds_path" == "$event_bounds_4096" ]]; then
+        event_bounds_command="$event_bounds_command_4096"
+    else
+        event_bounds_command="$event_bounds_command_4097"
+    fi
+    jq -cn --arg command "$event_bounds_command" \
+        '{type:"item.completed", item:{type:"command_execution", command:$command}}' >"$event_bounds_path"
+done
+for event_bounds_path in "$event_bounds_argv_64_path" "$event_bounds_argv_65_path" "$event_bounds_argv_oversized_path"; do
+    case "$event_bounds_path" in
+        "$event_bounds_argv_64_path") event_bounds_argv="$event_bounds_argv_64" ;;
+        "$event_bounds_argv_65_path") event_bounds_argv="$event_bounds_argv_65" ;;
+        *) event_bounds_argv="$event_bounds_argv_oversized" ;;
+    esac
+    jq -cn --argjson command "$event_bounds_argv" \
+        '{type:"item.completed", item:{type:"command_execution", command:$command}}' >"$event_bounds_path"
+done
+
+event_bounds_empty_quotes="$(printf '%50000s' '' | tr ' ' '"')"
+event_bounds_raw_command="rg -n $event_bounds_empty_quotes src/route.ts"
+event_bounds_wrapper_command="/bin/zsh -lc \"$event_bounds_raw_command\""
+jq -cn --arg command "$event_bounds_raw_command" \
+    '{type:"item.completed", item:{id:"raw", type:"command_execution", command:$command, status:"completed", exit_code:0, aggregated_output:""}}' \
+    >"$event_bounds_raw"
+jq -cn --arg command "$event_bounds_wrapper_command" \
+    '{type:"item.completed", item:{id:"wrapper", type:"command_execution", command:$command, status:"completed", exit_code:0, aggregated_output:""}}' \
+    >"$event_bounds_wrapper"
+
+event_bounds_timing_passed=true
+for event_bounds_path in "$event_bounds_raw" "$event_bounds_wrapper"; do
+    event_bounds_started_at=$SECONDS
+    if validate_event_stream "$event_bounds_path" >/dev/null 2>&1 \
+        || viewing_inspection_event_evidence "$event_bounds_path" >/dev/null 2>&1 \
+        || (( SECONDS - event_bounds_started_at >= 5 )); then
+        event_bounds_timing_passed=false
+    fi
+done
+if validate_event_stream "$event_bounds_64" \
+    && ! validate_event_stream "$event_bounds_65" \
+    && validate_event_stream "$event_bounds_4096" \
+    && ! validate_event_stream "$event_bounds_4097" \
+    && validate_event_stream "$event_bounds_argv_64_path" \
+    && ! validate_event_stream "$event_bounds_argv_65_path" \
+    && ! validate_event_stream "$event_bounds_argv_oversized_path" \
+    && [[ "$event_bounds_timing_passed" == true ]]; then
+    pass
+else
+    fail "command-event bounds or pre-regex pathological-input rejection regressed"
+fi
+
 test_start "VIEWING evidence mutations are isolated to the candidate verifier"
 viewing_mutation_failures=()
 for viewing_mutation in omitted_ref stale_hashes bad_path bad_symbol bad_assertion bad_event_ref missing_event; do
@@ -2282,7 +2702,7 @@ fi
 
 test_start "VIEWING inspection event mutations are isolated to the candidate verifier"
 viewing_event_failures=()
-for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p rg_preprocessor rg_preprocessor_as_pattern argv_rg_preprocessor argv_rg_preprocessor_as_pattern shell_substitution redirection additional_command cat_unsafe_flag pipeline_spoof extra_path_operand rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_wrapper_additional_command; do
+for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p rg_preprocessor rg_preprocessor_as_pattern rg_preprocessor_separate rg_pre_glob rg_hostname_bin rg_replace rg_field_match_separator rg_field_context_separator rg_context_separator rg_hyperlink_format rg_short_replace rg_short_replace_assignment rg_short_file rg_short_file_attached rg_clustered_short_file rg_long_file rg_ignore_file rg_target_path_as_glob rg_positional_then_explicit rg_explicit_then_positional rg_unquoted_glob wrapped_unquoted_glob rg_colors rg_path_separator_missing rg_path_separator_invalid rg_path_separator_multibyte rg_target_path_as_path_separator argv_rg_preprocessor argv_rg_preprocessor_as_pattern argv_rg_preprocessor_separate argv_rg_pre_glob argv_rg_hostname_bin argv_rg_replace argv_rg_field_match_separator argv_rg_field_context_separator argv_rg_context_separator argv_rg_hyperlink_format argv_rg_short_file argv_rg_short_file_attached argv_rg_clustered_short_file argv_rg_long_file argv_rg_ignore_file argv_rg_target_path_as_glob argv_rg_positional_then_explicit argv_rg_explicit_then_positional argv_rg_colors argv_rg_path_separator_missing argv_rg_path_separator_invalid argv_rg_path_separator_multibyte argv_rg_target_path_as_path_separator shell_substitution double_quoted_substitution double_quoted_parameter double_quoted_legacy_arithmetic bash_wrapped_legacy_arithmetic double_quoted_legacy_subscript bash_wrapped_legacy_subscript double_quoted_zsh_split zsh_wrapped_split zsh_equals wrapped_zsh_equals multi_double_fragment_expansion wrapped_multi_double_fragment_expansion redirection additional_command cat_unsafe_flag pipeline_spoof no_space_pipeline wrapped_no_space_pipeline no_space_semicolon wrapped_no_space_semicolon brace_expansion wrapped_brace_expansion no_space_ampersand no_space_process_substitution no_space_glob_pattern extra_path_operand extensionless_extra_path rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_extensionless_extra_path argv_wrapper_additional_command oversized_output symbol_spoof; do
     viewing_event_output="$fixture_root/viewing-event-$viewing_event_mutation"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_event_mutation" "$runner" --execute \
@@ -2303,20 +2723,26 @@ else
     fail "VIEWING inspection-event mutations were not isolated and rejected: ${viewing_event_failures[*]}"
 fi
 
-test_start "VIEWING inspection accepts authentic completed string shell-wrapper events"
-viewing_wrapped_output="$fixture_root/viewing-event-wrapped"
-rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=wrapped "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_wrapped_output" \
-    --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e '
-      all(.[]; .execution.verifier.workspace_status == "passed")
-      and ([.[] | select(.variant == "candidate")] | length) == 1
-    ' "$viewing_wrapped_output/traces/"*.json >/dev/null; then
+test_start "VIEWING inspection accepts authentic completed string shell-wrapper events including rg context"
+viewing_wrapped_failures=()
+for viewing_wrapped_mode in wrapped wrapped_context_rg; do
+    viewing_wrapped_output="$fixture_root/viewing-event-$viewing_wrapped_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_wrapped_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_wrapped_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e '
+          all(.[]; .execution.verifier.workspace_status == "passed")
+          and ([.[] | select(.variant == "candidate")] | length) == 1
+        ' "$viewing_wrapped_output/traces/"*.json >/dev/null; then
+        viewing_wrapped_failures+=("$viewing_wrapped_mode")
+    fi
+done
+if [[ ${#viewing_wrapped_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "VIEWING inspection rejected authentic completed string shell-wrapper events"
+    fail "VIEWING inspection rejected authentic completed string shell-wrapper events: ${viewing_wrapped_failures[*]}"
 fi
 
 test_start "VIEWING inspection retains explicitly labelled argv shell-wrapper compatibility"
@@ -2360,7 +2786,7 @@ fi
 
 test_start "VIEWING inspection accepts grouped and safely quoted rg equivalents"
 viewing_rg_equivalent_failures=()
-for viewing_rg_equivalent_mode in argv_combined_rg argv_grouped_rg double_quoted_rg combined_option_rg reversed_ignore_case_rg; do
+for viewing_rg_equivalent_mode in argv_combined_rg argv_grouped_rg double_quoted_rg combined_option_rg reversed_ignore_case_rg string_context_rg argv_context_rg argv_separated_value_rg argv_regexp_rg quoted_space_rg argv_quoted_space_rg string_glob_rg argv_glob_rg string_max_count_rg argv_max_count_rg string_sort_none_rg argv_sort_none_rg string_path_separator_rg argv_path_separator_rg string_anchored_rg argv_anchored_rg double_quoted_anchored_rg string_color_positional_before_rg string_color_positional_after_rg string_color_explicit_before_rg string_color_explicit_after_rg string_word_concat_rg wrapped_word_concat_rg string_attached_short_values_rg argv_attached_short_values_rg argv_literal_dollar_rg string_quoted_equals_rg; do
     viewing_rg_equivalent_output="$fixture_root/viewing-event-$viewing_rg_equivalent_mode"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_rg_equivalent_mode" "$runner" --execute \

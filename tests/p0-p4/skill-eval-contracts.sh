@@ -254,6 +254,9 @@ p0p4_write_skill_eval_responses() {
                     assistant-thinking:feature-preparation-exact-evidence-binding)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["The canonical row preserves the tested ACTIVE effects for VIEWING."], recommendation: "Carry the preservation obligation into the implementation plan.", confidence: "medium", gaps_or_assumptions: ["VIEWING implementation has not started."], evidence_or_observations: ["prep/viewing-route#viewing-route-effects records inspected implementation and behavioral tests."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", feature_preparation_evidence_claim_or_question: "Preserve selection, highlight, and viewport focus for VIEWING", rationale: "The exact canonical evidence row records inspected implementation and behavioral-test effects."}]}' >"$response_path"
                         ;;
+                    assistant-thinking:feature-preparation-multiple-evidence-bindings)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["The two concerns are independently backed by distinct canonical rows."], recommendation: "Carry each exact preservation and read-only obligation into the implementation plan.", confidence: "medium", gaps_or_assumptions: ["VIEWING implementation has not started."], evidence_or_observations: ["prep/viewing-route contains both inspected evidence rows."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-route-effects", feature_preparation_evidence_claim_or_question: "Preserve selection, highlight, and viewport focus for VIEWING", rationale: "The first exact canonical evidence row records tested route effects."}, {concern_or_criterion: "Keep VIEWING read-only without enabling editing", promotion_status: "validated_by_feature_preparation_evidence", feature_preparation_evidence_ref: "prep/viewing-route", feature_preparation_evidence_item_id: "viewing-editing-gap", feature_preparation_evidence_claim_or_question: "Keep VIEWING read-only without enabling editing", rationale: "The second exact canonical evidence row preserves the read-only boundary."}]}' >"$response_path"
+                        ;;
                     assistant-thinking:feature-preparation-mismatched-evidence-binding)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
                         ;;
@@ -1277,7 +1280,7 @@ mv "$feature_mutation_root/counter-cases.json" "$feature_counter_skill/evals/cas
 jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-diagram-traceability")' "$FRAMEWORK_DIR/skills/assistant-diagrams/evals/cases.json")" \
     '.cases = [$case]' "$feature_diagram_skill/evals/cases.json" >"$feature_mutation_root/diagram-cases.json"
 mv "$feature_mutation_root/diagram-cases.json" "$feature_diagram_skill/evals/cases.json"
-jq --argjson cases "$(jq '[.cases[] | select(.id == "feature-preparation-exact-evidence-binding" or .id == "feature-preparation-mismatched-evidence-binding")]' "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json")" \
+jq --argjson cases "$(jq '[.cases[] | select(.id == "feature-preparation-exact-evidence-binding" or .id == "feature-preparation-multiple-evidence-bindings" or .id == "feature-preparation-mismatched-evidence-binding")]' "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json")" \
     '.cases = $cases' "$feature_thinking_skill/evals/cases.json" >"$feature_mutation_root/thinking-cases.json"
 mv "$feature_mutation_root/thinking-cases.json" "$feature_thinking_skill/evals/cases.json"
 jq --argjson cases "$(jq '[.cases[] | select(.id == "architecture-doc-pack-backed-decision-trace" or .id == "architecture-doc-blocks-incomplete-feature-preparation-pack" or .id == "feature-preparation-doc-blocks-incomplete-evidence-without-pack" or .id == "feature-preparation-doc-requires-exact-evidence-binding" or .id == "feature-preparation-doc-rejects-mismatched-evidence-item" or .id == "feature-preparation-doc-rejects-mismatched-evidence-claim")]' "$FRAMEWORK_DIR/skills/assistant-docs/evals/cases.json")" \
@@ -1289,7 +1292,7 @@ cp "$passing_response_dir/assistant-workflow/feature-preparation-counterclassifi
     "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
 cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
     "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-for case_id in feature-preparation-exact-evidence-binding feature-preparation-mismatched-evidence-binding; do
+for case_id in feature-preparation-exact-evidence-binding feature-preparation-multiple-evidence-bindings feature-preparation-mismatched-evidence-binding; do
     cp "$passing_response_dir/assistant-thinking/$case_id.txt" "$feature_thinking_responses/assistant-eval-feature-thinking/$case_id.txt"
 done
 for case_id in architecture-doc-pack-backed-decision-trace architecture-doc-blocks-incomplete-feature-preparation-pack feature-preparation-doc-blocks-incomplete-evidence-without-pack feature-preparation-doc-requires-exact-evidence-binding feature-preparation-doc-rejects-mismatched-evidence-item feature-preparation-doc-rejects-mismatched-evidence-claim; do
@@ -1473,6 +1476,42 @@ else
     done
     cp "$passing_response_dir/assistant-thinking/feature-preparation-exact-evidence-binding.txt" \
         "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
+    for multi_binding_mutation in \
+        'del(.key_insights)' \
+        'del(.recommendation)' \
+        'del(.confidence)' \
+        'del(.gaps_or_assumptions)' \
+        'del(.evidence_or_observations)' \
+        '(.candidate_concerns_or_criteria[0].concern_or_criterion) as $first | .candidate_concerns_or_criteria[0].concern_or_criterion = .candidate_concerns_or_criteria[1].concern_or_criterion | .candidate_concerns_or_criteria[1].concern_or_criterion = $first' \
+        '(.candidate_concerns_or_criteria[0] | {feature_preparation_evidence_ref, feature_preparation_evidence_item_id, feature_preparation_evidence_claim_or_question}) as $first | (.candidate_concerns_or_criteria[1] | {feature_preparation_evidence_ref, feature_preparation_evidence_item_id, feature_preparation_evidence_claim_or_question}) as $second | .candidate_concerns_or_criteria[0].feature_preparation_evidence_ref = $second.feature_preparation_evidence_ref | .candidate_concerns_or_criteria[0].feature_preparation_evidence_item_id = $second.feature_preparation_evidence_item_id | .candidate_concerns_or_criteria[0].feature_preparation_evidence_claim_or_question = $second.feature_preparation_evidence_claim_or_question | .candidate_concerns_or_criteria[1].feature_preparation_evidence_ref = $first.feature_preparation_evidence_ref | .candidate_concerns_or_criteria[1].feature_preparation_evidence_item_id = $first.feature_preparation_evidence_item_id | .candidate_concerns_or_criteria[1].feature_preparation_evidence_claim_or_question = $first.feature_preparation_evidence_claim_or_question'; do
+        cp "$passing_response_dir/assistant-thinking/feature-preparation-multiple-evidence-bindings.txt" \
+            "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+        jq "$multi_binding_mutation" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+        if "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_thinking_output"; then
+            feature_mutation_failures+=("thinking:multiple-binding:$multi_binding_mutation")
+        fi
+    done
+    cp "$passing_response_dir/assistant-thinking/feature-preparation-multiple-evidence-bindings.txt" \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+    jq '(.candidate_concerns_or_criteria) |= reverse | .confidence = "high"' \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+    if ! "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1; then
+        feature_mutation_failures+=("thinking:multiple-binding:whole-object-reorder-or-high-confidence")
+    fi
+    cp "$passing_response_dir/assistant-thinking/feature-preparation-multiple-evidence-bindings.txt" \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+    jq '.confidence = "unsupported"' \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
+    if "$skill_eval_runner" --responses "$feature_thinking_responses" --skill "$feature_thinking_skill" >"$feature_thinking_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_thinking_output"; then
+        feature_mutation_failures+=("thinking:multiple-binding:invalid-confidence")
+    fi
+    cp "$passing_response_dir/assistant-thinking/feature-preparation-multiple-evidence-bindings.txt" \
+        "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-multiple-evidence-bindings.txt"
     restore_feature_docs_responses() {
         local case_id
         for case_id in architecture-doc-pack-backed-decision-trace architecture-doc-blocks-incomplete-feature-preparation-pack feature-preparation-doc-blocks-incomplete-evidence-without-pack feature-preparation-doc-requires-exact-evidence-binding feature-preparation-doc-rejects-mismatched-evidence-item feature-preparation-doc-rejects-mismatched-evidence-claim; do
@@ -1950,6 +1989,160 @@ else
     fail "path_absent structured assertions do not enforce exact absent-field semantics: ${path_absent_failures[*]}"
 fi
 
+test_start "one_of and unordered exact object assertions are bounded and correlation-safe"
+object_values_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-object-values.XXXXXX")"
+object_values_skill="$object_values_root/assistant-eval-object-values"
+object_values_responses="$object_values_root/responses"
+object_values_output="$object_values_root/object-values.out"
+object_values_err="$object_values_root/validation.err"
+p0p4_register_cleanup "$object_values_root"
+p0p4_write_skill_eval_fixture "$object_values_skill"
+jq '
+  .cases[0].machine_expectations.structured_json_assertions = [
+    {"operator":"one_of","path":["confidence"],"expected_values":["high","medium","low"]},
+    {"operator":"array_object_values_exact","path":["items"],"fields":["concern","promotion","evidence_ref","item_id","claim"],"expected_objects":[
+      {"concern":"Preserve effects","promotion":"validated","evidence_ref":"prep/viewing","item_id":"effects","claim":"Preserve effects"},
+      {"concern":"Keep read-only","promotion":"validated","evidence_ref":"prep/viewing","item_id":"read-only","claim":"Keep read-only"}
+    ]}
+  ]
+' "$object_values_skill/evals/cases.json" >"$object_values_root/cases.json"
+mv "$object_values_root/cases.json" "$object_values_skill/evals/cases.json"
+cp "$object_values_skill/evals/cases.json" "$object_values_root/valid-cases.json"
+mkdir -p "$object_values_responses/assistant-eval-object-values"
+object_values_response='{"fixture":"fixture required fixture first fixture second","confidence":"medium","items":[{"concern":"Preserve effects","promotion":"validated","evidence_ref":"prep/viewing","item_id":"effects","claim":"Preserve effects"},{"concern":"Keep read-only","promotion":"validated","evidence_ref":"prep/viewing","item_id":"read-only","claim":"Keep read-only"}]}'
+printf '%s\n' "$object_values_response" >"$object_values_responses/assistant-eval-object-values/fixture-case.txt"
+object_values_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$object_values_skill" >/dev/null 2>"$object_values_err"; then
+    object_values_failures+=("valid fixture: $(cat "$object_values_err")")
+elif ! "$skill_eval_runner" --responses "$object_values_responses" --skill "$object_values_skill" >"$object_values_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$object_values_output"; then
+    object_values_failures+=("valid response")
+else
+    for passing_mutation in \
+        '(.confidence) = "high"' \
+        '(.items) |= reverse'; do
+        jq "$passing_mutation" <<<"$object_values_response" >"$object_values_responses/assistant-eval-object-values/fixture-case.txt"
+        if ! "$skill_eval_runner" --responses "$object_values_responses" --skill "$object_values_skill" >"$object_values_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=0" "$object_values_output"; then
+            object_values_failures+=("passing mutation $passing_mutation")
+        fi
+    done
+    for failing_mutation in \
+        '(.confidence) = "unsupported"' \
+        '(.items[0].concern) = "Keep read-only"' \
+        '(.items[0].item_id) = "read-only"'; do
+        jq "$failing_mutation" <<<"$object_values_response" >"$object_values_responses/assistant-eval-object-values/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$object_values_responses" --skill "$object_values_skill" >"$object_values_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$object_values_output"; then
+            object_values_failures+=("failing mutation $failing_mutation")
+        fi
+    done
+fi
+for malformed_assertion in \
+    '{"operator":"one_of","path":["confidence"],"expected_values":[]}' \
+    '{"operator":"one_of","path":["confidence"],"expected_values":[{}]}' \
+    '{"operator":"array_object_values_exact","path":["items"],"fields":["concern","concern"],"expected_objects":[{"concern":"one"}]}' \
+    '{"operator":"array_object_values_exact","path":["items"],"fields":["concern","item_id"],"expected_objects":[{"concern":"one"}]}' \
+    '{"operator":"array_object_values_exact","path":["items"],"fields":["concern"],"expected_objects":[{"concern":{"unsafe":true}}]}'; do
+    jq --argjson assertion "$malformed_assertion" '(.cases[0].machine_expectations.structured_json_assertions) = [$assertion]' "$object_values_root/valid-cases.json" >"$object_values_root/invalid.json"
+    mv "$object_values_root/invalid.json" "$object_values_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_values_skill" >/dev/null 2>"$object_values_err"; then
+        object_values_failures+=("malformed assertion $malformed_assertion")
+    fi
+    cp "$object_values_root/valid-cases.json" "$object_values_skill/evals/cases.json"
+done
+if [[ ${#object_values_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "one_of or array_object_values_exact assertions are unsafe or incorrect: ${object_values_failures[*]}"
+fi
+
+test_start "array_object_values_exact distinguishes a present null from a missing projected field"
+object_null_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-object-null.XXXXXX")"
+object_null_skill="$object_null_root/assistant-eval-object-null"
+object_null_responses="$object_null_root/responses"
+object_null_output="$object_null_root/object-null.out"
+object_null_err="$object_null_root/validation.err"
+p0p4_register_cleanup "$object_null_root"
+p0p4_write_skill_eval_fixture "$object_null_skill"
+jq '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"array_object_values_exact","path":["items"],"fields":["evidence_ref","claim"],"expected_objects":[{"evidence_ref":"prep/viewing","claim":null}]}]' "$object_null_skill/evals/cases.json" >"$object_null_root/cases.json"
+mv "$object_null_root/cases.json" "$object_null_skill/evals/cases.json"
+mkdir -p "$object_null_responses/assistant-eval-object-null"
+printf '%s\n' '{"fixture":"fixture required fixture first fixture second","items":[{"evidence_ref":"prep/viewing","claim":null}]}' >"$object_null_responses/assistant-eval-object-null/fixture-case.txt"
+object_null_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$object_null_skill" >/dev/null 2>"$object_null_err"; then
+    object_null_failures+=("valid present-null fixture: $(cat "$object_null_err")")
+elif ! "$skill_eval_runner" --responses "$object_null_responses" --skill "$object_null_skill" >"$object_null_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$object_null_output"; then
+    object_null_failures+=("present null did not match")
+else
+    jq 'del(.items[0].claim)' <"$object_null_responses/assistant-eval-object-null/fixture-case.txt" >"$object_null_root/missing-claim.json"
+    mv "$object_null_root/missing-claim.json" "$object_null_responses/assistant-eval-object-null/fixture-case.txt"
+    if "$skill_eval_runner" --responses "$object_null_responses" --skill "$object_null_skill" >"$object_null_output" 2>&1 \
+        || ! grep -Fq "structured_json_assertion_failures=1" "$object_null_output"; then
+        object_null_failures+=("missing projected claim was accepted")
+    fi
+fi
+if [[ ${#object_null_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "array_object_values_exact does not distinguish present null from missing keys: ${object_null_failures[*]}"
+fi
+
+test_start "structured assertion declaration bounds accept exact limits and reject one-over limits"
+structured_bounds_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-structured-bounds.XXXXXX")"
+structured_bounds_skill="$structured_bounds_root/assistant-eval-structured-bounds"
+structured_bounds_err="$structured_bounds_root/validation.err"
+p0p4_register_cleanup "$structured_bounds_root"
+p0p4_write_skill_eval_fixture "$structured_bounds_skill"
+cp "$structured_bounds_skill/evals/cases.json" "$structured_bounds_root/base-cases.json"
+structured_bounds_failures=()
+one_of_32="$(jq -cn '[range(0; 32) | "value-\(.)"]')"
+one_of_33="$(jq -cn '[range(0; 33) | "value-\(.)"]')"
+fields_16="$(jq -cn '[range(0; 16) | "field-\(.)"]')"
+fields_17="$(jq -cn '[range(0; 17) | "field-\(.)"]')"
+objects_32="$(jq -cn '[range(0; 32) | {"field": .}]')"
+objects_33="$(jq -cn '[range(0; 33) | {"field": .}]')"
+for bound_case in one_of_32 fields_16 objects_32; do
+    case "$bound_case" in
+        one_of_32)
+            jq --argjson values "$one_of_32" '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"one_of","path":["confidence"],"expected_values":$values}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+        fields_16)
+            jq --argjson fields "$fields_16" '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_object_values_exact","path":["items"],"fields":$fields,"expected_objects":[($fields | reduce .[] as $field ({}; .[$field] = "value"))]}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+        objects_32)
+            jq --argjson objects "$objects_32" '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_object_values_exact","path":["items"],"fields":["field"],"expected_objects":$objects}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+    esac
+    mv "$structured_bounds_root/cases.json" "$structured_bounds_skill/evals/cases.json"
+    if ! "$skill_eval_runner" --validate-fixture --skill "$structured_bounds_skill" >/dev/null 2>"$structured_bounds_err"; then
+        structured_bounds_failures+=("$bound_case accepted boundary failed: $(cat "$structured_bounds_err")")
+    fi
+done
+for bound_case in one_of_33 fields_17 objects_33; do
+    case "$bound_case" in
+        one_of_33)
+            jq --argjson values "$one_of_33" '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"one_of","path":["confidence"],"expected_values":$values}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+        fields_17)
+            jq --argjson fields "$fields_17" '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_object_values_exact","path":["items"],"fields":$fields,"expected_objects":[($fields | reduce .[] as $field ({}; .[$field] = "value"))]}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+        objects_33)
+            jq --argjson objects "$objects_33" '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_object_values_exact","path":["items"],"fields":["field"],"expected_objects":$objects}]' "$structured_bounds_root/base-cases.json" >"$structured_bounds_root/cases.json"
+            ;;
+    esac
+    mv "$structured_bounds_root/cases.json" "$structured_bounds_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$structured_bounds_skill" >/dev/null 2>"$structured_bounds_err"; then
+        structured_bounds_failures+=("$bound_case accepted one-over limit")
+    fi
+done
+if [[ ${#structured_bounds_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "structured assertion bounds are not exact: ${structured_bounds_failures[*]}"
+fi
+
 test_start "structured array item assertions require a non-empty target array"
 nonempty_array_items_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-array-items.XXXXXX")"
 nonempty_array_items_skill="$nonempty_array_items_root/assistant-eval-array-items"
@@ -2193,11 +2386,78 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`empty_array`, `path_absent`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'unordered exact multiset against bounded `expected_objects`, preserving the' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`path_absent` passes only when its valid JSON path cannot be resolved' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq '`array_object_values_exact` projects every target-array object' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq 'at most 16 unique projected fields and 32 expected objects' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq 'unordered multiset, preserves field correlation, and treats' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq 'an absent field differently from a present `null`.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/README.md"; then
     pass
 else
     fail "skill eval docs do not describe complete first-class coverage"
+fi
+
+test_start "skill eval docs enumerate the exact canonical structured operator list"
+expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array path_absent equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields'
+structured_operator_list_is_exact() {
+    local document="$1" source_kind="$2" paragraph actual
+    case "$source_kind" in
+        evals-readme)
+            paragraph="$(awk '
+                /The local grader applies only the fixed provider-neutral operators:/ { capture = 1 }
+                capture && /Assertion paths are JSON arrays/ { sub(/Assertion paths are JSON arrays.*/, ""); print; exit }
+                capture { print }
+            ' "$document")"
+            ;;
+        contract-guide)
+            paragraph="$(awk '
+                /Use only the fixed provider-neutral operators/ { print; exit }
+            ' "$document" | perl -pe 's/(\x60array_items_nonempty_fields\x60).*/$1/')"
+            ;;
+        *)
+            return 2
+            ;;
+    esac
+    actual="$(printf '%s\n' "$paragraph" | perl -ne 'while (/\x60([a-z_]+)\x60/g) { print "$1 " }' | sed 's/[[:space:]]*$//')"
+    [[ "$actual" == "$expected_structured_operator_names" ]]
+}
+docs_operator_oracle_failures=()
+if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/evals/README.md" evals-readme; then
+    docs_operator_oracle_failures+=("evals-readme-current")
+fi
+if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" contract-guide; then
+    docs_operator_oracle_failures+=("contract-guide-current")
+fi
+docs_operator_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-operator-list.XXXXXX")"
+p0p4_register_cleanup "$docs_operator_mutation_root"
+for operator_document in evals-readme contract-guide; do
+    case "$operator_document" in
+        evals-readme) source_document="$FRAMEWORK_DIR/docs/evals/README.md" ;;
+        contract-guide) source_document="$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" ;;
+    esac
+    for removed_operator in one_of array_object_values_exact; do
+        mutant_document="$docs_operator_mutation_root/$operator_document-$removed_operator.md"
+        cp "$source_document" "$mutant_document"
+        perl -0pi -e "s/\x60$removed_operator\x60,? ?//" "$mutant_document"
+        if structured_operator_list_is_exact "$mutant_document" "$operator_document"; then
+            docs_operator_oracle_failures+=("$operator_document-$removed_operator-mutation-accepted")
+        fi
+    done
+done
+if [[ ${#docs_operator_oracle_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "structured operator documentation list oracle failed: ${docs_operator_oracle_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

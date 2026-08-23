@@ -871,7 +871,7 @@ fi
 test_start "thinking retains feature-preparation concerns as candidates until evidence validates them"
 thinking_failures=()
 for file_and_term in \
-    "$thinking_dir/contracts/input.yaml::- name: feature_preparation_evidence_ref" \
+    "$thinking_dir/contracts/input.yaml::- name: feature_preparation_evidence_bindings" \
     "$thinking_dir/contracts/output.yaml::- name: candidate_concerns_or_criteria" \
     "$thinking_dir/contracts/output.yaml::promotion_status" \
     "$thinking_dir/contracts/output.yaml::requires_feature_preparation_evidence" \
@@ -890,23 +890,29 @@ else
     fail "thinking feature preparation promotion contract missing: ${thinking_failures[*]}"
 fi
 
-test_start "thinking may surface candidates without evidence but cannot validate promotion without it"
+test_start "thinking may surface candidates without evidence but validates only against exact input bindings"
 if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0))
   output = YAML.load_file(ARGV.fetch(1))
-  evidence_ref = input.fetch("fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
+  bindings = input.fetch("fields").find { |field| field["name"] == "feature_preparation_evidence_bindings" }
+  obsolete_scalar_inputs = %w[feature_preparation_evidence_ref feature_preparation_evidence_item_id feature_preparation_evidence_claim_or_question]
+  binding_fields = bindings.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   candidates = output.fetch("artifacts").find { |artifact| artifact["name"] == "candidate_concerns_or_criteria" }
   promoted_ref = candidates.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
   promoted_item = candidates.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_item_id" }
   promotion = candidates.fetch("object_fields").find { |field| field["name"] == "promotion_status" }
 
-  valid = evidence_ref["required"] == false &&
-    evidence_ref["default"].nil? &&
-    evidence_ref["on_missing"] == "skip" &&
-    evidence_ref.fetch("validation").include?("may still surface candidates") &&
+  valid = bindings["type"] == "object[]" &&
+    obsolete_scalar_inputs.none? { |name| input.fetch("fields").any? { |field| field["name"] == name } } &&
+    bindings["required"] == false &&
+    bindings["default"] == [] &&
+    bindings["max_items"] == 32 &&
+    bindings["on_missing"] == "skip" &&
+    bindings.fetch("validation").include?("may still surface candidates") &&
+    %w[evidence_ref item_id claim_or_question].all? { |name| binding_fields.fetch(name)["required"] == true } &&
     promoted_ref["required"] == "conditional" &&
     promoted_ref["condition"] == "promotion_status == validated_by_feature_preparation_evidence" &&
-    promoted_ref.fetch("validation").include?("exact canonical input feature_preparation_evidence_ref") &&
+    promoted_ref.fetch("validation").include?("exact input feature_preparation_evidence_bindings entry") &&
     promoted_item["required"] == "conditional" &&
     promoted_item["condition"] == "promotion_status == validated_by_feature_preparation_evidence" &&
     promotion.fetch("enum_values") == %w[candidate_only requires_feature_preparation_evidence validated_by_feature_preparation_evidence]
@@ -917,21 +923,40 @@ else
     fail "thinking evidence reference blocks candidate generation or permits unsupported promotion"
 fi
 
-test_start "thinking validated promotion requires an exact reference and evidence item binding"
+test_start "thinking validated promotion requires one exact input evidence binding"
 if ruby -ryaml -e '
-  output = YAML.load_file(ARGV.fetch(0))
+  input = YAML.load_file(ARGV.fetch(0))
+  output = YAML.load_file(ARGV.fetch(1))
   candidates = output.fetch("artifacts").find { |artifact| artifact["name"] == "candidate_concerns_or_criteria" }
   fields = candidates.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   ref = fields.fetch("feature_preparation_evidence_ref")
   item = fields.fetch("feature_preparation_evidence_item_id")
-  valid = ref.fetch("validation").include?("exact canonical input feature_preparation_evidence_ref") &&
-    ref.fetch("validation").include?("missing, stale, mismatched, or unresolved") &&
+  valid = ref.fetch("validation").include?("exact input feature_preparation_evidence_bindings entry") &&
+    ref.fetch("validation").include?("missing, stale, mismatched, duplicate, or extra") &&
     item.fetch("validation").include?("admissible evidence row")
   exit valid ? 0 : 1
-' "$thinking_dir/contracts/output.yaml"; then
+' "$thinking_dir/contracts/input.yaml" "$thinking_dir/contracts/output.yaml"; then
     pass
 else
     fail "thinking promotion can validate without exact evidence reference and row binding"
+fi
+
+test_start "thinking eval binds each of two validated candidates to its own input evidence row"
+if ruby -rjson -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  entry = cases.find { |candidate| candidate["id"] == "feature-preparation-multiple-evidence-bindings" }
+  assertions = entry&.dig("machine_expectations", "structured_json_assertions") || []
+  fields = %w[concern_or_criterion promotion_status feature_preparation_evidence_ref feature_preparation_evidence_item_id feature_preparation_evidence_claim_or_question]
+  expected_objects = [
+    {"concern_or_criterion" => "Preserve selection, highlight, and viewport focus for VIEWING", "promotion_status" => "validated_by_feature_preparation_evidence", "feature_preparation_evidence_ref" => "prep/viewing-route", "feature_preparation_evidence_item_id" => "viewing-route-effects", "feature_preparation_evidence_claim_or_question" => "Preserve selection, highlight, and viewport focus for VIEWING"},
+    {"concern_or_criterion" => "Keep VIEWING read-only without enabling editing", "promotion_status" => "validated_by_feature_preparation_evidence", "feature_preparation_evidence_ref" => "prep/viewing-route", "feature_preparation_evidence_item_id" => "viewing-editing-gap", "feature_preparation_evidence_claim_or_question" => "Keep VIEWING read-only without enabling editing"}
+  ]
+  valid = assertions.any? { |assertion| assertion["operator"] == "array_object_values_exact" && assertion["path"] == ["candidate_concerns_or_criteria"] && assertion["fields"] == fields && assertion["expected_objects"] == expected_objects }
+  exit(valid ? 0 : 1)
+' "$thinking_dir/evals/cases.json"; then
+    pass
+else
+    fail "thinking multi-binding eval does not prove both candidate-to-row bindings"
 fi
 
 test_start "diagrams bind feature-preparation behavior to exact evidence rows"
@@ -1139,7 +1164,7 @@ if ruby -ryaml -e '
     preparation_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
     !preparation_reference.include?("open_decisions`, `implementation_implications`, and/or") &&
     triage_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
-    input_names.include?("feature_preparation_evidence_claim_or_question") &&
+    input_names.include?("feature_preparation_evidence_bindings") &&
     candidate_fields.fetch("feature_preparation_evidence_claim_or_question").fetch("condition").include?("validated_by_feature_preparation_evidence")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml" "$thinking_dir/contracts/input.yaml" "$thinking_dir/contracts/output.yaml" "$workflow_dir/contracts/input.yaml" "$workflow_dir/references/feature-preparation-evidence.md" "$workflow_dir/references/triage-rubric.md"; then
