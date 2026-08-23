@@ -112,14 +112,20 @@ materialized_candidate_skill_sha256() {
     printf '%s\n' "$result"
 }
 
-validate_activation_observations() {
+validate_activation_observation_file_boundary() {
     [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]] || return 0
     [[ -f "$ACTIVATION_OBSERVATIONS_FILE" && ! -L "$ACTIVATION_OBSERVATIONS_FILE" ]] \
         || die "--activation-observations must be a regular non-symlink JSON file."
-    local size candidate_skill_sha cases_sha
+    local size
     size="$(wc -c <"$ACTIVATION_OBSERVATIONS_FILE" | tr -d '[:space:]')"
     [[ "$size" =~ ^[0-9]+$ && "$size" -ge 1 && "$size" -le 65536 ]] \
         || die "--activation-observations must be at most 65536 bytes."
+}
+
+validate_activation_observations() {
+    [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]] || return 0
+    validate_activation_observation_file_boundary
+    local candidate_skill_sha cases_sha
     candidate_skill_sha="$(materialized_candidate_skill_sha256)" \
         || die "Could not materialize the candidate skill identity for activation validation."
     cases_sha="$(activation_cases_sha256)"
@@ -280,9 +286,8 @@ except (OSError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired):
 PY
 }
 
-prepare_model_selection_evidence() {
-    [[ "$MODE" == "execute" ]] || return 0
-
+attest_codex_cli_identity() {
+    local missing_default_message="$1"
     if [[ "$CODEX_BIN" == */* ]]; then
         if [[ -x "$CODEX_BIN" ]]; then
             CODEX_BIN="$(cd "$(dirname "$CODEX_BIN")" && pwd -P)/$(basename "$CODEX_BIN")"
@@ -301,10 +306,28 @@ prepare_model_selection_evidence() {
         fi
     else
         command -v "$CODEX_BIN" >/dev/null 2>&1 \
-            || die "Default Codex executable is unavailable before model-catalog attestation."
+            || die "$missing_default_message"
         CODEX_BIN="$(command -v "$CODEX_BIN")"
         CODEX_EXECUTABLE_SHA256="$(hash_file "$CODEX_BIN")"
         CLI_VERSION="$($CODEX_BIN --version 2>/dev/null || true)"
+    fi
+}
+
+prepare_model_selection_evidence() {
+    local activation_evidence_class
+    if [[ "$MODE" != "execute" ]]; then
+        [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]] || return 0
+        validate_activation_observation_file_boundary
+        activation_evidence_class="$(jq -r '.evidence_class // empty' "$ACTIVATION_OBSERVATIONS_FILE" 2>/dev/null || true)"
+        [[ "$activation_evidence_class" == "manual_native_observation" ]] || return 0
+        attest_codex_cli_identity "Default Codex executable is unavailable before manual activation observation attestation."
+        [[ -n "$CLI_VERSION" && "$CLI_VERSION" != "unavailable" ]] \
+            || die "Codex CLI version could not be attested for the manual activation observation."
+        return 0
+    fi
+
+    attest_codex_cli_identity "Default Codex executable is unavailable before model-catalog attestation."
+    if [[ "$CODEX_BIN_OVERRIDDEN" == false ]]; then
         [[ -n "$CLI_VERSION" && "$CLI_VERSION" != "unavailable" ]] \
             || die "Default Codex CLI version could not be attested before model execution."
 

@@ -2874,6 +2874,7 @@ jq -n --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" --arg cases_sha "$activ
        results:[$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow","assistant-thinking"] else ["assistant-docs"] end)}]}' \
     >"$manual_activation_observation"
 activation_static_output="$fixture_root/activation-static-output"
+activation_manual_plan_output="$fixture_root/activation-manual-plan-output"
 activation_manual_output="$fixture_root/activation-manual-output"
 rm -f "$capture"/*
 if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
@@ -2881,6 +2882,11 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
     --cases small-fix-stays-lightweight --repeats 1 --output "$activation_static_output" \
     --codex-bin "$fake_codex" \
     --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$activation_manual_plan_output" \
+        --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]] \
     && FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
         --baseline-variant "$baseline" --candidate-variant "$candidate" \
         --cases small-fix-stays-lightweight --repeats 1 --output "$activation_manual_output" \
@@ -2891,6 +2897,17 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
         and .activation_observation.manual_native_admissible == false
       ' "$activation_static_output/run-plan.json" >/dev/null \
     && jq -e --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" '
+        .mode == "plan"
+        and .candidate_variant.materialized_skill_sha256 == $candidate_sha
+        and .cli_version == "codex-cli 9.9.9-test"
+        and (.codex_executable_sha256 | type == "string" and length == 64)
+        and .model_selection_evidence.method == "not_checked_plan_mode"
+        and .model_selection_evidence.catalog_source == "none"
+        and .activation_observation.evidence_class == "manual_native_observation"
+        and .activation_observation.manual_native_admissible == true
+        and .activation_observation.result_count == 6
+      ' "$activation_manual_plan_output/run-plan.json" >/dev/null \
+    && jq -e --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" '
         .candidate_variant.materialized_skill_sha256 == $candidate_sha
         and .activation_observation.evidence_class == "manual_native_observation"
         and .activation_observation.manual_native_admissible == true
@@ -2898,7 +2915,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
       ' "$activation_manual_output/run-plan.json" >/dev/null; then
     pass
 else
-    fail "activation observation did not bind the materialized candidate or distinguish manual-native evidence"
+    fail "activation observation did not bind plan/execute CLI identity or distinguish manual-native evidence"
 fi
 
 test_start "resume retains an admitted activation observation after its freshness window"
