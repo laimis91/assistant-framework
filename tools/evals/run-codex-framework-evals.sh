@@ -146,13 +146,17 @@ validate_activation_observations() {
               and (($observed.selected_skills | index("assistant-workflow") != null) == $expected.should_activate)] | all)
       and (if .evidence_class == "manual_native_observation" then (.provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version) else (.provenance.capture_owner_kind == "repository_contract_test" and .provenance.capture_method == "static_contract_fixture" and .provenance.native_host == "not_applicable") end)
     ' "$ACTIVATION_OBSERVATIONS_FILE" >/dev/null \
-      || die "--activation-observations is malformed, stale, or does not exactly bind the six workflow activation cases."
+      || die "--activation-observations is malformed or does not exactly bind the six workflow activation cases."
+    ACTIVATION_OBSERVATIONS_SHA256="$(hash_file "$ACTIVATION_OBSERVATIONS_FILE")"
+    ACTIVATION_OBSERVATION_SUMMARY="$(jq -cS --arg sha "$ACTIVATION_OBSERVATIONS_SHA256" --arg cli_version "$CLI_VERSION" '{supplied:true,sha256:$sha,evidence_class,manual_native_admissible:(.evidence_class == "manual_native_observation" and .provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version and .provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false),result_count:(.results|length)}' "$ACTIVATION_OBSERVATIONS_FILE")"
+}
+
+validate_activation_observation_freshness() {
+    [[ -n "$ACTIVATION_OBSERVATIONS_FILE" ]] || return 0
     if [[ "$(jq -r '.evidence_class' "$ACTIVATION_OBSERVATIONS_FILE")" == "manual_native_observation" ]]; then
         activation_timestamp_is_current "$(jq -r '.provenance.captured_at_utc' "$ACTIVATION_OBSERVATIONS_FILE")" \
             || die "Manual native activation observation is stale or outside the permitted future skew."
     fi
-    ACTIVATION_OBSERVATIONS_SHA256="$(hash_file "$ACTIVATION_OBSERVATIONS_FILE")"
-    ACTIVATION_OBSERVATION_SUMMARY="$(jq -cS --arg sha "$ACTIVATION_OBSERVATIONS_SHA256" --arg cli_version "$CLI_VERSION" '{supplied:true,sha256:$sha,evidence_class,manual_native_admissible:(.evidence_class == "manual_native_observation" and .provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version and .provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false),result_count:(.results|length)}' "$ACTIVATION_OBSERVATIONS_FILE")"
 }
 
 die() {
@@ -2081,7 +2085,7 @@ verify_workspace() {
                     and $item.behavior_status == "existing_behavior_to_preserve"
                     and $item.work_status == "implementation_gap"
                     and $item.evidence_gaps == []
-                    and $item.requirements_evidence == ["VIEWING_PREPARATION.md#read-only-viewing"]
+                    and $item.requirements_evidence == ["VIEWING_PREPARATION.md#viewing-technical-preparation"]
                     and $item.design_evidence == {status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."}
                     and $item.implementation_evidence == {status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."}
                     and $item.behavioral_test_evidence == {status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."}
@@ -2975,8 +2979,12 @@ expected_plan="$WORK_ROOT/expected-run-plan.json"
 write_plan "$baseline_hash" "$candidate_hash" "$fixture_hash" "$expected_plan"
 RUN_PLAN_HASH="$(hash_file "$expected_plan")"
 if [[ "$RESUME" == true ]]; then
+    if [[ ! -f "$OUTPUT_DIR/run-plan.json" ]]; then
+        validate_activation_observation_freshness
+    fi
     validate_resume_output "$expected_plan"
 else
+    validate_activation_observation_freshness
     if [[ -d "$OUTPUT_DIR" ]] && find "$OUTPUT_DIR" -mindepth 1 -print -quit | grep -q .; then
         die "--output must be empty or not yet exist: $OUTPUT_DIR"
     fi

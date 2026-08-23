@@ -416,7 +416,7 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             source_sha="$(shasum -a 256 "$workspace/src/route.ts" | awk '{print $1}')"
             test_sha="$(shasum -a 256 "$workspace/tests/route.test.js" | awk '{print $1}')"
             jq -n --arg source_sha "$source_sha" --arg test_sha "$test_sha" '
-              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#read-only-viewing"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#viewing-technical-preparation"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
             ;;
         product_question)
             printf '%s\n' '{"schema_version":"1.0","feature_preparation_evidence":{"ref":"prep/viewing-route","items":[{"item_id":"viewing-observable-route-effects","behavior_status":"materially_unknown","work_status":"product_question"}]},"feature_preparation_result":{"execution_status":"not_started","scope":"VIEWING","feature_preparation_evidence_ref":"prep/viewing-route","evidence_gaps":[],"open_decisions":[],"implementation_implications":[],"recommended_next_step":"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
@@ -428,7 +428,7 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             source_sha="$(shasum -a 256 "$workspace/src/route.ts" | awk '{print $1}')"
             test_sha="$(shasum -a 256 "$workspace/tests/route.test.js" | awk '{print $1}')"
             jq -n --arg source_sha "$source_sha" --arg test_sha "$test_sha" '
-              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#read-only-viewing"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#viewing-technical-preparation"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
             case "$viewing_mode" in
                 omitted_ref) jq 'del(.feature_preparation_evidence.ref)' "$workspace/.assistant-eval/viewing-preparation.json" ;;
                 stale_hashes) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].content_sha256) = "0000000000000000000000000000000000000000000000000000000000000000"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
@@ -2561,6 +2561,16 @@ else
     fail "small-fix grader required ritual words or accepted broad/out-of-scope/plan_mode behavior"
 fi
 
+test_start "VIEWING requirement evidence resolves to the seeded fixture heading"
+viewing_requirement_fixture="$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation/VIEWING_PREPARATION.md"
+if grep -Fqx '# VIEWING technical preparation' "$viewing_requirement_fixture" \
+    && grep -Fq 'VIEWING_PREPARATION.md#viewing-technical-preparation' "$runner" \
+    && ! grep -Fq 'VIEWING_PREPARATION.md#read-only-viewing' "$runner"; then
+    pass
+else
+    fail "VIEWING requirement evidence uses a dangling Markdown fragment"
+fi
+
 test_start "all four preparation and pending-Pack pilot inflation modes fail closed"
 pilot_mode_failures=()
 for pilot_mode in product_question execution_evidence verified premature_ref; do
@@ -2889,6 +2899,77 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
     pass
 else
     fail "activation observation did not bind the materialized candidate or distinguish manual-native evidence"
+fi
+
+test_start "resume retains an admitted activation observation after its freshness window"
+stale_activation_observation="$fixture_root/stale-manual-native-activation-observation.json"
+stale_activation_output="$fixture_root/stale-activation-resume-output"
+jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' \
+    "$manual_activation_observation" >"$stale_activation_observation"
+cp -R "$activation_manual_output" "$stale_activation_output"
+cp "$stale_activation_observation" "$stale_activation_output/activation-observations.json"
+stale_activation_sha="$(test_sha256_stream <"$stale_activation_observation")"
+jq --arg sha "$stale_activation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$stale_activation_output/run-plan.json" >"$stale_activation_output/run-plan.json.tmp"
+mv "$stale_activation_output/run-plan.json.tmp" "$stale_activation_output/run-plan.json"
+stale_activation_plan_sha="$(test_sha256_stream <"$stale_activation_output/run-plan.json")"
+for stale_activation_attempt in "$stale_activation_output/run-attempts/"*.json; do
+    jq -cS --arg sha "$stale_activation_plan_sha" '.run_plan_sha256 = $sha' \
+        "$stale_activation_attempt" >"$stale_activation_attempt.tmp"
+    mv "$stale_activation_attempt.tmp" "$stale_activation_attempt"
+done
+stale_activation_missing_trace="$(find "$stale_activation_output/traces" -type f -name '*-candidate.json' -print -quit)"
+stale_activation_missing_attempt="$stale_activation_output/run-attempts/$(basename "$stale_activation_missing_trace")"
+rm -f "$stale_activation_missing_trace" "$stale_activation_output/comparison.json" \
+    "$stale_activation_output/semantic-review-packet.json"
+jq -cS '.state = "not_started" | .attempt_started_at = [] | .completed_at = null' \
+    "$stale_activation_missing_attempt" >"$stale_activation_missing_attempt.tmp"
+mv "$stale_activation_missing_attempt.tmp" "$stale_activation_missing_attempt"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" --activation-observations "$stale_activation_observation" >/dev/null \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 1 ]] \
+    && [[ "$(find "$stale_activation_output/traces" -type f -name '*.json' | wc -l | tr -d ' ')" -eq 2 ]] \
+    && [[ "$(test_sha256_stream <"$stale_activation_output/activation-observations.json")" == "$stale_activation_sha" ]]; then
+    pass
+else
+    fail "resume reapplied freshness or lost the exact admitted activation binding"
+fi
+
+test_start "stale resume still rejects replacement, omission, and unadmitted evidence"
+stale_resume_binding_failures=()
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("replacement")
+fi
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("omission")
+fi
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$fixture_root/unadmitted-stale-activation-output" \
+    --codex-bin "$fake_codex" --activation-observations "$stale_activation_observation" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("unadmitted")
+fi
+if [[ ${#stale_resume_binding_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume accepted activation evidence without its exact admitted binding: ${stale_resume_binding_failures[*]}"
 fi
 
 test_start "activation observation mutations reject before any model call and resume rechecks the copied evidence"
