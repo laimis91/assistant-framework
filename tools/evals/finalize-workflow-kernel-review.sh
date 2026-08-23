@@ -560,7 +560,15 @@ native_activation_observation_status() {
       and .provenance.repository_runner_invoked_native_routing == false and .provenance.raw_session_retained == false
       and (.provenance.captured_at_utc | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
       and (.bindings == {skill:"assistant-workflow",candidate_skill_sha256:$candidate_sha,activation_cases_sha256:$cases_sha})
-      and (.results == [$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow"] else [] end)}])
+      and (.results | type == "array" and length == ($evals[0].activation_cases | length))
+      and ([range(0; ($evals[0].activation_cases | length)) as $index
+            | $evals[0].activation_cases[$index] as $expected
+            | .results[$index] as $observed
+            | (($observed | keys | sort) == ["selected_skills","skill","user_request"])
+              and $observed.skill == "assistant-workflow"
+              and $observed.user_request == $expected.user_request
+              and ($observed.selected_skills | type == "array" and length <= 32 and length == (unique | length) and all(.[]; type == "string" and length > 0 and length <= 128))
+              and (($observed.selected_skills | index("assistant-workflow") != null) == $expected.should_activate)] | all)
       and ($plan[0].schema_version == "2.0")
       and ($plan[0].candidate_variant.materialized_skill_sha256 == $candidate_sha)
       and ($plan[0].activation_observations_sha256 == $observed_sha)
@@ -568,8 +576,7 @@ native_activation_observation_status() {
       and ($plan[0].activation_observation.evidence_class == .evidence_class)
       and (if .evidence_class == "manual_native_observation" then (.provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version) else (.provenance.capture_owner_kind == "repository_contract_test" and .provenance.capture_method == "static_contract_fixture" and .provenance.native_host == "not_applicable") end)
     ' "$observation" >/dev/null || return 1
-    if jq -e '.evidence_class == "manual_native_observation"' "$observation" >/dev/null \
-        && activation_timestamp_is_current "$(jq -r '.provenance.captured_at_utc' "$observation")"; then
+    if jq -e '.evidence_class == "manual_native_observation"' "$observation" >/dev/null; then
         printf '%s\n' true
     else
         printf '%s\n' false

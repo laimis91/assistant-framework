@@ -424,7 +424,9 @@ tools/evals/run-codex-framework-evals.sh --activation-observations /tmp/workflow
 
 The adapter records the artifact hash and a redacted admissibility summary in
 `run-plan.json`, then copies the validated observation to
-`activation-observations.json`. Promotion requires a fresh
+`activation-observations.json`. Freshness is checked when the runner admits a
+manual observation; finalization verifies that immutable hash binding rather
+than applying a second wall-clock freshness window. Promotion requires a fresh
 `manual_native_observation` with `human_evaluator`, `manual_native_session`,
 and `native_host=codex`, bound to the exact candidate skill and six activation
 cases. Missing evidence, stale hashes, or the checked-in

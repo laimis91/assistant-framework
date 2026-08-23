@@ -601,7 +601,7 @@ if ruby -ryaml -e '
   check = admissibility.fetch("check")
   input = YAML.load_file(ARGV.fetch(2))
   manual = input.fetch("fields").find { |field| field.fetch("name") == "manual_verification_mode" }
-  valid = %w[qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
+  valid = %w[acceptance_criteria qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
     manual.fetch("infer_from").include?("destructive or migration-related") &&
     check.include?("qa_evaluation_mode=not_required") &&
     check.include?("build_execution_lane=inline_direct") &&

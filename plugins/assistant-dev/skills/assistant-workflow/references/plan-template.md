@@ -42,6 +42,8 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
+- Feature preparation scope: [not_applicable | existing_system]
+- Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
 - QA evaluation mode: [carry triage value: not_required | optional | required]
 - Harness capable: [carry triage value: true | false]

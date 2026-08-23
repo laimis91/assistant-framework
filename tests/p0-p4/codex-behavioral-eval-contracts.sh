@@ -654,6 +654,101 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             nonzero) source_exit_code=1 ;;
             wrapped) ;;
             argv_wrapped) ;;
+            equivalent)
+                source_command='sed -n "1,200p" src/route.ts'
+                source_output="$(sed -n '1,200p' "$workspace/src/route.ts")"
+                test_command='cat tests/route.test.js'
+                test_output="$(cat "$workspace/tests/route.test.js")"
+                ;;
+            mutating)
+                source_command="sed -i.bak -e 's/ACTIVE/VIEWING/' src/route.ts"
+                ;;
+            echo_spoof)
+                source_command='echo src/route.ts'
+                ;;
+            wrong_path_substring)
+                source_command='cat src/route.ts.bak'
+                ;;
+            compound_touch)
+                source_command='touch evidence.txt && cat src/route.ts'
+                ;;
+            sed_write_file)
+                source_command="sed -n '1,200w evidence.txt' src/route.ts"
+                ;;
+            sed_write_ending_p)
+                source_command="sed -n '1p;w evidencep' src/route.ts"
+                ;;
+            argv_sed_write_ending_p)
+                source_command='sed -n 1p src/route.ts'
+                ;;
+            rg_preprocessor)
+                source_command="rg --pre=cat -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_preprocessor_as_pattern)
+                source_command="rg -n '--pre=/bin/cat' src/route.ts"
+                ;;
+            argv_rg_preprocessor)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            argv_rg_preprocessor_as_pattern) ;;
+            shell_substitution)
+                source_command='cat $(pwd)/src/route.ts'
+                ;;
+            redirection)
+                source_command='cat src/route.ts > evidence.txt'
+                ;;
+            additional_command)
+                source_command='cat src/route.ts; cat tests/route.test.js'
+                ;;
+            cat_unsafe_flag)
+                source_command='cat -z src/route.ts'
+                ;;
+            pipeline_spoof)
+                source_command='rg -n applyActiveRouteEffects src/route.ts | cat src/route.ts'
+                ;;
+            extra_path_operand)
+                source_command='rg -n applyActiveRouteEffects src/route.ts src/route.ts'
+                ;;
+            rg_backtick_substitution)
+                source_command='rg -n `printf applyActiveRouteEffects` src/route.ts'
+                ;;
+            rg_newline_injection)
+                source_command=$'rg -n applyActiveRouteEffects src/route.ts\ncat src/route.ts'
+                ;;
+            argv_combined_rg)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            argv_cat_extra_path) ;;
+            argv_grouped_rg)
+                source_command="rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' src/route.ts"
+                source_output="$(rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' "$workspace/src/route.ts")"
+                ;;
+            double_quoted_rg)
+                source_command='rg -n "(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)" src/route.ts'
+                source_output="$(rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' "$workspace/src/route.ts")"
+                ;;
+            combined_option_rg)
+                source_command="rg -ni 'ACTIVE|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -ni 'ACTIVE|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            reversed_ignore_case_rg)
+                source_command="rg -i 'ACTIVE|assert\\.deepEqual' tests/route.test.js src/route.ts"
+                source_output="$(rg -i 'ACTIVE|assert\.deepEqual' "$workspace/tests/route.test.js" "$workspace/src/route.ts")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            argv_wrapper_additional_command) ;;
+            combined_rg)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
             duplicate) ;;
             missing_status) source_status='' ;;
             failed_status) source_status='failed' ;;
@@ -669,6 +764,22 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
         elif [[ "$viewing_event_mode" == argv_wrapped ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command]')"
             test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == argv_sed_write_ending_p ]]; then
+            source_command_json='["sed","-n","1p;w evidencep","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor ]]; then
+            source_command_json='["rg","--pre=cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor_as_pattern ]]; then
+            source_command_json='["rg","-n","--pre=/bin/cat","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_combined_rg ]]; then
+            source_command_json='["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual","src/route.ts","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_cat_extra_path ]]; then
+            source_command_json='["cat","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_grouped_rg ]]; then
+            source_command_json='["rg","-n","(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == reversed_ignore_case_rg ]]; then
+            source_command_json='["rg","-i","ACTIVE|assert\\.deepEqual","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_wrapper_additional_command ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command,"touch evidence.txt"]')"
         fi
         jq -cn --arg id "$source_event_id" --arg status "$source_status" --argjson command "$source_command_json" --arg output "$source_output" --argjson exit_code "$source_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}' | if [[ -z "$source_status" ]]; then jq 'del(.item.status)'; else cat; fi
         jq -cn --arg id "$test_event_id" --arg status "$test_status" --argjson command "$test_command_json" --arg output "$test_output" --argjson exit_code "$test_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
@@ -2171,7 +2282,7 @@ fi
 
 test_start "VIEWING inspection event mutations are isolated to the candidate verifier"
 viewing_event_failures=()
-for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status; do
+for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p rg_preprocessor rg_preprocessor_as_pattern argv_rg_preprocessor argv_rg_preprocessor_as_pattern shell_substitution redirection additional_command cat_unsafe_flag pipeline_spoof extra_path_operand rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_wrapper_additional_command; do
     viewing_event_output="$fixture_root/viewing-event-$viewing_event_mutation"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_event_mutation" "$runner" --execute \
@@ -2219,6 +2330,51 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=argv_wrapped "$runn
     pass
 else
     fail "VIEWING inspection lost explicitly tested argv shell-wrapper compatibility"
+fi
+
+test_start "VIEWING inspection accepts equivalent read-only source and test inspection commands"
+viewing_equivalent_output="$fixture_root/viewing-event-equivalent"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=equivalent "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_equivalent_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_equivalent_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "VIEWING inspection rejected equivalent read-only source and test inspection commands"
+fi
+
+test_start "VIEWING inspection accepts one combined read-only rg event for both expected files"
+viewing_combined_rg_output="$fixture_root/viewing-event-combined-rg"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=combined_rg "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_combined_rg_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_combined_rg_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "VIEWING inspection rejected one combined read-only rg event for both expected files"
+fi
+
+test_start "VIEWING inspection accepts grouped and safely quoted rg equivalents"
+viewing_rg_equivalent_failures=()
+for viewing_rg_equivalent_mode in argv_combined_rg argv_grouped_rg double_quoted_rg combined_option_rg reversed_ignore_case_rg; do
+    viewing_rg_equivalent_output="$fixture_root/viewing-event-$viewing_rg_equivalent_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_rg_equivalent_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_rg_equivalent_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_rg_equivalent_output/traces/"*.json >/dev/null; then
+        viewing_rg_equivalent_failures+=("$viewing_rg_equivalent_mode")
+    fi
+done
+if [[ ${#viewing_rg_equivalent_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected safe rg equivalents: ${viewing_rg_equivalent_failures[*]}"
 fi
 
 test_start "VIEWING source-effect mutant fails executable behavior and candidate verification"
@@ -2279,7 +2435,7 @@ jq -n --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" --arg cases_sha "$activ
       {schema_version:"1.0",observation_kind:"workflow_kernel_native_activation",evidence_class:"manual_native_observation",
        provenance:{capture_owner_kind:"human_evaluator",capture_method:"manual_native_session",native_host:"codex",native_host_version:"codex-cli 9.9.9-test",captured_at_utc:$captured_at,observed_selection_surface:"native Codex skill routing",repository_runner_invoked_native_routing:false,raw_session_retained:false},
        bindings:{skill:"assistant-workflow",candidate_skill_sha256:$candidate_sha,activation_cases_sha256:$cases_sha},
-       results:[$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow"] else [] end)}]}' \
+       results:[$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow","assistant-thinking"] else ["assistant-docs"] end)}]}' \
     >"$manual_activation_observation"
 activation_static_output="$fixture_root/activation-static-output"
 activation_manual_output="$fixture_root/activation-manual-output"
@@ -2311,7 +2467,7 @@ fi
 
 test_start "activation observation mutations reject before any model call and resume rechecks the copied evidence"
 activation_mutation_failures=()
-for activation_mutation in candidate cases results order cardinality provenance old future version; do
+for activation_mutation in candidate cases results order cardinality provenance old future version skill_name_too_long false_positive; do
     mutation_file="$fixture_root/activation-$activation_mutation.json"
     case "$activation_mutation" in
         candidate) jq '.bindings.candidate_skill_sha256 = ("f" * 64)' "$manual_activation_observation" >"$mutation_file" ;;
@@ -2323,6 +2479,8 @@ for activation_mutation in candidate cases results order cardinality provenance 
         old) jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
         future) jq '.provenance.captured_at_utc = "2099-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
         version) jq '.provenance.native_host_version = "codex-cli mismatched"' "$manual_activation_observation" >"$mutation_file" ;;
+        skill_name_too_long) jq '.results[0].selected_skills[1] = ("x" * 129)' "$manual_activation_observation" >"$mutation_file" ;;
+        false_positive) jq '.results[-1].selected_skills = ["assistant-workflow"]' "$manual_activation_observation" >"$mutation_file" ;;
     esac
     rm -f "$capture"/*
     mutation_error="$fixture_root/activation-$activation_mutation.stderr"
@@ -3078,6 +3236,80 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     pass
 else
     fail "contract-test activation evidence became admissible during finalization"
+fi
+
+test_start "finalizer retains runner-admitted manual activation evidence after the 24-hour admission window"
+stale_finalizer_results="$fixture_root/stale-finalizer-activation-results"
+stale_finalizer_observation="$stale_finalizer_results/activation-observations.json"
+stale_finalizer_plan="$stale_finalizer_results/run-plan.json"
+stale_finalizer_observation_tmp="$fixture_root/stale-finalizer-activation-observation.tmp"
+stale_finalizer_plan_tmp="$fixture_root/stale-finalizer-activation-plan.tmp"
+rm -rf "$stale_finalizer_results"
+cp -R "$pilot_output" "$stale_finalizer_results"
+jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' "$stale_finalizer_observation" >"$stale_finalizer_observation_tmp"
+mv "$stale_finalizer_observation_tmp" "$stale_finalizer_observation"
+stale_finalizer_observation_sha="$(test_sha256_stream <"$stale_finalizer_observation")"
+jq --arg sha "$stale_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$stale_finalizer_plan" >"$stale_finalizer_plan_tmp"
+mv "$stale_finalizer_plan_tmp" "$stale_finalizer_plan"
+if [[ "$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$stale_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$stale_finalizer_plan")" == true ]]; then
+    pass
+else
+    fail "finalizer rechecked runner-admitted manual activation evidence against a later wall clock"
+fi
+
+test_start "finalizer rejects an unexpected assistant-workflow selection for a negative activation case"
+false_positive_finalizer_results="$fixture_root/false-positive-finalizer-activation-results"
+false_positive_finalizer_observation="$false_positive_finalizer_results/activation-observations.json"
+false_positive_finalizer_plan="$false_positive_finalizer_results/run-plan.json"
+false_positive_finalizer_observation_tmp="$fixture_root/false-positive-finalizer-activation-observation.tmp"
+false_positive_finalizer_plan_tmp="$fixture_root/false-positive-finalizer-activation-plan.tmp"
+rm -rf "$false_positive_finalizer_results"
+cp -R "$pilot_output" "$false_positive_finalizer_results"
+jq '.results[-1].selected_skills = ["assistant-workflow"]' "$false_positive_finalizer_observation" >"$false_positive_finalizer_observation_tmp"
+mv "$false_positive_finalizer_observation_tmp" "$false_positive_finalizer_observation"
+false_positive_finalizer_observation_sha="$(test_sha256_stream <"$false_positive_finalizer_observation")"
+jq --arg sha "$false_positive_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$false_positive_finalizer_plan" >"$false_positive_finalizer_plan_tmp"
+mv "$false_positive_finalizer_plan_tmp" "$false_positive_finalizer_plan"
+if finalizer_false_positive_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$false_positive_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$false_positive_finalizer_plan")"; then
+    if [[ "$finalizer_false_positive_status" == true ]]; then
+        fail "finalizer accepted an unexpected assistant-workflow selection for a negative activation case"
+    else
+        pass
+    fi
+else
+    pass
+fi
+
+test_start "finalizer rejects a missing assistant-workflow selection for a positive activation case"
+missing_positive_finalizer_results="$fixture_root/missing-positive-finalizer-activation-results"
+missing_positive_finalizer_observation="$missing_positive_finalizer_results/activation-observations.json"
+missing_positive_finalizer_plan="$missing_positive_finalizer_results/run-plan.json"
+missing_positive_finalizer_observation_tmp="$fixture_root/missing-positive-finalizer-activation-observation.tmp"
+missing_positive_finalizer_plan_tmp="$fixture_root/missing-positive-finalizer-activation-plan.tmp"
+rm -rf "$missing_positive_finalizer_results"
+cp -R "$pilot_output" "$missing_positive_finalizer_results"
+jq '.results[0].selected_skills = ["assistant-thinking"]' "$missing_positive_finalizer_observation" >"$missing_positive_finalizer_observation_tmp"
+mv "$missing_positive_finalizer_observation_tmp" "$missing_positive_finalizer_observation"
+missing_positive_finalizer_observation_sha="$(test_sha256_stream <"$missing_positive_finalizer_observation")"
+jq --arg sha "$missing_positive_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$missing_positive_finalizer_plan" >"$missing_positive_finalizer_plan_tmp"
+mv "$missing_positive_finalizer_plan_tmp" "$missing_positive_finalizer_plan"
+if missing_positive_finalizer_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$missing_positive_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$missing_positive_finalizer_plan")"; then
+    if [[ "$missing_positive_finalizer_status" == true ]]; then
+        fail "finalizer accepted a missing assistant-workflow selection for a positive activation case"
+    else
+        pass
+    fi
+else
+    pass
 fi
 
 test_start "final artifacts use atomic writes and safely recover from either one-artifact interruption"

@@ -135,8 +135,15 @@ validate_activation_observations() {
       and (.provenance.native_host_version | type == "string" and length >= 1 and length <= 160)
       and (.provenance.observed_selection_surface | type == "string" and length >= 1 and length <= 240)
       and (.bindings | type == "object" and (keys | sort) == ["activation_cases_sha256","candidate_skill_sha256","skill"] and .skill == "assistant-workflow" and .candidate_skill_sha256 == $candidate_skill_sha and .activation_cases_sha256 == $cases_sha)
-      and (.results | type == "array" and length == 6
-           and . == [$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow"] else [] end)}])
+      and (.results | type == "array" and length == ($evals[0].activation_cases | length))
+      and ([range(0; ($evals[0].activation_cases | length)) as $index
+            | $evals[0].activation_cases[$index] as $expected
+            | .results[$index] as $observed
+            | (($observed | keys | sort) == ["selected_skills","skill","user_request"])
+              and $observed.skill == "assistant-workflow"
+              and $observed.user_request == $expected.user_request
+              and ($observed.selected_skills | type == "array" and length <= 32 and length == (unique | length) and all(.[]; type == "string" and length > 0 and length <= 128))
+              and (($observed.selected_skills | index("assistant-workflow") != null) == $expected.should_activate)] | all)
       and (if .evidence_class == "manual_native_observation" then (.provenance.capture_owner_kind == "human_evaluator" and .provenance.capture_method == "manual_native_session" and .provenance.native_host == "codex" and .provenance.native_host_version == $cli_version) else (.provenance.capture_owner_kind == "repository_contract_test" and .provenance.capture_method == "static_contract_fixture" and .provenance.native_host == "not_applicable") end)
     ' "$ACTIVATION_OBSERVATIONS_FILE" >/dev/null \
       || die "--activation-observations is malformed, stale, or does not exactly bind the six workflow activation cases."
@@ -1684,34 +1691,96 @@ ordered_workflow_event_evidence() {
 viewing_inspection_event_evidence() {
     local jsonl="$1"
     jq -cse '
-      def is_exact_command($shell_command; $argv):
+      def path_pattern($path):
+        if $path == "src/route.ts" then "src/route\\.ts" else "tests/route\\.test\\.js" end;
+      def expected_path: . == "src/route.ts" or . == "tests/route.test.js";
+      def shell_string_body:
+        . as $raw
+        | if $raw | test("^/bin/(bash|zsh|sh)[[:space:]]+-lc[[:space:]]+") then
+            $raw
+            | sub("^/bin/(bash|zsh|sh)[[:space:]]+-lc[[:space:]]+"; "")
+            | sub("^[\\\"\u0027]"; "")
+            | sub("[\\\"\u0027]$"; "")
+          else $raw
+          end;
+      def allowed_rg_option:
+        . == "-n" or . == "-F" or . == "-i" or . == "-nF" or . == "-Fn" or . == "-ni" or . == "-in" or . == "--line-number" or . == "--no-heading" or . == "--with-filename" or . == "--fixed-strings" or . == "--ignore-case";
+      def safe_rg_pattern:
+        type == "string" and test("^[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*$");
+      def rg_arguments_valid:
+        length >= 1
+        and (.[-1] | safe_rg_pattern)
+        and all(.[0:-1][]; allowed_rg_option);
+      def cat_option_pattern:
+        "(?:-A|-b|-e|-E|-n|-s|-t|-T|-u|-v)";
+      def allowed_cat_option:
+        test("^" + cat_option_pattern + "$");
+      def cat_arguments_valid($path):
+        length >= 1
+        and .[-1] == $path
+        and all(.[0:-1][]; allowed_cat_option);
+      def approved_rg_string($path):
+        if $path == "src/route.ts" then
+          "^rg(?:[ \\t]+(?:-n|-F|-i|-nF|-Fn|-ni|-in|--line-number|--no-heading|--with-filename|--fixed-strings|--ignore-case))*[ \\t]+(?:\u0027[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0027|\u0022[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0022|[A-Za-z0-9_.:?*+^=,\\\\/][A-Za-z0-9_.:?*+^=,\\\\/-]*)[ \\t]+(?:src/route\\.ts(?:[ \\t]+tests/route\\.test\\.js)?|tests/route\\.test\\.js[ \\t]+src/route\\.ts)$"
+        else
+          "^rg(?:[ \\t]+(?:-n|-F|-i|-nF|-Fn|-ni|-in|--line-number|--no-heading|--with-filename|--fixed-strings|--ignore-case))*[ \\t]+(?:\u0027[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0027|\u0022[A-Za-z0-9_.|:?*+^=,()\\\\/][A-Za-z0-9_.|:?*+^=,()\\\\/-]*\u0022|[A-Za-z0-9_.:?*+^=,\\\\/][A-Za-z0-9_.:?*+^=,\\\\/-]*)[ \\t]+(?:tests/route\\.test\\.js(?:[ \\t]+src/route\\.ts)?|src/route\\.ts[ \\t]+tests/route\\.test\\.js)$"
+        end;
+      def approved_cat_string($path):
+        "^cat(?:[ \\t]+" + cat_option_pattern + ")*[ \\t]+" + path_pattern($path) + "$";
+      def approved_string($path):
+        shell_string_body as $body
+        | path_pattern($path) as $path_re
+        | ($body | test(approved_rg_string($path))
+           and (test("(^|[ \\t])--pre(=|[ \\t])") | not))
+          or ($body | test(approved_cat_string($path)))
+          or ($body | test("^sed[[:space:]]+-n[[:space:]]+(\\\"[0-9]+(,[0-9]+)?p\\\"|\u0027[0-9]+(,[0-9]+)?p\u0027|[0-9]+(,[0-9]+)?p)[[:space:]]+" + $path_re + "$"));
+      def approved_argv($path):
+        . as $argv
+        | path_pattern($path) as $path_re
+        | ($argv | all(.[]; type == "string"))
+          and (if $argv[0] == "rg" then
+                 ($argv | length >= 3)
+                 and (if ($argv | length) >= 4 and (($argv[-2] == "src/route.ts" and $argv[-1] == "tests/route.test.js") or ($argv[-2] == "tests/route.test.js" and $argv[-1] == "src/route.ts")) then
+                        ($argv[1:-2] | rg_arguments_valid)
+                      elif $path == "src/route.ts" then
+                        if $argv[-1] == "src/route.ts" then ($argv[1:-1] | rg_arguments_valid)
+                        else false end
+                      else
+                        if $argv[-1] == "tests/route.test.js" then ($argv[1:-1] | rg_arguments_valid)
+                        else false end
+                      end)
+               elif $argv[0] == "cat" then
+                 ($argv | length >= 2) and ($argv[1:] | cat_arguments_valid($path))
+               elif $argv[0] == "sed" then
+                 ($argv | length == 4) and $argv[1] == "-n" and ($argv[2] | test("^[0-9]+(,[0-9]+)?p$")) and $argv[3] == $path
+               else false
+               end);
+      def approved_inspection_command($path):
         (.item.command // .item.command_line // "") as $command
         | if ($command | type) == "array" then
-            ($command == $argv)
-            or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
-              $command == [., "-lc", $shell_command])
-          else
-            ($command | tostring) as $text
-            | ($text == $shell_command)
-              or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
-                $text == (. + " -lc \u0027" + $shell_command + "\u0027")
-                or $text == (. + " -lc \"" + $shell_command + "\""))
+            if ($command | (length == 3 and (.[0] == "/bin/bash" or .[0] == "/bin/zsh" or .[0] == "/bin/sh"))) then
+              ($command[1] == "-lc" and ($command[2] | type == "string") and ($command[2] | approved_string($path)))
+            else ($command | approved_argv($path))
+            end
+          elif ($command | type) == "string" then
+            ($command | approved_string($path))
+          else false
           end;
       . as $events
-      | def matching($shell_command; $argv; $needles):
+      | def matching($path; $needles):
           [ $events[] | select(.type == "item.completed" and .item.type == "command_execution"
-            and is_exact_command($shell_command; $argv)
+            and approved_inspection_command($path)
             and (.item.id | type == "string" and length > 0)
             and .item.status == "completed"
             and (.item.exit_code | type == "number") and .item.exit_code == 0
             and (((.item.aggregated_output // "") | tostring) as $out
               | all($needles[]; . as $needle | $out | contains($needle)))) ];
-        matching("rg -n \u0027applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport\u0027 src/route.ts"; ["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]; ["selectRoute","highlightRoute","focusViewport","applyActiveRouteEffects"]) as $source_events
-      | matching("rg -n \u0027assert\\.deepEqual\u0027 tests/route.test.js"; ["rg","-n","assert\\.deepEqual","tests/route.test.js"]; ["assert.deepEqual","applyActiveRouteEffects","select:ACTIVE","highlight:ACTIVE","focus:ACTIVE"]) as $test_events
+        matching("src/route.ts"; ["selectRoute","highlightRoute","focusViewport","applyActiveRouteEffects"]) as $source_events
+      | matching("tests/route.test.js"; ["assert.deepEqual","applyActiveRouteEffects","select:ACTIVE","highlight:ACTIVE","focus:ACTIVE"]) as $test_events
       | if (([$events[] | select(.type == "item.completed" and .item.type == "command_execution") | .item.id] | unique | length)
           == ([$events[] | select(.type == "item.completed" and .item.type == "command_execution")] | length)
-          and ($source_events | length == 1)
-          and ($test_events | length == 1))
+          and ($source_events | length >= 1)
+          and ($test_events | length >= 1))
         then {
           "viewing-source-search":$source_events[0].item.id,
           "viewing-test-search":$test_events[0].item.id

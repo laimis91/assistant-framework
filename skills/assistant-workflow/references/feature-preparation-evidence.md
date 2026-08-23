@@ -19,6 +19,12 @@ For each scoped behavior or proposed open question, create one
    inventing a file, symbol, or behavior.
 3. Inspect the behavioral tests and name the assertion, inspected absence, or
    access limitation.
+   When a hash-bound evaluator or downstream consumer requires exact inspection
+   provenance, record the inspected implementation trace's `content_sha256` and
+   `inspection_event_ref`; also record the behavioral test `file`,
+   `content_sha256`, `test_name`, and `inspection_event_ref`. Each event ref
+   resolves to the completed successful read-only inspection that produced the
+   cited evidence.
 4. Compare the sources and classify the row on both axes.
 5. Treat `feature_preparation_evidence.ref` as the stable identity of the evidence artifact.
    It is carried unchanged into preparation plans, task packets,

@@ -43,6 +43,8 @@ This packet is the executable contract for the slice. Supporting context below c
   - [setup, contracts, wiring, config, or "none"]
 - depends_on:
   - [slice id, or "none"]
+- feature_preparation_scope: not_applicable | existing_system
+- feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
 - acceptance_criteria:
   - [ ] [binary pass/fail criterion]
 - verification_command:

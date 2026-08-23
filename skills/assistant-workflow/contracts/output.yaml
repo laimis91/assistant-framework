@@ -2625,6 +2625,13 @@ artifacts:
                     type: string
                     required: true
                     on_missing: fail
+                  - name: content_sha256
+                    type: string
+                    required: conditional
+                    condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                    description: "SHA-256 of the inspected file content when exact inspection provenance is required"
+                    validation: "Lowercase 64-character SHA-256 matching the inspected file content"
+                    on_missing: fail
                   - name: symbols
                     type: string[]
                     required: true
@@ -2633,6 +2640,13 @@ artifacts:
                   - name: execution_behavior
                     type: string
                     required: true
+                    on_missing: fail
+                  - name: inspection_event_ref
+                    type: string
+                    required: conditional
+                    condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                    description: "Reference to the completed read-only inspection event that produced this trace"
+                    validation: "Resolves to a completed successful inspection event for this file"
                     on_missing: fail
               - name: search_or_access_refs
                 type: string[]
@@ -2654,11 +2668,39 @@ artifacts:
                 required: true
                 enum_values: [inspected, inspected_absent, inaccessible]
                 on_missing: fail
+              - name: file
+                type: string
+                required: conditional
+                condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                description: "Behavioral test file inspected when exact inspection provenance is required"
+                validation: "Relative path of the inspected behavioral test file"
+                on_missing: fail
+              - name: content_sha256
+                type: string
+                required: conditional
+                condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                description: "SHA-256 of the inspected behavioral test content when exact inspection provenance is required"
+                validation: "Lowercase 64-character SHA-256 matching the inspected test file content"
+                on_missing: fail
+              - name: test_name
+                type: string
+                required: conditional
+                condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                description: "Exact behavioral test name or bounded assertion subject inspected"
+                validation: "Exact behavioral test name or bounded assertion subject inspected"
+                on_missing: fail
               - name: assertions_or_search_refs
                 type: string[]
                 required: true
                 min_items: 1
                 validation: "Names assertions, bounded absence searches, or the concrete access limitation; never use an empty array to imply inspection."
+                on_missing: fail
+              - name: inspection_event_ref
+                type: string
+                required: conditional
+                condition: "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+                description: "Reference to the completed read-only inspection event that produced this behavioral-test evidence"
+                validation: "Resolves to a completed successful inspection event for this test file"
                 on_missing: fail
               - name: rationale
                 type: string

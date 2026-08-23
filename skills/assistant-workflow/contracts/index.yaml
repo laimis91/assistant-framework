@@ -21,7 +21,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [task_description,task_type,scope_hint,target_files,constraints,execution_intent,plan_mode,architecture_design_mode,manual_verification_mode,qa_evaluation_mode,harness_capable,build_execution_lane,workflow_state_mode]
+        names: [task_description,task_type,scope_hint,target_files,constraints,acceptance_criteria,execution_intent,plan_mode,architecture_design_mode,manual_verification_mode,qa_evaluation_mode,harness_capable,build_execution_lane,workflow_state_mode]
     budget_words: 3999
   architecture_design:
     references:

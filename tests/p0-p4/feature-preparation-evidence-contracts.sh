@@ -90,6 +90,22 @@ if ruby -ryaml -e '
   item_fields = evidence.fetch("object_fields").find { |field| field["name"] == "items" }.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   implementation = item_fields.fetch("implementation_evidence")
   implementation_fields = implementation.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  trace_fields = implementation_fields.fetch("traces").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  behavioral_test_fields = item_fields.fetch("behavioral_test_evidence").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  provenance_condition = "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+  provenance = {
+    "implementation.content_sha256" => [trace_fields.fetch("content_sha256"), "Lowercase 64-character SHA-256 matching the inspected file content"],
+    "implementation.inspection_event_ref" => [trace_fields.fetch("inspection_event_ref"), "Resolves to a completed successful inspection event for this file"],
+    "behavioral.file" => [behavioral_test_fields.fetch("file"), "Relative path of the inspected behavioral test file"],
+    "behavioral.content_sha256" => [behavioral_test_fields.fetch("content_sha256"), "Lowercase 64-character SHA-256 matching the inspected test file content"],
+    "behavioral.test_name" => [behavioral_test_fields.fetch("test_name"), "Exact behavioral test name or bounded assertion subject inspected"],
+    "behavioral.inspection_event_ref" => [behavioral_test_fields.fetch("inspection_event_ref"), "Resolves to a completed successful inspection event for this test file"]
+  }
+  exact_provenance = provenance.length == 6 && provenance.all? do |_name, (field, validation)|
+    field.keys.sort == %w[condition description name on_missing required type validation] &&
+      field["type"] == "string" && field["required"] == "conditional" &&
+      field["condition"] == provenance_condition && field["validation"] == validation && field["on_missing"] == "fail"
+  end
   work_status = item_fields.fetch("work_status")
   test_results = artifacts.fetch("test_results")
   pack = artifacts.fetch("architecture_decision_pack")
@@ -133,6 +149,7 @@ if ruby -ryaml -e '
     implementation["type"] == "object" &&
     implementation_fields.fetch("status").fetch("enum_values") == %w[inspected inspected_absent inaccessible] &&
     implementation_fields.fetch("traces")["type"] == "object[]" &&
+    exact_provenance &&
     implementation_fields.fetch("search_or_access_refs")["type"] == "string[]" &&
     work_status.fetch("enum_values").include?("source_conflict_resolution") &&
     work_status.fetch("validation").include?("product_question requires behavior_status=materially_unknown") &&
@@ -1068,9 +1085,28 @@ if ruby -ryaml -e '
   items = evidence.fetch("object_fields").find { |field| field["name"] == "items" }
   fields = items.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   required = %w[item_id requirements_evidence design_evidence implementation_evidence behavioral_test_evidence conflict_analysis evidence_gaps behavior_status work_status rationale implementation_implication]
-  nested = %w[design_evidence implementation_evidence behavioral_test_evidence].all? do |name|
-    fields.fetch(name).fetch("object_fields").all? { |field| field["required"] == true }
+  condition = "when status=inspected and a hash-bound evaluator or downstream consumer requires exact inspection provenance"
+  exact_nested = lambda do |name, conditional_names|
+    fields.fetch(name).fetch("object_fields").all? do |field|
+      if conditional_names.include?(field.fetch("name"))
+        field["required"] == "conditional" && field["condition"] == condition
+      else
+        field["required"] == true
+      end
+    end
   end
+  trace_fields = fields.fetch("implementation_evidence").fetch("object_fields").find { |field| field["name"] == "traces" }.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  trace_exact = trace_fields.all? do |name, field|
+    if %w[content_sha256 inspection_event_ref].include?(name)
+      field["required"] == "conditional" && field["condition"] == condition
+    else
+      field["required"] == true
+    end
+  end
+  nested = exact_nested.call("design_evidence", []) &&
+    exact_nested.call("implementation_evidence", []) &&
+    exact_nested.call("behavioral_test_evidence", %w[file content_sha256 test_name inspection_event_ref]) &&
+    trace_exact
   exit(required.all? { |name| fields.fetch(name)["required"] == true } && nested ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml"; then
     pass
