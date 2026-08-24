@@ -16,14 +16,14 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Scale phases to risk; Decompose, Design, and durable state run only when triggered.
 - Before resume, reconcile the newest user request and repository evidence.
 - On stale, superseded, or completed resume state, update `{agent_state_dir}/task.md` before acting; record classification, reason, task identity, and exact next action.
-- `plan_mode`: bounded small uses no-wait `inline`; For `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, scope changes. `prepare_only`: `approval_required` only for explicitly requested readiness planning; otherwise `none`.
+- `plan_mode`: bounded small uses no-wait `inline`; For `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, scope changes. `prepare_only`: `inline` only for explicitly requested readiness planning; otherwise `none`.
 - `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
 - Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - Triggered Architecture Decision Packs are source-backed and fresh. `prepare_only` retains Discover-only Pack context through Preparation Completion; `execution_intent != prepare_only` continues through Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
-- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; optional readiness plans contain evidence ref, implications, open decisions, and next state, with Pack handoff discover_only. Product questions need evidence.
+- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; an explicitly requested readiness Plan is always inline and never waits. Existing-system readiness carries the exact unchanged feature-evidence ref; `not_applicable` readiness carries `preparation_basis=not_applicable` and no feature-evidence ref. Product questions need evidence.
 - Review, QA, and security routing apply when triggered.
 - Medium+ output follows `references/final-handoff.md`; prepare_only returns readiness and next implementation state.
 
@@ -128,7 +128,7 @@ If scope exceeds initial triage during any phase, stop and re-triage. Use `refer
 
 ## Phase Routing
 
-Load `references/phases.md` for the current phase. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. Load `references/architecture-decision-pack.md` only when `architecture_design_mode != not_applicable`. Use `references/context-budget-and-pattern-retrieval.md` for large material or framework patterns, `references/artifact-first-output-contract.md` before Plan, `references/decomposition-plan-review.md` before medium+ Decompose exits, `references/plan-template.md` during Plan, and `references/context-handoff-templates.md` for non-standard continuations.
+Load `references/phases.md` for the current phase. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. Load `references/architecture-decision-pack.md` only when `architecture_design_mode != not_applicable`. Use `references/context-budget-and-pattern-retrieval.md` for large material or framework patterns, `references/artifact-first-output-contract.md` before Plan only when `execution_intent != prepare_only`, `references/decomposition-plan-review.md` before medium+ Decompose exits, `references/plan-template.md` during Plan, and `references/context-handoff-templates.md` for non-standard continuations. Optional `prepare_only` readiness Plans omit Artifact Contracts and executable slices.
 
 | Phase | When | Key Actions |
 |---|---|---|

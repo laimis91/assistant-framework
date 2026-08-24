@@ -11,7 +11,26 @@ else
     fail "unexpected .DS_Store file under tests/: $ds_store_file"
 fi
 
-test_start "general CI covers framework contracts, installs, and mirrors without retired runtime jobs"
+test_start "retired plugin distribution paths stay absent"
+retired_plugin_paths=(
+    "$FRAMEWORK_DIR/plugins"
+    "$FRAMEWORK_DIR/docs/plugin-architecture.md"
+    "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh"
+    "$FRAMEWORK_DIR/tests/p0-p4/plugin-boundary-contracts.sh"
+    "$FRAMEWORK_DIR/tests/p0-p4/plugin-manifest-contracts.sh"
+)
+remaining_retired_plugin_paths=()
+for retired_plugin_path in "${retired_plugin_paths[@]}"; do
+    [[ ! -e "$retired_plugin_path" && ! -L "$retired_plugin_path" ]] \
+        || remaining_retired_plugin_paths+=("${retired_plugin_path#"$FRAMEWORK_DIR/"}")
+done
+if [[ "${#remaining_retired_plugin_paths[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired plugin distribution paths remain: ${remaining_retired_plugin_paths[*]}"
+fi
+
+test_start "general CI covers framework contracts and installs without retired runtime jobs"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 framework_validation_failures=()
 if [[ ! -f "$framework_validation_workflow" ]]; then
@@ -27,7 +46,6 @@ else
         "timeout-minutes: 90" \
         "./tests/test-p0-p4-contracts.sh" \
         "tools/skills/validate-skills.sh" \
-        "tools/plugins/sync-plugin-skills.sh --check" \
         "./install.sh --agent codex --dry-run" \
         "./install.sh --agent claude --dry-run" \
         "./install.sh --agent gemini --dry-run"; do

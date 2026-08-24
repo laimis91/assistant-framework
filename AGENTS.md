@@ -4,7 +4,7 @@
 
 Assistant Framework is a framework repository, not an application. It installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
 
-Root `skills/assistant-*` directories are the editable source of truth. Plugin-local skill copies are generated mirrors. See `README.md` and `docs/plugin-architecture.md` for architecture and platform details.
+Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture and platform details.
 
 ## Workflow
 
@@ -20,10 +20,8 @@ Root `skills/assistant-*` directories are the editable source of truth. Plugin-l
 ./install.sh --agent codex --skill assistant-workflow
 ./install.sh --agent codex --dry-run
 
-# Skills and generated plugin mirrors
+# Skills
 tools/skills/validate-skills.sh
-tools/plugins/sync-plugin-skills.sh --check
-tools/plugins/sync-plugin-skills.sh --apply
 
 # Contract suites
 ./tests/test-p0-p4-contracts.sh

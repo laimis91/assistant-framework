@@ -80,7 +80,6 @@ git diff --check
 bash ./tests/p0-p4/workflow-basics-contracts.sh
 bash ./tests/p0-p4/eval-contracts.sh
 bash ./tests/p0-p4/skill-eval-contracts.sh
-bash ./tests/p0-p4/plugin-manifest-contracts.sh
 ```
 
 If installer or agent-home behavior changes, also run isolated temp-home install smoke tests for supported agents.

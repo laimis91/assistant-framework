@@ -9,7 +9,6 @@ test_start "installable skill and protocol sources use {agent_state_dir} instead
 RAW_CLAUDE_SCAN_OUT="/tmp/p0p4-raw-claude-installable-scan.out"
 if rg -n '(~?/)?\.claude/' \
     "$FRAMEWORK_DIR/skills" \
-    "$FRAMEWORK_DIR/plugins" \
     >"$RAW_CLAUDE_SCAN_OUT"; then
     fail "installable skill/protocol sources must not contain raw .claude paths; see $RAW_CLAUDE_SCAN_OUT"
 else

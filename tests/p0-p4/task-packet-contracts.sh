@@ -31,7 +31,7 @@ fi
 
 test_start "workflow executable task packet carries conditional feature-preparation bindings in its own section"
 plan_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
-packet_section="$(awk '/^## Executable Task Packet$/{capture=1; next} capture && /^## /{exit} capture{print}' "$plan_template")"
+packet_section="$(awk '/^## Executable Task Packet( |$)/{capture=1; next} capture && /^## /{exit} capture{print}' "$plan_template")"
 if [[ "$packet_section" == *"- Feature preparation scope: [not_applicable | existing_system]"* ]] \
     && [[ "$packet_section" == *"- Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]"* ]]; then
     pass
@@ -282,7 +282,6 @@ test_start "workflow task journal template anchors native dispatch evidence to C
 missing_task_identity_terms=()
 task_journal_template_surfaces=(
     "skills/assistant-workflow/references/task-journal-template.md"
-    "plugins/assistant-dev/skills/assistant-workflow/references/task-journal-template.md"
 )
 for surface in "${task_journal_template_surfaces[@]}"; do
     file="$FRAMEWORK_DIR/$surface"
@@ -504,9 +503,6 @@ active_delegation_surfaces=(
     "$FRAMEWORK_DIR/skills/assistant-workflow"
     "$FRAMEWORK_DIR/skills/assistant-thinking"
     "$FRAMEWORK_DIR/skills/assistant-review"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review"
-    "$FRAMEWORK_DIR/plugins/assistant-research/skills/assistant-thinking"
     "$FRAMEWORK_DIR/install.sh"
     "$FRAMEWORK_DIR/install.ps1"
     "$FRAMEWORK_DIR/docs/troubleshooting-subagents.md"
@@ -553,9 +549,6 @@ live_slice_framing_surfaces=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/decomposition-plan-review.md"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/plan-template.md"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/decomposition-plan-review.md"
 )
 missing_live_slice_framing_surfaces=()
 for file in "${live_slice_framing_surfaces[@]}"; do
@@ -580,8 +573,7 @@ if [[ "$plan_broad_split_count" -lt 2 ]]; then
     missing_broad_split_review_terms+=("plan-template.md medium/full Broad-split rejection lines")
 fi
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; do
     for term in \
         "- id: DC8" \
         "broad_split_rejection proof" \
@@ -592,8 +584,7 @@ for file in \
     done
 done
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/phases.md"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; do
     for term in \
         "Broad-split rejection" \
         "Broad-split rejection must explicitly prove broad layer/module/folder/feature/setup/contract/component splits were rejected"; do
@@ -689,8 +680,7 @@ handoff_context_field_has_direct_line() {
 test_start "workflow handoffs require conditional slice manifest and current task packets"
 missing_conditional_handoff_terms=()
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
     if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "required: conditional"; then
         missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest required: conditional")
     fi
@@ -748,8 +738,7 @@ fi
 test_start "workflow architect plan handoff requires task packet execution fields"
 missing_required_fields=()
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
     for field in \
         slice_id \
         slice_name \
@@ -821,8 +810,7 @@ field_in_required_list() {
 test_start "workflow Architect implementation_steps cover consumer current_task_packet required fields"
 missing_packet_coverage=()
 for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
     architect_required=()
     while IFS= read -r field; do
         architect_required+=("$field")
@@ -963,8 +951,6 @@ test_start "workflow reference templates reject stale sub-task branch and brief 
 reference_template_surfaces=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/sub-task-brief-template.md"
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/references/context-handoff-templates.md"
 )
 stale_reference_template_file="$(mktemp "${TMPDIR:-/tmp}/workflow-reference-template-stale.XXXXXX")"
 p0p4_register_cleanup "$stale_reference_template_file"

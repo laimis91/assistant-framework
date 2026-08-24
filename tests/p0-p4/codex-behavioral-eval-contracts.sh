@@ -156,9 +156,30 @@ fi
 
 if [[ "${FAKE_CODEX_BLOCK_AFTER_INVOCATION:-false}" == "true" ]]; then
     printf '%s\n' "$$" >"$capture_dir/call-$call_id.pid"
+    if [[ "${FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD:-false}" == "true" ]]; then
+        (
+            trap '' INT TERM
+            while true; do sleep 1; done
+        ) &
+        printf '%s\n' "$!" >"$capture_dir/call-$call_id.grandchild.pid"
+        trap '' INT TERM
+    fi
     while true; do
         sleep 1
     done
+fi
+
+if [[ -n "${FAKE_CODEX_EXIT_AFTER_GRANDCHILD:-}" ]]; then
+    (
+        trap '' INT TERM
+        while true; do sleep 1; done
+    ) &
+    printf '%s\n' "$!" >"$capture_dir/call-$call_id.grandchild.pid"
+    case "$FAKE_CODEX_EXIT_AFTER_GRANDCHILD" in
+        success) exit 0 ;;
+        nonzero) exit 23 ;;
+        *) printf 'unsupported FAKE_CODEX_EXIT_AFTER_GRANDCHILD\n' >&2; exit 2 ;;
+    esac
 fi
 
 if [[ -n "${FAKE_CODEX_FAILURE_MESSAGE:-}" ]]; then
@@ -1659,6 +1680,9 @@ fi
 test_start "bounded catalog recheck stops a hanging lookup before later model calls"
 catalog_hang_output="$fixture_root/catalog-hang-output"
 catalog_hang_error="$fixture_root/catalog-hang-error.txt"
+# This outer bound includes fixture setup and the first complete model pair;
+# the production catalog watchdog remains fixed at the requested one second.
+catalog_hang_outer_bound_seconds=20
 rm -f "$capture"/*
 hang_started_at="$(date +%s)"
 if ! PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MODE=hang_after_preflight \
@@ -1667,7 +1691,7 @@ if ! PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MO
     --cases small-fix-stays-lightweight,requirements-map-through-completion,medium-final-handoff-is-reconstructable \
     --repeats 1 --model-catalog-timeout-seconds 1 --output "$catalog_hang_output" \
     >/dev/null 2>"$catalog_hang_error" \
-    && [[ "$(( $(date +%s) - hang_started_at ))" -le 8 ]] \
+    && [[ "$(( $(date +%s) - hang_started_at ))" -le "$catalog_hang_outer_bound_seconds" ]] \
     && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" == "2" ]] \
     && [[ -f "$capture/catalog-child-pid" ]] \
     && ! kill -0 "$(cat "$capture/catalog-child-pid")" 2>/dev/null \
@@ -1771,6 +1795,27 @@ else
 fi
 rm -f "$symlink_output"
 
+test_start "rejected non-resume output preserves existing mode and contents"
+nonempty_output="$fixture_root/nonempty-admission-output"
+mkdir -p "$nonempty_output"
+chmod 755 "$nonempty_output"
+printf 'preserve\n' >"$nonempty_output/sentinel"
+if nonempty_mode="$(stat -f '%Lp' "$nonempty_output" 2>/dev/null)"; then :; else nonempty_mode="$(stat -c '%a' "$nonempty_output")"; fi
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$nonempty_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/nonempty-admission.stderr" 2>&1 \
+    && grep -Fq -- '--output must be empty or not yet exist' "$fixture_root/nonempty-admission.stderr" \
+    && [[ "$(cat "$nonempty_output/sentinel")" == "preserve" ]] \
+    && [[ "$(stat -f '%Lp' "$nonempty_output" 2>/dev/null || stat -c '%a' "$nonempty_output")" == "$nonempty_mode" ]] \
+    && [[ ! -e "$nonempty_output/.evaluation-lease" ]] \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    pass
+else
+    fail "non-resume output admission mutated a rejected directory"
+fi
+
 test_start "paid-call state and trace commits are fsync-backed before later transitions"
 if grep -Fq 'os.fsync(handle)' "$runner" \
     && grep -Fq 'durable_atomic_write_json "$path"' "$runner" \
@@ -1786,19 +1831,22 @@ test_start "runner owns Codex termination and enforces a bounded per-run timeout
 lifecycle_ok=true
 owned_child_output="$fixture_root/owned-child-output"
 rm -f "$capture"/*
-FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true \
+FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
     "$runner" --execute --model test-model \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$owned_child_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 &
 owned_runner_pid=$!
 owned_invoked=false
-for _ in {1..100}; do
+# Plan materialization and fsync-backed admission may exceed five wall-clock
+# seconds on a busy host; wait for the actual fake Codex boundary.
+for _ in {1..600}; do
     if [[ -f "$capture/call-0.pid" ]]; then owned_invoked=true; break; fi
     sleep 0.05
 done
 if [[ "$owned_invoked" == true ]]; then
     owned_codex_pid="$(cat "$capture/call-0.pid")"
+    owned_grandchild_pid="$(cat "$capture/call-0.grandchild.pid")"
     kill -TERM "$owned_runner_pid" 2>/dev/null || true
     owned_runner_exited=false
     for _ in {1..100}; do
@@ -1807,8 +1855,10 @@ if [[ "$owned_invoked" == true ]]; then
     done
     owned_child_alive=false
     kill -0 "$owned_codex_pid" 2>/dev/null && owned_child_alive=true
+    kill -0 "$owned_grandchild_pid" 2>/dev/null && owned_child_alive=true
     if [[ "$owned_runner_exited" != true || "$owned_child_alive" == true ]]; then lifecycle_ok=false; fi
     kill -KILL "$owned_codex_pid" 2>/dev/null || true
+    kill -KILL "$owned_grandchild_pid" 2>/dev/null || true
     kill -KILL "$owned_runner_pid" 2>/dev/null || true
     wait "$owned_runner_pid" 2>/dev/null || true
 else
@@ -1819,14 +1869,14 @@ fi
 
 timeout_output="$fixture_root/timeout-output"
 rm -f "$capture"/*
-if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true \
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
     "$runner" --execute --model test-model --run-timeout-seconds 1 \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$timeout_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable"
       and .error.code == "execution_timed_out")' "$timeout_output/traces/"*.json >/dev/null 2>&1 \
-    || find "$capture" -maxdepth 1 -name 'call-*.pid' -exec sh -c '
+    || find "$capture" -maxdepth 1 \( -name 'call-*.pid' -o -name 'call-*.grandchild.pid' \) -exec sh -c '
         for file do kill -0 "$(cat "$file")" 2>/dev/null && exit 1; done
       ' sh {} +; then
     lifecycle_ok=false
@@ -1837,21 +1887,326 @@ else
     fail "runner left Codex alive or did not classify and stop bounded timeouts"
 fi
 
-test_start "resume cleans an orphan plan temp and executes the newly recovered exact plan"
+test_start "supervisor reaps signal-ignoring descendants after leader success and failure before lease release"
+supervisor_reap_failures=()
+for supervisor_exit in success nonzero; do
+    supervisor_output="$fixture_root/supervisor-$supervisor_exit-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_EXIT_AFTER_GRANDCHILD="$supervisor_exit" \
+        "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$supervisor_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1; then
+        supervisor_reap_failures+=("$supervisor_exit-run")
+        continue
+    fi
+    for descendant_pid_file in "$capture"/*.grandchild.pid; do
+        [[ -f "$descendant_pid_file" ]] || { supervisor_reap_failures+=("$supervisor_exit-missing-pid"); continue; }
+        kill -0 "$(cat "$descendant_pid_file")" 2>/dev/null && supervisor_reap_failures+=("$supervisor_exit-descendant-live")
+    done
+    [[ ! -e "$supervisor_output/.evaluation-lease" ]] || supervisor_reap_failures+=("$supervisor_exit-lease-retained")
+done
+if [[ ${#supervisor_reap_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "supervisor returned or released its lease before descendant cleanup: ${supervisor_reap_failures[*]}"
+fi
+
+test_start "signal cleanup retains protected lease and raw state while a supervised group outlives five seconds"
+delayed_output="$fixture_root/delayed-supervisor-output"
+rm -f "$capture"/*
+FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_SUPERVISOR_POST_GROUP_HOLD_SECONDS=7 \
+    FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
+    "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$delayed_output" --codex-bin "$fake_codex" \
+    >"$fixture_root/delayed-supervisor.stdout" 2>"$fixture_root/delayed-supervisor.stderr" &
+delayed_runner_pid=$!
+delayed_started=false
+# Durable plan initialization can take longer than the cleanup grace on a busy
+# host. Wait for the actual fake Codex boundary before exercising the signal.
+for _ in {1..600}; do
+    [[ -f "$capture/call-0.pid" ]] && { delayed_started=true; break; }
+    sleep 0.05
+done
+delayed_raw_root=""
+if [[ "$delayed_started" == true ]]; then
+    delayed_workspace="$(awk 'previous == "-C" { print; exit } { previous = $0 }' "$capture/call-0.args")"
+    delayed_raw_root="$(dirname "$(dirname "$delayed_workspace")")"
+    kill -TERM "$delayed_runner_pid" 2>/dev/null || true
+    sleep 6
+fi
+if [[ "$delayed_started" == true && -d "$delayed_output/.evaluation-lease" && -d "$delayed_raw_root" ]]; then
+    delayed_child_pid="$(cat "$capture/call-0.pid")"
+    delayed_grandchild_pid="$(cat "$capture/call-0.grandchild.pid")"
+    kill -KILL "$delayed_child_pid" "$delayed_grandchild_pid" 2>/dev/null || true
+    wait "$delayed_runner_pid" 2>/dev/null || true
+    if [[ -d "$delayed_output/.evaluation-lease" && -d "$delayed_raw_root" ]]; then
+        rm -rf -- "$delayed_output/.evaluation-lease" "$delayed_raw_root"
+        pass
+    else
+        fail "outer cleanup released protected state after the supervisor hold instead of retaining it for explicit recovery"
+    fi
+else
+    kill -KILL "$delayed_runner_pid" 2>/dev/null || true
+    wait "$delayed_runner_pid" 2>/dev/null || true
+    fail "signal cleanup released lease or raw state before the supervised group confirmed exit"
+fi
+
+test_start "resume rejects an orphan plan temp before any model call"
 plan_temp_output="$fixture_root/resume-plan-temp-output"
 mkdir -p "$plan_temp_output"
 printf 'partial\n' >"$plan_temp_output/.run-plan.json.tmp.interrupted"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$plan_temp_output" \
-    --codex-bin "$fake_codex" >/dev/null \
-    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
-    && [[ -f "$plan_temp_output/run-plan.json" && -f "$plan_temp_output/comparison.json" ]] \
-    && [[ ! -e "$plan_temp_output/.run-plan.json.tmp.interrupted" ]]; then
+    --codex-bin "$fake_codex" >"$fixture_root/resume-plan-temp.stderr" 2>&1 \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/resume-plan-temp.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]] \
+    && [[ -f "$plan_temp_output/.run-plan.json.tmp.interrupted" ]]; then
     pass
 else
-    fail "resume did not safely recover an orphan atomic plan temp"
+    fail "orphan atomic plan temp authorized a resume, model call, or mutation"
+fi
+
+test_start "concurrent resume is rejected by the exclusive output lease before model calls"
+lease_output="$fixture_root/concurrent-lease-output"
+lease_first_pid=""
+rm -f "$capture"/*
+FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$lease_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/concurrent-lease-first.stdout" 2>"$fixture_root/concurrent-lease-first.stderr" &
+lease_first_pid=$!
+lease_started=false
+for _ in {1..1500}; do
+    if [[ -f "$capture/call-0.args" ]]; then lease_started=true; break; fi
+    sleep 0.02
+done
+if [[ "$lease_started" == true ]] \
+    && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$lease_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/concurrent-lease-second.stdout" 2>"$fixture_root/concurrent-lease-second.stderr" \
+    && grep -Fq 'Evaluation output already has an exclusive lease' "$fixture_root/concurrent-lease-second.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 1 ]]; then
+    kill -TERM "$lease_first_pid" 2>/dev/null || true
+    wait "$lease_first_pid" 2>/dev/null || true
+    pass
+else
+    kill -TERM "$lease_first_pid" 2>/dev/null || true
+    wait "$lease_first_pid" 2>/dev/null || true
+    fail "concurrent resume acquired the output lease or invoked an extra model call"
+fi
+
+test_start "unsafe, live, and stale output leases fail closed before resume validation"
+lease_guard_ok=true
+for lease_variant in live stale malformed symlink; do
+    lease_guard_output="$fixture_root/lease-guard-$lease_variant-output"
+    mkdir -p "$lease_guard_output"
+    case "$lease_variant" in
+        live)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            jq -cnS --arg token "$(printf live | test_sha256_stream)" --argjson owner_pid "$$" '{schema_version:"1.0",token:$token,owner_pid:$owner_pid}' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        stale)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            jq -cnS --arg token "$(printf stale | test_sha256_stream)" '{schema_version:"1.0",token:$token,owner_pid:999999}' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        malformed)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            printf '{}\n' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        symlink)
+            mkdir "$lease_guard_output/lease-target"
+            ln -s lease-target "$lease_guard_output/.evaluation-lease"
+            ;;
+    esac
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$lease_guard_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/lease-guard-$lease_variant.stdout" 2>"$fixture_root/lease-guard-$lease_variant.stderr" \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]] \
+        || [[ "$lease_variant" == stale && ! -f "$lease_guard_output/.evaluation-lease/owner.json" ]]; then
+        lease_guard_ok=false
+    fi
+done
+if [[ "$lease_guard_ok" == true ]]; then
+    pass
+else
+    fail "unsafe or live output lease variant reached model execution"
+fi
+
+test_start "resume initializes a wholly pre-attempt exact plan without retrying uncertain work"
+pre_attempt_output="$fixture_root/resume-pre-attempt-output"
+pre_attempt_ok=false
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$pre_attempt_output/run-plan.json" ]] \
+    && [[ -f "$pre_attempt_output/pre-attempt-authorization.json" ]] \
+    && [[ ! -e "$pre_attempt_output/traces" && ! -e "$pre_attempt_output/semantic-checkpoints" && ! -e "$pre_attempt_output/run-attempts" ]]; then
+    pre_attempt_plan_sha256="$(test_sha256_stream <"$pre_attempt_output/run-plan.json")"
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$pre_attempt_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
+        && [[ "$(test_sha256_stream <"$pre_attempt_output/run-plan.json")" == "$pre_attempt_plan_sha256" ]] \
+        && [[ ! -e "$pre_attempt_output/pre-attempt-authorization.json" ]] \
+        && jq -s -e 'length == 2 and all(.[]; .state == "completed")' "$pre_attempt_output/run-attempts/"*.json >/dev/null \
+        && jq -e '.complete_pairs == 1' "$pre_attempt_output/comparison.json" >/dev/null; then
+        pre_attempt_ok=true
+    fi
+fi
+if [[ "$pre_attempt_ok" == true ]]; then
+    pass
+else
+    fail "resume could not safely initialize an exact persisted plan before any attempt state existed"
+fi
+
+test_start "pre-attempt authorization permits only partial durable not-started initialization"
+partial_pre_attempt_output="$fixture_root/resume-partial-pre-attempt-output"
+partial_pre_attempt_ok=false
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$partial_pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$partial_pre_attempt_output/pre-attempt-authorization.json" ]]; then
+    mkdir -p "$partial_pre_attempt_output/run-attempts"
+    jq -cnS --arg run_id "$(jq -r '.runs[0] | .pair_id + "-" + .variant' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg pair_id "$(jq -r '.runs[0].pair_id' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg case_id "$(jq -r '.runs[0].case_id' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg variant "$(jq -r '.runs[0].variant' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg run_plan_sha256 "$(test_sha256_stream <"$partial_pre_attempt_output/run-plan.json")" \
+        --argjson trial_index "$(jq -r '.runs[0].trial_index' "$partial_pre_attempt_output/run-plan.json")" \
+        '{schema_version:"1.0",run_id:$run_id,pair_id:$pair_id,case_id:$case_id,trial_index:$trial_index,variant:$variant,run_plan_sha256:$run_plan_sha256,state:"not_started",attempt_started_at:[],completed_at:null}' \
+        >"$partial_pre_attempt_output/run-attempts/$(jq -r '.runs[0] | .pair_id + "-" + .variant + ".json"' "$partial_pre_attempt_output/run-plan.json")"
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$partial_pre_attempt_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
+        && [[ ! -e "$partial_pre_attempt_output/pre-attempt-authorization.json" ]] \
+        && jq -s -e 'length == 2 and all(.[]; .state == "completed")' "$partial_pre_attempt_output/run-attempts/"*.json >/dev/null; then
+        partial_pre_attempt_ok=true
+    fi
+fi
+if [[ "$partial_pre_attempt_ok" == true ]]; then
+    pass
+else
+    fail "resume did not limit pre-attempt recovery to durable not-started initialization"
+fi
+
+test_start "missing execution evidence without pre-attempt authorization never replays completed calls"
+erased_execution_output="$fixture_root/resume-erased-execution-evidence-output"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$erased_execution_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    rm -rf "$erased_execution_output/traces" "$erased_execution_output/semantic-checkpoints" "$erased_execution_output/run-attempts"
+    rm -f "$erased_execution_output/comparison.json" "$erased_execution_output/semantic-review-packet.json"
+    rm -f "$capture"/*
+    if [[ ! -e "$erased_execution_output/pre-attempt-authorization.json" ]] \
+        && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+            --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+            --cases small-fix-stays-lightweight --repeats 1 --output "$erased_execution_output" \
+            --codex-bin "$fake_codex" >"$fixture_root/resume-erased-execution-evidence.stderr" 2>&1 \
+        && grep -Fq 'Run-attempt state is missing' "$fixture_root/resume-erased-execution-evidence.stderr" \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+        pass
+    else
+        fail "missing execution evidence was treated as retry authority"
+    fi
+else
+    fail "completed execution fixture could not be created for replay-safety coverage"
+fi
+
+test_start "tampered pre-attempt authorization variants fail closed before model calls"
+marker_base_output="$fixture_root/pre-attempt-authorization-tamper-base"
+marker_tamper_ok=true
+rm -f "$capture"/*
+if ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$marker_base_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    marker_tamper_ok=false
+fi
+for marker_variant in malformed wrong-plan-hash symlink; do
+    marker_variant_output="$fixture_root/pre-attempt-authorization-$marker_variant"
+    rm -rf "$marker_variant_output"
+    cp -R "$marker_base_output" "$marker_variant_output"
+    case "$marker_variant" in
+        malformed)
+            jq '.state = "tampered"' "$marker_variant_output/pre-attempt-authorization.json" >"$marker_variant_output/marker.json"
+            mv "$marker_variant_output/marker.json" "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+        wrong-plan-hash)
+            jq '.run_plan_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$marker_variant_output/pre-attempt-authorization.json" >"$marker_variant_output/marker.json"
+            mv "$marker_variant_output/marker.json" "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+        symlink)
+            mv "$marker_variant_output/pre-attempt-authorization.json" "$marker_variant_output/marker-target.json"
+            ln -s marker-target.json "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+    esac
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$marker_variant_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/pre-attempt-authorization-$marker_variant.stderr" 2>&1 \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+        marker_tamper_ok=false
+    fi
+done
+if [[ "$marker_tamper_ok" == true ]]; then
+    pass
+else
+    fail "tampered or unsafe pre-attempt authorization admitted a model call"
+fi
+
+test_start "pre-attempt authorization without a committed plan fails closed"
+orphan_pre_attempt_output="$fixture_root/orphan-pre-attempt-authorization-output"
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PRE_ATTEMPT_AUTHORIZATION=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$orphan_pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$orphan_pre_attempt_output/pre-attempt-authorization.json" && ! -e "$orphan_pre_attempt_output/run-plan.json" ]] \
+    && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$orphan_pre_attempt_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/orphan-pre-attempt-authorization.stderr" 2>&1 \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/orphan-pre-attempt-authorization.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    pass
+else
+    fail "orphan pre-attempt authorization did not fail closed before a model call"
+fi
+
+test_start "test hooks require isolated contract-test mode and fake Codex identity"
+hook_gate_output="$fixture_root/hook-gate-output"
+hook_gate_missing_identity_output="$fixture_root/hook-gate-missing-identity-output"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$hook_gate_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/hook-gate.stderr" 2>&1 \
+    && grep -Fq 'FRAMEWORK_EVAL_TEST_* hooks require FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true' "$fixture_root/hook-gate.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]] \
+    && ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$hook_gate_missing_identity_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/hook-gate-missing-identity.stderr" 2>&1 \
+    && grep -Fq 'regular fake capture directory' "$fixture_root/hook-gate-missing-identity.stderr"; then
+    pass
+else
+    fail "test hook ran without isolated contract-test mode and fake Codex identity"
 fi
 
 test_start "partial generic resume executes only the missing planned run"
@@ -1911,6 +2266,28 @@ else
     fail "seeded checkpoint fixture could not be created"
 fi
 
+test_start "in-flight seeded checkpoint recovery restores trace without a paid replay"
+inflight_checkpoint_output="$fixture_root/inflight-checkpoint-output"
+cp -R "$resume_seeded_output" "$inflight_checkpoint_output"
+inflight_checkpoint_attempt="$(find "$inflight_checkpoint_output/run-attempts" -type f -name '*-candidate.json' -print -quit)"
+inflight_checkpoint_trace="$(find "$inflight_checkpoint_output/traces" -type f -name '*-candidate.json' -print -quit)"
+rm -f "$inflight_checkpoint_trace" "$inflight_checkpoint_output/comparison.json" "$inflight_checkpoint_output/semantic-review-packet.json"
+jq '.state = "in_flight" | .completed_at = null' "$inflight_checkpoint_attempt" >"$inflight_checkpoint_attempt.tmp"
+mv "$inflight_checkpoint_attempt.tmp" "$inflight_checkpoint_attempt"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases seeded-code-review-regressions --repeats 1 --output "$inflight_checkpoint_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]] \
+    && jq -e '.state == "completed" and .completed_at != null' "$inflight_checkpoint_attempt" >/dev/null \
+    && jq -e '.status == "completed" and (.execution.semantic_checkpoint_sha256 | test("^[0-9a-f]{64}$"))' \
+        "${inflight_checkpoint_trace:-$inflight_checkpoint_output/traces/missing}" >/dev/null; then
+    pass
+else
+    fail "in-flight checkpoint recovery replayed Codex, omitted the recovered trace, or left attempt state in-flight"
+fi
+
 test_start "resume blocks uncertain in-flight seeded and non-seeded runs before another model call"
 uncertain_cases_ok=true
 for uncertain_spec in \
@@ -1930,7 +2307,7 @@ for uncertain_spec in \
         --codex-bin "$fake_codex" >/dev/null 2>&1 &
     uncertain_runner_pid=$!
     uncertain_invoked=false
-    for _ in {1..100}; do
+    for _ in {1..600}; do
         if [[ -f "$capture/call-0.pid" ]]; then
             uncertain_invoked=true
             break
@@ -1953,6 +2330,10 @@ for uncertain_spec in \
         "${TMPDIR:-/tmp}"/codex-framework-evals.*) rm -rf -- "$uncertain_raw_root" ;;
         *) uncertain_cases_ok=false ;;
     esac
+    # The test deliberately killed the lease owner. Explicitly clear this
+    # fixture-owned stale lease before exercising the independent in-flight
+    # recovery guard; production resume never reclaims it automatically.
+    rm -rf -- "$uncertain_output/.evaluation-lease"
 
     uncertain_marker=""
     for candidate_marker in "$uncertain_output/run-attempts"/*.json; do
@@ -2032,6 +2413,79 @@ if [[ "$resume_rejections" -eq 4 && ! -e "$capture/call-0.args" ]]; then
     pass
 else
     fail "resume accepted unknown, finalized, or tampered persisted evidence"
+fi
+
+test_start "resume rejects hidden, symlinked, and FIFO nested evidence without mutating output"
+resume_nested_inventory_failures=()
+for nested_spec in \
+    'traces hidden-regular' \
+    'semantic-checkpoints hidden-json' \
+    'run-attempts symlink' \
+    'traces fifo'; do
+    read -r nested_dir nested_kind <<<"$nested_spec"
+    nested_output="$fixture_root/resume-nested-${nested_dir}-${nested_kind}"
+    cp -R "$resume_generic_output" "$nested_output"
+    case "$nested_kind" in
+        hidden-regular) printf 'unexpected\n' >"$nested_output/$nested_dir/.unexpected" ;;
+        hidden-json) printf '{}\n' >"$nested_output/$nested_dir/.unexpected.json" ;;
+        symlink) ln -s ../run-plan.json "$nested_output/$nested_dir/.unexpected-link" ;;
+        fifo) mkfifo "$nested_output/$nested_dir/.unexpected-fifo" ;;
+    esac
+    chmod 755 "$nested_output"
+    nested_mode="$(stat -f '%Lp' "$nested_output" 2>/dev/null || stat -c '%a' "$nested_output")"
+    nested_hash="$(test_sha256_directory "$nested_output")"
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$nested_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1 \
+        || [[ -e "$capture/call-0.args" ]] \
+        || [[ "$(stat -f '%Lp' "$nested_output" 2>/dev/null || stat -c '%a' "$nested_output")" != "$nested_mode" ]] \
+        || [[ "$(test_sha256_directory "$nested_output")" != "$nested_hash" ]]; then
+        resume_nested_inventory_failures+=("$nested_dir:$nested_kind")
+    fi
+done
+if [[ ${#resume_nested_inventory_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume accepted or mutated unsafe nested evidence: ${resume_nested_inventory_failures[*]}"
+fi
+
+test_start "rejected resume preserves supplied output mode and evidence bytes"
+resume_admission_failures=()
+for resume_admission_kind in mismatched-plan missing-evidence tampered-artifact; do
+    resume_admission_output="$fixture_root/resume-admission-$resume_admission_kind"
+    cp -R "$resume_generic_output" "$resume_admission_output"
+    case "$resume_admission_kind" in
+        mismatched-plan)
+            jq '.fixture_sha256 = ("f" * 64)' "$resume_admission_output/run-plan.json" >"$resume_admission_output/run-plan.tmp"
+            mv "$resume_admission_output/run-plan.tmp" "$resume_admission_output/run-plan.json"
+            ;;
+        missing-evidence) rm -f "$(find "$resume_admission_output/run-attempts" -type f -name '*.json' -print -quit)" ;;
+        tampered-artifact)
+            resume_admission_trace="$(find "$resume_admission_output/traces" -type f -name '*.json' -print -quit)"
+            jq '.provenance.fixture_sha256 = ("e" * 64)' "$resume_admission_trace" >"$resume_admission_trace.tmp"
+            mv "$resume_admission_trace.tmp" "$resume_admission_trace"
+            ;;
+    esac
+    chmod 755 "$resume_admission_output"
+    if resume_admission_mode="$(stat -f '%Lp' "$resume_admission_output" 2>/dev/null)"; then :; else resume_admission_mode="$(stat -c '%a' "$resume_admission_output")"; fi
+    resume_admission_hash="$(test_sha256_directory "$resume_admission_output")"
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$resume_admission_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1 \
+        || [[ "$(stat -f '%Lp' "$resume_admission_output" 2>/dev/null || stat -c '%a' "$resume_admission_output")" != "$resume_admission_mode" ]] \
+        || [[ "$(test_sha256_directory "$resume_admission_output")" != "$resume_admission_hash" ]] \
+        || [[ -e "$capture/call-0.args" ]]; then
+        resume_admission_failures+=("$resume_admission_kind")
+    fi
+done
+if [[ ${#resume_admission_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume admission mutated rejected output evidence: ${resume_admission_failures[*]}"
 fi
 
 test_start "stale-state case contains real conflicting journal and repository evidence"
@@ -2862,6 +3316,26 @@ else
     fail "VIEWING post-model test mutation executed or bypassed the scope/hash gate: ${viewing_post_model_failures[*]}"
 fi
 
+test_start "manual activation freshness preflights Python before timestamp validation"
+if ruby -e '
+  runner = File.read(ARGV.fetch(0))
+  readme = File.read(ARGV.fetch(1))
+  freshness = runner.index("validate_activation_observation_freshness()")
+  prerequisite = runner.index("require_python3_for_manual_activation_observation_freshness")
+  timestamp = runner.index("activation_timestamp_is_current", freshness)
+  valid = !freshness.nil? && !prerequisite.nil? && !timestamp.nil? &&
+    runner.include?("python3 is required to validate manual native activation observation freshness.") &&
+    runner.index("require_python3_for_manual_activation_observation_freshness", freshness) < timestamp &&
+    readme.include?("Python 3 is required whenever the runner validates a `manual_native_observation`") &&
+    readme.include?("including plan-only admission") &&
+    readme.include?("without reapplying the admission-time freshness window")
+  exit valid ? 0 : 1
+' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    pass
+else
+    fail "manual activation freshness does not preflight its Python prerequisite before timestamp validation"
+fi
+
 test_start "activation observations bind the rendered candidate, exact cases, and current native provenance"
 activation_cases_sha="$(jq -cS '.activation_cases' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" | test_sha256_stream)"
 manual_activation_observation="$fixture_root/manual-native-activation-observation.json"
@@ -2873,6 +3347,51 @@ jq -n --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" --arg cases_sha "$activ
        bindings:{skill:"assistant-workflow",candidate_skill_sha256:$candidate_sha,activation_cases_sha256:$cases_sha},
        results:[$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow","assistant-thinking"] else ["assistant-docs"] end)}]}' \
     >"$manual_activation_observation"
+
+test_start "plan-only activation freshness requires Python only for manual observations"
+pythonless_bin="$fixture_root/pythonless-bin"
+mkdir -p "$pythonless_bin"
+for pythonless_command in awk bash basename cat chmod cp cut date dirname env find grep head jq ln mkdir mktemp mv paste pwd rm rsync sed shasum sha256sum sort stat tail tee tr uname wc; do
+    pythonless_command_path="$(command -v "$pythonless_command" 2>/dev/null || true)"
+    [[ -z "$pythonless_command_path" || -e "$pythonless_bin/$pythonless_command" ]] \
+        || ln -s "$pythonless_command_path" "$pythonless_bin/$pythonless_command"
+done
+pythonless_manual_output="$fixture_root/pythonless-manual-output"
+pythonless_manual_error="$fixture_root/pythonless-manual-error.txt"
+pythonless_no_activation_output="$fixture_root/pythonless-no-activation-output"
+pythonless_static_output="$fixture_root/pythonless-static-output"
+pythonless_failures=()
+if [[ -e "$pythonless_bin/python3" ]]; then
+    pythonless_failures+=("path-includes-python3")
+fi
+if PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_manual_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null 2>"$pythonless_manual_error"; then
+    pythonless_failures+=("manual-observation-succeeded")
+elif ! grep -Fxq 'Error: python3 is required to validate manual native activation observation freshness.' "$pythonless_manual_error" \
+    || grep -Fq 'Manual native activation observation is stale or outside the permitted future skew.' "$pythonless_manual_error"; then
+    pythonless_failures+=("manual-observation-error")
+fi
+if ! PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_no_activation_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    pythonless_failures+=("no-activation-evidence")
+fi
+if ! PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_static_output" \
+    --codex-bin "$fake_codex" \
+    --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null; then
+    pythonless_failures+=("contract-test-fixture")
+fi
+if [[ ${#pythonless_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "plan-only Python freshness preflight did not remain manual-observation-specific: ${pythonless_failures[*]}"
+fi
+
 activation_static_output="$fixture_root/activation-static-output"
 activation_manual_plan_output="$fixture_root/activation-manual-plan-output"
 activation_manual_output="$fixture_root/activation-manual-output"
@@ -2916,6 +3435,101 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
     pass
 else
     fail "activation observation did not bind plan/execute CLI identity or distinguish manual-native evidence"
+fi
+
+test_start "resume restores a validated manual activation copy only with an exact existing plan"
+activation_manual_sha="$(test_sha256_stream <"$manual_activation_observation")"
+activation_orphan_plan_output="$fixture_root/activation-orphan-plan-output"
+activation_missing_copy_output="$fixture_root/activation-missing-copy-output"
+mkdir -p "$activation_orphan_plan_output"
+printf 'partial\n' >"$activation_orphan_plan_output/.run-plan.json.tmp.interrupted"
+printf 'partial\n' >"$activation_orphan_plan_output/.activation-observations.json.tmp.interrupted"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_orphan_plan_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >"$fixture_root/activation-orphan-plan.stderr" 2>&1 \
+    && [[ -f "$activation_orphan_plan_output/.run-plan.json.tmp.interrupted" ]] \
+    && [[ -f "$activation_orphan_plan_output/.activation-observations.json.tmp.interrupted" ]] \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/activation-orphan-plan.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    cp -R "$activation_manual_output" "$activation_missing_copy_output"
+    rm -f "$activation_missing_copy_output/activation-observations.json" "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$activation_missing_copy_output" \
+        --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
+        && [[ ! -e "$capture/call-0.args" ]] \
+        && [[ "$(test_sha256_stream <"$activation_missing_copy_output/activation-observations.json")" == "$activation_manual_sha" ]] \
+        && restored_activation_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$activation_missing_copy_output"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$activation_missing_copy_output/run-plan.json")" \
+        && [[ "$restored_activation_status" == true ]]; then
+        pass
+    else
+        fail "resume did not restore the activation copy bound by an exact existing plan"
+    fi
+else
+    fail "resume accepted orphan activation evidence or could not restore an exact-plan binding"
+fi
+
+test_start "activation snapshot barrier rejects a symlink marker without modifying its target"
+activation_snapshot_symlink_barrier="$fixture_root/activation-snapshot-symlink-barrier"
+activation_snapshot_symlink_output="$fixture_root/activation-snapshot-symlink-output"
+activation_snapshot_symlink_victim="$fixture_root/activation-snapshot-symlink-victim"
+mkdir -p "$activation_snapshot_symlink_barrier"
+printf 'unchanged\n' >"$activation_snapshot_symlink_victim"
+ln -s "$activation_snapshot_symlink_victim" "$activation_snapshot_symlink_barrier/snapshot-ready"
+if ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_ACTIVATION_SNAPSHOT_BARRIER_DIR="$activation_snapshot_symlink_barrier" \
+    FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_snapshot_symlink_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >"$fixture_root/activation-snapshot-symlink.stderr" 2>&1 \
+    && grep -Fq 'marker already exists or is unsafe' "$fixture_root/activation-snapshot-symlink.stderr" \
+    && [[ "$(cat "$activation_snapshot_symlink_victim")" == "unchanged" ]]; then
+    pass
+else
+    fail "activation snapshot barrier followed or overwrote a caller-controlled symlink"
+fi
+
+test_start "activation observation admission persists immutable snapshot bytes after caller mutation"
+activation_snapshot_barrier="$fixture_root/activation-snapshot-barrier"
+activation_snapshot_source="$fixture_root/activation-snapshot-source.json"
+activation_snapshot_replacement="$fixture_root/activation-snapshot-replacement.json"
+activation_snapshot_output="$fixture_root/activation-snapshot-output"
+mkdir -p "$activation_snapshot_barrier"
+cp "$manual_activation_observation" "$activation_snapshot_source"
+activation_snapshot_sha="$(test_sha256_stream <"$activation_snapshot_source")"
+jq '.provenance.observed_selection_surface = "caller-owned replacement after admission"' \
+    "$activation_snapshot_source" >"$activation_snapshot_replacement"
+(
+    for ((activation_snapshot_wait = 0; activation_snapshot_wait < 500; activation_snapshot_wait++)); do
+        if [[ -d "$activation_snapshot_barrier/snapshot-ready" && ! -L "$activation_snapshot_barrier/snapshot-ready" ]]; then
+            mv "$activation_snapshot_replacement" "$activation_snapshot_source"
+            mkdir "$activation_snapshot_barrier/continue"
+            exit 0
+        fi
+        sleep 0.01
+    done
+    exit 1
+) &
+activation_snapshot_mutator_pid=$!
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_ACTIVATION_SNAPSHOT_BARRIER_DIR="$activation_snapshot_barrier" \
+    FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_snapshot_output" \
+    --codex-bin "$fake_codex" --activation-observations "$activation_snapshot_source" >/dev/null \
+    && wait "$activation_snapshot_mutator_pid" \
+    && [[ "$(test_sha256_stream <"$activation_snapshot_source")" != "$activation_snapshot_sha" ]] \
+    && [[ "$(test_sha256_stream <"$activation_snapshot_output/activation-observations.json")" == "$activation_snapshot_sha" ]] \
+    && jq -e --arg sha "$activation_snapshot_sha" '
+      .activation_observations_sha256 == $sha
+      and .activation_observation.sha256 == $sha
+    ' "$activation_snapshot_output/run-plan.json" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]]; then
+    pass
+else
+    wait "$activation_snapshot_mutator_pid" 2>/dev/null || true
+    fail "activation admission did not persist immutable snapshot bytes after caller mutation"
 fi
 
 test_start "resume retains an admitted activation observation after its freshness window"

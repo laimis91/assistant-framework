@@ -468,8 +468,7 @@ fi
 test_start "assistant-review phase-gate IDs are unique"
 phase_gate_id_failures=()
 for phase_gate_file in \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/phase-gates.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; do
     if [[ ! -f "$phase_gate_file" ]]; then
         phase_gate_id_failures+=("${phase_gate_file#$FRAMEWORK_DIR/}: missing")
         continue

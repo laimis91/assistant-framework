@@ -38,8 +38,8 @@ not manufacture changed-files, Build, test-run, or code-review evidence. For
 `execution_intent=implement_only`, consume the approved ref rather than
 reconstructing missing preparation.
 
-Prepare-only routes from Discover to Preparation Completion. Readiness
-Decompose/Plan context is optional; Design, Build, Review, implementation
+Prepare-only routes from Discover to Preparation Completion. Readiness Plan
+context is optional; Decompose, Design, Build, Review, implementation
 Document, and final-handoff gates are inapplicable.
 
 ## Classification

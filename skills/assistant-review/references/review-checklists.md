@@ -89,8 +89,7 @@ Use this checklist when reviewing changes to skills, workflow docs, contracts, e
    - Guardrails should include educational/due-diligence framing where appropriate, risk/user-context caveats, verification requirements, and conservative defaults such as `investigate_further` unless stronger action is justified.
 
 6. **Mirror surfaces**
-   - Root skill and plugin-local copies must be synced.
-   - Generated installer/global instruction templates, automation, docs, references, and eval contract tests must be updated when they can drive the old behavior.
+   - Generated installer/global instruction templates, automation, docs, references, and eval contract tests must be synchronized with their canonical sources when they can drive the old behavior.
 
 Treat missing inherited artifacts, template-contract drift, evals that pass incomplete outputs, method-signature drift, high-stakes recommendation guard gaps, or mirror-surface drift as must-fix or should-fix depending on release risk.
 

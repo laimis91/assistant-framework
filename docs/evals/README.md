@@ -233,8 +233,26 @@ The default executable resolution remains an accepted local PATH trust boundary;
 its recorded hash detects later drift but does not make a compromised PATH trusted.
 
 If an execute run is interrupted, repeat the exact command with `--resume` only
-when exact validation succeeds, no uncertain `in_flight` or evidence-loss state
-exists, and the incomplete-pair breaker remains within its plan-bound limit.
+when an exact final persisted run plan already exists, exact validation
+succeeds, no uncertain `in_flight` or evidence-loss state exists, and the
+incomplete-pair breaker remains within its plan-bound limit. A missing plan or
+an orphan atomic plan temp never authorizes a resume; use a separate new output
+for replacement execution. The runner holds one crash-aware exclusive output
+lease from validation through final artifact creation, so concurrent writers
+fail before model invocation. It never automatically reclaims a stale-looking
+lease: any existing lease remains untouched and requires explicit operator
+cleanup or a new output directory.
+Its `FRAMEWORK_EVAL_TEST_*` synchronization hooks are rejected unless an
+isolated contract test explicitly enables test mode, supplies the repository
+fake-Codex capture directory, and uses an executable `--codex-bin` override;
+normal invocations never activate those hooks.
+For preparation readiness, `existing_system` carries its exact unchanged feature-preparation evidence ref, while `not_applicable` carries `preparation_basis=not_applicable` and no feature-evidence ref. An explicitly requested `prepare_only` readiness Plan is inline and does not wait; only execution work can use `approval_required`.
+Before the durable run plan is committed, execute mode writes a plan-hash-bound,
+content-free pre-attempt authorization marker. Resume may create missing
+`not_started` attempt records only while that exact marker remains and no trace,
+checkpoint, comparison, semantic packet, or started attempt evidence exists; it
+durably removes the marker before any Codex call. Missing execution evidence
+without this positive marker is evidence loss, never retry authority.
 Before any Codex invocation, the runner atomically transitions the plan-bound,
 content-free record in `run-attempts/` from `not_started` to `in_flight`; it
 marks the run `completed` only after durable trace evidence exists. Resume
@@ -264,9 +282,9 @@ Python 3 for that narrow durability syscall. Fresh and resumed output paths
 must resolve to real non-symlink directories; the parent is canonicalized
 before any result write.
 
-Each Codex child is tracked. INT/TERM is forwarded with a five-second grace
-period before forced termination, and the runner waits for the child before
-removing raw storage. The default per-run ceiling is 600 seconds and the
+Each Codex invocation runs under a supervisor in a new process group. INT/TERM,
+launch failure, and timeout terminate and wait for that complete group before
+the lease or raw storage is released. The default per-run ceiling is 600 seconds and the
 plan-bound total evaluation ceiling is 5,400 seconds. Override them only in the
 reviewed command with `--run-timeout-seconds` and
 `--total-timeout-seconds`; their values participate in exact resume-plan
@@ -464,6 +482,11 @@ finalizer writes `behavioral_promotion_eligible=true`. Repository contract tests
 can validate the framework mechanics without consuming model quota, but they do
 not substitute for that live promotion record.
 
+Python 3 is required whenever the runner validates a `manual_native_observation`
+freshness timestamp, including plan-only admission. The runner checks that
+prerequisite before evaluating freshness; resume validates the persisted binding
+without reapplying the admission-time freshness window.
+
 ### Source-only context budget
 
 The promotion evaluator, finalizer, evidence helper, and context reporter are
@@ -632,14 +655,18 @@ tools/evals/run-skill-evals.sh --activation-results /tmp/clarify-activation-resu
 Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
-`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `path_absent`, `equals_path`,
+`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `equals_path`,
 `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
-`array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
+`array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
 in every object must be a non-empty string.
+`array_items_nonempty_array_fields` requires the target array to contain at
+least one object, and every listed field in every object must be a non-empty
+array whose every member is a nonblank string.
 `empty_array` requires the target path to resolve to an empty array.
+`array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
 In this exhaustive fixed operator list, `path_absent` passes only when its target
 path cannot resolve; a present `null` value is present and therefore fails.
 `one_of` requires exact membership in its bounded declared scalar values.

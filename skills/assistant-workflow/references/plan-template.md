@@ -7,7 +7,9 @@ Harness details live in optional appendices. Base plans keep compact refs only:
 load `references/plan-harness-appendix.md` for harness-capable work, otherwise
 record `N/A: [reason]`.
 
-## Small Tasks — Inline Plan (`plan_mode=inline`)
+For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. `existing_system` records the exact unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` and no feature-evidence ref. It records readiness implications, open decisions, and recommended next implementation state; it never creates executable slices or a downstream handoff.
+
+## Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)
 
 No separate plan document needed. Include directly in your response:
 
@@ -31,7 +33,7 @@ No separate plan document needed. Include directly in your response:
 **SRP check:** [single responsibility confirmed / split needed]
 ```
 
-## Executable Task Packet
+## Executable Task Packet (`execution_intent != prepare_only`)
 
 For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
 
@@ -106,7 +108,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Evidence: [files changed, test result, review note, or "pending"]
 ```
 
-## Slice Manifest
+## Slice Manifest (`execution_intent != prepare_only`)
 
 For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
 
@@ -133,7 +135,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - single_slice_rationale: [required only when exactly one slice exists]
 ```
 
-## Medium Tasks — Standard Plan
+## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
 Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
 
@@ -301,7 +303,7 @@ next implementation state rather than treating it as a gate on preparation.
 - [command]: [what it validates]
 ```
 
-## Large / Mega Tasks — Full Plan
+## Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)
 
 Everything from Medium, plus Security and Operability sections. Use when the task touches auth, external inputs, infrastructure, or multi-module boundaries.
 

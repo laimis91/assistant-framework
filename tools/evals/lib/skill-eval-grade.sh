@@ -185,19 +185,21 @@ count_structured_json_assertion_failures() {
     local id="$2"
     local response_path="$3"
     local assertion
+    local structured_assertion_count
     local failures=0
 
-    if [[ "$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length' "$fixture_file")" -eq 0 ]]; then
-        printf '0\n'
-        return
-    fi
+    structured_assertion_count="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length' "$fixture_file")"
 
     if ! jq -e -s 'length == 1' "$response_path" >/dev/null 2>&1; then
-        printf '1\n'
+        if [[ "$structured_assertion_count" -gt 0 ]]; then
+            printf '1\n'
+        else
+            printf '0\n'
+        fi
         return
     fi
 
-    while IFS= read -r assertion; do
+    while [[ "$structured_assertion_count" -gt 0 ]] && IFS= read -r assertion; do
         if ! jq -e --argjson assertion "$assertion" '
             def path_exists($path):
               reduce $path[] as $key (
@@ -225,6 +227,13 @@ count_structured_json_assertion_failures() {
               path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length > 0)
             elif $assertion.operator == "empty_array" then
               path_exists($assertion.path) and (value_at($assertion.path) | type == "array" and length == 0)
+            elif $assertion.operator == "array_type" then
+              path_exists($assertion.path) and (value_at($assertion.path) | type == "array")
+            elif $assertion.operator == "array_nonblank_strings" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "array")
+              and ($assertion.allow_empty or (value_at($assertion.path) | length > 0))
+              and all(value_at($assertion.path)[]; type == "string" and test("[^[:space:]]"))
             elif $assertion.operator == "path_absent" then
               path_exists($assertion.path) | not
             elif $assertion.operator == "equals_path" then
@@ -245,6 +254,11 @@ count_structured_json_assertion_failures() {
               and (value_at($assertion.path) | type == "array")
               and (value_at($assertion.path) | length > 0)
               and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | ($item[$field] | type == "string" and test("[^[:space:]]"))))
+            elif $assertion.operator == "array_items_nonempty_array_fields" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "array")
+              and (value_at($assertion.path) | length > 0)
+              and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | ($item[$field] | type == "array" and length > 0 and all(.[]; type == "string" and test("[^[:space:]]")))))
             elif $assertion.operator == "array_object_values_exact" then
               path_exists($assertion.path)
               and (value_at($assertion.path) | type == "array")
@@ -256,6 +270,32 @@ count_structured_json_assertion_failures() {
             failures=$((failures + 1))
         fi
     done < <(jq -c --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.structured_json_assertions[]?' "$fixture_file")
+
+    # Preparation-only responses have a fixed no-execution boundary. Keep this
+    # structural guard independent of prose anchors so every declared response
+    # path is rejected, including paths that never appear in rendered text.
+    if ! jq -e '
+        def path_exists($path):
+          reduce $path[] as $key (
+            { exists: true, value: . };
+            if (.exists | not) then .
+            elif (($key | type) == "string") and ((.value | type) == "object") and (.value | has($key)) then { exists: true, value: .value[$key] }
+            elif (($key | type) == "number") and ((.value | type) == "array") and ($key >= 0) and ($key < (.value | length)) then { exists: true, value: .value[$key] }
+            else { exists: false, value: null } end
+          ) | .exists;
+        def execution_paths: [
+          ["artifact_contract"], ["task_packet"], ["task_packets"], ["decomposition_plan_review"], ["slice_manifest"], ["single_slice_rationale"], ["slice_verification_summary"], ["changed_files"], ["test_results"], ["spec_review_result"], ["review_result"], ["qa_evaluation_result"], ["fresh_review_result"], ["manual_test_steps"], ["manual_verification_result"], ["subagent_evidence"], ["build_repair_state"], ["artifact_reference_ledger"], ["done_contract"], ["harness_recipe"], ["harness_run_state"], ["trace_ledger"], ["replay_packet"], ["final_handoff"], ["user_approval"]
+        ];
+        . as $response
+        | if $response.execution_intent != "prepare_only" then true
+        else
+          (all(execution_paths[]; . as $path | $response | path_exists($path) | not))
+          and (if $response.completion_policy.plan_mode == "none" then ($response | path_exists(["plan_document"]) | not) and ($response | path_exists(["feature_preparation_result","readiness_plan"]) | not) else true end)
+          and (if $response.feature_preparation_scope == "not_applicable" then ($response | path_exists(["feature_preparation_evidence"]) | not) and ($response | path_exists(["feature_preparation_result","feature_preparation_evidence_ref"]) | not) and ($response | path_exists(["feature_preparation_result","readiness_plan","evidence_ref"]) | not) else $response | path_exists(["feature_preparation_result","readiness_plan","preparation_basis"]) | not end)
+        end
+    ' "$response_path" >/dev/null; then
+        failures=$((failures + 1))
+    fi
 
     printf '%s\n' "$failures"
 }

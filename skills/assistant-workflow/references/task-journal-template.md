@@ -42,7 +42,7 @@ Architecture design mode: [not_applicable | lightweight | required | review_inte
 Architecture Decision Pack ref: [ref, or N/A with concrete reason]
 Pack handoff binding: [prepare_only: discover_only context/journal ref only through Preparation Completion, including optional readiness Plan and no downstream packet refs | execution_intent != prepare_only: Plan binds downstream context/journal + plan/task-packet + review-scope refs before Build; plan_mode=none binds compact inline task-packet/execution + review-scope refs before Build]
 Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
-Build execution lane: [inline_direct | bounded_executor | separated_workers]
+Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
 Workflow state mode: [inline | journal]
 Uncertainty shape: [bounded | progressive]
 Progressive discovery state: [not_applicable | mapping | resolving | route_clear | blocked]
@@ -87,7 +87,7 @@ Plan approval: prepare_only optional readiness never waits; [N/A for none | read
 ## Agent Dispatch Log
 [subagent evidence required by completion gates]
 - Required roles: bounded executor during ordinary medium Build; Code Writer + Builder/Tester during separated Build; Code Reviewer during Review for both standard/strict lanes; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
-- Build execution lane: [inline_direct | bounded_executor | separated_workers]
+- Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
 - Execution mode: delegated | direct_fallback | not_applicable
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
 - Direct fallback reason: [delegation_opted_out | subagents_unavailable | policy_disallowed | N/A]
@@ -112,7 +112,7 @@ Plan approval: prepare_only optional readiness never waits; [N/A for none | read
 - [scope limits, e.g. "Backend only, no UI changes"]
 
 ## Plan
-[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested optional readiness plan records evidence, implications, open decisions, and next state without executable steps. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths and downstream task/review refs.]
+[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested readiness plan is inline/no-wait and records implications, open decisions, and next state without executable steps. existing_system carries the exact unchanged feature-preparation evidence ref; not_applicable records preparation_basis=not_applicable and no feature-evidence ref. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths and downstream task/review refs.]
 
 ## Preparation Readiness
 [prepare_only: completion_policy, validation_results, and feature_preparation_evidence plus feature_preparation_result; execution remains not_started, Pack handoff stays discover_only, and no downstream task/review refs exist. execution_intent != prepare_only: use downstream implementation refs before Build.]
@@ -193,6 +193,7 @@ Plan approval: prepare_only optional readiness never waits; [N/A for none | read
 
 ## Slice Verification Ledger
 [required for medium+ tasks; update after each slice before starting the next]
+[applies only when `execution_intent != prepare_only`; prepare_only has no slices]
 do not start the next slice until the current one is `VERIFIED`
 | Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
 |-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
@@ -234,7 +235,7 @@ do not start the next slice until the current one is `VERIFIED`
 - [anything not covered or deferred]
 
 ## Review Log
-[append entries; Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop); never overwrite previous entries]
+[required only when `execution_intent != prepare_only`; prepare_only has no review or final-handoff claim. Append entries; Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop); never overwrite previous entries]
 
 ### Spec Review #1
 - Result: PASS | FAIL
@@ -315,11 +316,12 @@ do not start the next slice until the current one is `VERIFIED`
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
-4. **Decompose/Plan** persists the slice manifest for medium+ work. Plan is omitted only for eligible `plan_mode=none`, inline mode records a no-wait compact plan, and approval-required mode captures approval.
-5. **Build** updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
-6. **Review** owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
-7. **Document/Handoff** solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
-8. **Done** sets `Status: DONE` and `Task state: completed`, then leaves the ignored state file unless cleanup is requested.
+4. **Decompose/Plan** persists the slice manifest for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
+5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
+6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
+7. **Document/Handoff** (`execution_intent != prepare_only`) solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
+8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.
+9. **Done** sets `Status: DONE` and `Task state: completed`, then leaves the ignored state file unless cleanup is requested.
 
 ## Rules
 

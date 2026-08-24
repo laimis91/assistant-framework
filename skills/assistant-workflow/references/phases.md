@@ -131,15 +131,17 @@ Print: `--- PHASE: DISCOVER COMPLETE ---`
 
 ## Phase: Decompose
 
+**Run condition:** `execution_intent != prepare_only`.
+
 Print: `--- PHASE: DECOMPOSE ---`
 
 **Goal:** Break the problem into the smallest iterable slices that can each be built, tested, reviewed against acceptance criteria, and verified before moving to the next slice.
 
 A slice is not a layer, folder, module, broad feature bucket, setup step, or broad architectural component. It is the smallest deliverable increment that produces observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence.
 
-**Skip condition:** Small tasks skip this phase entirely — they ARE the atomic unit.
+**Skip condition:** Small tasks skip this phase entirely — they ARE the atomic unit. For `prepare_only`, skip Decompose and move from Discover to Preparation Completion; optional Plan readiness has no slices.
 
-**Entry rule:** Medium+ tasks do not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
+**Entry rule:** Medium+ implementation/execution work does not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
 
 When decomposition is needed because the task has multiple coherent slices, a Pack-backed boundary, or unresolved cross-slice acceptance risk, produce bounded slice boundaries from the context map, Requirement Acceptance Map, risk tier, required gate packs, Context Budget note, and the Architecture Decision Pack when it applies. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform the same direct design work with equivalent criteria and evidence. The Architect consumes the Pack rather than recreating its facts, and each affected slice carries the Pack reference. Task size can signal possible decomposition, but never creates an Architect role by itself. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
@@ -232,7 +234,7 @@ Print: `>> Direct fallback Architect responsibility` (when `execution_intent != 
 
 **Entry rule:** Do not enter Plan while the saved clarification state is pending. Resume Plan only after Discover records `Clarification status: ready` and all implementation-shaping fields are explicit, automatically safe-defaulted with evidence, or explicitly accepted from a displayed recommendation. When architecture design applies, the Architecture Decision Pack must also be fresh for the current revision and have no unresolved blocking material questions.
 
-For `prepare_only`, record only the evidence ref, readiness implications, open decisions, and recommended next implementation state. prepare_only readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements.
+For `prepare_only`, an explicitly requested readiness Plan is inline and never waits. For `existing_system`, record the exact unchanged feature-preparation evidence ref, readiness implications, open decisions, and recommended next implementation state. For `not_applicable`, record `preparation_basis=not_applicable` instead and omit the feature-evidence ref. Readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements.
 
 For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply. Before writing that plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Carry forward the exact Triage values separately: `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode`. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then read `references/plan-template.md` and use the correct tier:
 - `inline`: compact small plan (goal, files, risks, tests); do not wait.
@@ -277,7 +279,7 @@ Review the plan:
 - Questions -- I'll address before proceeding
 ```
 
-Print: `--- PHASE: PLAN COMPLETE (approved) ---` for non-prepare-only approval-required plans, or `--- PHASE: PLAN COMPLETE ---` for non-prepare-only inline plans.
+Print: `--- PHASE: PLAN COMPLETE ---` for every completed Plan. Keep approval-required state in the plan approval evidence, not in the phase marker.
 
 ## Phase: Design (UI/UX only, skip for backend)
 

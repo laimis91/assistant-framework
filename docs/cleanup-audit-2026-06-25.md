@@ -12,6 +12,8 @@ This document records both the original cleanup audit and the cleanup execution 
 
 The stable target is unchanged: reduce repeated always-loaded instructions and ignored build clutter while preserving enforcement, evidence, generated-artifact boundaries, delegation behavior, and safety gates.
 
+> Retirement note (2026-08-24): the repository plugin distribution subsystem was removed. Plugin paths and sync commands in historical execution receipts below describe the 2026-06-25 state only and are not current maintenance instructions. Future cleanup should operate on canonical root skills and their contracts, evals, tests, and documentation.
+
 ## Execution Summary
 
 Status: cleanup slices below were completed, validated, and final Stage 1/Stage 2 review completed cleanly.
@@ -164,10 +166,10 @@ Note: `dotnet build` and `dotnet test` will recreate some `bin/` and `obj/` dire
 
 These are cleanup traps. They may look redundant, but deleting or editing them directly can create behavior drift.
 
-1. Plugin-local skill copies under `plugins/*/skills/`.
-   - They are generated release artifacts from root `skills/assistant-*`.
-   - Use `tools/plugins/sync-plugin-skills.sh --check` to detect drift and `tools/plugins/sync-plugin-skills.sh --apply` to regenerate.
-   - Manual prose cleanup should happen in root `skills/`, then be synced.
+1. Canonical skill sources under `skills/assistant-*`.
+   - The retired plugin-local mirrors no longer exist.
+   - Keep root skill prose, contracts, evals, tests, and documentation aligned in the same change.
+   - Validate the touched root skill and its focused contracts before aggregate verification.
 
 2. Skill contract files.
    - `contracts/input.yaml`, `contracts/output.yaml`, `contracts/phase-gates.yaml`, and `contracts/handoffs.yaml` encode behavior, not decoration.
@@ -372,7 +374,7 @@ General acceptance criteria for future skill distillation:
 - Every referenced file exists.
 - Contract fields still cover all required outputs.
 - Behavior-driving checklists either remain in the entrypoint or are referenced by mandatory load/apply instructions with eval coverage.
-- Plugin-local mirrors are regenerated after root skill edits.
+- Root skill prose, contracts, evals, tests, and documentation remain aligned after edits.
 - Tests prove behavior, not just line-count or word-count reduction.
 
 Suggested future validation:
@@ -382,7 +384,6 @@ bash tools/skills/validate-skills.sh
 bash tests/p0-p4/skill-instruction-quality-contracts.sh
 bash tests/p0-p4/skill-eval-contracts.sh
 bash tests/p0-p4/task-packet-contracts.sh
-tools/plugins/sync-plugin-skills.sh --check
 ```
 
 ## Verification Matrix For Future Cleanup Branches
@@ -392,10 +393,9 @@ Use the smallest validation set that covers the touched surface.
 | Touched surface | Minimum validation |
 |---|---|
 | Ignored files only | `git status --short --ignored`, relevant `dotnet build` or `dotnet test` if outputs were cleared. |
-| Root skill docs/contracts | `bash tools/skills/validate-skills.sh`, relevant P0/P4 contract test, plugin sync check. |
-| Plugin-local skill copies | Prefer no manual edit; use sync apply/check. |
+| Root skill docs/contracts | `bash tools/skills/validate-skills.sh` and the relevant focused P0/P4 contract test. |
 | Hook scripts/templates | `bash tests/test-hooks.sh --filter <hook-or-area>`, `bash tests/p0-p4/instruction-overload-contracts.sh`. |
-| Installer docs/templates | `./install.sh --agent <agent> --dry-run`, instruction-overload contracts, plugin manifest contracts. |
+| Installer docs/templates | `./install.sh --agent <agent> --dry-run` and instruction-overload contracts. |
 | Workflow/delegation behavior | Task packet contracts, hook tests, subagent monitor tests if present, manual scenario notes. |
 | Benchmark data | Run `tools/hooks/benchmark-hook-output.sh` and confirm required signals, not just smaller byte counts. |
 

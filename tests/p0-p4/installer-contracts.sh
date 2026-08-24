@@ -146,240 +146,19 @@ else
     fail "canonical block requires fixture install failed; see /tmp/p0p4-install-requires.err"
 fi
 
-test_start "Codex plugin profile dry-run selects assistant-core skills only"
-INSTALL_HOME_PLUGIN_DRY="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY"
-if HOME="$INSTALL_HOME_PLUGIN_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks --dry-run >/tmp/p0p4-install-plugin-dry.out 2>/tmp/p0p4-install-plugin-dry.err; then
-    plugin_dry_output="$(cat /tmp/p0p4-install-plugin-dry.out)"
-    if printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin profile: assistant-core" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-core -> ./skills/" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-clarify assistant-telos" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-clarify/" \
-        && printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-telos/" \
-        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-workflow/" \
-        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-research/" \
-        && ! printf '%s\n' "$plugin_dry_output" | grep -Fq "skills/assistant-security/"; then
-        pass
-    else
-        fail "assistant-core dry-run should list only core plugin skills"
-    fi
+test_start "retired plugin option is rejected without filesystem mutation"
+INSTALL_HOME_RETIRED_PLUGIN="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_RETIRED_PLUGIN"
+printf 'preserve\n' >"$INSTALL_HOME_RETIRED_PLUGIN/sentinel.txt"
+if HOME="$INSTALL_HOME_RETIRED_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core >/tmp/p0p4-install-retired-plugin.out 2>/tmp/p0p4-install-retired-plugin.err; then
+    fail "retired --plugin option should be rejected"
+elif ! grep -Fq 'Unknown option: --plugin' /tmp/p0p4-install-retired-plugin.err; then
+    fail "retired --plugin rejection should identify the unknown option"
+elif [[ "$(cat "$INSTALL_HOME_RETIRED_PLUGIN/sentinel.txt")" != "preserve" ]] \
+    || [[ -e "$INSTALL_HOME_RETIRED_PLUGIN/.codex" ]]; then
+    fail "retired --plugin rejection mutated the target home"
 else
-    fail "assistant-core dry-run failed; see /tmp/p0p4-install-plugin-dry.err"
-fi
-
-test_start "Codex plugin profile dry-run selects assistant-research skills only"
-INSTALL_HOME_PLUGIN_RESEARCH_DRY="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_RESEARCH_DRY"
-if HOME="$INSTALL_HOME_PLUGIN_RESEARCH_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-research --no-hooks --dry-run >/tmp/p0p4-install-plugin-research-dry.out 2>/tmp/p0p4-install-plugin-research-dry.err; then
-    plugin_research_dry_output="$(cat /tmp/p0p4-install-plugin-research-dry.out)"
-    if printf '%s\n' "$plugin_research_dry_output" | grep -Fq "Plugin profile: assistant-research" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-research/.codex-plugin/plugin.json" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-research -> ./skills/" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-ideate assistant-research assistant-thinking" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-ideate/" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-research/" \
-        && printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-thinking/" \
-        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-workflow/" \
-        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-security/" \
-        && ! printf '%s\n' "$plugin_research_dry_output" | grep -Fq "skills/assistant-memory/"; then
-        pass
-    else
-        fail "assistant-research dry-run should list only research plugin skills"
-    fi
-else
-    fail "assistant-research dry-run failed; see /tmp/p0p4-install-plugin-research-dry.err"
-fi
-
-test_start "Codex plugin profile dry-run selects assistant-dev skills only"
-INSTALL_HOME_PLUGIN_DEV_DRY="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DEV_DRY"
-if HOME="$INSTALL_HOME_PLUGIN_DEV_DRY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks --dry-run >/tmp/p0p4-install-plugin-dev-dry.out 2>/tmp/p0p4-install-plugin-dev-dry.err; then
-    plugin_dev_dry_output="$(cat /tmp/p0p4-install-plugin-dev-dry.out)"
-    if printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin profile: assistant-dev" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "Plugin manifest: $FRAMEWORK_DIR/plugins/assistant-dev/.codex-plugin/plugin.json" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Validate plugin manifest: assistant-dev -> ./skills/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "[dry-run] Plugin manifest skills match profile boundary: assistant-debugging assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-debugging/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-diagrams/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-docs/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-onboard/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-review/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-security/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-skill-creator/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-tdd/" \
-        && printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-workflow/" \
-        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-memory/" \
-        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-research/" \
-        && ! printf '%s\n' "$plugin_dev_dry_output" | grep -Fq "skills/assistant-thinking/"; then
-        pass
-    else
-        fail "assistant-dev dry-run should list only development plugin skills"
-    fi
-else
-    fail "assistant-dev dry-run failed; see /tmp/p0p4-install-plugin-dev-dry.err"
-fi
-
-test_start "Codex plugin profile dry-run rejects manifest skill drift"
-INSTALL_HOME_PLUGIN_DRY_DRIFT="$(mktemp -d)"
-PLUGIN_MANIFEST="$FRAMEWORK_DIR/plugins/assistant-core/.codex-plugin/plugin.json"
-PLUGIN_MANIFEST_BACKUP="$(mktemp "${TMPDIR:-/tmp}/assistant-core-plugin-json.XXXXXX")"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DRY_DRIFT" "$PLUGIN_MANIFEST_BACKUP"
-cp "$PLUGIN_MANIFEST" "$PLUGIN_MANIFEST_BACKUP"
-jq 'del(.skills)' "$PLUGIN_MANIFEST_BACKUP" >"$PLUGIN_MANIFEST"
-if HOME="$INSTALL_HOME_PLUGIN_DRY_DRIFT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks --dry-run >/tmp/p0p4-install-plugin-dry-drift.out 2>/tmp/p0p4-install-plugin-dry-drift.err; then
-    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
-    fail "assistant-core dry-run should reject a manifest without skills metadata"
-elif grep -Fq "Plugin manifest assistant-core must declare skills: ./skills/" /tmp/p0p4-install-plugin-dry-drift.err; then
-    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
     pass
-else
-    cp "$PLUGIN_MANIFEST_BACKUP" "$PLUGIN_MANIFEST"
-    fail "assistant-core dry-run drift rejection should explain manifest skills metadata"
-fi
-
-test_start "Codex assistant-core plugin install installs only core skills with lean AGENTS guidance"
-INSTALL_HOME_PLUGIN="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN"
-if HOME="$INSTALL_HOME_PLUGIN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-core --no-hooks >/tmp/p0p4-install-plugin-core.out 2>/tmp/p0p4-install-plugin-core.err; then
-    installed_skills_dir="$INSTALL_HOME_PLUGIN/.codex/skills"
-    agents_file="$INSTALL_HOME_PLUGIN/.codex/AGENTS.md"
-    agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
-    missing_core_skill=""
-    unexpected_profile_skill=""
-    for core_skill in assistant-clarify assistant-telos; do
-        if [[ ! -d "$installed_skills_dir/$core_skill" ]]; then
-            missing_core_skill="$core_skill"
-            break
-        fi
-    done
-    for non_core_skill in assistant-workflow assistant-review assistant-security assistant-research assistant-thinking assistant-docs; do
-        if [[ -d "$installed_skills_dir/$non_core_skill" ]]; then
-            unexpected_profile_skill="$non_core_skill"
-            break
-        fi
-    done
-
-    if [[ -n "$missing_core_skill" ]]; then
-        fail "assistant-core plugin install missed $missing_core_skill"
-    elif [[ -n "$unexpected_profile_skill" ]]; then
-        fail "assistant-core plugin install included non-core skill $unexpected_profile_skill"
-    elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
-        fail "expected assistant-core Codex AGENTS.md to stay lean and delegate routing to installed skills"
-    else
-        pass
-    fi
-else
-    fail "assistant-core plugin install failed; see /tmp/p0p4-install-plugin-core.err"
-fi
-
-test_start "Codex assistant-research plugin install installs only research skills with lean AGENTS guidance"
-INSTALL_HOME_PLUGIN_RESEARCH="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_RESEARCH"
-if HOME="$INSTALL_HOME_PLUGIN_RESEARCH" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-research --no-hooks >/tmp/p0p4-install-plugin-research.out 2>/tmp/p0p4-install-plugin-research.err; then
-    installed_research_skills_dir="$INSTALL_HOME_PLUGIN_RESEARCH/.codex/skills"
-    research_agents_file="$INSTALL_HOME_PLUGIN_RESEARCH/.codex/AGENTS.md"
-    research_agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$research_agents_file")"
-    missing_research_skill=""
-    unexpected_research_profile_skill=""
-    for research_skill in assistant-ideate assistant-research assistant-thinking; do
-        if [[ ! -d "$installed_research_skills_dir/$research_skill" ]]; then
-            missing_research_skill="$research_skill"
-            break
-        fi
-    done
-    for non_research_skill in assistant-workflow assistant-review assistant-security assistant-memory assistant-telos assistant-docs; do
-        if [[ -d "$installed_research_skills_dir/$non_research_skill" ]]; then
-            unexpected_research_profile_skill="$non_research_skill"
-            break
-        fi
-    done
-
-    if [[ -n "$missing_research_skill" ]]; then
-        fail "assistant-research plugin install missed $missing_research_skill"
-    elif [[ -n "$unexpected_research_profile_skill" ]]; then
-        fail "assistant-research plugin install included non-research skill $unexpected_research_profile_skill"
-    elif [[ "$research_agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$research_agents_file"; then
-        fail "expected assistant-research Codex AGENTS.md to stay lean and delegate routing to installed skills"
-    else
-        pass
-    fi
-else
-    fail "assistant-research plugin install failed; see /tmp/p0p4-install-plugin-research.err"
-fi
-
-test_start "Codex assistant-dev plugin install installs only development skills with lean AGENTS guidance"
-INSTALL_HOME_PLUGIN_DEV="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_DEV"
-if HOME="$INSTALL_HOME_PLUGIN_DEV" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-dev --no-hooks >/tmp/p0p4-install-plugin-dev.out 2>/tmp/p0p4-install-plugin-dev.err; then
-    installed_dev_skills_dir="$INSTALL_HOME_PLUGIN_DEV/.codex/skills"
-    dev_agents_file="$INSTALL_HOME_PLUGIN_DEV/.codex/AGENTS.md"
-    dev_agents_assistant_skill_rows="$(count_occurrences "^| assistant-" "$dev_agents_file")"
-    missing_dev_skill=""
-    unexpected_dev_profile_skill=""
-    for dev_skill in assistant-debugging assistant-diagrams assistant-docs assistant-onboard assistant-review assistant-security assistant-skill-creator assistant-tdd assistant-workflow; do
-        if [[ ! -d "$installed_dev_skills_dir/$dev_skill" ]]; then
-            missing_dev_skill="$dev_skill"
-            break
-        fi
-    done
-    for non_dev_skill in assistant-clarify assistant-memory assistant-reflexion assistant-telos assistant-ideate assistant-research assistant-thinking; do
-        if [[ -d "$installed_dev_skills_dir/$non_dev_skill" ]]; then
-            unexpected_dev_profile_skill="$non_dev_skill"
-            break
-        fi
-    done
-
-    if [[ -n "$missing_dev_skill" ]]; then
-        fail "assistant-dev plugin install missed $missing_dev_skill"
-    elif [[ -n "$unexpected_dev_profile_skill" ]]; then
-        fail "assistant-dev plugin install included non-development skill $unexpected_dev_profile_skill"
-    elif [[ "$dev_agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$dev_agents_file"; then
-        fail "expected assistant-dev Codex AGENTS.md to stay lean and delegate routing to installed skills"
-    else
-        pass
-    fi
-else
-    fail "assistant-dev plugin install failed; see /tmp/p0p4-install-plugin-dev.err"
-fi
-
-test_start "installer rejects boundary-only profiles without Unity hardcoding"
-INSTALL_HOME_PLUGIN_UNITY="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNITY"
-if HOME="$INSTALL_HOME_PLUGIN_UNITY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-unity --no-hooks >/tmp/p0p4-install-plugin-unity.out 2>/tmp/p0p4-install-plugin-unity.err; then
-    fail "assistant-unity boundary profile should not install until it has P0/P4 coverage"
-elif grep -Fq "assistant-unity is boundary-defined but not installable yet" /tmp/p0p4-install-plugin-unity.err \
-    && grep -Fq "assistant-core" /tmp/p0p4-install-plugin-unity.err \
-    && grep -Fq "assistant-research" /tmp/p0p4-install-plugin-unity.err \
-    && grep -Fq "assistant-dev" /tmp/p0p4-install-plugin-unity.err \
-    && ! grep -Fq "assistant-unity is local-only" "$FRAMEWORK_DIR/install.sh" \
-    && ! grep -Fq "skills/unity-*" "$FRAMEWORK_DIR/install.sh"; then
-    pass
-else
-    fail "assistant-unity should use the generic boundary-only rejection without Unity-specific installer code"
-fi
-
-test_start "installer rejects unknown plugin profiles"
-INSTALL_HOME_PLUGIN_UNKNOWN="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_UNKNOWN"
-if HOME="$INSTALL_HOME_PLUGIN_UNKNOWN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --plugin assistant-unknown --no-hooks >/tmp/p0p4-install-plugin-unknown.out 2>/tmp/p0p4-install-plugin-unknown.err; then
-    fail "unknown plugin profile should not install"
-elif grep -Fq "Unknown plugin profile: assistant-unknown" /tmp/p0p4-install-plugin-unknown.err \
-    && grep -Fq "Available install profiles are defined in docs/plugin-architecture.md" /tmp/p0p4-install-plugin-unknown.err; then
-    pass
-else
-    fail "unknown plugin profile rejection should explain where profiles are defined"
-fi
-
-test_start "installer rejects combining --skill and --plugin"
-INSTALL_HOME_PLUGIN_CONFLICT="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_PLUGIN_CONFLICT"
-if HOME="$INSTALL_HOME_PLUGIN_CONFLICT" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --plugin assistant-core --no-hooks >/tmp/p0p4-install-plugin-conflict.out 2>/tmp/p0p4-install-plugin-conflict.err; then
-    fail "installer should reject --skill combined with --plugin"
-elif grep -Fq "Use either --skill or --plugin, not both" /tmp/p0p4-install-plugin-conflict.err; then
-    pass
-else
-    fail "installer should explain --skill/--plugin mutual exclusion"
 fi
 
 test_start "Claude and Gemini installs ignore hostile ambient CODEX_HOME"
@@ -555,6 +334,84 @@ if HOME="$INSTALL_HOME_SEVEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --s
     fi
 else
     fail "first install for stale tool cleanup failed; see /tmp/p0p4-install-tools-1.err"
+fi
+
+test_start "installer retires the exact plugin sync tool and preserves unrelated plugin tools"
+INSTALL_HOME_RETIRED_PLUGIN_TOOL="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_RETIRED_PLUGIN_TOOL"
+retired_plugin_tools_directory="$INSTALL_HOME_RETIRED_PLUGIN_TOOL/.codex/tools/plugins"
+retired_plugin_sync_tool="$retired_plugin_tools_directory/sync-plugin-skills.sh"
+custom_plugin_tool="$retired_plugin_tools_directory/custom/tool.txt"
+mkdir -p "$(dirname "$custom_plugin_tool")"
+printf 'legacy plugin sync tool\n' >"$retired_plugin_sync_tool"
+printf 'preserve user plugin tool\n' >"$custom_plugin_tool"
+cp "$custom_plugin_tool" "$INSTALL_HOME_RETIRED_PLUGIN_TOOL/custom-tool.before"
+if HOME="$INSTALL_HOME_RETIRED_PLUGIN_TOOL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks --dry-run >/tmp/p0p4-install-retired-plugin-tool-dry-run.out 2>/tmp/p0p4-install-retired-plugin-tool-dry-run.err \
+    && grep -Fq 'Remove retired managed plugin tool:' /tmp/p0p4-install-retired-plugin-tool-dry-run.out \
+    && [[ -f "$retired_plugin_sync_tool" ]] \
+    && cmp -s "$custom_plugin_tool" "$INSTALL_HOME_RETIRED_PLUGIN_TOOL/custom-tool.before" \
+    && HOME="$INSTALL_HOME_RETIRED_PLUGIN_TOOL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-retired-plugin-tool.out 2>/tmp/p0p4-install-retired-plugin-tool.err \
+    && [[ ! -e "$retired_plugin_sync_tool" && ! -L "$retired_plugin_sync_tool" ]] \
+    && cmp -s "$custom_plugin_tool" "$INSTALL_HOME_RETIRED_PLUGIN_TOOL/custom-tool.before"; then
+    pass
+else
+    fail "installer must remove only the exact retired plugin sync tool and preserve unrelated plugin tools"
+fi
+
+test_start "installer reports and prunes an otherwise empty retired plugin tools directory"
+INSTALL_HOME_EMPTY_RETIRED_PLUGIN_ROOT="$(mktemp -d)"
+INSTALL_HOME_EMPTY_RETIRED_PLUGIN_TOOL="$INSTALL_HOME_EMPTY_RETIRED_PLUGIN_ROOT/assistant-[x]-home"
+p0p4_register_cleanup "$INSTALL_HOME_EMPTY_RETIRED_PLUGIN_ROOT"
+empty_retired_plugin_tools_directory="$INSTALL_HOME_EMPTY_RETIRED_PLUGIN_TOOL/.codex/tools/plugins"
+mkdir -p "$empty_retired_plugin_tools_directory"
+printf 'legacy plugin sync tool\n' >"$empty_retired_plugin_tools_directory/sync-plugin-skills.sh"
+if HOME="$INSTALL_HOME_EMPTY_RETIRED_PLUGIN_TOOL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks --dry-run >/tmp/p0p4-install-empty-retired-plugin-tool-dry-run.out 2>/tmp/p0p4-install-empty-retired-plugin-tool-dry-run.err \
+    && grep -Fq 'Remove retired managed plugin tool:' /tmp/p0p4-install-empty-retired-plugin-tool-dry-run.out \
+    && grep -Fq 'Remove empty retired plugin tools directory:' /tmp/p0p4-install-empty-retired-plugin-tool-dry-run.out \
+    && [[ -d "$empty_retired_plugin_tools_directory" ]] \
+    && HOME="$INSTALL_HOME_EMPTY_RETIRED_PLUGIN_TOOL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-empty-retired-plugin-tool.out 2>/tmp/p0p4-install-empty-retired-plugin-tool.err \
+    && [[ ! -e "$empty_retired_plugin_tools_directory" && ! -L "$empty_retired_plugin_tools_directory" ]]; then
+    pass
+else
+    fail "installer dry-run must report and reinstall must prune an otherwise empty retired plugin tools directory"
+fi
+
+test_start "installer rejects unsafe retired plugin tool parents before skill mutation"
+INSTALL_HOME_UNSAFE_RETIRED_PLUGIN_ROOT="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_UNSAFE_RETIRED_PLUGIN_ROOT"
+unsafe_retired_plugin_failure=""
+for unsafe_parent_kind in symlink wrong-type; do
+    unsafe_home="$INSTALL_HOME_UNSAFE_RETIRED_PLUGIN_ROOT/$unsafe_parent_kind"
+    unsafe_skill_directory="$unsafe_home/.codex/skills/assistant-workflow"
+    unsafe_plugin_parent="$unsafe_home/.codex/tools/plugins"
+    mkdir -p "$unsafe_skill_directory" "$(dirname "$unsafe_plugin_parent")"
+    printf 'preserve existing skill\n' >"$unsafe_skill_directory/SKILL.md"
+    cp "$unsafe_skill_directory/SKILL.md" "$unsafe_home/skill.before"
+    if [[ "$unsafe_parent_kind" == "symlink" ]]; then
+        unsafe_external_directory="$INSTALL_HOME_UNSAFE_RETIRED_PLUGIN_ROOT/external-target"
+        mkdir -p "$unsafe_external_directory"
+        printf 'preserve external target\n' >"$unsafe_external_directory/sentinel.txt"
+        cp "$unsafe_external_directory/sentinel.txt" "$unsafe_home/external.before"
+        ln -s "$unsafe_external_directory" "$unsafe_plugin_parent"
+    else
+        printf 'preserve wrong-type parent\n' >"$unsafe_plugin_parent"
+    fi
+
+    if HOME="$unsafe_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-unsafe-retired-plugin.out 2>/tmp/p0p4-install-unsafe-retired-plugin.err; then
+        unsafe_retired_plugin_failure="$unsafe_parent_kind parent was accepted"
+        break
+    elif ! cmp -s "$unsafe_skill_directory/SKILL.md" "$unsafe_home/skill.before"; then
+        unsafe_retired_plugin_failure="$unsafe_parent_kind rejection mutated the existing skill"
+        break
+    elif [[ "$unsafe_parent_kind" == "symlink" ]] && ! cmp -s "$unsafe_external_directory/sentinel.txt" "$unsafe_home/external.before"; then
+        unsafe_retired_plugin_failure="symlink rejection mutated the external target"
+        break
+    fi
+done
+if [[ -z "$unsafe_retired_plugin_failure" ]]; then
+    pass
+else
+    fail "$unsafe_retired_plugin_failure"
 fi
 
 test_start "Codex reinstall preserves legacy Memory Graph MCP config without a Codex CLI"

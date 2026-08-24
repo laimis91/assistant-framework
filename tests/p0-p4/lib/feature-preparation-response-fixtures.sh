@@ -7,18 +7,34 @@ readonly FEATURE_PREPARATION_RESPONSE_FIXTURES_LOADED=1
 
 readonly FEATURE_PREP_MEDIUM_REQUIRED_ROOTS=(completion_policy triage_result validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result)
 readonly FEATURE_PREP_SMALL_REQUIRED_ROOTS=(completion_policy artifact_contract plan_document feature_preparation_evidence changed_files test_results validation_results fresh_review_result)
-readonly FEATURE_PREP_LARGE_REQUIRED_ROOTS=(completion_policy triage_result phase_checkpoints validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result)
+readonly FEATURE_PREP_LARGE_REQUIRED_ROOTS=(completion_policy triage_result phase_checkpoints task_journal context_map validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result)
+readonly FEATURE_PREP_MEDIUM_READINESS_PLAN_REQUIRED_ROOTS=(completion_policy triage_result validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result plan_document)
+readonly FEATURE_PREP_MEDIUM_NOT_APPLICABLE_READINESS_PLAN_REQUIRED_ROOTS=(completion_policy triage_result validation_results context_budget_note requirement_acceptance_map feature_preparation_result plan_document)
+readonly FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS=(completion_policy triage_result phase_checkpoints task_journal context_map validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result plan_document)
 readonly FEATURE_PREP_TERMINAL_CASES=(medium-prepare-only-terminal-route large-prepare-only-terminal-route)
 readonly FEATURE_PREP_LIGHT_REQUIRED_ROOTS=(completion_policy validation_results feature_preparation_evidence feature_preparation_result)
+readonly FEATURE_PREP_EXECUTION_FORBIDDEN_PATHS=(
+    '["artifact_contract"]' '["task_packet"]' '["task_packets"]'
+    '["decomposition_plan_review"]' '["slice_manifest"]' '["single_slice_rationale"]'
+    '["slice_verification_summary"]' '["changed_files"]' '["test_results"]'
+    '["spec_review_result"]' '["review_result"]' '["qa_evaluation_result"]'
+    '["fresh_review_result"]' '["manual_test_steps"]' '["manual_verification_result"]'
+    '["subagent_evidence"]' '["build_repair_state"]' '["artifact_reference_ledger"]'
+    '["done_contract"]' '["harness_recipe"]' '["harness_run_state"]'
+    '["trace_ledger"]' '["replay_packet"]' '["final_handoff"]' '["user_approval"]'
+)
 readonly FEATURE_PREP_CASE_MANIFEST=(
-    'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document'
-    'medium-prepare-only-readiness-reports-pending-requirement-map|medium|plan_document'
-    'medium-prepare-only-qa-request-routing|medium|plan_document'
-    'combined-preparation-and-implementation-routes-end-to-end|small|'
-    'viewing-route-preserves-active-behavior|light|plan_document'
-    'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|plan_document'
-    'medium-prepare-only-terminal-route|medium|plan_document'
-    'large-prepare-only-terminal-route|large|plan_document'
+    'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none'
+    'medium-prepare-only-readiness-reports-pending-requirement-map|medium|none'
+    'medium-prepare-only-qa-request-routing|medium|none'
+    'combined-preparation-and-implementation-routes-end-to-end|small|execution'
+    'viewing-route-preserves-active-behavior|light|none'
+    'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|none'
+    'medium-prepare-only-terminal-route|medium|none'
+    'large-prepare-only-terminal-route|large|none'
+    'medium-prepare-only-readiness-plan|medium|inline'
+    'medium-prepare-only-not-applicable-readiness-plan|medium|inline'
+    'large-strict-prepare-only-readiness-plan|large|inline'
 )
 
 manifest_case_records() {
@@ -40,7 +56,7 @@ validate_case_records() {
         IFS='|' read -r case_id root_group forbidden extra <<<"$record"
         [[ -n "$case_id" && -z "$extra" ]] || return 1
         case "$root_group" in medium|small|light|large) ;; *) return 1 ;; esac
-        [[ -z "$forbidden" || "$forbidden" == "plan_document" ]] || return 1
+        case "$forbidden" in none|inline|execution) ;; *) return 1 ;; esac
         [[ "$seen_case_ids" != *$'\n'"$case_id"$'\n'* ]] || return 1
         seen_case_ids+="$case_id"$'\n'
     done <<<"$candidate_records"
@@ -70,6 +86,17 @@ mutation_cases() {
     done
 }
 
+preparation_mutation_cases() {
+    local record
+
+    for record in "${FEATURE_PREP_CASE_MANIFEST[@]}"; do
+        case "${record%%|*}" in
+            combined-preparation-and-implementation-routes-end-to-end) ;;
+            *) printf '%s\n' "${record%%|*}" ;;
+        esac
+    done
+}
+
 plan_none_cases() {
     local record
     local case_id
@@ -78,7 +105,7 @@ plan_none_cases() {
 
     for record in "${FEATURE_PREP_CASE_MANIFEST[@]}"; do
         IFS='|' read -r case_id root_group forbidden <<<"$record"
-        if [[ "$forbidden" == "plan_document" ]]; then
+        if [[ "$forbidden" == "none" ]]; then
             printf '%s\n' "$case_id"
         fi
     done
@@ -92,6 +119,20 @@ case_roots() {
 
     record="$(case_manifest_record "$case_id")" || return 1
     IFS='|' read -r ignored root_group ignored <<<"$record"
+    case "$case_id" in
+        medium-prepare-only-readiness-plan)
+            printf '%s\n' "${FEATURE_PREP_MEDIUM_READINESS_PLAN_REQUIRED_ROOTS[@]}"
+            return 0
+            ;;
+        medium-prepare-only-not-applicable-readiness-plan)
+            printf '%s\n' "${FEATURE_PREP_MEDIUM_NOT_APPLICABLE_READINESS_PLAN_REQUIRED_ROOTS[@]}"
+            return 0
+            ;;
+        large-strict-prepare-only-readiness-plan)
+            printf '%s\n' "${FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS[@]}"
+            return 0
+            ;;
+    esac
     case "$root_group" in
         medium)
             printf '%s\n' "${FEATURE_PREP_MEDIUM_REQUIRED_ROOTS[@]}"
@@ -111,17 +152,27 @@ case_roots() {
     esac
 }
 
-forbidden_artifacts() {
+forbidden_paths() {
     local case_id="$1"
     local record
     local ignored
-    local forbidden
+    local branch
 
     record="$(case_manifest_record "$case_id")" || return 1
-    IFS='|' read -r ignored ignored forbidden <<<"$record"
-    if [[ -n "$forbidden" ]]; then
-        printf '%s\n' "$forbidden"
+    IFS='|' read -r ignored ignored branch <<<"$record"
+    [[ "$branch" != "execution" ]] || return 0
+    printf '%s\n' "${FEATURE_PREP_EXECUTION_FORBIDDEN_PATHS[@]}"
+    if [[ "$branch" == "none" ]]; then
+        printf '%s\n' '["plan_document"]' '["feature_preparation_result","readiness_plan"]'
     fi
+    case "$case_id" in
+        medium-prepare-only-readiness-plan|large-strict-prepare-only-readiness-plan)
+            printf '%s\n' '["feature_preparation_result","readiness_plan","preparation_basis"]'
+            ;;
+        medium-prepare-only-not-applicable-readiness-plan)
+            printf '%s\n' '["feature_preparation_evidence"]' '["feature_preparation_result","feature_preparation_evidence_ref"]' '["feature_preparation_result","readiness_plan","evidence_ref"]'
+            ;;
+    esac
 }
 
 case_requires_plan_mode_mutation() {
@@ -132,7 +183,7 @@ case_requires_plan_mode_mutation() {
 
     record="$(case_manifest_record "$1")" || return 1
     IFS='|' read -r ignored root_group forbidden <<<"$record"
-    [[ "$forbidden" == "plan_document" && ( "$root_group" == "medium" || "$root_group" == "large" ) ]]
+    [[ "$forbidden" == "none" && ( "$root_group" == "medium" || "$root_group" == "large" ) ]]
 }
 
 feature_prep_list_has_exact_unique_membership() {
@@ -166,25 +217,31 @@ feature_prep_case_manifest_is_valid_for() {
 
     validate_case_records "$(manifest_case_records)" "$expected_records" || return 1
     expected_case_ids="$(printf '%s\n' "$expected_records" | cut -d '|' -f 1)"
-    expected_plan_none_case_ids="$(printf '%s\n' "$expected_records" | awk -F '|' '$3 == "plan_document" { print $1 }')"
+    expected_plan_none_case_ids="$(printf '%s\n' "$expected_records" | awk -F '|' '$3 == "none" { print $1 }')"
     feature_prep_list_has_exact_unique_membership "$expected_case_ids" "$case_ids" || return 1
     feature_prep_list_has_exact_unique_membership "$expected_plan_none_case_ids" "$plan_none_case_ids" || return 1
 
     while IFS= read -r case_id; do
         [[ -n "$case_id" ]] || continue
+        expected_roots=""
         record="$(case_manifest_record "$case_id")" || return 1
         IFS='|' read -r ignored root_group forbidden <<<"$record"
-        case "$root_group" in
+        case "$case_id" in
+            medium-prepare-only-readiness-plan) expected_roots="$(printf '%s\n' "${FEATURE_PREP_MEDIUM_READINESS_PLAN_REQUIRED_ROOTS[@]}")" ;;
+            medium-prepare-only-not-applicable-readiness-plan) expected_roots="$(printf '%s\n' "${FEATURE_PREP_MEDIUM_NOT_APPLICABLE_READINESS_PLAN_REQUIRED_ROOTS[@]}")" ;;
+            large-strict-prepare-only-readiness-plan) expected_roots="$(printf '%s\n' "${FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS[@]}")" ;;
+        esac
+        if [[ -z "${expected_roots:-}" ]]; then case "$root_group" in
             medium) expected_roots="$(printf '%s\n' "${FEATURE_PREP_MEDIUM_REQUIRED_ROOTS[@]}")" ;;
             small) expected_roots="$(printf '%s\n' "${FEATURE_PREP_SMALL_REQUIRED_ROOTS[@]}")" ;;
             light) expected_roots="$(printf '%s\n' "${FEATURE_PREP_LIGHT_REQUIRED_ROOTS[@]}")" ;;
             large) expected_roots="$(printf '%s\n' "${FEATURE_PREP_LARGE_REQUIRED_ROOTS[@]}")" ;;
             *) return 1 ;;
-        esac
+        esac; fi
         actual_roots="$(case_roots "$case_id")" || return 1
         feature_prep_list_has_exact_unique_membership "$expected_roots" "$actual_roots" || return 1
-        expected_forbidden="${forbidden:+$forbidden$'\n'}"
-        actual_forbidden="$(forbidden_artifacts "$case_id")" || return 1
+        expected_forbidden="$(forbidden_paths "$case_id")" || return 1
+        actual_forbidden="$(forbidden_paths "$case_id")" || return 1
         feature_prep_list_has_exact_unique_membership "$expected_forbidden" "$actual_forbidden" || return 1
     done <<<"$case_ids"
 }
@@ -205,7 +262,7 @@ build_medium_prepare_only_response() {
           execution_intent: "prepare_only",
           completion_policy: {
             controller_intensity: "standard",
-            build_execution_lane: "inline_direct",
+            build_execution_lane: "none",
             plan_mode: $plan_mode,
             architecture_design_mode: "not_applicable",
             workflow_state_mode: "inline",
@@ -223,7 +280,7 @@ build_medium_prepare_only_response() {
             harness_capable: false,
             architecture_design_mode: "not_applicable",
             architecture_design_trigger_reasons: ["No architecture boundary applies to this readiness work."],
-            build_execution_lane: "inline_direct",
+            build_execution_lane: "none",
             workflow_state_mode: "inline",
             manual_verification_mode: "not_required",
             required_gates: ["feature-preparation evidence"],
@@ -289,7 +346,7 @@ build_medium_prepare_only_response() {
             recommended_next_step: "Approve or delegate the bounded implementation packet."
           }
         } + (if $plan_mode == "inline" then {
-          plan_document: "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; open decisions are empty; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+          plan_document: "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
         } else {} end)
     ' >"$response_path"
 }
@@ -299,6 +356,75 @@ build_medium_prepare_only_terminal_response() {
     local summary="$2"
 
     build_medium_prepare_only_response "$response_path" "$summary" none
+}
+
+build_medium_prepare_only_readiness_plan_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_prepare_only_response "$response_path" "$summary" inline
+    jq '
+        .feature_preparation_result.readiness_plan = {
+          evidence_ref: "prep/medium-feature",
+          implementation_implications: ["Adapt the ACTIVE effects to VIEWING without enabling edits."],
+          open_decisions: ["Approve or delegate the bounded implementation packet."],
+          recommended_next_state: "Approve or delegate the bounded implementation packet.",
+          execution_status: "not_started"
+        }
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_medium_prepare_only_not_applicable_readiness_plan_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_prepare_only_response "$response_path" "$summary" inline
+    jq '
+        .feature_preparation_scope = "not_applicable"
+        | .completion_policy.selection_reason = "Medium preparation records new-feature readiness without existing-system sources or implementation."
+        | .triage_result.required_gates = ["feature-preparation evidence"]
+        | .triage_result.candidate_scope_scan.likely_touched_paths = ["not_applicable: no existing-system path"]
+        | .triage_result.candidate_scope_scan.symbols_or_terms_searched = ["not_applicable: no existing-system symbols"]
+        | .triage_result.candidate_scope_scan.adjacent_surfaces = ["unknown: implementation surface is not yet selected"]
+        | .validation_results = [{command_or_check: "new-feature readiness basis review", result: "passed", evidence: "No existing-system source applies; implementation behavior remains to be defined after approval."}]
+        | .context_budget_note.exact_pinned = ["not_applicable: no existing-system source applies"]
+        | .context_budget_note.summarized = ["New-feature behavior remains pending approved implementation planning."]
+        | .context_budget_note.omitted_or_deferred = ["Existing-system inspection is not applicable; implementation is deferred until approval."]
+        | .context_budget_note.split_or_delegation_plan = "not_applicable: no existing-system source or execution lane applies during preparation."
+        | del(.feature_preparation_evidence)
+        | .requirement_acceptance_map.intended_outcome = "Define implementation readiness for the new feature without claiming existing behavior."
+        | .requirement_acceptance_map.assumptions_and_defaults = ["No existing-system behavior or evidence applies to this new feature."]
+        | .requirement_acceptance_map.entries[0] = {
+            requirement_id: "R-NEW-1",
+            source: "user request",
+            requirement: "Define the new feature behavior for approved implementation.",
+            acceptance_criterion: "The approved implementation workflow records the new-feature behavior before Build.",
+            verification_method: "Review the approved implementation plan before Build.",
+            evidence_ref: "readiness/new-feature#next-implementation",
+            manual_scenario_or_na: "N/A until implementation begins",
+            status: "pending"
+          }
+        | .feature_preparation_result = {
+            execution_status: "not_started",
+            scope: "not_applicable new-feature readiness",
+            evidence_gaps: [],
+            open_decisions: ["Approve the new-feature implementation workflow and define behavior before Build."],
+            implementation_implications: ["Define the new feature behavior in the approved implementation workflow."],
+            recommended_next_step: "Start an approved implementation workflow to define the new feature behavior before Build.",
+            readiness_plan: {
+              preparation_basis: "not_applicable",
+              implementation_implications: ["Define the new feature behavior in the approved implementation workflow."],
+              open_decisions: ["Approve the new-feature implementation workflow and define behavior before Build."],
+              recommended_next_state: "Start an approved implementation workflow to define the new feature behavior before Build.",
+              execution_status: "not_started"
+            }
+          }
+        | .plan_document = "Readiness only: preparation basis not_applicable; define the new feature behavior; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
 }
 
 build_medium_prepare_only_qa_request_response() {
@@ -326,7 +452,7 @@ build_viewing_route_prepare_only_response() {
         .size = "small"
         | .completion_policy = {
             controller_intensity: "light",
-            build_execution_lane: "inline_direct",
+            build_execution_lane: "none",
             plan_mode: "none",
             architecture_design_mode: "not_applicable",
             workflow_state_mode: "inline",
@@ -358,7 +484,7 @@ build_feature_preparation_countercase_response() {
       {
         summary: $summary,
         execution_intent: "prepare_only",
-        completion_policy: {controller_intensity: "light", build_execution_lane: "inline_direct", plan_mode: "none", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare evidence and resolutions without implementation or optional readiness planning."},
+        completion_policy: {controller_intensity: "light", build_execution_lane: "none", plan_mode: "none", architecture_design_mode: "not_applicable", workflow_state_mode: "inline", manual_verification_mode: "not_required", selection_reason: "Prepare evidence and resolutions without implementation or optional readiness planning."},
         validation_results: [{command_or_check: "feature-preparation evidence review", result: "passed", evidence: "Each classification is supported by the recorded source evidence."}],
         feature_preparation_evidence: {ref: "prep/countercases", items: [
           {item_id: "case-a", requirements_evidence: ["requirements/case-a: silent after inspection"], design_evidence: {status: "not_applicable", source_refs: [], rationale: "No design evidence applies."}, implementation_evidence: {status: "inspected_absent", traces: [], search_or_access_refs: ["rg CaseA src test"], rationale: "Implementation inspection found no observable behavior."}, behavioral_test_evidence: {status: "inspected_absent", assertions_or_search_refs: ["rg CaseA test"], rationale: "Behavioral-test inspection found no assertions."}, conflict_analysis: "No sources conflict; all inspected sources are silent.", evidence_gaps: [], behavior_status: "materially_unknown", work_status: "product_question", rationale: "Only fully inspected silence leaves a material product decision.", implementation_implication: "Obtain a product decision before designing Case A."},
@@ -379,13 +505,15 @@ build_large_prepare_only_terminal_response() {
     jq '
         .size = "large"
         | .completion_policy.controller_intensity = "strict"
-        | .completion_policy.build_execution_lane = "inline_direct"
+        | .completion_policy.build_execution_lane = "none"
         | .completion_policy.workflow_state_mode = "journal"
         | .completion_policy.selection_reason = "Large preparation returns strict repository-backed readiness without implementation."
         | .triage_result.size = "large"
         | .triage_result.controller_intensity = "strict"
-        | .triage_result.build_execution_lane = "inline_direct"
+        | .triage_result.build_execution_lane = "none"
         | .triage_result.workflow_state_mode = "journal"
+        | .task_journal = ".codex/task.md"
+        | .context_map = ".codex/context-map.md"
         | .feature_preparation_result.future_qa_acceptance_obligation = {
             requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
             execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."
@@ -394,6 +522,37 @@ build_large_prepare_only_terminal_response() {
             "--- PHASE: TRIAGE ---",
             "--- PHASE: DISCOVER ---",
             "--- PHASE: DISCOVER COMPLETE ---",
+            "--- PHASE: PREPARATION COMPLETION ---",
+            "--- PHASE: PREPARATION COMPLETE ---"
+          ]
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_large_strict_prepare_only_readiness_plan_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_large_prepare_only_terminal_response "$response_path" "$summary"
+    jq '
+        .completion_policy.plan_mode = "inline"
+        | .triage_result.plan_mode = "inline"
+        | .plan_document = "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+        | .feature_preparation_result.readiness_plan = {
+            evidence_ref: "prep/medium-feature",
+            implementation_implications: ["Adapt the ACTIVE effects to VIEWING without enabling edits."],
+            open_decisions: ["Approve or delegate the bounded implementation packet."],
+            recommended_next_state: "Approve or delegate the bounded implementation packet.",
+            execution_status: "not_started"
+          }
+        | del(.feature_preparation_result.future_qa_acceptance_obligation)
+        | .phase_checkpoints = [
+            "--- PHASE: TRIAGE ---",
+            "--- PHASE: DISCOVER ---",
+            "--- PHASE: DISCOVER COMPLETE ---",
+            "--- PHASE: PLAN ---",
+            "--- PHASE: PLAN COMPLETE ---",
             "--- PHASE: PREPARATION COMPLETION ---",
             "--- PHASE: PREPARATION COMPLETE ---"
           ]

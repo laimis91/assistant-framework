@@ -183,7 +183,7 @@ review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 standalone_routing_text="$(tr '\n\t' '  ' < "$review_root"; tr '\n\t' '  ' < "$review_loop"; tr '\n\t' '  ' < "$review_gates")"
-standalone_handoff_text="$(tr '\n\t' '  ' < "$review_handoffs"; tr -s '[:space:]' ' ')"
+standalone_handoff_text="$(tr '\n\t' '  ' < "$review_handoffs" | tr -s '[:space:]' ' ')"
 
 if ! grep -Fq 'review this' "$review_root"; then
     standalone_failures+=("review this invocation is not routed")

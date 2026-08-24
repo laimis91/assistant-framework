@@ -145,8 +145,7 @@ fi
 test_start "assistant-review QA Done Contract debate_record contract is mirrored"
 debate_mirror_failures=()
 for qa_review_dir in \
-    "$FRAMEWORK_DIR/skills/assistant-review" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review"; do
+    "$FRAMEWORK_DIR/skills/assistant-review"; do
     for file_and_term in \
         "$qa_review_dir/contracts/input.yaml::- name: debate_record" \
         "$qa_review_dir/contracts/input.yaml::pre-build debate/subagent-perspective evidence" \
@@ -272,8 +271,7 @@ fi
 test_start "workflow delegates QA packet ownership to assistant-review"
 workflow_qa_ownership_failures=()
 for workflow_qa_dir in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow"; do
     if grep -Fq -- '- name: orchestrator_to_qa_evaluator' "$workflow_qa_dir/contracts/handoffs.yaml"; then
         workflow_qa_ownership_failures+=("${workflow_qa_dir#$FRAMEWORK_DIR/}/contracts/handoffs.yaml: duplicated QAEvaluator handoff")
     fi

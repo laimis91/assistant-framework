@@ -5,6 +5,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
+source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
@@ -13,8 +14,9 @@ skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 actual_grader_invocation_count=0
 workflow_full_corpus_eval_count=0
 prepare_only_mutation_invocation_count=0
-prepare_only_root_or_forbidden_mutation_count=0
 prepare_only_plan_mode_mutation_count=0
+prepare_only_direct_structured_probe_count=0
+prepare_only_representative_cli_probe_count=0
 non_workflow_skill_eval_count=0
 
 run_skill_eval() {
@@ -37,16 +39,33 @@ run_workflow_eval() {
     run_skill_eval "$responses_dir" "$output_path" assistant-workflow
 }
 
-run_prepare_only_mutation_eval() {
-    prepare_only_mutation_invocation_count=$((prepare_only_mutation_invocation_count + 1))
-    prepare_only_root_or_forbidden_mutation_count=$((prepare_only_root_or_forbidden_mutation_count + 1))
-    run_skill_eval "$@"
-}
-
 run_plan_mode_mutation_eval() {
     prepare_only_mutation_invocation_count=$((prepare_only_mutation_invocation_count + 1))
     prepare_only_plan_mode_mutation_count=$((prepare_only_plan_mode_mutation_count + 1))
     run_skill_eval "$@"
+}
+
+run_prepare_only_representative_cli_probe() {
+    prepare_only_mutation_invocation_count=$((prepare_only_mutation_invocation_count + 1))
+    prepare_only_representative_cli_probe_count=$((prepare_only_representative_cli_probe_count + 1))
+    run_skill_eval "$@"
+}
+
+run_prepare_only_representative_path_probe() {
+    local case_id="$1"
+    local path="$2"
+    local response_path="$prepare_only_eval_dir/assistant-workflow/$case_id.txt"
+
+    cp "$response_path" "$response_path.original"
+    jq --argjson path "$path" 'setpath($path; { injected_forbidden_artifact: true })' \
+        "$response_path" >"$prepare_only_eval_dir/mutated.json"
+    mv "$prepare_only_eval_dir/mutated.json" "$response_path"
+    if run_prepare_only_representative_cli_probe "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$prepare_only_eval_output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
+        prepare_only_mutation_failures+=("representative:$case_id:$path")
+    fi
+    mv "$response_path.original" "$response_path"
 }
 
 input_field_has_text() {
@@ -340,6 +359,15 @@ write_workflow_eval_responses() {
                 medium-prepare-only-terminal-route)
                     build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
+                medium-prepare-only-readiness-plan)
+                    build_medium_prepare_only_readiness_plan_response "$response_path" "$required_summary"
+                    ;;
+                medium-prepare-only-not-applicable-readiness-plan)
+                    build_medium_prepare_only_not_applicable_readiness_plan_response "$response_path" "$required_summary"
+                    ;;
+                large-strict-prepare-only-readiness-plan)
+                    build_large_strict_prepare_only_readiness_plan_response "$response_path" "$required_summary"
+                    ;;
                 medium-prepare-only-qa-request-routing)
                     build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
                     ;;
@@ -457,13 +485,13 @@ fi
 if ! validate_case_records "$(manifest_case_records)" "$expected_case_records_input"; then
     prepare_only_mutation_failures+=("baseline case records are invalid")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|plan_document/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|none/')" "$expected_case_records_input"; then
     prepare_only_mutation_failures+=("root-group mutation accepted")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')" "$expected_case_records_input"; then
     prepare_only_mutation_failures+=("forbidden-field delete accepted")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')" "$expected_case_records_input"; then
     prepare_only_mutation_failures+=("forbidden-field substitution accepted")
 fi
 if ! case_roots medium-prepare-only-readiness-does-not-wait-for-implementation-approval | awk '$0 == "completion_policy" { completion_policy = 1 } $0 == "validation_results" { validation_results = 1 } $0 == "feature_preparation_evidence" { feature_preparation_evidence = 1 } END { exit completion_policy && validation_results && feature_preparation_evidence ? 0 : 1 }'; then
@@ -490,24 +518,22 @@ while IFS= read -r workflow_case_id; do
         cp "$workflow_response" "$workflow_response.original"
         jq "del(.$root_artifact)" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
         mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
-        if run_prepare_only_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
-            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
+        prepare_only_direct_structured_probe_count=$((prepare_only_direct_structured_probe_count + 1))
+        if [[ "$(count_structured_json_assertion_failures "$workflow_dir/evals/cases.json" "$workflow_case_id" "$workflow_response")" -eq 0 ]]; then
             prepare_only_mutation_failures+=("$workflow_case_id:$root_artifact")
         fi
         mv "$workflow_response.original" "$workflow_response"
     done
-    while IFS= read -r forbidden_artifact; do
+    while IFS= read -r forbidden_path; do
         cp "$workflow_response" "$workflow_response.original"
-        # plan_document injection alone
-        workflow_mutation='. + {plan_document: "Injected readiness plan document."}'
-        jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
+        jq --argjson path "$forbidden_path" 'setpath($path; { injected_forbidden_artifact: true })' "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
         mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
-        if run_prepare_only_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
-            || ! grep -Eq 'forbidden_substring_hits=[1-9]' "$prepare_only_eval_output"; then
-            prepare_only_mutation_failures+=("$workflow_case_id:$forbidden_artifact")
+        prepare_only_direct_structured_probe_count=$((prepare_only_direct_structured_probe_count + 1))
+        if [[ "$(count_structured_json_assertion_failures "$workflow_dir/evals/cases.json" "$workflow_case_id" "$workflow_response")" -eq 0 ]]; then
+            prepare_only_mutation_failures+=("$workflow_case_id:$forbidden_path")
         fi
         mv "$workflow_response.original" "$workflow_response"
-    done < <(forbidden_artifacts "$workflow_case_id")
+    done < <(forbidden_paths "$workflow_case_id")
     if case_requires_plan_mode_mutation "$workflow_case_id"; then
         cp "$workflow_response" "$workflow_response.original"
         # completion_policy.plan_mode wrong alone
@@ -531,7 +557,15 @@ while IFS= read -r workflow_case_id; do
         fi
         mv "$workflow_response.original" "$workflow_response"
     fi
-done < <(plan_none_cases)
+done < <(preparation_mutation_cases)
+# The direct production grader proves every root and forbidden path. Keep one
+# full CLI invalid-response representative for each preparation branch.
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-terminal-route '["feature_preparation_result", "readiness_plan"]'
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-readiness-plan '["feature_preparation_result", "readiness_plan", "preparation_basis"]'
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
 if [[ ${#prepare_only_mutation_failures[@]} -eq 0 ]]; then
     pass
 else
@@ -3316,12 +3350,11 @@ else
     fail "terminal entry and consumed-map trace contract missing: ${terminal_entry_missing[*]}"
 fi
 
-test_start "workflow publishes progressive discovery behavior and generated distribution parity"
+test_start "workflow publishes progressive discovery behavior"
 alignment_missing=()
 eval_fixture="$workflow_dir/evals/cases.json"
 readme="$FRAMEWORK_DIR/README.md"
 aggregate_runner="$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh"
-workflow_plugin="$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow"
 
 if ! jq -e '.provider_neutral == true' "$eval_fixture" >/dev/null; then
     alignment_missing+=("assistant-workflow eval fixture is not provider-neutral")
@@ -3375,16 +3408,10 @@ if ! p0p4_contains_text "$aggregate_runner" 'source "$P0P4_SUITE_DIR/progressive
     alignment_missing+=("tests/test-p0-p4-contracts.sh does not source progressive-discovery-contracts.sh")
 fi
 
-mirror_diff="$(mktemp)"
-p0p4_register_cleanup "$mirror_diff"
-if ! diff -qr -x .DS_Store "$workflow_dir" "$workflow_plugin" >"$mirror_diff"; then
-    alignment_missing+=("assistant-workflow canonical and assistant-dev mirror are not directory-identical")
-fi
-
 if [[ "${#alignment_missing[@]}" -eq 0 ]]; then
     pass
 else
-    fail "progressive discovery publication/distribution contract missing: ${alignment_missing[*]}"
+    fail "progressive discovery publication contract missing: ${alignment_missing[*]}"
 fi
 
 test_start "workflow terminal archival references require a valid tombstone before release"
@@ -3454,14 +3481,15 @@ fi
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
 if [[ "$workflow_full_corpus_eval_count" -eq 26 \
-    && "$prepare_only_root_or_forbidden_mutation_count" -eq 51 \
+    && "$prepare_only_direct_structured_probe_count" -eq 341 \
     && "$prepare_only_plan_mode_mutation_count" -eq 10 \
-    && "$prepare_only_mutation_invocation_count" -eq 61 \
+    && "$prepare_only_representative_cli_probe_count" -eq 3 \
+    && "$prepare_only_mutation_invocation_count" -eq 13 \
     && "$actual_grader_invocation_count" -eq $((workflow_full_corpus_eval_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
     && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 26 full-corpus and 51 root-or-forbidden plus 10 plan-mode prepare-only mutation assistant-workflow eval invocations through one call site, with total accounting for all auxiliary evals; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_root_or_forbidden_mutation_count root-or-forbidden, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_mutation_invocation_count mutation, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 full-corpus, 341 independent direct production structured-grader probes, 10 plan-mode full CLI mutations, and 3 representative branch CLI probes; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count full CLI mutations, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total full CLI invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -6,14 +6,12 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 sync_tool="$FRAMEWORK_DIR/tools/skills/sync-skill-contract-guide.sh"
 canonical_guide="$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"
 generated_guide="$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md"
-plugin_sync_tool="$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh"
 
 test_start "contract guide sync tool keeps docs source canonical"
 if [[ -x "$sync_tool" ]] \
     && grep -Fq "docs/skill-contract-design-guide.md is canonical" "$canonical_guide" \
     && grep -Fq "sync-skill-contract-guide.sh --apply" "$canonical_guide" \
     && grep -Fq "generated from docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md" \
-    && grep -Fq 'sync-skill-contract-guide.sh' "$plugin_sync_tool" \
     && "$sync_tool" --check >/dev/null 2>&1 \
     && cmp -s "$canonical_guide" "$generated_guide"; then
     pass

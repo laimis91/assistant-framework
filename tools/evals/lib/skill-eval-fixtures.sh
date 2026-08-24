@@ -166,6 +166,9 @@ validate_fixture() {
           type == "string" or type == "number" or type == "boolean"
           or (type == "array" and all(.[]; type == "string" or type == "number" or type == "boolean"));
 
+        def object_tuple_value:
+          equality_value or type == "null";
+
         def scalar_array($maximum):
           type == "array" and length > 0 and length <= $maximum
           and all(.[]; scalar);
@@ -180,7 +183,7 @@ validate_fixture() {
           and all(.[];
             type == "object"
             and (keys | sort) == ($fields | sort)
-            and (. as $object | all($fields[]; . as $field | $object[$field] | scalar)));
+            and (. as $object | all($fields[]; . as $field | $object[$field] | object_tuple_value)));
 
         def structured_assertion_error($index; $assertion_index):
           if type != "object" then
@@ -195,9 +198,13 @@ validate_fixture() {
             if (.path? | json_path | not) or (.expected_values? | scalar_array(32) | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid one_of assertion"
             else empty end
-          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "path_absent" then
+          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "array_type" or .operator == "path_absent" then
             if (.path? | json_path | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid \(.operator) path"
+            else empty end
+          elif .operator == "array_nonblank_strings" then
+            if (.path? | json_path | not) or (.allow_empty? | type != "boolean") then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_nonblank_strings assertion"
             else empty end
           elif .operator == "equals_path" then
             if (.path? | json_path | not) or (.other_path? | json_path | not) then
@@ -215,6 +222,10 @@ validate_fixture() {
           elif .operator == "array_items_nonempty_fields" then
             if (.path? | json_path | not) or (.fields? | nonempty_string_array | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_items_nonempty_fields assertion"
+            else empty end
+          elif .operator == "array_items_nonempty_array_fields" then
+            if (.path? | json_path | not) or (.fields? | nonempty_string_array | not) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_items_nonempty_array_fields assertion"
             else empty end
           elif .operator == "array_object_values_exact" then
             .fields as $fields |

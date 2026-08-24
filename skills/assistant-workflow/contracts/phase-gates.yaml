@@ -67,7 +67,7 @@ gates:
         on_fail: "Infer and record plan_mode plus the two additive completion modes from the input contract; do not infer journal or manual-verification ceremony from size alone."
 
       - id: T_PLAN_MODE
-        check: "prepare_only at any size retains none unless an optional readiness plan is explicitly requested; prepare_only uses approval_required only for that optional plan, even at high/critical risk. For execution_intent != prepare_only, approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests; none is otherwise limited to trivial localized reversible low-risk work with an obvious path and verification and inline to bounded small no-approval work"
+        check: "prepare_only at any size retains none unless an optional readiness plan is explicitly requested; prepare_only uses inline only for that optional plan and never waits, even at high/critical risk. For execution_intent != prepare_only, approval_required is used for medium+, high/critical risk, destructive, public contract/data/security, material architecture/scope choices, repository policy, or explicit user approval requests; none is otherwise limited to trivial localized reversible low-risk work with an obvious path and verification and inline to bounded small no-approval work"
         on_fail: "Promote plan_mode to inline or approval_required. Do not skip Plan when size, risk, uncertainty, policy, or user intent requires it."
 
       - id: T_ARCHITECTURE_DESIGN_MODE
@@ -85,7 +85,7 @@ gates:
         on_fail: "Select the smallest safe build_execution_lane and matching roles; do not require separated workers from size alone."
 
       - id: T_PREPARATION_ADMISSIBILITY
-        check: "required_gates contains only feature-preparation evidence with no execution or task-category gate; qa_evaluation_mode=not_required and build_execution_lane=inline_direct; harness_capable=false unless separately recorded independent harness evidence applies, and a QA request alone never promotes harness or QA. required_agents contains only concrete Discover or preparation roles; do not select Build, Review, QA Evaluator, Code Writer, Builder/Tester, or Code Reviewer roles for preparation alone. workflow_state_mode remains inline for QA-only preparation; retain journal or other state only when risk, delegation, or independent harness evidence separately requires it."
+        check: "required_gates contains only feature-preparation evidence with no execution or task-category gate; qa_evaluation_mode=not_required, harness_capable=false, and build_execution_lane=none. A QA request alone never promotes harness or QA. required_agents contains only concrete Discover or preparation roles; do not select Build, Review, QA Evaluator, Code Writer, Builder/Tester, or Code Reviewer roles for preparation alone. workflow_state_mode remains inline for QA-only preparation; retain journal or other state only when risk, delegation, or independent harness evidence separately requires it."
         condition: "execution_intent == prepare_only"
         on_fail: "Remove every execution/task-category gate and execution role, retain only feature-preparation evidence and concrete Discover/preparation roles, and record future implementation obligations in feature_preparation_result."
 
@@ -296,7 +296,7 @@ gates:
   # ─────────────────────────────────────────────
   - phase: PLAN
     checkpoint_start: "--- PHASE: PLAN ---"
-    checkpoint_end: "--- PHASE: PLAN COMPLETE (approved) --- for approved non-prepare-only plans; --- PHASE: PLAN COMPLETE --- for no-wait inline or prepare_only readiness plans"
+    checkpoint_end: "--- PHASE: PLAN COMPLETE ---"
     condition: "plan_mode != none"
     exit_assertions:
 
@@ -733,7 +733,7 @@ invariants:
     on_fail: "Print '>> CONSTRAINT REMOVED — review with user before proceeding' and restore the removed constraint"
 
   - id: INV2
-    check: "No required phase is skipped. prepare_only requires Discover then PREPARATION_COMPLETION; Decompose/Plan readiness work is optional and Design, Build, Review, and implementation Document/final-handoff gates are inapplicable. Otherwise Plan runs exactly when plan_mode is inline or approval_required and is omitted only when plan_mode=none eligibility remains true"
+    check: "No required phase is skipped. prepare_only requires Discover then PREPARATION_COMPLETION; Plan readiness is optional; Decompose, Design, Build, Review, and implementation Document/final-handoff gates are inapplicable. Otherwise Plan runs exactly when plan_mode is inline or approval_required and is omitted only when plan_mode=none eligibility remains true"
     scope: all_phases
     on_fail: "Print '>> PHASE SKIPPED — run the missing phase before continuing', or return to Triage and correct plan_mode before proceeding"
 

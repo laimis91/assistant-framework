@@ -17,7 +17,7 @@ completion_tiers:
   preparation_only:
     execution_intent: prepare_only
     required_artifacts: [completion_policy, validation_results, feature_preparation_result]
-    conditional_artifacts: [triage_result, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet]
+    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet]
     review_gate: "Preparation-evidence admissibility audit only; no Build, changed-files, implementation test, code-review, or final-handoff claim is permitted."
     checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
@@ -96,8 +96,8 @@ artifacts:
       - name: build_execution_lane
         type: enum
         required: true
-        enum_values: [inline_direct, bounded_executor, separated_workers]
-        validation: "For execution_intent=prepare_only, inline_direct records no Build lane. Otherwise ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        enum_values: [none, inline_direct, bounded_executor, separated_workers]
+        validation: "For execution_intent=prepare_only, none records that no Build lane runs. Otherwise ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
       - name: workflow_state_mode
         type: enum
         required: true
@@ -182,8 +182,8 @@ artifacts:
       - name: build_execution_lane
         type: enum
         required: true
-        enum_values: [inline_direct, bounded_executor, separated_workers]
-        validation: "For execution_intent=prepare_only, inline_direct records that no Build lane runs. Otherwise select the execution lane from risk and verification shape."
+        enum_values: [none, inline_direct, bounded_executor, separated_workers]
+        validation: "For execution_intent=prepare_only, none records that no Build lane runs. Otherwise select the execution lane from risk and verification shape."
       - name: plan_mode
         type: enum
         required: true
@@ -2476,10 +2476,10 @@ artifacts:
     required: conditional
     condition: "plan_mode in [inline, approval_required]"
     validation: >
-      For prepare_only, readiness-only plan text contains the evidence ref, readiness implications, open decisions, recommended next implementation state, and execution not started; it omits files, tests, Artifact Contract, executable steps/task packets, and full plan tiers.
+      For prepare_only existing-system work, readiness-only plan text contains the exact feature-preparation evidence ref, readiness implications, open decisions, recommended next implementation state, and execution not started. For feature_preparation_scope=not_applicable, it instead records the typed not_applicable preparation basis, implications, open decisions, recommended next state, and execution not started; it must not fabricate an evidence ref. It omits files, tests, Artifact Contract, executable steps/task packets, and full plan tiers.
       For execution_intent != prepare_only: inline is a compact plan with goal, files, risks, and tests; approval_required medium is standard per plan-template.md; approval_required large/mega is full including Security and Operability.
       plan_mode=none: artifact is absent.
-    on_fail: "For prepare_only, write or repair only the readiness plan with evidence ref, implications, open decisions, recommended next state, and execution not started; do not add files, tests, or executable packets. For execution_intent != prepare_only, write or update the proportional execution plan when plan_mode is inline or approval_required; omit this artifact when plan_mode is none."
+    on_fail: "For prepare_only, write or repair only the readiness plan with the applicable existing-system evidence ref or typed not_applicable basis, implications, open decisions, recommended next state, and execution not started; do not add files, tests, or executable packets. For execution_intent != prepare_only, write or update the proportional execution plan when plan_mode is inline or approval_required; omit this artifact when plan_mode is none."
 
   - name: user_approval
     type: enum
@@ -2530,6 +2530,45 @@ artifacts:
         min_items: 1
         description: "Concrete future implementation work, preservation obligation, conflict resolution, or explicit no-change result; do not duplicate an explicit QA/acceptance request outside future_qa_acceptance_obligation"
         on_missing: fail
+      - name: readiness_plan
+        type: object
+        required: conditional
+        condition: "execution_intent == prepare_only and plan_mode == inline"
+        description: "Machine-checkable contents of an explicitly requested readiness-only Plan"
+        validation: "For existing_system, binds the same completed feature-preparation evidence ref; for not_applicable, records preparation_basis=not_applicable and omits evidence_ref. In both cases it records concrete implementation implications, any remaining open decisions, a next implementation state, and execution_status=not_started; it never contains executable packets, files, tests, or approval waiting."
+        on_missing: fail
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            validation: "Matches feature_preparation_result.feature_preparation_evidence_ref unchanged."
+            on_missing: fail
+          - name: preparation_basis
+            type: enum
+            required: conditional
+            condition: "feature_preparation_scope == not_applicable"
+            enum_values: [not_applicable]
+            validation: "Required instead of evidence_ref when no existing-system evidence applies."
+            on_missing: fail
+          - name: implementation_implications
+            type: string[]
+            required: true
+            min_items: 1
+            on_missing: fail
+          - name: open_decisions
+            type: string[]
+            required: true
+            on_missing: fail
+          - name: recommended_next_state
+            type: string
+            required: true
+            on_missing: fail
+          - name: execution_status
+            type: enum
+            required: true
+            enum_values: [not_started]
+            on_missing: fail
       - name: future_qa_acceptance_obligation
         type: object
         required: conditional

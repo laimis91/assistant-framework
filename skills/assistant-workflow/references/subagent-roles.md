@@ -71,7 +71,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | `reviewer` | Strongest / deep reasoning | Read-only | Review compatibility | Compatibility route for existing reviewer handoffs; prefer `code-reviewer` for new code review dispatches |
 | `qa-evaluator` | Strongest / deep reasoning | Read-only | Review QA | Independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation |
 
-## Dispatch rules by task size
+## Dispatch rules by task size (`execution_intent != prepare_only`)
 
 | Size | Agents used | Flow |
 |---|---|---|
@@ -79,6 +79,8 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | **Medium** | Code Mapper → Architect (decompose) → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only for separated_workers triggers |
 | **Large** | Code Mapper → Explorer → Architect (decompose + plan) → Code Writer → Builder/Tester → Code Reviewer → QA Evaluator when required | Full pipeline with slice verification; Reviewer is compatibility routing |
 | **Mega** | All roles; source-changing packets sequential by default | Mapper → Explorer → Architect → sequential Writers → Builder/Tester, Code Reviewer, and QA Evaluator when required at integration. In a shared or unknown workspace, parallel Writers require runtime proof of isolated workspaces; independent read-only analysis may run in parallel. |
+
+For `prepare_only`, dispatch only concretely triggered Discover or preparation roles, such as read-only mapping, research, security, thinking, documentation, or diagrams when their own trigger applies. Do not dispatch Architect decomposition, Code Writer, Builder/Tester, Code Reviewer, Reviewer, or QA Evaluator solely because task size is medium+; preparation ends without executable slices, Build, Review, or final handoff.
 
 ## Reviewer dispatch (review rounds)
 

@@ -3,6 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
+source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 p0p4_activation_examples_are_adequate() {
@@ -49,6 +50,7 @@ p0p4_activation_cases_are_adequate() {
 }
 
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
 workflow_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
@@ -183,6 +185,15 @@ p0p4_write_skill_eval_responses() {
                     medium-prepare-only-terminal-route)
                         build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
+                    medium-prepare-only-readiness-plan)
+                        build_medium_prepare_only_readiness_plan_response "$response_path" "$required_summary"
+                        ;;
+                    medium-prepare-only-not-applicable-readiness-plan)
+                        build_medium_prepare_only_not_applicable_readiness_plan_response "$response_path" "$required_summary"
+                        ;;
+                    large-strict-prepare-only-readiness-plan)
+                        build_large_strict_prepare_only_readiness_plan_response "$response_path" "$required_summary"
+                        ;;
                     medium-prepare-only-qa-request-routing)
                         build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
                         ;;
@@ -261,7 +272,7 @@ p0p4_write_skill_eval_responses() {
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
                         ;;
                     assistant-diagrams:feature-preparation-diagram-traceability)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}], evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus", "VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}], evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus"]}, {source_ref: "prep/viewing-route#requirements", supported_elements_or_relationships: ["VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
                         ;;
                     assistant-docs:architecture-doc-pack-backed-decision-trace)
                         jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/parser-boundary.md", change_type: "created", description: "Documents the current parser-boundary decision."}], evidence_sources: [{source: "pack/parser-boundary", claims_supported: "The selected parser boundary design and its compatibility claim are current."}], doc_coverage: "Documents the current parser boundary from the fresh Pack and exact feature-preparation row.", review_items: [], safety_notes: ["none"], architecture_design_mode: "required", architecture_decision_pack_status: "current", feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", architecture_decision_pack: {ref: "pack/parser-boundary", mode: "required", freshness: "current repository basis"}, architecture_decision_pack_trace: {outcome: "documented", source_pack_ref: "pack/parser-boundary", documented_decision_refs: ["pack/parser-boundary#selected-design"], evidence_refs: ["pack/parser-boundary#facts"], feature_preparation_evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["resolves selected design and rationale through the current canonical Pack ref"]}, feature_preparation_evidence_trace: {outcome: "validated", evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["Exact evidence-row binding validated before documentation."]}}' >"$response_path"
@@ -1151,6 +1162,25 @@ test_start "workflow preparation core artifacts are required by the actual grade
 workflow_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-workflow-core.XXXXXX")"
 p0p4_register_cleanup "$workflow_mutation_output"
 workflow_core_failures=()
+prepare_only_direct_structured_probe_count=0
+prepare_only_representative_cli_probe_count=0
+run_prepare_only_representative_path_probe() {
+    local case_id="$1"
+    local path="$2"
+    local response_path="$passing_response_dir/assistant-workflow/$case_id.txt"
+
+    cp "$response_path" "$response_path.original"
+    jq --argjson path "$path" 'setpath($path; { injected_forbidden_artifact: true })' \
+        "$response_path" >"$workflow_mutation_output"
+    mv "$workflow_mutation_output" "$response_path"
+    prepare_only_representative_cli_probe_count=$((prepare_only_representative_cli_probe_count + 1))
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$passing_response_output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+        workflow_core_failures+=("representative:$case_id:$path")
+    fi
+    mv "$response_path.original" "$response_path"
+}
 expected_case_records_input="$(feature_prep_expected_case_records)"
 if ! feature_prep_case_manifest_is_valid "$expected_case_records_input"; then
     workflow_core_failures+=("shared feature-preparation case manifest is invalid")
@@ -1158,13 +1188,13 @@ fi
 if ! validate_case_records "$(manifest_case_records)" "$expected_case_records_input"; then
     workflow_core_failures+=("baseline case records are invalid")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|plan_document/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|none/')" "$expected_case_records_input"; then
     workflow_core_failures+=("root-group mutation accepted")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')" "$expected_case_records_input"; then
     workflow_core_failures+=("forbidden-field delete accepted")
 fi
-if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')" "$expected_case_records_input"; then
+if validate_case_records "$(manifest_case_records | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')" "$expected_case_records_input"; then
     workflow_core_failures+=("forbidden-field substitution accepted")
 fi
 if ! case_roots medium-prepare-only-readiness-does-not-wait-for-implementation-approval | awk '$0 == "completion_policy" { completion_policy = 1 } $0 == "validation_results" { validation_results = 1 } $0 == "feature_preparation_evidence" { feature_preparation_evidence = 1 } END { exit completion_policy && validation_results && feature_preparation_evidence ? 0 : 1 }'; then
@@ -1203,27 +1233,25 @@ while IFS= read -r workflow_case_id; do
         cp "$workflow_response" "$workflow_response.original"
         jq "$workflow_mutation" "$workflow_response" >"$workflow_mutation_output"
         mv "$workflow_mutation_output" "$workflow_response"
-        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
-            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+        prepare_only_direct_structured_probe_count=$((prepare_only_direct_structured_probe_count + 1))
+        if [[ "$(count_structured_json_assertion_failures "$workflow_dir/evals/cases.json" "$workflow_case_id" "$workflow_response")" -eq 0 ]]; then
             workflow_core_failures+=("$workflow_case_id:$root_artifact")
         fi
         mv "$workflow_response.original" "$workflow_response"
     done
-done < <(mutation_cases)
+done < <(preparation_mutation_cases)
 while IFS= read -r workflow_case_id; do
-    while IFS= read -r forbidden_artifact; do
+    while IFS= read -r forbidden_path; do
         workflow_response="$passing_response_dir/assistant-workflow/$workflow_case_id.txt"
         cp "$workflow_response" "$workflow_response.original"
-        # plan_document injection alone
-        workflow_mutation='. + {plan_document: "Injected readiness plan document."}'
-        jq "$workflow_mutation" "$workflow_response" >"$workflow_mutation_output"
+        jq --argjson path "$forbidden_path" 'setpath($path; { injected_forbidden_artifact: true })' "$workflow_response" >"$workflow_mutation_output"
         mv "$workflow_mutation_output" "$workflow_response"
-        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
-            || ! grep -Eq 'forbidden_substring_hits=[1-9]' "$passing_response_output"; then
-            workflow_core_failures+=("$workflow_case_id:$forbidden_artifact")
+        prepare_only_direct_structured_probe_count=$((prepare_only_direct_structured_probe_count + 1))
+        if [[ "$(count_structured_json_assertion_failures "$workflow_dir/evals/cases.json" "$workflow_case_id" "$workflow_response")" -eq 0 ]]; then
+            workflow_core_failures+=("$workflow_case_id:$forbidden_path")
         fi
         mv "$workflow_response.original" "$workflow_response"
-    done < <(forbidden_artifacts "$workflow_case_id")
+    done < <(forbidden_paths "$workflow_case_id")
     if case_requires_plan_mode_mutation "$workflow_case_id"; then
         workflow_response="$passing_response_dir/assistant-workflow/$workflow_case_id.txt"
         cp "$workflow_response" "$workflow_response.original"
@@ -1248,11 +1276,21 @@ while IFS= read -r workflow_case_id; do
         fi
         mv "$workflow_response.original" "$workflow_response"
     fi
-done < <(plan_none_cases)
-if [[ ${#workflow_core_failures[@]} -eq 0 ]]; then
+done < <(mutation_cases)
+# The direct production grader proves every root and forbidden path. Keep one
+# full CLI invalid-response representative for each preparation branch.
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-terminal-route '["feature_preparation_result", "readiness_plan"]'
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-readiness-plan '["feature_preparation_result", "readiness_plan", "preparation_basis"]'
+run_prepare_only_representative_path_probe \
+    medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
+if [[ ${#workflow_core_failures[@]} -eq 0 \
+    && "$prepare_only_direct_structured_probe_count" -eq 341 \
+    && "$prepare_only_representative_cli_probe_count" -eq 3 ]]; then
     pass
 else
-    fail "workflow core artifact mutations were not rejected: ${workflow_core_failures[*]}"
+    fail "workflow core artifact mutations were not rejected or miscounted: ${workflow_core_failures[*]} (direct=$prepare_only_direct_structured_probe_count representative_cli=$prepare_only_representative_cli_probe_count)"
 fi
 
 test_start "feature-preparation rows and diagram traces reject omitted central evidence in the actual grader"
@@ -1424,6 +1462,21 @@ else
     fi
     cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
         "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    for trace_shape_mutation in invalid_kind dangling_source; do
+        case "$trace_shape_mutation" in
+            invalid_kind) trace_shape_filter='.element_trace[2].element_kind = "node"' ;;
+            dangling_source) trace_shape_filter='.element_trace[4].source_refs = ["prep/dangling"]' ;;
+        esac
+        jq "$trace_shape_filter" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+            feature_mutation_failures+=("diagram:$trace_shape_mutation")
+        fi
+        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    done
     jq '.feature_preparation_evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]' \
         "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
     mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
@@ -1442,6 +1495,23 @@ else
     fi
     cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
         "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    for support_array_mutation in null_member object_member blank_member whitespace_member; do
+        case "$support_array_mutation" in
+            null_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [null]' ;;
+            object_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [{}]' ;;
+            blank_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [""]' ;;
+            whitespace_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = ["  "]' ;;
+        esac
+        jq "$support_array_filter" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+            feature_mutation_failures+=("diagram:later-evidence-source-support-array:$support_array_mutation")
+        fi
+        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    done
     jq '(.diagram_code) |= sub("viewing-route"; "preview-route")' \
         "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
     mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
@@ -1711,6 +1781,172 @@ else
     fail "future-QA preparation routing mutations were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
 fi
 
+test_start "actual grader keeps an explicitly requested readiness Plan out of execution routing"
+if run_isolated_workflow_routing_mutations \
+    "medium-prepare-only-readiness-plan" \
+    build_medium_prepare_only_readiness_plan_response \
+    'del(.plan_document)' \
+    'del(.feature_preparation_result.readiness_plan)' \
+    'del(.feature_preparation_result.feature_preparation_evidence_ref)' \
+    '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/stale-result"' \
+    '(.feature_preparation_result.readiness_plan.evidence_ref) = "prep/stale"' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = []' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = [null]' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = ["  "]' \
+    'del(.feature_preparation_result.readiness_plan.open_decisions)' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = {}' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = [null]' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = ["  "]' \
+    '(.feature_preparation_result.readiness_plan.recommended_next_state) = ""' \
+    '(.feature_preparation_result.readiness_plan.execution_status) = "started"' \
+    '(.completion_policy.plan_mode) = "none"' \
+    '(.triage_result.plan_mode) = "approval_required"' \
+    '(.completion_policy.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.qa_evaluation_mode) = "required"' \
+    '(.triage_result.harness_capable) = true' \
+    '.triage_result.required_agents = ["Code Writer"]' \
+    '.triage_result.required_gates = ["tests/build executed"]' \
+    '.task_journal = ".codex/task.md"' \
+    '.context_map = ".codex/context-map.md"' \
+    '.phase_checkpoints = ["--- PHASE: DECOMPOSE ---"]' \
+    '.qa_evaluation_result = {}' \
+    '.fresh_review_result = {}' \
+    '.artifact_contract = {}' \
+    '.task_packet = {}' \
+    '.decomposition_plan_review = {}' \
+    '.slice_manifest = []' \
+    '.changed_files = {}' \
+    '.test_results = {}' \
+    '.review_result = {}' \
+    '.manual_test_steps = {}' \
+    '.manual_verification_result = {}' \
+    '.subagent_evidence = {}' \
+    '.build_repair_state = {}' \
+    '.artifact_reference_ledger = {}' \
+    '.done_contract = {}' \
+    '.harness_recipe = {}' \
+    '.harness_run_state = {}' \
+    '.trace_ledger = {}' \
+    '.replay_packet = {}' \
+    '.final_handoff = {}' \
+    '.user_approval = "confirmed"'; then
+    pass
+else
+    fail "optional readiness Plan omissions or execution-artifact injections were accepted: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader keeps strict readiness Plan checkpoints inside the preparation boundary"
+if run_isolated_workflow_routing_mutations \
+    "large-strict-prepare-only-readiness-plan" \
+    build_large_strict_prepare_only_readiness_plan_response \
+    'del(.plan_document)' \
+    'del(.feature_preparation_result.readiness_plan)' \
+    'del(.requirement_acceptance_map.entries[0].evidence_ref)' \
+    'del(.feature_preparation_result.feature_preparation_evidence_ref)' \
+    '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/stale-result"' \
+    '(.feature_preparation_result.readiness_plan.evidence_ref) = "prep/stale"' \
+    '(.completion_policy.plan_mode) = "approval_required"' \
+    '(.triage_result.plan_mode) = "none"' \
+    '(.completion_policy.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.qa_evaluation_mode) = "required"' \
+    '(.triage_result.harness_capable) = true' \
+    '.triage_result.required_agents = ["Code Writer"]' \
+    '.triage_result.required_gates = ["tests/build executed"]' \
+    '(.phase_checkpoints[3]) = "--- PHASE: DECOMPOSE ---"' \
+    '.phase_checkpoints += ["--- PHASE: BUILD ---"]' \
+    '.qa_evaluation_result = {}' \
+    '.fresh_review_result = {}' \
+    'del(.task_journal)' \
+    'del(.context_map)' \
+    '.artifact_contract = {}' \
+    '.slice_manifest = []' \
+    '.task_packet = {}' \
+    '.changed_files = {}' \
+    '.review_result = {}' \
+    '.manual_test_steps = {}' \
+    '.manual_verification_result = {}' \
+    '.subagent_evidence = {}' \
+    '.build_repair_state = {}' \
+    '.artifact_reference_ledger = {}' \
+    '.done_contract = {}' \
+    '.harness_recipe = {}' \
+    '.harness_run_state = {}' \
+    '.trace_ledger = {}' \
+    '.replay_packet = {}' \
+    '.final_handoff = {}' \
+    '.user_approval = "confirmed"'; then
+    pass
+else
+    fail "strict optional readiness Plan omitted readiness evidence or accepted execution routing: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader keeps not-applicable readiness Plan evidence-free and no-execution"
+if run_isolated_workflow_routing_mutations \
+    "medium-prepare-only-not-applicable-readiness-plan" \
+    build_medium_prepare_only_not_applicable_readiness_plan_response \
+    'del(.plan_document)' \
+    'del(.feature_preparation_result.readiness_plan)' \
+    'del(.requirement_acceptance_map.entries[0].evidence_ref)' \
+    '(.requirement_acceptance_map.entries[0].requirement) = "Preserve the VIEWING route effects."' \
+    '(.completion_policy.selection_reason) = "Medium preparation returns repository-backed readiness without implementation."' \
+    '(.feature_preparation_result.scope) = "existing_system read-only VIEWING route"' \
+    '(.validation_results[0].command_or_check) = "focused repository test trace"' \
+    '(.feature_preparation_scope) = "existing_system"' \
+    '.feature_preparation_evidence = {ref:"prep/fabricated",items:[]}' \
+    '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/fabricated"' \
+    '(.feature_preparation_result.readiness_plan.evidence_ref) = "prep/fabricated"' \
+    '(.feature_preparation_result.readiness_plan.preparation_basis) = "existing_system"' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = []' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = [null]' \
+    '(.feature_preparation_result.readiness_plan.implementation_implications) = ["  "]' \
+    'del(.feature_preparation_result.readiness_plan.open_decisions)' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = {}' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = [null]' \
+    '(.feature_preparation_result.readiness_plan.open_decisions) = ["  "]' \
+    '(.feature_preparation_result.readiness_plan.recommended_next_state) = ""' \
+    '(.feature_preparation_result.readiness_plan.execution_status) = "started"' \
+    '(.completion_policy.plan_mode) = "none"' \
+    '(.triage_result.plan_mode) = "approval_required"' \
+    '(.completion_policy.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.build_execution_lane) = "inline_direct"' \
+    '(.triage_result.qa_evaluation_mode) = "required"' \
+    '(.triage_result.harness_capable) = true' \
+    '.triage_result.required_agents = ["Code Writer"]' \
+    '.triage_result.required_gates = ["tests/build executed"]' \
+    '.task_journal = ".codex/task.md"' \
+    '.context_map = ".codex/context-map.md"' \
+    '.phase_checkpoints = ["--- PHASE: DECOMPOSE ---"]' \
+    '.qa_evaluation_result = {}' \
+    '.fresh_review_result = {}' \
+    '.artifact_contract = {}' \
+    '.task_packet = {}' \
+    '.decomposition_plan_review = {}' \
+    '.slice_manifest = []' \
+    '.single_slice_rationale = {}' \
+    '.slice_verification_summary = {}' \
+    '.changed_files = {}' \
+    '.test_results = {}' \
+    '.spec_review_result = {}' \
+    '.review_result = {}' \
+    '.manual_test_steps = {}' \
+    '.manual_verification_result = {}' \
+    '.subagent_evidence = {}' \
+    '.build_repair_state = {}' \
+    '.artifact_reference_ledger = {}' \
+    '.done_contract = {}' \
+    '.harness_recipe = {}' \
+    '.harness_run_state = {}' \
+    '.trace_ledger = {}' \
+    '.replay_packet = {}' \
+    '.final_handoff = {}' \
+    '.user_approval = "confirmed"'; then
+    pass
+else
+    fail "not-applicable readiness Plan accepted fabricated evidence or execution routing: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
 test_start "actual grader preserves the exact future-QA obligation in every carrying preparation case"
 future_qa_mutation_failures=()
 for future_qa_case_and_builder in \
@@ -1840,6 +2076,7 @@ jq '
     {"operator":"nonempty_string","path":["semantic","evidence_or_gap"]},
     {"operator":"nonempty_array","path":["semantic","source_refs"]},
     {"operator":"empty_array","path":["semantic","excluded_refs"]},
+    {"operator":"array_type","path":["semantic","open_decisions"]},
     {"operator":"equals_path","path":["architecture_design_mode"],"other_path":["architecture_decision_pack","mode"]},
     {"operator":"required_when_equals","when_path":["architecture_design_mode"],"value":"review_intensive","path":["architecture_decision_pack","independent_challenge_evidence"],"expected_type":"object"},
     {"operator":"array_field_values_exact","path":["contributors"],"field":"role","expected_values":["agent","human_or_user"]},
@@ -1851,7 +2088,7 @@ if ! "$skill_eval_runner" --validate-fixture --skill "$structured_skill" > /dev/
     fail "skill eval runner rejected valid structured JSON assertions: $(cat "$structured_validation_err")"
 else
     mkdir -p "$structured_responses/assistant-eval-structured"
-    structured_valid='{"fixture":"fixture required fixture first fixture second","status":"ready","architecture_design_mode":"review_intensive","architecture_decision_pack":{"mode":"review_intensive","independent_challenge_evidence":{"ref":"challenge"}},"semantic":{"evidence_or_gap":"src/order.rb","source_refs":["src/order.rb"],"excluded_refs":[]},"contributors":[{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"human_or_user","contribution":"decision","evidence_ref":"decision-ref"}]}'
+    structured_valid='{"fixture":"fixture required fixture first fixture second","status":"ready","architecture_design_mode":"review_intensive","architecture_decision_pack":{"mode":"review_intensive","independent_challenge_evidence":{"ref":"challenge"}},"semantic":{"evidence_or_gap":"src/order.rb","source_refs":["src/order.rb"],"excluded_refs":[],"open_decisions":[]},"contributors":[{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"human_or_user","contribution":"decision","evidence_ref":"decision-ref"}]}'
     printf '%s\n' "$structured_valid" >"$structured_responses/assistant-eval-structured/fixture-case.txt"
     if ! "$skill_eval_runner" --responses "$structured_responses" --skill "$structured_skill" >"$structured_output" 2>&1 \
         || ! grep -Fq "structured_json_assertion_failures=0" "$structured_output"; then
@@ -1863,6 +2100,8 @@ else
             '(.semantic.evidence_or_gap) = "   "' \
             '(.semantic.source_refs) = []' \
             '(.semantic.excluded_refs) = ["unexpected-ref"]' \
+            'del(.semantic.open_decisions)' \
+            '(.semantic.open_decisions) = {}' \
             '(.architecture_decision_pack.mode) = "lightweight"' \
             '(.architecture_decision_pack.independent_challenge_evidence) = null' \
             '(.contributors) = [{"role":"agent","contribution":"analysis","evidence_ref":"analysis-ref"},{"role":"agent","contribution":"decision","evidence_ref":"decision-ref"}]' \
@@ -1936,6 +2175,64 @@ if [[ ${#equals_array_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "equals array assertions do not preserve exact ordered primitive-array semantics: ${equals_array_failures[*]}"
+fi
+
+test_start "array_nonblank_strings assertions enforce typed readiness arrays and allow an explicit empty boundary"
+readiness_array_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-readiness-array.XXXXXX")"
+readiness_array_skill="$readiness_array_root/assistant-eval-readiness-array"
+readiness_array_responses="$readiness_array_root/responses"
+readiness_array_output="$readiness_array_root/readiness-array.out"
+readiness_array_err="$readiness_array_root/validation.err"
+p0p4_register_cleanup "$readiness_array_root"
+p0p4_write_skill_eval_fixture "$readiness_array_skill"
+jq '.cases[0].machine_expectations.structured_json_assertions = [
+  {"operator":"array_nonblank_strings","path":["readiness","implementation_implications"],"allow_empty":false},
+  {"operator":"array_nonblank_strings","path":["readiness","open_decisions"],"allow_empty":true}
+]' "$readiness_array_skill/evals/cases.json" >"$readiness_array_root/cases.json"
+mv "$readiness_array_root/cases.json" "$readiness_array_skill/evals/cases.json"
+cp "$readiness_array_skill/evals/cases.json" "$readiness_array_root/valid-cases.json"
+mkdir -p "$readiness_array_responses/assistant-eval-readiness-array"
+readiness_array_valid='{"fixture":"fixture required fixture first fixture second","readiness":{"implementation_implications":["Preserve the observable route behavior."],"open_decisions":[]}}'
+printf '%s\n' "$readiness_array_valid" >"$readiness_array_responses/assistant-eval-readiness-array/fixture-case.txt"
+readiness_array_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$readiness_array_skill" > /dev/null 2>"$readiness_array_err"; then
+    readiness_array_failures+=("valid fixture: $(cat "$readiness_array_err")")
+elif ! "$skill_eval_runner" --responses "$readiness_array_responses" --skill "$readiness_array_skill" >"$readiness_array_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$readiness_array_output"; then
+    readiness_array_failures+=("valid typed readiness arrays")
+else
+    for mutation in \
+        'del(.readiness.implementation_implications)' \
+        '(.readiness.implementation_implications) = []' \
+        '(.readiness.implementation_implications) = {}' \
+        '(.readiness.implementation_implications) = [null]' \
+        '(.readiness.implementation_implications) = ["  "]' \
+        'del(.readiness.open_decisions)' \
+        '(.readiness.open_decisions) = {}' \
+        '(.readiness.open_decisions) = [null]' \
+        '(.readiness.open_decisions) = ["  "]'; do
+        jq "$mutation" <<<"$readiness_array_valid" >"$readiness_array_responses/assistant-eval-readiness-array/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$readiness_array_responses" --skill "$readiness_array_skill" >"$readiness_array_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$readiness_array_output"; then
+            readiness_array_failures+=("$mutation")
+        fi
+    done
+fi
+for invalid_assertion in \
+    '{"operator":"array_nonblank_strings","path":["readiness"],"allow_empty":"true"}' \
+    '{"operator":"array_nonblank_strings","path":[],"allow_empty":true}' \
+    '{"operator":"array_nonblank_strings","path":["readiness","open_decisions"]}' ; do
+    jq --argjson assertion "$invalid_assertion" '(.cases[0].machine_expectations.structured_json_assertions) = [$assertion]' "$readiness_array_root/valid-cases.json" >"$readiness_array_root/invalid.json"
+    mv "$readiness_array_root/invalid.json" "$readiness_array_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$readiness_array_skill" > /dev/null 2>"$readiness_array_err"; then
+        readiness_array_failures+=("unsafe fixture $invalid_assertion")
+    fi
+    cp "$readiness_array_root/valid-cases.json" "$readiness_array_skill/evals/cases.json"
+done
+if [[ ${#readiness_array_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "array_nonblank_strings assertions do not enforce declared readiness-array semantics: ${readiness_array_failures[*]}"
 fi
 
 test_start "path_absent structured assertions distinguish absent fields from null evidence"
@@ -2165,12 +2462,61 @@ else
     pass
 fi
 
+test_start "structured array item array-field assertions reject every malformed later item"
+nonempty_array_fields_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-array-fields.XXXXXX")"
+nonempty_array_fields_skill="$nonempty_array_fields_root/assistant-eval-array-fields"
+nonempty_array_fields_responses="$nonempty_array_fields_root/responses"
+nonempty_array_fields_output="$nonempty_array_fields_root/array-fields.out"
+p0p4_register_cleanup "$nonempty_array_fields_root"
+p0p4_write_skill_eval_fixture "$nonempty_array_fields_skill"
+jq '
+  .cases[0].machine_expectations.structured_json_assertions = [
+    {"operator":"array_items_nonempty_array_fields","path":["evidence_sources"],"fields":["supported_elements_or_relationships","supporting_paths"]}
+  ]
+' "$nonempty_array_fields_skill/evals/cases.json" >"$nonempty_array_fields_root/cases.json"
+mv "$nonempty_array_fields_root/cases.json" "$nonempty_array_fields_skill/evals/cases.json"
+mkdir -p "$nonempty_array_fields_responses/assistant-eval-array-fields"
+printf '%s\n' '{"fixture":"fixture required fixture first fixture second","evidence_sources":[{"supported_elements_or_relationships":["first"],"supporting_paths":["src/first.ts"]},{"supported_elements_or_relationships":["second"],"supporting_paths":["src/second.ts"]}]}' >"$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt"
+array_field_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$nonempty_array_fields_skill" >/dev/null \
+    || ! "$skill_eval_runner" --responses "$nonempty_array_fields_responses" --skill "$nonempty_array_fields_skill" >"$nonempty_array_fields_output" 2>&1 \
+    || ! grep -Fq "structured_json_assertion_failures=0" "$nonempty_array_fields_output"; then
+    array_field_failures+=("valid-response")
+fi
+for mutation in target_missing target_empty target_wrong_type first_item_missing later_second_field_missing null_member object_member blank_member whitespace_member; do
+    case "$mutation" in
+        target_missing) jq 'del(.evidence_sources)' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        target_empty) jq '.evidence_sources = []' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        target_wrong_type) jq '.evidence_sources = {}' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        first_item_missing) jq 'del(.evidence_sources[0].supported_elements_or_relationships)' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        later_second_field_missing) jq 'del(.evidence_sources[1].supporting_paths)' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        null_member) jq '.evidence_sources[1].supported_elements_or_relationships = [null]' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        object_member) jq '.evidence_sources[1].supported_elements_or_relationships = [{}]' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        blank_member) jq '.evidence_sources[1].supported_elements_or_relationships = [""]' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+        whitespace_member) jq '.evidence_sources[1].supported_elements_or_relationships = ["  "]' "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt" >"$nonempty_array_fields_root/mutated.json" ;;
+    esac
+    mv "$nonempty_array_fields_root/mutated.json" "$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt"
+    if "$skill_eval_runner" --responses "$nonempty_array_fields_responses" --skill "$nonempty_array_fields_skill" >"$nonempty_array_fields_output" 2>&1 \
+        || ! grep -Fq "structured_json_assertion_failures=1" "$nonempty_array_fields_output"; then
+        array_field_failures+=("$mutation")
+    fi
+    printf '%s\n' '{"fixture":"fixture required fixture first fixture second","evidence_sources":[{"supported_elements_or_relationships":["first"],"supporting_paths":["src/first.ts"]},{"supported_elements_or_relationships":["second"],"supporting_paths":["src/second.ts"]}]}' >"$nonempty_array_fields_responses/assistant-eval-array-fields/fixture-case.txt"
+done
+if [[ ${#array_field_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "array_items_nonempty_array_fields did not reject malformed later items: ${array_field_failures[*]}"
+fi
+
 test_start "skill eval runner rejects unknown and malformed structured JSON assertion fixtures"
 structured_schema_failures=()
 for mutation in \
     '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"arbitrary_jq","path":["status"]}]' \
     '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":"status","expected":"ready"}]' \
-    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":[-1],"expected":"ready"}]'; do
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":[-1],"expected":"ready"}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_items_nonempty_array_fields","path":"items","fields":["support"]}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_items_nonempty_array_fields","path":["items"],"fields":[]}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_items_nonempty_array_fields","path":["items"],"fields":"support"}]'; do
     malformed_structured_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-structured-schema.XXXXXX")"
     malformed_structured_skill="$malformed_structured_root/assistant-eval-structured-schema"
     malformed_structured_err="$malformed_structured_root/validation.err"
@@ -2386,7 +2732,8 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`empty_array`, `path_absent`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -2408,7 +2755,7 @@ else
 fi
 
 test_start "skill eval docs enumerate the exact canonical structured operator list"
-expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array path_absent equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields'
+expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array array_type array_nonblank_strings path_absent equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields array_items_nonempty_array_fields'
 structured_operator_list_is_exact() {
     local document="$1" source_kind="$2" paragraph actual
     case "$source_kind" in
@@ -2422,7 +2769,7 @@ structured_operator_list_is_exact() {
         contract-guide)
             paragraph="$(awk '
                 /Use only the fixed provider-neutral operators/ { print; exit }
-            ' "$document" | perl -pe 's/(\x60array_items_nonempty_fields\x60).*/$1/')"
+            ' "$document" | perl -pe 's/(\x60array_items_nonempty_array_fields\x60).*/$1/')"
             ;;
         *)
             return 2
@@ -2445,7 +2792,7 @@ for operator_document in evals-readme contract-guide; do
         evals-readme) source_document="$FRAMEWORK_DIR/docs/evals/README.md" ;;
         contract-guide) source_document="$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" ;;
     esac
-    for removed_operator in one_of array_object_values_exact; do
+    for removed_operator in one_of array_object_values_exact array_items_nonempty_array_fields; do
         mutant_document="$docs_operator_mutation_root/$operator_document-$removed_operator.md"
         cp "$source_document" "$mutant_document"
         perl -0pi -e "s/\x60$removed_operator\x60,? ?//" "$mutant_document"

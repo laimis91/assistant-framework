@@ -41,9 +41,10 @@ file centralizes decision boundaries that cut across phase details while
   contract, data, security, destructive, or policy concern. Discover carries
   the goal, scope, constraints, and verification directly into Build; there is
   no plan artifact.
-- `prepare_only`: use `plan_mode=approval_required` only when an optional
-  readiness plan is explicitly requested; otherwise retain `plan_mode=none`,
-  including at high/critical risk.
+- `prepare_only`: use `plan_mode=inline` only when an optional readiness plan
+  is explicitly requested; otherwise retain `plan_mode=none`, including at
+  high/critical risk. The readiness plan never waits for implementation
+  approval.
 - For `prepare_only`, force `qa_evaluation_mode=not_required`, even when the
   request explicitly asks for QA or acceptance evaluation. Preserve that request
   only in `feature_preparation_result.future_qa_acceptance_obligation`; it must
@@ -55,7 +56,8 @@ file centralizes decision boundaries that cut across phase details while
   `feature_preparation_result.future_qa_acceptance_obligation`, never as a
   broad readiness substring.
 - `plan_mode=inline`: bounded small work with more than one useful step but no
-  approval trigger. Record the compact plan and continue without waiting.
+  approval trigger, or an explicitly requested `prepare_only` readiness plan.
+  Record the compact plan and continue without waiting.
 - `plan_mode=approval_required`: For `execution_intent != prepare_only`, use
   `plan_mode=approval_required` for medium+, high/critical risk, destructive
   effects, public contract/data/security changes, material architecture or
@@ -205,6 +207,3 @@ gates.
   `harness_capable=false`, and `qa_evaluation_mode=not_required`.
 - Harness checks must prove `references/harness-controller.md` stays
   harness-only.
-- Generated plugin mirrors must come from
-  `tools/plugins/sync-plugin-skills.sh --apply`; do not hand-edit plugin skill
-  copies.

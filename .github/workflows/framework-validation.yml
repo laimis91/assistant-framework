@@ -55,9 +55,6 @@ jobs:
       - name: Validate skills
         run: tools/skills/validate-skills.sh
 
-      - name: Verify generated plugin mirrors
-        run: tools/plugins/sync-plugin-skills.sh --check
-
       - name: Verify Unix installer dry-runs
         run: |
           ./install.sh --agent codex --dry-run

@@ -283,7 +283,7 @@ if ruby -ryaml -rjson -e '
     triage_fields.fetch("harness_capable")["type"] == "boolean" &&
     triage_fields.fetch("required_gates")["validation"].include?("exactly [feature-preparation evidence]") &&
     triage_fields.fetch("required_agents")["validation"].include?("execution_intent=prepare_only") &&
-    lane.fetch("infer_from").start_with?("For execution_intent == prepare_only, use inline_direct") &&
+    lane.fetch("infer_from").start_with?("For execution_intent == prepare_only, use none") &&
     lane.fetch("validation").include?("execution_intent == prepare_only") &&
     triage_fields.fetch("build_execution_lane")["validation"].include?("execution_intent=prepare_only") &&
     completion_fields.fetch("build_execution_lane")["validation"].include?("prepare_only") &&
@@ -307,7 +307,7 @@ if ruby -ryaml -rjson -e '
     assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "qa_evaluation_mode"] && assertion["expected"] == "not_required" } &&
     assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "harness_capable"] && assertion["expected"] == false } &&
     assertions.any? { |assertion| assertion["operator"] == "empty_array" && assertion["path"] == ["triage_result", "required_agents"] } &&
-    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "none" } &&
     assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "workflow_state_mode"] && assertion["expected"] == "journal" } &&
     assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["triage_result", "required_gates"] && assertion["expected"] == ["feature-preparation evidence"] } &&
     large.fetch("machine_expectations").fetch("required_substrings").include?("future_qa_acceptance_obligation") &&
@@ -450,19 +450,26 @@ if ruby -ryaml -rjson -e '
   valid = plan_mode.fetch("validation").include?("prepare_only at any size uses none") &&
     plan_mode.fetch("validation").include?("For execution_intent != prepare_only, approval_required applies") &&
     plan_mode.fetch("infer_from").include?("For execution_intent != prepare_only, approval_required") &&
-    skill.include?("`prepare_only`: `approval_required` only for explicitly requested readiness planning; otherwise `none`") &&
+    plan_mode.fetch("validation").include?("explicit readiness plan, which uses inline and never waits") &&
+    plan_mode.fetch("infer_from").include?("inline only for explicit readiness") &&
+    plan_mode.fetch("on_fail").include?("execution_intent == prepare_only") &&
+    plan_mode.fetch("on_fail").include?("set none unless the user explicitly requested a readiness Plan, then set inline") &&
+    plan_mode.fetch("on_fail").include?("execution_intent != prepare_only") &&
+    skill.include?("`prepare_only`: `inline` only for explicitly requested readiness planning; otherwise `none`") &&
     skill.include?("For `execution_intent != prepare_only`, `approval_required` applies to medium+") &&
     controller.match?(/`prepare_only` at any size may retain `plan_mode=none`\s+unless an optional readiness plan is specifically requested/) &&
+    controller.include?("`prepare_only`: use `plan_mode=inline` only when an optional readiness plan") &&
     controller.match?(/For `execution_intent != prepare_only`, use\s+`plan_mode=approval_required` for medium+/) &&
     triage.include?("prepare_only at any size retains `none`, including high/critical risk") &&
     triage.include?("For execution_intent != prepare_only, medium+ work") &&
     t_plan_mode.fetch("check").include?("prepare_only at any size retains none") &&
+    t_plan_mode.fetch("check").include?("prepare_only uses inline only for that optional plan") &&
     t_plan_mode.fetch("check").include?("For execution_intent != prepare_only, approval_required") &&
     !skill.include?("non-prepare-only medium+, risky") &&
     !controller.include?("all non-prepare-only medium+ work and any task") &&
     !triage.include?("Non-prepare-only medium+ work, high/critical") &&
     plan.fetch("condition") == "plan_mode != none" &&
-    plan.fetch("checkpoint_end").include?("prepare_only readiness plans") &&
+    plan.fetch("checkpoint_end") == "--- PHASE: PLAN COMPLETE ---" &&
     plan_mode.fetch("description").include?("requires explicit plan approval before implementation work") &&
     plan_mode.fetch("description").include?("prepare_only readiness never waits for implementation approval") &&
     !plan_mode.fetch("description").include?("waits for explicit plan approval") &&
@@ -475,8 +482,8 @@ if ruby -ryaml -rjson -e '
     terminal_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
     terminal_case.fetch("expected_behavior").join(" ").include?("Preparation Completion") &&
     terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" } &&
-    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
-    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "inline_direct" } &&
+    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "build_execution_lane"] && assertion["expected"] == "none" } &&
+    terminal_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["triage_result", "build_execution_lane"] && assertion["expected"] == "none" } &&
     !large_case.nil? &&
     large_case.fetch("expected_behavior").join(" ").include?("Keeps plan_mode=none") &&
     large_case.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["path"] == ["completion_policy", "plan_mode"] && assertion["expected"] == "none" }
@@ -495,6 +502,7 @@ if ruby -ryaml -rjson -e '
   cases = JSON.parse(File.read(ARGV.fetch(3))).fetch("cases")
   gate_map = gates.fetch("gates").to_h { |gate| [gate.fetch("phase"), gate] }
   invariant = gates.fetch("invariants").find { |item| item["id"] == "INV2" }
+  strict_checkpoint_invariant = gates.fetch("invariants").find { |item| item["id"] == "INV3" }
   completion = gate_map.fetch("PREPARATION_COMPLETION")
   completion_ids = completion.fetch("exit_assertions").map { |item| item["id"] }
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
@@ -503,13 +511,19 @@ if ruby -ryaml -rjson -e '
   tier = output.fetch("completion_tiers").fetch("preparation_only")
   eval_ids = %w[medium-prepare-only-terminal-route large-prepare-only-terminal-route]
   valid = %w[BUILD REVIEW].all? { |phase| gate_map.fetch(phase).fetch("condition").include?("execution_intent != prepare_only") } &&
+    gate_map.fetch("DECOMPOSE").fetch("condition").include?("execution_intent != prepare_only") &&
     gate_map.fetch("DESIGN").fetch("condition").include?("execution_intent != prepare_only") &&
     gate_map.fetch("PLAN").fetch("condition") == "plan_mode != none" &&
     current_phase_names.include?("PREPARATION_COMPLETION") &&
     completion.fetch("condition") == "execution_intent == prepare_only" &&
     %w[PC1 PC2 PC3].all? { |id| completion_ids.include?(id) } &&
     invariant.fetch("check").include?("prepare_only") &&
+    invariant.fetch("check").include?("Plan readiness is optional") &&
+    !invariant.fetch("check").include?("Decompose/Plan") &&
     tier.fetch("required_artifacts") == %w[completion_policy validation_results feature_preparation_result] &&
+    tier.fetch("conditional_artifacts").include?("phase_checkpoints") &&
+    artifacts.fetch("phase_checkpoints").fetch("condition").include?("controller_intensity == strict") &&
+    strict_checkpoint_invariant.fetch("check").include?("every executed phase prints each declared non-null checkpoint") &&
     preparation_forbidden.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
     eval_ids.all? { |id| cases.any? { |item| item["id"] == id } }
   exit valid ? 0 : 1
@@ -517,6 +531,63 @@ if ruby -ryaml -rjson -e '
     pass
 else
     fail "prepare-only still inherits implementation phase or final-handoff requirements"
+fi
+
+test_start "prepare-only readiness guidance advertises optional Plan but no impossible Decompose route"
+if ruby -e '
+  invariant = File.read(ARGV.fetch(0))
+  reference = File.read(ARGV.fetch(1))
+  valid = invariant.include?("Plan readiness is optional") &&
+    !invariant.include?("Decompose/Plan readiness work is optional") &&
+    reference.include?("Readiness Plan\ncontext is optional; Decompose") &&
+    !reference.include?("Readiness\nDecompose/Plan context is optional")
+  exit valid ? 0 : 1
+' "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/references/feature-preparation-evidence.md"; then
+    pass
+else
+    fail "prepare-only guidance still advertises an unavailable readiness Decompose phase"
+fi
+
+test_start "active Decompose guidance excludes prepare-only work"
+if ruby -e '
+  phases, patterns = ARGV.map { |path| File.read(path) }
+  valid = phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
+    phases.include?("For `prepare_only`, skip Decompose and move from Discover to Preparation Completion; optional Plan readiness has no slices.") &&
+    patterns.include?("**Skip Decompose:** Medium+ implementation/execution work MUST decompose into strict slices.") &&
+    patterns.include?("`prepare_only` uses Discover -> PREPARATION_COMPLETION with optional Plan readiness and no slices.")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/references/phases.md" "$workflow_dir/references/mega-and-patterns.md"; then
+    pass
+else
+    fail "active Decompose guidance still routes prepare-only work into executable slices"
+fi
+
+test_start "prepare-only applicability is aligned across loaded workflow consumers"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  skill, phases, plan, journal, roles, patterns = ARGV.drop(1).map { |path| File.read(path) }
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  valid = output.fetch("completion_tiers").fetch("preparation_only").fetch("conditional_artifacts").include?("task_journal") &&
+    artifacts.fetch("task_journal").fetch("condition").include?("workflow_state_mode == journal") &&
+    skill.include?("`references/artifact-first-output-contract.md` before Plan only when `execution_intent != prepare_only`") &&
+    phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
+    plan.include?("For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits.") &&
+    plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
+    journal.include?("[required for medium+ tasks; update after each slice before starting the next]") &&
+    journal.include?("[applies only when `execution_intent != prepare_only`; prepare_only has no slices]") &&
+    journal.include?("**Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.") &&
+    roles.include?("## Dispatch rules by task size (`execution_intent != prepare_only`)") &&
+    roles.include?("For `prepare_only`, dispatch only concretely triggered Discover or preparation roles") &&
+    patterns.include?("**Skip review:** For implementation/execution work") &&
+    patterns.include?("**Skip SOLID:** For implementation/execution work") &&
+    patterns.include?("**No checkpoints:** Exact phase checkpoints are required only when controller intensity, explicit project policy, or the user requires them.")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/output.yaml" "$workflow_dir/SKILL.md" "$workflow_dir/references/phases.md" \
+  "$workflow_dir/references/plan-template.md" "$workflow_dir/references/task-journal-template.md" \
+  "$workflow_dir/references/subagent-roles.md" "$workflow_dir/references/mega-and-patterns.md"; then
+    pass
+else
+    fail "prepare-only applicability drifted across workflow artifacts or loaded guidance"
 fi
 
 test_start "prepare-only plan readiness does not inherit approval wait or Build routing"
@@ -606,7 +677,7 @@ if ruby -ryaml -e '
     evidence_reference.fetch("on_fail").include?("prepare_only readiness") && evidence_reference.fetch("on_fail").include?("execution") &&
     pack_reference.fetch("on_fail").include?("prepare_only") && pack_reference.fetch("on_fail").include?("readiness") && pack_reference.fetch("on_fail").include?("execution") &&
     readiness_repair &&
-    phases.include?("prepare_only readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts") &&
+    phases.include?("Readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts") &&
     phases.include?("For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply") &&
     phases.include?("Architect implementation blueprint and dispatch apply only when `execution_intent != prepare_only`") &&
     phases.include?("prepare_only does not create an implementation blueprint")
@@ -637,12 +708,27 @@ if ruby -e '
  section=File.read(ARGV[0]).split(/^## /).find{|x|x.start_with?("Architecture Decision Pack")}; line=section&.lines&.find{|x|x.match?(/^\s*- Plan\/task packet\/review refs:/)}; exit(line && line.match?(/prepare_only.*(absent|N\/A).*execution.*typed/i) ? 0 : 1)
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "Plan/task packet/review refs label does not itself state prepare-only absence and typed execution locations"; fi
 
+test_start "task-journal lifecycle does not persist Decompose slices for prepare-only work"
+if ruby -e '
+  lifecycle = File.read(ARGV.fetch(0)).split(/^## /).find { |section| section.start_with?("Lifecycle") }
+  step = lifecycle&.lines&.find { |line| line.start_with?("4. **Decompose/Plan**") }
+  valid = step && step.include?("execution_intent != prepare_only") &&
+    step.include?("retain readiness context") &&
+    step.include?("optionally record an inline no-wait Plan") &&
+    step.include?("do not create or persist Decompose slices")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/references/task-journal-template.md"; then
+    pass
+else
+    fail "task-journal lifecycle still requires prepare-only Decompose slices"
+fi
+
 test_start "shared manifest validates records against independent expected root and forbidden tuples"
 expected_case_records="$(feature_prep_expected_case_records)"
 manifest_records="$(manifest_case_records)"
-root_group_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|plan_document/')"
-forbidden_delete_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')"
-forbidden_substitution_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|plan_document$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|changed_files/')"
+root_group_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|small|none/')"
+forbidden_delete_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|/')"
+forbidden_substitution_mutation="$(printf '%s\n' "$manifest_records" | sed 's/^medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none$/medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|inline/')"
 if feature_prep_case_manifest_is_valid "$expected_case_records" \
     && ! validate_case_records "$root_group_mutation" "$expected_case_records" \
     && ! validate_case_records "$forbidden_delete_mutation" "$expected_case_records" \
@@ -658,11 +744,11 @@ if ruby -e '
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "task-journal labeled slice and plan refs do not explicitly branch prepare-only N/A from execution typed refs"; fi
 
 test_start "both graders independently reject every plan-none mode and plan-document mutation"
-if grep -Fq 'completion_policy.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'triage_result.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'plan_document injection alone' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'completion_policy.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'triage_result.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'plan_document injection alone' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none mutation coverage combines selectors or is absent from one actual grader"; fi
+if grep -Fq 'completion_policy.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'triage_result.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'forbidden_paths' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'completion_policy.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'triage_result.plan_mode wrong alone' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'forbidden_paths' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none mutation coverage combines selectors or is absent from one actual grader"; fi
 
 test_start "shared manifest validates exact unique case membership and rejects duplicate or omitted cases"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
-if [[ -f "$helper" ]] && grep -Fq 'duplicate case id' "$helper" && grep -Fq 'omitted case id' "$helper" && grep -Fq 'plan_none_cases' "$helper" && grep -Fq 'forbidden_artifacts' "$helper" && grep -Fq 'duplicate' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'omitted' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "shared manifest lacks executable duplicate or omission membership validation"; fi
+if [[ -f "$helper" ]] && grep -Fq 'duplicate case id' "$helper" && grep -Fq 'omitted case id' "$helper" && grep -Fq 'plan_none_cases' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'duplicate' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'omitted' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "shared manifest lacks executable duplicate or omission membership validation"; fi
 
 test_start "task journal labels make prepare-only fields N/A and execution refs typed"
 if ruby -e '
@@ -672,14 +758,14 @@ if ruby -e '
 test_start "plan-none preparation evals assert triage and completion values and reject wrong plan modes"
 if grep -Fq '"completion_policy", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Fq '"triage_result", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none preparation evals do not mutate and reject wrong triage/completion plan modes in both graders"; fi
 
-test_start "shared helper owns executable case-root manifest and full grader-call accounting"
+test_start "shared helper owns executable case-root manifest and bounded grader-call accounting"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
-if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_artifacts' "$helper" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'case_roots' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_root_or_forbidden_mutation_count" -eq 51' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 10' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 61' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "grader suites duplicate case mappings or undercount corpus-expanded actual grader calls"; fi
+if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 341' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 10' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 13' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 341' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "grader suites duplicate case mappings, omit direct structured probes, or overcount bounded full CLI calls"; fi
 
 test_start "actual graders mutate every prepare-only active root, forbid plan documents, and journal branches detailed refs"
 if ruby -ryaml -e '
  j=File.read(ARGV[0]); required=%w[completion_policy validation_results feature_preparation_evidence]; ok=required.all?{|x|j.include?("prepare_only") && j.include?(x)} && j.include?("discover_only") && j.include?("execution_intent != prepare_only") && j.include?("downstream task/review refs"); exit(ok ? 0 : 1)
-' "$workflow_dir/references/task-journal-template.md" && grep -Eq 'medium-prepare-only-readiness-does-not-wait.*(completion_policy|validation_results|feature_preparation_evidence)' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'plan_document' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'plan_document' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'validation_results' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "actual graders do not mutate every prepare-only active root, reject injected plan documents, and enforce detailed journal lane refs"; fi
+' "$workflow_dir/references/task-journal-template.md" && grep -Eq 'medium-prepare-only-readiness-does-not-wait.*(completion_policy|validation_results|feature_preparation_evidence)' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'forbidden_paths' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'forbidden_paths' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'validation_results' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "actual graders do not mutate every prepare-only active root, reject structured forbidden paths, and enforce detailed journal lane refs"; fi
 
 test_start "prepare-only D5 and task-journal handoffs retain readiness context without execution packets"
 if ruby -ryaml -e '
@@ -709,8 +795,10 @@ test_start "prepare-only optional plans keep artifacts, Pack handoffs, and root 
 if ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0)); gates = YAML.load_file(ARGV.fetch(1)); skill = File.read(ARGV.fetch(2)); pack = File.read(ARGV.fetch(3)); root = File.read(ARGV.fetch(4))
   artifacts = output.fetch("artifacts").to_h { |a| [a["name"], a] }; plan = gates.fetch("gates").find { |g| g["phase"] == "PLAN" }; a = plan.fetch("exit_assertions").to_h { |x| [x["id"], x] }
+  readiness_plan = artifacts.fetch("feature_preparation_result").fetch("object_fields").find { |field| field["name"] == "readiness_plan" }
   handoff = artifacts.fetch("architecture_decision_pack").fetch("object_fields").find { |f| f["name"] == "handoff_refs" }
-  valid = artifacts.fetch("artifact_contract")["condition"].include?("execution_intent != prepare_only") && artifacts.fetch("plan_document")["validation"].include?("prepare_only") && artifacts.fetch("plan_document")["on_fail"].include?("readiness") && %w[P5 P6].all? { |id| a.fetch(id)["condition"].include?("execution_intent != prepare_only") } && handoff.fetch("validation").include?("discover_only") && handoff.fetch("on_fail").include?("Preparation Completion") && pack.include?("discover_only") && skill.include?("prepare_only") && root.include?("prepare_only")
+  readiness_fields = readiness_plan.fetch("object_fields").to_h { |field| [field["name"], field] }
+  valid = artifacts.fetch("artifact_contract")["condition"].include?("execution_intent != prepare_only") && artifacts.fetch("plan_document")["validation"].include?("not_applicable") && artifacts.fetch("plan_document")["on_fail"].include?("readiness") && readiness_plan.fetch("condition").include?("plan_mode == inline") && readiness_fields.keys.sort == %w[evidence_ref execution_status implementation_implications open_decisions preparation_basis recommended_next_state].sort && readiness_fields.fetch("evidence_ref").fetch("condition").include?("existing_system") && readiness_fields.fetch("preparation_basis").fetch("condition").include?("not_applicable") && %w[P5 P6].all? { |id| a.fetch(id)["condition"].include?("execution_intent != prepare_only") } && handoff.fetch("validation").include?("discover_only") && handoff.fetch("on_fail").include?("Preparation Completion") && pack.include?("discover_only") && skill.include?("prepare_only") && root.include?("prepare_only")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/SKILL.md" "$workflow_dir/references/architecture-decision-pack.md" "$FRAMEWORK_DIR/README.md"; then pass; else fail "prepare-only optional Plan artifacts and Pack handoffs are not consistently readiness-bound"; fi
 
@@ -1336,7 +1424,7 @@ if ruby -rjson -e '
     exact.call(["feature_preparation_evidence", "ref"], "prep/medium-feature") &&
     exact.call(["feature_preparation_result", "feature_preparation_evidence_ref"], "prep/medium-feature") &&
     roots.all? { |root| nonempty.call([root]) || root == "feature_preparation_evidence" && exact.call([root, "ref"], "prep/medium-feature") } && absent
-  record = "#{case_id}|medium|plan_document"
+  record = "#{case_id}|medium|none"
   exit(entry && complete && record_sets.all? { |records| records.any? { |line| line.include?(record) } } ? 0 : 1)
 ' "$workflow_dir/evals/cases.json" \
   "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh" \
@@ -1344,6 +1432,62 @@ if ruby -rjson -e '
     pass
 else
     fail "future-QA medium preparation omits a complete medium readiness root, stable evidence identity, or plan-document exclusion"
+fi
+
+test_start "strict journal preparation and optional readiness Plans inherit roots with typed no-execution eval coverage"
+if ruby -rjson -e '
+  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
+  helper = File.read(ARGV.fetch(1))
+  oracle = File.read(ARGV.fetch(2))
+  large = cases.find { |entry| entry["id"] == "large-prepare-only-terminal-route" }
+  readiness = cases.find { |entry| entry["id"] == "medium-prepare-only-readiness-plan" }
+  not_applicable_readiness = cases.find { |entry| entry["id"] == "medium-prepare-only-not-applicable-readiness-plan" }
+  strict_readiness = cases.find { |entry| entry["id"] == "large-strict-prepare-only-readiness-plan" }
+  large_assertions = large&.dig("machine_expectations", "structured_json_assertions") || []
+  readiness_assertions = readiness&.dig("machine_expectations", "structured_json_assertions") || []
+  nonempty = ->(assertions, path) { assertions.any? { |item| item["operator"] == "nonempty_string" && item["path"] == path } }
+  exact = ->(assertions, path, value) { assertions.any? { |item| item["operator"] == "equals" && item["path"] == path && item["expected"] == value } }
+  absent = ->(assertions, path) { assertions.any? { |item| item["operator"] == "path_absent" && item["path"] == path } }
+  strict_journal = nonempty.call(large_assertions, ["task_journal"]) && nonempty.call(large_assertions, ["context_map"]) &&
+    helper.include?("FEATURE_PREP_LARGE_REQUIRED_ROOTS=(completion_policy triage_result phase_checkpoints task_journal context_map") &&
+    helper.include?(%q(.task_journal = ".codex/task.md")) && helper.include?(%q(.context_map = ".codex/context-map.md"))
+  readiness_plan = readiness &&
+    exact.call(readiness_assertions, ["execution_intent"], "prepare_only") &&
+    exact.call(readiness_assertions, ["completion_policy", "plan_mode"], "inline") &&
+    exact.call(readiness_assertions, ["triage_result", "plan_mode"], "inline") &&
+    nonempty.call(readiness_assertions, ["plan_document"]) &&
+    %w[phase_checkpoints artifact_contract task_packet decomposition_plan_review slice_manifest changed_files test_results review_result final_handoff user_approval].all? { |root| absent.call(readiness_assertions, [root]) } &&
+    helper.include?("medium-prepare-only-readiness-plan|medium|") &&
+    helper.include?("FEATURE_PREP_MEDIUM_READINESS_PLAN_REQUIRED_ROOTS") &&
+    helper.include?("build_medium_prepare_only_readiness_plan_response") &&
+    oracle.include?("medium-prepare-only-readiness-plan|medium|")
+  strict_readiness_plan = strict_readiness &&
+    exact.call(strict_readiness_assertions = strict_readiness.dig("machine_expectations", "structured_json_assertions") || [], ["completion_policy", "controller_intensity"], "strict") &&
+    exact.call(strict_readiness_assertions, ["completion_policy", "plan_mode"], "inline") &&
+    exact.call(strict_readiness_assertions, ["phase_checkpoints"], ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---", "--- PHASE: PREPARATION COMPLETION ---", "--- PHASE: PREPARATION COMPLETE ---"]) &&
+    %w[artifact_contract task_packet decomposition_plan_review slice_manifest changed_files test_results review_result final_handoff user_approval].all? { |root| absent.call(strict_readiness_assertions, [root]) } &&
+    helper.include?("large-strict-prepare-only-readiness-plan|large|") &&
+    helper.include?("FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS") &&
+    helper.include?("build_large_strict_prepare_only_readiness_plan_response") &&
+    oracle.include?("large-strict-prepare-only-readiness-plan|large|")
+  not_applicable_assertions = not_applicable_readiness&.dig("machine_expectations", "structured_json_assertions") || []
+  not_applicable_readiness_plan = not_applicable_readiness &&
+    exact.call(not_applicable_assertions, ["feature_preparation_scope"], "not_applicable") &&
+    exact.call(not_applicable_assertions, ["completion_policy", "controller_intensity"], "standard") &&
+    exact.call(not_applicable_assertions, ["completion_policy", "plan_mode"], "inline") &&
+    exact.call(not_applicable_assertions, ["feature_preparation_result", "readiness_plan", "preparation_basis"], "not_applicable") &&
+    %w[feature_preparation_evidence phase_checkpoints artifact_contract task_packet decomposition_plan_review slice_manifest qa_evaluation_result fresh_review_result changed_files test_results review_result final_handoff user_approval].all? { |root| absent.call(not_applicable_assertions, [root]) } &&
+    absent.call(not_applicable_assertions, ["feature_preparation_result", "feature_preparation_evidence_ref"]) &&
+    absent.call(not_applicable_assertions, ["feature_preparation_result", "readiness_plan", "evidence_ref"]) &&
+    helper.include?("medium-prepare-only-not-applicable-readiness-plan|medium|") &&
+    helper.include?("FEATURE_PREP_MEDIUM_NOT_APPLICABLE_READINESS_PLAN_REQUIRED_ROOTS") &&
+    helper.include?("build_medium_prepare_only_not_applicable_readiness_plan_response") &&
+    oracle.include?("medium-prepare-only-not-applicable-readiness-plan|medium|")
+  exit(strict_journal && readiness_plan && strict_readiness_plan && not_applicable_readiness_plan ? 0 : 1)
+' "$workflow_dir/evals/cases.json" "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh" "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-case-oracle.sh"; then
+    pass
+else
+    fail "strict journal evidence or optional readiness-Plan inherited-root/no-execution coverage is incomplete"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

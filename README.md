@@ -31,16 +31,6 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
-Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The current installer still uses the root `skills/assistant-*` release inventory by default, and it also supports focused profile installs:
-
-```bash
-./install.sh --agent codex --plugin assistant-core
-./install.sh --agent codex --plugin assistant-research
-./install.sh --agent codex --plugin assistant-dev
-```
-
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold contains `assistant-clarify` and `assistant-telos`; the research scaffold has three skills, and the dev scaffold has nine. These plugin-local copies are generated release artifacts from the root `skills/assistant-*` source of truth; verify or refresh them with `tools/plugins/sync-plugin-skills.sh --check` and `tools/plugins/sync-plugin-skills.sh --apply`. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
-
 Install a single skill:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking
@@ -75,11 +65,10 @@ Install the complete release inventory for one agent:
 .\install.ps1 -Agent gemini
 ```
 
-The same entry point supports a single skill, a focused profile, and a non-mutating preview:
+The same entry point supports a single skill and a non-mutating preview:
 
 ```powershell
 .\install.ps1 -Agent claude -Skill assistant-thinking
-.\install.ps1 -Agent codex -Plugin assistant-dev
 .\install.ps1 -Agent codex -DryRun
 ```
 
@@ -170,8 +159,8 @@ For `execution_intent != prepare_only`, `plan_mode=none` is limited to small,
 local, reversible, high-confidence work with known scope. `inline` records a
 short plan without an approval wait. For `prepare_only` at any size, `plan_mode=none` is the default; optional readiness planning retains evidence and next-state context only, without executable packets or downstream Pack handoffs.
 For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
-`approval_required` applies to medium-or-larger work and to risk, policy, or
-public-impact changes. Build owns implementation, tests, verification, and
+For `execution_intent != prepare_only`, `approval_required` applies to medium-or-larger work and to risk, policy, or
+public-impact changes. An explicitly requested `prepare_only` readiness Plan is always inline and no-wait. Build owns implementation, tests, verification, and
 a bounded repair loop: at most three attempts, a no-progress limit of two, and
 recorded failure signatures and progress before pivoting or reporting a block.
 Build repair is implementation/verification-failure recovery. Review-fix work

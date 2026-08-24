@@ -270,22 +270,23 @@ fields:
   - name: build_execution_lane
     type: enum
     required: false
-    enum_values: [inline_direct, bounded_executor, separated_workers]
+    enum_values: [none, inline_direct, bounded_executor, separated_workers]
     description: "Build lane."
     default: bounded_executor
     on_missing: infer
-    infer_from: "For execution_intent == prepare_only, use inline_direct; otherwise light local -> inline_direct, ordinary medium -> bounded_executor, separated_workers only for high/critical, broad/noisy, environment-heavy, independent TDD, or explicit separation."
-    validation: "For execution_intent == prepare_only, inline_direct records no Build lane. Size alone never requires separated_workers; bounded_executor records RED, focused GREEN/regression, and independent Code Reviewer evidence."
+    infer_from: "For execution_intent == prepare_only, use none; otherwise light local -> inline_direct, ordinary medium -> bounded_executor, separated_workers only for high/critical, broad/noisy, environment-heavy, independent TDD, or explicit separation."
+    validation: "For execution_intent == prepare_only, none records that no Build lane runs. Size alone never requires separated_workers; bounded_executor records RED, focused GREEN/regression, and independent Code Reviewer evidence."
 
   - name: plan_mode
     type: enum
     required: false
     enum_values: [none, inline, approval_required]
     description: "requires explicit plan approval before implementation work; prepare_only readiness never waits for implementation approval."
-    validation: "prepare_only at any size uses none unless explicit readiness plan; approval_required then covers only it. For execution_intent != prepare_only, approval_required applies to medium+/risk/policy/scope/explicit; none trivial-safe, inline bounded-small."
+    validation: "prepare_only at any size uses none unless an explicit readiness plan, which uses inline and never waits. For execution_intent != prepare_only, approval_required applies to medium+/risk/policy/scope/explicit; none trivial-safe, inline bounded-small."
+    on_fail: "For execution_intent == prepare_only, set none unless the user explicitly requested a readiness Plan, then set inline and continue without waiting. For execution_intent != prepare_only, re-triage and use approval_required only when its execution triggers apply."
     default: none
     on_missing: infer
-    infer_from: "prepare_only -> none; approval_required only for explicit readiness. For execution_intent != prepare_only, approval_required applies to medium+/triggers; inline bounded-small."
+    infer_from: "prepare_only -> none; inline only for explicit readiness. For execution_intent != prepare_only, approval_required applies to medium+/triggers; inline bounded-small."
 
   - name: controller_intensity
     type: enum

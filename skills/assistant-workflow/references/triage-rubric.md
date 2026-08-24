@@ -27,7 +27,7 @@ unless isolated/covered.
 | Mode | Use when |
 |---|---|
 | `none` | prepare_only at any size retains `none`, including high/critical risk, unless optional readiness planning is requested. |
-| `inline` | Bounded small, no approval trigger. |
+| `inline` | Bounded small, no approval trigger, or an explicitly requested prepare_only readiness plan; never waits. |
 | `approval_required` | For execution_intent != prepare_only, medium+ work, high/critical, destructive/public/data/security, material architecture/scope, policy, or explicit approval. |
 
 ## Controller Intensity Rules

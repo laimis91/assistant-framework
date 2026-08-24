@@ -10,11 +10,19 @@ tdd="$FRAMEWORK_DIR/skills/assistant-tdd"
 
 test_start "workflow defines adaptive build execution lanes"
 if p0p4_contains_text "$workflow/contracts/input.yaml" "- name: build_execution_lane" \
-    && p0p4_contains_text "$workflow/contracts/input.yaml" "enum_values: [inline_direct, bounded_executor, separated_workers]" \
+    && p0p4_contains_text "$workflow/contracts/input.yaml" "enum_values: [none, inline_direct, bounded_executor, separated_workers]" \
     && p0p4_contains_text "$workflow/contracts/output.yaml" "- name: build_execution_lane"; then
     pass
 else
     fail "workflow does not expose a typed execution lane"
+fi
+
+test_start "prepare-only routes to no execution lane"
+if p0p4_contains_text "$workflow/contracts/input.yaml" "For execution_intent == prepare_only, use none" \
+    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "build_execution_lane=none"; then
+    pass
+else
+    fail "prepare-only routing does not select the no-execution lane"
 fi
 
 test_start "ordinary medium defaults to bounded executor plus independent review"

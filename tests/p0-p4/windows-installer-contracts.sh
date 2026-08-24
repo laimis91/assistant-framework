@@ -19,7 +19,7 @@ if [[ -f "$installer" ]]; then
     grep -Fq -- '#requires -Version 5.1' "$installer" \
         || failures+=("missing PowerShell 5.1 marker")
 
-    for parameter in Agent Skill Plugin DryRun NoHooks; do
+    for parameter in Agent Skill DryRun NoHooks; do
         grep -Eq -- "\\\$$parameter([[:space:]]|[,)=])" "$installer" \
             || failures+=("missing -$parameter parameter")
     done
@@ -138,8 +138,6 @@ else
         || promotion_failures+=("Windows workflow push validation is not restricted exactly to main")
     grep -Fq -- "- 'install.sh'" "$workflow" \
         || promotion_failures+=("Windows workflow does not react to Unix installer parity changes")
-    grep -Fq -- "- 'docs/plugin-architecture.md'" "$workflow" \
-        || promotion_failures+=("Windows workflow does not react to plugin profile source changes")
     if grep -Eqi -- 'ExecutionPolicy[[:space:]]+Bypass' "$workflow"; then
         promotion_failures+=("Windows workflow bypasses PowerShell execution policy")
     fi
@@ -155,8 +153,6 @@ else
         || promotion_failures+=("README lacks a full native Windows install example")
     grep -Eq -- 'install\.ps1[^[:cntrl:]]*-Skill[[:space:]]+[^[:space:]]+' "$readme" \
         || promotion_failures+=("README lacks a single-skill Windows example")
-    grep -Eq -- 'install\.ps1[^[:cntrl:]]*-Plugin[[:space:]]+[^[:space:]]+' "$readme" \
-        || promotion_failures+=("README lacks a profile Windows example")
     grep -Eq -- 'install\.ps1[^[:cntrl:]]*-DryRun([[:space:]]|$)' "$readme" \
         || promotion_failures+=("README lacks a Windows dry-run example")
     grep -Eqi -- 'reinstall|re-run the (same )?command|run the (same )?command again' "$readme" \

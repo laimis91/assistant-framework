@@ -517,14 +517,6 @@ else
     fail "workflow loop experiment contract missing terms: ${missing_loop_artifact_terms[*]}"
 fi
 
-test_start "workflow candidate-search root and assistant-dev plugin copies stay in sync"
-if [[ -d "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" ]] \
-    && diff -qr -x .DS_Store "$FRAMEWORK_DIR/skills/assistant-workflow" "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow" >/tmp/p0p4-candidate-plugin-parity.out; then
-    pass
-else
-    fail "assistant-workflow plugin copy is not in sync; see /tmp/p0p4-candidate-plugin-parity.out"
-fi
-
 test_start "workflow state artifacts are orchestrator-owned and ignored"
 missing_state_terms=()
 for term in \
@@ -604,7 +596,7 @@ if ruby -ryaml -e '
   valid = %w[acceptance_criteria qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
     manual.fetch("infer_from").include?("destructive or migration-related") &&
     check.include?("qa_evaluation_mode=not_required") &&
-    check.include?("build_execution_lane=inline_direct") &&
+    check.include?("build_execution_lane=none") &&
     check.include?("harness_capable=false") &&
     check.include?("independent harness evidence") &&
     check.include?("QA request alone") &&
@@ -648,7 +640,7 @@ if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
   triage = File.read(ARGV.fetch(1))
   valid = input.fetch("execution_intent").fetch("infer_from").include?("When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation") &&
-    input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use inline_direct") &&
+    input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use none") &&
     triage.include?("For execution_intent != prepare_only, medium+ work") &&
     input.fetch("controller_intensity").fetch("infer_from").include?("QA request alone never promotes strict") &&
     triage.include?("QA request alone never promotes strict") &&

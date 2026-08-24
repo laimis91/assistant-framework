@@ -35,14 +35,9 @@ result without relying on the original agent transcript.
 flowchart LR
   subgraph DIST["Skill distribution"]
     R["Root skills + contracts"]
-    S["Mirror sync"]
-    P["Plugin skill mirrors"]
     I["Installer to native skills"]
 
-    R -->|"copies whole skill directories"| S
-    S -->|"regenerates or checks"| P
     R -->|"supplies release inventory"| I
-    P -.->|"validates profile dry-runs only"| I
   end
 
   subgraph EVAL["Source-only Codex A/B evaluation"]
@@ -71,10 +66,10 @@ flowchart LR
   end
 ```
 
-Root `skills/assistant-*` directories remain authoritative. Plugin copies are
-generated mirrors, while normal installs still consume the root release
-inventory. The promotion runner, finalizer, context reporter, and evidence
-helper deliberately remain source-repository-only.
+Root `skills/assistant-*` directories remain authoritative and installers
+consume that release inventory directly. The promotion runner, finalizer,
+context reporter, and evidence helper deliberately remain
+source-repository-only.
 
 ## Changed Behavior and Areas
 
@@ -178,7 +173,6 @@ bash tests/p0-p4/eval-contracts.sh
 bash tests/p0-p4/context-budget-report-contracts.sh
 bash tests/p0-p4/installer-contracts.sh
 tools/skills/validate-skills.sh
-tools/plugins/sync-plugin-skills.sh --check
 tools/skills/sync-skill-contract-guide.sh --check
 git diff --check
 ```
@@ -365,8 +359,8 @@ authorization; any promotion decision requires a fresh exact promotion profile.
 
 ## Compatibility and Regression Surfaces
 
-- Root `skills/assistant-*` remain authoritative; generated assistant-dev plugin
-  mirrors are synchronized and normal installs still consume root inventory.
+- Root `skills/assistant-*` remain authoritative and normal installs consume
+  that inventory directly.
 - Codex, Claude, and Gemini share provider-neutral contracts; only Codex has the
   live v5 behavioral evidence, and no provider-specific workflow fork was added.
 - Existing small-task routing stays compact; durable maps and rich handoffs are
@@ -404,7 +398,7 @@ authorization; any promotion decision requires a fresh exact promotion profile.
 
 No material findings within the reviewed scope and available evidence.
 
-Scope: current source/contracts/tests, plugin mirrors, completed evaluated-v5
+Scope: current source/contracts/tests, completed evaluated-v5
 traces and comparison, bounded synthetic packet, documentation, and automatic
 no-promotion decision. Current install parity is verified separately after the
 final refresh. This claim does not transfer the evaluated result to the edited

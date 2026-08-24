@@ -344,8 +344,6 @@ contracts_yaml_parse_failures=()
 for docs_contract in \
     "$docs_input_contract" \
     "$docs_output_contract" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-docs/contracts/output.yaml" \
     "$workflow_dir/contracts/index.yaml" \
     "$workflow_dir/contracts/input.yaml" \
     "$workflow_dir/contracts/output.yaml" \
@@ -355,17 +353,7 @@ for docs_contract in \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/index.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/output.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-workflow/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/index.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/output.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/plugins/assistant-dev/skills/assistant-review/contracts/handoffs.yaml"; do
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"; do
     if ! ruby -e '
         require "yaml"
         def reject_duplicate_keys(node)
