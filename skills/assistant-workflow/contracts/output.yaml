@@ -60,11 +60,12 @@ artifacts:
         type: enum
         required: true
         enum_values: [small, medium, large, mega]
+        validation: "When approved_feature_preparation_harness_obligation is present, size is at least medium even if the requested implementation would otherwise classify as small, because the accepted trace/replay obligation activates the medium+ harness gates."
       - name: controller_intensity
         type: enum
         required: true
         enum_values: [light, standard, strict]
-        validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default; strict requires independent strict, harness, or QA criteria. Do not infer strict from size=medium+ or delegation alone."
+        validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default. For execution_intent != prepare_only, strict requires independent strict, harness, or QA criteria; preparation-only QA/harness requests remain typed future obligations and do not select strict. Do not infer strict from size=medium+ or delegation alone."
       - name: plan_mode
         type: enum
         required: true
@@ -82,7 +83,7 @@ artifacts:
       - name: harness_capable
         type: boolean
         required: true
-        validation: "prepare_only records false unless independent harness evidence is explicitly carried; an explicit QA/acceptance request alone is not independent harness evidence, and strict risk preparation alone does not imply a harness."
+        validation: "prepare_only always records false; explicit harness requests or accepted independent harness evidence are deferred only through feature_preparation_result.future_harness_obligation and never activate harness artifacts or execution routing."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -2494,7 +2495,7 @@ artifacts:
     required: conditional
     condition: "execution_intent == prepare_only"
     description: "Typed no-execution readiness handoff for provider-neutral technical preparation"
-    validation: "Records execution_status=not_started, exact scoped preparation outcome, evidence ref only when existing-system behavior is in scope, evidence gaps, open decisions, implementation implications, and a recommended next step. An explicit QA/acceptance request is retained only in future_qa_acceptance_obligation while qa_evaluation_mode remains not_required. It must not claim changed files, Build, test execution, review, or final handoff."
+    validation: "Records execution_status=not_started, scoped outcome, conditional evidence ref, gaps, decisions, implications, and next step. Explicit QA/acceptance and harness requests live only in future_qa_acceptance_obligation and future_harness_obligation while qa_evaluation_mode remains not_required and harness_capable remains false. Never claims changed files, Build, test execution, review, or final handoff."
     on_fail: "Return to feature preparation, complete the scoped readiness record, and explicitly keep execution not started."
     object_fields:
       - name: execution_status
@@ -2522,13 +2523,13 @@ artifacts:
       - name: open_decisions
         type: string[]
         required: true
-        description: "Admissible remaining Product or technical decisions; never duplicate an explicit QA/acceptance request, which belongs only in future_qa_acceptance_obligation; empty only when none remain"
+        description: "Admissible remaining Product or technical decisions; never duplicate explicit QA/acceptance or harness requests, which belong only in their typed future obligations; empty only when none remain"
         on_missing: fail
       - name: implementation_implications
         type: string[]
         required: true
         min_items: 1
-        description: "Concrete future implementation work, preservation obligation, conflict resolution, or explicit no-change result; do not duplicate an explicit QA/acceptance request outside future_qa_acceptance_obligation"
+        description: "Concrete future implementation work, preservation obligation, conflict resolution, or explicit no-change result; do not duplicate explicit QA/acceptance or harness requests outside their typed future obligations"
         on_missing: fail
       - name: readiness_plan
         type: object
@@ -2586,10 +2587,32 @@ artifacts:
             required: true
             validation: "Names the later implementation workflow after Build and Code Reviewer evidence."
             on_missing: fail
+      - name: future_harness_obligation
+        type: object
+        required: conditional
+        condition: "an explicit harness request or accepted independent harness evidence was supplied during prepare_only"
+        description: "Deferred harness work that cannot activate preparation runtime capability"
+        validation: "Records exact requested scope, non-empty evidence basis, and future execution prerequisite. Absent without an explicit request or accepted evidence; never loads the harness controller, activates runtime artifacts, selects Build, or independently requires strict/journal state. Later implement_only preserves those three payload fields exactly, adds exactly one existing-system evidence-ref or typed not_applicable source binding, and activates the pre-Build harness gate; the enriched consumer object is then carried unchanged downstream."
+        on_missing: fail
+        object_fields:
+          - name: requested_scope
+            type: string
+            required: true
+            on_missing: fail
+          - name: evidence_basis
+            type: string[]
+            required: true
+            min_items: 1
+            on_missing: fail
+          - name: execution_prerequisite
+            type: string
+            required: true
+            validation: "Names an approved later implementation workflow and its accepted pre-Build Done Contract and Harness Recipe."
+            on_missing: fail
       - name: recommended_next_step
         type: string
         required: true
-        description: "Next safe action after preparation, such as seek a decision, approve a plan, or begin a separate implementation workflow; do not duplicate an explicit QA/acceptance request outside future_qa_acceptance_obligation"
+        description: "Next safe action after preparation, such as seek a decision, approve a plan, or begin a separate implementation workflow; do not duplicate explicit QA/acceptance or harness requests outside their typed future obligations"
         on_missing: fail
 
   - name: feature_preparation_evidence

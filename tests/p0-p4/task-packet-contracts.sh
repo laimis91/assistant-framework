@@ -935,8 +935,9 @@ for term in \
 done
 strict_slice_packet="$(awk '/^### Strict slice packet \(execution contract\)$/{capture=1; next} capture && /^### Supporting context/{exit} capture{print}' "$sub_task_template")"
 if [[ "$strict_slice_packet" != *"- feature_preparation_scope:"* ]] \
-    || [[ "$strict_slice_packet" != *"- feature_preparation_evidence_ref:"* ]]; then
-    missing_sub_task_packet_terms+=("strict slice packet missing feature-preparation scope or evidence ref")
+    || [[ "$strict_slice_packet" != *"- feature_preparation_evidence_ref:"* ]] \
+    || [[ "$strict_slice_packet" != *"- feature_preparation_harness_obligation:"* ]]; then
+    missing_sub_task_packet_terms+=("strict slice packet missing feature-preparation scope, evidence ref, or harness obligation")
 fi
 if rg -n "^### (Goal|Scope)$" "$sub_task_template" >/dev/null; then
     missing_sub_task_packet_terms+=("loose Goal/Scope execution sections must be absent")

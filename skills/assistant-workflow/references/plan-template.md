@@ -291,6 +291,8 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 - Execution status: [`Execution not started` for prepare-only | evidence completed before Build for end-to-end | approved evidence ref resolved for implement-only]
 - Plan/readiness result: [implementation steps or the exact evidence gap/conflict]
 - Product questions: [only rows admitted by the canonical evidence matrix]
+- Future QA/acceptance obligation: [`feature_preparation_result.future_qa_acceptance_obligation` or N/A]
+- Future harness obligation: [`feature_preparation_result.future_harness_obligation` or N/A; preparation keeps `harness_capable=false`]
 
 For `prepare_only`, return `feature_preparation_result` instead of an execution
 handoff: scope, evidence ref when applicable, evidence gaps, open decisions,

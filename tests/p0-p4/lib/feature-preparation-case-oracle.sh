@@ -9,6 +9,7 @@ readonly FEATURE_PREP_EXPECTED_CASE_RECORDS=(
     'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none'
     'medium-prepare-only-readiness-reports-pending-requirement-map|medium|none'
     'medium-prepare-only-qa-request-routing|medium|none'
+    'medium-prepare-only-harness-request-routing|medium|none'
     'combined-preparation-and-implementation-routes-end-to-end|small|execution'
     'viewing-route-preserves-active-behavior|light|none'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|none'

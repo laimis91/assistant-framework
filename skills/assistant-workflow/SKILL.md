@@ -19,11 +19,11 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - `plan_mode`: bounded small uses no-wait `inline`; For `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, scope changes. `prepare_only`: `inline` only for explicitly requested readiness planning; otherwise `none`.
 - `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation.
 - Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply.
-- Harness-capable work carries the Done Contract, Harness Recipe, and trace/replay artifacts required by the controller.
+- Harness-capable execution carries required artifacts; preparation records requests as typed future obligations with capability inactive.
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - Triggered Architecture Decision Packs are source-backed and fresh. `prepare_only` retains Discover-only Pack context through Preparation Completion; `execution_intent != prepare_only` continues through Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
-- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; an explicitly requested readiness Plan is always inline and never waits. Existing-system readiness carries the exact unchanged feature-evidence ref; `not_applicable` readiness carries `preparation_basis=not_applicable` and no feature-evidence ref. Product questions need evidence.
+- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; an explicitly requested readiness Plan is always inline and never waits. Existing-system readiness carries the exact unchanged feature-evidence ref; `not_applicable` readiness carries `preparation_basis=not_applicable` and no feature-evidence ref. A deferred harness request remains inactive during preparation, then a later `implement_only` workflow consumes its exact approved obligation, sets `harness_capable=true`, and satisfies the pre-Build harness gate. Product questions need evidence.
 - Review, QA, and security routing apply when triggered.
 - Medium+ output follows `references/final-handoff.md`; prepare_only returns readiness and next implementation state.
 
@@ -47,7 +47,7 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
-- `feature_preparation`: for repository-grounded preparation or existing behavior, load `references/feature-preparation-evidence.md`; resolve its evidence ref before Decompose, Plan, or Build and retain it in downstream artifacts.
+- `feature_preparation`: for repository-grounded preparation, existing behavior, or any carried `approved_feature_preparation_harness_obligation` (including `feature_preparation_scope=not_applicable`), load `references/feature-preparation-evidence.md`; resolve the applicable evidence ref or typed `not_applicable` source binding before Decompose, Plan, or Build and retain it in downstream artifacts.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -149,7 +149,7 @@ direct user request or applicable `AGENTS.md` or active-skill instruction trigge
 opt-out, an exact active policy block, or real unavailability; do not infer unavailability merely because no visible tool is named `Task`, `delegate`, or `subagent`. Delegation retains parent sandbox, tool/action approvals,
 external-write, install, destructive-operation, and secrets safeguards.
 
-Load `references/harness-controller.md` only after `references/workflow-controller.md` or carried-forward phase state establishes `harness_capable=true`.
+Load `references/harness-controller.md` only for `execution_intent != prepare_only` with `harness_capable=true`.
 Load `assistant-security` when touching auth, user input, secrets, persistence, network calls, shell commands, dependency/config changes, or external integrations.
 
 ## Output

@@ -371,6 +371,15 @@ write_workflow_eval_responses() {
                 medium-prepare-only-qa-request-routing)
                     build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
                     ;;
+                medium-prepare-only-harness-request-routing)
+                    build_medium_prepare_only_harness_request_response "$response_path" "$required_summary"
+                    ;;
+                small-input-implement-only-promotes-deferred-harness-obligation|medium-implement-only-consumes-preparation-harness-obligation)
+                    build_medium_implement_only_harness_handoff_response "$response_path" "$required_summary"
+                    ;;
+                medium-implement-only-consumes-not-applicable-preparation-harness-obligation)
+                    build_medium_implement_only_not_applicable_harness_handoff_response "$response_path" "$required_summary"
+                    ;;
                 large-prepare-only-terminal-route)
                     build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
@@ -3481,15 +3490,15 @@ fi
 test_start "workflow keeps full-corpus eval enforcement proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
 if [[ "$workflow_full_corpus_eval_count" -eq 26 \
-    && "$prepare_only_direct_structured_probe_count" -eq 341 \
-    && "$prepare_only_plan_mode_mutation_count" -eq 10 \
+    && "$prepare_only_direct_structured_probe_count" -eq 375 \
+    && "$prepare_only_plan_mode_mutation_count" -eq 12 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 \
-    && "$prepare_only_mutation_invocation_count" -eq 13 \
+    && "$prepare_only_mutation_invocation_count" -eq 15 \
     && "$actual_grader_invocation_count" -eq $((workflow_full_corpus_eval_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
     && "$full_corpus_eval_call_sites" -eq 1 ]]; then
     pass
 else
-    fail "expected 26 full-corpus, 341 independent direct production structured-grader probes, 10 plan-mode full CLI mutations, and 3 representative branch CLI probes; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count full CLI mutations, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total full CLI invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 full-corpus, 375 independent direct production structured-grader probes, 12 plan-mode full CLI mutations, and 3 representative branch CLI probes; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count full CLI mutations, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total full CLI invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

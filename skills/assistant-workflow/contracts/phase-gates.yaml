@@ -43,8 +43,8 @@ gates:
     exit_assertions:
 
       - id: T1
-        check: "size is set to one of: small, medium, large, mega"
-        on_fail: "Re-assess task against size criteria table in SKILL.md"
+        check: "size is set to one of: small, medium, large, mega; an implement_only workflow consuming approved_feature_preparation_harness_obligation is promoted to at least medium even when its implementation scope was initially small"
+        on_fail: "Re-assess task against the size criteria table and promote an accepted deferred harness obligation to at least medium before applying harness gates"
 
       - id: T2
         check: "phases list is populated and matches the size-to-phases mapping table"
@@ -59,8 +59,8 @@ gates:
         on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
 
       - id: T_CONTROLLER_INTENSITY
-        check: "controller_intensity is set to one of: light, standard, strict; ordinary medium+ non-harness work uses standard; for execution_intent != prepare_only, strict is selected only for high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria; for prepare_only, risk/project criteria may select strict preparation but a QA request alone must not."
-        on_fail: "Set controller_intensity from existing completion_tiers/gate_tiers. Do not infer strict from size=medium+ or delegation alone; for prepare_only, restore risk/project-selected strict, force qa_evaluation_mode=not_required, and carry QA/acceptance request only into feature_preparation_result.future_qa_acceptance_obligation."
+        check: "controller_intensity is set to light, standard, or strict; ordinary medium+ non-harness work uses standard. For execution_intent != prepare_only, strict requires high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria. For prepare_only, risk/project criteria may select strict preparation; QA or harness requests alone must not."
+        on_fail: "Reapply completion_tiers/gate_tiers without size/delegation inference. For prepare_only, retain risk/project-selected strict, force QA/harness inactive, and carry requests only in feature_preparation_result.future_qa_acceptance_obligation or future_harness_obligation."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
         check: "plan_mode is none, inline, or approval_required; workflow_state_mode is inline or journal; and manual_verification_mode is not_required, optional, or required"
@@ -85,9 +85,9 @@ gates:
         on_fail: "Select the smallest safe build_execution_lane and matching roles; do not require separated workers from size alone."
 
       - id: T_PREPARATION_ADMISSIBILITY
-        check: "required_gates contains only feature-preparation evidence with no execution or task-category gate; qa_evaluation_mode=not_required, harness_capable=false, and build_execution_lane=none. A QA request alone never promotes harness or QA. required_agents contains only concrete Discover or preparation roles; do not select Build, Review, QA Evaluator, Code Writer, Builder/Tester, or Code Reviewer roles for preparation alone. workflow_state_mode remains inline for QA-only preparation; retain journal or other state only when risk, delegation, or independent harness evidence separately requires it."
+        check: "required_gates contains only feature-preparation evidence: no execution or task-category gate; qa_evaluation_mode=not_required, harness_capable=false, and build_execution_lane=none. QA/harness requests remain typed future obligations and activate neither. required_agents contains only Discover/preparation roles; excludes Build, Review, QA Evaluator, Code Writer, Builder/Tester, and Code Reviewer. workflow_state_mode is inline for future obligations alone; journal requires progressive uncertainty, risk-selected strict preparation, delegation, continuation, or an explicit persisted-state request."
         condition: "execution_intent == prepare_only"
-        on_fail: "Remove every execution/task-category gate and execution role, retain only feature-preparation evidence and concrete Discover/preparation roles, and record future implementation obligations in feature_preparation_result."
+        on_fail: "Remove execution gates/roles, force QA/harness inactive, retain preparation evidence/roles, and record explicit future work in typed feature_preparation_result obligations."
 
       - id: T_QA_EVALUATOR
         check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to the selected Build lane roles and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
@@ -160,9 +160,9 @@ gates:
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D_FEATURE_PREPARATION_EVIDENCE
-        check: "For existing-system feature work, prepare_only/end_to_end discovery completes feature_preparation_evidence before any question, plan, or Build is finalized; implement_only resolves an approved_feature_preparation_evidence_ref covering the current packet. feature_preparation_evidence.ref is the stable identity of that artifact and is carried unchanged to preparation plans, task packets, Architecture Decision Packs, diagrams, and documentation. Every Architecture Decision Pack carried behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding to its canonical row; missing, extra, duplicate, stale, or mismatched bindings block the Pack. Product question admissibility fails closed: absence from requirements/design alone is insufficient; current implementation and relevant behavioral tests are inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible/uninspected evidence is evidence_gap; contradictory evidence is source_conflict; existing behavior extended to a new route/scope is existing_behavior_to_preserve + implementation_gap."
-        condition: "feature_preparation_scope == existing_system"
-        on_fail: "For prepare_only/end_to_end, load references/feature-preparation-evidence.md, trace the behavior path and tests, classify each item, preserve the stable evidence identity unchanged, and replace unsupported Product questions with an implementation gap, source conflict, or evidence gap. For implement_only, stop until the approved evidence ref resolves to the current packet."
+        check: "Existing-system prepare_only/end_to_end completes feature_preparation_evidence before questions, Plan, or Build; existing-system implement_only resolves approved_feature_preparation_evidence_ref. approved_feature_preparation_harness_obligation preserves the three approved payload fields exactly, adds exactly one applicable preparation source binding (that evidence ref for existing_system, or source_preparation_basis=not_applicable with no evidence ref), and carries the enriched consumer object unchanged downstream. It promotes an initially small implementation to at least medium, sets harness_capable=true, and completes the Done Contract/Harness Recipe plus runtime-ref gate before Build. The stable identity feature_preparation_evidence.ref is carried unchanged to plans, packets, Packs, diagrams, and docs. Every Pack behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; missing, extra, duplicate, stale, or mismatched bindings block it. Product question admissibility fails closed: requirements/design silence is insufficient; inspect implementation and relevant tests; existing observable behavior defaults to preservation unless explicitly changed; inaccessible evidence is evidence_gap, contradiction is source_conflict, and a new route/scope for existing behavior is existing_behavior_to_preserve + implementation_gap."
+        condition: "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present"
+        on_fail: "Prepare by tracing behavior/tests when applicable, classifying each row, preserving the evidence id or exact not_applicable basis, and replacing unsupported Product questions with the correct gap/conflict. Implement only after the applicable source binding and any harness obligation resolve exactly and the harness entry gate passes."
 
       - id: D_PROGRESSIVE_DISCOVERY_HOLD
         check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."

@@ -57,7 +57,7 @@ fields:
     type: string[]
     required: false
     description: "Routing-required roles."
-    validation: "Entries are known workflow roles, installed skills, or a justified project role. For execution_intent=prepare_only, required_agents contains only concrete Discover/preparation roles and excludes QA Evaluator, Build, Review, Code Writer, Builder/Tester, and Code Reviewer roles; retain an explicit QA request only in feature_preparation_result.future_qa_acceptance_obligation. For execution_intent != prepare_only, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect need concrete mapping, lifecycle, or Pack uncertainty; Reviewer may satisfy only compatibility routing. Light low-risk work may keep required_agents empty with validation and fresh review."
+    validation: "Entries are known workflow roles, installed skills, or a justified project role. For execution_intent=prepare_only, required_agents contains only concrete Discover/preparation roles and excludes QA Evaluator, Build, Review, Code Writer, Builder/Tester, and Code Reviewer roles; retain explicit QA or harness requests only in feature_preparation_result.future_qa_acceptance_obligation or future_harness_obligation. For execution_intent != prepare_only, bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect need concrete mapping, lifecycle, or Pack uncertainty; Reviewer may satisfy only compatibility routing. Light low-risk work may keep required_agents empty with validation and fresh review."
     default: []
     on_missing: skip
 
@@ -262,10 +262,10 @@ fields:
     type: boolean
     required: false
     description: "Whether task uses harness; ordinary medium+ workflow tasks default to false, including source-changing workflow tasks."
-    validation: "Default false. True only for explicitly requested harness work; long-running or trace/replay-ready multi-slice; high-risk harness; domain-scored work or UI/visual/product/UX/docs/DX-facing work; or accepted Done Contract/Harness Recipe. In prepare_only QA/acceptance alone never makes it true; require independent evidence. Do not infer true from size=medium+, delegation alone, or ordinary source-changing work."
+    validation: "For execution_intent == prepare_only, always false; preserve an explicit harness request or accepted independent harness evidence only in feature_preparation_result.future_harness_obligation, without activating harness artifacts or execution routing. For execution_intent != prepare_only, true only for explicitly requested harness work; an accepted approved_feature_preparation_harness_obligation; long-running or trace/replay-ready multi-slice; high-risk harness; domain-scored work or UI/visual/product/UX/docs/DX-facing work; or accepted Done Contract/Harness Recipe. Do not infer true from size=medium+, delegation alone, ordinary source-changing work, or preparation-only QA/harness requests."
     default: false
     on_missing: infer
-    infer_from: "Listed harness evidence -> true; otherwise false, never size, delegation, ordinary source changes, or prepare_only QA alone."
+    infer_from: "prepare_only -> false plus feature_preparation_result.future_harness_obligation when explicit harness work or independent harness evidence is supplied; implement_only plus accepted approved_feature_preparation_harness_obligation -> true before Build; otherwise listed execution harness evidence -> true, else false. Never infer true from size, delegation, ordinary source changes, or preparation-only QA/harness requests."
 
   - name: build_execution_lane
     type: enum
@@ -293,10 +293,10 @@ fields:
     required: false
     enum_values: [light, standard, strict]
     description: "Controller intensity."
-    validation: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required; strict only high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay; never generic acceptance."
+    validation: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required. For execution_intent != prepare_only, strict only for high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay. For prepare_only, strict requires risk/project criteria; QA or harness requests alone remain typed future obligations. Never infer strict from generic acceptance."
     default: standard
     on_missing: infer
-    infer_from: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required. For execution_intent != prepare_only, strict only high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay. Do not infer strict from size=medium+ or delegation alone, or generic acceptance. In prepare_only, risk/project criteria may still select strict preparation; QA request alone never promotes strict and remains future_qa_acceptance_obligation."
+    infer_from: "light small/low-risk; standard ordinary medium+ with harness_capable == false and qa_evaluation_mode == not_required. For execution_intent != prepare_only, strict only high/critical, harness_capable == true, qa_evaluation_mode == required, explicit harness/QA acceptance work, or trace/replay. Do not infer strict from size=medium+, delegation alone, or generic acceptance. In prepare_only, risk/project criteria may still select strict preparation; QA or harness requests alone never promote strict and remain typed future obligations."
 
   - name: workflow_state_mode
     type: enum
@@ -519,6 +519,36 @@ fields:
     description: "Approved canonical evidence reference consumed by implementation-only work against existing behavior"
     validation: "Must resolve to the stable identity of a complete feature_preparation_evidence artifact whose current revision and scope cover the implementation packet; carry that identity unchanged, do not reconstruct missing evidence or downgrade it to a Product question."
     on_missing: fail
+
+  - name: approved_feature_preparation_harness_obligation
+    type: object
+    required: conditional
+    condition: "execution_intent == implement_only and the approved feature_preparation_result contains future_harness_obligation"
+    description: "Accepted deferred harness scope for implementation-only work"
+    validation: "Its three approved payload fields (requested_scope, evidence_basis, and execution_prerequisite) exactly match feature_preparation_result.future_harness_obligation. Triage adds exactly one preparation-source binding: existing_system requires source_feature_preparation_evidence_ref equal to approved_feature_preparation_evidence_ref and forbids source_preparation_basis; not_applicable requires source_preparation_basis=not_applicable and forbids source_feature_preparation_evidence_ref. The resulting enriched consumer object activates harness_capable, strict control, and the pre-Build Done Contract/Harness Recipe gate; if the requested implementation was initially small, Triage promotes size to at least medium so the trace/replay harness and runtime-ref gates cannot be bypassed. Carry that enriched object unchanged downstream. Absent when no future_harness_obligation was approved."
+    on_missing: fail
+    object_fields:
+      - name: requested_scope
+        type: string
+        required: true
+      - name: evidence_basis
+        type: string[]
+        required: true
+        min_items: 1
+      - name: execution_prerequisite
+        type: string
+        required: true
+      - name: source_feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        validation: "Equals the approved evidence ref."
+      - name: source_preparation_basis
+        type: enum
+        required: conditional
+        condition: "feature_preparation_scope == not_applicable"
+        enum_values: [not_applicable]
+        validation: "Records the exact non-existing-system preparation basis without fabricating an evidence ref."
 
 # Validation behavior:
 # 1. Resolve all required fields before entering Triage. Exact phase markers are conditional on strict intensity, explicit project policy, or user request.

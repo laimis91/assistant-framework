@@ -46,13 +46,13 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [execution_intent, feature_preparation_scope, approved_feature_preparation_evidence_ref]
+        names: [execution_intent, feature_preparation_scope, approved_feature_preparation_evidence_ref, approved_feature_preparation_harness_obligation]
       - id: workflow-feature-preparation-output
         path: contracts/output.yaml
         section: artifacts
         key: name
         names: [feature_preparation_evidence, feature_preparation_result]
-    budget_words: 5000
+    budget_words: 5260
   progressive_discovery:
     references:
       - references/progressive-discovery.md
@@ -89,7 +89,7 @@ load_sets:
         section: invariants
         key: id
         names: [INV_TASK_STATE_FRESHNESS,INV1,INV2,INV3,INV4,INV_SUBAGENT_TRIGGER_STATE,INV_PIVOT_RESTART_REAPPROVAL,INV_CONTROLLER_INTENSITY_STANDARD,INV_BUILD_REPAIR_BOUNDED,INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY,INV_ARCHITECTURE_PACK_FRESHNESS,INV_ARCHITECTURE_PACK_HANDOFF_BINDING,INV_SEMANTIC_TYPE_BOUNDARIES,INV_PROGRESSIVE_DISCOVERY_BOUNDARY,INV_PROGRESSIVE_SINGLE_ACTIVE,INV_PROGRESSIVE_DEPENDENCY_ORDER,INV_PROGRESSIVE_ACTIVATION_PROVENANCE,INV_PROGRESSIVE_HUMAN_EVIDENCE,INV_PROGRESSIVE_COLLABORATIVE_EVIDENCE,INV_PROGRESSIVE_BLOCKED_RECOVERY,INV_PROGRESSIVE_RECOMPUTATION,INV_PROGRESSIVE_ROUTE_CLEAR,INV_PROGRESSIVE_RETAINED_REFERENCE_CHAIN,INV_PROGRESSIVE_ARTIFACT_RETENTION_STATE,INV_PROGRESSIVE_TERMINAL_ARCHIVAL,INV_PROGRESSIVE_REPEAT_READINESS]
-    budget_words: 7028
+    budget_words: 7150
   selected_handoff:
     selectors:
       - id: workflow-selected-handoff

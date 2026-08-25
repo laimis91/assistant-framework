@@ -80,10 +80,14 @@ if ruby -ryaml -e '
   gates = YAML.load_file(ARGV.fetch(2))
   index = YAML.load_file(ARGV.fetch(3))
   handoffs = YAML.load_file(ARGV.fetch(4))
+  skill = File.read(ARGV.fetch(5))
 
   input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
   scope = input_fields.fetch("feature_preparation_scope")
   approved_ref = input_fields.fetch("approved_feature_preparation_evidence_ref")
+  approved_harness = input_fields.fetch("approved_feature_preparation_harness_obligation")
+  approved_harness_fields = approved_harness.fetch("object_fields").map { |field| field.fetch("name") }
+  approved_harness_field_map = approved_harness.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
 
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
   evidence = artifacts.fetch("feature_preparation_evidence")
@@ -131,20 +135,33 @@ if ruby -ryaml -e '
   handoff_map = handoffs.fetch("handoffs").to_h { |handoff| [handoff.fetch("name"), handoff] }
   scoped_handoffs = %w[orchestrator_to_architect_decompose orchestrator_to_architect orchestrator_to_code_writer orchestrator_to_builder_tester].all? do |name|
     fields = handoff_map.fetch(name).fetch("context_fields").to_h { |field| [field.fetch("name"), field] }
+    harness_fields = fields.fetch("feature_preparation_harness_obligation").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
     fields.fetch("feature_preparation_scope").fetch("enum_values") == %w[not_applicable existing_system] &&
-      fields.fetch("feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system"
+      fields.fetch("feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+      fields.fetch("feature_preparation_harness_obligation").fetch("type") == "object" &&
+      harness_fields.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+      harness_fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable"
   end
   architect_steps = handoff_map.fetch("orchestrator_to_architect").fetch("return_fields").find { |field| field["name"] == "implementation_steps" }
   architect_step_ref = architect_steps.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
+  architect_step_harness = architect_steps.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
   code_writer_packet = handoff_map.fetch("orchestrator_to_code_writer").fetch("context_fields").find { |field| field["name"] == "current_task_packet" }
   code_writer_ref = code_writer_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
+  code_writer_harness = code_writer_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
   builder_packet = handoff_map.fetch("orchestrator_to_builder_tester").fetch("context_fields").find { |field| field["name"] == "current_task_packet" }
   builder_ref = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
+  builder_harness = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
 
   valid = scope.fetch("validation").include?("prepare_only or end_to_end") &&
     approved_ref["required"] == "conditional" &&
     approved_ref["condition"] == "execution_intent == implement_only and feature_preparation_scope == existing_system" &&
     approved_ref["on_missing"] == "fail" &&
+    approved_harness["required"] == "conditional" &&
+    approved_harness["condition"].include?("execution_intent == implement_only") &&
+    approved_harness_fields == %w[requested_scope evidence_basis execution_prerequisite source_feature_preparation_evidence_ref source_preparation_basis] &&
+    approved_harness_field_map.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+    approved_harness_field_map.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
+    approved_harness_field_map.fetch("source_preparation_basis")["enum_values"] == ["not_applicable"] &&
     evidence["condition"] == "execution_intent in [prepare_only, end_to_end] and feature_preparation_scope == existing_system" &&
     implementation["type"] == "object" &&
     implementation_fields.fetch("status").fetch("enum_values") == %w[inspected inspected_absent inaccessible] &&
@@ -156,15 +173,19 @@ if ruby -ryaml -e '
     test_results["required"] == "conditional" &&
     test_results["condition"] == "execution_intent != prepare_only and (runnable tests exist or task changes behavior)" &&
     pack_ref && pack_ref["condition"] == "feature_preparation_scope == existing_system" &&
-    discover_gate && discover_gate["condition"] == "feature_preparation_scope == existing_system" &&
+    discover_gate && discover_gate["condition"] == "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present" &&
     discover_gate.fetch("check").include?("approved_feature_preparation_evidence_ref") &&
     plan_gate && plan_gate["condition"] == "feature_preparation_scope == existing_system" &&
     invariant && invariant["condition"] == "feature_preparation_scope == existing_system" &&
     entry_names.include?("execution_intent") &&
     preparation_names.include?("approved_feature_preparation_evidence_ref") &&
+    preparation_names.include?("approved_feature_preparation_harness_obligation") &&
+    skill.include?("any carried `approved_feature_preparation_harness_obligation` (including `feature_preparation_scope=not_applicable`)") &&
+    skill.include?("typed `not_applicable` source binding before Decompose, Plan, or Build") &&
     invariant_names.include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") &&
     scoped_handoffs &&
     [architect_step_ref, code_writer_ref, builder_ref].all? { |field| field && field["condition"] == "feature_preparation_scope == existing_system" } &&
+    [architect_step_harness, code_writer_harness, builder_harness].all? { |field| field && field["type"] == "object" } &&
     tiers &&
     preparation_tier.fetch("required_artifacts") == %w[completion_policy validation_results feature_preparation_result] &&
     !preparation_tier.fetch("required_artifacts").any? { |artifact| %w[triage_result feature_preparation_evidence final_handoff changed_files test_results review_result].include?(artifact) } &&
@@ -179,7 +200,7 @@ if ruby -ryaml -e '
     output_text.include?("returns feature_preparation_result plus every applicable preparation artifact") &&
     output_text.include?("excludes Build, changed-file, test, review, and final-handoff claims")
   exit(valid ? 0 : 1)
-' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/index.yaml" "$workflow_dir/contracts/handoffs.yaml"; then
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/index.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/SKILL.md"; then
     pass
 else
     fail "workflow feature-preparation evidence is not enforced across every execution lane"
@@ -260,7 +281,7 @@ if ruby -ryaml -rjson -e '
     qa.fetch("infer_from").include?("not_required") &&
     intensity.fetch("infer_from").include?("execution_intent != prepare_only") &&
     intensity.fetch("infer_from").include?("risk/project criteria may still select strict preparation") &&
-    intensity.fetch("infer_from").include?("QA request alone never promotes strict") &&
+    intensity.fetch("infer_from").include?("QA or harness requests alone never promote strict") &&
     state_text.include?("uncertainty_shape == progressive") &&
     state_text.include?("local state artifacts are configured and policy allows them") &&
     state_text.include?("unavailable/policy-disallowed progressive") &&
@@ -290,12 +311,12 @@ if ruby -ryaml -rjson -e '
     File.read(ARGV.fetch(1)).include?("If execution_intent != prepare_only and qa_evaluation_mode=required") &&
     controller.include?("For `prepare_only`, force `qa_evaluation_mode=not_required`") &&
     controller.include?("Risk/project criteria may still select strict preparation") &&
-    controller.include?("QA request alone must not select strict") &&
+    controller.include?("QA or harness request alone must not select strict") &&
     controller.include?("Progressive uncertainty may still use") &&
     triage.include?("For `prepare_only`, set `qa_evaluation_mode=not_required`") &&
     triage.include?("risk/project criteria may still select strict preparation") &&
     t_intensity.fetch("check").include?("risk/project criteria may select strict preparation") &&
-    t_intensity.fetch("check").include?("QA request alone") &&
+    t_intensity.fetch("check").include?("QA or harness requests alone") &&
     large &&
     large.fetch("setup_context").join(" ").include?("explicitly requests independent QA/acceptance evaluation") &&
     large.fetch("setup_context").join(" ").include?("QA request is not the strictness trigger") &&
@@ -760,7 +781,7 @@ if grep -Fq '"completion_policy", "plan_mode"' "$workflow_dir/evals/cases.json" 
 
 test_start "shared helper owns executable case-root manifest and bounded grader-call accounting"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
-if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 341' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 10' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 13' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 341' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "grader suites duplicate case mappings, omit direct structured probes, or overcount bounded full CLI calls"; fi
+if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 375' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 12' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 15' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 375' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "grader suites duplicate case mappings, omit direct structured probes, or overcount bounded full CLI calls"; fi
 
 test_start "actual graders mutate every prepare-only active root, forbid plan documents, and journal branches detailed refs"
 if ruby -ryaml -e '
@@ -1243,22 +1264,192 @@ if ruby -ryaml -e '
   routing_fields = workflow_input.fetch("fields").to_h { |entry| [entry.fetch("name"), entry] }
   valid = fields.fetch("future_qa_acceptance_obligation").fetch("required") == "conditional" &&
     fields.fetch("future_qa_acceptance_obligation").fetch("condition").include?("qa") &&
+    fields.fetch("future_harness_obligation").fetch("required") == "conditional" &&
+    fields.fetch("future_harness_obligation").fetch("condition").include?("harness") &&
+    fields.fetch("future_harness_obligation").fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }.fetch("evidence_basis").fetch("min_items") == 1 &&
     !fields.fetch("open_decisions").fetch("description").include?("include an explicit QA/acceptance request") &&
     !fields.fetch("implementation_implications").fetch("description").include?("explicit future QA/acceptance obligation") &&
     !fields.fetch("recommended_next_step").fetch("description").include?("including any explicitly requested QA/acceptance evaluation") &&
     routing_fields.fetch("required_agents").fetch("validation").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    routing_fields.fetch("required_agents").fetch("validation").include?("future_harness_obligation") &&
+    routing_fields.fetch("harness_capable").fetch("validation").include?("prepare_only, always false") &&
+    routing_fields.fetch("harness_capable").fetch("infer_from").include?("future_harness_obligation") &&
     routing_fields.fetch("qa_evaluation_mode").fetch("validation").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
     routing_fields.fetch("qa_evaluation_mode").fetch("infer_from").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
     preparation_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    preparation_reference.include?("feature_preparation_result.future_harness_obligation") &&
     !preparation_reference.include?("open_decisions`, `implementation_implications`, and/or") &&
     triage_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    triage_reference.include?("feature_preparation_result.future_harness_obligation") &&
     input_names.include?("feature_preparation_evidence_bindings") &&
     candidate_fields.fetch("feature_preparation_evidence_claim_or_question").fetch("condition").include?("validated_by_feature_preparation_evidence")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml" "$thinking_dir/contracts/input.yaml" "$thinking_dir/contracts/output.yaml" "$workflow_dir/contracts/input.yaml" "$workflow_dir/references/feature-preparation-evidence.md" "$workflow_dir/references/triage-rubric.md"; then
     pass
 else
-    fail "feature-preparation contracts do not bind future QA and every promoted claim to typed locations"
+    fail "feature-preparation contracts do not bind future QA/harness work and every promoted claim to typed locations"
+fi
+
+test_start "prepare-only harness requests remain typed future work without runtime capability"
+if ruby -rjson -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |entry| [entry.fetch("name"), entry] }
+  output = YAML.load_file(ARGV.fetch(1))
+  gates = YAML.load_file(ARGV.fetch(2))
+  cases = JSON.parse(File.read(ARGV.fetch(3))).fetch("cases")
+  controller = File.read(ARGV.fetch(4))
+  plan_template = File.read(ARGV.fetch(5))
+  result = output.fetch("artifacts").find { |entry| entry["name"] == "feature_preparation_result" }
+  result_fields = result.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  obligation = result_fields.fetch("future_harness_obligation")
+  obligation_fields = obligation.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  triage = output.fetch("artifacts").find { |entry| entry["name"] == "triage_result" }.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  admissibility = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |item| item["id"] == "T_PREPARATION_ADMISSIBILITY" }
+  eval_case = cases.find { |entry| entry["id"] == "medium-prepare-only-harness-request-routing" }
+  qa_case = cases.find { |entry| entry["id"] == "medium-prepare-only-qa-request-routing" }
+  ordinary_case = cases.find { |entry| entry["id"] == "medium-prepare-only-readiness-does-not-wait-for-implementation-approval" }
+  assertions = eval_case.fetch("machine_expectations").fetch("structured_json_assertions")
+  exact = lambda { |path, expected| assertions.any? { |entry| entry["operator"] == "equals" && entry["path"] == path && entry["expected"] == expected } }
+  absent = lambda { |path| assertions.any? { |entry| entry["operator"] == "path_absent" && entry["path"] == path } }
+  valid = input.fetch("harness_capable").fetch("validation").include?("prepare_only, always false") &&
+    input.fetch("harness_capable").fetch("infer_from").include?("future_harness_obligation") &&
+    triage.fetch("harness_capable").fetch("validation").include?("prepare_only always records false") &&
+    obligation.fetch("required") == "conditional" && obligation.fetch("condition").include?("harness") &&
+    obligation_fields.keys.sort == %w[evidence_basis execution_prerequisite requested_scope].sort &&
+    obligation_fields.fetch("evidence_basis").fetch("min_items") == 1 &&
+    obligation_fields.fetch("execution_prerequisite").fetch("validation").include?("pre-Build Done Contract and Harness Recipe") &&
+    admissibility.fetch("check").include?("harness_capable=false") &&
+    admissibility.fetch("check").include?("typed future obligations") &&
+    !admissibility.fetch("check").include?("independent harness evidence separately requires") &&
+    controller.include?("feature_preparation_result.future_harness_obligation") &&
+    plan_template.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    plan_template.include?("feature_preparation_result.future_harness_obligation") &&
+    [qa_case, ordinary_case].all? { |entry| entry.fetch("machine_expectations").fetch("structured_json_assertions").any? { |assertion| assertion["operator"] == "path_absent" && assertion["path"] == ["feature_preparation_result", "future_harness_obligation"] } } &&
+    exact.call(["triage_result", "harness_capable"], false) &&
+    exact.call(["triage_result", "workflow_state_mode"], "inline") &&
+    exact.call(["feature_preparation_result", "future_harness_obligation", "requested_scope"], "Run the explicitly requested trace/replay harness during future implementation.") &&
+    exact.call(["feature_preparation_result", "future_harness_obligation", "evidence_basis"], ["The user explicitly requested trace/replay harness evidence for future implementation."]) &&
+    exact.call(["feature_preparation_result", "future_harness_obligation", "execution_prerequisite"], "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted.") &&
+    absent.call(["done_contract"]) && absent.call(["harness_recipe"]) && absent.call(["harness_run_state"]) && absent.call(["trace_ledger"]) && absent.call(["replay_packet"])
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/evals/cases.json" "$workflow_dir/references/workflow-controller.md" "$workflow_dir/references/plan-template.md"; then
+    pass
+else
+    fail "prepare-only harness request can activate runtime harness capability or lose its typed future obligation"
+fi
+
+test_start "implement-only consumes the exact preparation harness obligation through typed handoffs"
+if ruby -rjson -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |entry| [entry.fetch("name"), entry] }
+  handoffs = YAML.load_file(ARGV.fetch(1)).fetch("handoffs")
+  cases = JSON.parse(File.read(ARGV.fetch(2))).fetch("cases")
+  strict_template = File.read(ARGV.fetch(3))
+  artifacts = YAML.load_file(ARGV.fetch(4)).fetch("artifacts").to_h { |entry| [entry.fetch("name"), entry] }
+  obligation = input.fetch("approved_feature_preparation_harness_obligation")
+  obligation_fields = obligation.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
+  carried = handoffs.flat_map do |handoff|
+    fields = handoff.fetch("context_fields", [])
+    direct = fields.select { |entry| entry["name"] == "feature_preparation_harness_obligation" }
+    nested = fields.flat_map do |entry|
+      entry.fetch("object_fields", []).select { |nested_entry| nested_entry["name"] == "feature_preparation_harness_obligation" }
+    end
+    returned = handoff.fetch("return_fields", []).flat_map do |entry|
+      entry.fetch("object_fields", []).select { |nested_entry| nested_entry["name"] == "feature_preparation_harness_obligation" }
+    end
+    direct + nested + returned
+  end
+  source_binding_valid = ->(fields) do
+    fields.fetch("source_feature_preparation_evidence_ref")["required"] == "conditional" &&
+      fields.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+      fields.fetch("source_preparation_basis")["required"] == "conditional" &&
+      fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
+      fields.fetch("source_preparation_basis")["enum_values"] == ["not_applicable"]
+  end
+  carried_bindings_valid = carried.length == 7 && carried.all? do |entry|
+    source_binding_valid.call(entry.fetch("object_fields").to_h { |field| [field.fetch("name"), field] })
+  end
+  done_fields = artifacts.fetch("done_contract").fetch("object_fields").map { |entry| entry.fetch("name") }
+  recipe_fields = artifacts.fetch("harness_recipe").fetch("object_fields").map { |entry| entry.fetch("name") }
+  triage_size = artifacts.fetch("triage_result").fetch("object_fields").find { |entry| entry["name"] == "size" }
+  canonical_gate = ->(assertions) do
+    expected_done = {
+      "done_when" => ["The exact approved harness obligation is carried unchanged and the pre-Build harness gate is complete."],
+      "not_done_when" => ["Build starts before the accepted Done Contract and Harness Recipe exist."],
+      "verification" => ["Inspect the approved obligation, its preparation-source binding, and the implementation handoff before Build."],
+      "owner_consumer" => "Workflow orchestrator -> implementation executor",
+      "acceptance_criteria" => ["The approved trace/replay harness scope remains exact and Build has not started."],
+      "accepted_by" => "orchestrator:plan/implementation-transition"
+    }
+    expected_recipe = {
+      "task_profile" => "medium implement-only trace/replay harness before Build",
+      "model_profile" => "bounded executor with independent review",
+      "risk_profile" => "strict pre-Build harness gate",
+      "context_profile" => "approved preparation obligation and source binding carried exactly",
+      "selected_recipe" => "strict bounded trace/replay",
+      "recipe_rationale" => "The accepted deferred trace/replay obligation requires concrete pre-Build harness controls.",
+      "required_artifacts" => ["Done Contract", "task packet", "verification", "Harness Run State", "Trace Ledger", "Replay Packet", "Artifact Reference Ledger", "approved feature-preparation harness obligation"],
+      "corrective_action" => "Block Build and repair any missing, stale, or broadened harness evidence."
+    }
+    exact_fields = expected_done.all? { |field, value| assertions.any? { |entry| entry["operator"] == "equals" && entry["path"] == ["done_contract", field] && entry["expected"] == value } } &&
+      expected_recipe.all? { |field, value| assertions.any? { |entry| entry["operator"] == "equals" && entry["path"] == ["harness_recipe", field] && entry["expected"] == value } }
+    debate = assertions.find { |entry| entry["operator"] == "array_object_values_exact" && entry["path"] == ["done_contract", "debate_record"] }
+    synthetic_absent = assertions.any? { |entry| entry["operator"] == "path_absent" && entry["path"] == ["harness_entry_state"] }
+    (expected_done.keys + ["debate_record"]).sort == done_fields.sort && expected_recipe.keys == recipe_fields && exact_fields &&
+      debate && debate["fields"] == %w[perspective concern_or_support resolution] && debate.fetch("expected_objects").length == 2 && synthetic_absent
+  end
+  transition = cases.find { |entry| entry["id"] == "medium-implement-only-consumes-preparation-harness-obligation" }
+  small_transition_case = cases.find { |entry| entry["id"] == "small-input-implement-only-promotes-deferred-harness-obligation" }
+  not_applicable = cases.find { |entry| entry["id"] == "medium-implement-only-consumes-not-applicable-preparation-harness-obligation" }
+  existing_assertions = transition&.dig("machine_expectations", "structured_json_assertions") || []
+  small_assertions = small_transition_case&.dig("machine_expectations", "structured_json_assertions") || []
+  not_applicable_assertions = not_applicable&.dig("machine_expectations", "structured_json_assertions") || []
+  exact = ->(assertions, path, value) { assertions.any? { |entry| entry["operator"] == "equals" && entry["path"] == path && entry["expected"] == value } }
+  absent = ->(assertions, path) { assertions.any? { |entry| entry["operator"] == "path_absent" && entry["path"] == path } }
+  equal_path = ->(assertions) { assertions.any? { |entry| entry["operator"] == "equals_path" && entry["path"] == ["approved_feature_preparation_harness_obligation"] && entry["other_path"] == ["implementation_steps", 0, "feature_preparation_harness_obligation"] } }
+  qa_consumer_bound = ->(assertions, path) do
+    projection = assertions.find { |entry| entry["operator"] == "array_object_values_exact" && entry["path"] == path }
+    verification = projection&.fetch("expected_objects", [])&.find { |entry| entry["artifact_id"] == "verification-evidence" }
+    projection && projection["fields"] == %w[artifact_id artifact_type consumer location_ref validation_status] &&
+      verification && verification["consumer"] == "Code Reviewer and QA Evaluator"
+  end
+  phase_checkpoints = ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
+  strict_routing = ->(assertions) do
+    exact.call(assertions, ["triage_result", "qa_evaluation_mode"], "required") &&
+      exact.call(assertions, ["triage_result", "required_agents"], ["bounded executor", "Code Reviewer", "QA Evaluator"]) &&
+      exact.call(assertions, ["triage_result", "subagent_trigger_scope"], ["Build bounded executor, Review Code Reviewer, and post-review QA Evaluator"]) &&
+      qa_consumer_bound.call(assertions, ["implementation_steps", 0, "artifact_refs"]) &&
+      qa_consumer_bound.call(assertions, ["artifact_reference_ledger"]) &&
+      exact.call(assertions, ["phase_checkpoints"], phase_checkpoints)
+  end
+  existing_transition = transition && canonical_gate.call(existing_assertions) && equal_path.call(existing_assertions) && strict_routing.call(existing_assertions) &&
+    exact.call(existing_assertions, ["feature_preparation_scope"], "existing_system") &&
+    exact.call(existing_assertions, ["approved_feature_preparation_evidence_ref"], "prep/medium-feature") &&
+    exact.call(existing_assertions, ["approved_feature_preparation_harness_obligation", "source_feature_preparation_evidence_ref"], "prep/medium-feature") &&
+    absent.call(existing_assertions, ["approved_feature_preparation_harness_obligation", "source_preparation_basis"])
+  small_transition = small_transition_case && small_assertions == existing_assertions
+  not_applicable_transition = not_applicable && canonical_gate.call(not_applicable_assertions) && equal_path.call(not_applicable_assertions) && strict_routing.call(not_applicable_assertions) &&
+    exact.call(not_applicable_assertions, ["feature_preparation_scope"], "not_applicable") &&
+    exact.call(not_applicable_assertions, ["approved_feature_preparation_harness_obligation", "source_preparation_basis"], "not_applicable") &&
+    absent.call(not_applicable_assertions, ["approved_feature_preparation_evidence_ref"]) &&
+    absent.call(not_applicable_assertions, ["approved_feature_preparation_harness_obligation", "source_feature_preparation_evidence_ref"])
+  valid = obligation.fetch("required") == "conditional" &&
+    obligation.fetch("condition").include?("execution_intent == implement_only") &&
+    obligation.fetch("validation").include?("promotes size to at least medium") &&
+    obligation.fetch("validation").include?("three approved payload fields") &&
+    obligation.fetch("validation").include?("adds exactly one preparation-source binding") &&
+    obligation.fetch("validation").include?("Carry that enriched object unchanged downstream") &&
+    triage_size.fetch("validation").include?("size is at least medium") &&
+    obligation_fields.keys == %w[requested_scope evidence_basis execution_prerequisite source_feature_preparation_evidence_ref source_preparation_basis] &&
+    source_binding_valid.call(obligation_fields) &&
+    carried_bindings_valid &&
+    strict_template.include?("- feature_preparation_harness_obligation:") &&
+    strict_template.include?("source_feature_preparation_evidence_ref for existing_system") &&
+    strict_template.include?("source_preparation_basis=not_applicable for not_applicable") &&
+    small_transition && existing_transition && not_applicable_transition
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/evals/cases.json" "$workflow_dir/references/sub-task-brief-template.md" "$workflow_dir/contracts/output.yaml"; then
+    pass
+else
+    fail "approved future harness work can be lost before or within implement-only execution"
 fi
 
 test_start "existing-system Architecture Pack eval binds the exact carried evidence-row set"
@@ -1371,7 +1562,7 @@ else
     fail "preparation QA, strict checkpoint, completion producer, or Pack quality evidence contracts drifted"
 fi
 
-test_start "prepare-only QA evals exactly retain triage, completion, absent execution roots, and declared checkpoints"
+test_start "prepare-only future-obligation evals exactly retain triage, completion, absent execution roots, and declared checkpoints"
 if ruby -rjson -ryaml -e '
   cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
   gates = YAML.load_file(ARGV.fetch(1))
@@ -1384,6 +1575,7 @@ if ruby -rjson -ryaml -e '
   end
   valid = [
     ["medium-prepare-only-qa-request-routing", "standard", "inline"],
+    ["medium-prepare-only-harness-request-routing", "standard", "inline"],
     ["large-prepare-only-terminal-route", "strict", "journal"]
   ].all? do |id, intensity, state|
     entry = cases.find { |candidate| candidate["id"] == id }
@@ -1404,34 +1596,37 @@ if ruby -rjson -ryaml -e '
 ' "$workflow_dir/evals/cases.json" "$workflow_dir/contracts/phase-gates.yaml"; then
     pass
 else
-    fail "prepare-only QA evals do not exactly preserve triage/completion/absence/checkpoint semantics"
+    fail "prepare-only future-obligation evals do not exactly preserve triage/completion/absence/checkpoint semantics"
 fi
 
-test_start "medium future-QA preparation inherits the complete medium readiness root oracle"
+test_start "medium future-obligation preparation inherits the complete medium readiness root oracle"
 if ruby -rjson -e '
   cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
   record_sets = ARGV.drop(1).map { |path| File.readlines(path, chomp: true).reject(&:empty?) }
-  case_id = "medium-prepare-only-qa-request-routing"
-  entry = cases.find { |candidate| candidate["id"] == case_id }
-  assertions = entry&.dig("machine_expectations", "structured_json_assertions") || []
-  exact = lambda { |path, expected| assertions.any? { |item| item["operator"] == "equals" && item["path"] == path && item["expected"] == expected } }
-  nonempty = lambda { |path| assertions.any? { |item| item["operator"] == "nonempty_array" && item["path"] == path } }
-  absent = assertions.any? { |item| item["operator"] == "path_absent" && item["path"] == ["plan_document"] }
-  roots = %w[validation_results feature_preparation_evidence]
-  complete = exact.call(["size"], "medium") &&
-    exact.call(["feature_preparation_result", "execution_status"], "not_started") &&
-    exact.call(["feature_preparation_result", "scope"], "existing_system read-only VIEWING route") &&
-    exact.call(["feature_preparation_evidence", "ref"], "prep/medium-feature") &&
-    exact.call(["feature_preparation_result", "feature_preparation_evidence_ref"], "prep/medium-feature") &&
-    roots.all? { |root| nonempty.call([root]) || root == "feature_preparation_evidence" && exact.call([root, "ref"], "prep/medium-feature") } && absent
-  record = "#{case_id}|medium|none"
-  exit(entry && complete && record_sets.all? { |records| records.any? { |line| line.include?(record) } } ? 0 : 1)
+  case_ids = %w[medium-prepare-only-qa-request-routing medium-prepare-only-harness-request-routing]
+  complete = case_ids.all? do |case_id|
+    entry = cases.find { |candidate| candidate["id"] == case_id }
+    assertions = entry&.dig("machine_expectations", "structured_json_assertions") || []
+    exact = lambda { |path, expected| assertions.any? { |item| item["operator"] == "equals" && item["path"] == path && item["expected"] == expected } }
+    nonempty = lambda { |path| assertions.any? { |item| item["operator"] == "nonempty_array" && item["path"] == path } }
+    absent = assertions.any? { |item| item["operator"] == "path_absent" && item["path"] == ["plan_document"] }
+    roots = %w[validation_results feature_preparation_evidence]
+    record = "#{case_id}|medium|none"
+    entry && exact.call(["size"], "medium") &&
+      exact.call(["feature_preparation_result", "execution_status"], "not_started") &&
+      exact.call(["feature_preparation_result", "scope"], "existing_system read-only VIEWING route") &&
+      exact.call(["feature_preparation_evidence", "ref"], "prep/medium-feature") &&
+      exact.call(["feature_preparation_result", "feature_preparation_evidence_ref"], "prep/medium-feature") &&
+      roots.all? { |root| nonempty.call([root]) || root == "feature_preparation_evidence" && exact.call([root, "ref"], "prep/medium-feature") } && absent &&
+      record_sets.all? { |records| records.any? { |line| line.include?(record) } }
+  end
+  exit(complete ? 0 : 1)
 ' "$workflow_dir/evals/cases.json" \
   "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh" \
   "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-case-oracle.sh"; then
     pass
 else
-    fail "future-QA medium preparation omits a complete medium readiness root, stable evidence identity, or plan-document exclusion"
+    fail "future-obligation medium preparation omits a complete medium readiness root, stable evidence identity, or plan-document exclusion"
 fi
 
 test_start "strict journal preparation and optional readiness Plans inherit roots with typed no-execution eval coverage"
@@ -1465,6 +1660,10 @@ if ruby -rjson -e '
     exact.call(strict_readiness_assertions = strict_readiness.dig("machine_expectations", "structured_json_assertions") || [], ["completion_policy", "controller_intensity"], "strict") &&
     exact.call(strict_readiness_assertions, ["completion_policy", "plan_mode"], "inline") &&
     exact.call(strict_readiness_assertions, ["phase_checkpoints"], ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---", "--- PHASE: PREPARATION COMPLETION ---", "--- PHASE: PREPARATION COMPLETE ---"]) &&
+    exact.call(strict_readiness_assertions, ["plan_document"], "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: Run the explicitly requested trace/replay harness during future implementation; evidence basis: the user explicitly requested trace/replay harness evidence for future implementation; execution prerequisite: activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted. No executable task packet, files, tests, or Build handoff.") &&
+    exact.call(strict_readiness_assertions, ["feature_preparation_result", "future_harness_obligation", "requested_scope"], "Run the explicitly requested trace/replay harness during future implementation.") &&
+    exact.call(strict_readiness_assertions, ["feature_preparation_result", "future_harness_obligation", "evidence_basis"], ["The user explicitly requested trace/replay harness evidence for future implementation."]) &&
+    exact.call(strict_readiness_assertions, ["feature_preparation_result", "future_harness_obligation", "execution_prerequisite"], "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted.") &&
     %w[artifact_contract task_packet decomposition_plan_review slice_manifest changed_files test_results review_result final_handoff user_approval].all? { |root| absent.call(strict_readiness_assertions, [root]) } &&
     helper.include?("large-strict-prepare-only-readiness-plan|large|") &&
     helper.include?("FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS") &&
@@ -1475,7 +1674,11 @@ if ruby -rjson -e '
     exact.call(not_applicable_assertions, ["feature_preparation_scope"], "not_applicable") &&
     exact.call(not_applicable_assertions, ["completion_policy", "controller_intensity"], "standard") &&
     exact.call(not_applicable_assertions, ["completion_policy", "plan_mode"], "inline") &&
+    exact.call(not_applicable_assertions, ["plan_document"], "Readiness only: preparation basis not_applicable; define the new feature behavior; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: Run the explicitly requested trace/replay harness during future implementation; evidence basis: the user explicitly requested trace/replay harness evidence for future implementation; execution prerequisite: activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted. No executable task packet, files, tests, or Build handoff.") &&
     exact.call(not_applicable_assertions, ["feature_preparation_result", "readiness_plan", "preparation_basis"], "not_applicable") &&
+    exact.call(not_applicable_assertions, ["feature_preparation_result", "future_harness_obligation", "requested_scope"], "Run the explicitly requested trace/replay harness during future implementation.") &&
+    exact.call(not_applicable_assertions, ["feature_preparation_result", "future_harness_obligation", "evidence_basis"], ["The user explicitly requested trace/replay harness evidence for future implementation."]) &&
+    exact.call(not_applicable_assertions, ["feature_preparation_result", "future_harness_obligation", "execution_prerequisite"], "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted.") &&
     %w[feature_preparation_evidence phase_checkpoints artifact_contract task_packet decomposition_plan_review slice_manifest qa_evaluation_result fresh_review_result changed_files test_results review_result final_handoff user_approval].all? { |root| absent.call(not_applicable_assertions, [root]) } &&
     absent.call(not_applicable_assertions, ["feature_preparation_result", "feature_preparation_evidence_ref"]) &&
     absent.call(not_applicable_assertions, ["feature_preparation_result", "readiness_plan", "evidence_ref"]) &&

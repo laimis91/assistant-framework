@@ -34,13 +34,23 @@ unless isolated/covered.
 
 For `prepare_only`, set `qa_evaluation_mode=not_required` and retain explicit
 QA/acceptance only in `feature_preparation_result.future_qa_acceptance_obligation`;
-risk/project criteria may still select strict preparation. QA request alone never promotes strict and remains a future obligation; QA request alone never selects harness_capable=true during prepare_only without separate harness evidence.
+risk/project criteria may still select strict preparation. Always set
+`harness_capable=false`; retain explicit harness requests or accepted independent
+harness evidence only in `feature_preparation_result.future_harness_obligation`.
+QA or harness requests alone never promote strict, activate runtime artifacts,
+or require journal state during preparation.
+For `implement_only`, an accepted
+`approved_feature_preparation_harness_obligation` is explicit harness evidence:
+bind its exact existing-system evidence ref or `not_applicable` preparation
+basis, promote an initially small implementation to at least `medium`, select
+`harness_capable=true` and strict control, then require the existing pre-Build
+Done Contract, Harness Recipe, and runtime-ref gates.
 
 | Intensity | Use when |
 |---|---|
 | `light` | Small low-risk localized work. |
 | `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
-| `strict` | High/critical, `harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay; QA only outside `prepare_only`. |
+| `strict` | High/critical risk, or—only when `execution_intent != prepare_only`—`harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay. |
 
 Never infer `strict` from size/delegation.
 

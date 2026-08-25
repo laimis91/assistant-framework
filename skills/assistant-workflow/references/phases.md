@@ -434,4 +434,15 @@ Return `completion_policy`, `validation_results`, and `feature_preparation_resul
 as required by PC1 and the `preparation_only` completion tier, plus complete
 `feature_preparation_evidence` for existing-system work. Keep execution
 `not_started`; do not claim Build, changed files, tests, review, final handoff,
-or implementation documentation.
+or implementation documentation. Keep `qa_evaluation_mode=not_required` and
+`harness_capable=false`. When explicitly requested future QA/acceptance or
+harness work exists, return it only through the corresponding typed
+`future_qa_acceptance_obligation` or `future_harness_obligation`; those fields
+do not load execution controllers or artifacts.
+A later approved `implement_only` workflow consumes the exact future harness
+object as `approved_feature_preparation_harness_obligation`, binds the source
+evidence ref for `existing_system` or `source_preparation_basis=not_applicable`
+without an evidence ref for `not_applicable`, promotes an initially small
+implementation to at least `medium`, sets `harness_capable=true`, and completes
+the existing Done Contract, Harness Recipe, and runtime-ref entry gates before
+Build.

@@ -96,5 +96,21 @@ and/or `recommended_next_step`. When an explicit QA/acceptance evaluation was
 requested, keep it only in
 `feature_preparation_result.future_qa_acceptance_obligation` while preparation
 uses `qa_evaluation_mode=not_required`.
+When an explicit harness request or accepted independent harness evidence was
+supplied, keep it only in `feature_preparation_result.future_harness_obligation`
+with the exact requested scope, non-empty evidence basis, and the prerequisite
+of an approved implementation workflow with accepted pre-Build Done Contract
+and Harness Recipe. Preparation always keeps `harness_capable=false`; this
+future obligation does not load harness guidance, activate runtime artifacts,
+select a Build lane, or independently require strict/journal state.
+Later `implement_only` preserves the three approved payload fields
+(`requested_scope`, `evidence_basis`, and `execution_prerequisite`) exactly as
+`approved_feature_preparation_harness_obligation`, then adds exactly one source
+binding: the evidence ref for `existing_system`, or
+`source_preparation_basis=not_applicable` without an evidence ref for
+`not_applicable`. It promotes an initially small implementation to at least
+`medium`, sets `harness_capable=true`, and carries the resulting enriched object unchanged through the
+pre-Build Done Contract, Harness Recipe, and runtime-ref gates, task packets,
+Build, and verification.
 It does not return invented changed files,
 Build, test-run, review, or final-handoff evidence.

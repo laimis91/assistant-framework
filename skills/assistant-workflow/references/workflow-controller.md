@@ -51,9 +51,13 @@ file centralizes decision boundaries that cut across phase details while
   not activate Build, Review, QA Evaluator, strict control, or persisted
   workflow state solely from that request. Progressive uncertainty may still use
   journal state when local artifacts are configured and policy allows it.
-- QA request alone never makes harness_capable=true during prepare_only;
-  independent explicit harness evidence may still do so. Record a QA request at
-  `feature_preparation_result.future_qa_acceptance_obligation`, never as a
+- For `prepare_only`, force `harness_capable=false`, including when the request
+  explicitly asks for harness work or accepted independent harness evidence is
+  carried. Preserve that scope only in
+  `feature_preparation_result.future_harness_obligation`; it must not load the
+  harness controller, activate Done Contract or trace/replay artifacts, select a
+  Build lane, or independently require strict/journal state. Record a QA request
+  at `feature_preparation_result.future_qa_acceptance_obligation`, never as a
   broad readiness substring.
 - `plan_mode=inline`: bounded small work with more than one useful step but no
   approval trigger, or an explicitly requested `prepare_only` readiness plan.
@@ -83,12 +87,23 @@ file centralizes decision boundaries that cut across phase details while
 - `strict`: for `execution_intent != prepare_only`, select for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
   explicit harness/QA criteria, or explicit strict control. Risk/project criteria may still select strict preparation for
-  `prepare_only`, but a QA request alone must not select strict.
+  `prepare_only`, but a QA or harness request alone must not select strict.
 - Do not infer `strict`, `harness_capable=true`, or required QA from
   size=medium+ or delegation alone.
-- Treat `harness_capable` as false unless the task is long-running,
+- During `prepare_only`, always treat `harness_capable` as false and retain an
+  explicit harness request or accepted independent harness evidence only in
+  `feature_preparation_result.future_harness_obligation`. For execution work,
+  treat `harness_capable` as false unless the task is long-running,
   trace/replay-ready, high-risk harness work, domain-scored work or UI/visual/product/UX/docs/DX-facing work, explicitly requested as harness/QA work,
   or already has an accepted Done Contract/Harness Recipe.
+- For `implement_only`, an accepted
+  `approved_feature_preparation_harness_obligation` is explicit harness scope:
+  bind it to `approved_feature_preparation_evidence_ref` for `existing_system`,
+  or to `source_preparation_basis=not_applicable` with no evidence ref for
+  `not_applicable`; promote an initially small implementation to at least
+  `medium`, set `harness_capable=true`, load the harness controller, and complete
+  the existing Done Contract, Harness Recipe, and runtime-ref gates before Build.
+  Preserve its three approved payload fields exactly, add exactly one applicable preparation-source binding, and carry the resulting enriched obligation unchanged through task packets and verification handoffs.
 - Treat `qa_evaluation_mode=not_required` unless `execution_intent != prepare_only` and explicit QA/acceptance
   evaluation, accepted Done Contract, harness-capable acceptance scope,
   domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance applies.

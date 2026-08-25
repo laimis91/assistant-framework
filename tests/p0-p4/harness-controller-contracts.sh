@@ -82,13 +82,13 @@ missing_load_terms=()
 for term in \
     "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation." \
     "Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply." \
-    "Load \`references/harness-controller.md\` only after \`references/workflow-controller.md\` or carried-forward phase state establishes \`harness_capable=true\`."; do
+    "Load \`references/harness-controller.md\` only for \`execution_intent != prepare_only\` with \`harness_capable=true\`."; do
     if ! grep -Fq -- "$term" "$workflow_dir/SKILL.md"; then
         missing_load_terms+=("SKILL.md: $term")
     fi
 done
 for term in \
-    "Treat \`harness_capable\` as false unless" \
+    "During \`prepare_only\`, always treat \`harness_capable\` as false" \
     "\`references/harness-controller.md\` is loaded only after" \
     "\`harness_capable=true\` is established" \
     "Do not load \`references/harness-controller.md\` for ordinary medium work" \
@@ -117,7 +117,8 @@ test_start "workflow defaults harness_capable false unless explicitly scoped"
 require_terms "workflow input contract" "$workflow_dir/contracts/input.yaml" \
     "- name: harness_capable" \
     "default: false" \
-    "Default false." \
+    "For execution_intent == prepare_only, always false" \
+    "accepted approved_feature_preparation_harness_obligation" \
     "explicitly requested harness work" \
     "long-running" \
     "trace/replay-ready multi-slice" \
@@ -153,11 +154,11 @@ require_terms "controller intensity input contract" "$workflow_dir/contracts/inp
     "harness_capable == false" \
     "qa_evaluation_mode == not_required" \
     "Do not infer" \
-    "strict from size=medium+ or delegation alone"
+    "strict from size=medium+, delegation alone"
 require_terms "controller intensity phase gates" "$workflow_dir/contracts/phase-gates.yaml" \
     "T_CONTROLLER_INTENSITY" \
     "ordinary medium+ non-harness work uses standard" \
-    "Do not infer strict from size=medium+ or delegation alone" \
+    "without size/delegation inference" \
     "controller_intensity == standard with harness_capable=false and qa_evaluation_mode=not_required does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation"
 if rg -n 'size=medium\+?[[:space:]]*->[[:space:]]*strict|strict (for|when|because of) size=medium\+?|size=medium\+?[^.\n]*(promote|requires|selects|uses)[^.\n]*strict|delegation alone[^.\n]*(promote|requires|selects|uses|means)[^.\n]*strict|strict (for|when|because of) delegation alone' \
     "$workflow_dir/contracts/input.yaml" \
@@ -186,6 +187,32 @@ else
     fail "controller intensity does not map explicit harness or required QA to strict"
 fi
 
+test_start "implement-only consumes the exact deferred preparation harness obligation"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  obligation = input.fetch("approved_feature_preparation_harness_obligation")
+  harness = input.fetch("harness_capable")
+  fields = obligation.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  valid = obligation.fetch("type") == "object" &&
+    obligation.fetch("required") == "conditional" &&
+    obligation.fetch("condition").include?("implement_only") &&
+    fields.keys == %w[requested_scope evidence_basis execution_prerequisite source_feature_preparation_evidence_ref source_preparation_basis] &&
+    fields.fetch("source_feature_preparation_evidence_ref").fetch("condition") == "feature_preparation_scope == existing_system" &&
+    fields.fetch("source_preparation_basis").fetch("condition") == "feature_preparation_scope == not_applicable" &&
+    fields.fetch("source_preparation_basis").fetch("enum_values") == ["not_applicable"] &&
+    harness.fetch("validation").include?("accepted approved_feature_preparation_harness_obligation") &&
+    harness.fetch("infer_from").include?("implement_only plus accepted approved_feature_preparation_harness_obligation -> true before Build")
+  exit(valid ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" \
+    && [[ "$(rg -c -- '^- name: feature_preparation_harness_obligation$|^      - name: feature_preparation_harness_obligation$|^          - name: feature_preparation_harness_obligation$' "$workflow_dir/contracts/handoffs.yaml")" -eq 7 ]] \
+    && grep -Fq -- '- feature_preparation_harness_obligation:' "$workflow_dir/references/sub-task-brief-template.md" \
+    && grep -Fq -- '`approved_feature_preparation_harness_obligation`' "$workflow_dir/references/feature-preparation-evidence.md" \
+    && grep -Fq -- '`harness_capable=true`' "$workflow_dir/references/feature-preparation-evidence.md"; then
+    pass
+else
+    fail "deferred harness obligation is not typed and carried into implementation handoffs"
+fi
+
 test_start "workflow controller preserves ordinary defaults and harness boundary"
 require_terms "workflow controller defaults" "$workflow_controller_ref" \
     'ordinary medium+ source-changing work defaults to' \
@@ -193,7 +220,9 @@ require_terms "workflow controller defaults" "$workflow_controller_ref" \
     '`qa_evaluation_mode=not_required`' \
     "Do not infer \`strict\`, \`harness_capable=true\`, or required QA from" \
     "size=medium+ or delegation alone" \
-    'Treat `harness_capable` as false unless' \
+    'During `prepare_only`, always treat `harness_capable` as false' \
+    'For `implement_only`, an accepted' \
+    '`approved_feature_preparation_harness_obligation` is explicit harness scope' \
     'Treat `qa_evaluation_mode=not_required` unless'
 require_terms "workflow controller harness boundary" "$workflow_controller_ref" \
     '`references/harness-controller.md` is loaded only after' \

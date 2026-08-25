@@ -27,6 +27,7 @@ readonly FEATURE_PREP_CASE_MANIFEST=(
     'medium-prepare-only-readiness-does-not-wait-for-implementation-approval|medium|none'
     'medium-prepare-only-readiness-reports-pending-requirement-map|medium|none'
     'medium-prepare-only-qa-request-routing|medium|none'
+    'medium-prepare-only-harness-request-routing|medium|none'
     'combined-preparation-and-implementation-routes-end-to-end|small|execution'
     'viewing-route-preserves-active-behavior|light|none'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|none'
@@ -346,7 +347,7 @@ build_medium_prepare_only_response() {
             recommended_next_step: "Approve or delegate the bounded implementation packet."
           }
         } + (if $plan_mode == "inline" then {
-          plan_document: "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+          plan_document: "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: N/A. No executable task packet, files, tests, or Build handoff."
         } else {} end)
     ' >"$response_path"
 }
@@ -414,6 +415,11 @@ build_medium_prepare_only_not_applicable_readiness_plan_response() {
             open_decisions: ["Approve the new-feature implementation workflow and define behavior before Build."],
             implementation_implications: ["Define the new feature behavior in the approved implementation workflow."],
             recommended_next_step: "Start an approved implementation workflow to define the new feature behavior before Build.",
+            future_harness_obligation: {
+              requested_scope: "Run the explicitly requested trace/replay harness during future implementation.",
+              evidence_basis: ["The user explicitly requested trace/replay harness evidence for future implementation."],
+              execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+            },
             readiness_plan: {
               preparation_basis: "not_applicable",
               implementation_implications: ["Define the new feature behavior in the approved implementation workflow."],
@@ -422,7 +428,7 @@ build_medium_prepare_only_not_applicable_readiness_plan_response() {
               execution_status: "not_started"
             }
           }
-        | .plan_document = "Readiness only: preparation basis not_applicable; define the new feature behavior; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+        | .plan_document = "Readiness only: preparation basis not_applicable; define the new feature behavior; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: Run the explicitly requested trace/replay harness during future implementation; evidence basis: the user explicitly requested trace/replay harness evidence for future implementation; execution prerequisite: activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted. No executable task packet, files, tests, or Build handoff."
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
 }
@@ -438,6 +444,245 @@ build_medium_prepare_only_qa_request_response() {
           requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
           execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."
         }
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_medium_prepare_only_harness_request_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_prepare_only_response "$response_path" "$summary" none
+    jq '
+        .feature_preparation_result.future_harness_obligation = {
+          requested_scope: "Run the explicitly requested trace/replay harness during future implementation.",
+          evidence_basis: ["The user explicitly requested trace/replay harness evidence for future implementation."],
+          execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+        }
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_medium_implement_only_harness_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+      def approved_obligation:
+        {
+          requested_scope: "Run the explicitly requested trace/replay harness during future implementation.",
+          evidence_basis: ["The user explicitly requested trace/replay harness evidence for future implementation."],
+          execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted.",
+          source_feature_preparation_evidence_ref: "prep/medium-feature"
+        };
+      def artifact_refs:
+        [
+          {artifact_id:"done-contract",artifact_type:"done_contract",producer:"orchestrator",consumer:"implementation executor",location_ref:"plan/implementation-transition#done-contract",schema_or_contract:"assistant-workflow done_contract",validation_status:"valid",summary:"Accepted implementation-owned Done Contract."},
+          {artifact_id:"harness-recipe",artifact_type:"harness_recipe",producer:"orchestrator",consumer:"implementation executor",location_ref:"plan/implementation-transition#harness-recipe",schema_or_contract:"assistant-workflow harness_recipe",validation_status:"valid",summary:"Selected trace/replay-ready Harness Recipe."},
+          {artifact_id:"harness-run-state",artifact_type:"harness_run_state",producer:"orchestrator",consumer:"implementation executor",location_ref:"journal/implementation-transition#harness-run-state",schema_or_contract:"assistant-workflow harness_run_state",validation_status:"valid",summary:"Pre-Build run state with Build not started."},
+          {artifact_id:"trace-ledger",artifact_type:"trace_ledger",producer:"orchestrator",consumer:"implementation executor",location_ref:"journal/implementation-transition#trace-ledger",schema_or_contract:"assistant-workflow trace_ledger",validation_status:"valid",summary:"Ordered pre-Build gate trace."},
+          {artifact_id:"replay-packet",artifact_type:"replay_packet",producer:"orchestrator",consumer:"implementation executor",location_ref:"journal/implementation-transition#replay-packet",schema_or_contract:"assistant-workflow replay_packet",validation_status:"valid",summary:"Replay state pinned before Build."},
+          {artifact_id:"task-packet",artifact_type:"task_packet",producer:"orchestrator",consumer:"implementation executor",location_ref:"plan/implementation-transition#task-packet",schema_or_contract:"assistant-workflow implementation_steps packet",validation_status:"valid",summary:"Executable bounded implementation packet."},
+          {artifact_id:"verification-evidence",artifact_type:"verification_evidence",producer:"implementation executor",consumer:"Code Reviewer and QA Evaluator",location_ref:"journal/implementation-transition#verification",schema_or_contract:"focused verification result",validation_status:"pending",summary:"Pending implementation verification evidence."}
+        ];
+      {
+        summary: $summary,
+        size: "medium",
+        execution_intent: "implement_only",
+        feature_preparation_scope: "existing_system",
+        approved_feature_preparation_evidence_ref: "prep/medium-feature",
+        approved_feature_preparation_harness_obligation: approved_obligation,
+        completion_policy: {
+          controller_intensity: "strict",
+          build_execution_lane: "bounded_executor",
+          plan_mode: "approval_required",
+          architecture_design_mode: "not_applicable",
+          workflow_state_mode: "journal",
+          manual_verification_mode: "not_required",
+          selection_reason: "The accepted deferred trace/replay obligation activates the strict medium implementation gate."
+        },
+        triage_result: {
+          task_type: "feature",
+          risk_tier: "moderate",
+          size: "medium",
+          execution_intent: "implement_only",
+          controller_intensity: "strict",
+          plan_mode: "approval_required",
+          harness_capable: true,
+          qa_evaluation_mode: "required",
+          architecture_design_mode: "not_applicable",
+          architecture_design_trigger_reasons: ["The bounded route adaptation does not change an architecture boundary."],
+          build_execution_lane: "bounded_executor",
+          workflow_state_mode: "journal",
+          manual_verification_mode: "not_required",
+          required_gates: ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "Feature: binary acceptance", "Feature: new behavior tested", "Feature: contract/config/telemetry/docs impacts checked", "approved feature-preparation evidence", "Done Contract", "Harness Recipe", "Harness runtime artifact refs"],
+          required_agents: ["bounded executor", "Code Reviewer", "QA Evaluator"],
+          subagent_policy_state: "delegation_triggered",
+          subagent_execution_mode: "delegated",
+          subagent_trigger_scope: ["Build bounded executor, Review Code Reviewer, and post-review QA Evaluator"],
+          search_mode: "none",
+          candidate_scope_scan: {
+            likely_touched_paths: ["src/route.ts", "test/route_test.ts"],
+            symbols_or_terms_searched: ["ACTIVE", "VIEWING", "applyActiveRouteEffects"],
+            adjacent_surfaces: ["route selection", "map highlight", "viewport focus"],
+            confidence: "high",
+            unknowns: []
+          }
+        },
+        requirement_acceptance_map: {
+          intended_outcome: "Adapt the existing ACTIVE route effects to read-only VIEWING without enabling edits.",
+          assumptions_and_defaults: ["The approved preparation evidence remains current."],
+          open_material_questions: [],
+          non_goals: ["Do not change ACTIVE behavior or enable editing for VIEWING."],
+          entries: [{
+            requirement_id: "R1",
+            source: "prep/medium-feature#route-effects",
+            requirement: "Preserve selection, highlight, and viewport focus for read-only VIEWING.",
+            acceptance_criterion: "VIEWING applies all three effects without enabling editing.",
+            verification_method: "Run the focused route behavior test.",
+            evidence_ref: "prep/medium-feature#route-effects",
+            manual_scenario_or_na: "N/A: focused automated behavior test applies.",
+            status: "pending"
+          }]
+        },
+        decomposition_plan_review: {
+          scope_understanding: "One observable route-behavior increment consumes the approved preservation evidence.",
+          slice_subagent_count: "One bounded behavior slice and one independent reviewer.",
+          step_cost_budget: "One implementation packet plus focused verification and review.",
+          dependency_order: "Accept harness gate, then execute the single route-behavior packet.",
+          output_plan_match: "The packet delivers R1 and no broader behavior.",
+          fallback_path: "Return to Discover if the approved evidence ref is stale.",
+          broad_split_rejection: "Layer/module/setup splits would not be independently observable; the one behavior slice is the smallest verifiable increment.",
+          decision: "proceed"
+        },
+        slice_manifest: [{
+          slice_id: "viewing-route-effects",
+          name: "Preserve VIEWING route effects",
+          observable_increment: "VIEWING selects, highlights, and focuses while remaining read-only.",
+          deliverable_type: "behavior",
+          acceptance_criteria: ["VIEWING applies selection, highlight, and viewport focus without enabling editing."],
+          files_to_create: [],
+          files_to_modify: ["src/route.ts"],
+          files_to_test: ["test/route_test.ts"],
+          enabling_changes_included: ["none"],
+          depends_on: [],
+          verification_command: ["bash", "tests/route-behavior-contracts.sh"],
+          expected_success_signal: "Focused route behavior verification passes.",
+          evidence_to_record: ["Focused test result and changed-file evidence."],
+          deviation_rollback_rule: "Stop and return to Plan if the approved evidence or file scope differs."
+        }],
+        single_slice_rationale: "Selection, highlight, and focus are one tested route-effect increment and cannot be split without losing observable parity.",
+        artifact_contract: {
+          artifact_type: "code",
+          required_files_or_deliverables: ["src/route.ts", "test/route_test.ts"],
+          output_format_schema: "Bounded route behavior implementation and focused behavioral test.",
+          acceptance_criteria: ["VIEWING preserves selection, highlight, and viewport focus without enabling editing."],
+          verification_command_or_method: "bash tests/route-behavior-contracts.sh",
+          expected_success_signal: "Focused route behavior verification passes.",
+          owner_consumer: "Implementation executor -> Code Reviewer",
+          non_goals_exclusions: ["No ACTIVE behavior change and no VIEWING editing support."]
+        },
+        plan_document: "Approved implementation plan plan/implementation-transition: execute the single viewing-route-effects packet only after the canonical harness gate; Build not started.",
+        done_contract: {
+          done_when: ["The exact approved harness obligation is carried unchanged and the pre-Build harness gate is complete."],
+          not_done_when: ["Build starts before the accepted Done Contract and Harness Recipe exist."],
+          verification: ["Inspect the approved obligation, its preparation-source binding, and the implementation handoff before Build."],
+          owner_consumer: "Workflow orchestrator -> implementation executor",
+          acceptance_criteria: ["The approved trace/replay harness scope remains exact and Build has not started."],
+          debate_record: [
+            {perspective: "delivery", concern_or_support: "The deferred harness scope must not broaden implementation.", resolution: "Carry the approved object unchanged."},
+            {perspective: "verification", concern_or_support: "The harness gate must be concrete before Build.", resolution: "Require this Done Contract and the selected Harness Recipe."}
+          ],
+          accepted_by: "orchestrator:plan/implementation-transition"
+        },
+        harness_recipe: {
+          task_profile: "medium implement-only trace/replay harness before Build",
+          model_profile: "bounded executor with independent review",
+          risk_profile: "strict pre-Build harness gate",
+          context_profile: "approved preparation obligation and source binding carried exactly",
+          selected_recipe: "strict bounded trace/replay",
+          recipe_rationale: "The accepted deferred trace/replay obligation requires concrete pre-Build harness controls.",
+          required_artifacts: ["Done Contract", "task packet", "verification", "Harness Run State", "Trace Ledger", "Replay Packet", "Artifact Reference Ledger", "approved feature-preparation harness obligation"],
+          corrective_action: "Block Build and repair any missing, stale, or broadened harness evidence."
+        },
+        implementation_steps: [{
+          order: 1,
+          slice_id: "viewing-route-effects",
+          slice_name: "Preserve VIEWING route effects",
+          name: "Adapt ACTIVE effects to read-only VIEWING",
+          task_id: "implementation-transition-1",
+          description: "Consume the approved preparation evidence and implement only the bounded route-effects gap.",
+          observable_increment: "VIEWING selects, highlights, and focuses while remaining read-only.",
+          deliverable_type: "behavior",
+          requirement_ids: ["R1"],
+          feature_preparation_evidence_ref: "prep/medium-feature",
+          feature_preparation_harness_obligation: approved_obligation,
+          files_to_create: [],
+          files_to_modify: ["src/route.ts"],
+          files_to_test: ["test/route_test.ts"],
+          enabling_changes_included: ["none"],
+          depends_on: [],
+          tdd_applies: false,
+          acceptance_criteria: ["VIEWING applies selection, highlight, and viewport focus without enabling editing."],
+          reuse_search: {applicability:"not_applicable",applicability_reason:"The approved existing route path is the required extension point."},
+          done_contract_ref: "plan/implementation-transition#done-contract",
+          harness_recipe_ref: "plan/implementation-transition#harness-recipe",
+          artifact_refs: artifact_refs,
+          test_criteria: ["The focused route behavior test proves all preserved effects and read-only scope."],
+          implementation_notes: ["Preserve ACTIVE behavior and consume prep/medium-feature unchanged."],
+          verification_command: ["bash", "tests/route-behavior-contracts.sh"],
+          expected_success_signal: "Focused route behavior verification passes.",
+          evidence_to_record: ["Changed source, focused test result, and independent review."],
+          deviation_rollback_rule: "Stop and return to Plan if implementation requires broader files, behavior, or evidence."
+        }],
+        artifact_reference_ledger: artifact_refs,
+        harness_run_state: {
+          task_id: "implementation-transition",
+          task_name: "Consume deferred route harness obligation",
+          phase: "PLAN",
+          slice: "viewing-route-effects",
+          status: "not_started",
+          blockers: ["none"],
+          last_verification: {command_or_check:"Done Contract, Harness Recipe, packet, and recovery-ref inspection",result:"passed",evidence:"plan/implementation-transition"},
+          next_action: "Dispatch the bounded implementation packet after the approved pre-Build gate.",
+          recovery_pointer: "plan/implementation-transition#task-packet"
+        },
+        trace_ledger: [{sequence:1,timestamp:"pre-build-1",event_type:"decision",actor:"orchestrator",summary:"Accepted the implementation-owned Done Contract and trace/replay Harness Recipe before Build.",artifact_refs:["done-contract","harness-recipe","task-packet","harness-run-state","trace-ledger","replay-packet"]}],
+        replay_packet: {
+          pinned_context: ["prep/medium-feature", "R1", "Do not enable editing for VIEWING."],
+          artifact_refs: ["plan/implementation-transition#task-packet", "journal/implementation-transition#harness-run-state", "journal/implementation-transition#trace-ledger"],
+          validation_state: {completed_checks:["Done Contract accepted", "Harness Recipe selected", "runtime refs valid"],pending_checks:["implementation verification", "independent review"],last_result:"Pre-Build harness gate passed; Build not started."},
+          exact_next_action: "Dispatch the bounded implementation packet after the approved pre-Build gate.",
+          run_state_ref: "journal/implementation-transition#harness-run-state",
+          trace_ledger_ref: "journal/implementation-transition#trace-ledger",
+          recovery_pointer: "plan/implementation-transition#task-packet"
+        },
+        validation_results: [{command_or_check:"canonical pre-Build harness gate",result:"passed",evidence:"Done Contract, Harness Recipe, executable packet, and runtime refs are valid; Build not started."}],
+        phase_checkpoints: ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
+      }
+    ' >"$response_path"
+}
+
+build_medium_implement_only_not_applicable_harness_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_implement_only_harness_handoff_response "$response_path" "$summary"
+    jq '
+        .feature_preparation_scope = "not_applicable"
+        | del(.approved_feature_preparation_evidence_ref)
+        | del(.approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)
+        | .approved_feature_preparation_harness_obligation.source_preparation_basis = "not_applicable"
+        | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "Feature: binary acceptance", "Feature: new behavior tested", "Feature: contract/config/telemetry/docs impacts checked", "approved not_applicable preparation basis", "Done Contract", "Harness Recipe", "Harness runtime artifact refs"]
+        | del(.implementation_steps[0].feature_preparation_evidence_ref)
+        | del(.implementation_steps[0].feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)
+        | .implementation_steps[0].feature_preparation_harness_obligation.source_preparation_basis = "not_applicable"
+        | .requirement_acceptance_map.entries[0].source = "approved preparation basis: not_applicable"
+        | .requirement_acceptance_map.entries[0].evidence_ref = "preparation/not-applicable"
+        | .implementation_steps[0].implementation_notes = ["Use the approved not_applicable preparation basis and do not invent an existing-system evidence ref."]
+        | .replay_packet.pinned_context[0] = "approved preparation basis: not_applicable"
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
 }
@@ -538,7 +783,7 @@ build_large_strict_prepare_only_readiness_plan_response() {
     jq '
         .completion_policy.plan_mode = "inline"
         | .triage_result.plan_mode = "inline"
-        | .plan_document = "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. No executable task packet, files, tests, or Build handoff."
+        | .plan_document = "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: Run the explicitly requested trace/replay harness during future implementation; evidence basis: the user explicitly requested trace/replay harness evidence for future implementation; execution prerequisite: activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted. No executable task packet, files, tests, or Build handoff."
         | .feature_preparation_result.readiness_plan = {
             evidence_ref: "prep/medium-feature",
             implementation_implications: ["Adapt the ACTIVE effects to VIEWING without enabling edits."],
@@ -547,6 +792,11 @@ build_large_strict_prepare_only_readiness_plan_response() {
             execution_status: "not_started"
           }
         | del(.feature_preparation_result.future_qa_acceptance_obligation)
+        | .feature_preparation_result.future_harness_obligation = {
+            requested_scope: "Run the explicitly requested trace/replay harness during future implementation.",
+            evidence_basis: ["The user explicitly requested trace/replay harness evidence for future implementation."],
+            execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+          }
         | .phase_checkpoints = [
             "--- PHASE: TRIAGE ---",
             "--- PHASE: DISCOVER ---",

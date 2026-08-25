@@ -45,6 +45,7 @@ This packet is the executable contract for the slice. Supporting context below c
   - [slice id, or "none"]
 - feature_preparation_scope: not_applicable | existing_system
 - feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
+- feature_preparation_harness_obligation: [required exact approved object when the preparation result contains future_harness_obligation; include requested_scope, evidence_basis, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - acceptance_criteria:
   - [ ] [binary pass/fail criterion]
 - verification_command:

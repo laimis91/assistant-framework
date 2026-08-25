@@ -197,6 +197,15 @@ p0p4_write_skill_eval_responses() {
                     medium-prepare-only-qa-request-routing)
                         build_medium_prepare_only_qa_request_response "$response_path" "$required_summary"
                         ;;
+                    medium-prepare-only-harness-request-routing)
+                        build_medium_prepare_only_harness_request_response "$response_path" "$required_summary"
+                        ;;
+                    small-input-implement-only-promotes-deferred-harness-obligation|medium-implement-only-consumes-preparation-harness-obligation)
+                        build_medium_implement_only_harness_handoff_response "$response_path" "$required_summary"
+                        ;;
+                    medium-implement-only-consumes-not-applicable-preparation-harness-obligation)
+                        build_medium_implement_only_not_applicable_harness_handoff_response "$response_path" "$required_summary"
+                        ;;
                     large-prepare-only-terminal-route)
                         build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
@@ -1286,11 +1295,11 @@ run_prepare_only_representative_path_probe \
 run_prepare_only_representative_path_probe \
     medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
 if [[ ${#workflow_core_failures[@]} -eq 0 \
-    && "$prepare_only_direct_structured_probe_count" -eq 341 \
+    && "$prepare_only_direct_structured_probe_count" -eq 375 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 ]]; then
     pass
 else
-    fail "workflow core artifact mutations were not rejected or miscounted: ${workflow_core_failures[*]} (direct=$prepare_only_direct_structured_probe_count representative_cli=$prepare_only_representative_cli_probe_count)"
+    fail "workflow core artifact mutations were not rejected or miscounted: ${workflow_core_failures[*]-} (direct=$prepare_only_direct_structured_probe_count representative_cli=$prepare_only_representative_cli_probe_count)"
 fi
 
 test_start "feature-preparation rows and diagram traces reject omitted central evidence in the actual grader"
@@ -1751,6 +1760,32 @@ run_isolated_workflow_routing_mutations() {
     return 1
 }
 
+build_reordered_medium_implement_only_harness_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+    local reordered_response="${response_path}.reordered"
+
+    build_medium_implement_only_harness_handoff_response "$response_path" "$summary"
+    jq '
+      .implementation_steps[0].artifact_refs |= ([.[-1]] + .[0:-1])
+      | .artifact_reference_ledger |= ([.[-1]] + .[0:-1])
+    ' "$response_path" >"$reordered_response"
+    mv "$reordered_response" "$response_path"
+}
+
+build_reordered_medium_implement_only_not_applicable_harness_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+    local reordered_response="${response_path}.reordered"
+
+    build_medium_implement_only_not_applicable_harness_handoff_response "$response_path" "$summary"
+    jq '
+      .implementation_steps[0].artifact_refs |= ([.[-1]] + .[0:-1])
+      | .artifact_reference_ledger |= ([.[-1]] + .[0:-1])
+    ' "$response_path" >"$reordered_response"
+    mv "$reordered_response" "$response_path"
+}
+
 test_start "actual grader isolates future-QA preparation routing from execution routing"
 if run_isolated_workflow_routing_mutations \
     "medium-prepare-only-qa-request-routing" \
@@ -1775,7 +1810,8 @@ if run_isolated_workflow_routing_mutations \
     '. + {plan_document: "Injected execution plan."}' \
     'del(.feature_preparation_result.future_qa_acceptance_obligation)' \
     '(.feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run unrelated security QA."' \
-    '(.feature_preparation_result.future_qa_acceptance_obligation.execution_prerequisite) = "Run now during preparation."'; then
+    '(.feature_preparation_result.future_qa_acceptance_obligation.execution_prerequisite) = "Run now during preparation."' \
+    '(.feature_preparation_result.future_harness_obligation) = {requested_scope: "invented", evidence_basis: ["invented"], execution_prerequisite: "invented"}'; then
     pass
 else
     fail "future-QA preparation routing mutations were not rejected by their target grader: $WORKFLOW_ROUTING_MUTATION_FAILURE"
@@ -1846,6 +1882,10 @@ if run_isolated_workflow_routing_mutations \
     'del(.feature_preparation_result.feature_preparation_evidence_ref)' \
     '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/stale-result"' \
     '(.feature_preparation_result.readiness_plan.evidence_ref) = "prep/stale"' \
+    'del(.feature_preparation_result.future_harness_obligation)' \
+    '(.feature_preparation_result.future_harness_obligation.requested_scope) = "Run an unrelated harness."' \
+    '(.feature_preparation_result.future_harness_obligation.evidence_basis) = []' \
+    '(.feature_preparation_result.future_harness_obligation.execution_prerequisite) = "Run now during preparation."' \
     '(.completion_policy.plan_mode) = "approval_required"' \
     '(.triage_result.plan_mode) = "none"' \
     '(.completion_policy.build_execution_lane) = "inline_direct"' \
@@ -1898,6 +1938,11 @@ if run_isolated_workflow_routing_mutations \
     '(.feature_preparation_result.feature_preparation_evidence_ref) = "prep/fabricated"' \
     '(.feature_preparation_result.readiness_plan.evidence_ref) = "prep/fabricated"' \
     '(.feature_preparation_result.readiness_plan.preparation_basis) = "existing_system"' \
+    'del(.feature_preparation_result.future_harness_obligation)' \
+    '(.feature_preparation_result.future_harness_obligation.requested_scope) = "Run unrelated load testing."' \
+    '(.feature_preparation_result.future_harness_obligation.evidence_basis) = []' \
+    '(.feature_preparation_result.future_harness_obligation.execution_prerequisite) = "Run now during preparation."' \
+    '(.plan_document) = "Readiness only: preparation basis not_applicable. Future harness obligation: N/A."' \
     '(.feature_preparation_result.readiness_plan.implementation_implications) = []' \
     '(.feature_preparation_result.readiness_plan.implementation_implications) = [null]' \
     '(.feature_preparation_result.readiness_plan.implementation_implications) = ["  "]' \
@@ -1945,6 +1990,203 @@ if run_isolated_workflow_routing_mutations \
     pass
 else
     fail "not-applicable readiness Plan accepted fabricated evidence or execution routing: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader defers prepare-only harness requests without runtime routing"
+if run_isolated_workflow_routing_mutations \
+    "medium-prepare-only-harness-request-routing" \
+    build_medium_prepare_only_harness_request_response \
+    '(.triage_result.harness_capable) = true' \
+    '(.triage_result.controller_intensity) = "strict"' \
+    '(.completion_policy.workflow_state_mode) = "journal"' \
+    '(.triage_result.workflow_state_mode) = "journal"' \
+    '(.triage_result.build_execution_lane) = "bounded_executor"' \
+    '.triage_result.required_gates += ["harness execution"]' \
+    'del(.feature_preparation_result.future_harness_obligation)' \
+    '(.feature_preparation_result.future_harness_obligation.requested_scope) = "Run an unrelated load harness."' \
+    '(.feature_preparation_result.future_harness_obligation.evidence_basis) = []' \
+    '(.feature_preparation_result.future_harness_obligation.execution_prerequisite) = "Run now during preparation."' \
+    '.done_contract = {}' \
+    '.harness_recipe = {}' \
+    '.harness_run_state = {}' \
+    '.trace_ledger = {}' \
+    '.replay_packet = {}' \
+    '.artifact_reference_ledger = {}' \
+    '.changed_files = {}' \
+    '.test_results = {}'; then
+    pass
+else
+    fail "prepare-only harness request escaped its typed future obligation: $WORKFLOW_ROUTING_MUTATION_FAILURE"
+fi
+
+test_start "actual grader fully enforces existing-system deferred harness transitions"
+existing_system_transition_failures=()
+for existing_system_transition_case in \
+    medium-implement-only-consumes-preparation-harness-obligation \
+    small-input-implement-only-promotes-deferred-harness-obligation; do
+if ! run_isolated_workflow_routing_mutations \
+    "$existing_system_transition_case" \
+    build_medium_implement_only_harness_handoff_response \
+    'del(.approved_feature_preparation_harness_obligation)' \
+    '(.approved_feature_preparation_harness_obligation.requested_scope) = "Run unrelated load testing."' \
+    '(.approved_feature_preparation_harness_obligation.evidence_basis) = []' \
+    '(.approved_feature_preparation_harness_obligation.execution_prerequisite) = "Run after Build."' \
+    '(.approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref) = "prep/stale"' \
+    '(.approved_feature_preparation_harness_obligation.source_preparation_basis) = "not_applicable"' \
+    'del(.feature_preparation_scope, .approved_feature_preparation_evidence_ref, .approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)' \
+    '(.size) = "small"' \
+    'del(.triage_result.task_type)' \
+    'del(.triage_result.risk_tier)' \
+    '(.triage_result.size) = "small"' \
+    '(.triage_result.harness_capable) = false' \
+    '(.triage_result.controller_intensity) = "standard"' \
+    'del(.triage_result.plan_mode)' \
+    'del(.triage_result.execution_intent)' \
+    'del(.triage_result.qa_evaluation_mode)' \
+    '(.triage_result.qa_evaluation_mode) = "not_required"' \
+    'del(.triage_result.architecture_design_mode)' \
+    'del(.triage_result.architecture_design_trigger_reasons)' \
+    'del(.triage_result.build_execution_lane)' \
+    'del(.triage_result.workflow_state_mode)' \
+    'del(.triage_result.manual_verification_mode)' \
+    'del(.triage_result.required_gates)' \
+    'del(.triage_result.required_agents)' \
+    '(.triage_result.required_agents) = ["bounded executor", "Code Reviewer"]' \
+    'del(.triage_result.subagent_policy_state)' \
+    'del(.triage_result.subagent_execution_mode)' \
+    'del(.triage_result.subagent_trigger_scope)' \
+    '(.triage_result.subagent_trigger_scope) = ["Build bounded executor and Review Code Reviewer"]' \
+    'del(.triage_result.search_mode)' \
+    'del(.triage_result.candidate_scope_scan.likely_touched_paths)' \
+    'del(.triage_result.candidate_scope_scan.symbols_or_terms_searched)' \
+    'del(.triage_result.candidate_scope_scan.adjacent_surfaces)' \
+    'del(.triage_result.candidate_scope_scan.confidence)' \
+    'del(.triage_result.candidate_scope_scan.unknowns)' \
+    'del(.done_contract)' \
+    '(.done_contract.done_when) = []' \
+    '(.done_contract.not_done_when) = []' \
+    '(.done_contract.verification) = []' \
+    '(.done_contract.owner_consumer) = ""' \
+    '(.done_contract.acceptance_criteria) = []' \
+    '(.done_contract.debate_record) = [.done_contract.debate_record[0]]' \
+    'del(.done_contract.debate_record[0].perspective)' \
+    'del(.done_contract.debate_record[0].concern_or_support)' \
+    'del(.done_contract.debate_record[0].resolution)' \
+    '(.done_contract.accepted_by) = ""' \
+    'del(.harness_recipe)' \
+    '(.harness_recipe.task_profile) = ""' \
+    '(.harness_recipe.model_profile) = ""' \
+    '(.harness_recipe.risk_profile) = ""' \
+    '(.harness_recipe.context_profile) = ""' \
+    '(.harness_recipe.selected_recipe) = ""' \
+    '(.harness_recipe.recipe_rationale) = ""' \
+    '(.harness_recipe.required_artifacts) = []' \
+    '(.harness_recipe.corrective_action) = ""' \
+    '.harness_entry_state = {done_contract_status:"accepted",harness_recipe_status:"accepted",build_status:"not_started"}' \
+    'del(.implementation_steps)' \
+    'del(.implementation_steps[0].feature_preparation_harness_obligation)' \
+    '(.implementation_steps[0].feature_preparation_harness_obligation.requested_scope) = "broadened"' \
+    '(.implementation_steps[0].feature_preparation_harness_obligation.source_preparation_basis) = "not_applicable"' \
+    'del(.implementation_steps[0].slice_id)' \
+    'del(.implementation_steps[0].order)' \
+    'del(.implementation_steps[0].slice_name)' \
+    'del(.implementation_steps[0].name)' \
+    'del(.implementation_steps[0].task_id)' \
+    'del(.implementation_steps[0].description)' \
+    'del(.implementation_steps[0].observable_increment)' \
+    'del(.implementation_steps[0].deliverable_type)' \
+    'del(.implementation_steps[0].requirement_ids)' \
+    'del(.implementation_steps[0].feature_preparation_evidence_ref)' \
+    'del(.implementation_steps[0].files_to_create)' \
+    'del(.implementation_steps[0].files_to_modify)' \
+    'del(.implementation_steps[0].files_to_test)' \
+    'del(.implementation_steps[0].enabling_changes_included)' \
+    'del(.implementation_steps[0].depends_on)' \
+    'del(.implementation_steps[0].tdd_applies)' \
+    'del(.implementation_steps[0].acceptance_criteria)' \
+    'del(.implementation_steps[0].reuse_search)' \
+    'del(.implementation_steps[0].done_contract_ref)' \
+    'del(.implementation_steps[0].harness_recipe_ref)' \
+    'del(.implementation_steps[0].test_criteria)' \
+    'del(.implementation_steps[0].implementation_notes)' \
+    'del(.implementation_steps[0].verification_command)' \
+    'del(.implementation_steps[0].expected_success_signal)' \
+    'del(.implementation_steps[0].evidence_to_record)' \
+    'del(.implementation_steps[0].deviation_rollback_rule)' \
+    'del(.implementation_steps[0].artifact_refs[0].location_ref)' \
+    'del(.artifact_reference_ledger[0].location_ref)' \
+    '(.implementation_steps[0].artifact_refs[6].consumer) = "unrelated consumer" | (.artifact_reference_ledger[6].consumer) = "unrelated consumer"' \
+    'del(.harness_run_state.status)' \
+    'del(.harness_run_state.recovery_pointer)' \
+    'del(.trace_ledger[0].artifact_refs)' \
+    'del(.replay_packet.run_state_ref)' \
+    'del(.replay_packet.trace_ledger_ref)' \
+    'del(.replay_packet.recovery_pointer)' \
+    'del(.phase_checkpoints)' \
+    '(.phase_checkpoints[2]) = "--- PHASE: BUILD ---"' \
+    '.changed_files = {}' \
+    '.test_results = {}'; then
+    existing_system_transition_failures+=("$existing_system_transition_case:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+fi
+done
+if [[ ${#existing_system_transition_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "existing-system harness transition grading remained incomplete: ${existing_system_transition_failures[*]}"
+fi
+
+test_start "actual grader accepts reordered canonical harness artifact ledgers"
+reordered_transition_failures=()
+for reordered_transition_case_and_builder in \
+    "medium-implement-only-consumes-preparation-harness-obligation build_reordered_medium_implement_only_harness_handoff_response" \
+    "small-input-implement-only-promotes-deferred-harness-obligation build_reordered_medium_implement_only_harness_handoff_response" \
+    "medium-implement-only-consumes-not-applicable-preparation-harness-obligation build_reordered_medium_implement_only_not_applicable_harness_handoff_response"; do
+    reordered_transition_case="${reordered_transition_case_and_builder%% *}"
+    reordered_transition_builder="${reordered_transition_case_and_builder#* }"
+    if ! run_isolated_workflow_routing_mutations "$reordered_transition_case" "$reordered_transition_builder"; then
+        reordered_transition_failures+=("$reordered_transition_case:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#reordered_transition_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "canonical harness ledgers became order-sensitive: ${reordered_transition_failures[*]}"
+fi
+
+test_start "actual grader consumes a not-applicable deferred harness obligation without inventing evidence"
+if run_isolated_workflow_routing_mutations \
+    "medium-implement-only-consumes-not-applicable-preparation-harness-obligation" \
+    build_medium_implement_only_not_applicable_harness_handoff_response \
+    'del(.approved_feature_preparation_harness_obligation)' \
+    '(.approved_feature_preparation_harness_obligation.source_preparation_basis) = "existing_system"' \
+    '(.approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref) = "prep/fabricated"' \
+    '(.approved_feature_preparation_evidence_ref) = "prep/fabricated"' \
+    '(.triage_result.qa_evaluation_mode) = "not_required"' \
+    '(.triage_result.required_agents) = ["bounded executor", "Code Reviewer"]' \
+    '(.triage_result.subagent_trigger_scope) = ["Build bounded executor and Review Code Reviewer"]' \
+    'del(.done_contract)' \
+    'del(.harness_recipe)' \
+    '.harness_entry_state = {done_contract_status:"accepted",harness_recipe_status:"accepted",build_status:"not_started"}' \
+    'del(.implementation_steps[0].feature_preparation_harness_obligation)' \
+    '(.implementation_steps[0].feature_preparation_harness_obligation.source_preparation_basis) = "existing_system"' \
+    '(.implementation_steps[0].feature_preparation_harness_obligation.source_feature_preparation_evidence_ref) = "prep/fabricated"' \
+    '(.implementation_steps[0].feature_preparation_evidence_ref) = "prep/fabricated"' \
+    'del(.implementation_steps[0].done_contract_ref)' \
+    'del(.implementation_steps[0].harness_recipe_ref)' \
+    'del(.implementation_steps[0].artifact_refs[0].location_ref)' \
+    'del(.artifact_reference_ledger[0].location_ref)' \
+    '(.implementation_steps[0].artifact_refs[6].consumer) = "unrelated consumer" | (.artifact_reference_ledger[6].consumer) = "unrelated consumer"' \
+    'del(.harness_run_state.status)' \
+    'del(.trace_ledger[0].artifact_refs)' \
+    'del(.replay_packet.run_state_ref)' \
+    'del(.replay_packet.trace_ledger_ref)' \
+    'del(.phase_checkpoints)' \
+    '(.phase_checkpoints[2]) = "--- PHASE: BUILD ---"' \
+    '.changed_files = {}' \
+    '.test_results = {}'; then
+    pass
+else
+    fail "not-applicable implement-only invented evidence or bypassed its canonical harness gate: $WORKFLOW_ROUTING_MUTATION_FAILURE"
 fi
 
 test_start "actual grader preserves the exact future-QA obligation in every carrying preparation case"
@@ -1995,6 +2237,32 @@ if [[ ${#future_qa_mutation_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "future-QA obligation mutations were not rejected by every carrying case: ${future_qa_mutation_failures[*]}"
+fi
+
+test_start "actual grader rejects invented harness obligations in every no-harness preparation case"
+invented_harness_failures=()
+for no_harness_case_and_builder in \
+    "viewing-route-preserves-active-behavior build_viewing_route_prepare_only_response" \
+    "medium-prepare-only-readiness-does-not-wait-for-implementation-approval build_medium_prepare_only_response" \
+    "medium-prepare-only-readiness-reports-pending-requirement-map build_medium_prepare_only_response" \
+    "medium-prepare-only-terminal-route build_medium_prepare_only_terminal_response" \
+    "medium-prepare-only-qa-request-routing build_medium_prepare_only_qa_request_response" \
+    "medium-prepare-only-readiness-plan build_medium_prepare_only_readiness_plan_response" \
+    "large-prepare-only-terminal-route build_large_prepare_only_terminal_response" \
+    "feature-preparation-counterclassifies-unknown-conflict-and-gap build_feature_preparation_countercase_response"; do
+    no_harness_case_id="${no_harness_case_and_builder%% *}"
+    no_harness_builder="${no_harness_case_and_builder#* }"
+    if ! run_isolated_workflow_routing_mutations \
+        "$no_harness_case_id" \
+        "$no_harness_builder" \
+        '(.feature_preparation_result.future_harness_obligation) = {requested_scope: "invented", evidence_basis: ["invented"], execution_prerequisite: "invented"}'; then
+        invented_harness_failures+=("$no_harness_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#invented_harness_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "invented future harness work passed one or more no-harness preparation cases: ${invented_harness_failures[*]}"
 fi
 
 test_start "actual grader requires Medium Plan triage routing carry-forward fields"

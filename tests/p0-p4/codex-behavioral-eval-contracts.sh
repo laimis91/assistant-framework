@@ -445,7 +445,7 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
         execution_evidence)
             printf '%s\n' '{"schema_version":"1.0","feature_preparation_evidence":{"ref":"prep/viewing-route","items":[]},"feature_preparation_result":{"execution_status":"implemented","scope":"VIEWING","feature_preparation_evidence_ref":"prep/viewing-route","evidence_gaps":[],"open_decisions":[],"implementation_implications":[],"recommended_next_step":"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
             ;;
-        omitted_ref|stale_hashes|bad_path|bad_symbol|bad_assertion|bad_event_ref|missing_event)
+        omitted_ref|stale_hashes|bad_path|bad_symbol|bad_assertion|bad_event_ref|missing_event|extra_top_key|extra_evidence_key|extra_item_key|extra_design_key|extra_implementation_key|extra_trace_key|extra_behavioral_test_key|extra_result_key|prepended_document|appended_document)
             source_sha="$(shasum -a 256 "$workspace/src/route.ts" | awk '{print $1}')"
             test_sha="$(shasum -a 256 "$workspace/tests/route.test.js" | awk '{print $1}')"
             jq -n --arg source_sha "$source_sha" --arg test_sha "$test_sha" '
@@ -458,6 +458,16 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
                 bad_assertion) jq '(.feature_preparation_evidence.items[0].behavioral_test_evidence.assertions_or_search_refs[0]) = "assert.equal"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
                 bad_event_ref) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].inspection_event_ref) = "wrong-event"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
                 missing_event) jq '(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs) = []' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_top_key) jq '(.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_evidence_key) jq '(.feature_preparation_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_item_key) jq '(.feature_preparation_evidence.items[0].undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_design_key) jq '(.feature_preparation_evidence.items[0].design_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_implementation_key) jq '(.feature_preparation_evidence.items[0].implementation_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_trace_key) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_behavioral_test_key) jq '(.feature_preparation_evidence.items[0].behavioral_test_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_result_key) jq '(.feature_preparation_result.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                prepended_document) jq -n '{invalid:true},inputs' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                appended_document) jq -n 'inputs,{invalid:true}' "$workspace/.assistant-eval/viewing-preparation.json" ;;
             esac >"$workspace/.assistant-eval/viewing-preparation.mutated.json"
             mv "$workspace/.assistant-eval/viewing-preparation.mutated.json" "$workspace/.assistant-eval/viewing-preparation.json"
             ;;
@@ -687,6 +697,35 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
                 test_command='cat tests/route.test.js'
                 test_output="$(cat "$workspace/tests/route.test.js")"
                 ;;
+            quoted_non_rg)
+                source_command='cat "src/route.ts"'
+                source_output="$(cat "$workspace/src/route.ts")"
+                test_command='sed -n "1,200p" "tests/route.test.js"'
+                test_output="$(sed -n '1,200p' "$workspace/tests/route.test.js")"
+                ;;
+            wrapped_quoted_non_rg)
+                source_command='head -n 50 "src/route.ts"'
+                source_output="$(head -n 50 "$workspace/src/route.ts")"
+                test_command='cat "tests/route.test.js"'
+                test_output="$(cat "$workspace/tests/route.test.js")"
+                ;;
+            head|argv_head)
+                source_command='head -n 50 src/route.ts'
+                source_output="$(head -n 50 "$workspace/src/route.ts")"
+                test_command='head -n 50 tests/route.test.js'
+                test_output="$(head -n 50 "$workspace/tests/route.test.js")"
+                ;;
+            head_unsafe_flag)
+                source_command='head -c 10000 src/route.ts'
+                ;;
+            head_too_many|argv_head_too_many)
+                source_command='head -n 10001 src/route.ts'
+                source_output="$(head -n 10001 "$workspace/src/route.ts")"
+                test_command='head -n 10001 tests/route.test.js'
+                test_output="$(head -n 10001 "$workspace/tests/route.test.js")"
+                ;;
+            transient_mutation) ;;
+            alias_transient_mutation) ;;
             mutating)
                 source_command="sed -i.bak -e 's/ACTIVE/VIEWING/' src/route.ts"
                 ;;
@@ -777,6 +816,10 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             rg_colors)
                 source_command="rg --colors match:none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
                 ;;
+            rg_only_matching)
+                source_command="rg -o 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -o 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                ;;
             rg_path_separator_missing)
                 source_command="rg --path-separator -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
                 ;;
@@ -792,7 +835,7 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             argv_rg_preprocessor)
                 source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
                 ;;
-            argv_rg_preprocessor_as_pattern|argv_rg_preprocessor_separate|argv_rg_pre_glob|argv_rg_hostname_bin|argv_rg_replace|argv_rg_field_match_separator|argv_rg_field_context_separator|argv_rg_context_separator|argv_rg_hyperlink_format|argv_rg_short_file|argv_rg_short_file_attached|argv_rg_clustered_short_file|argv_rg_long_file|argv_rg_ignore_file|argv_rg_target_path_as_glob|argv_rg_positional_then_explicit|argv_rg_explicit_then_positional|argv_rg_colors|argv_rg_path_separator_missing|argv_rg_path_separator_invalid|argv_rg_path_separator_multibyte|argv_rg_target_path_as_path_separator) ;;
+            argv_rg_preprocessor_as_pattern|argv_rg_preprocessor_separate|argv_rg_pre_glob|argv_rg_hostname_bin|argv_rg_replace|argv_rg_field_match_separator|argv_rg_field_context_separator|argv_rg_context_separator|argv_rg_hyperlink_format|argv_rg_short_file|argv_rg_short_file_attached|argv_rg_clustered_short_file|argv_rg_long_file|argv_rg_ignore_file|argv_rg_target_path_as_glob|argv_rg_positional_then_explicit|argv_rg_explicit_then_positional|argv_rg_colors|argv_rg_only_matching|argv_rg_path_separator_missing|argv_rg_path_separator_invalid|argv_rg_path_separator_multibyte|argv_rg_target_path_as_path_separator) ;;
             shell_substitution)
                 source_command='cat $(pwd)/src/route.ts'
                 ;;
@@ -1021,12 +1064,12 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             missing_status) source_status='' ;;
             failed_status) source_status='failed' ;;
             contradictory_status) test_status='failed' ;;
-            valid) ;;
+            artifact_file_change_exact|artifact_file_change_dot|artifact_file_change_backslash|artifact_file_change_item_path|file_change_source_exact|file_change_source_dot|file_change_source_backslash|file_change_source_absolute_suffix|file_change_source_item_path|file_change_empty_changes|file_change_missing_paths|file_change_dual_conflict|file_change_multiple_conflict|file_change_requirement|hash_sha256sum|hash_shasum|hash_quoted|valid) ;;
             *) printf 'unsupported FAKE_VIEWING_EVENT_MODE: %s\n' "$viewing_event_mode" >&2; exit 2 ;;
         esac
         source_command_json="$(jq -cn --arg command "$source_command" '$command')"
         test_command_json="$(jq -cn --arg command "$test_command" '$command')"
-        if [[ "$viewing_event_mode" == wrapped || "$viewing_event_mode" == wrapped_context_rg || "$viewing_event_mode" == wrapped_word_concat_rg || "$viewing_event_mode" == wrapped_unquoted_glob || "$viewing_event_mode" == wrapped_no_space_pipeline || "$viewing_event_mode" == wrapped_no_space_semicolon || "$viewing_event_mode" == wrapped_brace_expansion || "$viewing_event_mode" == wrapped_zsh_equals || "$viewing_event_mode" == wrapped_multi_double_fragment_expansion ]]; then
+        if [[ "$viewing_event_mode" == wrapped || "$viewing_event_mode" == wrapped_context_rg || "$viewing_event_mode" == wrapped_quoted_non_rg || "$viewing_event_mode" == wrapped_word_concat_rg || "$viewing_event_mode" == wrapped_unquoted_glob || "$viewing_event_mode" == wrapped_no_space_pipeline || "$viewing_event_mode" == wrapped_no_space_semicolon || "$viewing_event_mode" == wrapped_brace_expansion || "$viewing_event_mode" == wrapped_zsh_equals || "$viewing_event_mode" == wrapped_multi_double_fragment_expansion ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '"/bin/zsh -lc \"" + $command + "\""')"
             test_command_json="$(jq -cn --arg command "$test_command" '"/bin/zsh -lc \"" + $command + "\""')"
         elif [[ "$viewing_event_mode" == argv_wrapped ]]; then
@@ -1040,6 +1083,14 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
             test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
         elif [[ "$viewing_event_mode" == argv_sed_write_ending_p ]]; then
             source_command_json='["sed","-n","1p;w evidencep","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_head ]]; then
+            source_command_json='["head","-n","50","src/route.ts"]'
+            test_command_json='["head","-n","50","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_head_too_many ]]; then
+            source_command_json='["head","-n","10001","src/route.ts"]'
+            test_command_json='["head","-n","10001","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_rg_only_matching ]]; then
+            source_command_json='["rg","--only-matching","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
         elif [[ "$viewing_event_mode" == argv_rg_preprocessor ]]; then
             source_command_json='["rg","--pre=cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
         elif [[ "$viewing_event_mode" == argv_rg_preprocessor_as_pattern ]]; then
@@ -1132,8 +1183,58 @@ if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
         elif [[ "$viewing_event_mode" == argv_wrapper_additional_command ]]; then
             source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command,"touch evidence.txt"]')"
         fi
+        if [[ "$viewing_event_mode" == artifact_file_change_exact ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:".assistant-eval/viewing-preparation.json",kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_dot ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:"./.assistant-eval/./viewing-preparation.json",kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_backslash ]]; then
+            jq -cn --arg path '.\.assistant-eval\viewing-preparation.json' '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:$path,kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_item_path ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",path:".assistant-eval/viewing-preparation.json"}}'
+        elif [[ "$viewing_event_mode" == file_change_source_exact ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_dot ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"./src/./route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_backslash ]]; then
+            jq -cn --arg path '.\src\route.ts' '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:$path,kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_absolute_suffix ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"/tmp/workspace/src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_item_path ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",path:"src/route.ts"}}'
+        elif [[ "$viewing_event_mode" == file_change_empty_changes ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",changes:[]}}'
+        elif [[ "$viewing_event_mode" == file_change_missing_paths ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change"}}'
+        elif [[ "$viewing_event_mode" == file_change_dual_conflict ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",path:".assistant-eval/viewing-preparation.json",changes:[{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_multiple_conflict ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",changes:[{path:".assistant-eval/viewing-preparation.json",kind:"add"},{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_requirement ]]; then
+            jq -cn '{type:"item.completed",item:{id:"requirement-mutation",type:"file_change",changes:[{path:"VIEWING_PREPARATION.md",kind:"update"}]}}'
+        fi
+        if [[ "$viewing_event_mode" == transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"transient-mutation",type:"command_execution",command:"sed -i.bak -e s/ACTIVE/VIEWING/ src/route.ts",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == alias_transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"alias-transient-mutation",type:"command_execution",command:"sed -i.bak -e s/ACTIVE/VIEWING/ src/route.?s",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_sha256sum ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:["sha256sum","src/route.ts"],exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"sha256sum tests/route.test.js",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_shasum ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:["shasum","-a","256","src/route.ts"],exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"shasum -a 256 tests/route.test.js",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_quoted ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:"sha256sum \"src/route.ts\"",exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"shasum -a 256 \"tests/route.test.js\"",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        fi
         jq -cn --arg id "$source_event_id" --arg status "$source_status" --argjson command "$source_command_json" --arg output "$source_output" --argjson exit_code "$source_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}' | if [[ -z "$source_status" ]]; then jq 'del(.item.status)'; else cat; fi
-        jq -cn --arg id "$test_event_id" --arg status "$test_status" --argjson command "$test_command_json" --arg output "$test_output" --argjson exit_code "$test_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
+        if [[ "$viewing_event_mode" != combined_rg && "$viewing_event_mode" != argv_combined_rg && "$viewing_event_mode" != combined_option_rg && "$viewing_event_mode" != reversed_ignore_case_rg ]]; then
+            jq -cn --arg id "$test_event_id" --arg status "$test_status" --argjson command "$test_command_json" --arg output "$test_output" --argjson exit_code "$test_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
+        fi
+        if [[ "$viewing_event_mode" == transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"transient-restoration",type:"command_execution",command:"mv src/route.ts.bak src/route.ts",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == alias_transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"alias-transient-restoration",type:"command_execution",command:"mv src/route.?s.bak src/route.?s",exit_code:0,aggregated_output:"",status:"completed"}}'
+        fi
         if [[ "$viewing_event_mode" == duplicate ]]; then
             jq -cn --arg id "$source_event_id" --arg status "$source_status" --argjson command "$source_command_json" --arg output "$source_output" --argjson exit_code "$source_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
         fi
@@ -3025,6 +3126,77 @@ else
     fail "VIEWING requirement evidence uses a dangling Markdown fragment"
 fi
 
+test_start "VIEWING blind prompt exposes every exact producer obligation without grader sections"
+viewing_prompt_output="$fixture_root/viewing-prompt-contract"
+rm -f "$capture"/*
+viewing_prompt_failures=()
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_prompt_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    viewing_prompt_failures+=("runner")
+fi
+if [[ "$(find "$capture" -maxdepth 1 -name 'call-*.prompt' | wc -l | tr -d ' ')" -ne 2 ]]; then
+    viewing_prompt_failures+=("prompt-count")
+else
+    viewing_required_prompt_fragments=(
+        '.assistant-eval/viewing-preparation.json'
+        'schema_version is the JSON string "1.0"'
+        'top-level keys schema_version, feature_preparation_evidence, and feature_preparation_result'
+        'feature_preparation_evidence is exactly {ref,items}'
+        'ref is prep/viewing-route'
+        'exact keys item_id, requirements_evidence, design_evidence, implementation_evidence, behavioral_test_evidence, conflict_analysis, evidence_gaps, behavior_status, work_status, rationale, implementation_implication'
+        'item_id viewing-observable-route-effects'
+        'requirements_evidence [VIEWING_PREPARATION.md#viewing-technical-preparation]'
+        'design_evidence {status: unavailable, source_refs: [], rationale: No design artifact is seeded.}'
+        'implementation_evidence is exactly {status: inspected'
+        'file: src/route.ts'
+        'content_sha256: the lowercase SHA-256 of the inspected file bytes'
+        'symbols: [applyActiveRouteEffects, selectRoute, highlightRoute, focusViewport]'
+        'execution_behavior: ACTIVE applies selection, highlight, and viewport focus.'
+        'inspection_event_ref: viewing-source-search'
+        'search_or_access_refs: [viewing-source-search]'
+        'rationale: Current implementation path inspected.'
+        'behavioral_test_evidence is exactly {status: inspected, file: tests/route.test.js'
+        'test_name: ACTIVE route selects, highlights, and focuses the viewport'
+        'assertions_or_search_refs: [assert.deepEqual, viewing-test-search]'
+        'inspection_event_ref: viewing-test-search'
+        'rationale: Behavioral assertion inspected.'
+        'conflict_analysis Requirements extend scope without changing existing effects.'
+        'evidence_gaps []'
+        'behavior_status existing_behavior_to_preserve'
+        'work_status implementation_gap'
+        'rationale Tested behavior defaults to preservation.'
+        'implementation_implication Adapt ACTIVE-only scope for read-only VIEWING.'
+        'one completed successful source-inspection command event whose raw output contains these exact complete source lines'
+        'function applyActiveRouteEffects() {'
+        'selectRoute("ACTIVE", effects);'
+        'one completed successful test-inspection command event whose raw output contains this exact complete assertion line'
+        'assert.deepEqual(applyActiveRouteEffects(), ["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"]);'
+        'Use only rg without -o/--only-matching, cat, sed -n, or head -n with a positive decimal line count against the exact seeded path'
+        'Compute each content_sha256 only with sha256sum PATH or shasum -a 256 PATH against the exact seeded path.'
+        'command events are limited to the disclosed exact-path inspection and hash forms'
+        'create the JSON artifact through a file-change operation, not another command'
+        'feature_preparation_result is exactly {execution_status: not_started, scope: VIEWING, feature_preparation_evidence_ref: prep/viewing-route, evidence_gaps: [], open_decisions: [], implementation_implications: [Preserve selection, highlight, and viewport focus without enabling editing.], recommended_next_step: Start a separate implementation workflow.}'
+        'Do not add keys outside the declared closed-world schema.'
+    )
+    for viewing_prompt_fragment in "${viewing_required_prompt_fragments[@]}"; do
+        if [[ "$(grep -lF -- "$viewing_prompt_fragment" "$capture"/call-*.prompt | wc -l | tr -d ' ')" -ne 2 ]]; then
+            viewing_prompt_failures+=("missing:$viewing_prompt_fragment")
+        fi
+    done
+    for viewing_grader_heading in 'Expected Behavior' 'Pass Criteria' 'Fail Signals' 'Machine Expectations'; do
+        if grep -Fq -- "$viewing_grader_heading" "$capture"/call-*.prompt; then
+            viewing_prompt_failures+=("grader:$viewing_grader_heading")
+        fi
+    done
+fi
+if [[ ${#viewing_prompt_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING runtime prompt hides exact producer obligations or exposes grader sections: ${viewing_prompt_failures[*]}"
+fi
+
 test_start "all four preparation and pending-Pack pilot inflation modes fail closed"
 pilot_mode_failures=()
 for pilot_mode in product_question execution_evidence verified premature_ref; do
@@ -3143,7 +3315,7 @@ fi
 
 test_start "VIEWING evidence mutations are isolated to the candidate verifier"
 viewing_mutation_failures=()
-for viewing_mutation in omitted_ref stale_hashes bad_path bad_symbol bad_assertion bad_event_ref missing_event; do
+for viewing_mutation in omitted_ref stale_hashes bad_path bad_symbol bad_assertion bad_event_ref missing_event extra_top_key extra_evidence_key extra_item_key extra_design_key extra_implementation_key extra_trace_key extra_behavioral_test_key extra_result_key prepended_document appended_document; do
     viewing_mutation_output="$fixture_root/viewing-mutation-$viewing_mutation"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_PREPARATION_MODE="$viewing_mutation" "$runner" --execute \
@@ -3166,7 +3338,7 @@ fi
 
 test_start "VIEWING inspection event mutations are isolated to the candidate verifier"
 viewing_event_failures=()
-for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p rg_preprocessor rg_preprocessor_as_pattern rg_preprocessor_separate rg_pre_glob rg_hostname_bin rg_replace rg_field_match_separator rg_field_context_separator rg_context_separator rg_hyperlink_format rg_short_replace rg_short_replace_assignment rg_short_file rg_short_file_attached rg_clustered_short_file rg_long_file rg_ignore_file rg_target_path_as_glob rg_positional_then_explicit rg_explicit_then_positional rg_unquoted_glob wrapped_unquoted_glob rg_colors rg_path_separator_missing rg_path_separator_invalid rg_path_separator_multibyte rg_target_path_as_path_separator argv_rg_preprocessor argv_rg_preprocessor_as_pattern argv_rg_preprocessor_separate argv_rg_pre_glob argv_rg_hostname_bin argv_rg_replace argv_rg_field_match_separator argv_rg_field_context_separator argv_rg_context_separator argv_rg_hyperlink_format argv_rg_short_file argv_rg_short_file_attached argv_rg_clustered_short_file argv_rg_long_file argv_rg_ignore_file argv_rg_target_path_as_glob argv_rg_positional_then_explicit argv_rg_explicit_then_positional argv_rg_colors argv_rg_path_separator_missing argv_rg_path_separator_invalid argv_rg_path_separator_multibyte argv_rg_target_path_as_path_separator shell_substitution double_quoted_substitution double_quoted_parameter double_quoted_legacy_arithmetic bash_wrapped_legacy_arithmetic double_quoted_legacy_subscript bash_wrapped_legacy_subscript double_quoted_zsh_split zsh_wrapped_split zsh_equals wrapped_zsh_equals multi_double_fragment_expansion wrapped_multi_double_fragment_expansion redirection additional_command cat_unsafe_flag pipeline_spoof no_space_pipeline wrapped_no_space_pipeline no_space_semicolon wrapped_no_space_semicolon brace_expansion wrapped_brace_expansion no_space_ampersand no_space_process_substitution no_space_glob_pattern extra_path_operand extensionless_extra_path rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_extensionless_extra_path argv_wrapper_additional_command oversized_output symbol_spoof; do
+for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating transient_mutation alias_transient_mutation file_change_source_exact file_change_source_dot file_change_source_backslash file_change_source_absolute_suffix file_change_source_item_path file_change_empty_changes file_change_missing_paths file_change_dual_conflict file_change_multiple_conflict file_change_requirement echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p head_unsafe_flag rg_preprocessor rg_preprocessor_as_pattern rg_preprocessor_separate rg_pre_glob rg_hostname_bin rg_replace rg_field_match_separator rg_field_context_separator rg_context_separator rg_hyperlink_format rg_short_replace rg_short_replace_assignment rg_short_file rg_short_file_attached rg_clustered_short_file rg_long_file rg_ignore_file rg_target_path_as_glob rg_positional_then_explicit rg_explicit_then_positional rg_unquoted_glob wrapped_unquoted_glob rg_colors rg_only_matching rg_path_separator_missing rg_path_separator_invalid rg_path_separator_multibyte rg_target_path_as_path_separator argv_rg_preprocessor argv_rg_preprocessor_as_pattern argv_rg_preprocessor_separate argv_rg_pre_glob argv_rg_hostname_bin argv_rg_replace argv_rg_field_match_separator argv_rg_field_context_separator argv_rg_context_separator argv_rg_hyperlink_format argv_rg_short_file argv_rg_short_file_attached argv_rg_clustered_short_file argv_rg_long_file argv_rg_ignore_file argv_rg_target_path_as_glob argv_rg_positional_then_explicit argv_rg_explicit_then_positional argv_rg_colors argv_rg_only_matching argv_rg_path_separator_missing argv_rg_path_separator_invalid argv_rg_path_separator_multibyte argv_rg_target_path_as_path_separator shell_substitution double_quoted_substitution double_quoted_parameter double_quoted_legacy_arithmetic bash_wrapped_legacy_arithmetic double_quoted_legacy_subscript bash_wrapped_legacy_subscript double_quoted_zsh_split zsh_wrapped_split zsh_equals wrapped_zsh_equals multi_double_fragment_expansion wrapped_multi_double_fragment_expansion redirection additional_command cat_unsafe_flag pipeline_spoof no_space_pipeline wrapped_no_space_pipeline no_space_semicolon wrapped_no_space_semicolon brace_expansion wrapped_brace_expansion no_space_ampersand no_space_process_substitution no_space_glob_pattern extra_path_operand extensionless_extra_path rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_extensionless_extra_path argv_wrapper_additional_command oversized_output symbol_spoof; do
     viewing_event_output="$fixture_root/viewing-event-$viewing_event_mutation"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_event_mutation" "$runner" --execute \
@@ -3187,9 +3359,47 @@ else
     fail "VIEWING inspection-event mutations were not isolated and rejected: ${viewing_event_failures[*]}"
 fi
 
+test_start "VIEWING lifecycle accepts disclosed exact-path SHA-256 commands"
+viewing_hash_failures=()
+for viewing_hash_mode in hash_sha256sum hash_shasum hash_quoted; do
+    viewing_hash_output="$fixture_root/viewing-event-$viewing_hash_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_hash_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_hash_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_hash_output/traces/"*.json >/dev/null; then
+        viewing_hash_failures+=("$viewing_hash_mode")
+    fi
+done
+if [[ ${#viewing_hash_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING lifecycle rejected disclosed SHA-256 commands: ${viewing_hash_failures[*]}"
+fi
+
+test_start "VIEWING lifecycle permits only canonical grading-artifact file changes"
+viewing_artifact_change_failures=()
+for viewing_artifact_change_mode in artifact_file_change_exact artifact_file_change_dot artifact_file_change_backslash artifact_file_change_item_path; do
+    viewing_artifact_change_output="$fixture_root/viewing-event-$viewing_artifact_change_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_artifact_change_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_artifact_change_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_artifact_change_output/traces/"*.json >/dev/null; then
+        viewing_artifact_change_failures+=("$viewing_artifact_change_mode")
+    fi
+done
+if [[ ${#viewing_artifact_change_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING lifecycle rejected canonical grading-artifact aliases: ${viewing_artifact_change_failures[*]}"
+fi
+
 test_start "VIEWING inspection accepts authentic completed string shell-wrapper events including rg context"
 viewing_wrapped_failures=()
-for viewing_wrapped_mode in wrapped wrapped_context_rg; do
+for viewing_wrapped_mode in wrapped wrapped_context_rg wrapped_quoted_non_rg; do
     viewing_wrapped_output="$fixture_root/viewing-event-$viewing_wrapped_mode"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_wrapped_mode" "$runner" --execute \
@@ -3223,16 +3433,41 @@ else
 fi
 
 test_start "VIEWING inspection accepts equivalent read-only source and test inspection commands"
-viewing_equivalent_output="$fixture_root/viewing-event-equivalent"
-rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=equivalent "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_equivalent_output" \
-    --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_equivalent_output/traces/"*.json >/dev/null; then
+viewing_equivalent_failures=()
+for viewing_equivalent_mode in equivalent quoted_non_rg; do
+    viewing_equivalent_output="$fixture_root/viewing-event-$viewing_equivalent_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_equivalent_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_equivalent_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_equivalent_output/traces/"*.json >/dev/null; then
+        viewing_equivalent_failures+=("$viewing_equivalent_mode")
+    fi
+done
+if [[ ${#viewing_equivalent_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "VIEWING inspection rejected equivalent read-only source and test inspection commands"
+    fail "VIEWING inspection rejected equivalent quoted read-only source and test commands: ${viewing_equivalent_failures[*]}"
+fi
+
+test_start "VIEWING inspection accepts disclosed bounded head string and argv commands"
+viewing_head_failures=()
+for viewing_head_mode in head argv_head head_too_many argv_head_too_many; do
+    viewing_head_output="$fixture_root/viewing-event-$viewing_head_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_head_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_head_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_head_output/traces/"*.json >/dev/null; then
+        viewing_head_failures+=("$viewing_head_mode")
+    fi
+done
+if [[ ${#viewing_head_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected bounded head equivalents: ${viewing_head_failures[*]}"
 fi
 
 test_start "VIEWING inspection accepts one combined read-only rg event for both expected files"

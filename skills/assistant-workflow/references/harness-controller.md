@@ -6,6 +6,10 @@ domain-scored work or UI/visual/product/UX/docs/DX-facing work, or explicitly
 requested as harness work. Do not load it for small local fixes, ordinary
 medium+ source changes, or delegation alone.
 
+An `implement_only` workflow that consumes an accepted
+`approved_feature_preparation_harness_obligation` is promoted to at least
+`medium` during Triage before this reference and its pre-Build gates are loaded.
+
 `harness_capable` defaults to false. Set it to true only when one of the
 explicit criteria above is present in the request, approved plan, task packet,
 or accepted Done Contract/Harness Recipe evidence.

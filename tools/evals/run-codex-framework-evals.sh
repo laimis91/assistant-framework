@@ -2060,8 +2060,6 @@ ordered_workflow_event_evidence() {
 viewing_inspection_event_evidence() {
     local jsonl="$1"
     jq -cse '
-      def path_pattern($path):
-        if $path == "src/route.ts" then "src/route\\.ts" else "tests/route\\.test\\.js" end;
       def expected_path: . == "src/route.ts" or . == "tests/route.test.js";
       def shell_string_body:
         . as $raw
@@ -2073,7 +2071,7 @@ viewing_inspection_event_evidence() {
           else $raw
           end;
       def forbidden_rg_option:
-        test("^(?:--(?:pre|pre-glob|hostname-bin|replace|field-match-separator|field-context-separator|context-separator|hyperlink-format|file|glob-from|ignore-file(?:-case-insensitive)?|colors)(?:=.*)?|-[A-Za-z0-9]*[rf].*)$");
+        test("^(?:--(?:pre|pre-glob|hostname-bin|replace|field-match-separator|field-context-separator|context-separator|hyperlink-format|file|glob-from|ignore-file(?:-case-insensitive)?|colors|only-matching)(?:=.*)?|-[A-Za-z0-9]*[rf].*|-[A-Za-z0-9]*o[A-Za-z0-9]*(?:=.*)?)$");
       def safe_rg_value:
         type == "string"
         and test("^[A-Za-z0-9 _.|:?*+^=,;()\\[\\]{}\"\\\\/!$-]+$");
@@ -2189,21 +2187,19 @@ viewing_inspection_event_evidence() {
         length >= 1
         and .[-1] == $path
         and all(.[0:-1][]; allowed_cat_option);
-      def normalize_shell_token:
-        if test("^\u0027[^\u0027]*\u0027$") then .[1:-1]
-        elif test("^\u0022[^\u0022]*\u0022$") then .[1:-1]
-        else .
-        end;
-      def approved_cat_string($path):
-        "^cat(?:[ \\t]+" + cat_option_pattern + ")*[ \\t]+" + path_pattern($path) + "$";
-      def approved_string($path):
-        shell_string_body as $body
-        | path_pattern($path) as $path_re
-        | ($body | test(approved_cat_string($path)))
-          or ($body | test("^sed[[:space:]]+-n[[:space:]]+(\\\"[0-9]+(,[0-9]+)?p\\\"|\u0027[0-9]+(,[0-9]+)?p\u0027|[0-9]+(,[0-9]+)?p)[[:space:]]+" + $path_re + "$"));
+      def safe_head_count:
+        type == "string" and test("^[1-9][0-9]*$");
+      def head_arguments_valid($path):
+        length == 4
+        and .[0] == "head"
+        and .[1] == "-n"
+        and (.[2] | safe_head_count)
+        and .[3] == $path;
+      def hash_arguments_valid($path):
+        (length == 2 and .[0] == "sha256sum" and .[1] == $path)
+        or (length == 4 and .[0] == "shasum" and .[1] == "-a" and .[2] == "256" and .[3] == $path);
       def approved_argv($path):
         . as $argv
-        | path_pattern($path) as $path_re
         | ($argv | all(.[]; type == "string"))
           and (if $argv[0] == "rg" then
                  ($argv | length >= 3)
@@ -2220,19 +2216,16 @@ viewing_inspection_event_evidence() {
                  ($argv | length >= 2) and ($argv[1:] | cat_arguments_valid($path))
                elif $argv[0] == "sed" then
                  ($argv | length == 4) and $argv[1] == "-n" and ($argv[2] | test("^[0-9]+(,[0-9]+)?p$")) and $argv[3] == $path
+               elif $argv[0] == "head" then
+                 head_arguments_valid($path)
+               elif $argv[0] == "sha256sum" or $argv[0] == "shasum" then
+                 hash_arguments_valid($path)
                else false
                end);
-      def approved_rg_string($path):
-        shell_string_body
-        | shell_tokens
-        | approved_argv($path);
       def approved_command_string($path):
-        shell_string_body as $body
-        | select($body | length <= 4096)
-        | if ($body | test("^rg(?:[ \\t]|$)")) then
-            ($body | approved_rg_string($path))
-          else ($body | approved_string($path))
-          end;
+        ((shell_string_body
+        | shell_tokens
+        | approved_argv($path)) // false);
       def approved_inspection_command($path):
         (.item.command // .item.command_line // "") as $command
         | if ($command | type) == "array" then
@@ -2244,6 +2237,37 @@ viewing_inspection_event_evidence() {
             ($command | approved_command_string($path))
           else false
           end;
+      def canonical_relative_path:
+        if type != "string" or length == 0 then null
+        else
+          gsub("\\\\"; "/") as $candidate
+          | if ($candidate | startswith("/")) or ($candidate | test("^[A-Za-z]:/")) then null
+            else ($candidate | split("/")) as $segments
+            | if any($segments[]; . == "" or . == "..") then null
+              else [$segments[] | select(. != ".")] | join("/")
+              end
+            end
+        end;
+      def approved_viewing_file_change:
+        .item as $item
+        | (($item | has("path")) or ($item | has("changes")))
+          and (if ($item | has("path")) then
+                 (($item.path | canonical_relative_path) == ".assistant-eval/viewing-preparation.json")
+               else true end)
+          and (if ($item | has("changes")) then
+                 (($item.changes | type) == "array")
+                 and (($item.changes | length) > 0)
+                 and all($item.changes[];
+                   type == "object"
+                   and has("path")
+                   and ((.path | canonical_relative_path) == ".assistant-eval/viewing-preparation.json"))
+               else true end);
+      def protected_path_lifecycle_safe($events):
+        all($events[] | select(.item.type == "command_execution");
+          approved_inspection_command("src/route.ts")
+          or approved_inspection_command("tests/route.test.js"))
+        and all($events[] | select(.item.type == "file_change");
+          approved_viewing_file_change);
       . as $events
       | def matching($path; $needles):
           [ $events[] | select(.type == "item.completed" and .item.type == "command_execution"
@@ -2258,6 +2282,7 @@ viewing_inspection_event_evidence() {
       | matching("tests/route.test.js"; ["assert.deepEqual(applyActiveRouteEffects(), [\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"]);"]) as $test_events
       | if (([$events[] | select(.type == "item.completed" and .item.type == "command_execution") | .item.id] | unique | length)
           == ([$events[] | select(.type == "item.completed" and .item.type == "command_execution")] | length)
+          and protected_path_lifecycle_safe($events)
           and ($source_events | length >= 1)
           and ($test_events | length >= 1))
         then {
@@ -2425,13 +2450,17 @@ verify_workspace() {
                 && viewing_seed_workspace_is_trusted "$workspace" \
                 && rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts" >/dev/null \
                 && rg -n 'assert\.deepEqual' "$workspace/tests/route.test.js" >/dev/null \
-                && jq -e --arg source_sha "$viewing_source_sha" --arg test_sha "$viewing_test_sha" --argjson event_map "$viewing_event_map" '
-                  type == "object"
-                  and (keys | sort) == ["feature_preparation_evidence", "feature_preparation_result", "schema_version"]
-                  and .schema_version == "1.0"
-                  and .feature_preparation_evidence.ref == "prep/viewing-route"
-                  and (.feature_preparation_evidence.items | type == "array" and length == 1)
-                  and (.feature_preparation_evidence.items[0] as $item
+                && jq -s -e --arg source_sha "$viewing_source_sha" --arg test_sha "$viewing_test_sha" --argjson event_map "$viewing_event_map" '
+                  . as $documents
+                  | ($documents | length == 1)
+                  and ($documents[0] as $document
+                  | ($document | type == "object")
+                  and ($document | keys | sort) == ["feature_preparation_evidence", "feature_preparation_result", "schema_version"]
+                  and $document.schema_version == "1.0"
+                  and ($document.feature_preparation_evidence | type == "object" and (keys | sort) == ["items", "ref"])
+                  and $document.feature_preparation_evidence.ref == "prep/viewing-route"
+                  and ($document.feature_preparation_evidence.items | type == "array" and length == 1)
+                  and ($document.feature_preparation_evidence.items[0] as $item
                     | ($item | keys | sort) == ["behavior_status", "behavioral_test_evidence", "conflict_analysis", "design_evidence", "evidence_gaps", "implementation_evidence", "implementation_implication", "item_id", "rationale", "requirements_evidence", "work_status"]
                     and $item.item_id == "viewing-observable-route-effects"
                     and $item.behavior_status == "existing_behavior_to_preserve"
@@ -2445,7 +2474,7 @@ verify_workspace() {
                       | $event_map[$source_ref] | type == "string" and length > 0)
                     and ($item.behavioral_test_evidence.inspection_event_ref as $test_ref
                       | $event_map[$test_ref] | type == "string" and length > 0))
-                  and .feature_preparation_result == {execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}
+                  and $document.feature_preparation_result == {execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."})
                 ' "$artifact" >/dev/null; then
                     workspace_record_check "workspace-002" true
                 else

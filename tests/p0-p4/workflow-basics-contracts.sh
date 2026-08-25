@@ -562,15 +562,16 @@ else
     fail "workflow state artifact ownership missing terms: ${missing_state_terms[*]}"
 fi
 
-test_start "workflow preparation routing keeps QA, harness, delegated state, and future QA obligations distinct"
+test_start "workflow preparation routing keeps QA, harness, delegated state, and typed future obligations distinct"
 preparation_routing_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::QA request alone never makes harness_capable=true during prepare_only" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::For \`prepare_only\`, force \`harness_capable=false\`" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::workflow_state_mode=journal" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::feature_preparation_result.future_qa_acceptance_obligation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::QA request alone never selects harness_capable=true during prepare_only" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Carry forward \`qa_evaluation_mode\`" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Future QA/acceptance obligation"; do
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::feature_preparation_result.future_harness_obligation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::future_harness_obligation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::future_harness_obligation" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Future harness obligation"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
@@ -593,15 +594,19 @@ if ruby -ryaml -e '
   check = admissibility.fetch("check")
   input = YAML.load_file(ARGV.fetch(2))
   manual = input.fetch("fields").find { |field| field.fetch("name") == "manual_verification_mode" }
+  harness = input.fetch("fields").find { |field| field.fetch("name") == "harness_capable" }
   valid = %w[acceptance_criteria qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
     manual.fetch("infer_from").include?("destructive or migration-related") &&
+    harness.fetch("validation").include?("prepare_only, always false") &&
+    harness.fetch("validation").include?("future_harness_obligation") &&
     check.include?("qa_evaluation_mode=not_required") &&
     check.include?("build_execution_lane=none") &&
     check.include?("harness_capable=false") &&
-    check.include?("independent harness evidence") &&
-    check.include?("QA request alone") &&
+    check.include?("typed future obligations") &&
     check.include?("workflow_state_mode") &&
-    check.include?("risk, delegation, or independent harness")
+    check.include?("progressive uncertainty") &&
+    check.include?("risk-selected strict preparation") &&
+    check.include?("explicit persisted-state request")
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
     pass
@@ -639,14 +644,21 @@ test_start "workflow routing retains exact execution, lane, plan, and prepare-on
 if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
   triage = File.read(ARGV.fetch(1))
+  gates = YAML.load_file(ARGV.fetch(2))
+  intensity_gate = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_CONTROLLER_INTENSITY" }
   valid = input.fetch("execution_intent").fetch("infer_from").include?("When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation") &&
     input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use none") &&
     triage.include?("For execution_intent != prepare_only, medium+ work") &&
-    input.fetch("controller_intensity").fetch("infer_from").include?("QA request alone never promotes strict") &&
-    triage.include?("QA request alone never promotes strict") &&
-    input.fetch("controller_intensity").fetch("infer_from").include?("future_qa_acceptance_obligation")
+    input.fetch("controller_intensity").fetch("infer_from").include?("QA or harness requests alone never promote strict") &&
+    input.fetch("controller_intensity").fetch("validation").include?("For execution_intent != prepare_only") &&
+    input.fetch("controller_intensity").fetch("validation").include?("QA or harness requests alone remain typed future obligations") &&
+    triage.include?("QA or harness requests alone never promote strict") &&
+    triage.include?("only when `execution_intent != prepare_only`") &&
+    intensity_gate.fetch("check").include?("QA or harness requests alone must not") &&
+    intensity_gate.fetch("on_fail").include?("future_harness_obligation") &&
+    input.fetch("controller_intensity").fetch("infer_from").include?("typed future obligations")
   exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" "$triage_file"; then
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" "$triage_file" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
     pass
 else
     fail "workflow execution, lane, plan, or prepare-only strict routing drifted"
